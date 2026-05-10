@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
+		<PackageReference Include="CShells.Abstractions" Version="0.0.16" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Elsa.Common\Elsa.Common.csproj" />
+		<ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
+	</ItemGroup>
+
+</Project>

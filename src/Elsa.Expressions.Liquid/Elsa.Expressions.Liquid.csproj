@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" Version="0.0.16" />
+    <PackageReference Include="Fluid.Core" Version="2.31.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Notifications.Core\Elsa.Notifications.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/core/">
+    <Project Path="Elsa.Activities.Core/Elsa.Activities.Core.csproj" Id="92ba06c8-8f02-409d-9b81-f02d975c2442" />
+    <Project Path="Elsa.Caching.Core/Elsa.Caching.Core.csproj" Id="bafe0ddc-6833-4b44-89ba-31ab2365bae7" />
+    <Project Path="Elsa.Common/Elsa.Common.csproj" Id="d2aeee95-6087-4d0f-b690-3d4ed411e61c" />
+    <Project Path="Elsa.Expressions.Core/Elsa.Expressions.Core.csproj" Id="8f326321-7dcc-45f9-b792-c41c297a2e13" />
+    <Project Path="Elsa.Locking.Core/Elsa.Locking.Core.csproj" />
+    <Project Path="Elsa.Notifications.Core/Elsa.Notifications.Core.csproj" Id="d957e04a-ee6f-4197-b7f1-4373138641a3" />
+    <Project Path="Elsa.Persistence.Core/Elsa.Persistence.Core.csproj" Id="a6989f18-a2ac-4127-9a2a-0756fc8ffbc1" />
+    <Project Path="Elsa.Serialization.Core/Elsa.Serialization.Core.csproj" Id="4a14cffe-bedf-4cad-9f88-740bb087e5ad" />
+    <Project Path="Elsa.Tasks.Core/Elsa.Tasks.Core.csproj" Id="756ccc0a-6bd4-4aa6-809d-353c4a761d9f" />
+    <Project Path="Elsa.Tasks.Schedules/Elsa.Tasks.Schedules.csproj" Id="91fb8ac3-4a22-40b0-a108-d06c2a453ca6" />
+    <Project Path="Elsa.Workflows.Design.Core/Elsa.Workflows.Design.Core.csproj" Id="44fd2fe7-0762-472f-80cd-b1ff1d3fd618" />
+    <Project Path="Elsa.Workflows.Design.Persistence.Core/Elsa.Workflows.Design.Persistence.Core.csproj" Id="90497690-6709-40d8-8a15-0a12b5140e96" />
+    <Project Path="Elsa.Workflows.Runtime.Core/Elsa.Workflows.Runtime.Core.csproj" Id="8c47eba7-039d-44fd-9162-6ebb9103102e" />
+  </Folder>
+  <Folder Name="/modules/">
+    <Project Path="Elsa.Activities/Elsa.Activities.csproj" Id="5194d143-35cc-486b-b034-861cab62288b" />
+    <Project Path="Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
+    <Project Path="Elsa.Expressions.Liquid/Elsa.Expressions.Liquid.csproj" Id="6e8590e2-5d27-418b-a772-8d38d58a94e0" />
+    <Project Path="Elsa.Expressions/Elsa.Expressions.csproj" Id="b8aa29ae-26a6-4379-a599-d5179dc7448f" />
+    <Project Path="Elsa.Locking/Elsa.Locking.csproj" Id="d3c5ba84-c00b-4357-9095-3f3d74d995c3" />
+    <Project Path="Elsa.Notifications/Elsa.Notifications.csproj" Id="ee951ba7-465e-495e-89f3-7cf407d81eee" />
+    <Project Path="Elsa.Persistence.EFCore/Elsa.Persistence.EFCore.csproj" Id="c64a3ea5-6b27-4872-8ecd-341221f74208" />
+    <Project Path="Elsa.Serialization/Elsa.Serialization.csproj" Id="296f6c59-d41d-469b-a70c-8b2dfa9b02cc" />
+    <Project Path="Elsa.Tasks/Elsa.Tasks.csproj" Id="203e79ef-bc61-4c33-80b3-a7cd25462d41" />
+    <Project Path="Elsa.Workflows.Design.Persistence.EFCore.Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" Id="640a7089-7fc1-41bf-a9af-030029768134" />
+    <Project Path="Elsa.Workflows.Design.Persistence.EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" Id="92a70432-2e17-427a-89cf-ac35f850a352" />
+    <Project Path="Elsa.Workflows.Runtime.StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj" Id="730e3ea0-8d78-48fd-ae5d-dae6b4c7cc8b" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Elsa.Server.csproj" />
+  </Folder>
+</Solution>

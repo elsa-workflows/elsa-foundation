@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Persistence.EFCore\Elsa.Persistence.EFCore.csproj" />
+	</ItemGroup>
+
+</Project>

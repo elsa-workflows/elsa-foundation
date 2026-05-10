@@ -1,0 +1,44 @@
+﻿using Elsa.Activities.Core.Contracts;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text;
+using System.Text.Json.Serialization;
+
+namespace Elsa.Activities.Core.Models
+{
+    /// <summary>
+    /// A descriptor of an activity's output property.
+    /// </summary>
+    public class OutputDescriptor : PropertyDescriptor
+    {
+        /// <inheritdoc />
+        [JsonConstructor]
+        public OutputDescriptor()
+        {
+        }
+
+        /// <inheritdoc />
+        public OutputDescriptor(
+            string name,
+            string displayName,
+            Type type,
+            Func<IActivity, object?> valueGetter,
+            Action<IActivity, object?> valueSetter,
+            PropertyInfo? propertyInfo = default,
+            string? description = default,
+            bool? isBrowsable = default,
+            bool? isSerializable = default)
+        {
+            Name = name;
+            DisplayName = displayName;
+            Type = type;
+            ValueGetter = valueGetter;
+            ValueSetter = valueSetter;
+            Description = description;
+            IsBrowsable = isBrowsable;
+            IsSerializable = isSerializable;
+            PropertyInfo = propertyInfo;
+        }
+    }
+}

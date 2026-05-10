@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.16" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.7" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
+	</ItemGroup>
+
+</Project>

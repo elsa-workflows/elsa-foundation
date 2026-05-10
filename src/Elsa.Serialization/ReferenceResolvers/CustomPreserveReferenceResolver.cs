@@ -1,0 +1,64 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Elsa.Serialization.ReferenceResolvers
+{
+    /// <summary>
+    /// A custom reference resolver that uses a <see cref="ReferenceEqualityComparer"/> to compare objects.
+    /// </summary>
+    /// <remarks>We only need this class because the built-in <c>PreserveReferenceResolver"</c> is internal</remarks>
+    public sealed class CustomPreserveReferenceResolver : ReferenceResolver
+    {
+        private uint _referenceCount;
+        private readonly Dictionary<string, object> _referenceIdToObjectMap = new();
+        private readonly Dictionary<object, string> _objectToReferenceIdMap = new(ReferenceEqualityComparer.Instance);
+
+        /// <inheritdoc />
+        public override void AddReference(string referenceId, object value)
+        {
+            if (!_referenceIdToObjectMap.TryAdd(referenceId, value))
+                throw new JsonException();
+        }
+
+        /// <summary>
+        /// Tries to add a reference.
+        /// </summary>
+        public bool TryAddReference(string referenceId, object value)
+        {
+            return _referenceIdToObjectMap.TryAdd(referenceId, value);
+        }
+
+        /// <inheritdoc />
+        public override string GetReference(object value, out bool alreadyExists)
+        {
+            if (_objectToReferenceIdMap.TryGetValue(value, out var referenceId))
+            {
+                alreadyExists = true;
+            }
+            else
+            {
+                _referenceCount++;
+                referenceId = _referenceCount.ToString();
+                _objectToReferenceIdMap.Add(value, referenceId);
+                alreadyExists = false;
+            }
+
+            return referenceId;
+        }
+
+        /// <inheritdoc />
+        public override object ResolveReference(string referenceId) => !_referenceIdToObjectMap.TryGetValue(referenceId, out var value) 
+            ? throw new JsonException() 
+            : value;
+
+        /// <summary>
+        /// Determines whether the specified value has a reference.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns><c>true</c> if the specified value has a reference; otherwise, <c>false</c>.</returns>
+        public bool HasReference(object value) => _objectToReferenceIdMap.ContainsKey(value);
+    }
+}

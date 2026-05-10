@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.16" />
+		<PackageReference Include="DistributedLock" Version="2.8.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+  </ItemGroup>
+
+</Project>
