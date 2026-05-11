@@ -16,6 +16,6 @@ namespace Elsa.Persistence.Core
         /// Deletes entities using a query.
         /// </summary>
         /// <returns>The number of entities deleted.</returns>
-        Task<long> DeleteWhereAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default);        
+        Task<long> DeleteWhereAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default);
     }
 }

@@ -13,7 +13,7 @@ namespace Elsa.Persistence.EFCore.Extensions
 
             var results = await queryable.ToListAsync();
 
-            if(onMaterialization is not null)
+            if (onMaterialization is not null)
             {
                 await onMaterialization.Invoke(results);
             }

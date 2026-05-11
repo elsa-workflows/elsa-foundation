@@ -1,9 +1,7 @@
 using Elsa.Serialization.Core;
-using Elsa.Serialization.JsonConverters;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Serialization.Services
 {
@@ -72,17 +70,17 @@ namespace Elsa.Serialization.Services
             };
 
             var converterProviders = serviceProvider.GetServices<IPayloadSerializerConverterProvider>();
-            foreach(var provider in converterProviders)
+            foreach (var provider in converterProviders)
             {
                 options.Converters.Add(
-                    provider.Get()    
+                    provider.Get()
                 );
             }
-            
+
             return options;
         }
 
-     
+
     }
 
 }

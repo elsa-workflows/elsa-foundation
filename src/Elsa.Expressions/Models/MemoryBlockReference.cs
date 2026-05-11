@@ -39,7 +39,7 @@ namespace Elsa.Expressions.Models
         /// Returns the value of the memory block.
         /// </summary>
         public object? Get(IMemoryRegister memoryRegister) => GetBlock(memoryRegister).Value;
-        
+
         /// <summary>
         /// Returns the value of the memory block.
         /// </summary>
@@ -88,8 +88,8 @@ namespace Elsa.Expressions.Models
         /// <summary>
         /// Returns the <see cref="MemoryBlock"/> pointed to by the specified memory block reference.
         /// </summary>
-        public IMemoryBlock GetBlock(IMemoryRegister memoryRegister) => memoryRegister.TryGetBlock(Id, out var location) 
-            ? location 
+        public IMemoryBlock GetBlock(IMemoryRegister memoryRegister) => memoryRegister.TryGetBlock(Id, out var location)
+            ? location
             : memoryRegister.Declare(this);
     }
 

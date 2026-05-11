@@ -3,7 +3,6 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
 using Elsa.Serialization.Core.Options;
-using Elsa.Serialization.Extensions;
 using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -318,9 +317,9 @@ namespace Elsa.Serialization.Services
             }
 
             throw new TypeConversionException(
-                $"Failed to convert an object of type {value.GetType()} to {underlyingTargetType}", 
-                value, 
-                underlyingTargetType, 
+                $"Failed to convert an object of type {value.GetType()} to {underlyingTargetType}",
+                value,
+                underlyingTargetType,
                 e
             );
         }

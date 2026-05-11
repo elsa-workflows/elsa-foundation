@@ -2,7 +2,6 @@ using Elsa.Expressions.Core;
 using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Options;
 using Fluid;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.Liquid.Extensions
 {

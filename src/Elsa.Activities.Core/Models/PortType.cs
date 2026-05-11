@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Activities.Core.Models
+﻿namespace Elsa.Activities.Core.Models
 {
     /// <summary>
     /// The type of a port.

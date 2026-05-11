@@ -1,5 +1,4 @@
 using Elsa.Primitives.Entities;
-using System.Linq.Expressions;
 
 namespace Elsa.Persistence.Core
 {

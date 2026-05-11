@@ -7,7 +7,7 @@ namespace Elsa.Persistence.EFCore.Contracts
         where TDbContext : DbContext
     {
     }
-    
+
     public interface IEntitySavingHandler<TDbContext, TEntity> : IEntitySavingHandler<TDbContext>
         where TDbContext : DbContext
         where TEntity : Entity, new()

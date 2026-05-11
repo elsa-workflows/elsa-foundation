@@ -1,6 +1,6 @@
+using Elsa.Persistence.EFCore.Options;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
-using Elsa.Persistence.EFCore.Options;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -13,7 +13,7 @@ namespace Elsa.Persistence.EFCore.Tasks
     [UsedImplicitly]
     [SingleNodeTask]
     [Order(-100)]
-    public class RunMigrationsStartupTask<TDbContext>(IDbContextFactory<TDbContext> dbContextFactory, IOptions<MigrationOptions> options) : IStartupTask 
+    public class RunMigrationsStartupTask<TDbContext>(IDbContextFactory<TDbContext> dbContextFactory, IOptions<MigrationOptions> options) : IStartupTask
         where TDbContext : DbContext
     {
         /// <inheritdoc />

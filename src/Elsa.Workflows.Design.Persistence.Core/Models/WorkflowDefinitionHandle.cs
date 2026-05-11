@@ -1,7 +1,4 @@
 using Elsa.Primitives.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Models
 {

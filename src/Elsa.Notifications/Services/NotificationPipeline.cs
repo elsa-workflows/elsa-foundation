@@ -1,10 +1,6 @@
 using Elsa.Notifications.Core;
-using Elsa.Notifications.Contexts;
 using Elsa.Notifications.Helpers;
 using Elsa.Notifications.Middleware;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Notifications.Services
 {

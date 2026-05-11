@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core;
-using Elsa.Serialization.Core;
 using Elsa.Expressions.Liquid.Contracts;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Expressions.Liquid.Services
 {
@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Liquid.Services
     /// <remarks>
     /// Initializes a new instance of the <see cref="LiquidExpressionHandler"/> class.
     /// </remarks>
-    public sealed class LiquidExpressionHandler(ILiquidTemplateManager liquidTemplateManager, IObjectConverter objectConverter) 
+    public sealed class LiquidExpressionHandler(ILiquidTemplateManager liquidTemplateManager, IObjectConverter objectConverter)
         : IExpressionHandler
     {
         /// <inheritdoc />

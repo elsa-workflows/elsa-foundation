@@ -59,8 +59,8 @@ namespace Elsa.Serialization.JsonConverters
                 var parsedModel = JsonElement.ParseValue(ref reader);
                 var newtonsoftJson = parsedModel.GetProperty(IslandPropertyName).GetString();
 
-                return !string.IsNullOrWhiteSpace(newtonsoftJson) 
-                    ? JObject.Parse(newtonsoftJson) 
+                return !string.IsNullOrWhiteSpace(newtonsoftJson)
+                    ? JObject.Parse(newtonsoftJson)
                     : [];
             }
 

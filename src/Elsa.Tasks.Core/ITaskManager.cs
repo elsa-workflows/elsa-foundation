@@ -1,5 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Elsa.Tasks.Core
 {
     public interface ITaskManager

@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
-using System.Text;
 
 namespace Elsa.Primitives.Extensions
 {
@@ -36,7 +33,7 @@ namespace Elsa.Primitives.Extensions
             var invokeMethods = methods
                 .Where(method =>
                 {
-                    foreach(var name in names)
+                    foreach (var name in names)
                     {
                         var nameEquals = string.Equals(
                             method.Name,
@@ -44,7 +41,7 @@ namespace Elsa.Primitives.Extensions
                             StringComparison.Ordinal
                         );
 
-                        if(nameEquals)
+                        if (nameEquals)
                         {
                             return true;
                         }

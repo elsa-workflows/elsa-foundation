@@ -2,7 +2,7 @@ using Elsa.Primitives.Entities;
 
 namespace Elsa.Persistence.Core
 {
-    public interface IAddCommand<TEntity>        
+    public interface IAddCommand<TEntity>
         where TEntity : Entity, new()
     {
         /// <summary>

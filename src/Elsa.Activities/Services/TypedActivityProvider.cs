@@ -3,10 +3,7 @@ using Elsa.Activities.Core.Models;
 using Elsa.Activities.Options;
 using JetBrains.Annotations;
 using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Elsa.Activities.Services
 {
@@ -17,7 +14,7 @@ namespace Elsa.Activities.Services
     /// Initializes a new instance of the <see cref="TypedActivityProvider"/> class.
     /// </remarks>
     [UsedImplicitly]
-    public sealed class TypedActivityProvider(IOptions<TypedActivityProviderOptions> options, IActivityDescriber activityDescriber) 
+    public sealed class TypedActivityProvider(IOptions<TypedActivityProviderOptions> options, IActivityDescriber activityDescriber)
         : IActivityProvider
     {
         private readonly TypedActivityProviderOptions _options = options.Value;

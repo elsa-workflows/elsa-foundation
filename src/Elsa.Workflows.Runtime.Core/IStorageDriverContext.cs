@@ -12,5 +12,5 @@ namespace Elsa.Workflows.Runtime.Core
         IVariable Variable { get; }
 
         CancellationToken CancellationToken { get; }
-    }  
+    }
 }

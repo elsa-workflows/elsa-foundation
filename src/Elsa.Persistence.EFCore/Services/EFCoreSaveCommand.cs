@@ -1,12 +1,8 @@
-﻿using Elsa.Primitives.Entities;
-using Elsa.Persistence.Core;
+﻿using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Persistence.EFCore.Services
 {
@@ -62,6 +58,6 @@ namespace Elsa.Persistence.EFCore.Services
             {
                 Semaphore.Release();
             }
-        }      
+        }
     }
 }

@@ -1,8 +1,5 @@
 ﻿using Elsa.Activities.Core.Contracts;
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Core.Models

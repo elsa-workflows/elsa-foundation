@@ -1,6 +1,6 @@
-﻿using Elsa.Primitives.Entities;
-using Elsa.Persistence.Core;
+﻿using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,7 +26,7 @@ namespace Elsa.Persistence.EFCore.Services
             await using var dbContext = await CreateDbContextAsync(cancellationToken);
 
             try
-            {                
+            {
                 // Loop through batched entities
                 foreach (var batch in entities.Chunk(batchSize))
                 {
@@ -57,7 +57,7 @@ namespace Elsa.Persistence.EFCore.Services
         {
             var entitySaveHandlers = serviceProvider.GetServices<IEntitySavingHandler<TDbContext, TEntity>>();
 
-            foreach(var entity in entities)
+            foreach (var entity in entities)
             {
                 foreach (var handler in entitySaveHandlers)
                     await handler.Handle(dbContext, entity, cancellationToken);

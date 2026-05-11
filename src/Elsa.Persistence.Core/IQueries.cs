@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Core
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The entity if found, otherwise <c>null</c></returns>
         Task<TEntity?> FindAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default);
-        
+
         /// <summary>
         /// Finds the entity matching the specified predicate.
         /// </summary>
@@ -37,7 +37,7 @@ namespace Elsa.Persistence.Core
         /// Returns a list of entities using a query
         /// </summary>
         Task<Page<TEntity>> FindManyAsync(
-            Expression<Func<TEntity, bool>>? predicate,            
+            Expression<Func<TEntity, bool>>? predicate,
             PageArgs? pageArgs = null,
             CancellationToken cancellationToken = default
         );
@@ -69,7 +69,7 @@ namespace Elsa.Persistence.Core
         /// <summary>
         /// Queries the database using a query and a selector.
         /// </summary>
-        Task<IEnumerable<TResult>> QueryAsync<TResult>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, Expression<Func<TEntity, TResult>> selector,CancellationToken cancellationToken = default);
+        Task<IEnumerable<TResult>> QueryAsync<TResult>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, Expression<Func<TEntity, TResult>> selector, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Queries the database using a query and a selector.
@@ -101,6 +101,6 @@ namespace Elsa.Persistence.Core
         /// <param name="propertySelector">The property selector to distinct by.</param>
         /// <param name="ignoreQueryFilters">Whether to ignore query filters.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        Task<long> CountAsync<TProperty>(Expression<Func<TEntity, bool>> predicate, Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default);        
+        Task<long> CountAsync<TProperty>(Expression<Func<TEntity, bool>> predicate, Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default);
     }
 }

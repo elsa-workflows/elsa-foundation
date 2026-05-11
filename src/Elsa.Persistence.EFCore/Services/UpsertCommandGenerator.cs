@@ -1,5 +1,5 @@
-using Elsa.Primitives.Entities;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -94,7 +94,7 @@ namespace Elsa.Persistence.EFCore.Services
             mergeSql.AppendLine($"    INSERT ({string.Join(", ", columnNames)})");
             mergeSql.AppendLine($"    VALUES ({string.Join(", ", columnNames.Select(c => $"Source.{c}"))});");
 
-            return new (mergeSql.ToString(), [.. parameters]);
+            return new(mergeSql.ToString(), [.. parameters]);
         }
 
         private static GeneratedCommand GenerateSqliteUpsert<TEntity>(
@@ -154,7 +154,7 @@ namespace Elsa.Persistence.EFCore.Services
 
             sb.AppendLine(string.Join(", ", updateAssignments) + ";");
 
-            return new (sb.ToString(), [.. parameters]);
+            return new(sb.ToString(), [.. parameters]);
         }
 
         private static GeneratedCommand GeneratePostgresUpsert<TEntity>(
@@ -224,10 +224,10 @@ namespace Elsa.Persistence.EFCore.Services
 
             sb.AppendLine(string.Join(", ", updateAssignments) + ";");
 
-            return new (sb.ToString(), [.. parameters]);
+            return new(sb.ToString(), [.. parameters]);
         }
 
-        private static GeneratedCommand GenerateMySqlUpsert<TEntity>(DbContext dbContext,IList<TEntity> entities,Expression<Func<TEntity, string>> keySelector)
+        private static GeneratedCommand GenerateMySqlUpsert<TEntity>(DbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector)
             where TEntity : class
         {
             var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
@@ -286,7 +286,7 @@ namespace Elsa.Persistence.EFCore.Services
             return new(sb.ToString(), [.. parameters]);
         }
 
-        private static GeneratedCommand GenerateOracleUpsert<TEntity>(DbContext dbContext,IList<TEntity> entities,Expression<Func<TEntity, string>> keySelector)
+        private static GeneratedCommand GenerateOracleUpsert<TEntity>(DbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector)
             where TEntity : class
         {
             var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;

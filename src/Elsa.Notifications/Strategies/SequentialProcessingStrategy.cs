@@ -1,8 +1,5 @@
 using Elsa.Notifications.Core;
 using Elsa.Notifications.Helpers;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Notifications.Strategies
 {

@@ -1,10 +1,5 @@
 ﻿using Elsa.Activities.Core.Contracts;
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using System.Runtime.Serialization;
-using System.Text;
-using System.Xml.Linq;
 
 namespace Elsa.Activities.Core.Models
 {

@@ -1,7 +1,4 @@
 using Elsa.Expressions.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Expressions.Liquid.Contracts
 {

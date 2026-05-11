@@ -1,6 +1,5 @@
 using CShells.Features;
 using Elsa.Expressions.Core;
-using Elsa.Notifications.Core;
 using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Enums;
 using Elsa.Expressions.Liquid.Filters;
@@ -8,6 +7,7 @@ using Elsa.Expressions.Liquid.Handlers;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
 using Elsa.Expressions.Liquid.Services;
+using Elsa.Notifications.Core;
 using Fluid;
 using Fluid.Filters;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +51,7 @@ namespace Elsa.Expressions.Liquid
 
         public LiquidEncodingType EncodingType { get; set; }
 
-        public IEnumerable<string> VariableDescriptorTypes { get; set; } = [];               
+        public IEnumerable<string> VariableDescriptorTypes { get; set; } = [];
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -69,7 +69,7 @@ namespace Elsa.Expressions.Liquid
                 .AddSingleton(templateManagerOptions)
                 .AddScoped<ILiquidTemplateManager, LiquidTemplateManager>()
                 .AddScoped<FluidParser>()
-                .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();            
+                .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
         }
 
         void AddLiquidFilter<T>(IServiceCollection services, string name) where T : class, ILiquidFilter
@@ -80,15 +80,15 @@ namespace Elsa.Expressions.Liquid
 
         IEnumerable<Type> GetVariableDescriptorTypes()
         {
-            foreach(var typeName in VariableDescriptorTypes)
+            foreach (var typeName in VariableDescriptorTypes)
             {
                 var type = Type.GetType(typeName)
                     ?? throw new TypeUnloadedException($"Type '{typeName}' is not loaded"); ;
 
                 if (!type.IsClass)
                     throw new InvalidOperationException("Variable descriptors must be a class");
-                
-                if(type.ContainsGenericParameters)
+
+                if (type.ContainsGenericParameters)
                     throw new InvalidOperationException("Variable descriptor class cannot contain generic parameters");
 
                 yield return type;
@@ -97,7 +97,7 @@ namespace Elsa.Expressions.Liquid
 
         void ConfigureFilters(TemplateContext context)
         {
-            if(AddNumberFilters)
+            if (AddNumberFilters)
             {
                 context.Options.Filters.WithNumberFilters();
             }

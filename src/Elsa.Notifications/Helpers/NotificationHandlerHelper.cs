@@ -1,9 +1,6 @@
-using Elsa.Primitives.Extensions;
 using Elsa.Notifications.Core;
-using System;
-using System.Collections.Generic;
+using Elsa.Primitives.Extensions;
 using System.Reflection;
-using System.Text;
 
 namespace Elsa.Notifications.Helpers
 {

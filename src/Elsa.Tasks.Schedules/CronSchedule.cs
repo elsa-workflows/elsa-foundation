@@ -10,7 +10,7 @@ namespace Elsa.Tasks.Schedules
         public IScheduledTaskExecution ScheduleExecution(Func<Task> action)
         {
             return new ScheduledTaskExecution(
-                action, 
+                action,
                 () => expression.GetNextOccurrence(systemClock.UtcNow.DateTime)!.Value - systemClock.UtcNow.DateTime,
                 logger
             );

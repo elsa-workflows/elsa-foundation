@@ -21,7 +21,7 @@ namespace Elsa.Notifications
 
         public void ConfigureServices(IServiceCollection services)
         {
-            
+
             RegisterDefaultEventPublishingStrategy(services);
             services.AddSingleton<INotificationPipeline, NotificationPipeline>();
         }

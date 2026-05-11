@@ -1,13 +1,13 @@
 using CShells.Features;
-using Elsa.Tasks.Core;
+using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Tasks;
+using Elsa.Tasks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Reflection;
-using Elsa.Persistence.EFCore.Extensions;
 
 namespace Elsa.Persistence.EFCore
 {
@@ -41,7 +41,12 @@ namespace Elsa.Persistence.EFCore
         /// <summary>
         /// 
         /// </summary>
-        public CommandsOptions Commands { get; set; } = new();
+        public bool UseCommands { get; set; } = true;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public bool UseQueries { get; set; } = true;
 
         /// <summary>
         /// Gets or sets additional options to configure the database context.
@@ -66,7 +71,7 @@ namespace Elsa.Persistence.EFCore
             if (useContextPooling)
                 services.AddPooledDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder);
             else
-                services.AddDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder, dbContextFactoryLifetime);            
+                services.AddDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder, dbContextFactoryLifetime);
 
             services.Configure<MigrationOptions>(options =>
             {
@@ -75,9 +80,15 @@ namespace Elsa.Persistence.EFCore
 
             services.AddScoped<IStartupTask, RunMigrationsStartupTask<TDbContext>>();
 
-            services
-                .ConfigureCommands<TDbContext>(Commands)
-                .ConfigureQueries<TDbContext>();
+            if (UseCommands)
+            {
+                services
+                    .ConfigureCommands<TDbContext>();
+            }
+            if (UseQueries)
+            {
+                services.ConfigureQueries<TDbContext>();
+            }
 
             OnConfiguring(services);
         }

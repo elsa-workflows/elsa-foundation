@@ -1,7 +1,4 @@
 using Elsa.Notifications.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Notifications.Services
 {

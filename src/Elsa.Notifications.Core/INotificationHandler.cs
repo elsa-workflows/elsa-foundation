@@ -1,13 +1,10 @@
-using System.Reflection;
-using Elsa.Primitives.Extensions;
-
 namespace Elsa.Notifications.Core
 {
     /// <summary>
     /// Represents a notification handler.
     /// </summary>
     public interface INotificationHandler
-    {        
+    {
     }
 
     /// <summary>

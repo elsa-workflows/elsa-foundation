@@ -31,5 +31,5 @@ namespace Elsa.Locking.FileSystem.Adaptors
               ? new DistributedLockHandleAdaptor(handle)
               : null;
         }
-    }    
+    }
 }

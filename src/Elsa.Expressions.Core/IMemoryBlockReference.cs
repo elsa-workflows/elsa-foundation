@@ -55,14 +55,14 @@ namespace Elsa.Expressions.Core
         /// <summary>
         /// Sets the value of the memory block.
         /// </summary>
-        public void Set(IExpressionExecutionContext context, object? value, Action<IMemoryBlock>? configure = null) 
+        public void Set(IExpressionExecutionContext context, object? value, Action<IMemoryBlock>? configure = null)
             => context.Set(this, value, configure);
 
         /// <summary>
         /// Returns the <see cref="MemoryBlock"/> pointed to by the specified memory block reference.
         /// </summary>
-        public IMemoryBlock GetBlock(IMemoryRegister memoryRegister) => memoryRegister.TryGetBlock(Id, out var location) 
-            ? location 
+        public IMemoryBlock GetBlock(IMemoryRegister memoryRegister) => memoryRegister.TryGetBlock(Id, out var location)
+            ? location
             : memoryRegister.Declare(this);
     }
 }

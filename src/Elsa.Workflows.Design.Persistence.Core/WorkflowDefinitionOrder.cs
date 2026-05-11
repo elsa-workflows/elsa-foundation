@@ -1,9 +1,6 @@
 using Elsa.Primitives.Persistence;
 using Elsa.Workflows.Design.Core.Entities;
-using System;
-using System.Collections.Generic;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace Elsa.Workflows.Design.Persistence.Core
 {

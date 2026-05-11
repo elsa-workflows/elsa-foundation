@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Activities.Options
+﻿namespace Elsa.Activities.Options
 {
     public sealed class TypedActivityProviderOptions
     {

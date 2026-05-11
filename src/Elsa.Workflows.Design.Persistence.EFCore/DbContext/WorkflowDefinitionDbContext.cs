@@ -1,10 +1,10 @@
-using Elsa.Workflows.Design.Core.Entities;
 using Elsa.Persistence.EFCore;
+using Elsa.Workflows.Design.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.DbContext
 {
-    public sealed class WorkflowDefinitionDbContext(DbContextOptions options, IServiceProvider serviceProvider) 
+    public sealed class WorkflowDefinitionDbContext(DbContextOptions options, IServiceProvider serviceProvider)
         : ElsaDbContextBase(options, serviceProvider)
     {
         /// <summary>

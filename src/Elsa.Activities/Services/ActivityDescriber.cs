@@ -1,10 +1,7 @@
 ﻿using Elsa.Activities.Core.Contracts;
 using Elsa.Activities.Core.Models;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Text;
 
 namespace Elsa.Activities.Services
 {

@@ -1,9 +1,6 @@
 using Elsa.Expressions.Liquid.Contracts;
 using Fluid;
 using Fluid.Values;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Expressions.Liquid.Filters
 {

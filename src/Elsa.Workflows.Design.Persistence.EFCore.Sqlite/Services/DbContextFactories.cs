@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Services
     public sealed class WorkflowDefinitionDbContextFactory : SqliteDesignTimeDbContextFactory<WorkflowDefinitionDbContext>;
 
 
-    public class SqliteDesignTimeDbContextFactory<TDbContext> : DesignTimeDbContextFactoryBase<TDbContext> 
+    public class SqliteDesignTimeDbContextFactory<TDbContext> : DesignTimeDbContextFactoryBase<TDbContext>
         where TDbContext : Microsoft.EntityFrameworkCore.DbContext
     {
         protected override void ConfigureBuilder(DbContextOptionsBuilder<TDbContext> builder, string connectionString)

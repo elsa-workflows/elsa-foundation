@@ -1,11 +1,11 @@
 namespace Elsa.Expressions.Core
 {
     public interface IVariable<TValue> : IVariable
-    {        
+    {
         /// <summary>
         /// Gets the value of the variable.
         /// </summary>
-        TValue? Get(IExpressionExecutionContext context);      
+        TValue? Get(IExpressionExecutionContext context);
 
         public IVariable<TValue> WithId(string id)
         {

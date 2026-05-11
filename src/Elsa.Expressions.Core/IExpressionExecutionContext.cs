@@ -30,7 +30,7 @@ namespace Elsa.Expressions.Core
 
         object? GetRequiredService(Type type);
 
-        public TService GetRequiredService<TService>() where TService : notnull 
+        public TService GetRequiredService<TService>() where TService : notnull
             => (TService)GetRequiredService(typeof(TService))!;
 
         /// <summary>

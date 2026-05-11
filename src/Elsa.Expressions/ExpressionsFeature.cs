@@ -1,10 +1,10 @@
 using CShells.Features;
-using Elsa.Expressions.Core;
-using Elsa.Serialization.Core;
 using Elsa.Expressions.Contracts;
+using Elsa.Expressions.Core;
 using Elsa.Expressions.JsonConverters;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;
+using Elsa.Serialization.Core;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions
@@ -19,12 +19,12 @@ namespace Elsa.Expressions
         public ExpressionEvaluatorOptions EvaluatorOptions { get; set; } = new();
 
         public void ConfigureServices(IServiceCollection services)
-        {            
+        {
             services
                 .AddSingleton<IExpressionDescriptorRegistry, ExpressionDescriptorRegistry>()
                 .Configure<ExpressionEvaluatorOptions>(o =>
                 {
-                        o.Arguments = EvaluatorOptions.Arguments;
+                    o.Arguments = EvaluatorOptions.Arguments;
                 })
                 .AddSingleton<IVariableFormatter, VariableFormatter>()
                 .AddSingleton<IVariableMapper, VariableMapper>()

@@ -10,7 +10,7 @@ namespace Elsa.Caching.Memory
     /// Configures the MemoryCache.
     /// </summary>
     [ShellFeature(
-        name:  "MemoryCache",
+        name: "MemoryCache",
         DisplayName = "Memory Cache",
         Description = "Provides in-memory caching capabilities."
     )]

@@ -12,7 +12,7 @@ namespace Elsa.Expressions.Liquid.Filters
     /// </summary>
     public sealed class Base64Filter : ILiquidFilter
     {
-        public const string Key = "base64";        
+        public const string Key = "base64";
 
         /// <inheritdoc />
         public ValueTask<FluidValue> ProcessAsync(FluidValue input, FilterArguments arguments, TemplateContext context)

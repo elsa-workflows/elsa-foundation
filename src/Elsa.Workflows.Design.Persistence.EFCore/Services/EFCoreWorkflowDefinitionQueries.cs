@@ -1,6 +1,6 @@
+using Elsa.Persistence.Core;
 using Elsa.Primitives.Extensions;
 using Elsa.Primitives.Persistence;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -11,7 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Services
 {
-    public sealed class EFCoreWorkflowDefinitionQueries(IQueries<WorkflowDefinition> queries, IDbContextFactory<WorkflowDefinitionDbContext> dbContextFactory) 
+    public sealed class EFCoreWorkflowDefinitionQueries(IQueries<WorkflowDefinition> queries, IDbContextFactory<WorkflowDefinitionDbContext> dbContextFactory)
         : IWorkflowDefinitionQueries
     {
         /// <inheritdoc />
@@ -45,7 +45,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services
             var results = await queries.QueryAsync(query, cancellationToken).ToList();
 
             return new(results, count);
-        }    
+        }
 
         /// <inheritdoc />
         public async Task<IEnumerable<WorkflowDefinition>> FindManyAsync(IWorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
@@ -79,7 +79,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services
               .AsQueryable()
               .OrderBy(order);
 
-            var queryable = GetQuery(filter).Invoke(set);            
+            var queryable = GetQuery(filter).Invoke(set);
             var count = await queryable.LongCountAsync(cancellationToken);
             queryable = Paginate(queryable, pageArgs);
 
@@ -143,7 +143,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services
             var exists = await queries.AnyAsync(x => x.Name == name && x.DefinitionId != definitionId, cancellationToken);
             return !exists;
         }
-        
+
         private static IQueryable<WorkflowDefinition> Paginate(IQueryable<WorkflowDefinition> queryable, PageArgs? pageArgs)
         {
             if (pageArgs?.Offset != null) queryable = queryable.Skip(pageArgs.Offset.Value);

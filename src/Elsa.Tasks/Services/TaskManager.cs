@@ -24,7 +24,7 @@ namespace Elsa.Tasks.Services
                 return;
 
             var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
-            
+
             var stateManager = GetOrInitializeTaskStateManager(token);
             var cancellationToken = stateManager.GetCancellationToken();
 
@@ -48,7 +48,7 @@ namespace Elsa.Tasks.Services
                 // Step 3: Start recurring tasks
                 await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, cancellationToken);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.LogError(e, "An error occurred while starting tasks.");
                 await stateManager.Stop();
@@ -62,14 +62,14 @@ namespace Elsa.Tasks.Services
 
         TaskStateManager GetOrInitializeTaskStateManager(CancellationToken token)
         {
-            if(taskStateManager is not null)
+            if (taskStateManager is not null)
                 return taskStateManager;
 
             var activationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, _shutdownCancellationTokenSource.Token);
             taskStateManager = new TaskStateManager(loggerFactory.CreateLogger<TaskStateManager>(), activationTokenSource);
 
             return taskStateManager;
-        }   
+        }
 
         private static async Task RunStartupTasks(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, CancellationToken cancellationToken)
         {
@@ -84,7 +84,7 @@ namespace Elsa.Tasks.Services
             var tasksToExecute = topologicalSorter is not null
                 ? topologicalSorter.Sort(startupTasks)
                 : startupTasks;
-            
+
             foreach (var task in tasksToExecute)
             {
                 await taskExecutor.ExecuteTaskAsync(task, cancellationToken);
@@ -135,7 +135,7 @@ namespace Elsa.Tasks.Services
                     }
                     catch (OperationCanceledException e)
                     {
-                        if(logger.IsEnabled(LogLevel.Information))
+                        if (logger.IsEnabled(LogLevel.Information))
                             logger.LogInformation(e, "Recurring task {TaskType} was cancelled", task.GetType().Name);
                     }
                     catch (Exception e) when (!e.IsFatal())
@@ -165,7 +165,7 @@ namespace Elsa.Tasks.Services
                 // Already disposed by a concurrent path.
             }
 
-            if(taskStateManager is not null)
+            if (taskStateManager is not null)
             {
                 await taskStateManager.Gate.WaitAsync();
 

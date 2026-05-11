@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Expressions.Services
 {
     /// <inheritdoc />
-    public sealed class ExpressionEvaluator(IExpressionDescriptorRegistry registry, IServiceProvider serviceProvider, IOptions<ExpressionEvaluatorOptions> evaluatorOptions) 
+    public sealed class ExpressionEvaluator(IExpressionDescriptorRegistry registry, IServiceProvider serviceProvider, IOptions<ExpressionEvaluatorOptions> evaluatorOptions)
         : IExpressionEvaluator
     {
         /// <inheritdoc />

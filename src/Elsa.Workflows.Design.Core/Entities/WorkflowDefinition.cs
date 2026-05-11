@@ -1,6 +1,5 @@
-using Elsa.Primitives.Entities;
 using Elsa.Expressions.Core;
-using Elsa.Workflows.Design.Core;
+using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Options;
 
 namespace Elsa.Workflows.Design.Core.Entities

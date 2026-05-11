@@ -1,12 +1,11 @@
 using Elsa.Expressions.Core;
-using Elsa.Notifications.Core;
 using Elsa.Expressions.Liquid.Helpers;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
+using Elsa.Notifications.Core;
 using Fluid;
 using Fluid.Values;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
 using System.Dynamic;
 
 namespace Elsa.Expressions.Liquid.Handlers
@@ -17,7 +16,7 @@ namespace Elsa.Expressions.Liquid.Handlers
     /// <remarks>
     /// Constructor.
     /// </remarks>
-    internal sealed class ConfigureLiquidEngine(IConfiguration configuration, ConfigureLiquidEngineOptions options) 
+    internal sealed class ConfigureLiquidEngine(IConfiguration configuration, ConfigureLiquidEngineOptions options)
         : INotificationHandler<RenderingLiquidTemplate>
     {
         private readonly ConfigureLiquidEngineOptions _options = options;
@@ -53,10 +52,10 @@ namespace Elsa.Expressions.Liquid.Handlers
             return Task.CompletedTask;
         }
 
-        private ConfigurationSectionWrapper GetConfigurationValue(string name) 
+        private ConfigurationSectionWrapper GetConfigurationValue(string name)
             => new(configuration.GetSection(name));
 
-        private static Task<FluidValue> ToFluidValue(object? input, TemplateOptions options) 
+        private static Task<FluidValue> ToFluidValue(object? input, TemplateOptions options)
             => Task.FromResult(FluidValue.Create(input, options));
 
         private static Task<FluidValue> GetVariable(IExpressionExecutionContext context, string key, TemplateOptions options)
@@ -74,11 +73,11 @@ namespace Elsa.Expressions.Liquid.Handlers
             // Else, fall back to workflow inputs if activity inputs don't contain the key
             if (context.TryGetActivityInput(key, out object? input) || context.TryGetWorkflowInput(key, out input))
             {
-                fluidValue = input is null 
-                    ? NilValue.Instance 
+                fluidValue = input is null
+                    ? NilValue.Instance
                     : FluidValue.Create(input, options);
             }
-                        
+
             return Task.FromResult(fluidValue);
         }
     }

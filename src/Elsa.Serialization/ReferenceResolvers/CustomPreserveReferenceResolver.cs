@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -50,8 +47,8 @@ namespace Elsa.Serialization.ReferenceResolvers
         }
 
         /// <inheritdoc />
-        public override object ResolveReference(string referenceId) => !_referenceIdToObjectMap.TryGetValue(referenceId, out var value) 
-            ? throw new JsonException() 
+        public override object ResolveReference(string referenceId) => !_referenceIdToObjectMap.TryGetValue(referenceId, out var value)
+            ? throw new JsonException()
             : value;
 
         /// <summary>

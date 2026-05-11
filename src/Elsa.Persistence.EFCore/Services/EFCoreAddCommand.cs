@@ -1,10 +1,6 @@
-﻿using Elsa.Primitives.Entities;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.EFCore.Contracts;
+﻿using Elsa.Persistence.Core;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Persistence.EFCore.Services
 {

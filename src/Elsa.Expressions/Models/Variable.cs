@@ -1,8 +1,7 @@
 using Elsa.Activities.Core.Contracts;
-using Elsa.Primitives.Extensions;
 using Elsa.Expressions.Core;
+using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
-using Elsa.Workflows.Design.Core;
 
 namespace Elsa.Expressions.Models
 {

@@ -1,7 +1,4 @@
 using Elsa.Notifications.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Notifications.Contexts
 {
@@ -15,7 +12,7 @@ namespace Elsa.Notifications.Contexts
     /// <param name="notificationStrategy">The publishing strategy to use.</param>
     /// <param name="serviceProvider">The service provider to resolve services from.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    public sealed class NotificationContext(INotification notification, IEventPublishingStrategy notificationStrategy, IServiceProvider serviceProvider, CancellationToken cancellationToken = default) 
+    public sealed class NotificationContext(INotification notification, IEventPublishingStrategy notificationStrategy, IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
         : INotificationContext
     {
 

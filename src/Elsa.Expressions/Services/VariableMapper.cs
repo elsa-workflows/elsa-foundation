@@ -1,8 +1,8 @@
-using Elsa.Primitives.Extensions;
-using Elsa.Expressions.Core;
-using Elsa.Serialization.Core;
 using Elsa.Expressions.Contracts;
+using Elsa.Expressions.Core;
 using Elsa.Expressions.Models;
+using Elsa.Primitives.Extensions;
+using Elsa.Serialization.Core;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Expressions.Services
@@ -32,8 +32,8 @@ namespace Elsa.Expressions.Services
                 .OnSuccess(value => variable.Value = value)
                 .OnFailure(e => logger.LogWarning("Failed to convert {SourceValue} to {TargetType}", source.Value, type.Name));
 
-            variable.StorageDriverType = !string.IsNullOrEmpty(source.StorageDriverTypeName) 
-                ? Type.GetType(source.StorageDriverTypeName) 
+            variable.StorageDriverType = !string.IsNullOrEmpty(source.StorageDriverTypeName)
+                ? Type.GetType(source.StorageDriverTypeName)
                 : null;
 
             return variable;

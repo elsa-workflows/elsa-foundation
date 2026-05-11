@@ -1,10 +1,9 @@
-using Elsa.Primitives.Entities;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Options;
+using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.DependencyInjection;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Elsa.Persistence.EFCore
 {
@@ -118,7 +117,7 @@ namespace Elsa.Persistence.EFCore
         /// Determine if an entity was modified.
         /// </summary>
         private bool IsModifiedEntity(EntityEntry entityEntry)
-        {            
+        {
             return ModifiedEntityStates.Contains(entityEntry.State) && entityEntry.Entity is Entity;
         }
     }

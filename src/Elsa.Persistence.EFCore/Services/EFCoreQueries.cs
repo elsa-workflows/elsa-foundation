@@ -1,8 +1,8 @@
-using Elsa.Primitives.Entities;
-using Elsa.Primitives.Persistence;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Primitives.Entities;
+using Elsa.Primitives.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Open.Linq.AsyncExtensions;
@@ -15,18 +15,18 @@ namespace Elsa.Persistence.EFCore.Services
     /// </summary>
     /// <typeparam name="TDbContext">The type of the database context.</typeparam>
     /// <typeparam name="TEntity">The type of the entity.</typeparam>
-    public sealed class EFCoreQueries<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IServiceProvider serviceProvider) 
+    public sealed class EFCoreQueries<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IServiceProvider serviceProvider)
         : IQueries<TEntity>
         where TDbContext : DbContext
         where TEntity : Entity, new()
-    {        
+    {
         /// <summary>
         /// Creates a new instance of the database context.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The database context.</returns>
         private Task<TDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => dbContextFactory.CreateDbContextAsync(cancellationToken);
-             
+
 
         /// <inheritdoc />
         public async Task<TEntity?> FindAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
@@ -77,7 +77,7 @@ namespace Elsa.Persistence.EFCore.Services
 
         static IQueryable<TEntity> ApplyOrder<TProp>(IQueryable<TEntity> query, OrderDefinition<TEntity, TProp> order)
         {
-            if(order.Direction == OrderDirection.Descending)
+            if (order.Direction == OrderDirection.Descending)
             {
                 return query.OrderByDescending(order.KeySelector);
             }
@@ -87,7 +87,7 @@ namespace Elsa.Persistence.EFCore.Services
 
         /// <inheritdoc />
         public async Task<Page<TEntity>> FindManyAsync(
-            Expression<Func<TEntity, bool>>? predicate,         
+            Expression<Func<TEntity, bool>>? predicate,
             PageArgs? pageArgs = null,
             CancellationToken cancellationToken = default)
         {
@@ -96,7 +96,7 @@ namespace Elsa.Persistence.EFCore.Services
 
             if (predicate != null)
                 set = set.Where(predicate);
-    
+
             var page = await set.PaginateAsync(pageArgs);
 
             return page;
@@ -135,7 +135,7 @@ namespace Elsa.Persistence.EFCore.Services
         public async Task<IEnumerable<TEntity>> QueryAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContextAsync(cancellationToken);
-            
+
             var loadingHandlersRegistered = LoadingHandlersRegistered();
             var set = loadingHandlersRegistered
                 ? dbContext.Set<TEntity>()

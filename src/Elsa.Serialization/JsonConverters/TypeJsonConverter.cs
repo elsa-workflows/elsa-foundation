@@ -49,8 +49,8 @@ namespace Elsa.Serialization.JsonConverters
             if (value.IsArray)
             {
                 var elementType = value.GetElementType()!;
-                var elementTypeAlias = wellKnownTypeRegistry.TryGetAlias(elementType, out var elementTypeAliasValue) 
-                    ? elementTypeAliasValue 
+                var elementTypeAlias = wellKnownTypeRegistry.TryGetAlias(elementType, out var elementTypeAliasValue)
+                    ? elementTypeAliasValue
                     : elementType.GetSimpleAssemblyQualifiedName();
 
                 writer.WriteStringValue($"{elementTypeAlias}[]");
@@ -70,8 +70,8 @@ namespace Elsa.Serialization.JsonConverters
                 }
             }
 
-            var typeAlias = wellKnownTypeRegistry.TryGetAlias(value, out var alias) 
-                ? alias 
+            var typeAlias = wellKnownTypeRegistry.TryGetAlias(value, out var alias)
+                ? alias
                 : value.GetSimpleAssemblyQualifiedName();
 
             writer.WriteStringValue(typeAlias);

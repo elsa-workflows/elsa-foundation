@@ -23,6 +23,6 @@ namespace Elsa.Expressions.Core
         /// <param name="id"></param>
         /// <returns></returns>
         IVariable<T> Create<T>(string name, T value, string? id = null)
-            where T: notnull;
+            where T : notnull;
     }
 }

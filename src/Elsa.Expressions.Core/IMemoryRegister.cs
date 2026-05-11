@@ -21,7 +21,7 @@ namespace Elsa.Expressions.Core
         /// Returns the memory block with the specified ID.
         /// </summary>
         public bool TryGetBlock(string id, out IMemoryBlock block)
-        {            
+        {
             return Blocks.TryGetValue(id, out block!);
         }
 

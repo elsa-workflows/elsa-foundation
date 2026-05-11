@@ -1,18 +1,18 @@
 using Elsa.Expressions.Core;
 using Elsa.Expressions.Liquid.Contracts;
+using Elsa.Expressions.Liquid.Extensions;
 using Elsa.Expressions.Liquid.Notifications;
+using Elsa.Expressions.Liquid.Options;
+using Elsa.Notifications.Core;
 using Fluid;
 using Microsoft.Extensions.Caching.Memory;
-using Elsa.Notifications.Core;
-using Elsa.Expressions.Liquid.Extensions;
-using Elsa.Expressions.Liquid.Options;
 
 namespace Elsa.Expressions.Liquid.Services
 {
     /// <summary>
     /// Constructor.
     /// </summary>
-    public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, INotificationSender notificationSender, LiquidTemplateManagerOptions options) 
+    public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, INotificationSender notificationSender, LiquidTemplateManagerOptions options)
         : ILiquidTemplateManager
     {
 

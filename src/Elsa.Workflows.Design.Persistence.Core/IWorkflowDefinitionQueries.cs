@@ -1,10 +1,6 @@
 using Elsa.Primitives.Persistence;
 using Elsa.Workflows.Design.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Workflows.Design.Persistence.Core
 {

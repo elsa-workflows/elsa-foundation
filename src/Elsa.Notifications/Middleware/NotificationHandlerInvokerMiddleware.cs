@@ -1,5 +1,5 @@
-using Elsa.Notifications.Core;
 using Elsa.Notifications.Contexts;
+using Elsa.Notifications.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -26,10 +26,10 @@ namespace Elsa.Notifications.Middleware
                 .ToArray();
 
             var strategyContext = new NotificationStrategyContext(
-                context, 
-                handlers, 
-                logger, 
-                serviceProvider, 
+                context,
+                handlers,
+                logger,
+                serviceProvider,
                 context.CancellationToken
             );
             await context.NotificationStrategy.PublishAsync(strategyContext);

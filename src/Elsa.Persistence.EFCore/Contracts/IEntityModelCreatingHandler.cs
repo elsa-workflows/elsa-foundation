@@ -1,9 +1,5 @@
-using Elsa.Persistence.EFCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Persistence.EFCore.Contracts
 {

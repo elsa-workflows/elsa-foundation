@@ -1,9 +1,7 @@
 using Elsa.Notifications.Core;
-using Microsoft.Extensions.DependencyInjection;
-using System;
 using Elsa.Primitives.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
-using System.Text;
 
 namespace Elsa.Notifications.Helpers
 {
