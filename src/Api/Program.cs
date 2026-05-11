@@ -4,7 +4,7 @@ using CShells.DependencyInjection;
 using Elsa.Caching.Memory;
 using Elsa.Expressions;
 using Elsa.Expressions.Liquid;
-using Elsa.Locking;
+using Elsa.Locking.FileSystem;
 using Elsa.Notifications;
 using Elsa.Serialization;
 using Elsa.Tasks;

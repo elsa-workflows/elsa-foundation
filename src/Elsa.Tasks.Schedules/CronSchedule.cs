@@ -1,5 +1,5 @@
 using Cronos;
-using Elsa.Common.Contracts;
+using Elsa.Primitives.Contracts;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.Logging;
 

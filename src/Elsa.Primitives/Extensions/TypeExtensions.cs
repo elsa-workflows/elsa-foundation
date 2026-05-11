@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text;
 
-namespace Elsa.Common.Extensions
+namespace Elsa.Primitives.Extensions
 {
     /// <summary>
     /// Extends <see cref="Type"/> with additional methods.

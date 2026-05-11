@@ -1,7 +1,7 @@
 using Elsa.Notifications.Core;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using System.Reflection;
 using System.Text;
 

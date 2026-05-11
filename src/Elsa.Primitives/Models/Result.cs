@@ -1,4 +1,4 @@
-namespace Elsa.Common.Models
+namespace Elsa.Primitives.Models
 {
     /// <summary>
     /// A strongly typed monad that runs either the <see cref="OnSuccess"/> or <see cref="OnFailure"/> lambda, depending on whether or not the operation succeeded.

@@ -1,4 +1,4 @@
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
 using System.Text.Json;
 using System.Text.Json.Serialization;

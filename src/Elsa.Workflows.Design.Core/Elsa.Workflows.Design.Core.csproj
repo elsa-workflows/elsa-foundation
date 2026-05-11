@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Activities.Core\Elsa.Activities.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Common\Elsa.Common.csproj" />
+    <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>
 

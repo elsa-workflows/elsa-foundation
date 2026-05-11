@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Elsa.Common.Extensions
+namespace Elsa.Primitives.Extensions
 {
     public static class CollectionExtensions
     {

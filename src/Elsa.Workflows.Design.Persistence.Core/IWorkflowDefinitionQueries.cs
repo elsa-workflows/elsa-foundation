@@ -1,4 +1,4 @@
-using Elsa.Common.Persistence;
+using Elsa.Primitives.Persistence;
 using Elsa.Workflows.Design.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;

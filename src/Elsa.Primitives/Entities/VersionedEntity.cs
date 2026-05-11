@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Elsa.Common.Entities
+namespace Elsa.Primitives.Entities
 {
     /// <summary>
     /// Represents an entity that is versioned.

@@ -1,4 +1,4 @@
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using System.Linq.Expressions;
 
 namespace Elsa.Persistence.EFCore.Extensions

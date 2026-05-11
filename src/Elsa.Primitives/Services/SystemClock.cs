@@ -1,6 +1,6 @@
-using Elsa.Common.Contracts;
+using Elsa.Primitives.Contracts;
 
-namespace Elsa.Common.Services
+namespace Elsa.Primitives.Services
 {
     /// <inheritdoc />
     public sealed class SystemClock : ISystemClock

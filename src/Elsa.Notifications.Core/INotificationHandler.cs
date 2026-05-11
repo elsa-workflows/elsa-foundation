@@ -1,5 +1,5 @@
 using System.Reflection;
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 
 namespace Elsa.Notifications.Core
 {

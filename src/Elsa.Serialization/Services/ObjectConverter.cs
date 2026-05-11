@@ -1,5 +1,5 @@
-using Elsa.Common.Extensions;
-using Elsa.Common.Models;
+using Elsa.Primitives.Extensions;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
 using Elsa.Serialization.Core.Options;

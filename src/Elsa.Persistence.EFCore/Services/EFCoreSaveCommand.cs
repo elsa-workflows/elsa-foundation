@@ -1,4 +1,4 @@
-﻿using Elsa.Common.Entities;
+﻿using Elsa.Primitives.Entities;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Extensions;
 using Microsoft.EntityFrameworkCore;

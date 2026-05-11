@@ -1,8 +1,8 @@
-using Elsa.Locking.Options;
+using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Locking.Adaptors
+namespace Elsa.Locking.FileSystem.Adaptors
 {
     /// <inheritdoc />
     public sealed class DistributedLockProviderAdaptor(IDistributedLockProvider distributedLockProvider, IOptions<DistributedLockingOptions> options) : Elsa.Locking.Core.IDistributedLockProvider

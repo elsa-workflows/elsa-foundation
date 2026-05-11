@@ -1,5 +1,5 @@
-using Elsa.Common.Entities;
-using Elsa.Common.Persistence;
+using Elsa.Primitives.Entities;
+using Elsa.Primitives.Persistence;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Extensions;

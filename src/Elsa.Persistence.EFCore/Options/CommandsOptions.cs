@@ -1,4 +1,4 @@
-﻿using Elsa.Common.Entities;
+﻿using Elsa.Primitives.Entities;
 
 namespace Elsa.Persistence.EFCore.Options
 {

@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Common.Models
+namespace Elsa.Primitives.Models
 {
     /// <summary>
     /// Provides parameters for querying a given version of versioned entities.

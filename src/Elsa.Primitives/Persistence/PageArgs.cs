@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Elsa.Common.Persistence
+namespace Elsa.Primitives.Persistence
 {
     /// <summary>
     /// Represents pagination arguments.

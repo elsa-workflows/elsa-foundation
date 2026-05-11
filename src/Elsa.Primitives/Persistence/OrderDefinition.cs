@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 
-namespace Elsa.Common.Persistence
+namespace Elsa.Primitives.Persistence
 {
     /// <summary>
     /// Represents the order by which to order the results of a query.

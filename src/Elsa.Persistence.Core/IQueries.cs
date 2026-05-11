@@ -1,5 +1,5 @@
-using Elsa.Common.Entities;
-using Elsa.Common.Persistence;
+using Elsa.Primitives.Entities;
+using Elsa.Primitives.Persistence;
 using System.Linq.Expressions;
 
 namespace Elsa.Persistence.Core

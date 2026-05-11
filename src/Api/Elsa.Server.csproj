@@ -18,7 +18,7 @@
     <ProjectReference Include="..\Elsa.Caching.Memory\Elsa.Caching.Memory.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Liquid\Elsa.Expressions.Liquid.csproj" />
     <ProjectReference Include="..\Elsa.Expressions\Elsa.Expressions.csproj" />
-    <ProjectReference Include="..\Elsa.Locking\Elsa.Locking.csproj" />
+    <ProjectReference Include="..\Elsa.Locking.FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\Elsa.Notifications\Elsa.Notifications.csproj" />
     <ProjectReference Include="..\Elsa.Serialization\Elsa.Serialization.csproj" />
     <ProjectReference Include="..\Elsa.Tasks\Elsa.Tasks.csproj" />

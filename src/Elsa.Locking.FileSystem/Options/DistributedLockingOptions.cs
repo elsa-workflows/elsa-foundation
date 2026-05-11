@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Elsa.Locking.Options
+namespace Elsa.Locking.FileSystem.Options
 {
     public class DistributedLockingOptions
     {

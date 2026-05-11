@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
-namespace Elsa.Common.Extensions
+namespace Elsa.Primitives.Extensions
 {
     public static class PropertyAccessorExtentions
     {

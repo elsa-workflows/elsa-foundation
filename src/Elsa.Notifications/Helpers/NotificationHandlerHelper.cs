@@ -1,4 +1,4 @@
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using Elsa.Notifications.Core;
 using System;
 using System.Collections.Generic;

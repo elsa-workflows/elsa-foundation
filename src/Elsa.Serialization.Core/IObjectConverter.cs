@@ -1,4 +1,4 @@
-using Elsa.Common.Models;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core.Options;
 
 namespace Elsa.Serialization.Core

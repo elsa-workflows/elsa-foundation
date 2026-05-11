@@ -1,11 +1,11 @@
 using CShells.Features;
-using Elsa.Locking.Adaptors;
-using Elsa.Locking.Options;
+using Elsa.Locking.FileSystem.Adaptors;
+using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading.FileSystem;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Locking
+namespace Elsa.Locking.FileSystem
 {
     [ShellFeature(
         name: "FileSystemDistributedLocking",

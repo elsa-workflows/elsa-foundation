@@ -16,7 +16,7 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Common\Elsa.Common.csproj" />
+    <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 

@@ -1,12 +1,12 @@
-using Elsa.Common.Entities;
-using Elsa.Common.Models;
-using Elsa.Common.Persistence;
+using Elsa.Primitives.Entities;
+using Elsa.Primitives.Models;
+using Elsa.Primitives.Persistence;
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 
-namespace Elsa.Common.Extensions
+namespace Elsa.Primitives.Extensions
 {
     /// <summary>
     /// Provides extension methods for <see cref="VersionedEntity"/> objects.

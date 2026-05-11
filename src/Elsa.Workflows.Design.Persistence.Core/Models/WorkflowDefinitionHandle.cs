@@ -1,4 +1,4 @@
-using Elsa.Common.Models;
+using Elsa.Primitives.Models;
 using System;
 using System.Collections.Generic;
 using System.Text;

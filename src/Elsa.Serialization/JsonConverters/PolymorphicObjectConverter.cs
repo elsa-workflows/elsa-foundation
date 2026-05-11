@@ -1,4 +1,4 @@
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Extensions;
 using Elsa.Serialization.ReferenceHandlers;
 using Elsa.Serialization.ReferenceResolvers;

@@ -1,4 +1,4 @@
-using Elsa.Common.Extensions;
+using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Serialization.Services
