@@ -18,10 +18,16 @@ Added sections (relative to the empty speckit template):
     closes with a cross-reference to framework §2.21.1 (golden rule of refactoring)
     binding all refactor work in this constitution's scope.
   - §E2 Elsa domain decomposition:
-      §E2.1 The Elsa domain tree (12 top-level domains).
-      §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split (NEW —
-            promoted from project memory; hard rule Runtime MUST NOT depend on Design;
-            WorkflowExecutable seam; three deployment shapes; naming history).
+      §E2.1 The Elsa domain tree (12 top-level domains; Workflows.Management removed
+            on 2026-05-11 after Joey+Sipke+Frans confirmed Management → Design rename).
+      §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split:
+            §E2.2.1 Design sub-domain
+            §E2.2.2 Runtime sub-domain
+            §E2.2.3 Three deployment shapes
+            §E2.2.4 Naming history
+            (Originally also contained §E2.2.3 "The seam — WorkflowExecutable" and
+             specific runtime entities; both removed 2026-05-11 after Sipke meeting and
+             pulled into the Workflow execution seam follow-up file.)
       §E2.3 Elsa.Primitives charter (no Elsa.Common; Elsa.Foundation.Core held back).
       §E2.4 Elsa foundation repo composition (in-repo vs standalone snapshot 2026-05-11).
       §E2.5 ElsaDbContextBase — opt-in capability, not requirement.
@@ -33,8 +39,6 @@ Added sections (relative to the empty speckit template):
       §E3.5 Dual-integration smell (Elsa.Http ↔ Elsa.Expressions.JavaScript).
   - §E4 Elsa configuration [DEFERRED — Configuration & Infrastructure meeting].
   - §E5 Elsa packaging snapshot.
-  - §E6 Open Elsa items (Entity Design, Configuration, DI Container Observability,
-    Packaging & Versioning + Branching Strategy).
   - Governance — Elsa amendment process, sync rule with framework constitution,
     compliance review.
 
@@ -54,13 +58,55 @@ Structural deviation from speckit template (justified, intentional):
   speckit-constitution runs MUST preserve the §-numbered structure.
 
 Memory promotion executed:
-  - project_workflows_bounded_context → §E2.2.
+  - project_workflows_bounded_context → §E2.2 (partial — split + hard rule + naming
+    landed in §E2.2; the WorkflowExecutable seam + three-deployment-shapes detail
+    were deferred to follow-up `2026-05-11_workflow_execution_seam.md` on 2026-05-11
+    after the Joey+Sipke alignment meeting).
 
-Follow-up TODOs:
+Post-initial-population revision 2026-05-11 (still pre-ratification, no version bump):
+  - §E2.1 Workflows.Management row removed; Management → Design rename confirmed by
+    Joey + Sipke + Frans.
+  - §E2.2 "Hard rule" preserved (Runtime MUST NOT depend on Design); seam mechanism
+    deferred.
+  - §E2.2.3 "The seam — WorkflowExecutable" section deleted; concept moved to
+    follow-up `2026-05-11_workflow_execution_seam.md`.
+  - §E2.2.4 / §E2.2.5 renumbered to §E2.2.3 / §E2.2.4.
+  - §E2.2.1: removed `IActivityDefinition` from listed Design contracts (deferred).
+  - §E2.2.2: removed specific Runtime entities (deferred).
+  - §E2.4 "Workflow management" → "Workflow design" in foundation-repo table.
+  - §E6 Open Elsa items section deleted entirely (per Joey 2026-05-11): pure project
+    record, not constitutional content. Inline [DEFERRED] markers and direct follow-up
+    file links cover what mattered constitutionally; this SIR's Follow-up TODOs block
+    is now the single index of deferred items.
+  - Plan-template G15: WorkflowExecutable seam reference removed; hard-rule citation
+    of §E2.2 preserved.
+  - §E3.1 Cross-`.Core` composition worked example rewritten: the non-existent
+    `Elsa.Workflows.Core` parent package removed; example reshaped around the observable
+    `Elsa.Persistence.Core` cross-reference. Note added that Design and Runtime are
+    independent sub-domain Cores with no shared parent. Inconsistency with §E2.2's hard
+    rule resolved.
+
+Follow-up TODOs (single index of deferred items, post-§E6-removal):
   - TODO(RATIFICATION_DATE) — awaiting Joey + Sipke + Frans formal ratification.
-  - §E4 Elsa configuration — awaiting Configuration & Infrastructure meeting.
-  - §E2.1 Elsa.Workflows.Management — deferred pending Entity Design exploratory meeting.
+  - §E4 Elsa configuration — awaiting Configuration & Infrastructure meeting. (Meeting
+    opens after FastEndpoints first refactor pass yields working API.)
   - §E2.3 Elsa.Notifications charter — pending.
+  - §E2.3 Elsa.Mediator charter — pending, only if a mediator pattern materialises.
+  - Workflow execution seam (`follow-up-items/2026-05-11_workflow_execution_seam.md`) —
+    pulled from §E2.2 on 2026-05-11 (Sipke meeting). Carrier type (working names
+    WorkflowBlueprint / MaterializedWorkflow / WorkflowExecutable), ActivityRegistry
+    design, Publish-domain interaction, isolated activity execution. Candidate rules
+    CR-1..CR-5 captured in the follow-up file. Resurfaces when Runtime refactor begins.
+  - Entity Design (`follow-up-items/2026-05-08_entity_design.md`) — WorkflowDefinition
+    vs WorkflowInstance separation; three API distributions (WorkflowExecutor,
+    WorkflowBuilder, RuntimeMonitor); graphical/UI extraction. Overlaps with the
+    Workflow execution seam follow-up; scope together when Runtime refactor opens.
+  - DI Container Observability & Resolve Behaviour — replacement-vs-contribution
+    contract enforcement (framework §2.6.1) + explicit feature-dependency graph
+    (replaces the old DependsOn from framework §2.11).
+  - Packaging & Versioning + Branching Strategy
+    (`follow-up-items/2026-05-11_branching_strategy_github_flow.md`) — multi-iteration
+    packaging meeting will refine §E2.4 and §E5.
 -->
 
 # Elsa Workflow Engine Constitution
@@ -80,7 +126,7 @@ Follow-up TODOs:
 - [§E2 Elsa domain decomposition](#e2-elsa-domain-decomposition)
   - [§E2.1 The Elsa domain tree](#e21-the-elsa-domain-tree)
   - [§E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split](#e22-workflowsdesign--workflowsruntime-bounded-context-split)
-    - [§E2.2.1 Design sub-domain](#e221-design-sub-domain--the-designed-contract) · [§E2.2.2 Runtime sub-domain](#e222-runtime-sub-domain--the-runtime-representation) · [§E2.2.3 The seam — WorkflowExecutable](#e223-the-seam--workflowexecutable) · [§E2.2.4 Three deployment shapes](#e224-why-the-split--three-deployment-shapes) · [§E2.2.5 Naming history](#e225-naming-history)
+    - [§E2.2.1 Design sub-domain](#e221-design-sub-domain--the-designed-contract) · [§E2.2.2 Runtime sub-domain](#e222-runtime-sub-domain--the-runtime-representation) · [§E2.2.3 Three deployment shapes](#e223-why-the-split--three-deployment-shapes) · [§E2.2.4 Naming history](#e224-naming-history)
   - [§E2.3 `Elsa.Primitives` charter](#e23-elsaprimitives-charter)
   - [§E2.4 Elsa foundation repo composition](#e24-elsa-foundation-repo-composition)
   - [§E2.5 `ElsaDbContextBase` — opt-in capability](#e25-elsadbcontextbase--opt-in-capability-not-requirement)
@@ -92,7 +138,6 @@ Follow-up TODOs:
   - [§E3.5 Dual-integration smell](#e35-dual-integration-smell--elsahttp--elsaexpressionsjavascript)
 - [§E4 Elsa configuration — \[DEFERRED\]](#e4-elsa-configuration--deferred)
 - [§E5 Elsa packaging snapshot](#e5-elsa-packaging-snapshot)
-- [§E6 Open Elsa items (forward references)](#e6-open-elsa-items-forward-references)
 - [Governance](#governance)
 
 ---
@@ -158,8 +203,7 @@ Applying framework §2.18's methodology to Elsa, the root-level domains are:
 | Domain | Purpose (one verb-led sentence) | Surface package(s) |
 |---|---|---|
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.Persistence.{Core,EFCore,EFCore.Sqlite}` |
-| `Elsa.Workflows.Runtime` | Executes a materialised workflow from start state to completion. | `Elsa.Workflows.Runtime.Core` *(stub)*, `Elsa.Workflows.Runtime.StorageDrivers` *(stub)* |
-| `Elsa.Workflows.Management` | *(deferred — see §E2.2)* Manages workflows above the design/runtime split (lifecycle, publication, mapping). | *(pending)* |
+| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution log, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core` *(stub)*, `Elsa.Workflows.Runtime.StorageDrivers` *(stub)* |
 | `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks.Schedules` (helper) |
 | `Elsa.Scheduling` | Schedules workflow activations on time/event triggers. | `Elsa.Scheduling.Core`, `Elsa.Scheduling.<Provider>` |
 | `Elsa.Serialization` | Serialises payloads and workflow models. | `Elsa.Serialization.Core`, `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` |
@@ -175,56 +219,52 @@ Sub-domain decomposition follows framework §2.1's naming convention. Variation 
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 
-**framework §2.18 — Elsa specialization:** `Elsa.Workflows.*` is split into two bounded contexts: `.Design.*` and `.Runtime.*`. The split is load-bearing for Elsa's deployment shapes (§E2.2.4).
+**framework §2.18 — Elsa specialization:** `Elsa.Workflows.*` is split into **two dedicated sub-domains with separate persistence layers**: `.Design.*` (designs and persists workflow definitions) and `.Runtime.*` (executes workflows and persists runtime state). The asymmetry is load-bearing for Elsa's deployment shapes (§E2.2.3) and is the agreed boundary.
 
-**Hard rule.** There **must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.** Runtime knows the materialised form of a workflow; it does not know the designed form.
+**Hard rule.** There **must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.** The two sub-domains are co-equal — neither owns the other; the dependency direction is enforced (or at least audited) in CI via project references.
+
+**The seam between Design and Runtime is deferred.** The mechanism by which a workflow flows from Design into Runtime for execution — the carrier type, the activity-contract surfacing, the role of publication, the implications for an `ActivityRegistry` — is **not pinned by this constitution**. It is scheduled for the [Workflow execution seam follow-up](../../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-11_workflow_execution_seam.md) and resurfaces when the Runtime refactor begins.
 
 #### §E2.2.1 Design sub-domain — the designed contract
 
-The *designed contract* of a workflow. A `WorkflowDefinition` is JSON-shaped: input/output definitions, activity tree, expression bindings.
+Design owns the *designed contract* of a workflow: input/output definitions, activity tree, expression bindings, plus the persistence layer that stores them.
 
 Packages:
 
-- `Elsa.Workflows.Design.Core` — contracts: `IWorkflowDefinition`, `IInputDefinition`, `IOutputDefinition`, `IActivityDefinition`, etc.
+- `Elsa.Workflows.Design.Core` — contracts: `IWorkflowDefinition`, `IInputDefinition`, `IOutputDefinition`, etc.
 - `Elsa.Workflows.Design.Persistence.Core` — design-time persistence contracts.
 - `Elsa.Workflows.Design.Persistence.EFCore` — EF Core implementation.
 - `Elsa.Workflows.Design.Persistence.EFCore.Sqlite` — SQLite provider for the EF Core implementation.
 
 #### §E2.2.2 Runtime sub-domain — the runtime representation
 
-The *runtime representation* of a workflow execution. Entities recording what happened during execution.
+Runtime owns the *runtime representation* of workflow execution and its own dedicated persistence layer, separate from Design.
 
-Packages (currently stubs; full design pending the Entity Design follow-up meeting — see §E4 *Open Elsa items*):
+Packages (currently stubs; the specific runtime contracts and entities are deferred to the [Workflow execution seam follow-up](../../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-11_workflow_execution_seam.md)):
 
-- `Elsa.Workflows.Runtime.Core` — runtime contracts: `WorkflowInstance`, `ExecutionLogRecord`, `Bookmark`, etc.
+- `Elsa.Workflows.Runtime.Core` — runtime contracts.
 - `Elsa.Workflows.Runtime.StorageDrivers` — runtime persistence.
 
 Runtime does **not** reference `Elsa.Workflows.Design.Core`.
 
-#### §E2.2.3 The seam — `WorkflowExecutable`
-
-`WorkflowExecutable` (working name — also referred to as `MaterializedWorkflowEntity` or `ExecutableWorkflowArtifact` in the Entity Design exploratory work) is the **only type Runtime knows** that originates from a workflow design.
-
-It is a **separate runtime-owned type**, not a Design type. The materialization step — translating a `WorkflowDefinition` into a `WorkflowExecutable` — lives at the boundary; the host (or the Executor distribution, §E2.2.4) performs it. The libraries themselves stay separate.
-
-#### §E2.2.4 Why the split — three deployment shapes
+#### §E2.2.3 Why the split — three deployment shapes
 
 The Workflows.Design ↔ Workflows.Runtime asymmetry is what enables three deployable distribution shapes Elsa supports:
 
 | Distribution | Dependencies | Purpose |
 |---|---|---|
 | **WorkflowDesigner** | Design only | Build, edit, persist workflow definitions. No execution. |
-| **WorkflowExecutor** | Runtime only (target state); currently Runtime + Design until the seam is fully realised | Execute workflows from materialised executables. |
-| **RuntimeMonitorService** | Runtime only | Report on execution: instance metrics, execution logs, bookmarks. |
+| **WorkflowExecutor** | Currently both Design and Runtime | Execute workflows. The long-term goal is Runtime-only via the seam between the two sub-domains; the seam mechanism is deferred (see follow-up `2026-05-11_workflow_execution_seam.md`). |
+| **RuntimeMonitorService** | Runtime only | Report on execution (instance state, execution log, runtime persistence). |
 
-The naming convention makes the seam visible at the project boundary so the dependency direction can be enforced — or at least audited — in CI.
+The naming convention makes the split visible at the project boundary so the dependency direction can be enforced — or at least audited — in CI.
 
-#### §E2.2.5 Naming history
+#### §E2.2.4 Naming history
 
 Rejected names for the sub-domains:
 
 - `Elsa.Workflows.Management.*` — rejected as too broad; "Management" could equally cover Runtime concerns.
-- `Elsa.Workflows.Definitions.*` — rejected as ambiguous; both Design and Runtime ultimately concern workflow definitions in different forms (designed vs materialized).
+- `Elsa.Workflows.Definitions.*` — rejected as ambiguous; both Design and Runtime ultimately concern workflow definitions in different forms.
 - **`Elsa.Workflows.Design.*` (current)** — names the activity (designing workflows), not the artefact, which makes the asymmetry with Runtime clearer.
 
 ### §E2.3 `Elsa.Primitives` charter
@@ -258,7 +298,7 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 | `Elsa.Server` host | The application entry point. |
 | `Elsa.Primitives` | Domainless primitives — used by every other module. |
 | Workflow execution runtime + `.Core` | Without execution, the application does nothing locally. |
-| Workflow management `.Core` + a default implementation | Required to seed and update workflow definitions during local development. |
+| Workflow design `.Core` + a default implementation | Required to seed and update workflow definitions during local development. |
 | Persistence `.Core` + a default implementation (SQLite EF Core) | Local development without a default persistence implementation is impractical. |
 | Expression abstractions | Activities need an expression engine to be useful. |
 | Activity abstractions | Workflows need activities to be useful. |
@@ -298,27 +338,27 @@ The framework constitution is written with synthetic examples. The Elsa-specific
 
 ### §E3.1 Cross-`.Core` composition (framework §2.1)
 
-Top-level domain Cores:
+**There is no shared `Elsa.Workflows.Core` parent package.** Design and Runtime are *independent sub-domain Cores* — each stands on its own, consistent with §E2.2's bounded-context split. Cross-`.Core` composition still happens (and framework §2.1 applies), but through unrelated top-level Cores that both sub-domains may consume.
 
-- `Elsa.Workflows.Core` — workflow contracts (e.g. `IWorkflowDefinition`, `IInputDefinition`).
+Top-level domain Cores in play:
+
 - `Elsa.Persistence.Core` — generic persistence contracts (e.g. `IAddCommand<T>`, `IQuery<T>`).
 - `Elsa.Serialization.Core` — serialization contracts.
 
-Sub-domain Cores under `Elsa.Workflows`:
+Workflows sub-domain Cores (no shared parent):
 
-- `Elsa.Workflows.Design.Core` — design sub-domain Core, references `Elsa.Workflows.Core`.
-- `Elsa.Workflows.Runtime.Core` — runtime sub-domain Core, references `Elsa.Workflows.Core` (but **not** `Elsa.Workflows.Design.Core`, per §E2.2).
+- `Elsa.Workflows.Design.Core` — design-time contracts: `IWorkflowDefinition`, `IInputDefinition`, `IOutputDefinition`, etc.
+- `Elsa.Workflows.Runtime.Core` — runtime contracts (specifics deferred — see follow-up `2026-05-11_workflow_execution_seam.md`). **Does not reference `Elsa.Workflows.Design.Core`** (§E2.2 hard rule).
 
-Sub-sub-domain Cores under `Elsa.Workflows.Design.Persistence`:
+The **observable cross-`.Core` reference today** is in Design's sub-sub-domain Cores:
 
-- `Elsa.Workflows.Design.Persistence.Core` — references `Elsa.Workflows.Design.Core`. *May* additionally reference `Elsa.Persistence.Core` to consume `IAddCommand<T>` etc. — this cross-`.Core` reference is an explicit design choice, not automatic.
+- `Elsa.Workflows.Design.Persistence.Core` — references `Elsa.Workflows.Design.Core` and *may* reference `Elsa.Persistence.Core` as an explicit design choice when this would make sense.
 
 Implementations:
 
-- `Elsa.Workflows.Design.Persistence.EFCore` — EF Core implementation of the design persistence sub-sub-domain.
-- `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` — variation implementations of serialization.
+- `Elsa.Workflows.Design.Persistence.EFCore` — EF Core implementation of the design-persistence sub-sub-domain.
 
-**Impl-to-impl carve-out (framework §2.1, row 7).** Implementations across **unrelated** sub-domains never reference each other — e.g. `Elsa.Workflows.Design.Persistence.EFCore` and `Elsa.Workflows.Runtime.StorageDrivers.SqlServer` (when it exists) never reference each other. Implementations **within the same provider family** *may* — e.g. an `Elsa.Workflows.Design.Persistence.EFCore.SqlServer` provider package extending an `Elsa.Workflows.Design.Persistence.EFCore` base implementation. This is directional, intentional, and reflected in the package naming and dependency graph.
+**Impl-to-impl carve-out (framework §2.1, row 7).** Implementations across **unrelated** sub-domains never reference each other — e.g. `Elsa.Workflows.Design.Persistence.EFCore` and any future `Elsa.Workflows.Runtime.StorageDrivers.*` provider must not reference each other. Implementations **within the same provider family** *may* — e.g. an `Elsa.Workflows.Design.Persistence.EFCore.SqlServer` provider package extending an `Elsa.Workflows.Design.Persistence.EFCore` base implementation. This is directional, intentional, and reflected in the package naming and dependency graph.
 
 ### §E3.2 Adapter pattern (framework §2.7 + §2.20)
 
@@ -392,17 +432,6 @@ This section will be revised when the follow-up meeting closes.
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
 **Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host (`Elsa.Server`) pins `.Core` libraries; Nuplane focuses on dynamically loading Layer-3 implementations, helper libraries, and optional features. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
-
----
-
-## §E6 Open Elsa items (forward references)
-
-The following are tracked in the meta-repo (`../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/`) and will land in future versions of this constitution:
-
-- **Entity Design** (`2026-05-08_entity_design.md`) — `WorkflowDefinition` vs `WorkflowInstance` separation; the materialized `WorkflowExecutable` seam; three API distributions (`WorkflowExecutor`, `WorkflowBuilder`, `RuntimeMonitor`); whether graphical/UI aspects are extracted into a separate distribution.
-- **Configuration & Infrastructure** — see §E4 above.
-- **DI Container Observability & Resolve Behaviour** — encompasses replacement-vs-contribution contract enforcement (framework §2.6.1) and the explicit feature-dependency graph (replaces the old `DependsOn` from framework §2.11).
-- **Packaging & Versioning + Branching Strategy** (`2026-05-11_branching_strategy_github_flow.md`) — the multi-iteration packaging meeting will refine §E2.4 and §E5.
 
 ---
 

@@ -1,21 +1,18 @@
 namespace Elsa.Locking.Core
 {
-    //
-    // Summary:
-    //     A handle to a distributed lock or other synchronization primitive. To unlock/release,
-    //     simply dispose the handle.
+    /// <summary>
+    /// A handle representing an acquired distributed lock or synchronization primitive.
+    /// Dispose (synchronously or asynchronously) to release.
+    /// </summary>
     public interface IDistributedSynchronizationHandle : IDisposable, IAsyncDisposable
     {
-        //
-        // Summary:
-        //     Gets a System.Threading.CancellationToken instance which may be used to monitor
-        //     whether the handle to the lock is lost before the handle is disposed. For example,
-        //     this could happen if the lock is backed by a database and the connection to the
-        //     database is disrupted. Not all lock types support this; those that don't will
-        //     return System.Threading.CancellationToken.None which can be detected by checking
-        //     System.Threading.CancellationToken.CanBeCanceled. For lock types that do support
-        //     this, accessing this property may incur additional costs, such as polling to
-        //     detect connectivity loss.
+        /// <summary>
+        /// A token that fires when the handle is lost before disposal — for example, when
+        /// the connection backing the lock is disrupted. Implementations that cannot detect
+        /// handle loss return <see cref="CancellationToken.None"/>; callers can distinguish
+        /// via <see cref="CancellationToken.CanBeCanceled"/>. Reading this property may incur
+        /// runtime cost (e.g. polling) on implementations that do support detection.
+        /// </summary>
         CancellationToken HandleLostToken { get; }
     }
 }

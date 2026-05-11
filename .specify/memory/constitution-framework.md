@@ -68,7 +68,7 @@ Structural deviation from speckit template (justified, intentional):
   shape. This constitution is a numbered legal-document with 20+ rules organised by §
   identifier. The deviation is intentional and load-bearing:
     (a) v2's content density does not compress into 5 short principles;
-    (b) plan-template.md's Constitution Check cites specific § identifiers (G1–G16), which
+    (b) plan-template.md's Constitution Check cites specific § identifiers (G1–G20), which
         requires this numbered structure;
     (c) the speckit-constitution skill explicitly permits varying the principle count
         ("the user might require less or more principles than the ones used in the

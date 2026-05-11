@@ -1,4 +1,4 @@
-namespace Elsa.Locking.FileSystem.Adaptors
+namespace Elsa.Locking.FileSystem
 {
     public sealed class DistributedLockHandleAdaptor(Medallion.Threading.IDistributedSynchronizationHandle handle) : Elsa.Locking.Core.IDistributedSynchronizationHandle
     {

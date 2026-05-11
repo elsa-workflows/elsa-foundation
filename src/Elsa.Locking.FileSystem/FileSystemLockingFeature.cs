@@ -1,5 +1,4 @@
 using CShells.Features;
-using Elsa.Locking.FileSystem.Adaptors;
 using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading.FileSystem;
 using Microsoft.Extensions.DependencyInjection;

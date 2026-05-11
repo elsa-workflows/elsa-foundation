@@ -252,7 +252,7 @@ With multiple developers:
 
 ## Constitutional Compliance
 
-Tasks inherit the *Constitution Check* gates (G1–G16) decided in `plan.md`. Task generation MUST NOT introduce structural choices that violate those gates — most commonly:
+Tasks inherit the *Constitution Check* gates (G1–G20) decided in `plan.md`. Task generation MUST NOT introduce structural choices that violate those gates — most commonly:
 
 - A task that *creates a package* must place it at the namespace/path dictated by framework §2.1/§2.2 (domain-language naming, no `Features.*`/`Modules.*` segments).
 - A task that *moves a type between libraries* must respect the impl-to-impl rule (framework §2.1) and the cross-`.Core` reference rule.

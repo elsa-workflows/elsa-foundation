@@ -129,7 +129,7 @@
 
 ## Constitutional Compliance
 
-This spec is implemented against the two-layer constitution at `.specify/memory/constitution.md` (Elsa) and `.specify/memory/constitution-framework.md` (framework). Constitutional compliance is enforced at the plan stage via the *Constitution Check* gates G1–G16 in `plan-template.md` — not duplicated here.
+This spec is implemented against the two-layer constitution at `.specify/memory/constitution.md` (Elsa) and `.specify/memory/constitution-framework.md` (framework). Constitutional compliance is enforced at the plan stage via the *Constitution Check* gates G1–G20 in `plan-template.md` — not duplicated here.
 
 Specs may however *originate* constitutional concerns: if a user story requires a structural pattern not yet covered by a constitutional rule, or seems to require violating an existing rule, flag it in this section. Such flags are the trigger for an architecture-meeting escalation (Definition of Done point 2).
 
