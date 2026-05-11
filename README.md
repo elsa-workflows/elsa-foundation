@@ -1,2 +1,3 @@
 # elsa-foundation
-The new Elsa foundation repo (formerly known as 'Core'). 
+
+Foundational building blocks and shared infrastructure for the Elsa Workflows ecosystem.
