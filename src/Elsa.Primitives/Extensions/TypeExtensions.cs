@@ -11,6 +11,26 @@ namespace Elsa.Primitives.Extensions
     {
         private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();
 
+        public static string GetSanitizedFullName(this Type type)
+        {
+            var ns = type.Namespace;
+            string typeName;
+
+            if (type.IsGenericType)
+            {
+                var sanitizedTypeName = type.Name[..type.Name.IndexOf('`', StringComparison.InvariantCulture)];
+                var genericArgs = type.GenericTypeArguments.Select(
+                    GetSanitizedFullName
+                );
+                typeName = $"{sanitizedTypeName}<{string.Join(',', genericArgs)}>";
+            }
+            else
+                typeName = type.Name;
+
+            return $"{ns}.{typeName}";
+        }
+ 
+
         /// <summary>
         /// Gets the assembly-qualified name of the type, without any version info etc.
         /// E.g. "System.String, System.Private.CoreLib"

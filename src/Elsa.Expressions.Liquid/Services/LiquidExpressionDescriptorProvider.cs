@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Liquid.Models;
 
 namespace Elsa.Expressions.Liquid.Services

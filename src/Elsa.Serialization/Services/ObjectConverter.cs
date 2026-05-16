@@ -3,6 +3,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
 using Elsa.Serialization.Core.Options;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -19,7 +20,7 @@ namespace Elsa.Serialization.Services
     /// <summary>
     /// A helper that attempts many strategies to try and convert the source value into the destination type. 
     /// </summary>
-    public sealed class ObjectConverter : IObjectConverter
+    public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectConverter
     {
         private static JsonSerializerOptions? _defaultSerializerOptions;
         private static JsonSerializerOptions? _internalSerializerOptions;
@@ -72,12 +73,24 @@ namespace Elsa.Serialization.Services
         public T? ConvertTo<T>(object? value, ObjectConverterOptions? converterOptions = null)
             => value != null ? (T?)ConvertTo(value, typeof(T), converterOptions) : default;
 
+        bool TryGetTypeConverter(Type targetType, out ITypeConverter typeConverter)
+        {            
+            typeConverter = serviceProvider
+                .GetServices<ITypeConverter>()
+                .FirstOrDefault(x => x.TargetType == targetType)!;
+
+            return typeConverter is not null;
+        }
+
         /// <summary>
         /// Attempts to convert the source value into the destination type.
         /// </summary>
         [RequiresUnreferencedCode("The JsonSerializer type is not trim-compatible.")]
         public object? ConvertTo(object? value, Type targetType, ObjectConverterOptions? converterOptions = null)
         {
+            if(TryGetTypeConverter(targetType, out var typeConverter))
+                return typeConverter.Convert(value);
+
             var strictMode = converterOptions?.StrictMode ?? StrictMode;
 
             if (value == null)

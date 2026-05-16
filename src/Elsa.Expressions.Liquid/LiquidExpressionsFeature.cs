@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Enums;
 using Elsa.Expressions.Liquid.Filters;

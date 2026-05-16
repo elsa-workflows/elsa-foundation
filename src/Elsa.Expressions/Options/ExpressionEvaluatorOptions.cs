@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 
 namespace Elsa.Expressions.Options
 {

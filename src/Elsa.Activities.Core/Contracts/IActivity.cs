@@ -35,18 +35,18 @@ namespace Elsa.Activities.Core.Contracts
         /// <summary>
         /// A bag of properties that can be used by custom activities and other code such as middleware components to store additional values with the activity.
         /// </summary>
-        IDictionary<string, object> CustomProperties { get; set; }
+        Dictionary<string, object> CustomProperties { get; set; }
 
         /// <summary>
         /// Synthetic properties are dynamic properties not found on the activity class itself.
         /// </summary>
         [JsonIgnore]
-        IDictionary<string, object> SyntheticProperties { get; set; }
+        Dictionary<string, object> SyntheticProperties { get; set; }
 
         /// <summary>
         /// Metadata associated with the activity. This is typically used by the workflow designer to store information about the activity.
         /// </summary>
-        IDictionary<string, object> Metadata { get; set; }
+        Dictionary<string, object> Metadata { get; set; }
 
         /// <summary>
         /// Returns a value indicating whether the activity can execute.

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Authorization.Policy" Version="2.3.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Routing" Version="2.3.10" />
+    <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
+	  <PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Http.Core\Elsa.Http.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+</Project>

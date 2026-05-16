@@ -1,0 +1,152 @@
+using Elsa.Primitives.Extensions;
+using System.Reflection.PortableExecutable;
+
+namespace Elsa.Expressions.Core.Contracts
+{
+    public interface IExpressionExecutionContext
+    {
+        /// <summary>
+        /// A shared register of computer memory. 
+        /// </summary>
+        IMemoryRegister Memory { get; }
+
+        /// <summary>
+        /// A dictionary of transient properties.
+        /// </summary>
+        IDictionary<object, object> TransientProperties { get; set; }
+
+        bool IsContainedWithinCompositeActivity();
+
+        bool TryGetActivityInput(string key, out object? value);
+
+        bool TryGetWorkflowInput(string key, out object? value);
+
+        object? GetVariableValueOrDefault(string variableName);
+
+        string GetCorrelationId();
+
+        string GetWorkfowDefinitionId();
+
+        string GetWorkfowDefinitionVersionId();
+
+        int GetWorkfowDefinitionVersion();
+
+        string GetWorkfowInstanceId();
+
+        object? GetRequiredService(Type type);
+
+        public TService GetRequiredService<TService>() where TService : notnull
+            => (TService)GetRequiredService(typeof(TService))!;
+
+        /// <summary>
+        /// Provides access to the parent <see cref="IExpressionExecutionContext"/>, if there is any.
+        /// </summary>
+        IExpressionExecutionContext? ParentContext { get; set; }
+
+        /// <summary>
+        /// A cancellation token.
+        /// </summary>
+        CancellationToken CancellationToken { get; }
+
+        /// <summary>
+        /// Returns the <see cref="IMemoryBlock"/> pointed to by the specified memory block reference.
+        /// </summary>
+        public IMemoryBlock GetBlock(Func<IMemoryBlockReference> blockReference) => GetBlock(blockReference());
+
+        /// <summary>
+        /// Returns the <see cref="IMemoryBlock"/> pointed to by the specified memory block reference.
+        /// </summary>
+        IMemoryBlock GetBlock(IMemoryBlockReference blockReference);
+
+        /// <summary>
+        /// Returns the <see cref="IMemoryBlock"/> pointed to by the specified memory block reference.
+        /// </summary>
+        bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block);
+
+        /// <summary>
+        /// Returns the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        public object? Get(Func<IMemoryBlockReference> blockReference) => Get(blockReference());
+
+        /// <summary>
+        /// Returns the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        public object? Get(IMemoryBlockReference blockReference) => GetBlock(blockReference).Value;
+
+        /// <summary>
+        /// Returns the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        public bool TryGet(IMemoryBlockReference blockReference, out object? value)
+        {
+            if (TryGetBlock(blockReference, out var block))
+            {
+                value = block.Value;
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the value of the memory block pointed to by the specified memory block reference. 
+        /// </summary>
+        public T? Get<T>(Func<IMemoryBlockReference> blockReference) => Get<T>(blockReference());
+
+        /// <summary>
+        /// Returns the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        T? Get<T>(IMemoryBlockReference blockReference);
+
+        /// <summary>
+        /// Sets the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        public void Set(Func<IMemoryBlockReference> blockReference, object? value, Action<IMemoryBlock>? configure = null) => Set(blockReference(), value, configure);
+
+        /// <summary>
+        /// Sets the value of the memory block pointed to by the specified memory block reference.
+        /// </summary>
+        void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null);
+
+        IVariable? GetVariable(string name, bool localScopeOnly = false);
+
+        IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null);
+
+        IEnumerable<IVariable> EnumerateVariablesInScope();
+
+        /// <summary>
+        /// Returns a transient property with the specified key and type.
+        /// </summary>
+        public bool TryGetTransientProperty<TValue>(object key, out TValue value)
+        {
+            var result = TransientProperties.TryGetValue(key, out var property);
+            if(property is not TValue typedProperty)
+            {
+                throw new InvalidOperationException($"Transient property with key '{key}' exists, but is of type '{property?.GetType()}' and not expected type '{typeof(TValue)}'");
+            }
+
+            value = typedProperty;
+            return result;
+        }
+
+        /// <summary>
+        /// Returns the value of the specified variable.
+        /// </summary>
+        public object GetVariableInScope(string variableName)
+        {
+            var variable = GetVariable(variableName);
+            var value = variable?.Get(this);
+
+            return value.ConvertIEnumerableToArray();
+        }
+
+        /// <summary>
+        /// Gets all variables names in scope.
+        /// </summary>
+        public IEnumerable<string> GetVariableNamesInScope() =>
+            EnumerateVariablesInScope()
+                .Select(x => x.Name)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct();
+    }
+}

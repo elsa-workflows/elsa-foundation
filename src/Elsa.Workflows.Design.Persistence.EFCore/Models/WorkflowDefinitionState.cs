@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Design.Core;
 using Elsa.Workflows.Design.Core.Options;
 using System.Text.Json.Serialization;

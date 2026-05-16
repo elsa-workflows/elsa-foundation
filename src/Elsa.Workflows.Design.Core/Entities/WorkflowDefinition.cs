@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Options;
 

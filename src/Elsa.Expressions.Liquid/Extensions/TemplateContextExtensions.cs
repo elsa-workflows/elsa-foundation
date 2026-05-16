@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Options;
 using Fluid;

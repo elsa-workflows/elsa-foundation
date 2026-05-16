@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Expressions.Contracts;
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JsonConverters;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;

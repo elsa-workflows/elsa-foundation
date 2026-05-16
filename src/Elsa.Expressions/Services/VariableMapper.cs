@@ -1,5 +1,5 @@
 using Elsa.Expressions.Contracts;
-using Elsa.Expressions.Core;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Models;
 using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
