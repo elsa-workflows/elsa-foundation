@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Providers
 {
-    internal class WorkflowInputFunctionsProvider(IWorkflowExecution workflowExecution)
+    internal sealed class WorkflowInputFunctionsProvider(IWorkflowExecutionContext workflowExecution)
         : IJavaScriptFunctionProvider
     {
         public async ValueTask<IEnumerable<IJavaScriptFunction>> GetFunctions(IExpressionExecutionContext expressionExecutionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken = default)
@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Providers
 
             var result = new List<IJavaScriptFunction>();
 
-            var inputs = workflowExecution.ExecutionContext
+            var inputs = workflowExecution
                 .GetWorkflowInputs()
                 .Where(x => VariableNameValidator.IsValidVariableName(x.Name));
 

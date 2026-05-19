@@ -18,10 +18,12 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
                 services.AddScoped<IEntitySavingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionSavingHandler>();
             }
 
-
-            services
-                .AddScoped<IEntityLoadingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionLoadingHandler>()
-                .AddScoped<IWorkflowDefinitionQueries, EFCoreWorkflowDefinitionQueries>();
+            if(UseQueries)
+            {
+                services
+                    .AddScoped<IEntityLoadingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionLoadingHandler>()
+                    .AddScoped<IWorkflowDefinitionQueries, EFCoreWorkflowDefinitionQueries>();
+            }
         }
     }
 }

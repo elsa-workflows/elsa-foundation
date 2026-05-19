@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Local CShells source pending upstream PR for generation-aware endpoint teardown.
+		     Transitively brings in CShells, CShells.Abstractions, CShells.AspNetCore.Abstractions,
+		     CShells.FastEndpoints.Abstractions via ProjectReferences inside the cshells repo. -->
+		<ProjectReference Include="..\..\cshells\src\CShells.AspNetCore\CShells.AspNetCore.csproj" />
+		<ProjectReference Include="..\..\cshells\src\CShells.FastEndpoints\CShells.FastEndpoints.csproj" />
+		<PackageReference Include="FastEndpoints" Version="7.2.0" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+		<PackageReference Include="Nuplane" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Admin" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Loading" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Sources.Directory" Version="0.0.8" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Http.Core\Elsa.Http.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Notifications.Core\Elsa.Notifications.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Persistence.Core\Elsa.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Tasks.Schedules\Elsa.Tasks.Schedules.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Activities.Core\Elsa.Workflows.Activities.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Runtime.Core\Elsa.Workflows.Runtime.Core.csproj" />
+	</ItemGroup>
+
+</Project>

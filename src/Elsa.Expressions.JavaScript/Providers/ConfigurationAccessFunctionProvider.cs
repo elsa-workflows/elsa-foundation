@@ -7,7 +7,12 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Expressions.JavaScript.Providers
 {
-    public record ConfigurationAccessFunctionProviderOptions(bool AllowConfigurationAccess, IEnumerable<string> DisallowedSections);
+    public class ConfigurationAccessFunctionProviderOptions
+    {
+        public bool AllowConfigurationAccess { get; set; } = false;
+
+        public IEnumerable<string> DisallowedSections { get; set; } = [];
+    }
 
     internal sealed class ConfigurationAccessFunctionProvider(IOptions<ConfigurationAccessFunctionProviderOptions> featureOptions, IConfiguration configuration)
         : IJavaScriptFunctionProvider,

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Providers
 {
-    internal sealed class VariableFunctionsProvider(IOptions<ProviderOptions> options, IWorkflowExecution workflowExecution)
+    internal sealed class VariableFunctionsProvider(IOptions<ProviderOptions> options, IWorkflowExecutionContext workflowExecution)
         : IJavaScriptFunctionProvider
     {
         public ValueTask<IEnumerable<IJavaScriptFunction>> GetFunctions(IExpressionExecutionContext expressionExecutionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken = default)
@@ -27,7 +27,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Providers
 
             var getVariable = new JavaScriptFunction<string>(
                 WorkflowFunctionNames.GetVariableFunctionName,
-                (ctx, name) => workflowExecution.ExecutionContext.GetVariable(name)
+                (ctx, name) => workflowExecution.GetVariable(name)
             );
             result.Add(getVariable);
 
@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Providers
 
         IEnumerable<IJavaScriptFunction> BuildWorkflowVariableFunctions()
         {
-            foreach (var variable in workflowExecution.Variables)
+            foreach (var variable in workflowExecution.GetVariables())
             {
                 var pascalName = variable.Name.Pascalize();
                 var variableType = variable.GetVariableType();
@@ -47,7 +47,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Providers
                 );
                 var getVariable = new JavaScriptFunction(
                     string.Format(WorkflowFunctionNames.GetNamedVariableFunctionFormat, pascalName),
-                    (ctx) => workflowExecution.ExecutionContext.GetVariable(variable.Name)
+                    (ctx) => workflowExecution.GetVariable(variable.Name)
                 );
 
                 yield return setVariable;
@@ -78,7 +78,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Providers
             );
 
             // Set value in Workflow Context
-            workflowExecution.ExecutionContext.SetVariable(name, value);
+            workflowExecution.SetVariable(name, value);
         }
     }
 }

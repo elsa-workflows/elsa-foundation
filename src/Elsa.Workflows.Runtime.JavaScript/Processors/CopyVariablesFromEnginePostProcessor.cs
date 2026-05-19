@@ -1,9 +1,9 @@
-﻿using Elsa.Activities.Core.Contracts;
-using Elsa.Expressions.Core.Contracts;
+﻿using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Activities.Core;
 using Elsa.Workflows.Constants;
+using Elsa.Workflows.Runtime.Core;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Processors
 {
@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Processors
     /// Copies variables from the JavaScript engine back into the expression execution context after evaluation, excluding variables that are defined as inputs to any workflow activity in the current execution context. 
     /// This allows JavaScript expressions to modify existing variables or create new ones without overwriting activity inputs.
     /// </summary>
-    internal sealed class CopyVariablesFromEnginePostProcessor : IJavaScriptEvaluationPostProcessor
+    internal sealed class CopyVariablesFromEnginePostProcessor(IWorkflowExecutionContext context) : IJavaScriptEvaluationPostProcessor
     {
         public ValueTask Process(IJavaScriptExecutionContext javascriptExecutionContext, IExpressionExecutionContext expressionExecutionContext, string Expression, object? Result)
         {
@@ -42,11 +42,9 @@ namespace Elsa.Workflows.Runtime.JavaScript.Processors
             return ValueTask.CompletedTask;
         }
 
-        private static IEnumerable<string> GetInputNames(IExpressionExecutionContext context)
+        private IEnumerable<string> GetInputNames(IExpressionExecutionContext expressionContext)
         {
-            var activityExecutionContext = context.TryGetTransientProperty<IActivityExecutionContext>(IActivityExecutionContext.ContextKey, out var aec) 
-                ? aec 
-                : null;
+            var activityExecutionContext = context.GetActivityContextForExpression(expressionContext);
 
             while (activityExecutionContext != null)
             {

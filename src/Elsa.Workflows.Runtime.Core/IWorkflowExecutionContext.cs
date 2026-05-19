@@ -1,7 +1,16 @@
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Expressions.Core.Contracts;
+
 namespace Elsa.Workflows.Runtime.Core
 {
     public interface IWorkflowExecutionContext
     {
+        string WorkflowDefinitionId { get; }
+
+        string WorkflowDefinitionVersionId { get; }
+
+        int WorkflowDefinitionVersion { get; }
+
         void SetVariable(string variableName, object? value);
 
         object GetVariable(string variableName);
@@ -20,6 +29,10 @@ namespace Elsa.Workflows.Runtime.Core
 
         string? Name { get; set; }
 
+        IEnumerable<IVariable> GetVariables();
+
         IEnumerable<WorkflowInput> GetWorkflowInputs();
+
+        IActivityExecutionContext GetActivityContextForExpression(IExpressionExecutionContext expressionContext);
     }
 }

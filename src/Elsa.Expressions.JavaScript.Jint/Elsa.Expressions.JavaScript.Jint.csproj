@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+	  <Version>0.0.4-jint4</Version>
   </PropertyGroup>
 
   <ItemGroup>

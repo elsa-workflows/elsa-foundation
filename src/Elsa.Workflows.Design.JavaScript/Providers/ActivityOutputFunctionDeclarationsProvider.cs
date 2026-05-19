@@ -1,5 +1,4 @@
-﻿using Elsa.Activities.Core.Contracts;
-using Elsa.Expressions.Core.Extensions;
+﻿using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Constants;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
@@ -10,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Design.JavaScript.Providers
 {
-    internal sealed class ActivityOutputFunctionDeclarationsProvider(IOptions<JavaScriptProviderOptions> options, IWorkflowDesignContext designContext, IActivityDescriber activityDescriber) 
+    internal sealed class ActivityOutputFunctionDeclarationsProvider(IOptions<JavaScriptProviderOptions> options, IWorkflowDesignContext designContext) 
         : IJavaScriptFunctionDeclarationProvider
     {
         public async ValueTask<IEnumerable<JavaScriptFunctionDeclaration>> GetDeclarations(CancellationToken cancellationToken = default)
@@ -19,7 +18,7 @@ namespace Elsa.Workflows.Design.JavaScript.Providers
                 return [];
 
             var activitiesWithOutput = designContext.Graph.ActivityNodes
-                .Select(x => x.Activity)
+                .Select(x => x.Definition)
                 .Where(x => x.Name.IsValidVariableName());
 
             var result = new List<JavaScriptFunctionDeclaration>();
@@ -27,8 +26,7 @@ namespace Elsa.Workflows.Design.JavaScript.Providers
             foreach (var activity in activitiesWithOutput)
             {
                 var activityName = $"{activity.Name?.Pascalize()}";
-                var descriptor = await activityDescriber.DescribeActivityAsync(activity.GetType(), cancellationToken);
-                var outputs = descriptor.Outputs
+                var outputs = activity.Outputs
                     .Where(x => VariableNameValidator.IsValidVariableName(x.Name))
                     .Select(x => x.Name.Pascalize());
 

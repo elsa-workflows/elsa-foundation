@@ -1,9 +1,10 @@
 <Solution>
   <Folder Name="/apps/">
-    <Project Path="src/Api/Elsa.Server.csproj" />
+    <Project Path="src/Server/Elsa.Server.csproj" />
   </Folder>
   <Folder Name="/core/">
-    <Project Path="src/Elsa.Activities.Core/Elsa.Activities.Core.csproj" Id="92ba06c8-8f02-409d-9b81-f02d975c2442" />
+    <Project Path="src/Elsa.Activities.Design.Core/Elsa.Activities.Design.Core.csproj" Id="003dd3ed-cf48-4d03-bf21-4fbb74dd2e11" />
+    <Project Path="src/Elsa.Activities.Runtime.Core/Elsa.Activities.Runtime.Core.csproj" Id="0859f566-e403-459d-91fc-a1c42694262a" />
     <Project Path="src/Elsa.Caching.Core/Elsa.Caching.Core.csproj" Id="bafe0ddc-6833-4b44-89ba-31ab2365bae7" />
     <Project Path="src/Elsa.Expressions.Core/Elsa.Expressions.Core.csproj" Id="8f326321-7dcc-45f9-b792-c41c297a2e13" />
     <Project Path="src/Elsa.Expressions.JavaScript.Core/Elsa.Expressions.JavaScript.Core.csproj" />
@@ -22,17 +23,16 @@
     <Project Path="src/Elsa.Workflows.Runtime.Core/Elsa.Workflows.Runtime.Core.csproj" Id="8c47eba7-039d-44fd-9162-6ebb9103102e" />
   </Folder>
   <Folder Name="/modules/">
-    <Project Path="Elsa.FastEndpoints/Elsa.FastEndpoints.csproj" Id="d77b8940-6002-411f-bbd0-ffcccc68e235" />
-    <Project Path="Elsa.Nuplane.FastEndpoints/Elsa.Nuplane.FastEndpoints.csproj" Id="3b40e9d9-4931-4027-b0a6-019e12226455" />
-    <Project Path="Elsa.Shells.FastEndpoints/Elsa.Shells.FastEndpoints.csproj" Id="b3c38fd8-bde7-4c90-807d-5c3caca0ef26" />
     <Project Path="src/Elsa.Activities/Elsa.Activities.csproj" Id="5194d143-35cc-486b-b034-861cab62288b" />
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
     <Project Path="src/Elsa.Expressions.JavaScript.Activities/Elsa.Expressions.JavaScript.Activities.csproj" />
     <Project Path="src/Elsa.Expressions.JavaScript.Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
+    <Project Path="src/Elsa.Expressions.JavaScript.Jint3/Elsa.Expressions.JavaScript.Jint3.csproj" Id="fcf91b1a-36b4-4fbd-8b84-6b39fe2c405e" />
     <Project Path="src/Elsa.Expressions.JavaScript.Libraries/Elsa.Expressions.JavaScript.Libraries.csproj" />
     <Project Path="src/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <Project Path="src/Elsa.Expressions.Liquid/Elsa.Expressions.Liquid.csproj" Id="6e8590e2-5d27-418b-a772-8d38d58a94e0" />
     <Project Path="src/Elsa.Expressions/Elsa.Expressions.csproj" Id="b8aa29ae-26a6-4379-a599-d5179dc7448f" />
+    <Project Path="src/Elsa.FastEndpoints/Elsa.FastEndpoints.csproj" />
     <Project Path="src/Elsa.Http.JavaScript/Elsa.Http.JavaScript.csproj" />
     <Project Path="src/Elsa.Http/Elsa.Http.csproj" />
     <Project Path="src/Elsa.Locking.FileSystem/Elsa.Locking.FileSystem.csproj" Id="d3c5ba84-c00b-4357-9095-3f3d74d995c3" />

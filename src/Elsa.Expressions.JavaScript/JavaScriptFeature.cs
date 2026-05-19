@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Expressions.JavaScript
 {
     [ShellFeature(
-        name: "JavaScript",
+        name: "JavaScriptExpressions",
         DisplayName = "JavaScript Expressions",
         Description = "Provides functions to register and configure JavaScript Expressions"
     )]

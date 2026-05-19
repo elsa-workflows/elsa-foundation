@@ -1,4 +1,3 @@
-using Elsa.Activities.Core.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
@@ -83,17 +82,6 @@ namespace Elsa.Expressions.Models
 
         public Variable(string name, T value, string? id = null) : base(name, value, id)
         {
-        }
-
-        /// <summary>
-        /// Gets the value of the variable.
-        /// </summary>
-        public T? Get(IActivityExecutionContext context)
-        {
-            var result = Get(context.ExpressionExecutionContext);
-            var objectConverter = context.GetRequiredService<IObjectConverter>();
-            return objectConverter.ConvertTo<T?>(result);
-
         }
 
         /// <summary>

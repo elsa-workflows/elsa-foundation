@@ -2,8 +2,8 @@
 {
     public interface IWorkflowExecutionPool
     {
-        ValueTask<IWorkflowExecution> StartWorkflowExecution();
+        ValueTask<IWorkflowExecutionContext> StartWorkflowExecution();
 
-        ValueTask<IWorkflowExecution> GetWorkflowExecution(string workflowExecutionId);
+        ValueTask<IWorkflowExecutionContext> GetWorkflowExecution(string workflowExecutionId);
     }
 }

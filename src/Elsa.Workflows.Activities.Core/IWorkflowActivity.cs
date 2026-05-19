@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Core.Contracts;
+﻿using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Design.Core;
 
 namespace Elsa.Workflows.Activities.Core

@@ -10,8 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Expressions.JavaScript.Jint
 {
     [ShellFeature(
-        "Jint", 
-        DisplayName = "Jint", 
+        "JavaScriptJintEngine", 
+        DisplayName = "JavaScript Jint engine", 
         Description = "Provides JavaScript evaluation using the Jint engine."
     )]
     public class JintFeature : IShellFeature
@@ -43,22 +43,7 @@ namespace Elsa.Expressions.JavaScript.Jint
                 .AddScoped<IJavaScriptEvaluator, JintJavaScriptEvaluator>()
                 .AddScoped<IJavaScriptExecutionContextFactory, JintExecutionContextFactory>()
                 .AddScoped<IPreparedScriptFactory, PreparedScriptFactory>()
-                ;             
-
-            // Type definition services.
-            //services            
-
-            // Handlers.
-            //services.AddNotificationHandlersFrom<JavaScriptFeature>();
-
-            // Type Script definitions.
-            //services.AddFunctionDefinitionProvider<InputFunctionsDefinitionProvider>();
-
-            // UI property handlers.
-            //services.AddScoped<IPropertyUIHandler, RunJavaScriptOptionsProvider>();
-
-            // Hosted services.
-            //services.AddHostedService<RegisterVariableTypesWithJavaScriptHostedService>();
+                ;
         }
     }
 }

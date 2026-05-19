@@ -1,5 +1,4 @@
 using Elsa.Primitives.Extensions;
-using System.Reflection.PortableExecutable;
 
 namespace Elsa.Expressions.Core.Contracts
 {
@@ -9,11 +8,6 @@ namespace Elsa.Expressions.Core.Contracts
         /// A shared register of computer memory. 
         /// </summary>
         IMemoryRegister Memory { get; }
-
-        /// <summary>
-        /// A dictionary of transient properties.
-        /// </summary>
-        IDictionary<object, object> TransientProperties { get; set; }
 
         bool IsContainedWithinCompositeActivity();
 
@@ -113,21 +107,6 @@ namespace Elsa.Expressions.Core.Contracts
         IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null);
 
         IEnumerable<IVariable> EnumerateVariablesInScope();
-
-        /// <summary>
-        /// Returns a transient property with the specified key and type.
-        /// </summary>
-        public bool TryGetTransientProperty<TValue>(object key, out TValue value)
-        {
-            var result = TransientProperties.TryGetValue(key, out var property);
-            if(property is not TValue typedProperty)
-            {
-                throw new InvalidOperationException($"Transient property with key '{key}' exists, but is of type '{property?.GetType()}' and not expected type '{typeof(TValue)}'");
-            }
-
-            value = typedProperty;
-            return result;
-        }
 
         /// <summary>
         /// Returns the value of the specified variable.
