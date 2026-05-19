@@ -1,5 +1,9 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Events;
+using Elsa.Expressions.JavaScript.Libraries.EventHandlers;
+using Elsa.Expressions.JavaScript.Libraries.Options;
+using Elsa.Mediator.Core;
 using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,7 +26,7 @@ namespace Elsa.Expressions.JavaScript.Libraries
             ValidateFeatureOptions();
 
             services
-                .AddScoped<IJavaScriptEvaluationPreProcessor, LoadLibraryPreProcessor>()
+                .AddScoped<IDomainEventHandler<OnEvaluatingScript>, LoadLibraryResource>()
                 .Configure<JavaScriptLibrariesFeatureOptions>(o => o.FullModuleResourceName = GetFullModuleResourceName());
         }
 

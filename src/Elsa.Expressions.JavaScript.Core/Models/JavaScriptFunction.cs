@@ -3,44 +3,50 @@ using Elsa.Expressions.JavaScript.Core.Exceptions;
 
 namespace Elsa.Expressions.JavaScript.Core.Models
 {
-    public class JavaScriptFunction(string name, Func<IJavaScriptExecutionContext, object[], object?> @delegate) : IJavaScriptFunction
+    public class JavaScriptFunction(string name, Func<object[], object?> @delegate) : IJavaScriptFunction
     {
-        public JavaScriptFunction(string name, Func<object[], object?> @delegate)
-            : this(name, (_, p) => @delegate(p))
+        public static IJavaScriptFunction Build<TParam1>(string name, Func<TParam1, object?> execute)
+            where TParam1 : notnull
+            => new JavaScriptFunction<TParam1>(name, execute);
+
+        public static IJavaScriptFunction Build<TParam1, TParam2>(string name, Func<TParam1, TParam2, object?> execute)
+            where TParam1 : notnull
+            where TParam2 : notnull
+            => new JavaScriptFunction<TParam1, TParam2>(name, execute);
+
+        public static IJavaScriptFunction Build<TParam1, TParam2, TParam3>(string name, Func<TParam1, TParam2, TParam3, object?> execute)
+            where TParam1 : notnull
+            where TParam2 : notnull
+            where TParam3 : notnull
+            => new JavaScriptFunction<TParam1, TParam2, TParam3>(name, execute);
+
+        public JavaScriptFunction(string name, Action<object[]> @delegate) 
+            : this(name, CreateVoidAction((p) => @delegate(p)))
         {
         }
 
-        public JavaScriptFunction(string name, Action<IJavaScriptExecutionContext, object[]> @delegate) : this(name, CreateVoidAction(@delegate))
+
+        public JavaScriptFunction(string name, Action @delegate) 
+            : this(name, CreateVoidAction((_) => @delegate()))
         {
         }
 
-        public JavaScriptFunction(string name, Action<object[]> @delegate) : this(name, CreateVoidAction((_, p) => @delegate(p)))
-        {
-        }
+        public string Name { get; } = name;
 
-        public JavaScriptFunction(string name, Action<IJavaScriptExecutionContext> @delegate) : this(name, CreateVoidAction((c, _) => @delegate(c)))
+        static private Func<object[], object?> CreateVoidAction(Action<object[]> action)
         {
-        }
-
-        public JavaScriptFunction(string name, Action @delegate) : this(name, CreateVoidAction((_, _) => @delegate()))
-        {
-        }
-        public string Name => name;
-
-        static private Func<IJavaScriptExecutionContext, object[], object?> CreateVoidAction(Action<IJavaScriptExecutionContext, object[]> action)
-        {
-            return (context, parameters) =>
+            return (parameters) =>
             {
-                action(context, parameters);
+                action(parameters);
                 return null;
             };
         }
 
 
-        public object? Execute(IJavaScriptExecutionContext context, object[] parameters)
+        public object? Execute(object[] parameters)
         {
             ValidateParameters(parameters);
-            return @delegate.Invoke(context, parameters);
+            return @delegate.Invoke(parameters);
         }
 
         private void ValidateParameters(object[] parameters)

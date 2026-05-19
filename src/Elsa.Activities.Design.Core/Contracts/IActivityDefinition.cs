@@ -1,12 +1,22 @@
 ﻿using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Contracts;
 
 namespace Elsa.Activities.Design.Core.Contracts
 {
     public interface IActivityDefinition
     {
-        string Id { get; }
+        /// <summary>
+        /// Unique, immutable name that identifies the instance within its defined scope.
+        /// </summary>
+        /// <remarks>The name must be stable for the lifetime of the instance and unique within the
+        /// relevant context (for example, a collection, namespace, or registry). Use this value as a key when
+        /// consistent identification is required.</remarks>
+        string UniqueName { get; }
 
-        string Name { get; }
+        /// <summary>
+        /// Information about the type where the activity lives
+        /// </summary>
+        ITypeInformation TypeInfo { get; }
 
         /// <summary>
         /// The category of the activity type.
@@ -22,32 +32,20 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// The description of the activity type.
         /// </summary>
         string? Description { get; }
-
+        
         /// <summary>
-        /// The fully qualified name of the activity type.
+        /// 
         /// </summary>
-        string FullyQualifiedName { get; }
-
-        /// <summary>
-        /// The namespace of the activity type.
-        /// </summary>
-        string Namespace { get; }
-
-        /// <summary>
-        /// The name of the assembly in which this activity is located
-        /// </summary>
-        string? AssemblyName { get; }
-
-        /// <summary>
-        /// The version of the assembly in which this activity is located
-        /// </summary>
-        string? AssemblyVersion { get; }
-
-
         IEnumerable<IActivityPropertyDefinition> Inputs { get; }
 
+        /// <summary>
+        /// 
+        /// </summary>
         IEnumerable<IActivityPropertyDefinition> Outputs { get; }
 
+        /// <summary>
+        /// 
+        /// </summary>
         IEnumerable<ActivityPortDefinition> Ports { get; }
 
         /// <summary>

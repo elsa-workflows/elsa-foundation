@@ -1,6 +1,5 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Expressions.JavaScript.Services

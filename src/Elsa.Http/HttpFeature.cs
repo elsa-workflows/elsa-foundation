@@ -26,7 +26,7 @@ namespace Elsa.Http
         public void ConfigureServices(IServiceCollection services)
         {
             RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
-            RegisterType<IZipFileCacheStorageProvider>(services, ZipFileCacheProviderType);
+            RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
             RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);
 
             RegisterFileDownloader(services);

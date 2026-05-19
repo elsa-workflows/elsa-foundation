@@ -5,10 +5,6 @@ namespace Elsa.Workflows.Design.Core
 {
     public interface IWorkflowGraph
     {
-        IVariable[] Variables { get; }
-
-        IEnumerable<IActivityNode> ActivityNodes { get; }
-
-        IEnumerable<IInputDefinition> Inputs { get; }
+       
     }
 }

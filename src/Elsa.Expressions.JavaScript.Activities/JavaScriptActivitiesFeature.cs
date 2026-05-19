@@ -1,8 +1,9 @@
 ﻿using CShells.Features;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Expressions.JavaScript.Activities.RunJavaScript;
+using Elsa.Expressions.JavaScript.Activities.EventHandlers;
 using Elsa.Expressions.JavaScript.Activities.RunJavaScript.TestClasses;
-using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Rendering.Core.Events;
+using Elsa.Mediator.Core;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Activities
@@ -17,7 +18,7 @@ namespace Elsa.Expressions.JavaScript.Activities
         {
             services
                 .AddScoped<IActivityCompletionHandler, ActivityCompletionHandler>()
-                .AddScoped<IJavaScriptFunctionDeclarationProvider, FunctionsProvider>();
+                .AddScoped<IDomainEventHandler<OnDeclarationsDocumentGenerating>, AddFunctionDeclarations>();
         }
     }
 }

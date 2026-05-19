@@ -1,9 +1,9 @@
-﻿namespace Elsa.Activities.Design.Core.Contracts
+﻿using Elsa.Primitives.Contracts;
+
+namespace Elsa.Activities.Design.Core.Contracts
 {
     public interface IActivityPropertyDefinition
     {
-        string Id { get; }
-
         /// <summary>
         /// The name.
         /// </summary>
@@ -12,7 +12,7 @@
         /// <summary>
         /// 
         /// </summary>
-        string FullyQualifiedType { get; set; }
+        ITypeInformation TypeInfo { get; }
 
         /// <summary>
         /// The user friendly name of the input. Used by UI tools.

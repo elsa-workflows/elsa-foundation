@@ -11,7 +11,7 @@ namespace Elsa.Http.Services
     /// <summary>
     /// Initializes a new instance of the <see cref="ZipManager"/> class.
     /// </summary>
-    internal sealed class ZipArchiveManager(ISystemClock clock, IZipFileCacheStorageProvider fileCacheStorageProvider, IOptions<HttpZipFileCacheOptions> fileCacheOptions, ILogger<ZipArchiveManager> logger)
+    internal sealed class ZipArchiveManager(ISystemClock clock, IZipFileCacheStorageProviders fileCacheStorageFactory, IOptions<HttpZipFileCacheOptions> fileCacheOptions, ILogger<ZipArchiveManager> logger)
         : IZipArchiveManager
     {
         public async Task<ZipFileArchive> CreateAsync(
@@ -47,7 +47,7 @@ namespace Elsa.Http.Services
         /// <returns>A tuple containing the blob and the stream.</returns>
         public async Task<ZipFileArchive?> LoadAsync(string downloadCorrelationId, CancellationToken cancellationToken = default)
         {
-            var fileCacheStorage = fileCacheStorageProvider.GetStorage();
+            var fileCacheStorage = fileCacheStorageFactory.GetStorage();
             var fileCacheFilename = $"{downloadCorrelationId}.tmp";
             var blob = await fileCacheStorage.GetMetaData<InternalBlob>(fileCacheFilename, cancellationToken);
 
@@ -111,7 +111,7 @@ namespace Elsa.Http.Services
         /// <param name="cancellationToken">An optional cancellation token.</param>
         private async Task CreateCachedZipBlobAsync(string localPath, string downloadCorrelationId, string downloadAsFilename, string contentType, CancellationToken cancellationToken)
         {
-            var fileCacheStorage = fileCacheStorageProvider.GetStorage();
+            var fileCacheStorage = fileCacheStorageFactory.GetStorage();
             var fileCacheFilename = $"{downloadCorrelationId}.tmp";
             var expiresAt = clock.UtcNow.Add(fileCacheOptions.Value.TimeToLive);
             var cachedBlob = CreateBlob(fileCacheFilename, downloadAsFilename, contentType, expiresAt);

@@ -1,5 +1,16 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Events;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
+using Elsa.Mediator.Core;
+using Elsa.Primitives.Extensions;
+using Jint;
+using Jint.Native;
+using Jint.Native.Object;
+using Jint.Runtime.Descriptors;
+using Jint.Runtime.Interop;
+using System.Collections;
+using System.Dynamic;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services
 {
@@ -8,9 +19,10 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
     /// </summary>
     internal sealed class JintJavaScriptEvaluator(
         Serialization.Core.IObjectConverter objectConverter,
-        IJavaScriptExecutionContextFactory contextFactory,
-        IEnumerable<IJavaScriptEvaluationPreProcessor> preProcessors,
-        IEnumerable<IJavaScriptEvaluationPostProcessor> postProcessors) : IJavaScriptEvaluator
+        IJintValueNormalizer valueNormalizer,
+        IMediator mediator,
+        IJintEngineFactory jintEngineFactory,
+        IPreparedScriptFactory preparedScriptFactory) : IJavaScriptEvaluator
     {
         /// <inheritdoc />
         public async Task<object?> EvaluateAsync(
@@ -22,42 +34,51 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
             CancellationToken cancellationToken = default
         )
         {
-            var executionContext = await contextFactory.Create(context, options, cancellationToken);
+            var engine = await jintEngineFactory.Create(options, cancellationToken);
+            var evaluationContext = new JintEvaluationContext();
 
-            RegisterAdditionalFunctions(executionContext, additionalFunctions);
-            await InvokePreProcessors(executionContext, context, expression);
+            await PublishOnEvaluating(expression, evaluationContext, context, options, cancellationToken);
+            additionalFunctions?.ToList().ForEach(evaluationContext.AddFunction);
 
-            var result = executionContext.Evaluate(expression);
-            await InvokePostProcessors(executionContext, context, expression, result);
+            ConfigureEngine(engine, evaluationContext);
+
+            var preparedScript = preparedScriptFactory.Create(expression);
+            var result = engine.Execute(preparedScript);            
 
             return objectConverter.ConvertTo(result, returnType);
-        }
-
-        static void RegisterAdditionalFunctions(IJavaScriptExecutionContext context, IEnumerable<IJavaScriptFunction>? additionalFunctions)
+        }             
+        
+        void ConfigureEngine(Engine engine, JintEvaluationContext context)
         {
-            if (additionalFunctions == null)
-                return;
-
-            foreach (var function in additionalFunctions)
+            foreach(var libraryScript in context.Libraries)
             {
-                context.RegisterFunction(function);
+                var preparedScript = preparedScriptFactory.Create(libraryScript);
+                engine.Evaluate(preparedScript);
+            }
+
+            foreach(var (name, value) in context.Values)
+            {
+                var normalizedValue = valueNormalizer.Normalize(engine, value);
+                engine.SetValue(name, normalizedValue);
+            }
+
+            foreach (var function in context.Functions)
+            {                
+                engine.SetValue(function.Name, function.Execute);
+            }
+
+            foreach (var type in context.Types)
+            {
+                engine.SetValue(type.Name, TypeReference.CreateTypeReference(engine, type));
             }
         }
 
-        async ValueTask InvokePostProcessors(IJavaScriptExecutionContext javascriptExecutionContext, IExpressionExecutionContext context, string expression, object? result)
+        Task PublishOnEvaluating(string script, IJavaScriptEvaluationContext evaluationContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken)
         {
-            foreach (var postProcessor in postProcessors)
-            {
-                await postProcessor.Process(javascriptExecutionContext, context, expression, result);
-            }
-        }
-
-        async ValueTask InvokePreProcessors(IJavaScriptExecutionContext javascriptExecutionContext, IExpressionExecutionContext context, string expression)
-        {
-            foreach (var preProcessor in preProcessors)
-            {
-                await preProcessor.Process(javascriptExecutionContext, context, expression);
-            }
+            var notification = new OnEvaluatingScript(
+                script, evaluationContext, expressionContext, options
+            );
+            return mediator.Publish(notification, cancellationToken);
         }
     }
 }

@@ -21,5 +21,29 @@ namespace Elsa.Primitives.Extensions
 
             return services;
         }
+
+        public static  IServiceCollection AddSingletonList<TInstance, TService>(this IServiceCollection services, IEnumerable<TInstance> instances, Func<IServiceProvider, TInstance, TService> factory)
+            where TInstance : class
+            where TService : class
+        {
+            foreach (var instance in instances)
+            {
+                services.AddSingleton(sp =>
+                {
+                    return factory.Invoke(sp, instance);
+                });
+            }
+
+            return services;
+        }
+
+        public static IServiceCollection AddSingletonList<T>(this IServiceCollection services, IEnumerable<T> instances)
+            where T : class
+        {
+            foreach (var instance in instances)
+                services.AddSingleton(instance);
+
+            return services;
+        }
     }
 }

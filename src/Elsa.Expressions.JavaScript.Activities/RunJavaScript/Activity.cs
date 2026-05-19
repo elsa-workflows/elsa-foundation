@@ -2,7 +2,9 @@
 using Elsa.Activities.Runtime.Core.Constants;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.JavaScript.Activities.Constants;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Models;
 
 namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
 {
@@ -46,7 +48,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
                 typeof(object),
                 context.ExpressionExecutionContext,
                 options: null,    
-                additionalFunctions: FunctionsProvider.CreateSetOutcomeFunctions(context),
+                additionalFunctions: CreateSetOutcomeFunctions(context),
                 context.CancellationToken
             );
 
@@ -66,6 +68,22 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
             await activityCompletionHandler.CompleteActivityAsync(context, outcomes);
         }
 
-        
+        static IEnumerable<IJavaScriptFunction> CreateSetOutcomeFunctions(IActivityExecutionContext context)
+        {
+            yield return new JavaScriptFunction<string>(ActivityFunctionNames.SetOutcome, (value) => SetOutcome(context, value));
+            yield return new JavaScriptFunction<string[]>(ActivityFunctionNames.SetOutcomes, (value) => SetOutcomes(context, value));
+        }
+
+        static object? SetOutcomes(IActivityExecutionContext ctx, string[] outcomes)
+        {
+            ctx.SetOutcomes(outcomes);
+            return null;
+        }
+
+        static object? SetOutcome(IActivityExecutionContext ctx, string outcome)
+        {
+            ctx.SetOutcomes([outcome]);
+            return null;
+        }
     }
 }

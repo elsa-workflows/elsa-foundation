@@ -3,7 +3,7 @@ using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Extensions;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
-using Elsa.Notifications.Core;
+using Elsa.Mediator.Core;
 using Fluid;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -12,7 +12,7 @@ namespace Elsa.Expressions.Liquid.Services
     /// <summary>
     /// Constructor.
     /// </summary>
-    public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, INotificationSender notificationSender, LiquidTemplateManagerOptions options)
+    public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, IMediator mediator, LiquidTemplateManagerOptions options)
         : ILiquidTemplateManager
     {
 
@@ -60,7 +60,7 @@ namespace Elsa.Expressions.Liquid.Services
         private async Task<TemplateContext> CreateTemplateContextAsync(IExpressionExecutionContext expressionExecutionContext, CancellationToken cancellationToken)
         {
             var context = new TemplateContext(expressionExecutionContext, new TemplateOptions());
-            await notificationSender.SendAsync(new RenderingLiquidTemplate(context, expressionExecutionContext), cancellationToken);
+            await mediator.Publish(new RenderingLiquidTemplate(context, expressionExecutionContext), cancellationToken);
             context.SetValue("ExpressionExecutionContext", expressionExecutionContext);
             return context;
         }

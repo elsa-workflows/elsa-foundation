@@ -1,4 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
 {
@@ -14,34 +15,36 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
             return new()
             {
                 Id = "RunJavaScriptUsingJint",
-                Name = "Run JavaScript",
+                UniqueName = "Run JavaScript",
                 Namespace = typeof(Activity).Namespace!,
                 AssemblyName = assemblyName.FullName,
                 AssemblyVersion = version,
                 Category = "Javascript",
                 Description = "Runs a script using JInt engine",
                 DisplayName = "Run JavaScript (Jint)",
-                FullyQualifiedName = typeof(Activity).FullName!,
-                Inputs = 
+                FullyQualifiedTypeName = typeof(Activity).FullName!,
+                Inputs =
                 [
-                    new ActivityPropertyDefinition<string>(
+                    new ActivityPropertyDefinition(
                         "RunJavaScriptUsingJint_ScriptInput",
                         "Script",
+                        TypeInformation.String,
                         "Script",
                         "The JavaScript code to execute."
                     )
                 ],
                 Outputs =
                 [
-                    new ActivityPropertyDefinition<object>(
+                    new ActivityPropertyDefinition(
                         "RunJavaScriptUsingJint_ResultOutput",
                         "Result",
+                        TypeInformation.Object,
                         "Result",
                         "The result of the JavaScript execution."
                     )
                 ],
                 IsBrowsable = true,
-                Kind = ActivityKind.Action                
+                Kind = ActivityKind.Action
             };
         }
     }

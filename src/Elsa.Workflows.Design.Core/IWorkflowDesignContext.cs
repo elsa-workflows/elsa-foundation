@@ -1,11 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Expressions.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core
 {
     public interface IWorkflowDesignContext
     {
-        IWorkflowGraph Graph { get; }
+        IVariable[] Variables { get; }
+
+        IEnumerable<IActivityNode> ActivityNodes { get; }
+
+        IEnumerable<IInputDefinition> Inputs { get; }
     }
 }

@@ -1,47 +1,17 @@
 ﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Primitives.Contracts;
 
 namespace Elsa.Activities.Design.Core.Models
 {
     /// <summary>
     /// 
     /// </summary>
-    /// <typeparam name="TValueType"></typeparam>
-    /// <param name="id"></param>
-    /// <param name="name"></param>
-    /// <param name="displayName"></param>
-    /// <param name="description"></param>
-    /// <param name="category"></param>
-    /// <param name="order"></param>
-    /// <param name="isBrowsable"></param>
-    /// <param name="isSerializable"></param>
-    /// <param name="uiHint"></param>
-    /// <param name="propertyInfo"></param>
-    /// <param name="uISpecifications"></param>
-    public class ActivityPropertyDefinition<TValueType>(
-        string id,
-        string name,
-        string displayName,
-        string? description = null,
-        string? category = null,
-        float order = 0,
-        bool isBrowsable = true,
-        bool isSerializable = true,
-        string? uiHint = null,
-        IDictionary<string, object>? propertyInfo = null,
-        IDictionary<string, object>? uISpecifications = null
-        ) : ActivityPropertyDefinition(id, name, typeof(TValueType).FullName!, displayName, category, description, order, isBrowsable, isSerializable, uiHint, propertyInfo, uISpecifications)
-    {
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    public class ActivityPropertyDefinition : IActivityPropertyDefinition
+    public sealed class ActivityPropertyDefinition : IActivityPropertyDefinition
     {
         public ActivityPropertyDefinition(
             string id,
             string name,
-            string fullyQualifiedType,
+            ITypeInformation typeInfo,
             string displayName,
             string? category,
             string? description = null,
@@ -55,7 +25,7 @@ namespace Elsa.Activities.Design.Core.Models
         {
             Id = id;
             Name = name;
-            FullyQualifiedType = fullyQualifiedType;
+            TypeInfo = typeInfo;
             DisplayName = displayName;
             Description = description;
             Order = order;
@@ -69,15 +39,12 @@ namespace Elsa.Activities.Design.Core.Models
 
         public string Id { get; }
 
+        public ITypeInformation TypeInfo { get; }
+
         /// <summary>
         /// The name.
         /// </summary>
         public string Name { get; set; } = null!;
-
-        /// <summary>
-        /// The fully qualified type name.
-        /// </summary>
-        public string FullyQualifiedType { get; set; }  = null!;
 
         /// <summary>
         /// The user friendly name of the input. Used by UI tools.
@@ -116,6 +83,6 @@ namespace Elsa.Activities.Design.Core.Models
 
         public IDictionary<string, object>? PropertyInfo { get; } 
 
-        public IDictionary<string, object>? UISpecifications { get; }
+        public IDictionary<string, object>? UISpecifications { get; }        
     }
 }

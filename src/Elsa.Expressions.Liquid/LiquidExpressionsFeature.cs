@@ -7,7 +7,7 @@ using Elsa.Expressions.Liquid.Handlers;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
 using Elsa.Expressions.Liquid.Services;
-using Elsa.Notifications.Core;
+using Elsa.Mediator.Core;
 using Fluid;
 using Fluid.Filters;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,9 +60,9 @@ namespace Elsa.Expressions.Liquid
 
             var variableDescriptorTypes = GetVariableDescriptorTypes().ToArray();
             var engineOptions = new ConfigureLiquidEngineOptions(variableDescriptorTypes, AllowConfigurationAccess);
-            services
+            services                
                 .AddSingleton(engineOptions)
-                .AddScoped<INotificationHandler<RenderingLiquidTemplate>, ConfigureLiquidEngine>();
+                .AddScoped<IDomainEventHandler<RenderingLiquidTemplate>, ConfigureLiquidEngine>();
 
             var templateManagerOptions = new LiquidTemplateManagerOptions(Encoder, filterRegistrations, ConfigureFilters);
             services

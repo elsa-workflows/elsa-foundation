@@ -1,5 +1,6 @@
 ﻿using Acornima.Ast;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
+using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -9,7 +10,7 @@ using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services
 {
-    internal sealed class PreparedScriptFactory(IMemoryCache memoryCache, IOptions<JintFeatureOptions> options) : IPreparedScriptFactory
+    internal sealed class PreparedScriptFactory(IMemoryCache memoryCache, IOptions<FeatureOptions> options) : IPreparedScriptFactory
     {
         public Prepared<Script> Create(string expression)
         {

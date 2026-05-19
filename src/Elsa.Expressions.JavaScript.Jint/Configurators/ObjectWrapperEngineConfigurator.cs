@@ -3,13 +3,13 @@ using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Jint;
 using Jint.Runtime.Interop;
 using System.Collections;
-using Options = Jint.Options;
+using JintOptions = Jint.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Configurators
 {
     internal sealed class ObjectWrapperEngineConfigurator : IJintEngineOptionsConfigurator
     {
-        public void Configure(Options options, IExpressionEvaluatorOptions? evaluatorOptions)
+        public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
         {
             options.SetWrapObjectHandler((engine, target, type) =>
             {

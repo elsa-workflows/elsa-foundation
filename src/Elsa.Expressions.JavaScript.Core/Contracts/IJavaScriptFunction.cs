@@ -4,6 +4,6 @@
     {
         string Name { get; }
 
-        object? Execute(IJavaScriptExecutionContext context, object[] parameters);
+        object? Execute(object[] parameters);
     }
 }

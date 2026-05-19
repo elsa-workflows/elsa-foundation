@@ -1,4 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Primitives.Contracts;
 using System.Diagnostics;
 
 namespace Elsa.Activities.Design.Core.Models
@@ -11,10 +12,12 @@ namespace Elsa.Activities.Design.Core.Models
     {
         public string Id { get; set; } = string.Empty;
 
+        public ITypeInformation TypeInfo { get; set; } = default!;
+
         /// <summary>
         /// The fully qualified name of the activity type.
         /// </summary>
-        public string FullyQualifiedName { get; set; } = null!;
+        public string FullyQualifiedTypeName { get; set; } = null!;
 
         /// <summary>
         /// The namespace of the activity type.
@@ -34,7 +37,7 @@ namespace Elsa.Activities.Design.Core.Models
         /// <summary>
         /// The name of this activity definition.
         /// </summary>
-        public string Name { get; set; } = null!;
+        public string UniqueName { get; set; } = null!;
 
         /// <summary>
         /// The category of the activity type.

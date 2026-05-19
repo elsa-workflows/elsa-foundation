@@ -2,6 +2,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Liquid.Helpers;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
+using Elsa.Mediator.Core;
 using Elsa.Notifications.Core;
 using Fluid;
 using Fluid.Values;
@@ -16,13 +17,13 @@ namespace Elsa.Expressions.Liquid.Handlers
     /// <remarks>
     /// Constructor.
     /// </remarks>
-    internal sealed class ConfigureLiquidEngine(IConfiguration configuration, ConfigureLiquidEngineOptions options)
-        : INotificationHandler<RenderingLiquidTemplate>
+    public sealed class ConfigureLiquidEngine(IConfiguration configuration, ConfigureLiquidEngineOptions options)
+        : IDomainEventHandler<RenderingLiquidTemplate>
     {
         private readonly ConfigureLiquidEngineOptions _options = options;
 
         /// <inheritdoc />
-        public Task HandleAsync(RenderingLiquidTemplate notification, CancellationToken cancellationToken)
+        public ValueTask Handle(RenderingLiquidTemplate notification, CancellationToken cancellationToken)
         {
             var context = notification.TemplateContext;
             var options = context.Options;
@@ -49,7 +50,7 @@ namespace Elsa.Expressions.Liquid.Handlers
             foreach (var variableDescriptor in _options.VariableDescriptorTypes)
                 memberAccessStrategy.Register(variableDescriptor);
 
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
 
         private ConfigurationSectionWrapper GetConfigurationValue(string name)

@@ -3,6 +3,8 @@
     <Project Path="src/Server/Elsa.Server.csproj" />
   </Folder>
   <Folder Name="/core/">
+    <Project Path="Elsa.Expressions.JavaScript.Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" Id="4840997b-50dc-4a02-b658-e0d27426d3b6" />
+    <Project Path="Elsa.Expressions.JavaScript.Rendering.Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" Id="88bd6860-9b8b-462d-bfcd-6a2445435d25" />
     <Project Path="src/Elsa.Activities.Design.Core/Elsa.Activities.Design.Core.csproj" Id="003dd3ed-cf48-4d03-bf21-4fbb74dd2e11" />
     <Project Path="src/Elsa.Activities.Runtime.Core/Elsa.Activities.Runtime.Core.csproj" Id="0859f566-e403-459d-91fc-a1c42694262a" />
     <Project Path="src/Elsa.Caching.Core/Elsa.Caching.Core.csproj" Id="bafe0ddc-6833-4b44-89ba-31ab2365bae7" />
@@ -10,6 +12,7 @@
     <Project Path="src/Elsa.Expressions.JavaScript.Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <Project Path="src/Elsa.Http.Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa.Locking.Core/Elsa.Locking.Core.csproj" />
+    <Project Path="src/Elsa.Mediator.Core/Elsa.Mediator.Core.csproj" Id="a3621d18-ab71-455e-b8ec-84b9ac165608" />
     <Project Path="src/Elsa.Notifications.Core/Elsa.Notifications.Core.csproj" Id="d957e04a-ee6f-4197-b7f1-4373138641a3" />
     <Project Path="src/Elsa.Persistence.Core/Elsa.Persistence.Core.csproj" Id="a6989f18-a2ac-4127-9a2a-0756fc8ffbc1" />
     <Project Path="src/Elsa.Primitives/Elsa.Primitives.csproj" Id="d2aeee95-6087-4d0f-b690-3d4ed411e61c" />
@@ -27,8 +30,8 @@
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
     <Project Path="src/Elsa.Expressions.JavaScript.Activities/Elsa.Expressions.JavaScript.Activities.csproj" />
     <Project Path="src/Elsa.Expressions.JavaScript.Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
-    <Project Path="src/Elsa.Expressions.JavaScript.Jint3/Elsa.Expressions.JavaScript.Jint3.csproj" Id="fcf91b1a-36b4-4fbd-8b84-6b39fe2c405e" />
     <Project Path="src/Elsa.Expressions.JavaScript.Libraries/Elsa.Expressions.JavaScript.Libraries.csproj" />
+    <Project Path="src/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" Id="1d5e85d2-3979-4764-a772-d187bf9d0c2a" />
     <Project Path="src/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <Project Path="src/Elsa.Expressions.Liquid/Elsa.Expressions.Liquid.csproj" Id="6e8590e2-5d27-418b-a772-8d38d58a94e0" />
     <Project Path="src/Elsa.Expressions/Elsa.Expressions.csproj" Id="b8aa29ae-26a6-4379-a599-d5179dc7448f" />

@@ -13,6 +13,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
