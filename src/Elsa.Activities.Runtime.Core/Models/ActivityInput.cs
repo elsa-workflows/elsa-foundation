@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Models;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Runtime.Core.Models
-{    
+{
     /// <summary>
     /// A base type for the <see cref="ActivityInput{T}"/> type.
     /// </summary>
@@ -45,25 +45,25 @@ namespace Elsa.Activities.Runtime.Core.Models
         }
 
         /// <inheritdoc />
-        public ActivityInput(Func<T> @delegate, IMemoryBlockReference memoryBlockReference) 
+        public ActivityInput(Func<T> @delegate, IMemoryBlockReference memoryBlockReference)
             : this(Expression.DelegateExpression(@delegate), memoryBlockReference)
         {
         }
 
         /// <inheritdoc />
-        public ActivityInput(Func<IExpressionExecutionContext, ValueTask<T?>> @delegate, IMemoryBlockReference memoryBlockReference) 
+        public ActivityInput(Func<IExpressionExecutionContext, ValueTask<T?>> @delegate, IMemoryBlockReference memoryBlockReference)
             : this(Expression.DelegateExpression(@delegate), memoryBlockReference)
         {
         }
 
         /// <inheritdoc />
-        public ActivityInput(Func<ValueTask<T?>> @delegate, IMemoryBlockReference memoryBlockReference) 
+        public ActivityInput(Func<ValueTask<T?>> @delegate, IMemoryBlockReference memoryBlockReference)
             : this(Expression.DelegateExpression(@delegate), memoryBlockReference)
         {
         }
 
         /// <inheritdoc />
-        public ActivityInput(Func<IExpressionExecutionContext, T> @delegate, IMemoryBlockReference memoryBlockReference) 
+        public ActivityInput(Func<IExpressionExecutionContext, T> @delegate, IMemoryBlockReference memoryBlockReference)
             : this(Expression.DelegateExpression(@delegate), memoryBlockReference)
         {
         }

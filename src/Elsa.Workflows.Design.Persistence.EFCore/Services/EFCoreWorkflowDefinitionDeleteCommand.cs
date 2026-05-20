@@ -28,7 +28,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services
             );
         }
 
-        static Func<IQueryable<WorkflowDefinition>, IQueryable<WorkflowDefinition>> GetDeleteQuery(IWorkflowDefinitionFilter filter)
+        private static Func<IQueryable<WorkflowDefinition>, IQueryable<WorkflowDefinition>> GetDeleteQuery(IWorkflowDefinitionFilter filter)
         {
             return queryable =>
             {

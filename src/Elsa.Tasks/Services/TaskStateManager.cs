@@ -34,7 +34,7 @@ namespace Elsa.Tasks.Services
             await DisposeCancellationTokenSource();
         }
 
-        async ValueTask DisposeCancellationTokenSource()
+        private async ValueTask DisposeCancellationTokenSource()
         {
             if (CancellationTokenSource == null)
                 return;
@@ -55,7 +55,7 @@ namespace Elsa.Tasks.Services
             CancellationTokenSource = null;
         }
 
-        async ValueTask CancelCancellationTokenSource()
+        private async ValueTask CancelCancellationTokenSource()
         {
             if (CancellationTokenSource is null)
                 return;
@@ -74,7 +74,7 @@ namespace Elsa.Tasks.Services
             }
         }
 
-        async ValueTask DisposeBackgroundRunningTasks()
+        private async ValueTask DisposeBackgroundRunningTasks()
         {
             try
             {
@@ -96,7 +96,7 @@ namespace Elsa.Tasks.Services
             RunningBackgroundTasks.Clear();
         }
 
-        async ValueTask DisposeScheduledExecutions()
+        private async ValueTask DisposeScheduledExecutions()
         {
             foreach (var task in ScheduledTaskExecutions)
             {
@@ -117,7 +117,7 @@ namespace Elsa.Tasks.Services
             ScheduledTaskExecutions.Clear();
         }
 
-        async ValueTask DisposeRecurringTasks()
+        private async ValueTask DisposeRecurringTasks()
         {
             foreach (var task in RecurringTasks)
             {

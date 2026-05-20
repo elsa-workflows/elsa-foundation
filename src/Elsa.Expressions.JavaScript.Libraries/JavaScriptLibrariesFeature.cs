@@ -1,9 +1,8 @@
 ﻿using CShells.Features;
-using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Libraries.EventHandlers;
 using Elsa.Expressions.JavaScript.Libraries.Options;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Extensions;
 using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,22 +25,23 @@ namespace Elsa.Expressions.JavaScript.Libraries
             ValidateFeatureOptions();
 
             services
-                .AddScoped<IDomainEventHandler<OnEvaluatingScript>, LoadLibraryResource>()
-                .Configure<JavaScriptLibrariesFeatureOptions>(o => o.FullModuleResourceName = GetFullModuleResourceName());
+                .AddDomainEventHandler<OnEvaluatingScript, LoadLibraryResource>()
+                .Configure<JavaScriptLibrariesFeatureOptions>(o => o.FullModuleResourceName = GetFullModuleResourceName())
+                ;
         }
 
-        void ValidateFeatureOptions()
+        private void ValidateFeatureOptions()
         {
             var bothEmpty = string.IsNullOrWhiteSpace(FullModuleResourceName) && string.IsNullOrWhiteSpace(ModuleName);
             var bothSpecified = !string.IsNullOrWhiteSpace(FullModuleResourceName) && !string.IsNullOrWhiteSpace(ModuleName);
-            
+
             if (bothEmpty || bothSpecified)
             {
                 throw new FeatureConfigurationException($"You must specify one of the following optionws: '{nameof(FullModuleResourceName)}' or '{nameof(ModuleName)}'");
             }
         }
 
-        string GetFullModuleResourceName()
+        private string GetFullModuleResourceName()
         {
             if (!string.IsNullOrWhiteSpace(FullModuleResourceName))
                 return FullModuleResourceName;

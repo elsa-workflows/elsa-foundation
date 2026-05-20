@@ -1,7 +1,7 @@
 ﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Http.JavaScript.Constants;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Http.JavaScript.EventHandlers
 {
@@ -12,7 +12,7 @@ namespace Elsa.Http.JavaScript.EventHandlers
         {
             HttpTypeDescriptors
                 .GetDescriptors()
-                .Select(d => typeDeclarationFactory.Create(d.GetDescriptorType()))                             
+                .Select(d => typeDeclarationFactory.Create(d.GetDescriptorType()))
                 .ToList()
                 .ForEach(domainEvent.Context.AddType);
 

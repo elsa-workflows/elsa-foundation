@@ -19,7 +19,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
         }
 
         /// <inheritdoc />
-        public Activity(ActivityInput<string> script) 
+        public Activity(ActivityInput<string> script)
             : this()
         {
             Script = script;
@@ -47,7 +47,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
                 script,
                 typeof(object),
                 context.ExpressionExecutionContext,
-                options: null,    
+                options: null,
                 additionalFunctions: CreateSetOutcomeFunctions(context),
                 context.CancellationToken
             );
@@ -68,19 +68,19 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
             await activityCompletionHandler.CompleteActivityAsync(context, outcomes);
         }
 
-        static IEnumerable<IJavaScriptFunction> CreateSetOutcomeFunctions(IActivityExecutionContext context)
+        private static IEnumerable<IJavaScriptFunction> CreateSetOutcomeFunctions(IActivityExecutionContext context)
         {
             yield return new JavaScriptFunction<string>(ActivityFunctionNames.SetOutcome, (value) => SetOutcome(context, value));
             yield return new JavaScriptFunction<string[]>(ActivityFunctionNames.SetOutcomes, (value) => SetOutcomes(context, value));
         }
 
-        static object? SetOutcomes(IActivityExecutionContext ctx, string[] outcomes)
+        private static object? SetOutcomes(IActivityExecutionContext ctx, string[] outcomes)
         {
             ctx.SetOutcomes(outcomes);
             return null;
         }
 
-        static object? SetOutcome(IActivityExecutionContext ctx, string outcome)
+        private static object? SetOutcome(IActivityExecutionContext ctx, string outcome)
         {
             ctx.SetOutcomes([outcome]);
             return null;

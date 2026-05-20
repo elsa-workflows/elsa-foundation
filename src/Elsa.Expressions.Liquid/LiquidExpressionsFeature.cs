@@ -7,7 +7,7 @@ using Elsa.Expressions.Liquid.Handlers;
 using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
 using Elsa.Expressions.Liquid.Services;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Fluid;
 using Fluid.Filters;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +32,7 @@ namespace Elsa.Expressions.Liquid
         /// <summary>
         /// Gets or sets the default encoder to use when rendering a template.
         /// </summary>
-        TextEncoder Encoder => EncodingType == LiquidEncodingType.Null
+        private TextEncoder Encoder => EncodingType == LiquidEncodingType.Null
             ? NullEncoder.Default
             : HtmlEncoder.Default;
 
@@ -60,7 +60,7 @@ namespace Elsa.Expressions.Liquid
 
             var variableDescriptorTypes = GetVariableDescriptorTypes().ToArray();
             var engineOptions = new ConfigureLiquidEngineOptions(variableDescriptorTypes, AllowConfigurationAccess);
-            services                
+            services
                 .AddSingleton(engineOptions)
                 .AddScoped<IDomainEventHandler<RenderingLiquidTemplate>, ConfigureLiquidEngine>();
 
@@ -72,13 +72,13 @@ namespace Elsa.Expressions.Liquid
                 .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
         }
 
-        void AddLiquidFilter<T>(IServiceCollection services, string name) where T : class, ILiquidFilter
+        private void AddLiquidFilter<T>(IServiceCollection services, string name) where T : class, ILiquidFilter
         {
             filterRegistrations[name] = typeof(T);
             services.AddScoped<T>();
         }
 
-        IEnumerable<Type> GetVariableDescriptorTypes()
+        private IEnumerable<Type> GetVariableDescriptorTypes()
         {
             foreach (var typeName in VariableDescriptorTypes)
             {
@@ -95,7 +95,7 @@ namespace Elsa.Expressions.Liquid
             }
         }
 
-        void ConfigureFilters(TemplateContext context)
+        private void ConfigureFilters(TemplateContext context)
         {
             if (AddNumberFilters)
             {

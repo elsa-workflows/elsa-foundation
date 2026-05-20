@@ -60,7 +60,7 @@ namespace Elsa.Tasks.Services
             }
         }
 
-        TaskStateManager GetOrInitializeTaskStateManager(CancellationToken token)
+        private TaskStateManager GetOrInitializeTaskStateManager(CancellationToken token)
         {
             if (taskStateManager is not null)
                 return taskStateManager;

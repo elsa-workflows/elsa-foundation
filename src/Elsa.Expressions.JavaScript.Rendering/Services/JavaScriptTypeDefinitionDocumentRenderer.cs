@@ -1,12 +1,12 @@
-﻿using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services
 {
     /// <inheritdoc />
     internal sealed class JavaScriptTypeDefinitionDocumentRenderer
-        
+
         : IJavaScriptDeclarationsDocumentRenderer
     {
         /// <inheritdoc />
@@ -59,16 +59,16 @@ namespace Elsa.Expressions.JavaScript.Rendering.Services
             output.AppendLine("}");
         }
 
-        private static void Render(JavaScriptPropertyDeclaration property, StringBuilder output) 
+        private static void Render(JavaScriptPropertyDeclaration property, StringBuilder output)
             => output.AppendLine($"{property.Name}{(property.IsOptional ? "?" : "")}: {property.Type};");
-        private static void RenderEnumMember(JavaScriptPropertyDeclaration property, StringBuilder output) 
+        private static void RenderEnumMember(JavaScriptPropertyDeclaration property, StringBuilder output)
             => output.AppendLine($"{property.Name} = \"{property.Name}\",");
-        private static void Render(JavaScriptVariableDeclaration variable, StringBuilder output) 
+        private static void Render(JavaScriptVariableDeclaration variable, StringBuilder output)
             => output.AppendLine($"declare var {variable.Name}: {variable.Type};");
-        private static string RenderParameter(JavaScriptParameterDeclaration parameter) 
+        private static string RenderParameter(JavaScriptParameterDeclaration parameter)
             => $"{parameter.Name}{(parameter.IsOptional ? "?" : "")}: {parameter.Type}";
-        private static string RenderParameters(IEnumerable<JavaScriptParameterDeclaration> parameters) 
+        private static string RenderParameters(IEnumerable<JavaScriptParameterDeclaration> parameters)
             => string.Join(", ", parameters.Select(RenderParameter));
     }
-    
+
 }

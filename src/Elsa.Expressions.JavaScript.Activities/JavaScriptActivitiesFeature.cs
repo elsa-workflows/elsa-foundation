@@ -3,7 +3,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Expressions.JavaScript.Activities.EventHandlers;
 using Elsa.Expressions.JavaScript.Activities.RunJavaScript.TestClasses;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Activities
@@ -18,7 +18,7 @@ namespace Elsa.Expressions.JavaScript.Activities
         {
             services
                 .AddScoped<IActivityCompletionHandler, ActivityCompletionHandler>()
-                .AddScoped<IDomainEventHandler<OnDeclarationsDocumentGenerating>, AddFunctionDeclarations>();
+                .AddDomainEventHandler<OnDeclarationsDocumentGenerating, AddFunctionDeclarations>();
         }
     }
 }

@@ -11,6 +11,6 @@ namespace Elsa.Persistence.Core
         /// <summary>
         /// Handles the given exception that occurs during database operations.
         /// </summary>
-        public Task HandleAsync(Exception Exception, CancellationToken CancellationToken);
+        Task HandleAsync(Exception Exception, CancellationToken CancellationToken);
     }
 }

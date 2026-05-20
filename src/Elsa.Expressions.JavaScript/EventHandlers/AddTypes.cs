@@ -1,9 +1,9 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Options;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Expressions.JavaScript.Jint.EventHandlers
+namespace Elsa.Expressions.JavaScript.EventHandlers
 {
     public sealed class AddTypes(IOptions<JavaScriptOptions> options) : IDomainEventHandler<OnEvaluatingScript>
     {
@@ -11,7 +11,7 @@ namespace Elsa.Expressions.JavaScript.Jint.EventHandlers
         {
             options.Value.TypeDescriptors
                 .ToList()
-                .ForEach(d => domainEvent.EvaluationContext.AddType(d.GetDescriptorType()));
+                .ForEach(d => domainEvent.ExecutionContext.RegisterType(d.GetDescriptorType()));
 
             return ValueTask.CompletedTask;
         }

@@ -2,15 +2,7 @@
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
-using Elsa.Mediator.Core;
-using Elsa.Primitives.Extensions;
-using Jint;
-using Jint.Native;
-using Jint.Native.Object;
-using Jint.Runtime.Descriptors;
-using Jint.Runtime.Interop;
-using System.Collections;
-using System.Dynamic;
+using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services
 {
@@ -19,8 +11,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
     /// </summary>
     internal sealed class JintJavaScriptEvaluator(
         Serialization.Core.IObjectConverter objectConverter,
-        IJintValueNormalizer valueNormalizer,
-        IMediator mediator,
+        IDomainEventSender mediator,
         IJintEngineFactory jintEngineFactory,
         IPreparedScriptFactory preparedScriptFactory) : IJavaScriptEvaluator
     {
@@ -35,50 +26,22 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
         )
         {
             var engine = await jintEngineFactory.Create(options, cancellationToken);
-            var evaluationContext = new JintEvaluationContext();
+            var evaluationContext = new JintExecutionContext(preparedScriptFactory, engine);
 
             await PublishOnEvaluating(expression, evaluationContext, context, options, cancellationToken);
-            additionalFunctions?.ToList().ForEach(evaluationContext.AddFunction);
+            additionalFunctions?.ToList().ForEach(evaluationContext.RegisterFunction);
 
-            ConfigureEngine(engine, evaluationContext);
-
-            var preparedScript = preparedScriptFactory.Create(expression);
-            var result = engine.Execute(preparedScript);            
+            var result = evaluationContext.Evaluate(expression);
 
             return objectConverter.ConvertTo(result, returnType);
-        }             
-        
-        void ConfigureEngine(Engine engine, JintEvaluationContext context)
-        {
-            foreach(var libraryScript in context.Libraries)
-            {
-                var preparedScript = preparedScriptFactory.Create(libraryScript);
-                engine.Evaluate(preparedScript);
-            }
-
-            foreach(var (name, value) in context.Values)
-            {
-                var normalizedValue = valueNormalizer.Normalize(engine, value);
-                engine.SetValue(name, normalizedValue);
-            }
-
-            foreach (var function in context.Functions)
-            {                
-                engine.SetValue(function.Name, function.Execute);
-            }
-
-            foreach (var type in context.Types)
-            {
-                engine.SetValue(type.Name, TypeReference.CreateTypeReference(engine, type));
-            }
         }
 
-        Task PublishOnEvaluating(string script, IJavaScriptEvaluationContext evaluationContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken)
+        private Task PublishOnEvaluating(string script, JintExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken)
         {
             var notification = new OnEvaluatingScript(
-                script, evaluationContext, expressionContext, options
+                script, executionContext, expressionContext, options
             );
-            return mediator.Publish(notification, cancellationToken);
+            return mediator.Send(notification, cancellationToken);
         }
     }
 }

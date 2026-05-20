@@ -29,7 +29,7 @@ namespace Elsa.Expressions.Core.Contracts
 
         object? GetRequiredService(Type type);
 
-        public TService GetRequiredService<TService>() where TService : notnull
+        TService GetRequiredService<TService>() where TService : notnull
             => (TService)GetRequiredService(typeof(TService))!;
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Returns the <see cref="IMemoryBlock"/> pointed to by the specified memory block reference.
         /// </summary>
-        public IMemoryBlock GetBlock(Func<IMemoryBlockReference> blockReference) => GetBlock(blockReference());
+        IMemoryBlock GetBlock(Func<IMemoryBlockReference> blockReference) => GetBlock(blockReference());
 
         /// <summary>
         /// Returns the <see cref="IMemoryBlock"/> pointed to by the specified memory block reference.
@@ -60,17 +60,17 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Returns the value of the memory block pointed to by the specified memory block reference.
         /// </summary>
-        public object? Get(Func<IMemoryBlockReference> blockReference) => Get(blockReference());
+        object? Get(Func<IMemoryBlockReference> blockReference) => Get(blockReference());
 
         /// <summary>
         /// Returns the value of the memory block pointed to by the specified memory block reference.
         /// </summary>
-        public object? Get(IMemoryBlockReference blockReference) => GetBlock(blockReference).Value;
+        object? Get(IMemoryBlockReference blockReference) => GetBlock(blockReference).Value;
 
         /// <summary>
         /// Returns the value of the memory block pointed to by the specified memory block reference.
         /// </summary>
-        public bool TryGet(IMemoryBlockReference blockReference, out object? value)
+        bool TryGet(IMemoryBlockReference blockReference, out object? value)
         {
             if (TryGetBlock(blockReference, out var block))
             {
@@ -85,7 +85,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Returns the value of the memory block pointed to by the specified memory block reference. 
         /// </summary>
-        public T? Get<T>(Func<IMemoryBlockReference> blockReference) => Get<T>(blockReference());
+        T? Get<T>(Func<IMemoryBlockReference> blockReference) => Get<T>(blockReference());
 
         /// <summary>
         /// Returns the value of the memory block pointed to by the specified memory block reference.
@@ -95,7 +95,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Sets the value of the memory block pointed to by the specified memory block reference.
         /// </summary>
-        public void Set(Func<IMemoryBlockReference> blockReference, object? value, Action<IMemoryBlock>? configure = null) => Set(blockReference(), value, configure);
+        void Set(Func<IMemoryBlockReference> blockReference, object? value, Action<IMemoryBlock>? configure = null) => Set(blockReference(), value, configure);
 
         /// <summary>
         /// Sets the value of the memory block pointed to by the specified memory block reference.
@@ -111,7 +111,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Returns the value of the specified variable.
         /// </summary>
-        public object GetVariableInScope(string variableName)
+        object GetVariableInScope(string variableName)
         {
             var variable = GetVariable(variableName);
             var value = variable?.Get(this);
@@ -122,7 +122,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Gets all variables names in scope.
         /// </summary>
-        public IEnumerable<string> GetVariableNamesInScope() =>
+        IEnumerable<string> GetVariableNamesInScope() =>
             EnumerateVariablesInScope()
                 .Select(x => x.Name)
                 .Where(x => !string.IsNullOrWhiteSpace(x))

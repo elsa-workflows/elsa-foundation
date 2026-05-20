@@ -1,4 +1,3 @@
-using Elsa.Primitives.Contracts;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -30,7 +29,7 @@ namespace Elsa.Primitives.Extensions
 
             return $"{ns}.{typeName}";
         }
- 
+
 
         /// <summary>
         /// Gets the assembly-qualified name of the type, without any version info etc.

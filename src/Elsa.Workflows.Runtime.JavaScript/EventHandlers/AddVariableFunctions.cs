@@ -1,8 +1,7 @@
-﻿using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Contracts;
+﻿using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Constants;
 using Elsa.Workflows.Runtime.Core;
@@ -15,18 +14,18 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
         : IDomainEventHandler<OnEvaluatingScript>
     {
         public ValueTask Handle(OnEvaluatingScript domainEvent, CancellationToken cancellationToken)
-        {            
-            var workflowVariableFunctions = BuildWorkflowVariableFunctions(domainEvent.EvaluationContext);
-            workflowVariableFunctions.ToList().ForEach(domainEvent.EvaluationContext.AddFunction);
-            
-            domainEvent.EvaluationContext.AddFunction(
+        {
+            var workflowVariableFunctions = BuildWorkflowVariableFunctions(domainEvent.ExecutionContext);
+            workflowVariableFunctions.ToList().ForEach(domainEvent.ExecutionContext.RegisterFunction);
+
+            domainEvent.ExecutionContext.RegisterFunction(
                 new JavaScriptFunction<string, object>(
                      WorkflowFunctionNames.SetVariableFunctionName,
-                     (name, value) => SetVariable(domainEvent.EvaluationContext, name, value)
+                     (name, value) => SetVariable(domainEvent.ExecutionContext, name, value)
                  )
             );
 
-            domainEvent.EvaluationContext.AddFunction(
+            domainEvent.ExecutionContext.RegisterFunction(
                 new JavaScriptFunction<string>(
                     WorkflowFunctionNames.GetVariableFunctionName,
                     (name) => workflowExecution.GetVariable(name)
@@ -36,13 +35,13 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
             return ValueTask.CompletedTask;
         }
 
-        IEnumerable<IJavaScriptFunction> BuildWorkflowVariableFunctions(IJavaScriptEvaluationContext context)
+        private IEnumerable<IJavaScriptFunction> BuildWorkflowVariableFunctions(IJavaScriptExecutionContext context)
         {
             foreach (var variable in workflowExecution.GetVariables())
             {
                 var pascalName = variable.Name.Pascalize();
                 var variableType = variable.GetVariableType();
-                
+
                 var setVariable = new JavaScriptFunction<object>(
                     string.Format(WorkflowFunctionNames.SetNamedVariableFunctionFormat, pascalName),
                     (value) => SetVariable(context, variable.Name, value)
@@ -58,26 +57,28 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
         }
 
 
-        private void SetVariable(IJavaScriptEvaluationContext context, string name, object? value)
+        private void SetVariable(IJavaScriptExecutionContext context, string name, object? value)
         {
+            if (options.Value.DisableVariableCopying)
+                return;
+
+            // To ensure both variable accessor syntaxes work, we need to update the variables container in the engine as well as the context
+            // to keep them in sync.
+
             // Variables Container
             var variablesContainer = (IDictionary<string, object?>?)context.GetValue(
                 VariableNames.VariableContainer
             );
             variablesContainer ??= new Dictionary<string, object?>();
 
-            // Set value in JavaScript Evaluation Context
-            variablesContainer[name] = value;
-
+            // Set value in JavaScript Execution Context
+            variablesContainer[name] = context.NormalizeValue(value);
             context.SetValue(
-                VariableNames.VariableContainer, 
+                VariableNames.VariableContainer,
                 variablesContainer
             );
 
-            if (options.Value.DisableVariableCopying)
-                return;
-
-            // To ensure both variable accessor syntaxes work, we need to update the variables container in the engine as well as the context to keep them in sync.            
+            // Set value in Workflow Context
             workflowExecution.SetVariable(name, value);
         }
     }

@@ -1,8 +1,4 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Text;
 
 namespace Elsa.Primitives.Extensions
 {
@@ -12,7 +8,7 @@ namespace Elsa.Primitives.Extensions
             where TImplementation : class
         {
             var interfaces = typeof(TImplementation).GetInterfaces();
-            foreach(var serviceType in interfaces)
+            foreach (var serviceType in interfaces)
             {
                 services.Add(
                     new ServiceDescriptor(serviceType, typeof(TImplementation), serviceLifetime)
@@ -22,7 +18,7 @@ namespace Elsa.Primitives.Extensions
             return services;
         }
 
-        public static  IServiceCollection AddSingletonList<TInstance, TService>(this IServiceCollection services, IEnumerable<TInstance> instances, Func<IServiceProvider, TInstance, TService> factory)
+        public static IServiceCollection AddSingletonList<TInstance, TService>(this IServiceCollection services, IEnumerable<TInstance> instances, Func<IServiceProvider, TInstance, TService> factory)
             where TInstance : class
             where TService : class
         {

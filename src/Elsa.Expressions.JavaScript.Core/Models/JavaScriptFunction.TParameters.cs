@@ -5,12 +5,12 @@
             where TParam1 : notnull
     {
         public JavaScriptFunction(string name, Func<TParam1, object?> @delegate)
-            : base(name, parameters => @delegate((TParam1)parameters[0]))
+            : base(name, @delegate)
         {
         }
 
         public JavaScriptFunction(string name, Action<TParam1?> @delegate)
-            : base(name, parameters => @delegate((TParam1)parameters[0]))
+            : base(name,@delegate)
         {
         }
 
@@ -22,14 +22,14 @@
             where TParam2 : notnull
     {
         public JavaScriptFunction(string name, Func<TParam1, TParam2, object?> @delegate)
-            : base(name, (parameters) => @delegate((TParam1)parameters[0], (TParam2)parameters[1]))
+            : base(name, @delegate)
         {
 
         }
 
 
         public JavaScriptFunction(string name, Action<TParam1, TParam2> @delegate)
-           : base(name, (parameters) => @delegate((TParam1)parameters[0], (TParam2)parameters[1]))
+           : base(name, @delegate)
         {
 
         }
@@ -43,14 +43,14 @@
             where TParam3 : notnull
     {
         public JavaScriptFunction(string name, Func<TParam1, TParam2, TParam3, object?> @delegate)
-            : base(name, (parameters) => @delegate((TParam1)parameters[0], (TParam2)parameters[1], (TParam3)parameters[2]))
+            : base(name, @delegate)
         {
 
         }
 
 
         public JavaScriptFunction(string name, Action<TParam1, TParam2, TParam3> @delegate)
-            : base(name, (parameters) => @delegate((TParam1)parameters[0], (TParam2)parameters[1], (TParam3)parameters[2]))
+            : base(name, @delegate)
         {
 
         }

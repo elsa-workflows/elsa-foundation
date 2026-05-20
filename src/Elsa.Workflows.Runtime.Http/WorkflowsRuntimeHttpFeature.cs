@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Http
 
         public string AuthorizationHandlerType { get; set; } = typeof(AuthenticationBasedHttpEndpointAuthorizationHandler).FullName!;
 
-        public string RouteResolverType { get; set; } =  typeof(HttpEndpointRoutesResolver).FullName!;        
+        public string RouteResolverType { get; set; } = typeof(HttpEndpointRoutesResolver).FullName!;
 
         public void ConfigureServices(IServiceCollection services)
         {
@@ -33,19 +33,19 @@ namespace Elsa.Workflows.Runtime.Http
             RegisterRouteResolver(services);
         }
 
-        void RegisterFaultHandler(IServiceCollection services)
-        {           
+        private void RegisterFaultHandler(IServiceCollection services)
+        {
             var type = FaultHandlerType.GetLoadedType();
             services.AddScoped(typeof(IHttpEndpointFaultHandler), type);
         }
 
-        void RegisterAuthorizationHandler(IServiceCollection services)
+        private void RegisterAuthorizationHandler(IServiceCollection services)
         {
             var type = AuthorizationHandlerType.GetLoadedType();
             services.AddScoped(typeof(IHttpEndpointAuthorizationHandler), type);
         }
 
-        void RegisterRouteResolver(IServiceCollection services)
+        private void RegisterRouteResolver(IServiceCollection services)
         {
             var type = RouteResolverType.GetLoadedType();
             services.AddScoped(typeof(IHttpEndpointRoutesResolver), type);

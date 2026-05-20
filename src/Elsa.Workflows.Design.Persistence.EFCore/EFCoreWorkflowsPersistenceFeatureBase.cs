@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
                 services.AddScoped<IEntitySavingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionSavingHandler>();
             }
 
-            if(UseQueries)
+            if (UseQueries)
             {
                 services
                     .AddScoped<IEntityLoadingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionLoadingHandler>()

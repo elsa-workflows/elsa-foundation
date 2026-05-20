@@ -1,8 +1,6 @@
 ﻿using CShells.FastEndpoints.Contracts;
 using CShells.FastEndpoints.Features;
-using CShells.Features;
 using Elsa.FastEndpoints.Configurators;
-using Elsa.FastEndpoints.Contracts;
 using Elsa.FastEndpoints.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -18,11 +16,11 @@ namespace Elsa.FastEndpoints
             services.TryAddEnumerable(
                 [
                     new(
-                        typeof(IFastEndpointsConfigurator), 
-                        typeof(SerializationFastEndpointConfigurator), 
+                        typeof(IFastEndpointsConfigurator),
+                        typeof(SerializationFastEndpointConfigurator),
                         ServiceLifetime.Scoped
-                    )                    
-                ]    
+                    )
+                ]
             );
 
             if (EndpointFilters.Any())

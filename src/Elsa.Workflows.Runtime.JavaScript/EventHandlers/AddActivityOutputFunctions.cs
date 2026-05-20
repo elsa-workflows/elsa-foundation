@@ -1,14 +1,9 @@
-﻿using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Core.Extensions;
-using Elsa.Expressions.JavaScript.Core.Contracts;
+﻿using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Runtime.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
 {
@@ -16,8 +11,6 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
     {
         public async ValueTask Handle(OnEvaluatingScript domainEvent, CancellationToken cancellationToken)
         {
-            var result = new List<IJavaScriptFunction>();
-
             var activityExecutionContext = workflowExecutionContext.GetActivityContextForExpression(domainEvent.ExpressionContext);
             var activityOutputs = activityExecutionContext.GetActivityOutputs();
 
@@ -35,11 +28,11 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
                         () => workflowExecutionContext.GetOutput(activityOutput.ActivityId, outputName)
                     );
 
-                    result.Add(getOutputFunction);
+                    domainEvent.ExecutionContext.RegisterFunction(getOutputFunction);
                 }
             }
 
-            
+
         }
     }
 }

@@ -11,7 +11,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Configurators
     {
         public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
         {
-            if(featureOptions.Value.AllowClrAccess)
+            if (featureOptions.Value.AllowClrAccess)
             {
                 options.AllowClr();
             }

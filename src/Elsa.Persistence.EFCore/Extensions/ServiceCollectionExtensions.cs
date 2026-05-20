@@ -66,7 +66,7 @@ namespace Elsa.Persistence.EFCore.Extensions
             return services;
         }
 
-        static void ConfigureCommand<TDbContext>(IServiceCollection serviceCollection, Type genericServiceType, Type genericImplementationType, Type entityType)
+        private static void ConfigureCommand<TDbContext>(IServiceCollection serviceCollection, Type genericServiceType, Type genericImplementationType, Type entityType)
             where TDbContext : DbContext
         {
             var serviceDescriptor = new ServiceDescriptor(

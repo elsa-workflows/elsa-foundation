@@ -7,7 +7,7 @@ namespace Elsa.Http.Services
     /// <summary>
     /// Handles content that represents a downloadable URL.
     /// </summary>
-    internal sealed class UrlDownloadableContentHandler(IFileDownloader fileDownloader, IContentTypeProvider contentTypeProvider) 
+    internal sealed class UrlDownloadableContentHandler(IFileDownloader fileDownloader, IContentTypeProvider contentTypeProvider)
         : IDownloadableContentHandler
     {
         public float Priority => 0;
@@ -22,7 +22,7 @@ namespace Elsa.Http.Services
 
         private async ValueTask<Downloadable> DownloadAsync(object content, CancellationToken cancellationToken)
         {
-            var url = content is string s ? new Uri(s) : (Uri)content;            
+            var url = content is string s ? new Uri(s) : (Uri)content;
             var response = await fileDownloader.DownloadAsync(url, new(), cancellationToken);
             var eTag = response.Headers.ETag?.Tag;
             var filename = GetFilename(response) ?? url.Segments.Last();

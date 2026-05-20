@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Expressions.JavaScript.Activities.Constants
+﻿namespace Elsa.Expressions.JavaScript.Activities.Constants
 {
     internal static class ActivityFunctionNames
     {

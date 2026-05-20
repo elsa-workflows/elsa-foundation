@@ -22,7 +22,7 @@ namespace Elsa.Activities.Runtime.Core
         /// </summary>
         /// <param name="signalType">The type of signal to register a handler for.</param>
         /// <param name="handler">The delegate to invoke when a signal of the specified type is received.</param>
-        protected void OnSignalReceived(Type signalType, Func<object, SignalContext, ValueTask> handler) 
+        protected void OnSignalReceived(Type signalType, Func<object, SignalContext, ValueTask> handler)
             => _signalReceivedHandlers.Add(new SignalHandlerRegistration(signalType, handler));
 
         /// <summary>
@@ -30,7 +30,7 @@ namespace Elsa.Activities.Runtime.Core
         /// </summary>
         /// <param name="handler">The delegate to invoke when a signal of the specified type is received.</param>
         /// <typeparam name="T">The type of signal to register a handler for.</typeparam>
-        protected void OnSignalReceived<T>(Func<T, SignalContext, ValueTask> handler) 
+        protected void OnSignalReceived<T>(Func<T, SignalContext, ValueTask> handler)
             => OnSignalReceived(typeof(T), (signal, context) => handler((T)signal, context));
 
         /// <summary>

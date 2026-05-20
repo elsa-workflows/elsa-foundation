@@ -10,8 +10,8 @@ namespace Elsa.Activities.Runtime.Core.Models
     /// Initializes a new instance of the <see cref="SignalContext"/> class.
     /// </remarks>
     public sealed class SignalContext(
-        IActivityExecutionContext receiverActivityExecutionContext, 
-        IActivityExecutionContext senderActivityExecutionContext, 
+        IActivityExecutionContext receiverActivityExecutionContext,
+        IActivityExecutionContext senderActivityExecutionContext,
         CancellationToken cancellationToken
     )
     {

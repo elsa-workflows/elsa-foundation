@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Activities.Runtime.Core.Models
+﻿namespace Elsa.Activities.Runtime.Core.Models
 {
     /// <summary>
     /// Represents the outputs of an activity.

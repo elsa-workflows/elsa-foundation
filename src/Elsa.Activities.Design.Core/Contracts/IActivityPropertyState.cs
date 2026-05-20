@@ -19,6 +19,6 @@ namespace Elsa.Activities.Design.Core.Contracts
 
         string? StorageDriverType { get; }
 
-        bool IsSensitive { get; set; }        
+        bool IsSensitive { get; set; }
     }
 }

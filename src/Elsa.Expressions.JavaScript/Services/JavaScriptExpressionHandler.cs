@@ -10,7 +10,7 @@ namespace Elsa.Expressions.JavaScript.Services
     /// <remarks>
     /// Initializes a new instance of the <see cref="JavaScriptExpressionHandler"/> class.
     /// </remarks>
-    public sealed class JavaScriptExpressionHandler(IJavaScriptEvaluator javaScriptEvaluator, IObjectConverter objectConverter) 
+    public sealed class JavaScriptExpressionHandler(IJavaScriptEvaluator javaScriptEvaluator, IObjectConverter objectConverter)
         : IExpressionHandler
     {
         /// <inheritdoc />
@@ -19,9 +19,9 @@ namespace Elsa.Expressions.JavaScript.Services
             var javaScriptExpression = objectConverter.ConvertTo<string>(expression.Value) ?? "";
 
             return await javaScriptEvaluator.EvaluateAsync(
-                javaScriptExpression, 
-                returnType, 
-                context, 
+                javaScriptExpression,
+                returnType,
+                context,
                 options,
                 additionalFunctions: [],
                 context.CancellationToken

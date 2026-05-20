@@ -1,7 +1,4 @@
 ﻿using Microsoft.AspNetCore.Routing;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Http.Core.Models
 {
@@ -27,7 +24,7 @@ namespace Elsa.Http.Core.Models
         }
 
         public string Route { get; set; } = default!;
-        public RouteValueDictionary DataTokens { get; set; } = new();
-        public RouteValueDictionary RouteValues { get; set; } = new();
+        public RouteValueDictionary DataTokens { get; set; } = [];
+        public RouteValueDictionary RouteValues { get; set; } = [];
     }
 }

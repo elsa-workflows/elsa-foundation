@@ -6,7 +6,7 @@ namespace Elsa.Notifications.Services
     public sealed class NotificationPipelineBuilder : INotificationPipelineBuilder
     {
         private const string ServicesKey = "mediator.Services";
-        private readonly List<Func<NotificationMiddlewareDelegate, NotificationMiddlewareDelegate>> _components = new();
+        private readonly List<Func<NotificationMiddlewareDelegate, NotificationMiddlewareDelegate>> _components = [];
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NotificationPipelineBuilder"/> class.

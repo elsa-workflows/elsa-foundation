@@ -1,7 +1,6 @@
 ﻿using Elsa.FastEndpoints.Constants;
 using FastEndpoints;
 
-
 namespace Elsa.FastEndpoints.Abstractions
 {
     public abstract class ElsaEndpointWithoutRequest : EndpointWithoutRequest

@@ -1,8 +1,8 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 
-namespace Elsa.Expressions.JavaScript.Jint.EventHandlers
+namespace Elsa.Expressions.JavaScript.EventHandlers
 {
     internal sealed class AddGetArgumentFunctions : IDomainEventHandler<OnEvaluatingScript>
     {
@@ -13,8 +13,8 @@ namespace Elsa.Expressions.JavaScript.Jint.EventHandlers
 
             domainEvent.Options.Arguments.ToList().ForEach(arg =>
             {
-                var function = new JavaScriptFunction($"get{arg.Key}", (_) => arg.Value);
-                domainEvent.EvaluationContext.AddFunction(function);
+                var function = new JavaScriptFunction($"get{arg.Key}", () => arg.Value);
+                domainEvent.ExecutionContext.RegisterFunction(function);
             });
 
             return ValueTask.CompletedTask;

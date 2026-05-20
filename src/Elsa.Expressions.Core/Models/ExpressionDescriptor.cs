@@ -3,7 +3,7 @@
 namespace Elsa.Expressions.Core.Models
 {
     public class ExpressionDescriptor(string typeName) : IExpressionDescriptor
-    {        
+    {
         /// <summary>
         /// Gets or sets the syntax name.
         /// </summary>

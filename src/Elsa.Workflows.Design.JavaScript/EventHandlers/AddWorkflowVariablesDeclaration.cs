@@ -1,9 +1,9 @@
 ﻿using Elsa.Expressions.Core.Extensions;
-using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Constants;
 using Elsa.Workflows.Design.Core;
 using Microsoft.Extensions.Options;
@@ -54,6 +54,6 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
             }
 
             return result;
-        }        
+        }
     }
 }

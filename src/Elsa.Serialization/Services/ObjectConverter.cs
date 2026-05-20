@@ -73,8 +73,8 @@ namespace Elsa.Serialization.Services
         public T? ConvertTo<T>(object? value, ObjectConverterOptions? converterOptions = null)
             => value != null ? (T?)ConvertTo(value, typeof(T), converterOptions) : default;
 
-        bool TryGetTypeConverter(Type targetType, out ITypeConverter typeConverter)
-        {            
+        private bool TryGetTypeConverter(Type targetType, out ITypeConverter typeConverter)
+        {
             typeConverter = serviceProvider
                 .GetServices<ITypeConverter>()
                 .FirstOrDefault(x => x.TargetType == targetType)!;
@@ -88,7 +88,7 @@ namespace Elsa.Serialization.Services
         [RequiresUnreferencedCode("The JsonSerializer type is not trim-compatible.")]
         public object? ConvertTo(object? value, Type targetType, ObjectConverterOptions? converterOptions = null)
         {
-            if(TryGetTypeConverter(targetType, out var typeConverter))
+            if (TryGetTypeConverter(targetType, out var typeConverter))
                 return typeConverter.Convert(value);
 
             var strictMode = converterOptions?.StrictMode ?? StrictMode;
@@ -321,7 +321,7 @@ namespace Elsa.Serialization.Services
             }
         }
 
-        static object? ReturnOrThrow(bool strictMode, Type targetType, Type underlyingTargetType, object value, Exception e)
+        private static object? ReturnOrThrow(bool strictMode, Type targetType, Type underlyingTargetType, object value, Exception e)
         {
             if (!strictMode)
             {

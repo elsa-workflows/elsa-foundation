@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
-using System.Text;
+﻿using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Http.Core.Models

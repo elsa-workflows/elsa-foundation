@@ -1,8 +1,5 @@
 ﻿using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Xml.Serialization;
 
 namespace Elsa.Http.Services

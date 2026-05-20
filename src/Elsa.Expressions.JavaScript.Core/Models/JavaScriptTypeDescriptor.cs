@@ -22,7 +22,7 @@
         public string TypeFullName { get; set; } = string.Empty;
 
         public Type GetDescriptorType()
-        {            
+        {
             loadedType ??= Type.GetType(TypeFullName) ?? throw new InvalidOperationException($"Type '{TypeFullName}' cannot be loaded");
             return loadedType;
         }

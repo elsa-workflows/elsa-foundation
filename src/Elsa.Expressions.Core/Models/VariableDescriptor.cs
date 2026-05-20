@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Expressions.Core.Models
+﻿namespace Elsa.Expressions.Core.Models
 {
     /// <summary>
     /// Represents a description of a .NET type that can be used as a workflow variable.

@@ -10,17 +10,17 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Returns true if the specified memory block is declared in this register.
         /// </summary>
-        public bool IsDeclared(IMemoryBlockReference reference) => HasBlock(reference.Id);
+        bool IsDeclared(IMemoryBlockReference reference) => HasBlock(reference.Id);
 
         /// <summary>
         /// Returns true if the specified memory block is declared in this register.
         /// </summary>
-        public bool HasBlock(string id) => Blocks.ContainsKey(id);
+        bool HasBlock(string id) => Blocks.ContainsKey(id);
 
         /// <summary>
         /// Returns the memory block with the specified ID.
         /// </summary>
-        public bool TryGetBlock(string id, out IMemoryBlock block)
+        bool TryGetBlock(string id, out IMemoryBlock block)
         {
             return Blocks.TryGetValue(id, out block!);
         }
@@ -28,7 +28,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Declares the memory for the specified memory block references. 
         /// </summary>
-        public void Declare(IEnumerable<IMemoryBlockReference> references)
+        void Declare(IEnumerable<IMemoryBlockReference> references)
         {
             foreach (var reference in references)
                 Declare(reference);
@@ -37,7 +37,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// Declares the memory for the specified memory block reference.
         /// </summary>
-        public IMemoryBlock Declare(IMemoryBlockReference blockReference)
+        IMemoryBlock Declare(IMemoryBlockReference blockReference)
         {
             if (Blocks.TryGetValue(blockReference.Id, out var block))
                 return block;

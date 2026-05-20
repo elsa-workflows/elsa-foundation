@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Elsa.Expressions.JavaScript.Primitives\Elsa.Expressions.JavaScript.Primitives.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Expressions.JavaScript.Primitives\Elsa.Expressions.JavaScript.Primitives.csproj" />
     <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>
 

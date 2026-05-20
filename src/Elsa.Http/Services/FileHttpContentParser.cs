@@ -27,7 +27,7 @@ namespace Elsa.Http.Services
             return Task.FromResult<object>(file);
         }
 
-        static string? GetFilename(IDictionary<string, string[]> headers)
+        private static string? GetFilename(IDictionary<string, string[]> headers)
         {
             if (!headers.TryGetValue("Content-Disposition", out var values))
                 return null;

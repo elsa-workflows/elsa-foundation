@@ -1,5 +1,4 @@
 using CShells.Lifecycle;
-using Elsa.Serialization.Core;
 
 namespace Elsa.Server.Shells.Endpoints;
 

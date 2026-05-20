@@ -82,7 +82,7 @@ namespace Elsa.Persistence.EFCore
             await ApplyEntitySavingHandlers(scope, cancellationToken);
         }
 
-        async Task ApplyGlobalSavingHandlers(IServiceScope scope, CancellationToken cancellationToken)
+        private async Task ApplyGlobalSavingHandlers(IServiceScope scope, CancellationToken cancellationToken)
         {
             var handlers = scope.ServiceProvider.GetServices<IGlobalEntitySavingHandler>().ToList();
             foreach (var entry in ChangeTracker.Entries().Where(IsModifiedEntity))
@@ -92,7 +92,7 @@ namespace Elsa.Persistence.EFCore
             }
         }
 
-        async Task ApplyEntitySavingHandlers(IServiceScope scope, CancellationToken cancellationToken)
+        private async Task ApplyEntitySavingHandlers(IServiceScope scope, CancellationToken cancellationToken)
         {
             foreach (var entry in ChangeTracker.Entries().Where(IsModifiedEntity))
             {

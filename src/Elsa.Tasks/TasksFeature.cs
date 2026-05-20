@@ -13,7 +13,7 @@ namespace Elsa.Tasks
     public class TasksFeature : IShellFeature
     {
         public void ConfigureServices(IServiceCollection services)
-        {            
+        {
             services.AddScoped<TaskExecutor>();
             services.AddScoped<ITopologicalTaskSorter, TopologicalTaskSorter>();
             services.AddScoped<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());

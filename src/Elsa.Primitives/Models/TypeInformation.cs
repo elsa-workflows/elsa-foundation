@@ -4,11 +4,11 @@ using System.Text.Json.Serialization;
 namespace Elsa.Primitives.Models
 {
     [method: JsonConstructor]
-    public sealed class TypeInformation(string typeName, string @namespace, string assemblyName, string assemblyVersion) 
+    public sealed class TypeInformation(string typeName, string @namespace, string assemblyName, string assemblyVersion)
         : ITypeInformation
     {
         public string TypeName => typeName;
-        
+
         public string Namespace => @namespace!;
 
         public string AssemblyName => assemblyName;
@@ -38,13 +38,13 @@ namespace Elsa.Primitives.Models
     }
 
     public sealed class TypeInformation<TValue> : ITypeInformation
-    {        
+    {
         public string TypeName => typeof(TValue).Name;
 
         public string Namespace => typeof(TValue).Namespace ?? string.Empty;
 
         public string AssemblyName => typeof(TValue).AssemblyQualifiedName ?? string.Empty;
 
-        public string? AssemblyVersion => typeof(TValue).Assembly.GetName().Version?.ToString() ?? string.Empty;       
+        public string? AssemblyVersion => typeof(TValue).Assembly.GetName().Version?.ToString() ?? string.Empty;
     }
 }

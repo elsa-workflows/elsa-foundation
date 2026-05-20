@@ -4,6 +4,6 @@
     {
         string Name { get; }
 
-        object? Execute(object[] parameters);
+        Delegate Delegate { get; }
     }
 }

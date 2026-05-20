@@ -1,19 +1,19 @@
-﻿using Elsa.Expressions.JavaScript.Core.Constants;
+﻿using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Options;
 using System.Dynamic;
 
 namespace Elsa.Expressions.JavaScript.Rendering.EventHandlers
 {
-    public sealed class AddDeclarations(IOptions<JavaScriptDeclarationOptions> options, IJavaScriptTypeDeclarationFactory factory) 
+    public sealed class AddDeclarations(IOptions<JavaScriptDeclarationOptions> options, IJavaScriptTypeDeclarationFactory factory)
         : IDomainEventHandler<OnDeclarationsDocumentGenerating>
     {
         public ValueTask Handle(OnDeclarationsDocumentGenerating domainEvent, CancellationToken cancellationToken)
-        {            
-            RegisterTypeDeclarations(domainEvent);     
+        {
+            RegisterTypeDeclarations(domainEvent);
 
             options.Value.Functions
                 .ToList()

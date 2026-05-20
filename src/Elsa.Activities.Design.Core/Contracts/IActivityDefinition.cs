@@ -32,7 +32,7 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// The description of the activity type.
         /// </summary>
         string? Description { get; }
-        
+
         /// <summary>
         /// 
         /// </summary>
@@ -56,6 +56,6 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// <summary>
         /// Whether this activity type is selectable from activity pickers.
         /// </summary>
-        bool IsBrowsable { get; }        
+        bool IsBrowsable { get; }
     }
 }

@@ -1,6 +1,6 @@
-﻿using Elsa.Workflows.Design.Core;
+﻿using Elsa.Activities.Design.Core.Contracts;
 
-namespace Elsa.Activities.Design.Core.Contracts
+namespace Elsa.Workflows.Design.Core
 {
     public interface IActivityNode
     {

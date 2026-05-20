@@ -1,12 +1,9 @@
 ﻿using CShells.Features;
-using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Options;
-using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
-using Elsa.Expressions.JavaScript.Rendering.Core.Options;
 using Elsa.Http.JavaScript.Constants;
 using Elsa.Http.JavaScript.EventHandlers;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Http.JavaScript
@@ -16,7 +13,7 @@ namespace Elsa.Http.JavaScript
         DisplayName = "HTTP JavaScript services"
     )]
     public class HttpJavaScriptFeature : IShellFeature
-    {   
+    {
         public void ConfigureServices(IServiceCollection services)
         {
             services.Configure<JavaScriptOptions>(o =>
@@ -24,7 +21,7 @@ namespace Elsa.Http.JavaScript
                 HttpTypeDescriptors.GetDescriptors().ToList().ForEach(o.TypeDescriptors.Add);
             });
 
-            services.AddScoped<IDomainEventHandler<OnDeclarationsDocumentGenerating>, AddHttpTypeDeclarations>();
-        } 
+            services.AddDomainEventHandler<OnDeclarationsDocumentGenerating, AddHttpTypeDeclarations>();
+        }
     }
 }

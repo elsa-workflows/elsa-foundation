@@ -135,11 +135,11 @@ namespace Elsa.Http.Services
             var now = clock.UtcNow;
 
             return new InternalBlob(
-                filePath, 
-                downloadAsFilename, 
-                contentType, 
-                now, 
-                now, 
+                filePath,
+                downloadAsFilename,
+                contentType,
+                now,
+                now,
                 expiresAt
             );
         }

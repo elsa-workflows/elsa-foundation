@@ -1,10 +1,7 @@
 ﻿using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Http.Services
 {
@@ -36,6 +33,6 @@ namespace Elsa.Http.Services
         }
 
         /// <inheritdoc />
-        public bool SupportsContent(object content) => content is IEnumerable and not string and not byte[];    
+        public bool SupportsContent(object content) => content is IEnumerable and not string and not byte[];
     }
 }

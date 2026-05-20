@@ -27,12 +27,12 @@ namespace Elsa.Serialization
             RegisterJsonPayloadSerializerConverterProvider(services, GetService<TypeJsonConverter>);
         }
 
-        static void RegisterJsonPayloadSerializerConverterProvider(IServiceCollection services, Func<JsonConverter> factory)
+        private static void RegisterJsonPayloadSerializerConverterProvider(IServiceCollection services, Func<JsonConverter> factory)
         {
             services.AddSingleton<IPayloadSerializerConverterProvider>(sp => new DefaultPayloadSerializerConverterProvider(factory));
         }
 
-        static void RegisterJsonPayloadSerializerConverterProvider(IServiceCollection services, Func<IServiceProvider, JsonConverter> factory)
+        private static void RegisterJsonPayloadSerializerConverterProvider(IServiceCollection services, Func<IServiceProvider, JsonConverter> factory)
         {
             services.AddSingleton<IPayloadSerializerConverterProvider>(sp => new DefaultPayloadSerializerConverterProvider(() => factory(sp)));
         }

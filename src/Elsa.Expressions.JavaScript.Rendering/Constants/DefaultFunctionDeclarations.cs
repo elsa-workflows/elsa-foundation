@@ -1,5 +1,5 @@
-﻿using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Models;
+﻿using Elsa.Expressions.JavaScript.Primitives.Constants;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Constants
 {
@@ -90,12 +90,12 @@ namespace Elsa.Expressions.JavaScript.Rendering.Constants
             return result;
         }
 
-        static JavaScriptFunctionDeclaration Build(string name, string? returnType, IEnumerable<JavaScriptParameterDeclaration>? parameters = null)
+        private static JavaScriptFunctionDeclaration Build(string name, string? returnType, IEnumerable<JavaScriptParameterDeclaration>? parameters = null)
         {
             return new JavaScriptFunctionDeclaration(name, returnType, parameters ?? []);
         }
 
-        static JavaScriptFunctionDeclaration Build(string name, string? returnType, JavaScriptParameterDeclaration parameter)
+        private static JavaScriptFunctionDeclaration Build(string name, string? returnType, JavaScriptParameterDeclaration parameter)
             => Build(name, returnType, [parameter]);
     }
 }

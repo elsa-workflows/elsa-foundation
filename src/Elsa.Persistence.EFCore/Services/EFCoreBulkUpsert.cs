@@ -53,7 +53,7 @@ namespace Elsa.Persistence.EFCore.Services
             }
         }
 
-        async Task HandleOnBeforeExecuting(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
+        private async Task HandleOnBeforeExecuting(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
         {
             var entitySaveHandlers = serviceProvider.GetServices<IEntitySavingHandler<TDbContext, TEntity>>();
 

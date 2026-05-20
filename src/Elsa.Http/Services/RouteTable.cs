@@ -32,7 +32,7 @@ namespace Elsa.Http.Services
                 return ValueTask.CompletedTask;
             }
 
-            if(Routes.ContainsKey(normalizedRoute))
+            if (Routes.ContainsKey(normalizedRoute))
             {
                 throw new InvalidOperationException($"Route '{route}' is already added");
             }
@@ -53,14 +53,14 @@ namespace Elsa.Http.Services
         /// <inheritdoc />
         public async ValueTask AddRange(IEnumerable<string> routes)
         {
-            foreach (var route in routes) 
+            foreach (var route in routes)
                 await Add(route);
         }
 
         /// <inheritdoc />
         public async ValueTask RemoveRange(IEnumerable<string> routes)
         {
-            foreach (var route in routes) 
+            foreach (var route in routes)
                 await Remove(route);
         }
 
@@ -69,7 +69,7 @@ namespace Elsa.Http.Services
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        static string NormalizeRoute(string path) => $"/{path.Trim('/')}";
+        private static string NormalizeRoute(string path) => $"/{path.Trim('/')}";
 
         public ValueTask Refresh(IEnumerable<string> routes)
         {
@@ -80,8 +80,8 @@ namespace Elsa.Http.Services
         public async ValueTask Refresh(IEnumerable<HttpRouteData> routes)
         {
             Routes.Clear();
-            
-            foreach(var route in routes)
+
+            foreach (var route in routes)
             {
                 await Add(route);
             }

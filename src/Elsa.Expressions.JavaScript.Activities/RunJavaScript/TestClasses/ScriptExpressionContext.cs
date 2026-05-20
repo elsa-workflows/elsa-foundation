@@ -1,12 +1,9 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript.TestClasses
 {
-    internal sealed class ScriptExpressionContext(IServiceProvider serviceProvider) 
+    internal sealed class ScriptExpressionContext(IServiceProvider serviceProvider)
         : IExpressionExecutionContext
     {
         public IMemoryRegister Memory => null!;

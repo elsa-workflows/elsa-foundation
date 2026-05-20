@@ -2,14 +2,11 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript.TestClasses
 {
-    internal sealed class ScriptExecutionContext(IServiceProvider serviceProvider) 
+    internal sealed class ScriptExecutionContext(IServiceProvider serviceProvider)
         : IActivityExecutionContext
     {
         private ActivityOutput<object?>? activityOutput;

@@ -1,7 +1,7 @@
-﻿using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Models;
+﻿using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
-using Elsa.Mediator.Core;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Constants;
 
 namespace Elsa.Workflows.Design.JavaScript.EventHandlers
@@ -45,12 +45,12 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
             return result;
         }
 
-        static JavaScriptFunctionDeclaration Build(string name, string? returnType, IEnumerable<JavaScriptParameterDeclaration>? parameters = null)
+        private static JavaScriptFunctionDeclaration Build(string name, string? returnType, IEnumerable<JavaScriptParameterDeclaration>? parameters = null)
         {
             return new JavaScriptFunctionDeclaration(name, returnType, parameters ?? []);
         }
 
-        static JavaScriptFunctionDeclaration Build(string name, string? returnType, JavaScriptParameterDeclaration parameter)
-            => Build(name, returnType, [parameter]);      
+        private static JavaScriptFunctionDeclaration Build(string name, string? returnType, JavaScriptParameterDeclaration parameter)
+            => Build(name, returnType, [parameter]);
     }
 }

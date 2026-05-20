@@ -7,7 +7,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
     {
         internal static readonly Elsa.Activities.Design.Core.Models.ActivityDefinition Instance = CreateInstance();
 
-        static Elsa.Activities.Design.Core.Models.ActivityDefinition CreateInstance()
+        private static Elsa.Activities.Design.Core.Models.ActivityDefinition CreateInstance()
         {
             var assemblyName = typeof(Activity).Assembly.GetName();
             var version = assemblyName.Version?.ToString() ?? "";

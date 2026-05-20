@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Activities.Runtime.Core.Contracts
+﻿namespace Elsa.Activities.Runtime.Core.Contracts
 {
     public interface IActivityCompletionHandler
     {

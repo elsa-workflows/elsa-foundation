@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Expressions.JavaScript.Core.Exceptions
+﻿namespace Elsa.Expressions.JavaScript.Core.Exceptions
 {
     public sealed class JavaScriptExpressionException : Exception
     {

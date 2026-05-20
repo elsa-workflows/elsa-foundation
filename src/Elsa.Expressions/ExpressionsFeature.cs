@@ -36,13 +36,13 @@ namespace Elsa.Expressions
                 ;
         }
 
-        static DefaultPayloadSerializerConverterProvider GetVariableConverterProvider(IServiceProvider sp)
+        private static DefaultPayloadSerializerConverterProvider GetVariableConverterProvider(IServiceProvider sp)
         {
             return new DefaultPayloadSerializerConverterProvider(
                 () => new VariableConverterFactory(sp.GetRequiredService<IVariableMapper>()));
         }
 
-        static DefaultPayloadSerializerConverterProvider GetFuncExpressionValueConverterProvider(IServiceProvider sp)
+        private static DefaultPayloadSerializerConverterProvider GetFuncExpressionValueConverterProvider(IServiceProvider sp)
         {
             return new DefaultPayloadSerializerConverterProvider(() => new FuncExpressionValueConverter());
         }

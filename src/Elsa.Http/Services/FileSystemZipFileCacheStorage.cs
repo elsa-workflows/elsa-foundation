@@ -26,7 +26,7 @@ namespace Elsa.Http.Services
             finally
             {
                 zipFileLock.Release();
-            }            
+            }
         }
 
         public async Task<Stream> Read(string relativeFilePath, CancellationToken cancellationToken = default)
@@ -100,7 +100,7 @@ namespace Elsa.Http.Services
             {
                 metaDataLock.Release();
             }
-        }   
+        }
 
         private string GetMetaDataFilePath(string relativeFilePath)
         {
@@ -110,14 +110,14 @@ namespace Elsa.Http.Services
             var result = fullFilePath.Replace(extension, string.Empty);
 
             return string.Concat(
-                result, 
+                result,
                 metaDataFileSuffix
             );
         }
 
         private string GetFullFilePathInLocalDirectory(string relativeFilePath)
         {
-            if(Path.IsPathFullyQualified(relativeFilePath))
+            if (Path.IsPathFullyQualified(relativeFilePath))
             {
                 throw new InvalidOperationException($"Path '{relativeFilePath}' is an absolute path; which is not allowed. Please specify only a relative path");
             }

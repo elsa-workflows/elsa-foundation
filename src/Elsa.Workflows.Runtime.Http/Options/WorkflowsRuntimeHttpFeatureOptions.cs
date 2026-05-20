@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Workflows.Runtime.Http.Options
+﻿namespace Elsa.Workflows.Runtime.Http.Options
 {
     public sealed class WorkflowsRuntimeHttpFeatureOptions
     {

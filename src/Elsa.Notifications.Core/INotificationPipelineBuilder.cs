@@ -8,7 +8,7 @@ namespace Elsa.Notifications.Core
         /// <summary>
         /// Gets the properties associated with the notification pipeline.
         /// </summary>
-        public IDictionary<string, object?> Properties { get; }
+        IDictionary<string, object?> Properties { get; }
 
         /// <summary>
         /// Gets the service provider.
@@ -25,6 +25,6 @@ namespace Elsa.Notifications.Core
         /// Builds the notification pipeline.
         /// </summary>
         /// <returns></returns>
-        public NotificationMiddlewareDelegate Build();
+        NotificationMiddlewareDelegate Build();
     }
 }

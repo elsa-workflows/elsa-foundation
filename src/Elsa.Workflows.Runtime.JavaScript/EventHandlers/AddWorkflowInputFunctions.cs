@@ -1,7 +1,7 @@
 ﻿using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Constants;
 using Elsa.Workflows.Runtime.Core;
@@ -30,10 +30,10 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
                 );
                 var getInputValue = new JavaScriptFunction(
                     name,
-                    (_) => input?.Value
+                    () => input?.Value
                 );
 
-                domainEvent.EvaluationContext.AddFunction(getInputValue);
+                domainEvent.ExecutionContext.RegisterFunction(getInputValue);
             }
 
             return ValueTask.CompletedTask;

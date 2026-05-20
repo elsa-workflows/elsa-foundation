@@ -1,6 +1,6 @@
-﻿using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Models;
+﻿using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
 using Elsa.Primitives.Extensions;
 using Microsoft.Extensions.Options;
@@ -13,7 +13,7 @@ namespace Elsa.Expressions.JavaScript.Rendering.Services
     /// <inheritdoc />
     public sealed class JavaScriptTypeDeclarationFactory(IOptions<JavaScriptDeclarationOptions> options)
         : IJavaScriptTypeDeclarationFactory
-    {      
+    {
         /// <inheritdoc />
         public JavaScriptTypeDeclaration Create(Type type)
         {

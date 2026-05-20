@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Primitives.Extensions
+﻿namespace Elsa.Primitives.Extensions
 {
     public static class StringArrayExtensions
     {

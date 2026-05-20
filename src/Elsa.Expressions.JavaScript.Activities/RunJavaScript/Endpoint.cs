@@ -15,7 +15,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
 
         public override async Task HandleAsync(RequestModel req, CancellationToken ct)
         {
-            if(string.IsNullOrWhiteSpace(req.Script))
+            if (string.IsNullOrWhiteSpace(req.Script))
             {
                 await Send.ResponseAsync(
                     new { error = "Script is null" },
@@ -36,14 +36,14 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
                 await ((IActivity)activity).ExecuteAsync(executionContext);
 
                 var result = executionContext.Get(activity.Result);
-
+                
                 await Send.ResponseAsync(
-                    new { success = true, result }    ,
+                    new { success = true, value = result },
                     200,
                     ct
                 );
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 await Send.ResponseAsync(
                    new { success = false, message = e.Message },
@@ -57,7 +57,7 @@ namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript
     internal sealed class RequestModel
     {
         public RequestModel()
-        {            
+        {
         }
 
         public string? Script { get; set; }

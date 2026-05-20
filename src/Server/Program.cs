@@ -1,6 +1,12 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using Elsa.Expressions;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Activities;
+using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Expressions.JavaScript.Rendering;
+using Elsa.Mediator;
 using Elsa.Server.Constants;
 
 
@@ -38,6 +44,19 @@ builder.Services.AddCShellsAspNetCore(shells =>
     shells
         .WithHostAssemblies()
         .WithAssemblyProvider<NuplaneFeatureAssemblyProvider>()
+
+        .WithAssemblies(
+            typeof(ExpressionsFeature).Assembly,
+            typeof(JavaScriptFeature).Assembly,
+            typeof(JintFeature).Assembly,
+            typeof(JavaScriptActivitiesFeature).Assembly,
+            typeof(JavaScriptActivitiesEndpointsFeature).Assembly,
+            typeof(JavaScriptRenderingFeature).Assembly,
+            typeof(JavaScriptRenderingEndpointsFeature).Assembly,
+
+            typeof(MediatorFeature).Assembly
+        )
+
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {

@@ -18,7 +18,7 @@ namespace Elsa.Http.Services
 
         /// <inheritdoc />
         public async Task<object> ReadAsync(HttpResponseParserContext context)
-        {            
+        {
             var content = context.Content;
             using var reader = new StreamReader(content, leaveOpen: true);
             var json = await reader.ReadToEndAsync();
@@ -33,8 +33,8 @@ namespace Elsa.Http.Services
             if (returnType != typeof(ExpandoObject) && returnType != typeof(object))
             {
                 return payloadSerializer.Deserialize(json, returnType);
-            }                
-            
+            }
+
             return payloadSerializer.Deserialize<object>(json)!;
         }
     }

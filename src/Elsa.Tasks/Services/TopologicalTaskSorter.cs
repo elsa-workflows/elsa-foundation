@@ -43,7 +43,7 @@ namespace Elsa.Tasks.Services
             foreach (var taskType in taskTypes)
             {
                 if (!graph.ContainsKey(taskType))
-                    graph[taskType] = new();
+                    graph[taskType] = [];
 
                 var dependencies = taskType.GetCustomAttributes<TaskDependencyAttribute>()
                     .Select(attr => attr.DependencyTaskType)

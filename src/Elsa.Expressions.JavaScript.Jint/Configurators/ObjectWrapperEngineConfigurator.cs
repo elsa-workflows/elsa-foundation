@@ -22,7 +22,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Configurators
             });
         }
 
-        static bool IsObjectArrayLikeClrCollection(Type type)
+        private static bool IsObjectArrayLikeClrCollection(Type type)
         {
             var isDictionary = typeof(IDictionary).IsAssignableFrom(type);
 

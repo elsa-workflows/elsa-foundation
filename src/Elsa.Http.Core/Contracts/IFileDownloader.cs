@@ -1,7 +1,4 @@
 ﻿using Elsa.Http.Core.Options;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Http.Core.Contracts
 {

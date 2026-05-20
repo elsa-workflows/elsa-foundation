@@ -1,6 +1,4 @@
 using CShells.Lifecycle;
-using Elsa.Serialization.Core;
-using Microsoft.Extensions.Logging;
 
 namespace Elsa.Server.Shells.Endpoints;
 

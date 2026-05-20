@@ -1,9 +1,9 @@
 ﻿using Elsa.Expressions.Core.Extensions;
-using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Design.Core;
 using Microsoft.Extensions.Options;
@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
             var activitiesWithOutput = designContext.ActivityNodes
                 .Select(x => x.Definition)
                 .Where(x => x.UniqueName.IsValidVariableName());
-            
+
             foreach (var activity in activitiesWithOutput)
             {
                 var activityName = $"{activity.UniqueName?.Pascalize()}";

@@ -1,7 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
-
-namespace Elsa.Activities.Services
+﻿namespace Elsa.Activities.Services
 {
     //public sealed class ActivityDescriber : IActivityDescriber
     //{

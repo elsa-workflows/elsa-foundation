@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Primitives.Exceptions
+﻿namespace Elsa.Primitives.Exceptions
 {
     public sealed class FeatureConfigurationException : Exception
     {

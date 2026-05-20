@@ -31,7 +31,7 @@ namespace Elsa.Persistence.Core
         /// <param name="entities">The list of entities to be upserted.</param>
         /// <param name="keySelector">An expression used to determine the key for upsert operations.</param>
         /// <param name="cancellationToken">A token to observe while waiting for the operation to complete.</param>
-        public Task BulkUpsertAsync(
+        Task BulkUpsertAsync(
             IList<TEntity> entities,
             CancellationToken cancellationToken = default
         )

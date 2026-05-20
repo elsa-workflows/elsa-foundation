@@ -1,7 +1,7 @@
 namespace Elsa.Expressions.Core.Contracts
 {
     public interface IVariable : IMemoryBlockReference
-    {        
+    {
         /// <summary>
         /// The name of the variable.
         /// </summary>
@@ -18,7 +18,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// </summary>
         Type? StorageDriverType { get; set; }
 
-        public Type GetVariableType()
+        Type GetVariableType()
         {
             var variableType = GetType();
             return variableType.GenericTypeArguments.Length != 0

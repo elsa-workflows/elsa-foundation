@@ -20,7 +20,7 @@ namespace Elsa.Http
         public string FileDownloaderType { get; set; } = typeof(HttpClientFileDownloader).FullName!;
 
         public TimeSpan CacheTtl { get; set; } = TimeSpan.FromDays(7);
-        
+
         public string LocalCacheDirectory { get; set; } = Path.GetTempPath();
 
         public void ConfigureServices(IServiceCollection services)
@@ -39,7 +39,7 @@ namespace Elsa.Http
 
             services
                 .AddHttpContextAccessor()
-                .AddScoped<IRouteTable, RouteTable>()                
+                .AddScoped<IRouteTable, RouteTable>()
 
                 .AddSingleton<IHttpContentParser, JsonHttpContentParser>()
                 .AddSingleton<IHttpContentParser, XmlHttpContentParser>()
@@ -63,7 +63,7 @@ namespace Elsa.Http
 
         }
 
-        void RegisterFileDownloader(IServiceCollection services)
+        private void RegisterFileDownloader(IServiceCollection services)
         {
             RegisterType<IFileDownloader>(services, FileDownloaderType);
 
@@ -77,7 +77,7 @@ namespace Elsa.Http
             genericMethod.Invoke(null, [services]);
         }
 
-        static void RegisterType<TService>(IServiceCollection services, string typeName)
+        private static void RegisterType<TService>(IServiceCollection services, string typeName)
         {
             var type = typeName.GetLoadedType();
             services.AddScoped(typeof(TService), type);

@@ -5,12 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Expressions.JavaScript.Services
 {
     internal class JavaScriptExpressionDescriptorProvider : IExpressionDescriptorProvider
-    {        
+    {
         public IEnumerable<IExpressionDescriptor> GetDescriptors()
         {
             yield return new JavaScriptExpressionDescriptor()
             {
-                DisplayName = "JavaScript",                
+                DisplayName = "JavaScript",
                 HandlerFactory = ActivatorUtilities.GetServiceOrCreateInstance<JavaScriptExpressionHandler>
             };
         }

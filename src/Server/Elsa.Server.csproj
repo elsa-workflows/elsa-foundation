@@ -6,13 +6,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
-	<ItemGroup>
-		<!-- Local CShells source pending upstream PR for generation-aware endpoint teardown.
-		     Transitively brings in CShells, CShells.Abstractions, CShells.AspNetCore.Abstractions,
-		     CShells.FastEndpoints.Abstractions via ProjectReferences inside the cshells repo. -->
-		<ProjectReference Include="..\..\cshells\src\CShells.AspNetCore\CShells.AspNetCore.csproj" />
-		<ProjectReference Include="..\..\cshells\src\CShells.FastEndpoints\CShells.FastEndpoints.csproj" />
-		<PackageReference Include="FastEndpoints" Version="7.2.0" />
+	<ItemGroup>				
+		<PackageReference Include="CShells.FastEndpoints" Version="0.0.24" />				
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
 		<PackageReference Include="Nuplane" Version="0.0.8" />
 		<PackageReference Include="Nuplane.Admin" Version="0.0.8" />
@@ -25,9 +20,17 @@
 		<ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Activities\Elsa.Expressions.JavaScript.Activities.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Libraries\Elsa.Expressions.JavaScript.Libraries.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+		<ProjectReference Include="..\Elsa.Expressions\Elsa.Expressions.csproj" />
 		<ProjectReference Include="..\Elsa.Http.Core\Elsa.Http.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\Elsa.Notifications.Core\Elsa.Notifications.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Persistence.Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />

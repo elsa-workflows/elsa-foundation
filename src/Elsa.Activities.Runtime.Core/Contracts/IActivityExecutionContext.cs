@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace Elsa.Activities.Runtime.Core.Contracts
 {
     public interface IActivityExecutionContext
-    {        
+    {
         TService GetRequiredService<TService>()
             where TService : notnull;
 

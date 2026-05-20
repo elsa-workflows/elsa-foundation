@@ -7,7 +7,7 @@ namespace Elsa.FastEndpoints.Filters
     public sealed class FastEndpointsFilter : IFastEndpointFilter
     {
         public FastEndpointsFilter()
-        {            
+        {
         }
 
         public string Namespace { get; set; } = string.Empty;
@@ -18,9 +18,9 @@ namespace Elsa.FastEndpoints.Filters
         public IEnumerable<string> WhitelistedTypes { get; set; } = [];
 
 
-        void Validate()
+        private void Validate()
         {
-            if(string.IsNullOrWhiteSpace(Namespace))
+            if (string.IsNullOrWhiteSpace(Namespace))
             {
                 throw new InvalidOperationException("Namespace cannot be null or whitespace.");
             }
@@ -36,9 +36,9 @@ namespace Elsa.FastEndpoints.Filters
                 return false;
             }
 
-            foreach(var method in WhitelistedMethods)
+            foreach (var method in WhitelistedMethods)
             {
-                if(endpointDefinition.Verbs.Contains(method, StringComparer.OrdinalIgnoreCase))
+                if (endpointDefinition.Verbs.Contains(method, StringComparer.OrdinalIgnoreCase))
                 {
                     return false;
                 }
@@ -58,12 +58,12 @@ namespace Elsa.FastEndpoints.Filters
 
         private bool ExistsInNamespace(string? endpointNamespace)
         {
-            if(string.IsNullOrWhiteSpace(endpointNamespace))
+            if (string.IsNullOrWhiteSpace(endpointNamespace))
             {
                 return false;
             }
 
-            if(Namespace.EndsWith('*'))
+            if (Namespace.EndsWith('*'))
             {
                 var trimmedNamespace = Namespace.TrimEnd('*');
                 return endpointNamespace.StartsWith(trimmedNamespace);

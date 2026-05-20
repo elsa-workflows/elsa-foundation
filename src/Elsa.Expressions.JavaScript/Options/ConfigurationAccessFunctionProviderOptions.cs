@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Expressions.JavaScript.Jint.Options
+﻿namespace Elsa.Expressions.JavaScript.Options
 {
     public class ConfigurationAccessFunctionProviderOptions
     {

@@ -1,7 +1,8 @@
 ﻿using CShells.Features;
+using Elsa.Mediator.Core.Extensions;
 using Elsa.Primitives.Extensions;
-using Microsoft.Extensions.DependencyInjection;
 using Elsa.Workflows.Design.JavaScript.EventHandlers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.JavaScript
 {
@@ -13,7 +14,9 @@ namespace Elsa.Workflows.Design.JavaScript
     {
         public void ConfigureServices(IServiceCollection services)
         {
-            services                
+            services
+                .AddDomainEventHandlers(typeof(JavaScriptWorkflowsDesignFeature).Assembly)
+
                 .AddAsInterfaces<AddActivityOutputFunctionDeclarations>()
                 .AddAsInterfaces<AddWorkflowFunctionDeclarationsProvider>()
                 .AddAsInterfaces<AddWorkflowInputFunctionDeclarations>()

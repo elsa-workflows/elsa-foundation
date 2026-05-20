@@ -11,8 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Expressions.JavaScript.Jint
 {
     [ShellFeature(
-        "JavaScriptJintEngine", 
-        DisplayName = "JavaScript Jint engine", 
+        "JavaScriptJintEngine",
+        DisplayName = "JavaScript Jint engine",
         Description = "Provides JavaScript evaluation using the Jint engine."
     )]
     public class JintFeature : IShellFeature
@@ -37,10 +37,9 @@ namespace Elsa.Expressions.JavaScript.Jint
             services.Configure<FeatureOptions>(options =>
             {
                 options.AllowClrAccess = AllowClrAccess;
-                options.ScriptCacheTimeout = ScriptCacheTimeout;                
+                options.ScriptCacheTimeout = ScriptCacheTimeout;
             });
 
-            // JavaScript services.
             services
                 // Configurators
                 .AddScoped<IJintEngineOptionsConfigurator, ClrAccessEngineConfigurator>()
@@ -55,6 +54,7 @@ namespace Elsa.Expressions.JavaScript.Jint
                 // JINT Evaluation / Execution
                 .AddScoped<IJavaScriptEvaluator, JintJavaScriptEvaluator>()
                 .AddScoped<IPreparedScriptFactory, PreparedScriptFactory>()
+                .AddScoped<IJintEngineFactory, JintEngineFactory>()
                 ;
         }
     }

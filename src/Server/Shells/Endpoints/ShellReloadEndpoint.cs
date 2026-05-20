@@ -1,8 +1,6 @@
-using Elsa.Serialization.Core;
 using Elsa.Server.Constants;
 using Elsa.Server.Shells.Endpoints.Models;
 using FastEndpoints;
-using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Server.Shells.Endpoints;
 

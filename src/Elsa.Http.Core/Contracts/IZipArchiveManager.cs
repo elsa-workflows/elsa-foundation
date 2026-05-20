@@ -14,7 +14,7 @@ namespace Elsa.Http.Core.Contracts
         );
 
         Task<ZipFileArchive?> LoadAsync(
-            string downloadCorrelationId, 
+            string downloadCorrelationId,
             CancellationToken cancellationToken = default
         );
     }

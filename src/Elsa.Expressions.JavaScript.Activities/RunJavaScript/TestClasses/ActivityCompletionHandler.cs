@@ -1,7 +1,4 @@
 ﻿using Elsa.Activities.Runtime.Core.Contracts;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Activities.RunJavaScript.TestClasses
 {

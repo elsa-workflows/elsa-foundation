@@ -1,10 +1,7 @@
 ﻿using Jint;
 using Jint.Native;
 using Jint.Runtime.Interop;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Jint.Converters
 {

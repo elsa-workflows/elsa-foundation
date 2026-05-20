@@ -1,5 +1,5 @@
-﻿using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services
 {
@@ -7,7 +7,7 @@ namespace Elsa.Expressions.JavaScript.Rendering.Services
     {
         private readonly List<JavaScriptFunctionDeclaration> functions = [];
         private readonly List<JavaScriptTypeDeclaration> types = [];
-        private readonly List<JavaScriptVariableDeclaration> variables = [];        
+        private readonly List<JavaScriptVariableDeclaration> variables = [];
 
         internal IEnumerable<JavaScriptFunctionDeclaration> Functions => functions.AsEnumerable();
         internal IEnumerable<JavaScriptTypeDeclaration> Types => types.AsEnumerable();

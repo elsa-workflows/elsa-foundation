@@ -1,9 +1,8 @@
-﻿using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Constants;
-using Elsa.Expressions.JavaScript.Core.Contracts;
+﻿using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
-using Elsa.Mediator.Core;
+using Elsa.Expressions.JavaScript.Primitives.Constants;
+using Elsa.Mediator.Core.Contracts;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -18,9 +17,9 @@ namespace Elsa.Expressions.JavaScript.Jint.EventHandlers
         private readonly JsonSerializerOptions _jsonSerializerOptions = CreateJsonSerializerOptions();
 
         public ValueTask Handle(OnEvaluatingScript domainEvent, CancellationToken cancellationToken)
-        {            
+        {
             var functions = GetFunctions();
-            functions.ForEach(domainEvent.EvaluationContext.AddFunction);
+            functions.ForEach(domainEvent.ExecutionContext.RegisterFunction);
 
             return ValueTask.CompletedTask;
         }

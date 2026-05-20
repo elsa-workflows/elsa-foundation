@@ -1,7 +1,7 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Events;
-using Elsa.Mediator.Core;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Activities.Core;
 using Elsa.Workflows.Constants;
 using Elsa.Workflows.Runtime.Core;
@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
         public ValueTask Handle(OnScriptEvaluated domainEvent, CancellationToken cancellationToken)
         {
             var context = domainEvent.ExpressionContext;
-            var variablesContainer = domainEvent.EvaluationContext.GetValue<IDictionary<string, object?>>(
+            var variablesContainer = domainEvent.ExecutionContext.GetValue<IDictionary<string, object?>>(
                 VariableNames.VariableContainer
             );
 
@@ -42,7 +42,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
 
             return ValueTask.CompletedTask;
         }
-  
+
         private IEnumerable<string> GetInputNames(IExpressionExecutionContext expressionContext)
         {
             var activityExecutionContext = context.GetActivityContextForExpression(expressionContext);

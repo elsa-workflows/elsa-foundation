@@ -36,14 +36,14 @@ namespace Elsa.FastEndpoints.Configurators
         }
 
         private static ValueTask<object?> DeserializeRequestAsync(HttpRequest httpRequest, Type modelType, JsonSerializerContext? serializerContext, CancellationToken cancellationToken)
-        {            
+        {
             return serializerContext == null
                 ? JsonSerializer.DeserializeAsync(httpRequest.Body, modelType, options, cancellationToken)
                 : JsonSerializer.DeserializeAsync(httpRequest.Body, modelType, serializerContext, cancellationToken);
         }
 
         private static Task SerializeResponseAsync(HttpResponse httpResponse, object? dto, string contentType, JsonSerializerContext? serializerContext, CancellationToken cancellationToken)
-        {            
+        {
             httpResponse.ContentType = contentType;
             return serializerContext == null
                 ? JsonSerializer.SerializeAsync(httpResponse.Body, dto, dto?.GetType() ?? typeof(object), options, cancellationToken)

@@ -17,7 +17,7 @@ namespace Elsa.Activities.Runtime.Core
         /// <inheritdoc />
         protected CodeActivity(string activityType, int version = 1 /*string? source = default, int? line = default*/)
             : base(activityType, version /*source, line*/)
-        {            
+        {
         }
     }
 
@@ -48,9 +48,9 @@ namespace Elsa.Activities.Runtime.Core
         }
 
         /// <inheritdoc />
-        protected CodeActivityWithResult(ActivityOutput? output /*string? source = default, int? line = default*/) 
+        protected CodeActivityWithResult(ActivityOutput? output /*string? source = default, int? line = default*/)
             : base()
-        {            
+        {
             Result = output;
         }
 

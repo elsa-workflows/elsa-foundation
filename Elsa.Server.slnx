@@ -3,13 +3,13 @@
     <Project Path="src/Server/Elsa.Server.csproj" />
   </Folder>
   <Folder Name="/core/">
-    <Project Path="Elsa.Expressions.JavaScript.Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" Id="4840997b-50dc-4a02-b658-e0d27426d3b6" />
-    <Project Path="Elsa.Expressions.JavaScript.Rendering.Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" Id="88bd6860-9b8b-462d-bfcd-6a2445435d25" />
     <Project Path="src/Elsa.Activities.Design.Core/Elsa.Activities.Design.Core.csproj" Id="003dd3ed-cf48-4d03-bf21-4fbb74dd2e11" />
     <Project Path="src/Elsa.Activities.Runtime.Core/Elsa.Activities.Runtime.Core.csproj" Id="0859f566-e403-459d-91fc-a1c42694262a" />
     <Project Path="src/Elsa.Caching.Core/Elsa.Caching.Core.csproj" Id="bafe0ddc-6833-4b44-89ba-31ab2365bae7" />
     <Project Path="src/Elsa.Expressions.Core/Elsa.Expressions.Core.csproj" Id="8f326321-7dcc-45f9-b792-c41c297a2e13" />
     <Project Path="src/Elsa.Expressions.JavaScript.Core/Elsa.Expressions.JavaScript.Core.csproj" />
+    <Project Path="src/Elsa.Expressions.JavaScript.Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" />
+    <Project Path="src/Elsa.Expressions.JavaScript.Rendering.Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa.Http.Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa.Locking.Core/Elsa.Locking.Core.csproj" />
     <Project Path="src/Elsa.Mediator.Core/Elsa.Mediator.Core.csproj" Id="a3621d18-ab71-455e-b8ec-84b9ac165608" />
@@ -39,6 +39,7 @@
     <Project Path="src/Elsa.Http.JavaScript/Elsa.Http.JavaScript.csproj" />
     <Project Path="src/Elsa.Http/Elsa.Http.csproj" />
     <Project Path="src/Elsa.Locking.FileSystem/Elsa.Locking.FileSystem.csproj" Id="d3c5ba84-c00b-4357-9095-3f3d74d995c3" />
+    <Project Path="src/Elsa.Mediator/Elsa.Mediator.csproj" Id="0f0d0ba0-8e28-4782-9af8-a45a5b94becb" />
     <Project Path="src/Elsa.Notifications/Elsa.Notifications.csproj" Id="ee951ba7-465e-495e-89f3-7cf407d81eee" />
     <Project Path="src/Elsa.Persistence.EFCore/Elsa.Persistence.EFCore.csproj" Id="c64a3ea5-6b27-4872-8ecd-341221f74208" />
     <Project Path="src/Elsa.Serialization/Elsa.Serialization.csproj" Id="296f6c59-d41d-469b-a70c-8b2dfa9b02cc" />

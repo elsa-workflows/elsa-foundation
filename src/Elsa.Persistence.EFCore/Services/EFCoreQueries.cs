@@ -75,7 +75,7 @@ namespace Elsa.Persistence.EFCore.Services
             return entities;
         }
 
-        static IQueryable<TEntity> ApplyOrder<TProp>(IQueryable<TEntity> query, OrderDefinition<TEntity, TProp> order)
+        private static IQueryable<TEntity> ApplyOrder<TProp>(IQueryable<TEntity> query, OrderDefinition<TEntity, TProp> order)
         {
             if (order.Direction == OrderDirection.Descending)
             {
@@ -272,14 +272,14 @@ namespace Elsa.Persistence.EFCore.Services
                 .CountAsync(cancellationToken);
         }
 
-        Task ApplyEntityLoadingHandlers(TDbContext dbContext, List<TEntity> entities, CancellationToken cancellationToken)
+        private Task ApplyEntityLoadingHandlers(TDbContext dbContext, List<TEntity> entities, CancellationToken cancellationToken)
         {
             using var scope = serviceProvider.CreateScope();
             var tasks = entities.Select(e => ApplyEntityLoadingHandlers(dbContext, scope, e, cancellationToken));
             return Task.WhenAll(tasks);
         }
 
-        static async Task ApplyEntityLoadingHandlers(TDbContext dbContext, IServiceScope scope, TEntity entity, CancellationToken cancellationToken)
+        private static async Task ApplyEntityLoadingHandlers(TDbContext dbContext, IServiceScope scope, TEntity entity, CancellationToken cancellationToken)
         {
             var handlers = scope.ServiceProvider
                 .GetServices<IEntityLoadingHandler<TDbContext, TEntity>>()
@@ -291,13 +291,13 @@ namespace Elsa.Persistence.EFCore.Services
             }
         }
 
-        Task ApplyEntityLoadingHandlers(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken)
+        private Task ApplyEntityLoadingHandlers(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken)
         {
             using var scope = serviceProvider.CreateScope();
             return ApplyEntityLoadingHandlers(dbContext, scope, entity, cancellationToken);
         }
 
-        bool LoadingHandlersRegistered()
+        private bool LoadingHandlersRegistered()
         {
             return serviceProvider
                 .GetServices<IEntityLoadingHandler<TDbContext, TEntity>>()

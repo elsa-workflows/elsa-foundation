@@ -4,7 +4,6 @@ using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using System;
 using System.Security.Cryptography;
 using System.Text;
 

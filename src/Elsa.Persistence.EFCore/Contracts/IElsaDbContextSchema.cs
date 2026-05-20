@@ -8,6 +8,6 @@ namespace Elsa.Persistence.EFCore.Contracts
         /// <summary>
         /// Name of the Schema
         /// </summary>
-        public string Schema { get; }
+        string Schema { get; }
     }
 }

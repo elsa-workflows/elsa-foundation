@@ -10,7 +10,7 @@ namespace Elsa.Serialization.ReferenceResolvers
     public sealed class CustomPreserveReferenceResolver : ReferenceResolver
     {
         private uint _referenceCount;
-        private readonly Dictionary<string, object> _referenceIdToObjectMap = new();
+        private readonly Dictionary<string, object> _referenceIdToObjectMap = [];
         private readonly Dictionary<object, string> _objectToReferenceIdMap = new(ReferenceEqualityComparer.Instance);
 
         /// <inheritdoc />

@@ -196,7 +196,7 @@ namespace Elsa.Activities.Runtime.Core
             await ExecuteAsync(context);
 
             // Invoke behaviors.
-            foreach (var behavior in Behaviors) 
+            foreach (var behavior in Behaviors)
                 await behavior.ExecuteAsync(context);
         }
 
@@ -213,7 +213,7 @@ namespace Elsa.Activities.Runtime.Core
                 await registration.Handler(signal, context);
 
             // Invoke behaviors.
-            foreach (var behavior in Behaviors) 
+            foreach (var behavior in Behaviors)
                 await behavior.ReceiveSignalAsync(signal, context);
         }
     }

@@ -78,7 +78,7 @@ namespace Elsa.Activities.Design.Core.Models
         /// <summary>
         /// Whether this activity type is selectable from activity pickers.
         /// </summary>
-        public bool IsBrowsable { get; set; } = true; 
+        public bool IsBrowsable { get; set; } = true;
 
 
         IEnumerable<IActivityPropertyDefinition> IActivityDefinition.Inputs => Inputs;

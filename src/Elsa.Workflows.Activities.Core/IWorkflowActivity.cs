@@ -13,17 +13,17 @@ namespace Elsa.Workflows.Activities.Core
         /// <summary>
         /// Gets or sets output definitions.
         /// </summary>
-        ICollection<IOutputDefinition> Outputs { get;  }
+        ICollection<IOutputDefinition> Outputs { get; }
 
         /// <summary>
         /// Gets or sets possible outcomes for this workflow.
         /// </summary>
-        ICollection<string> Outcomes { get;  }
+        ICollection<string> Outcomes { get; }
 
         /// <summary>
         /// Gets or sets options for the workflow.
         /// </summary>
-        IWorkflowOptions Options { get;  }
+        IWorkflowOptions Options { get; }
 
         /// <summary>
         /// Make workflow definition readonly.

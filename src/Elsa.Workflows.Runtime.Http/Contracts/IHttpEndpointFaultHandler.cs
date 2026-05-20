@@ -1,7 +1,4 @@
 ﻿using Elsa.Workflows.Runtime.Http.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Workflows.Runtime.Http.Contracts
 {

@@ -3,9 +3,9 @@ using FastEndpoints;
 
 namespace Elsa.FastEndpoints.Abstractions
 {
-    public class ElsaEndpoint<TRequest, TResponse, TMapper> : Endpoint<TRequest, TResponse, TMapper> 
+    public class ElsaEndpoint<TRequest, TResponse, TMapper> : Endpoint<TRequest, TResponse, TMapper>
         where TRequest : notnull, new()
-        where TResponse : notnull 
+        where TResponse : notnull
         where TMapper : class, IMapper, new()
     {
         protected void ConfigurePermissions(params string[] permissions)

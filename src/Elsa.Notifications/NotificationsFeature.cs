@@ -26,7 +26,7 @@ namespace Elsa.Notifications
             services.AddSingleton<INotificationPipeline, NotificationPipeline>();
         }
 
-        void RegisterDefaultEventPublishingStrategy(IServiceCollection services)
+        private void RegisterDefaultEventPublishingStrategy(IServiceCollection services)
         {
             switch (DefaultPublishingStrategy)
             {

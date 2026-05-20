@@ -33,7 +33,7 @@ namespace Elsa.Activities.Design.Core.Models
             IsSerializable = isSerializable;
             UiHint = uiHint;
             Category = category;
-            PropertyInfo = propertyInfo ?? new Dictionary<string, object>(); 
+            PropertyInfo = propertyInfo ?? new Dictionary<string, object>();
             UISpecifications = uISpecifications ?? new Dictionary<string, object>(); ;
         }
 
@@ -81,8 +81,8 @@ namespace Elsa.Activities.Design.Core.Models
         /// </summary>
         public string? UiHint { get; set; }
 
-        public IDictionary<string, object>? PropertyInfo { get; } 
+        public IDictionary<string, object>? PropertyInfo { get; }
 
-        public IDictionary<string, object>? UISpecifications { get; }        
+        public IDictionary<string, object>? UISpecifications { get; }
     }
 }

@@ -1,56 +1,117 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Primitives.Extensions;
+using Jint;
 using Jint.Native;
 using Jint.Native.Object;
 using Jint.Runtime.Descriptors;
+using Jint.Runtime.Interop;
 using System.Collections;
 using System.Dynamic;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services
 {
-    public sealed class JintEvaluationContext 
-        : IJavaScriptEvaluationContext
+    public sealed class JintExecutionContext(IPreparedScriptFactory preparedScriptFactory, Engine engine) : IJavaScriptExecutionContext
     {
-        internal readonly Dictionary<string, object?> Values = [];
-        internal readonly List<IJavaScriptFunction> Functions = [];
-        internal readonly List<Type> Types = [];
-        internal readonly List<string> Libraries = [];
+        public object? Evaluate(string script)
+        {
+            var preparedScript = preparedScriptFactory.Create(script);
+            var result = engine.Evaluate(preparedScript);
+            return result.UnwrapIfPromise().ToObject();
+        }
+
+        public void Execute(string script)
+        {
+            var preparedScript = preparedScriptFactory.Create(script);
+            _ = engine.Execute(preparedScript);
+        }
 
         public object? GetValue(string name)
         {
-            var result = Values.TryGetValue(name, out var value)
-                ? value 
-                : null;
+            var result = engine.GetValue(name).ToObject();
 
             if (result is JsObject jsObject)
                 return jsObject.ToObject();
 
             return result;
         }
-  
-        public void AddType(Type type)=> Types.Add(type);
 
-        public void AddFunction(IJavaScriptFunction function) => Functions.Add(function);
-
-        public void AddResource(Stream stream)
+        public void SetValue(string name, object? value)
         {
-            try
-            {
-                using var reader = new StreamReader(stream);
-                var script = reader.ReadToEnd();
-                Libraries.Add(script);
-            }
-            finally
-            {
-                stream.Dispose();
-            }
-        }
-       
-        public TValue? GetValue<TValue>(string name)
-        {
-            return (TValue?)GetValue(name);
+            engine.SetValue(
+                name,
+                value
+            );
         }
 
-        public void SetValue(string name, object? value) => Values[name] = value;
+        public object? NormalizeValue(object? value)
+        {
+            if (value == null)
+                return null;
+
+            if (value is not ExpandoObject expandoObject)
+                return value;
+
+            return ConvertToJsObject(expandoObject);
+        }
+
+        public void RegisterFunction(IJavaScriptFunction function)
+        {
+            engine.SetValue(
+                function.Name,
+                function.Delegate
+            );
+        }
+
+        public void RegisterType(Type type)
+            => engine.SetValue(type.Name, TypeReference.CreateTypeReference(engine, type));
+
+        private ObjectInstance ConvertToJsObject(IDictionary<string, object?> expando)
+        {
+            var jsObject = engine.Intrinsics.Object.Construct([]);
+
+            foreach (var kvp in expando)
+            {
+                var value = kvp.Value;
+                var jsValue = ConvertToJsValue(value);
+                var propertyDescriptor = new PropertyDescriptor(jsValue, true, true, true);
+                jsObject.DefineOwnProperty(kvp.Key, propertyDescriptor);
+            }
+
+            return jsObject;
+        }
+
+        private JsValue ConvertToJsValue(object? value)
+        {
+            if (value == null)
+                return JsValue.Null;
+
+            if (value is IDictionary<string, object?> dict)
+                return ConvertToJsObject(dict);
+
+            var valueType = value.GetType();
+            if (valueType.IsCollectionType())
+            {
+                var list = (ICollection)value;
+                var jsArray = engine.Intrinsics.Array.Construct(list.Count);
+                var index = 0;
+
+                foreach (var item in list)
+                    jsArray.Set(index++, ConvertToJsValue(item), true);
+
+                return jsArray;
+            }
+
+            if (value is string str)
+                return JsValue.FromObject(engine, str);
+
+            if (value is int or double or float or decimal)
+                return JsValue.FromObject(engine, Convert.ToDouble(value));
+
+            if (value is bool b)
+                return JsValue.FromObject(engine, b);
+
+            return JsValue.FromObject(engine, value);
+        }
     }
 }
