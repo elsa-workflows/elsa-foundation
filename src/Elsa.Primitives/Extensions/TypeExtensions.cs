@@ -1,3 +1,4 @@
+using Elsa.Primitives.Attributes;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -9,7 +10,15 @@ namespace Elsa.Primitives.Extensions
     /// </summary>
     public static class TypeExtensions
     {
-        private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();
+        private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();  
+
+        public static IEnumerable<string> GetImmutableProperties(this Type type)
+        {
+            return type
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(p => p.GetCustomAttribute<ImmutableAttribute>() is not null)
+                .Select(x => x.Name);
+        }
 
         public static string GetSanitizedFullName(this Type type)
         {

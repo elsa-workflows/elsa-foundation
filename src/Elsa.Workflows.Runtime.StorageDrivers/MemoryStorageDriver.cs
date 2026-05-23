@@ -1,4 +1,4 @@
-using Elsa.Workflows.Runtime.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using System.ComponentModel.DataAnnotations;
 
 namespace Elsa.Workflows.Runtime.StorageDrivers

@@ -1,10 +1,9 @@
-﻿using Elsa.Expressions.Core.Extensions;
-using Elsa.Expressions.JavaScript.Core.Events;
+﻿using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
-using Elsa.Workflows.Constants;
-using Elsa.Workflows.Runtime.Core;
+using Elsa.Workflows.Primitives.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
 {
@@ -18,19 +17,17 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
             if (domainEvent.ExpressionContext.IsContainedWithinCompositeActivity())
                 return ValueTask.CompletedTask;
 
-            var inputs = workflowExecution
-                .GetWorkflowInputs()
-                .Where(x => VariableNameValidator.IsValidVariableName(x.Name));
+            var inputs = workflowExecution.GetWorkflowInputs();
 
             foreach (var input in inputs)
             {
                 var name = string.Format(
                     WorkflowFunctionNames.GetNamedInputFunctionFormat,
-                    input.Name.Pascalize()
+                    input.Key.Pascalize()
                 );
                 var getInputValue = new JavaScriptFunction(
                     name,
-                    () => input?.Value
+                    () => domainEvent.ExpressionContext.Get(input.Value.MemoryBlockReference)
                 );
 
                 domainEvent.ExecutionContext.RegisterFunction(getInputValue);

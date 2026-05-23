@@ -5,7 +5,7 @@ using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
-using Elsa.Workflows.Design.Core;
+using Elsa.Workflows.Design.Core.Contracts;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Design.JavaScript.EventHandlers
@@ -18,13 +18,11 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
             if (options.Value.DisableWrappers)
                 return ValueTask.CompletedTask;
 
-            var activitiesWithOutput = designContext.ActivityNodes
-                .Select(x => x.Definition)
-                .Where(x => x.UniqueName.IsValidVariableName());
+            var activitiesWithOutput = designContext.GetActivitiesWithOutput();                
 
             foreach (var activity in activitiesWithOutput)
             {
-                var activityName = $"{activity.UniqueName?.Pascalize()}";
+                var activityName = $"{activity.Definition.UniqueName?.Pascalize()}";
                 var outputs = activity.Outputs
                     .Where(x => VariableNameValidator.IsValidVariableName(x.Name))
                     .Select(x => x.Name.Pascalize());

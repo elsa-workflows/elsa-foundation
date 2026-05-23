@@ -2,7 +2,7 @@
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Constants;
+using Elsa.Workflows.Primitives.Constants;
 
 namespace Elsa.Workflows.Design.JavaScript.EventHandlers
 {

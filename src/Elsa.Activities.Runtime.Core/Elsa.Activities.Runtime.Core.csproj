@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Contracts\" />
+  </ItemGroup>
+
 </Project>

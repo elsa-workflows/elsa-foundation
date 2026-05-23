@@ -4,8 +4,8 @@ using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Constants;
-using Elsa.Workflows.Design.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Primitives.Constants;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Design.JavaScript.EventHandlers
@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
 
         private JavaScriptTypeDeclaration GetTypeDeclaration()
         {
-            var variables = designContext.Variables;
+            var variables = designContext.GetVariableDefinitions();
             var result = new JavaScriptTypeDeclaration
             {
                 Name = TypeName,
@@ -45,11 +45,11 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
 
             foreach (var variable in variables.Where(x => VariableNameValidator.IsValidVariableName(x.Name)))
             {
-                var variableType = variable.GetVariableType();
+                var variableType = variable.TypeInformation;
                 result.Properties.Add(new JavaScriptPropertyDeclaration
                 {
                     Name = variable.Name,
-                    Type = variableType.Name
+                    Type = variableType.TypeName
                 });
             }
 

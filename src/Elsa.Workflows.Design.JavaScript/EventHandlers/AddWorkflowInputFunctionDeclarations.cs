@@ -4,7 +4,7 @@ using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Extensions;
-using Elsa.Workflows.Design.Core;
+using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Workflows.Design.JavaScript.EventHandlers
 {
@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
     {
         public ValueTask Handle(OnDeclarationsDocumentGenerating domainEvent, CancellationToken cancellationToken)
         {
-            var inputs = designContext.Inputs.Where(x => VariableNameValidator.IsValidVariableName(x.Name));
+            var inputs = designContext.GetWorkflowInputs();
             foreach (var input in inputs)
             {
                 var pascalizedInputName = input.Name.Pascalize();

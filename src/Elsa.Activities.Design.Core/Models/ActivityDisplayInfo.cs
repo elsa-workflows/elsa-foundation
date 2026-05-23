@@ -5,5 +5,10 @@
         double Y,
         double Width,
         double Height
-    );
+    )
+    {
+        public ActivityDisplayInfo() : this(0, 0, 0, 0)
+        {            
+        }
+    }
 }

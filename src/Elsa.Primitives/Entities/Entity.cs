@@ -8,7 +8,7 @@ namespace Elsa.Primitives.Entities
         /// <summary>
         /// Gets or sets the ID of this entity.
         /// </summary>
-        public string Id { get; set; } = null!;
+        public string Id { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the ID of the tenant that own this entity.

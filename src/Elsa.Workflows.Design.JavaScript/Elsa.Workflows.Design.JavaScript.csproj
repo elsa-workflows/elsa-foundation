@@ -13,8 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Workflows.Constants\Elsa.Workflows.Constants.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Workflows.Primitives\Elsa.Workflows.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

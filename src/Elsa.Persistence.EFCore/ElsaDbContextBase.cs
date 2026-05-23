@@ -1,8 +1,11 @@
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.EFCore
@@ -62,10 +65,34 @@ namespace Elsa.Persistence.EFCore
                 modelBuilder.HasDefaultSchema(Schema);
 
             var additionalConfigurations = _elsaDbContextOptions?.GetModelConfigurations(this);
-
             additionalConfigurations?.Invoke(modelBuilder);
 
             using var scope = ServiceProvider.CreateScope();
+
+            ApplyEntityModelCreatingHandlers(scope, modelBuilder);
+            ApplyImmutability(modelBuilder);
+        }
+
+        protected virtual void ApplyImmutability(ModelBuilder modelBuilder)
+        {
+            foreach(var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                var entityType = entity.ClrType;
+
+                if (entityType is null)
+                    continue;
+
+                var immutableProperties = entityType.GetImmutableProperties();
+                foreach(var propertyName in immutableProperties)
+                {
+                    var property = entity.GetProperty(propertyName);
+                    property.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+                }
+            }
+        }
+
+        private void ApplyEntityModelCreatingHandlers(IServiceScope scope, ModelBuilder modelBuilder)
+        {
             var entityTypeHandlers = scope.ServiceProvider.GetServices<IEntityModelCreatingHandler>().ToList();
 
             foreach (var entityType in modelBuilder.Model.GetEntityTypes().ToList())
@@ -77,10 +104,38 @@ namespace Elsa.Persistence.EFCore
 
         private async Task OnBeforeSavingAsync(CancellationToken cancellationToken)
         {
+            PreventImmutableChanges();
+
             using var scope = ServiceProvider.CreateScope();
             await ApplyGlobalSavingHandlers(scope, cancellationToken);
             await ApplyEntitySavingHandlers(scope, cancellationToken);
         }
+
+        void PreventImmutableChanges()
+        {
+            foreach(var entry in ChangeTracker.Entries())
+            {
+                if(entry.State != EntityState.Modified)
+                    continue;
+
+                var modifiedProperties = entry.Properties
+                    .Where(x => x.IsModified)
+                    .Select(x => x.Metadata.Name);
+             
+                var immutableProperties = entry.Entity
+                    .GetType()
+                    .GetImmutableProperties();
+
+                var prohibitedImmutableProperties = modifiedProperties.Where(immutableProperties.Contains);
+                if (prohibitedImmutableProperties.Any())
+                {
+                    throw new InvalidOperationException(
+                        $"Properties '{string.Join(", ", prohibitedImmutableProperties)}' are immutable"
+                    );
+                }
+            }
+        }
+
 
         private async Task ApplyGlobalSavingHandlers(IServiceScope scope, CancellationToken cancellationToken)
         {

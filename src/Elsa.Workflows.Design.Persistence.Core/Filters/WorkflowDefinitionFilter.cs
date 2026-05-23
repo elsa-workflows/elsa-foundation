@@ -1,15 +1,12 @@
-using Elsa.Primitives.Extensions;
-using Elsa.Primitives.Models;
-using Elsa.Workflows.Design.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Models;
-
+using Elsa.Persistence.Core;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters
 {
     /// <summary>
     /// A specification to use when finding workflow definitions. Only non-null fields will be included in the conditional expression.
     /// </summary>
-    public class WorkflowDefinitionFilter : IWorkflowDefinitionFilter
+    public class WorkflowDefinitionFilter : IFilter<WorkflowDefinition>
     {
         /// <summary>
         /// Filter by the ID of the workflow definition.
@@ -20,26 +17,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         /// Filter by the IDs of the workflow definitions.
         /// </summary>
         public ICollection<string>? Ids { get; set; }
-
-        /// <summary>
-        /// Filter by the ID of the workflow definition.
-        /// </summary>
-        public string? DefinitionId { get; set; }
-
-        /// <summary>
-        /// Filter by the IDs of the workflow definitions.
-        /// </summary>
-        public ICollection<string>? DefinitionIds { get; set; }
-
-        /// <summary>
-        /// Filter by the version options.
-        /// </summary>
-        public VersionOptions? VersionOptions { get; set; }
-
-        /// <summary>
-        /// Filter by the handle of the workflow definition.
-        /// </summary>
-        public WorkflowDefinitionHandle? DefinitionHandle { get; set; }
 
         /// <summary>
         /// Filter by the name of the workflow definition.
@@ -62,48 +39,29 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         public string? MaterializerName { get; set; }
 
         /// <summary>
-        /// Filter on workflows that are usable as activities.
-        /// </summary>
-        public bool? UsableAsActivity { get; set; }
-
-        /// <summary>
         /// Filter on workflows that are system workflows.
         /// </summary>
         public bool? IsSystem { get; set; }
 
         /// <summary>
-        /// Filter on workflows that are read-only.
-        /// </summary>
-        public bool? IsReadonly { get; set; }
-
-        /// <summary>
         /// Gets or sets a value indicating whether to include tenant matching in the filter.
         /// </summary>
-        public bool TenantAgnostic { get; set; }
+        public bool? TenantAgnostic { get; set; } 
 
         /// <summary>
         /// Applies the filter to the specified queryable.
         /// </summary>
         /// <param name="queryable">The queryable to apply the filter to.</param>
         /// <returns>The filtered queryable.</returns>
-        public IQueryable<WorkflowDefinition> Apply(IQueryable<WorkflowDefinition> queryable)
-        {
-            var definitionId = DefinitionId ?? DefinitionHandle?.DefinitionId;
-            var versionOptions = VersionOptions ?? DefinitionHandle?.VersionOptions;
-            var id = Id ?? DefinitionHandle?.DefinitionVersionId;
-
-            if (definitionId != null) queryable = queryable.Where(x => x.DefinitionId == definitionId);
-            if (DefinitionIds != null) queryable = queryable.Where(x => DefinitionIds.Contains(x.DefinitionId));
-            if (id != null) queryable = queryable.Where(x => x.Id == id);
+        public virtual IQueryable<WorkflowDefinition> Apply(IQueryable<WorkflowDefinition> queryable)
+        {     
+            if (Id != null) queryable = queryable.Where(x => x.Id == Id);
             if (Ids != null) queryable = queryable.Where(x => Ids.Contains(x.Id));
-            if (versionOptions != null) queryable = queryable.WithVersion(versionOptions.Value);
-            if (MaterializerName != null) queryable = queryable.Where(x => x.MaterializerName == MaterializerName);
+            if (MaterializerName != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.Materializer == MaterializerName);
             if (Name != null) queryable = queryable.Where(x => x.Name == Name);
             if (Names != null) queryable = queryable.Where(x => Names.Contains(x.Name!));
-            if (UsableAsActivity != null) queryable = queryable.Where(x => x.Options.UsableAsActivity == UsableAsActivity);
-            if (!string.IsNullOrWhiteSpace(SearchTerm)) queryable = queryable.Where(x => x.Name!.ToLower().Contains(SearchTerm.ToLower()) || x.Description!.ToLower().Contains(SearchTerm.ToLower()) || x.Id.Contains(SearchTerm) || x.DefinitionId.Contains(SearchTerm));
-            if (IsSystem != null) queryable = queryable.Where(x => x.IsSystem == IsSystem);
-            if (IsReadonly != null) queryable = queryable.Where(x => x.IsReadonly == IsReadonly);
+            if (!string.IsNullOrWhiteSpace(SearchTerm)) queryable = queryable.Where(x => x.Name!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Description!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Id.Contains(SearchTerm));
+            if (IsSystem != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.IsSystem == IsSystem);
 
             return queryable;
         }

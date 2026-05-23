@@ -13,11 +13,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
-	  <ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.FastEndpoints\Elsa.FastEndpoints.csproj" />
+	  <ProjectReference Include="..\Elsa.Workflows.Runtime.Core\Elsa.Workflows.Runtime.Core.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -10,7 +10,7 @@ namespace Elsa.Persistence.EFCore.Contracts
 
     public interface IEntityLoadingHandler<TDbContext, TEntity> : IEntityLoadingHandler<TDbContext>
         where TDbContext : DbContext
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         ValueTask Handle(TDbContext dbContext, TEntity? entity, CancellationToken cancellationToken);
     }

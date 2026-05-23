@@ -1,4 +1,6 @@
-﻿namespace Elsa.Activities.Design.Core.Models
+﻿using System.Text.Json.Serialization;
+
+namespace Elsa.Activities.Design.Core.Models
 {
     /// <summary>
     /// The type of a port.

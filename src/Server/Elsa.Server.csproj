@@ -16,11 +16,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Activities\Elsa.Expressions.JavaScript.Activities.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Libraries\Elsa.Expressions.JavaScript.Libraries.csproj" />
@@ -36,10 +33,10 @@
 		<ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Tasks.Schedules\Elsa.Tasks.Schedules.csproj" />
-		<ProjectReference Include="..\Elsa.Workflows.Activities.Core\Elsa.Workflows.Activities.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Workflows.Runtime.Core\Elsa.Workflows.Runtime.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Runtime.JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
 	</ItemGroup>
 
 </Project>

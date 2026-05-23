@@ -16,7 +16,7 @@ namespace Elsa.Persistence.EFCore.Services
         /// </summary>
         /// <param name="entity">The entity to add.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        public async Task AddAsync(TEntity entity, CancellationToken cancellationToken = default)
+        public async Task Add(TEntity entity, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContextAsync(cancellationToken);
 

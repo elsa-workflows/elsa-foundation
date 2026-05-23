@@ -2,9 +2,8 @@
 using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Activities.Core;
-using Elsa.Workflows.Constants;
-using Elsa.Workflows.Runtime.Core;
+using Elsa.Workflows.Primitives.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
 {
@@ -54,7 +53,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
                     var inputDefinitions = workflow.Inputs;
 
                     foreach (var inputDefinition in inputDefinitions)
-                        yield return inputDefinition.Name;
+                        yield return inputDefinition.Key;
                 }
 
                 foreach (var syntheticProperty in activityExecutionContext.Activity.SyntheticProperties)

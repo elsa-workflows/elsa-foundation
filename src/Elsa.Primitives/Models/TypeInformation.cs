@@ -1,21 +1,33 @@
-﻿using Elsa.Primitives.Contracts;
+﻿using System.Reflection;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Primitives.Models
 {
-    [method: JsonConstructor]
-    public sealed class TypeInformation(string typeName, string @namespace, string assemblyName, string assemblyVersion)
-        : ITypeInformation
+    public sealed class TypeInformation<TValue> : TypeInformation
     {
-        public string TypeName => typeName;
+        public TypeInformation()
+            : base(typeof(TValue).Name, $"{typeof(TValue).Namespace}", $"{typeof(TValue).Assembly.FullName}", $"{typeof(TValue).Assembly.GetName().Version}")
+        {
+        }
+    }
 
-        public string Namespace => @namespace!;
+    [method: JsonConstructor]
+    public class TypeInformation(string typeName, string @namespace, string assemblyName, string assemblyVersion)
+    {
+        public TypeInformation(Type type) 
+            : this(type.Name, $"{type.Namespace}", $"{type.Assembly.FullName}", $"{type.Assembly.GetName().Version}")
+        {            
+        }
+
+        public string TypeName => typeName.TrimStart('.');
+
+        public string Namespace => @namespace.TrimEnd('.');
 
         public string AssemblyName => assemblyName;
 
-        public string? AssemblyVersion => assemblyVersion;
+        public string AssemblyVersion => assemblyVersion;
 
-        public static ITypeInformation FromType(Type type)
+        public static TypeInformation FromType(Type type)
         {
             return new TypeInformation(
                 type.Name,
@@ -25,26 +37,34 @@ namespace Elsa.Primitives.Models
             );
         }
 
-        public static readonly ITypeInformation String = new TypeInformation<string>();
-        public static readonly ITypeInformation Object = new TypeInformation<object>();
-        public static readonly ITypeInformation Integer = new TypeInformation<int>();
-        public static readonly ITypeInformation Double = new TypeInformation<double>();
-        public static readonly ITypeInformation Float = new TypeInformation<float>();
-        public static readonly ITypeInformation Decimal = new TypeInformation<decimal>();
-        public static readonly ITypeInformation Bool = new TypeInformation<bool>();
-        public static readonly ITypeInformation DateTimeOffset = new TypeInformation<DateTimeOffset>();
-        public static readonly ITypeInformation DateTime = new TypeInformation<DateTime>();
-        public static readonly ITypeInformation TimeSpan = new TypeInformation<TimeSpan>();
-    }
+        public static readonly TypeInformation String = new TypeInformation<string>();
+        public static readonly TypeInformation Object = new TypeInformation<object>();
+        public static readonly TypeInformation Integer = new TypeInformation<int>();
+        public static readonly TypeInformation Double = new TypeInformation<double>();
+        public static readonly TypeInformation Float = new TypeInformation<float>();
+        public static readonly TypeInformation Decimal = new TypeInformation<decimal>();
+        public static readonly TypeInformation Bool = new TypeInformation<bool>();
+        public static readonly TypeInformation DateTimeOffset = new TypeInformation<DateTimeOffset>();
+        public static readonly TypeInformation DateTime = new TypeInformation<DateTime>();
+        public static readonly TypeInformation TimeSpan = new TypeInformation<TimeSpan>();
 
-    public sealed class TypeInformation<TValue> : ITypeInformation
-    {
-        public string TypeName => typeof(TValue).Name;
+        public Type LoadType()
+        {
+            var assemblyName = new AssemblyName(AssemblyName)
+            {
+                Version = new Version(AssemblyVersion)
+            };            
+            var assembly = Assembly.Load(assemblyName);
 
-        public string Namespace => typeof(TValue).Namespace ?? string.Empty;
+            var typeName = GetTypeFullName();
+            var type = assembly.GetType(typeName, throwOnError: true, ignoreCase: true);
 
-        public string AssemblyName => typeof(TValue).AssemblyQualifiedName ?? string.Empty;
+            return type!;
+        }
 
-        public string? AssemblyVersion => typeof(TValue).Assembly.GetName().Version?.ToString() ?? string.Empty;
+        public string GetTypeFullName()
+        {
+            return string.Join('.', Namespace, TypeName);
+        }
     }
 }

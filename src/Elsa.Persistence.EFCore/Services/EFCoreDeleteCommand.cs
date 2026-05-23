@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace Elsa.Persistence.EFCore.Services
 {
-    public sealed class EFCoreDeleteCommand<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory)
+    public sealed class EFCoreDeleteCommand<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IQueries<TEntity> queries)
         : IDeleteCommand<TEntity>
         where TDbContext : DbContext
         where TEntity : Entity, new()
@@ -16,7 +16,7 @@ namespace Elsa.Persistence.EFCore.Services
         /// Deletes entities using a predicate.
         /// </summary>
         /// <returns>The number of entities deleted.</returns>
-        public async Task<long> DeleteWhereAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+        public async Task<long> DeleteWhere(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContextAsync(cancellationToken);
             var set = dbContext.Set<TEntity>().AsNoTracking();
@@ -27,12 +27,33 @@ namespace Elsa.Persistence.EFCore.Services
         /// Deletes entities using a query.
         /// </summary>
         /// <returns>The number of entities deleted.</returns>
-        public async Task<long> DeleteWhereAsync(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default)
+        public async Task<long> DeleteWhere(IFilter<TEntity> filter, CancellationToken cancellationToken = default)
         {
-            await using var dbContext = await CreateDbContextAsync(cancellationToken);
-            var set = dbContext.Set<TEntity>().AsNoTracking();
-            var queryable = query(set.AsQueryable());
-            return await queryable.ExecuteDeleteAsync(cancellationToken);
+            var query = GetDeleteQuery(filter);
+            var ids = await queries.Query(
+                query,
+                selector: e => e.Id,
+                cancellationToken: cancellationToken
+            );
+
+            return await DeleteWhere(
+                x => ids.Contains(x.Id),
+                cancellationToken
+            );
+        }
+
+        private static Func<IQueryable<TEntity>, IQueryable<TEntity>> GetDeleteQuery(IFilter<TEntity> filter)
+        {
+            return queryable =>
+            {
+                var result = filter.Apply(queryable);
+                if (filter.TenantAgnostic == true)
+                {
+                    result = result.IgnoreQueryFilters();
+                }
+
+                return result.DistinctBy(x => x.Id);
+            };
         }
     }
 }

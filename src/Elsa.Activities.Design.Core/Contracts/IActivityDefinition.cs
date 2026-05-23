@@ -1,7 +1,4 @@
-﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Primitives.Contracts;
-
-namespace Elsa.Activities.Design.Core.Contracts
+﻿namespace Elsa.Activities.Design.Core.Contracts
 {
     public interface IActivityDefinition
     {
@@ -12,11 +9,6 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// relevant context (for example, a collection, namespace, or registry). Use this value as a key when
         /// consistent identification is required.</remarks>
         string UniqueName { get; }
-
-        /// <summary>
-        /// Information about the type where the activity lives
-        /// </summary>
-        ITypeInformation TypeInfo { get; }
 
         /// <summary>
         /// The category of the activity type.
@@ -32,26 +24,6 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// The description of the activity type.
         /// </summary>
         string? Description { get; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        IEnumerable<IActivityPropertyDefinition> Inputs { get; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        IEnumerable<IActivityPropertyDefinition> Outputs { get; }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        IEnumerable<ActivityPortDefinition> Ports { get; }
-
-        /// <summary>
-        /// The kind of activity.
-        /// </summary>
-        ActivityKind Kind { get; }
 
         /// <summary>
         /// Whether this activity type is selectable from activity pickers.

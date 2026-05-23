@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Constants;
+using Elsa.Workflows.Primitives.Constants;
 using System.Dynamic;
 using System.Text.RegularExpressions;
 

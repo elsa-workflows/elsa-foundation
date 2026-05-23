@@ -1,28 +1,25 @@
 using Elsa.Persistence.EFCore;
 using Elsa.Persistence.EFCore.Contracts;
-using Elsa.Workflows.Design.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
-using Elsa.Workflows.Design.Persistence.EFCore.Services;
+using Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore
 {
-    public abstract class EFCoreWorkflowsPersistenceFeatureBase : PersistenceShellFeatureBase<WorkflowDefinitionDbContext>
+    public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceShellFeatureBase<WorkflowsDesignDbContext>
     {
         protected override void OnConfiguring(IServiceCollection services)
         {
             if (UseCommands)
             {
-                services.AddScoped<IWorkflowDefinitionDeleteCommand, EFCoreWorkflowDefinitionDeleteCommand>();
-                services.AddScoped<IEntitySavingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionSavingHandler>();
+                services.AddScoped<IEntitySavingHandler<WorkflowsDesignDbContext, WorkflowDefinitionVersion>, WorkflowDefinitionVersionSavingHandler>();
             }
 
             if (UseQueries)
             {
                 services
-                    .AddScoped<IEntityLoadingHandler<WorkflowDefinitionDbContext, WorkflowDefinition>, WorkflowDefinitionLoadingHandler>()
-                    .AddScoped<IWorkflowDefinitionQueries, EFCoreWorkflowDefinitionQueries>();
+                    .AddScoped<IEntityLoadingHandler<WorkflowsDesignDbContext, WorkflowDefinitionVersion>, WorkflowDefinitionVersionLoadingHandler>();
             }
         }
     }

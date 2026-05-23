@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Elsa.Mapping.Core\Elsa.Mapping.Core.csproj" />
+	</ItemGroup>
+	
+</Project>

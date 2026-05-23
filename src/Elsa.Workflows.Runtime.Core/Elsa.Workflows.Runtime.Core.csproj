@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>
 
