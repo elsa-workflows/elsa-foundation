@@ -1,9 +1,9 @@
 ﻿using CShells.Features;
+using Elsa.Mediator.Commands;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.DomainEvents;
+using Elsa.Mediator.Requests;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Elsa.Mediator;
 
@@ -14,6 +14,12 @@ public class MediatorFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddScoped<IDomainEventSender, DomainEventSender>();
+        services
+            .AddScoped<IRequestSender, RequestSender>()
+            .AddScoped<ICommandSender, CommandSender>()
+            .AddScoped<IDomainEventSender, DomainEventSender>()
+            .AddSingleton<IRequestPipeline, RequestPipeline>()
+            .AddSingleton<ICommandPipeline, CommandPipeline>()
+            .AddSingleton<IDomainEventPipeline, DomainEventPipeline>();
     }
 }

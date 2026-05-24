@@ -5,7 +5,8 @@ public interface ICommandSender
     /// <summary>
     /// Sends a command using the default strategy.
     /// </summary>
-    Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default);
+    Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default)
+        where T : notnull;
 
     /// <summary>
     /// Sends a command using the default strategy.

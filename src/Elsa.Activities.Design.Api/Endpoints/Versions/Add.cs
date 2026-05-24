@@ -1,30 +1,17 @@
 ﻿using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Constants;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Versions;
 
-internal sealed class Add : ElsaEndpoint<AddVersionCommand>
+internal sealed class Add : ElsaCommandHandlerEndpoint<AddVersion, ActivityDefinitionVersionView>
 {
-    private readonly ICommandSender commandSender;
-
-    public Add(ICommandSender commandSender)
+    public Add(ICommandSender commandSender, ILogger<Add> logger) : base(commandSender, logger)
     {
-        Post("design/activities/versions");
+        Post(RouteConstants.Versions);
         AllowAnonymous();
-        this.commandSender = commandSender;
-    }
-
-    public override async Task HandleAsync(AddVersionCommand req, CancellationToken ct)
-    {
-        try
-        {
-            var result = await commandSender.Send(req, ct);
-            await Send.OkAsync(result, ct);
-        }
-        catch (Exception e)
-        {
-            await SendError(e, cancellationToken: ct);
-        }
     }
 }

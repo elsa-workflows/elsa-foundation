@@ -1,6 +1,27 @@
-﻿namespace Elsa.Activities.Design.Api.Handlers;
+﻿using CShells.Features;
+using Elsa.FastEndpoints;
+using Elsa.Mapping.Core.Extensions;
+using Elsa.Mediator.Core.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 
-public class ActivitiesDesignApiFeature
+namespace Elsa.Activities.Design.Api;
+
+[ShellFeature(
+    name: "ActivitiesDesignApi",
+    Description = "Contains endpoints to manage data in the Activities Design Domain"
+)]
+public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 {
+    public override void ConfigureServices(IServiceCollection services)
+    {
+        base.ConfigureServices(services);
 
+        var assembly = GetType().Assembly;
+
+        services.AddMappingsFromAssembly(assembly);
+
+        services.AddDomainEventHandlersFrom(assembly);
+        services.AddCommandHandlersFrom(assembly);
+        services.AddRequestHandlersFrom(assembly);
+    }
 }

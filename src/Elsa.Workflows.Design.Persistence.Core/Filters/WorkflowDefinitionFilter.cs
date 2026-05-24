@@ -29,6 +29,11 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         public string? SearchTerm { get; set; }
 
         /// <summary>
+        /// Filter by the description of the workflow definition.
+        /// </summary>
+        public string? Description { get; set; }
+
+        /// <summary>
         /// Filter by the names of the workflow definitions.
         /// </summary>
         public ICollection<string>? Names { get; set; }
@@ -62,6 +67,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
             if (Names != null) queryable = queryable.Where(x => Names.Contains(x.Name!));
             if (!string.IsNullOrWhiteSpace(SearchTerm)) queryable = queryable.Where(x => x.Name!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Description!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Id.Contains(SearchTerm));
             if (IsSystem != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.IsSystem == IsSystem);
+            if (Description != null) queryable = queryable.Where(x => x.Description == Description);
 
             return queryable;
         }

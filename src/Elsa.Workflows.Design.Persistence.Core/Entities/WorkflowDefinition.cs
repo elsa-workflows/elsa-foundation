@@ -10,12 +10,12 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities
     /// </summary>
     public sealed class WorkflowDefinition : Entity, IWorkflowDefinition
     {
-        public string? Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public string? Description { get; set; }
 
         [Immutable]
-        public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; }
 
         public DateTimeOffset LastModifiedAt { get; set; }
 

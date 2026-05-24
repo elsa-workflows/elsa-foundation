@@ -1,5 +1,5 @@
 ﻿using CShells.Features;
-using Elsa.Mapping.Contracts;
+using Elsa.Mapping.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Mapping;

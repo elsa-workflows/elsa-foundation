@@ -7,7 +7,7 @@ namespace Elsa.Persistence.Core
     public interface IQueries<TEntity>
         where TEntity : Entity
     {
-        Task<TEntity> Get(string id, CancellationToken cancellationToken);
+        public async Task<TEntity> Get(string id, CancellationToken cancellationToken) => (await Find(x => x.Id == id, cancellationToken)) ?? throw new InvalidOperationException($"Entity '{typeof(TEntity)}' with id '{id}' cannot be found");
 
         /// <summary>
         /// Finds a single entity using a query

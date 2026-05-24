@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.JavaScript
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .AddDomainEventHandlers(typeof(JavaScriptWorkflowsRuntimeFeature).Assembly)
+                .AddDomainEventHandlersFrom(typeof(JavaScriptWorkflowsRuntimeFeature).Assembly)
                 .AddAsInterfaces<AddWorkflowInputFunctions>()
                 .AddAsInterfaces<AddActivityOutputFunctions>()
                 .AddAsInterfaces<AddWorkflowFunctions>();

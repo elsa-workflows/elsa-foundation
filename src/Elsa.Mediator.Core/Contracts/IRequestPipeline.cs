@@ -2,5 +2,5 @@
 
 public interface IRequestPipeline
 {
-    Task Execute(IRequestContext context, CancellationToken cancellationToken);
+    Task Execute(IRequestContext context);
 }

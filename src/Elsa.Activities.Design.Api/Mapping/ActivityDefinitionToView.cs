@@ -1,6 +1,6 @@
 ﻿using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Mapping.Contracts;
+using Elsa.Mapping.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Mapping;
 

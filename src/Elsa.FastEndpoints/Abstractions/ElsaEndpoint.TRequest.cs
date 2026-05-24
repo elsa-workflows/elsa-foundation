@@ -13,22 +13,6 @@ namespace Elsa.FastEndpoints.Abstractions
                 Permissions([PermissionNames.All, .. permissions]);
         }
 
-        protected Task SendError(string error, int statusCode = 500, string? errorCode = null, CancellationToken cancellationToken = default)
-        {
-            return Send.ResponseAsync(
-                new { success = false, error, errorCode },
-                statusCode,
-                cancellationToken
-            );
-        }
-
-        protected Task SendError(Exception exception, int statusCode = 500, string? errorCode = null, CancellationToken cancellationToken = default)
-        {
-            return Send.ResponseAsync(
-                new { success = false, error = exception.Message, errorCode },
-                statusCode,
-                cancellationToken
-            );
-        }
+        protected void ThrowError(Exception exception, int statusCode = 500) => ThrowError(exception.Message, statusCode);
     }
 }

@@ -1,7 +1,8 @@
 ﻿using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Mapping.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Extensions;
+using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
@@ -9,17 +10,19 @@ using Elsa.Primitives.Contracts;
 namespace Elsa.Activities.Design.Api.Handlers;
 
 public sealed class AddDefinitionCommandHandler(
+    ISystemClock systemClock,
     IIdentityGenerator identityGenerator,
     IObjectMapper mapper,
+    IQueries<ActivityDefinitionVersion> versionQueries,
     IAddCommand<ActivityDefinition> addDefinitionCommand,
     IAddCommand<ActivityDefinitionVersion> addVersionCommand,
     IQueries<ActivityDefinition> definitionQueries)
 
-    : ICommandHandler<AddDefinitionCommand, ActivityDefinitionVersionView>
+    : ICommandHandler<AddDefinition, ActivityDefinitionVersionView>
 {
     const int initialVersion = 1;
 
-    public async Task<ActivityDefinitionVersionView> Handle(AddDefinitionCommand command, CancellationToken cancellationToken)
+    public async Task<ActivityDefinitionVersionView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
         var exists = await definitionQueries.Any(d => d.UniqueName == command.UniqueName, cancellationToken);
         if (exists)
@@ -33,10 +36,12 @@ public sealed class AddDefinitionCommandHandler(
         var version = CreateVersion(command, definition);
         await addVersionCommand.Add(version, cancellationToken);
 
-        return mapper.Map<ActivityDefinitionVersionView>(version);
+        var addedVersion = await versionQueries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
+
+        return mapper.Map<ActivityDefinitionVersionView>(addedVersion);
     }
 
-    ActivityDefinition CreateDefinition(AddDefinitionCommand def)
+    ActivityDefinition CreateDefinition(AddDefinition def)
     {
         return new()
         {
@@ -48,15 +53,15 @@ public sealed class AddDefinitionCommandHandler(
         };
     }
 
-    ActivityDefinitionVersion CreateVersion(AddDefinitionCommand command, ActivityDefinition definition)
+    ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
     {
-        return new(command.TypeInfo, initialVersion, definition.Id, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(command.TypeInfo, initialVersion, definition.Id, systemClock.UtcNow, kind: command.Kind ?? Core.Models.ActivityKind.Action)
         {
             Id = identityGenerator.Generate(),
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
             Ports = command.Ports ?? [],
-            Definition = definition
+            Definition = definition            
         };
     }
 }

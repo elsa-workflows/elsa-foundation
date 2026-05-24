@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\Elsa.Activities.Design.Persistence.Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\Elsa.FastEndpoints\Elsa.FastEndpoints.csproj" />
     <ProjectReference Include="..\Elsa.Mapping\Elsa.Mapping.csproj" />

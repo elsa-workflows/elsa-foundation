@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action) 
+public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int version, string definitionId, DateTimeOffset createdAt, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action) 
     : Entity, IActivityDefinitionVersion
 {
     /// <summary>
@@ -36,6 +36,9 @@ public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int vers
     [Immutable]
     public string? PortsSource { get; set; } = portsSource;
 
+    [Immutable]
+    public DateTimeOffset CreatedAt { get; } = createdAt;
+
     /// <summary>
     /// The kind of activity.
     /// </summary>
@@ -58,7 +61,7 @@ public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int vers
     /// The ports of the activity type.
     /// </summary>
     [NotMapped]
-    public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];
+    public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];    
 
     IEnumerable<IInputDefinition> IActivityDefinitionVersion.Inputs => Inputs;
 

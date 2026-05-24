@@ -13,25 +13,49 @@ public static class ServiceCollectionExtensions
         return services.AddScoped<IDomainEventHandler<TDomainEvent>, THandler>();
     }
 
-    public static IServiceCollection AddDomainEventHandlers(this IServiceCollection services, Assembly assembly)
+    public static IServiceCollection AddDomainEventHandlersFrom(this IServiceCollection services, Assembly assembly)
     {
-        AddDomainEventHandlerTypesFromAssembly(services, assembly);
+        services.AddHandlersFromAssembly(assembly, typeof(IDomainEventHandler<>));
         return services;
     }
 
-    private static void AddDomainEventHandlerTypesFromAssembly(IServiceCollection services, Assembly assembly)
+    public static IServiceCollection AddRequestHandlersFrom(this IServiceCollection services, Assembly assembly)
     {
-        var types = assembly.GetTypes();
+        services.AddHandlersFromAssembly(assembly, typeof(IRequestHandler<,>));
+        return services;
+    }
+
+    public static IServiceCollection AddCommandHandlersFrom(this IServiceCollection services, Assembly assembly)
+    {
+        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<>));
+        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<,>));
+        return services;
+    }
+
+    /// <summary>
+    /// Registers a <see cref="IRequestHandler{TRequest,TResponse}"/> with the service container.
+    /// </summary>
+    public static IServiceCollection AddRequestHandler<THandler, TRequest, TResponse>(this IServiceCollection services)
+        where THandler : class, IRequestHandler<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>?
+    {
+        return services.AddScoped<IRequestHandler, THandler>();
+    }
+
+    private static void AddHandlersFromAssembly(this IServiceCollection services, Assembly assembly, Type handlerGenericTypeDefinition)
+    {
+        var types = assembly.DefinedTypes;
+
         foreach (var type in types)
         {
-            var domainEventHandlerServiceTypes = type
+            var handlerServiceTypes = type
                 .GetInterfaces()
-                .Where(x => x.IsGenericType && x.GetGenericTypeDefinition() == typeof(IDomainEventHandler<>));
+                .Where(x => x.IsGenericType && x.GetGenericTypeDefinition() == handlerGenericTypeDefinition);
 
-            if (!domainEventHandlerServiceTypes.Any())
+            if (!handlerServiceTypes.Any())
                 continue;
 
-            foreach(var handlerServiceType in domainEventHandlerServiceTypes)
+            foreach(var handlerServiceType in handlerServiceTypes)
                 services.AddScoped(handlerServiceType, type);
         }
     }

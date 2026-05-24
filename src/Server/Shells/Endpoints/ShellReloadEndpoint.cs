@@ -1,3 +1,4 @@
+using Elsa.Primitives.Contracts;
 using Elsa.Server.Constants;
 using Elsa.Server.Shells.Endpoints.Models;
 using FastEndpoints;

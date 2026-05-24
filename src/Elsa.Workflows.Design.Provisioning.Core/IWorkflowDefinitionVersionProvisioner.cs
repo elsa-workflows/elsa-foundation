@@ -2,5 +2,5 @@
 
 public interface IWorkflowDefinitionVersionProvisioner
 {
-    Task Provision(CancellationToken cancellationToken);
+    Task Provision(IEnumerable<IWorkflowDefinitionVersionSource> sources, CancellationToken cancellationToken);
 }

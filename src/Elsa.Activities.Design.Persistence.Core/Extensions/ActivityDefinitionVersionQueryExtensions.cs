@@ -1,8 +1,8 @@
 ﻿using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.OrderDefinitions;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Persistence;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
 
 namespace Elsa.Activities.Design.Persistence.Core.Extensions;
 
@@ -29,15 +29,5 @@ public static class ActivityDefinitionVersionQueryExtensions
         var order = new OrderDefinition<ActivityDefinitionVersion, int>(e => e.Version, OrderDirection.Descending);
         var result = await queries.Query(filter, order, cancellationToken);
         return result.FirstOrDefault();
-    }
-
-    public static Task<IEnumerable<ActivityDefinitionVersion>> FindVersions(this IQueries<ActivityDefinitionVersion> queries, string activityDefinitionId, CancellationToken cancellationToken)
-    {
-        var filter = new ActivityDefinitionVersionFilter
-        {
-            DefinitionId = activityDefinitionId
-        };
-        var order = new ActivityVersionOrderDefinition();
-        return queries.Query(filter, order, cancellationToken);
     }
 }

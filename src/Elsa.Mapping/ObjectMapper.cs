@@ -1,11 +1,11 @@
-﻿using Elsa.Mapping.Contracts;
+﻿using Elsa.Mapping.Core.Contracts;
 using System.Reflection;
 
 namespace Elsa.Mapping;
 
 public sealed class ObjectMapper(IServiceProvider serviceProvider) : IObjectMapper
 {
-    public object? Map(object source, Type returnType)
+    public object Map(object source, Type returnType)
     {
         var sourceType = source.GetType();
         var mappingType = typeof(IObjectMapping<,>).MakeGenericType(sourceType, returnType);
@@ -15,6 +15,7 @@ public sealed class ObjectMapper(IServiceProvider serviceProvider) : IObjectMapp
         var mapMethod = mappingType.GetMethod(nameof(IObjectMapping<,>.Map), BindingFlags.Public | BindingFlags.Instance, [sourceType])
             ?? throw new InvalidProgramException($"'Map' method could not be retrieved from '{mappingType}'");
 
-        return mapMethod.Invoke(mapping, parameters: [source]);
+        return mapMethod.Invoke(mapping, parameters: [source])
+            ?? throw new InvalidOperationException("Invoking 'Map' method returned null");
     }
 }

@@ -2,5 +2,5 @@
 
 public interface IDomainEventPipeline
 {
-    Task Execute(IDomainEventContext context, CancellationToken cancellationToken);
+    Task Execute(IDomainEventContext context);
 }

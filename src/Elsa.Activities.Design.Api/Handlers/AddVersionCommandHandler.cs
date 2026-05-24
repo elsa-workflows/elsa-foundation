@@ -2,33 +2,40 @@
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Extensions;
-using Elsa.Mapping.Contracts;
+using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class AddVersionCommandHandler(IIdentityGenerator identityGenerator, IAddCommand<ActivityDefinitionVersion> addCommand, IQueries<ActivityDefinitionVersion> queries, IQueries<ActivityDefinition> definitionQueries, IObjectMapper objectMapper)
+public sealed class AddVersionCommandHandler(
+    IIdentityGenerator identityGenerator, 
+    ISystemClock systemClock,
+    IAddCommand<ActivityDefinitionVersion> addCommand, 
+    IQueries<ActivityDefinitionVersion> queries, 
+    IQueries<ActivityDefinition> definitionQueries, 
+    IObjectMapper objectMapper)
     
-    : ICommandHandler<AddVersionCommand, ActivityDefinitionVersionView>
+    : ICommandHandler<AddVersion, ActivityDefinitionVersionDetailsView>
 {
-    public async Task<ActivityDefinitionVersionView> Handle(AddVersionCommand command, CancellationToken cancellationToken)
+    public async Task<ActivityDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
         var definition = await definitionQueries.Get(command.DefinitionId, cancellationToken);
 
         var lastVersion = await queries.FindLastVersion(command.DefinitionId, cancellationToken);
         var nextVersionNumber = (lastVersion?.Version ?? 0) + 1;
-
         var version = CreateVersion(command, nextVersionNumber, definition);
-        await addCommand.Add(version, cancellationToken);
 
-        return objectMapper.Map<ActivityDefinitionVersionView>(version);
+        await addCommand.Add(version, cancellationToken);
+        var addedVersion = await queries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
+
+        return objectMapper.Map<ActivityDefinitionVersionDetailsView>(addedVersion);
     }
 
-    ActivityDefinitionVersion CreateVersion(AddVersionCommand command, int version, ActivityDefinition definition)
+    ActivityDefinitionVersion CreateVersion(AddVersion command, int version, ActivityDefinition definition)
     {
-        return new(command.TypeInfo, version, command.DefinitionId, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(command.TypeInfo, version, command.DefinitionId, systemClock.UtcNow, kind: command.Kind ?? Core.Models.ActivityKind.Action)
         {
             Id = identityGenerator.Generate(),
             Inputs = command.Inputs ?? [],

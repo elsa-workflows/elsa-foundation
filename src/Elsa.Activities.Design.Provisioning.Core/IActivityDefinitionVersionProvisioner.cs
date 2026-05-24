@@ -1,6 +1,8 @@
-﻿namespace Elsa.Activities.Design.Provisioning.Core;
+﻿using Elsa.Activities.Design.Core.Contracts;
+
+namespace Elsa.Activities.Design.Provisioning.Core;
 
 public interface IActivityDefinitionVersionProvisioner
 {
-    Task Provision(CancellationToken cancellationToken);
+    Task Provision(IEnumerable<IActivityDefinitionVersionSource> sources, CancellationToken cancellationToken);
 }

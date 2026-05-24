@@ -34,7 +34,7 @@ namespace Elsa.Expressions.JavaScript
                     TypeDescriptors.ToList().ForEach(o.TypeDescriptors.Add);
                 })
 
-                .AddDomainEventHandlers(typeof(JavaScriptFeature).Assembly)
+                .AddDomainEventHandlersFrom(typeof(JavaScriptFeature).Assembly)
 
                 .AddScoped<IExpressionHandler, JavaScriptExpressionHandler>()
                 .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();

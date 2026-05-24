@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Core\Elsa.Persistence.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
   </ItemGroup>
 

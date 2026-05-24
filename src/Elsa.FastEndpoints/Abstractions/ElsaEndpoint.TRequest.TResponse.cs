@@ -3,7 +3,7 @@ using FastEndpoints;
 
 namespace Elsa.FastEndpoints.Abstractions
 {
-    public class ElsaEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse> where TRequest : notnull, new() where TResponse : notnull
+    public class ElsaEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse> where TRequest : notnull where TResponse : notnull
     {
         protected void ConfigurePermissions(params string[] permissions)
         {
@@ -12,5 +12,7 @@ namespace Elsa.FastEndpoints.Abstractions
             else
                 Permissions([PermissionNames.All, .. permissions]);
         }
+
+        protected void ThrowError(Exception exception, int statusCode = 500) => ThrowError(exception.Message, statusCode);
     }
 }

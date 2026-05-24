@@ -15,7 +15,7 @@ public sealed record WorkflowDefinitionState(
     WorkflowMetadata? MetaData) 
     
     : IWorkflowDefinitionState
-{
+{    
     IEnumerable<IInputDefinition> IWorkflowDefinitionState.Inputs => Inputs;
     IEnumerable<IOutputDefinition> IWorkflowDefinitionState.Outputs => Outputs;
     IEnumerable<IActivityConnection> IWorkflowDefinitionState.ActivityConnections => ActivityConnections;
