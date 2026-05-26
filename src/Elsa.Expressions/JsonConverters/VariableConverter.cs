@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -16,7 +17,7 @@ namespace Elsa.Expressions.JsonConverters
         public override IVariable Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             var newOptions = GetClonedOptions(options);
-            var model = JsonSerializer.Deserialize<IVariableDefinition>(ref reader, newOptions)!;
+            var model = JsonSerializer.Deserialize<VariableDefinition>(ref reader, newOptions)!;
             var variable = variableMapper.Map(model);
 
             return variable;

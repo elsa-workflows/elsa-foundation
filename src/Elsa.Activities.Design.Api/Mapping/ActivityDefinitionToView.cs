@@ -6,9 +6,9 @@ namespace Elsa.Activities.Design.Api.Mapping;
 
 public sealed class ActivityDefinitionToView : IObjectMapping<ActivityDefinition, ActivityDefinitionView>
 {
-    public ActivityDefinitionView Map(ActivityDefinition source)
+    public ValueTask<ActivityDefinitionView> Map(ActivityDefinition source, CancellationToken cancellationToken)
     {
-        return new(
+        var result = new ActivityDefinitionView(
             source.Id,
             source.UniqueName,
             source.Category,
@@ -16,5 +16,7 @@ public sealed class ActivityDefinitionToView : IObjectMapping<ActivityDefinition
             source.Description,
             source.IsBrowsable
         );
+
+        return new(result);
     }
 }

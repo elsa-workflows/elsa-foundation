@@ -10,25 +10,25 @@ public static class ServiceCollectionExtensions
         where TDomainEvent : IDomainEvent
         where THandler : class, IDomainEventHandler<TDomainEvent>
     {
-        return services.AddScoped<IDomainEventHandler<TDomainEvent>, THandler>();
+        return services.AddScoped<IDomainEventHandler, THandler>();
     }
 
     public static IServiceCollection AddDomainEventHandlersFrom(this IServiceCollection services, Assembly assembly)
     {
-        services.AddHandlersFromAssembly(assembly, typeof(IDomainEventHandler<>));
+        services.AddHandlersFromAssembly(assembly, typeof(IDomainEventHandler<>), typeof(IDomainEventHandler));
         return services;
     }
 
     public static IServiceCollection AddRequestHandlersFrom(this IServiceCollection services, Assembly assembly)
     {
-        services.AddHandlersFromAssembly(assembly, typeof(IRequestHandler<,>));
+        services.AddHandlersFromAssembly(assembly, typeof(IRequestHandler<,>), typeof(IRequestHandler));
         return services;
     }
 
     public static IServiceCollection AddCommandHandlersFrom(this IServiceCollection services, Assembly assembly)
     {
-        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<>));
-        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<,>));
+        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<>), typeof(ICommandHandler));
+        services.AddHandlersFromAssembly(assembly, typeof(ICommandHandler<,>), typeof(ICommandHandler));
         return services;
     }
 
@@ -42,7 +42,7 @@ public static class ServiceCollectionExtensions
         return services.AddScoped<IRequestHandler, THandler>();
     }
 
-    private static void AddHandlersFromAssembly(this IServiceCollection services, Assembly assembly, Type handlerGenericTypeDefinition)
+    private static void AddHandlersFromAssembly(this IServiceCollection services, Assembly assembly, Type handlerGenericTypeDefinition, Type? serviceType)
     {
         var types = assembly.DefinedTypes;
 
@@ -55,8 +55,16 @@ public static class ServiceCollectionExtensions
             if (!handlerServiceTypes.Any())
                 continue;
 
-            foreach(var handlerServiceType in handlerServiceTypes)
+            if (serviceType is not null)
+            {
+                services.AddScoped(serviceType, type);
+                continue;
+            }
+
+            foreach (var handlerServiceType in handlerServiceTypes)
+            {
                 services.AddScoped(handlerServiceType, type);
+            }
         }
     }
 }

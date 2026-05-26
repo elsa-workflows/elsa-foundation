@@ -18,7 +18,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
-        services.AddMappingsFromAssembly(assembly);
+        services.AddMappingsFrom(assembly);
 
         services.AddDomainEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

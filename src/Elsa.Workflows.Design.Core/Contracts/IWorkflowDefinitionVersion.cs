@@ -1,4 +1,6 @@
-﻿namespace Elsa.Workflows.Design.Core.Contracts;
+﻿using Elsa.Workflows.Design.Core.Models;
+
+namespace Elsa.Workflows.Design.Core.Contracts;
 
 public interface IWorkflowDefinitionVersion
 {
@@ -8,10 +10,12 @@ public interface IWorkflowDefinitionVersion
 
     IWorkflowDefinition Definition { get; }
 
-    IWorkflowDefinitionState State { get; }
+    WorkflowDefinitionState State { get; }
 
     /// <summary>
     /// UTC timestamp when this draft was created
     /// </summary>
     DateTimeOffset CreatedAt { get; }
+
+    DateTimeOffset? SourceCreatedAt { get; }
 }

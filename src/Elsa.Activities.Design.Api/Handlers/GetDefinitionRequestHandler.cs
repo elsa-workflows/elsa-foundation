@@ -6,25 +6,24 @@ using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
-using System.Linq.Expressions;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersion> versionQueries, IQueries<ActivityDefinition> defQueries, IObjectMapper mapper) 
+public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersion> versionQueries, IQueries<ActivityDefinition> defQueries, IObjectMapper mapper)
     : IRequestHandler<GetDefinition, ActivityDefinitionDetailsView>
 {
     public async Task<ActivityDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
         var definitionTask = defQueries.Get(request.Id, cancellationToken);
         var filter = new ActivityDefinitionVersionFilter { DefinitionId = request.Id };
-        var versionsTask = versionQueries.Query(filter, Expressions.VersionViewSelector, cancellationToken);
+        var versionsTask = versionQueries.Query(filter, Expressions.VersionInfoSelector, cancellationToken);
 
         var definition = await definitionTask;
         var versions = await versionsTask;
 
         return new ActivityDefinitionDetailsView(
-            mapper.Map<ActivityDefinitionView>(definition),
+            await mapper.Map<ActivityDefinitionView>(definition, cancellationToken),
             versions
         );
-    }    
+    }
 }

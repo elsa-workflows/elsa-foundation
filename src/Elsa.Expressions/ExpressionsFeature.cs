@@ -26,7 +26,7 @@ namespace Elsa.Expressions
                 {
                     o.Arguments = EvaluatorOptions.Arguments;
                 })
-                .AddSingleton<IVariableFormatter, VariableFormatter>()
+                .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
                 .AddSingleton<IVariableMapper, VariableMapper>()
                 .AddSingleton<IPayloadSerializerConverterProvider>(GetVariableConverterProvider)
                 .AddSingleton<IPayloadSerializerConverterProvider>(GetFuncExpressionValueConverterProvider)

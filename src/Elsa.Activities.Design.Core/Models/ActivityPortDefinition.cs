@@ -3,5 +3,5 @@
     /// <summary>
     /// Represents a port on an activity.
     /// </summary>
-    public sealed record ActivityPortDefinition(string Name, string? DisplayName, ActivityPortType Type, bool IsBrowsable = true);    
+    public sealed record ActivityPortDefinition(string Name, string? DisplayName, ActivityPortType Type, bool IsBrowsable = true);
 }

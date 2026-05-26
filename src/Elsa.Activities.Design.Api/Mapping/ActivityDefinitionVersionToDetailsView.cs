@@ -4,14 +4,15 @@ using Elsa.Mapping.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Mapping;
 
-public sealed class ActivityDefinitionVersionToDetailsView(IObjectMapping<ActivityDefinition, ActivityDefinitionView> defMapping) : IObjectMapping<ActivityDefinitionVersion, ActivityDefinitionVersionDetailsView>
+public sealed class ActivityDefinitionVersionToDetailsView(IObjectMapping<ActivityDefinition, ActivityDefinitionView> defMapping)
+    : IObjectMapping<ActivityDefinitionVersion, ActivityDefinitionVersionDetailsView>
 {
-    public ActivityDefinitionVersionDetailsView Map(ActivityDefinitionVersion source)
+    public async ValueTask<ActivityDefinitionVersionDetailsView> Map(ActivityDefinitionVersion source, CancellationToken cancellationToken)
     {
         if (source.Definition is null)
             throw new InvalidOperationException($"Mapping failed: source.Definition is null");
 
-        var definition = defMapping.Map(source.Definition);
+        var definition = await defMapping.Map(source.Definition, cancellationToken);
         return new(
             source.Id,
             source.Version,

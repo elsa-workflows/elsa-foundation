@@ -17,9 +17,10 @@ public sealed class RequestHandlerInvokerMiddleware(RequestMiddlewareDelegate ne
         var requestType = request.GetType();
         var responseType = context.ResponseType;
         var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, responseType);
-        var handlers = context
-            .ServiceProvider
-            .GetServices(handlerType)
+        var requestHandlers = context.ServiceProvider.GetServices<IRequestHandler>();
+        var handlers = requestHandlers
+            .DistinctBy(x => x.GetType())
+            .Where(handlerType.IsInstanceOfType)
             .ToArray();
 
         if (handlers.Length == 0)

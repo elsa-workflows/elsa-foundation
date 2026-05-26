@@ -10,10 +10,10 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers
         public ValueTask Handle(WorkflowsDesignDbContext dbContext, WorkflowDefinitionVersion entity, CancellationToken cancellationToken)
         {
             var stateSource = string.Empty;
-            if(entity.State is not null)
+            if (entity.State is not null)
             {
                 stateSource = payloadSerializer.Serialize(entity.State);
-            }            
+            }
 
             entity.StateSource = stateSource;
 

@@ -7,11 +7,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions;
 
-internal sealed class Add : ElsaCommandHandlerEndpoint<AddDefinition, ActivityDefinitionVersionDetailsView>
-{    
-    public Add(ICommandSender commandSender, ILogger<Add> logger) : base(commandSender, logger)
+internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : ElsaCommandHandlerEndpoint<AddDefinition, ActivityDefinitionVersionDetailsView>(commandSender, logger)
+{
+    public override void Configure()
     {
         Post(RouteConstants.Definitions);
-        AllowAnonymous();        
+        AllowAnonymous();
     }
 }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
@@ -6,37 +6,39 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
-	<ItemGroup>				
-		<PackageReference Include="CShells.FastEndpoints" Version="0.0.24" />				
+	<ItemGroup>
+		<PackageReference Include="CShells.FastEndpoints" Version="0.0.24" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
 		<PackageReference Include="Nuplane" Version="0.0.8" />
 		<PackageReference Include="Nuplane.Admin" Version="0.0.8" />
 		<PackageReference Include="Nuplane.Loading" Version="0.0.8" />
 		<PackageReference Include="Nuplane.Sources.Directory" Version="0.0.8" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" Version="10.0.8" />
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Elsa.Activities.Design.Api\Elsa.Activities.Design.Api.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Design.Persistence.Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Design.Persistence.EFCore.Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Caching.Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Libraries\Elsa.Expressions.JavaScript.Libraries.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
-		<ProjectReference Include="..\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions\Elsa.Expressions.csproj" />
-		<ProjectReference Include="..\Elsa.Http.Core\Elsa.Http.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Locking.FileSystem\Elsa.Locking.FileSystem.csproj" />
+		<ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Mediator\Elsa.Mediator.csproj" />
-		<ProjectReference Include="..\Elsa.Notifications.Core\Elsa.Notifications.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Persistence.Core\Elsa.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Serialization\Elsa.Serialization.csproj" />
 		<ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Tasks.Schedules\Elsa.Tasks.Schedules.csproj" />
+		<ProjectReference Include="..\Elsa.Tasks\Elsa.Tasks.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Api\Elsa.Workflows.Design.Api.csproj" />
 		<ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Workflows.Runtime.Core\Elsa.Workflows.Runtime.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Workflows.Runtime.JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Persistence.EFCore.Sqlite\Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
 	</ItemGroup>
 
 </Project>

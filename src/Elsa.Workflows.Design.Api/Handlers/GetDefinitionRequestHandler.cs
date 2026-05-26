@@ -23,11 +23,11 @@ public sealed class GetDefinitionRequestHandler(IQueries<WorkflowDefinitionVersi
         var versions = await versionsTask;
 
         var mappedDraft = definition.Draft is not null
-            ? mapper.Map<WorkflowDefinitionStateView>(definition.Draft)
+            ? await mapper.Map<WorkflowDefinitionStateView>(definition.Draft, cancellationToken)
             : null;
 
         return new WorkflowDefinitionDetailsView(
-            mapper.Map<WorkflowDefinitionView>(definition),
+            await mapper.Map<WorkflowDefinitionView>(definition, cancellationToken),
             mappedDraft,
             versions
         );

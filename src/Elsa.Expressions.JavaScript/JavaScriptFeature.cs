@@ -22,7 +22,7 @@ namespace Elsa.Expressions.JavaScript
         public ConfigurationAccessFunctionProviderOptions? GetConfigurationFunction { get; set; }
 
         public void ConfigureServices(IServiceCollection services)
-        {            
+        {
             services
                 .Configure<ConfigurationAccessFunctionProviderOptions>(o =>
                 {

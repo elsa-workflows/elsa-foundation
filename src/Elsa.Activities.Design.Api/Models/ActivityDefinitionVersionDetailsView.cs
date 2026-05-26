@@ -5,11 +5,11 @@ namespace Elsa.Activities.Design.Api.Models;
 
 public sealed record ActivityDefinitionVersionDetailsView(
     string Id,
-    int Version, 
+    int Version,
     TypeInformation TypeInfo,
     ActivityDefinitionView Definition,
-    IEnumerable<InputDefinition>? Inputs, 
-    IEnumerable<OutputDefinition>? Outputs, 
-    IEnumerable<ActivityPortDefinition>? Ports, 
+    IEnumerable<InputDefinition>? Inputs,
+    IEnumerable<OutputDefinition>? Outputs,
+    IEnumerable<ActivityPortDefinition>? Ports,
     ActivityKind Kind
 );

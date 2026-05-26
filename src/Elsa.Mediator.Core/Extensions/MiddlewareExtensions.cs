@@ -67,7 +67,7 @@ public static class MiddlewareExtensions
     private static CommandMiddlewareDelegate BuildMiddlewareDelegate<TMiddleware>(
         ICommandPipelineBuilder builder,
         CommandMiddlewareDelegate next,
-        object[] args)         
+        object[] args)
 
         where TMiddleware : ICommandMiddleware
     {

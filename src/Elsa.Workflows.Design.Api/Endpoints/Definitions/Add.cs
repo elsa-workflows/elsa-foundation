@@ -2,16 +2,16 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Constants;
-using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
-internal sealed class Add : ElsaCommandHandlerEndpoint<AddDefinition, WorkflowDefinitionVersionView>
-{    
-    public Add(ICommandSender commandSender, ILogger<Add> logger) : base(commandSender, logger)
+internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : ElsaCommandHandlerEndpoint<AddDefinition, WorkflowDefinitionVersionInfo>(commandSender, logger)
+{
+    public override void Configure()
     {
         Post(RouteConstants.Definitions);
-        AllowAnonymous();        
+        AllowAnonymous();
     }
 }

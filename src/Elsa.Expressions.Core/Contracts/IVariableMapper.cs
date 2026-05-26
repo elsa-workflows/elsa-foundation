@@ -1,15 +1,17 @@
+using Elsa.Expressions.Core.Models;
+
 namespace Elsa.Expressions.Core.Contracts
 {
     public interface IVariableMapper
     {
         /// <summary>
-        /// Maps a <see cref="IVariableDefinition"/> to a <see cref="IVariable"/>.
+        /// Maps a <see cref="VariableDefinition"/> to a <see cref="IVariable"/>.
         /// </summary>
-        IVariable Map(IVariableDefinition source);
+        IVariable Map(VariableDefinition source);
 
         /// <summary>
-        /// Maps a <see cref="IVariable"/> to a <see cref="IVariableDefinition"/>.
+        /// Maps a <see cref="IVariable"/> to a <see cref="VariableDefinition"/>.
         /// </summary>
-        IVariableDefinition Map(IVariable source);
+        VariableDefinition Map(IVariable source);
     }
 }

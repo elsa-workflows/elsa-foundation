@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers
     {
         public ValueTask Handle(WorkflowsDesignDbContext dbContext, WorkflowDefinition entity, CancellationToken cancellationToken)
         {
-            dbContext.Entry(entity).Property(nameof(WorkflowMetadata.IsSystem)).CurrentValue = entity.MetaData?.IsSystem ?? false;            
+            dbContext.Entry(entity).Property(nameof(WorkflowMetadata.IsSystem)).CurrentValue = entity.MetaData?.IsSystem ?? false;
             return ValueTask.CompletedTask;
         }
     }

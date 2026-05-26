@@ -7,11 +7,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
-internal sealed class List : ElsaRequestHandlerEndpoint<ListDefinitions, IEnumerable<WorkflowDefinitionView>>
-{    
-    public List(IRequestSender requestSender, ILogger<List> logger) : base(requestSender, logger)
+internal sealed class List(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitions, IEnumerable<WorkflowDefinitionView>>(requestSender, logger)
+{
+    public override void Configure()
     {
         Get(RouteConstants.Definitions);
-        AllowAnonymous();        
+        AllowAnonymous();
     }
 }

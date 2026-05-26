@@ -10,7 +10,7 @@
         }
 
         public JavaScriptFunction(string name, Action<TParam1?> @delegate)
-            : base(name,@delegate)
+            : base(name, @delegate)
         {
         }
 

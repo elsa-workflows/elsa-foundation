@@ -1,6 +1,6 @@
 ﻿namespace Elsa.Mapping.Core.Contracts;
 
-public interface IObjectMapping<in TSource, out TTarget>
+public interface IObjectMapping<in TSource, TTarget>
 {
-    TTarget Map(TSource source);
+    ValueTask<TTarget> Map(TSource source, CancellationToken cancellationToken = default);
 }

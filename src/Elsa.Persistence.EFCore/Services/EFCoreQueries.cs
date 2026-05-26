@@ -18,7 +18,7 @@ namespace Elsa.Persistence.EFCore.Services
     public sealed class EFCoreQueries<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IServiceProvider serviceProvider)
         : IQueries<TEntity>
             where TDbContext : DbContext
-            where TEntity : Entity, new()
+            where TEntity : Entity
     {
         /// <summary>
         /// Creates a new instance of the database context.
@@ -33,7 +33,7 @@ namespace Elsa.Persistence.EFCore.Services
         {
             await using var dbContext = await CreateDbContext(cancellationToken);
             var set = dbContext.Set<TEntity>().AsNoTracking();
-            var entity = await set.FirstOrDefaultAsync(predicate, cancellationToken);            
+            var entity = await set.FirstOrDefaultAsync(predicate, cancellationToken);
 
             if (entity == null)
                 return null;
@@ -53,13 +53,17 @@ namespace Elsa.Persistence.EFCore.Services
         public async Task<TEntity?> Find<TProperty>(IFilter<TEntity> filter, IEnumerable<Expression<Func<TEntity, TProperty>>> include, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContext(cancellationToken);
-            var query = GetQuery(filter);
             var set = dbContext.Set<TEntity>().AsNoTracking();
 
-            foreach(var expression in include)
+            foreach (var expression in include)
                 set = set.Include(expression);
 
-            var entity = await set.FirstOrDefaultAsync(cancellationToken);
+            // Apply the filter to the include-augmented set. Without this the filter was
+            // built then discarded, producing SELECT ... LIMIT 1 with no WHERE — which
+            // returned an arbitrary row and triggered EF's First-without-OrderBy warning.
+            var query = GetQuery(filter)(set);
+
+            var entity = await query.FirstOrDefaultAsync(cancellationToken);
 
             if (entity == null)
                 return null;
@@ -445,6 +449,6 @@ namespace Elsa.Persistence.EFCore.Services
 
                 return result;
             };
-        }       
+        }
     }
 }

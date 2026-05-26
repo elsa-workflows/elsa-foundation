@@ -2,6 +2,8 @@
 {
     public interface IActivityDefinition
     {
+        string Id { get; }
+
         /// <summary>
         /// Unique, immutable name that identifies the instance within its defined scope.
         /// </summary>

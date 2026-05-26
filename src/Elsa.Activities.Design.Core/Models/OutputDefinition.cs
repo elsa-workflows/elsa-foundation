@@ -1,12 +1,12 @@
-﻿using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Primitives.Models;
+﻿using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
 
 public sealed record OutputDefinition(
     string ReferenceKey,
     string Name,
-    TypeInformation TypeInfo,
+    TypeInformation Type,
+    TypeInformation? StorageDriverType,
     string DisplayName,
     string? Category,
     bool? IsBrowsable = null,
@@ -17,5 +17,4 @@ public sealed record OutputDefinition(
     IDictionary<string, object>? PropertyInfo = null,
     IDictionary<string, object>? UISpecifications = null)
 
-    :   ArgumentDefinition(ReferenceKey, Name, TypeInfo, DisplayName, Category, IsBrowsable, IsSerializable, Description, Order, UiHint, PropertyInfo, UISpecifications), 
-        IOutputDefinition;
+    : ArgumentDefinition(ReferenceKey, Name, Type, StorageDriverType, DisplayName, Category, IsBrowsable, IsSerializable, Description, Order, UiHint, PropertyInfo, UISpecifications);

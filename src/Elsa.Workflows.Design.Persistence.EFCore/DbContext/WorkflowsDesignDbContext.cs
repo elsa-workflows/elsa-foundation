@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.DbContext
 {
-    public sealed class WorkflowsDesignDbContext(DbContextOptions options, IServiceProvider serviceProvider)
+    public sealed class WorkflowsDesignDbContext(DbContextOptions<WorkflowsDesignDbContext> options, IServiceProvider serviceProvider)
         : ElsaDbContextBase(options, serviceProvider)
     {
         /// <summary>

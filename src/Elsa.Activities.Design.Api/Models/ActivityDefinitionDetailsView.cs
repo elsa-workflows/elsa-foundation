@@ -1,6 +1,8 @@
-﻿namespace Elsa.Activities.Design.Api.Models;
+﻿using Elsa.Activities.Design.Core.Models;
+
+namespace Elsa.Activities.Design.Api.Models;
 
 public sealed record ActivityDefinitionDetailsView(
     ActivityDefinitionView Definition,
-    IEnumerable<ActivityDefinitionVersionView> Versions
+    IEnumerable<ActivityDefinitionVersionInfo> Versions
 );

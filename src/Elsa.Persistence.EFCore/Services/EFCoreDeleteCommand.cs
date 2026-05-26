@@ -8,7 +8,7 @@ namespace Elsa.Persistence.EFCore.Services
     public sealed class EFCoreDeleteCommand<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IQueries<TEntity> queries)
         : IDeleteCommand<TEntity>
         where TDbContext : DbContext
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         private async Task<TDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => await dbContextFactory.CreateDbContextAsync(cancellationToken);
 

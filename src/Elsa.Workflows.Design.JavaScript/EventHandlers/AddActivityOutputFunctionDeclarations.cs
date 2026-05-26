@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
             if (options.Value.DisableWrappers)
                 return ValueTask.CompletedTask;
 
-            var activitiesWithOutput = designContext.GetActivitiesWithOutput();                
+            var activitiesWithOutput = designContext.GetActivitiesWithOutput();
 
             foreach (var activity in activitiesWithOutput)
             {

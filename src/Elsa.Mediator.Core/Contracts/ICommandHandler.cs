@@ -1,8 +1,4 @@
 ﻿using Elsa.Mediator.Core.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Windows.Input;
 
 namespace Elsa.Mediator.Core.Contracts;
 

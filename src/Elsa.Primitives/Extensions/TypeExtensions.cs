@@ -10,7 +10,7 @@ namespace Elsa.Primitives.Extensions
     /// </summary>
     public static class TypeExtensions
     {
-        private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();  
+        private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();
 
         public static IEnumerable<string> GetImmutableProperties(this Type type)
         {
@@ -87,6 +87,19 @@ namespace Elsa.Primitives.Extensions
             try
             {
                 return (T)method.Invoke(target, args)!;
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw; // Unreachable, but required for compiler
+            }
+        }
+
+        public static ValueTask<T> InvokeAndUnwrapValueTask<T>(this MethodBase method, object target, object[] args) where T : notnull
+        {
+            try
+            {
+                return (ValueTask<T>)method.Invoke(target, args)!;
             }
             catch (TargetInvocationException ex) when (ex.InnerException is not null)
             {

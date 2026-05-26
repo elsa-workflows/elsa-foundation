@@ -6,4 +6,21 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Design.Provisioning.Core\Elsa.Workflows.Design.Provisioning.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Contracts\" />
+	</ItemGroup>
+
 </Project>

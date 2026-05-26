@@ -1,4 +1,3 @@
-using Elsa.Primitives.Attributes;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -14,11 +13,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities
 
         public string? Description { get; set; }
 
-        [Immutable]
-        public DateTimeOffset CreatedAt { get; set; }
-
-        public DateTimeOffset LastModifiedAt { get; set; }
-
         /// <summary>
         /// Value object containing some technical and custom meta data about the workflow definition
         /// </summary>
@@ -33,6 +27,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities
         /// Id of the draft
         /// </summary>
         public string? DraftId { get; set; }
+
+        IWorkflowDefinitionDraft? IWorkflowDefinition.Draft => Draft;
 
         /// <summary>
         /// Creates and returns a shallow copy of the workflow definition.

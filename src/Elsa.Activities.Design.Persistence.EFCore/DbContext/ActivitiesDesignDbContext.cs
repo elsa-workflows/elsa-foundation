@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.DbContext
 {
-    public sealed class ActivitiesDesignDbContext(DbContextOptions options, IServiceProvider serviceProvider)
+    public sealed class ActivitiesDesignDbContext(DbContextOptions<ActivitiesDesignDbContext> options, IServiceProvider serviceProvider)
         : ElsaDbContextBase(options, serviceProvider)
-    {        
+    {
         public DbSet<ActivityDefinition> ActivityDefinitions { get; set; } = null!;
 
         public DbSet<ActivityDefinitionVersion> ActivityDefinitionVersions { get; set; } = null!;

@@ -7,7 +7,7 @@ namespace Elsa.Persistence.Core
     public interface IQueries<TEntity>
         where TEntity : Entity
     {
-        public async Task<TEntity> Get(string id, CancellationToken cancellationToken) => (await Find(x => x.Id == id, cancellationToken)) ?? throw new InvalidOperationException($"Entity '{typeof(TEntity)}' with id '{id}' cannot be found");
+        async Task<TEntity> Get(string id, CancellationToken cancellationToken) => (await Find(x => x.Id == id, cancellationToken)) ?? throw new InvalidOperationException($"Entity '{typeof(TEntity)}' with id '{id}' cannot be found");
 
         /// <summary>
         /// Finds a single entity using a query
@@ -56,7 +56,7 @@ namespace Elsa.Persistence.Core
             IFilter<TEntity> filter,
             PageArgs? pageArgs = null,
             CancellationToken cancellationToken = default
-        );    
+        );
 
 
         /// <summary>

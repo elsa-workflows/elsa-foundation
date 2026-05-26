@@ -1,25 +1,31 @@
 using Elsa.Persistence.EFCore;
-using Elsa.Persistence.EFCore.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
-using Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers;
+using Elsa.Workflows.Design.Persistence.EFCore.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore
 {
     public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceShellFeatureBase<WorkflowsDesignDbContext>
     {
-        protected override void OnConfiguring(IServiceCollection services)
+        protected override void OnAfterConfigured(IServiceCollection services)
         {
             if (UseCommands)
             {
-                services.AddScoped<IEntitySavingHandler<WorkflowsDesignDbContext, WorkflowDefinitionVersion>, WorkflowDefinitionVersionSavingHandler>();
+                services
+                    .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinitionCommand>()
+                    .AddEntitySavingHandlersFrom(GetType().Assembly)
+                    .AddEntitySavingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
             }
 
             if (UseQueries)
             {
                 services
-                    .AddScoped<IEntityLoadingHandler<WorkflowsDesignDbContext, WorkflowDefinitionVersion>, WorkflowDefinitionVersionLoadingHandler>();
+                    .AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>()
+                    .AddEntityLoadingHandlersFrom(GetType().Assembly)
+                    .AddEntityLoadingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
             }
         }
     }

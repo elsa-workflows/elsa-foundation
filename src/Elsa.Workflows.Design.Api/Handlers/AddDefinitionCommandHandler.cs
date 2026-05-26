@@ -1,64 +1,54 @@
-﻿using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Mapping.Core.Contracts;
+﻿using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Extensions;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class AddDefinitionCommandHandler(
-    ISystemClock systemClock,
     IIdentityGenerator identityGenerator,
     IObjectMapper mapper,
-    IAddCommand<WorkflowDefinition> addDefinitionCommand,
-    IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
-    IQueries<WorkflowDefinitionVersion> queries)
+    IAddWorkflowDefinitionCommand addCommand,
+    IQueries<WorkflowDefinition> queries)
 
-    : ICommandHandler<AddDefinition, WorkflowDefinitionVersionView>
+    : ICommandHandler<AddDefinition, WorkflowDefinitionDetailsView>
 {
-    const int initialVersion = 1;
-
-    public async Task<WorkflowDefinitionVersionView> Handle(AddDefinition command, CancellationToken cancellationToken)
+    public async Task<WorkflowDefinitionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
-        var definition = CreateDefinition(command);
-        await addDefinitionCommand.Add(definition, cancellationToken);
+        var draft = await BuildDraft(cancellationToken);
+        var definition = BuildDefinition(command);
 
-        var state = mapper.Map<WorkflowDefinitionState>(
-            new WorkflowDefinitionStateView(MetaData: command.MetaData)
-        );
-        var version = CreateVersion(definition, state);
-        await addVersionCommand.Add(version, cancellationToken);
+        await addCommand.Execute(definition, draft, cancellationToken);
 
-        var addedVersion = queries.GetVersionIncludingDefinition(version.Id, cancellationToken);
-        return mapper.Map<WorkflowDefinitionVersionView>(addedVersion);
+        var addedDefinition = queries.GetDefinitionInlcudingDraft(definition.Id, cancellationToken);
+        return await mapper.Map<WorkflowDefinitionDetailsView>(addedDefinition, cancellationToken);
     }
 
-    
-
-    WorkflowDefinition CreateDefinition(AddDefinition def)
+    private async ValueTask<WorkflowDefinitionDraft> BuildDraft(CancellationToken cancellationToken)
     {
-        var now = systemClock.UtcNow;
+        var state = await mapper.Map<WorkflowDefinitionState>(new WorkflowDefinitionStateView(), cancellationToken);
 
         return new()
         {
             Id = identityGenerator.Generate(),
-            Description = def.Description,
-            LastModifiedAt = now,
-            CreatedAt = now
+            State = state
         };
     }
 
-    WorkflowDefinitionVersion CreateVersion(WorkflowDefinition definition, WorkflowDefinitionState state)
+    private WorkflowDefinition BuildDefinition(AddDefinition def)
     {
-        return new(definition.Id, initialVersion, systemClock.UtcNow)
+        return new()
         {
             Id = identityGenerator.Generate(),
-            Definition = definition,
-            State = state
+            Description = def.Description,
+            MetaData = def.MetaData,
+            Name = def.Name
         };
     }
 }

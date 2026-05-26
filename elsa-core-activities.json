@@ -1,0 +1,1029 @@
+[
+  {
+    "typeInfo": { "typeName": "Event", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.Event",
+      "category": "Primitives",
+      "displayName": "Event",
+      "description": "Wait for an event to be triggered.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "eventName", "name": "EventName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Event Name", "category": null, "description": "The name of the event to listen for.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "ExecuteWorkflow", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.ExecuteWorkflow",
+      "category": "Composition",
+      "displayName": "Execute Workflow",
+      "description": "Create a new workflow instance of the specified workflow and execute it.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "workflowDefinitionId", "name": "WorkflowDefinitionId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Workflow Definition", "category": null, "description": "The definition ID of the workflow to execute.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "WorkflowDefinitionPicker", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "correlationId", "name": "CorrelationId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Correlation ID", "category": null, "description": "The correlation ID to associate the workflow with.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "input", "name": "Input", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Input", "category": null, "description": "The input to send to the workflow.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "waitForCompletion", "name": "WaitForCompletion", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Wait For Completion", "category": null, "description": "Wait for the child workflow to complete before completing this activity.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "PublishEvent", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.PublishEvent",
+      "category": "Primitives",
+      "displayName": "Publish Event",
+      "description": "Publishes an event.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "eventName", "name": "EventName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Event Name", "category": null, "description": "The name of the event to publish.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "correlationId", "name": "CorrelationId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Correlation ID", "category": null, "description": "The correlation ID to scope the event to.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "isLocalEvent", "name": "IsLocalEvent", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Local Event", "category": null, "description": "Whether the event is local to the workflow. When checked, the event will be delivered to this workflow instance only.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "payload", "name": "Payload", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Payload", "category": null, "description": "The payload to send as the event body.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "RunTask", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.RunTask",
+      "category": "Primitives",
+      "displayName": "Run Task",
+      "description": "Requests a given task to be run.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "taskName", "name": "TaskName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Task Name", "category": null, "description": "The name of the task being requested.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "payload", "name": "Payload", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Payload", "category": null, "description": "Any additional parameters to send to the task.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "taskId", "name": "TaskId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Task ID", "category": null, "description": "The ID of the task that was requested to run.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "DispatchWorkflow", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.DispatchWorkflow",
+      "category": "Composition",
+      "displayName": "Dispatch Workflow",
+      "description": "Create a new workflow instance of the specified workflow and dispatch it for execution.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "workflowDefinitionId", "name": "WorkflowDefinitionId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Workflow Definition", "category": null, "description": "The definition ID of the workflow to dispatch.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "WorkflowDefinitionPicker", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "correlationId", "name": "CorrelationId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Correlation ID", "category": null, "description": "The correlation ID to associate the workflow with.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "input", "name": "Input", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Input", "category": null, "description": "The input to send to the workflow.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "waitForCompletion", "name": "WaitForCompletion", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Wait For Completion", "category": null, "description": "Wait for the child workflow to complete before completing this activity.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "startNewTrace", "name": "StartNewTrace", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Start New Trace", "category": "Open Telemetry", "description": "Start a new trace context when using Open Telemetry.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "channelName", "name": "ChannelName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Channel", "category": null, "description": "The channel to dispatch the workflow to.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "BulkDispatchWorkflows", "namespace": "Elsa.Workflows.Runtime.Activities", "assemblyName": "Elsa.Workflows.Runtime", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.BulkDispatchWorkflows",
+      "category": "Composition",
+      "displayName": "Bulk Dispatch Workflows",
+      "description": "Create new workflow instances for each item in the data source and dispatch them for execution.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "workflowDefinitionId", "name": "WorkflowDefinitionId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Workflow Definition", "category": null, "description": "The definition ID of the workflows to dispatch.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "WorkflowDefinitionPicker", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "items", "name": "Items", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Items", "category": null, "description": "The data source to use for dispatching the workflows.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "defaultItemInputKey", "name": "DefaultItemInputKey", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Default Item Input Key", "category": null, "description": "The default key to use for the input name when sending the current item to the dispatched workflow. Will not be used if the Items field contains a list of dictionaries.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "correlationIdFunction", "name": "CorrelationIdFunction", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Correlation ID Function", "category": null, "description": "A function to compute the correlation ID to associate a dispatched workflow with.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "input", "name": "Input", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Input", "category": null, "description": "Additional input to send to the workflows being dispatched.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "waitForCompletion", "name": "WaitForCompletion", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Wait For Completion", "category": null, "description": "Wait for the dispatched workflows to complete before completing this activity.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "startNewTrace", "name": "StartNewTrace", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Start New Trace", "category": "Open Telemetry", "description": "Start a new trace context when using Open Telemetry.", "order": 6, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "channelName", "name": "ChannelName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Channel", "category": null, "description": "The channel to dispatch the workflow to.", "order": 7, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "ChildCompleted", "displayName": "Child Completed", "type": "Embedded", "isBrowsable": true },
+      { "name": "ChildFaulted", "displayName": "Child Faulted", "type": "Embedded", "isBrowsable": true },
+      { "name": "Completed", "displayName": "Completed", "type": "Flow", "isBrowsable": true },
+      { "name": "Canceled", "displayName": "Canceled", "type": "Flow", "isBrowsable": true },
+      { "name": "Done", "displayName": "Done", "type": "Flow", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "SetOutput", "namespace": "Elsa.Workflows.Management.Activities.SetOutput", "assemblyName": "Elsa.Workflows.Management", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.SetOutput",
+      "category": "Composition",
+      "displayName": "Set Output",
+      "description": "Assigns a given value to a container's output.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "outputName", "name": "OutputName", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Output", "category": null, "description": "The output to assign.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "OutputPicker", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "outputValue", "name": "OutputValue", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Output Value", "category": null, "description": "The value to assign.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "WriteLine", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.WriteLine",
+      "category": "Console",
+      "displayName": "Write Line",
+      "description": "Write a line of text to the console.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "text", "name": "Text", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Text", "category": null, "description": "The text to write.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "SetVariable", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.SetVariable",
+      "category": "Primitives",
+      "displayName": "Set Variable",
+      "description": "Assign a value to a workflow variable.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "variable", "name": "Variable", "typeInfo": { "typeName": "Variable", "namespace": "Elsa.Workflows.Memory", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Variable", "category": null, "description": "The variable to assign the value to.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "value", "name": "Value", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Value", "category": null, "description": "The value to assign.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Start", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Start",
+      "category": "Flow",
+      "displayName": "Start",
+      "description": "A milestone activity that marks the start of a flowchart.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Switch", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Switch",
+      "category": "Branching",
+      "displayName": "Switch",
+      "description": "Evaluate a set of case conditions and schedule the activity for a matching case.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "cases", "name": "Cases", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Cases", "category": null, "description": "The cases to evaluate.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "switch-editor", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "mode", "name": "Mode", "typeInfo": { "typeName": "SwitchMode", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Mode", "category": null, "description": "The switch mode determines whether the first match should be scheduled, or all matches.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "output", "name": "Output", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Output", "category": null, "description": "The selected case's output.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": [
+      { "name": "Default", "displayName": "Default", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "While", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.While",
+      "category": "Looping",
+      "displayName": "While",
+      "description": "Execute an activity while a given condition evaluates to true.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "condition", "name": "Condition", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Condition", "category": null, "description": "The condition to evaluate.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "SingleLine", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "Body", "displayName": "Body", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "Workflow", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Workflow",
+      "category": "Workflows",
+      "displayName": "Workflow",
+      "description": "A workflow is an activity that executes its Root activity.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Sequence", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Sequence",
+      "category": "Workflows",
+      "displayName": "Sequence",
+      "description": "Execute a set of activities in sequence.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "SetName", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.SetName",
+      "category": "Primitives",
+      "displayName": "Set Name",
+      "description": "Set the name of the workflow instance to a specified value.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "value", "name": "Value", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Value", "category": null, "description": null, "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "For", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.For",
+      "category": "Looping",
+      "displayName": "For",
+      "description": "Iterate over a sequence of steps between a start and an end number.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "start", "name": "Start", "typeInfo": { "typeName": "Int32", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Start", "category": null, "description": "The start step.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "end", "name": "End", "typeInfo": { "typeName": "Int32", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "End", "category": null, "description": "The end step.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "step", "name": "Step", "typeInfo": { "typeName": "Int32", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Step", "category": null, "description": "The step size. To count down, enter a negative number.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "outerBoundInclusive", "name": "OuterBoundInclusive", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Outer Bound Inclusive", "category": null, "description": "Controls whether the end step is upper/lowerbound inclusive or exclusive. True (inclusive) by default.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "currentValue", "name": "CurrentValue", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Current Value", "category": null, "description": "The current value of the iteration.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": [
+      { "name": "Body", "displayName": "Body", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "ForEach", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.ForEach",
+      "category": "Looping",
+      "displayName": "For Each",
+      "description": "Iterate over a set of values.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "items", "name": "Items", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Items", "category": null, "description": "The set of values to iterate.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "currentValue", "name": "CurrentValue", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Current Value", "category": null, "description": "The current value of the iteration.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": [
+      { "name": "Body", "displayName": "Body", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "Fork", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Fork",
+      "category": "Control Flow",
+      "displayName": "Fork",
+      "description": "Branch execution into multiple branches.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "joinMode", "name": "JoinMode", "typeInfo": { "typeName": "ForkJoinMode", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Join Mode", "category": null, "description": "Controls when this activity yields control back to its parent activity.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "Branches", "displayName": "Branches", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "If", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.If",
+      "category": "Branching",
+      "displayName": "If",
+      "description": "Evaluate a Boolean condition to determine which activity to execute next.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "condition", "name": "Condition", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Condition", "category": null, "description": null, "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "SingleLine", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "Then", "displayName": "Then", "type": "Embedded", "isBrowsable": true },
+      { "name": "Else", "displayName": "Else", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "Inline", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Inline",
+      "category": "Primitives",
+      "displayName": "Inline",
+      "description": "Execute inline code provided to the activity.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "NotFoundActivity", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.NotFoundActivity",
+      "category": "System",
+      "displayName": "Not Found",
+      "description": "A placeholder activity that will be used in case a workflow definition references an activity type that cannot be found.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Parallel", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Parallel",
+      "category": "Workflows",
+      "displayName": "Parallel",
+      "description": "Execute a set of activities in parallel.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "ParallelForEach", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.ParallelForEach",
+      "category": "Looping",
+      "displayName": "Parallel For Each",
+      "description": "Schedule an activity for each item in parallel.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "items", "name": "Items", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Items", "category": null, "description": "The items to iterate through.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "Body", "displayName": "Body", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "ReadLine", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.ReadLine",
+      "category": "Console",
+      "displayName": "Read Line",
+      "description": "Read a line of text from the console.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [
+      { "referenceKey": "result", "name": "Result", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Result", "category": null, "description": "The line read from the console.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Flowchart", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Flowchart",
+      "category": "Flow",
+      "displayName": "Flowchart",
+      "description": "A flowchart is a collection of activities and connections between them.",
+      "isBrowsable": false
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": [
+      { "name": "Start", "displayName": "Start", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "FlowJoin", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.FlowJoin",
+      "category": "Branching",
+      "displayName": "Flow Join",
+      "description": "Explicitly merge multiple branches into a single branch of execution.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "mode", "name": "Mode", "typeInfo": { "typeName": "FlowJoinMode", "namespace": "Elsa.Workflows.Activities.Flowchart.Models", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Mode", "category": null, "description": "The join mode determines whether this activity should continue as soon as one inbound path comes in (WaitAny), or once all inbound paths have executed (WaitAll). To wait for all activated inbound paths, set the mode to WaitAllActive.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "FlowNode", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.FlowNode",
+      "category": "Flow",
+      "displayName": "Flow Node",
+      "description": "A simple container that executes the specified activity.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": [
+      { "name": "Body", "displayName": "Body", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "FlowSwitch", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.FlowSwitch",
+      "category": "Branching",
+      "displayName": "Flow Switch",
+      "description": "Evaluate a set of case conditions and schedule the activity for a matching case.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "cases", "name": "Cases", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Cases", "category": null, "description": "The set of cases to evaluate.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "flow-switch-editor", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "mode", "name": "Mode", "typeInfo": { "typeName": "SwitchMode", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Mode", "category": null, "description": "The switch mode determines whether the first match should be scheduled, or all matches.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "Default", "displayName": "Default", "type": "Flow", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "FlowFork", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.FlowFork",
+      "category": "Branching",
+      "displayName": "Flow Fork",
+      "description": "Branch execution into multiple branches that will be executed in parallel.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "branches", "name": "Branches", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Branches", "category": null, "description": "A list of expected outcomes to handle.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "DynamicOutcomes", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "FlowDecision", "namespace": "Elsa.Workflows.Activities.Flowchart.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.FlowDecision",
+      "category": "Branching",
+      "displayName": "Flow Decision",
+      "description": "Evaluate a Boolean condition to determine which path to execute next.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "condition", "name": "Condition", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Condition", "category": null, "description": null, "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "SingleLine", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "True", "displayName": "True", "type": "Flow", "isBrowsable": true },
+      { "name": "False", "displayName": "False", "type": "Flow", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "Finish", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Finish",
+      "category": "Primitives",
+      "displayName": "Finish",
+      "description": "Mark the workflow as finished.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "End", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.End",
+      "category": "Flow",
+      "displayName": "End",
+      "description": "Marks the end of a flowchart, causing the flowchart to complete.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Fault", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Fault",
+      "category": "Primitives",
+      "displayName": "Fault",
+      "description": "Faults the workflow.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "code", "name": "Code", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Code", "category": null, "description": "Code to categorize the fault.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "category", "name": "Category", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Category", "category": null, "description": "Category to categorize the fault. Examples: HTTP, Alteration, Azure, etc.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "faultType", "name": "FaultType", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Type", "category": null, "description": "The type of fault. Examples: System, Business, Integration, etc.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "message", "name": "Message", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Message", "category": null, "description": "The message to include with the fault.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Break", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Break",
+      "category": "Looping",
+      "displayName": "Break",
+      "description": "Break out of a loop.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Complete", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Complete",
+      "category": "Composition",
+      "displayName": "Complete",
+      "description": "Signals the current composite activity to complete itself as a whole.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "outcomes", "name": "Outcomes", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Outcomes", "category": null, "description": "The outcome or set of outcomes to complete this activity with.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "OutcomePicker", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Correlate", "namespace": "Elsa.Workflows.Activities", "assemblyName": "Elsa.Workflows.Core", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Correlate",
+      "category": "Primitives",
+      "displayName": "Correlate",
+      "description": "Set the CorrelationId of the workflow to a given value.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "correlationId", "name": "CorrelationId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Correlation ID", "category": null, "description": "An expression that evaluates to the value to store as the correlation id.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Timer", "namespace": "Elsa.Scheduling.Activities", "assemblyName": "Elsa.Scheduling", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.Timer",
+      "category": "Scheduling",
+      "displayName": "Timer",
+      "description": "Trigger workflow execution at a specific interval.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "interval", "name": "Interval", "typeInfo": { "typeName": "TimeSpan", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Interval", "category": null, "description": "The interval at which the timer should execute.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "StartAt", "namespace": "Elsa.Scheduling.Activities", "assemblyName": "Elsa.Scheduling", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.StartAt",
+      "category": "Scheduling",
+      "displayName": "Start At",
+      "description": "Trigger execution at a specific time in the future.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "dateTime", "name": "DateTime", "typeInfo": { "typeName": "DateTimeOffset", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Date Time", "category": null, "description": "The future point in time to trigger workflow execution.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Cron", "namespace": "Elsa.Scheduling.Activities", "assemblyName": "Elsa.Scheduling", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.Cron",
+      "category": "Scheduling",
+      "displayName": "Cron",
+      "description": "Trigger workflow execution at a specific interval using a CRON expression.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "cronExpression", "name": "CronExpression", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Cron Expression", "category": null, "description": "The CRON expression at which the timer should execute.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "Delay", "namespace": "Elsa.Scheduling.Activities", "assemblyName": "Elsa.Scheduling", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.Delay",
+      "category": "Scheduling",
+      "displayName": "Delay",
+      "description": "Delay execution for the specified amount of time.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "timeSpan", "name": "TimeSpan", "typeInfo": { "typeName": "TimeSpan", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Time Span", "category": null, "description": "The timespan to delay workflow execution.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "WriteFileHttpResponse", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.WriteFileHttpResponse",
+      "category": "HTTP",
+      "displayName": "Write File HTTP Response",
+      "description": "Send one or more files (zipped) to the HTTP response.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "contentType", "name": "ContentType", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Content Type", "category": null, "description": "The content type of the file to serve. Leave empty to let the system determine the content type.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "filename", "name": "Filename", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Filename", "category": null, "description": "The name of the file to serve. Leave empty to let the system determine the file name.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "entityTag", "name": "EntityTag", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Entity Tag", "category": null, "description": "The Entity Tag of the file to serve. Leave empty to let the system determine the Entity Tag.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "content", "name": "Content", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Content", "category": null, "description": "The file content to serve. Supports various types, such as byte array, stream, string, Uri, Downloadable and a (mixed) array of the aforementioned types.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "enableResumableDownloads", "name": "EnableResumableDownloads", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Enable Resumable Downloads", "category": null, "description": "Whether to enable resumable downloads. When enabled, the client can resume a download if the connection is lost.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "downloadCorrelationId", "name": "DownloadCorrelationId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Download Correlation ID", "category": null, "description": "The correlation ID of the download used to resume a download. If left empty, the x-download-id header will be used.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "WriteHttpResponse", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.WriteHttpResponse",
+      "category": "HTTP",
+      "displayName": "Write HTTP Response",
+      "description": "Write a response to the current HTTP response object.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "statusCode", "name": "StatusCode", "typeInfo": { "typeName": "HttpStatusCode", "namespace": "System.Net", "assemblyName": "System.Net.Primitives", "assemblyVersion": "10.0.0.0" }, "displayName": "Status Code", "category": null, "description": "The status code to return.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "content", "name": "Content", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Content", "category": null, "description": "The content to write back. String values will be sent as-is, while objects will be serialized to a JSON string. Byte arrays and streams will be sent as files.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "contentType", "name": "ContentType", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Content Type", "category": null, "description": "The content type to write when sending the response.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "responseHeaders", "name": "ResponseHeaders", "typeInfo": { "typeName": "HttpHeaders", "namespace": "Elsa.Http.Models", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" }, "displayName": "Response Headers", "category": "Advanced", "description": "The headers to send along with the response.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": "JsonEditor", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "SendHttpRequest", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.SendHttpRequest",
+      "category": "HTTP",
+      "displayName": "Send HTTP Request",
+      "description": "Send an HTTP request.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "expectedStatusCodes", "name": "ExpectedStatusCodes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Expected Status Codes", "category": null, "description": "A list of expected status codes to handle and the corresponding activity to execute when the status code matches.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "http-status-codes", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": [
+      { "name": "UnmatchedStatusCode", "displayName": "Unmatched Status Code", "type": "Embedded", "isBrowsable": true },
+      { "name": "FailedToConnect", "displayName": "Failed To Connect", "type": "Embedded", "isBrowsable": true },
+      { "name": "Timeout", "displayName": "Timeout", "type": "Embedded", "isBrowsable": true }
+    ]
+  },
+  {
+    "typeInfo": { "typeName": "HttpEndpoint", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.HttpEndpoint",
+      "category": "HTTP",
+      "displayName": "HTTP Endpoint",
+      "description": "Wait for an inbound HTTP request that matches the specified path and methods.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "path", "name": "Path", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Path", "category": null, "description": "The path to associate with the workflow.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "SingleLine", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "supportedMethods", "name": "SupportedMethods", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Supported Methods", "category": null, "description": "The HTTP methods to accept.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "CheckList", "propertyInfo": null, "uiSpecifications": { "options": ["GET", "POST", "PUT", "HEAD", "DELETE"] } },
+      { "referenceKey": "authorize", "name": "Authorize", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Authorize", "category": "Security", "description": "Allow authenticated requests only.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "policy", "name": "Policy", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Policy", "category": "Security", "description": "Provide a policy to evaluate. If the policy fails, the request is forbidden.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "requestTimeout", "name": "RequestTimeout", "typeInfo": { "typeName": "TimeSpan", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Request Timeout", "category": "Upload", "description": "The maximum time allowed to process the request.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "requestSizeLimit", "name": "RequestSizeLimit", "typeInfo": { "typeName": "Int64", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Request Size Limit", "category": "Upload", "description": "The maximum request size allowed in bytes.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "fileSizeLimit", "name": "FileSizeLimit", "typeInfo": { "typeName": "Int64", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "File Size Limit", "category": "Upload", "description": "The maximum file size allowed in bytes for an individual file.", "order": 6, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "allowedFileExtensions", "name": "AllowedFileExtensions", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Allowed File Extensions", "category": "Upload", "description": "Only file extensions in this list are allowed. Leave empty to allow all extensions.", "order": 7, "isBrowsable": true, "isSerializable": true, "uiHint": "MultiText", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "blockedFileExtensions", "name": "BlockedFileExtensions", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Blocked File Extensions", "category": "Upload", "description": "File extensions in this list are forbidden. Leave empty to not block any extension.", "order": 8, "isBrowsable": true, "isSerializable": true, "uiHint": "MultiText", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "allowedMimeTypes", "name": "AllowedMimeTypes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Allowed MIME Types", "category": "Upload", "description": "Only MIME types in this list are allowed. Leave empty to allow all types.", "order": 9, "isBrowsable": true, "isSerializable": true, "uiHint": "MultiText", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "parsedContent", "name": "ParsedContent", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Parsed Content", "category": null, "description": "The parsed request content, if any.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "files", "name": "Files", "typeInfo": { "typeName": "IFormFile[]", "namespace": "Microsoft.AspNetCore.Http", "assemblyName": "Microsoft.AspNetCore.Http.Features", "assemblyVersion": "10.0.0.0" }, "displayName": "Files", "category": null, "description": "The uploaded files, if any.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "file", "name": "File", "typeInfo": { "typeName": "IFormFile", "namespace": "Microsoft.AspNetCore.Http", "assemblyName": "Microsoft.AspNetCore.Http.Features", "assemblyVersion": "10.0.0.0" }, "displayName": "File", "category": null, "description": "The first uploaded file, if any.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "routeData", "name": "RouteData", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Route Data", "category": null, "description": "The parsed route data, if any.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "queryStringData", "name": "QueryStringData", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Query String Data", "category": null, "description": "The querystring data, if any.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "headers", "name": "Headers", "typeInfo": { "typeName": "IDictionary`2", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Headers", "category": null, "description": "The headers, if any.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "DownloadHttpFile", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.DownloadHttpFile",
+      "category": "HTTP",
+      "displayName": "Download HTTP File",
+      "description": "Downloads a file from a given URL.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "url", "name": "Url", "typeInfo": { "typeName": "Uri", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "URL", "category": null, "description": "The URL to download the file from.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "method", "name": "Method", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Method", "category": null, "description": "The HTTP method to use when sending the request.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": { "options": ["GET", "POST", "PUT"] } },
+      { "referenceKey": "expectedStatusCodes", "name": "ExpectedStatusCodes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Expected Status Codes", "category": null, "description": "A list of expected status codes to handle.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": "MultiText", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "requestContent", "name": "RequestContent", "typeInfo": { "typeName": "Object", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Request Content", "category": null, "description": "The content to send with the request. Can be a string, an object, a byte array or a stream.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "requestContentType", "name": "RequestContentType", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Content Type", "category": null, "description": "The content type to use when sending the request.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": "DropDown", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "authorization", "name": "Authorization", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Authorization", "category": "Security", "description": "The Authorization header value to send with the request. For example: Bearer {some-access-token}.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "disableAuthorizationHeaderValidation", "name": "DisableAuthorizationHeaderValidation", "typeInfo": { "typeName": "Boolean", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Disable Authorization Header Validation", "category": "Security", "description": "A value that allows to add the Authorization header without validation.", "order": 6, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "requestHeaders", "name": "RequestHeaders", "typeInfo": { "typeName": "HttpHeaders", "namespace": "Elsa.Http.Models", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" }, "displayName": "Request Headers", "category": "Advanced", "description": "The headers to send along with the request.", "order": 7, "isBrowsable": true, "isSerializable": true, "uiHint": "JsonEditor", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [
+      { "referenceKey": "response", "name": "Response", "typeInfo": { "typeName": "HttpResponseMessage", "namespace": "System.Net.Http", "assemblyName": "System.Net.Http", "assemblyVersion": "10.0.0.0" }, "displayName": "Response", "category": null, "description": "The HTTP response.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "statusCode", "name": "StatusCode", "typeInfo": { "typeName": "Int32", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Status Code", "category": null, "description": "The HTTP response status code.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "responseContentStream", "name": "ResponseContentStream", "typeInfo": { "typeName": "Stream", "namespace": "System.IO", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Response Content Stream", "category": null, "description": "The downloaded content stream, if any.", "order": 2, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "responseContentBytes", "name": "ResponseContentBytes", "typeInfo": { "typeName": "Byte[]", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Response Content Bytes", "category": null, "description": "The downloaded content bytes, if any.", "order": 3, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "responseHeaders", "name": "ResponseHeaders", "typeInfo": { "typeName": "HttpHeaders", "namespace": "Elsa.Http.Models", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" }, "displayName": "Response Headers", "category": null, "description": "The response headers that were received.", "order": 4, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "responseContentHeaders", "name": "ResponseContentHeaders", "typeInfo": { "typeName": "HttpHeaders", "namespace": "Elsa.Http.Models", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" }, "displayName": "Content Headers", "category": null, "description": "The response content headers that were received.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "FlowSendHttpRequest", "namespace": "Elsa.Http", "assemblyName": "Elsa.Http", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.FlowSendHttpRequest",
+      "category": "HTTP",
+      "displayName": "Flow Send HTTP Request",
+      "description": "Send an HTTP request with flow-style outcomes per expected status code.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "expectedStatusCodes", "name": "ExpectedStatusCodes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Expected Status Codes", "category": null, "description": "A list of expected status codes to handle.", "order": 5, "isBrowsable": true, "isSerializable": true, "uiHint": "MultiText", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "RunPython", "namespace": "Elsa.Expressions.Python.Activities", "assemblyName": "Elsa.Expressions.Python", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.RunPython",
+      "category": "Scripting",
+      "displayName": "Run Python",
+      "description": "Executes Python code.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "script", "name": "Script", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Script", "category": null, "description": "The script to run.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "CodeEditor", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "possibleOutcomes", "name": "PossibleOutcomes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Possible Outcomes", "category": null, "description": "A list of possible outcomes. Use \"SetOutcome(string)\" to set the outcome. Use \"SetOutcomes(params string[])\" to set multiple outcomes.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DynamicOutcomes", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "RunJavaScript", "namespace": "Elsa.Expressions.JavaScript.Activities", "assemblyName": "Elsa.Expressions.JavaScript", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.RunJavaScript",
+      "category": "Scripting",
+      "displayName": "Run JavaScript",
+      "description": "Executes JavaScript code.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "script", "name": "Script", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Script", "category": null, "description": "The script to run.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "CodeEditor", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "possibleOutcomes", "name": "PossibleOutcomes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Possible Outcomes", "category": null, "description": "A list of possible outcomes. Use \"setOutcome()\" to set the outcome. Use \"setOutcomes()\" to set multiple outcomes.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DynamicOutcomes", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "RunCSharp", "namespace": "Elsa.Expressions.CSharp.Activities", "assemblyName": "Elsa.Expressions.CSharp", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.RunCSharp",
+      "category": "Scripting",
+      "displayName": "Run C#",
+      "description": "Executes C# code.",
+      "isBrowsable": true
+    },
+    "inputs": [
+      { "referenceKey": "script", "name": "Script", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Script", "category": null, "description": "The script to run.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": "CodeEditor", "propertyInfo": null, "uiSpecifications": null },
+      { "referenceKey": "possibleOutcomes", "name": "PossibleOutcomes", "typeInfo": { "typeName": "ICollection`1", "namespace": "System.Collections.Generic", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Possible Outcomes", "category": null, "description": "A list of possible outcomes. Use \"SetOutcome(string)\" to set the outcome. Use \"SetOutcomes(params string[])\" to set multiple outcomes.", "order": 1, "isBrowsable": true, "isSerializable": true, "uiHint": "DynamicOutcomes", "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "AlterationPlanCompleted", "namespace": "Elsa.Alterations.Activities", "assemblyName": "Elsa.Alterations", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Trigger",
+    "definition": {
+      "uniqueName": "Elsa.AlterationPlanCompleted",
+      "category": "Alterations",
+      "displayName": "Alteration Plan Completed",
+      "description": "Triggered when an Alteration Plan completed.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "planId", "name": "PlanId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Plan ID", "category": null, "description": "The ID of the alteration plan.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "CompleteAlterationPlan", "namespace": "Elsa.Alterations.Activities", "assemblyName": "Elsa.Alterations", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.CompleteAlterationPlan",
+      "category": "Alterations",
+      "displayName": "Complete Alteration Plan",
+      "description": "Marks an Alteration Plan as completed.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "planId", "name": "PlanId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Plan ID", "category": null, "description": "The ID of the alteration plan.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "DispatchAlterationJobs", "namespace": "Elsa.Alterations.Activities", "assemblyName": "Elsa.Alterations", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.DispatchAlterationJobs",
+      "category": "Alterations",
+      "displayName": "Dispatch Alteration Jobs",
+      "description": "Dispatches jobs for the specified Alteration Plan.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "planId", "name": "PlanId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Plan ID", "category": null, "description": "The ID of the alteration plan.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "GenerateAlterationJobs", "namespace": "Elsa.Alterations.Activities", "assemblyName": "Elsa.Alterations", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.GenerateAlterationJobs",
+      "category": "Alterations",
+      "displayName": "Generate Alteration Jobs",
+      "description": "Generates jobs for the specified Alteration Plan.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "planId", "name": "PlanId", "typeInfo": { "typeName": "String", "namespace": "System", "assemblyName": "System.Private.CoreLib", "assemblyVersion": "10.0.0.0" }, "displayName": "Plan ID", "category": null, "description": "The ID of the submitted alteration plan.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "SubmitAlterationPlan", "namespace": "Elsa.Alterations.Activities", "assemblyName": "Elsa.Alterations", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Task",
+    "definition": {
+      "uniqueName": "Elsa.SubmitAlterationPlan",
+      "category": "Alterations",
+      "displayName": "Submit Alteration Plan",
+      "description": "Submits an Alteration Plan.",
+      "isBrowsable": false
+    },
+    "inputs": [
+      { "referenceKey": "params", "name": "Params", "typeInfo": { "typeName": "AlterationPlanParams", "namespace": "Elsa.Alterations.Core.Models", "assemblyName": "Elsa.Alterations.Core", "assemblyVersion": "1.0.0.0" }, "displayName": "Params", "category": null, "description": "The parameters for the alteration plan to be submitted.", "order": 0, "isBrowsable": true, "isSerializable": true, "uiHint": null, "propertyInfo": null, "uiSpecifications": null }
+    ],
+    "outputs": [],
+    "ports": []
+  },
+  {
+    "typeInfo": { "typeName": "AuthorizeFlow", "namespace": "Elsa.Server.Web.Activities", "assemblyName": "Elsa.Server.Web", "assemblyVersion": "1.0.0.0" },
+    "version": 1,
+    "kind": "Action",
+    "definition": {
+      "uniqueName": "Elsa.AuthorizeFlow",
+      "category": "Authorization",
+      "displayName": "Authorize Flow",
+      "description": "Authorizes a flow based on the configured policies.",
+      "isBrowsable": true
+    },
+    "inputs": [],
+    "outputs": [],
+    "ports": [
+      { "name": "Authorized", "displayName": "Authorized", "type": "Flow", "isBrowsable": true },
+      { "name": "Unauthorized", "displayName": "Unauthorized", "type": "Flow", "isBrowsable": true },
+      { "name": "Error", "displayName": "Error", "type": "Flow", "isBrowsable": true }
+    ]
+  }
+]

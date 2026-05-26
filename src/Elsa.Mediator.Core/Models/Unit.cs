@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Mediator.Core.Models;
+﻿namespace Elsa.Mediator.Core.Models;
 
 /// <summary>
 /// Represents a void result.

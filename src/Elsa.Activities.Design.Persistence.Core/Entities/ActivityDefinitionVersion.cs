@@ -7,14 +7,14 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int version, string definitionId, DateTimeOffset createdAt, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action) 
+public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action)
     : Entity, IActivityDefinitionVersion
 {
     /// <summary>
     /// Type information: asssembly name, version, namespace, and fully qualified type name
     /// </summary>
     [Immutable]
-    public TypeInformation TypeInfo { get; } = typeInfo;
+    public TypeInformation TypeInfo { get; set; } = default!;
 
     /// <summary>
     /// Navigation property to the <see cref="ActivityDefinition"/>
@@ -22,10 +22,10 @@ public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int vers
     public ActivityDefinition? Definition { get; set; }
 
     [Immutable]
-    public int Version { get; } = version;
+    public int Version { get; init; } = version;
 
     [Immutable]
-    public string DefinitionId { get; } = definitionId;
+    public string DefinitionId { get; init; } = definitionId;
 
     [Immutable]
     public string? InputsSource { get; set; } = inputsSource;
@@ -36,14 +36,11 @@ public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int vers
     [Immutable]
     public string? PortsSource { get; set; } = portsSource;
 
-    [Immutable]
-    public DateTimeOffset CreatedAt { get; } = createdAt;
-
     /// <summary>
     /// The kind of activity.
     /// </summary>
     [Immutable]
-    public ActivityKind Kind { get; } = kind;
+    public ActivityKind Kind { get; init; } = kind;
 
     /// <summary>
     /// The input properties of the activity type.
@@ -61,11 +58,7 @@ public sealed class ActivityDefinitionVersion(TypeInformation typeInfo, int vers
     /// The ports of the activity type.
     /// </summary>
     [NotMapped]
-    public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];    
-
-    IEnumerable<IInputDefinition> IActivityDefinitionVersion.Inputs => Inputs;
-
-    IEnumerable<IOutputDefinition> IActivityDefinitionVersion.Outputs => Outputs;
+    public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];
 
     IEnumerable<ActivityPortDefinition> IActivityDefinitionVersion.Ports => Ports;
 

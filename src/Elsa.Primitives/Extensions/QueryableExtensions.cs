@@ -1,33 +1,12 @@
-using Elsa.Primitives.Entities;
-using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
 
 namespace Elsa.Primitives.Extensions
 {
     /// <summary>
-    /// Provides extension methods for <see cref="VersionedEntity"/> objects.
+    /// Provides extension methods for <see cref="IQueryable{T}"/>.
     /// </summary>
-    public static class VersionedEntityExtensions
+    public static class QueryableExtensions
     {
-        public static IQueryable<T> WithVersion<T>(this IQueryable<T> query, VersionOptions versionOptions)
-            where T : VersionedEntity
-        {
-            if (versionOptions.IsDraft)
-                return query.Where(x => !x.IsPublished);
-            if (versionOptions.IsLatest)
-                return query.Where(x => x.IsLatest);
-            if (versionOptions.IsPublished)
-                return query.Where(x => x.IsPublished);
-            if (versionOptions.IsLatestOrPublished)
-                return query.Where(x => x.IsPublished || x.IsLatest);
-            if (versionOptions.IsLatestAndPublished)
-                return query.Where(x => x.IsPublished && x.IsLatest);
-            if (versionOptions.Version > 0)
-                return query.Where(x => x.Version == versionOptions.Version);
-
-            return query;
-        }
-
         /// <summary>
         /// Orders the queryable by the specified order.
         /// </summary>

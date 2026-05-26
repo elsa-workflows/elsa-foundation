@@ -1,5 +1,6 @@
 ﻿using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Extensions;
 using Elsa.Mapping.Core.Contracts;
@@ -10,19 +11,17 @@ using Elsa.Primitives.Contracts;
 namespace Elsa.Activities.Design.Api.Handlers;
 
 public sealed class AddDefinitionCommandHandler(
-    ISystemClock systemClock,
     IIdentityGenerator identityGenerator,
     IObjectMapper mapper,
     IQueries<ActivityDefinitionVersion> versionQueries,
-    IAddCommand<ActivityDefinition> addDefinitionCommand,
-    IAddCommand<ActivityDefinitionVersion> addVersionCommand,
+    IAddActivityDefinitionCommand addCommand,
     IQueries<ActivityDefinition> definitionQueries)
 
-    : ICommandHandler<AddDefinition, ActivityDefinitionVersionView>
+    : ICommandHandler<AddDefinition, ActivityDefinitionVersionDetailsView>
 {
-    const int initialVersion = 1;
+    private const int initialVersion = 1;
 
-    public async Task<ActivityDefinitionVersionView> Handle(AddDefinition command, CancellationToken cancellationToken)
+    public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
         var exists = await definitionQueries.Any(d => d.UniqueName == command.UniqueName, cancellationToken);
         if (exists)
@@ -31,37 +30,35 @@ public sealed class AddDefinitionCommandHandler(
         }
 
         var definition = CreateDefinition(command);
-        await addDefinitionCommand.Add(definition, cancellationToken);
-
         var version = CreateVersion(command, definition);
-        await addVersionCommand.Add(version, cancellationToken);
+        await addCommand.Execute(definition, version, cancellationToken);
 
         var addedVersion = await versionQueries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
 
-        return mapper.Map<ActivityDefinitionVersionView>(addedVersion);
+        return await mapper.Map<ActivityDefinitionVersionDetailsView>(addedVersion, cancellationToken);
     }
 
-    ActivityDefinition CreateDefinition(AddDefinition def)
+    private ActivityDefinition CreateDefinition(AddDefinition def)
     {
         return new()
         {
+            Id = identityGenerator.Generate(),
             UniqueName = def.UniqueName,
             Category = def.Category,
             Description = def.Description,
-            DisplayName = def.DisplayName,
-            Id = identityGenerator.Generate()
+            DisplayName = def.DisplayName
         };
     }
 
-    ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
+    private ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
     {
-        return new(command.TypeInfo, initialVersion, definition.Id, systemClock.UtcNow, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(initialVersion, definition.Id, kind: command.Kind ?? Core.Models.ActivityKind.Action)
         {
             Id = identityGenerator.Generate(),
+            TypeInfo = command.TypeInfo,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
-            Ports = command.Ports ?? [],
-            Definition = definition            
+            Ports = command.Ports ?? []
         };
     }
 }

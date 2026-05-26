@@ -8,14 +8,9 @@
 /// <param name="MaterializerContext"></param>
 /// <param name="IsSystem"></param>
 /// <param name="ToolVersion"></param>
-/// <param name="CustomProperties">
-///     Stores custom information about the workflow. Can be used to store application-specific properties to associate with the workflow.
-/// </param>
 public sealed record WorkflowMetadata(
-    string Provider,
-    string Materializer,
-    string MaterializerContext,
+    string? Materializer,
+    string? MaterializerContext,
     bool IsSystem,
-    string? ToolVersion,    
-    IDictionary<string, object> CustomProperties
+    string? ToolVersion
 );

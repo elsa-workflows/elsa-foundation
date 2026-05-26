@@ -24,7 +24,7 @@ namespace Elsa.Expressions.Models
         /// <inheritdoc />
         public Variable(string name, object? value = null) : this(name)
         {
-            Value = value;
+            DefaultValue = value;
         }
 
         public Variable(string name, object? value = null, string? id = null) : this(name, value)
@@ -43,7 +43,7 @@ namespace Elsa.Expressions.Models
         /// <summary>
         /// A default value for the variable.
         /// </summary>
-        public object? Value { get; set; }
+        public object? DefaultValue { get; set; }
 
         /// <summary>
         /// The storage driver type to use for persistence.
@@ -52,7 +52,7 @@ namespace Elsa.Expressions.Models
         public Type? StorageDriverType { get; set; }
 
         /// <inheritdoc />
-        public override IMemoryBlock Declare() => new MemoryBlock(Value, new VariableBlockMetadata(this, StorageDriverType, false));
+        public override IMemoryBlock Declare() => new MemoryBlock(DefaultValue, new VariableBlockMetadata(this, StorageDriverType, false));
 
         private string GetIdFromName(string? name) => $"{name?.Camelize() ?? "Unnamed"}{nameof(Variable)}";
     }
@@ -72,7 +72,7 @@ namespace Elsa.Expressions.Models
         [Obsolete("Use the constructor that takes a name parameter instead.", true)]
         public Variable(T value)
         {
-            Value = value;
+            DefaultValue = value;
         }
 
         /// <inheritdoc />
@@ -118,7 +118,7 @@ namespace Elsa.Expressions.Models
 
         public Variable<T> WithValue(T value)
         {
-            Value = value;
+            DefaultValue = value;
             return this;
         }
     }

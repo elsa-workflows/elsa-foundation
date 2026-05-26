@@ -7,7 +7,7 @@ namespace Elsa.Mediator.DomainEvents;
 /// <summary>
 /// A middleware component that invokes request handlers.
 /// </summary>
-public sealed class DomainEventHandlerInvokerMiddleware(DomainEventMiddlewareDelegate next) 
+public sealed class DomainEventHandlerInvokerMiddleware(DomainEventMiddlewareDelegate next)
     : IDomainEventMiddleware
 {
     /// <inheritdoc />
@@ -25,9 +25,9 @@ public sealed class DomainEventHandlerInvokerMiddleware(DomainEventMiddlewareDel
         if (handlers.Length == 0)
             return;
 
-        foreach(var handler in handlers)
+        foreach (var handler in handlers)
         {
-            var handleMethod = handlerType.GetMethod(nameof(IDomainEventHandler<>.Handle))!;        
+            var handleMethod = handlerType.GetMethod(nameof(IDomainEventHandler<>.Handle))!;
 
             var task = (Task)handleMethod.Invoke(handler, [@event, context.CancellationToken])!;
             await task;

@@ -24,7 +24,7 @@ namespace Elsa.Expressions.JavaScript.Rendering
 
         public void ConfigureServices(IServiceCollection services)
         {
-            services                
+            services
                 .AddDomainEventHandler<OnDeclarationsDocumentGenerating, AddDeclarations>()
 
                 .AddScoped<IJavaScriptDeclarationsDocumentFactory, JavaScriptDeclarationsDocumentFactory>()

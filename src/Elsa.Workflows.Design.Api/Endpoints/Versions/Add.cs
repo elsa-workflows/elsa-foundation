@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Versions;
 
-internal sealed class Add : ElsaCommandHandlerEndpoint<AddVersion, WorkflowDefinitionVersionDetailsView>
+internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : ElsaCommandHandlerEndpoint<AddVersion, WorkflowDefinitionVersionDetailsView>(commandSender, logger)
 {
-    public Add(ICommandSender commandSender, ILogger<Add> logger) : base(commandSender, logger)
+    public override void Configure()
     {
         Post(RouteConstants.Versions);
         AllowAnonymous();

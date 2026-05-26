@@ -1,6 +1,4 @@
-﻿using Elsa.Workflows.Design.Core.Models;
-
-namespace Elsa.Workflows.Design.Api.Models;
+﻿namespace Elsa.Workflows.Design.Api.Models;
 
 public sealed record WorkflowDefinitionView(
     string Id,

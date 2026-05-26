@@ -6,20 +6,20 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
-public sealed class WorkflowDefinitionVersion(string definitionId, int version, DateTimeOffset createdAt, string? stateSource = null)
+public sealed class WorkflowDefinitionVersion(string definitionId, int version, string? stateSource = null, DateTimeOffset? sourceCreatedAt = null)
     : Entity, IWorkflowDefinitionVersion
 {
     /// <summary>
     /// The version number of this workflow definition version
     /// </summary>
     [Immutable]
-    public int Version { get; } = version;
+    public int Version { get; init; } = version;
 
     /// <summary>
     /// The id of the workflow definition
     /// </summary>
     [Immutable]
-    public string DefinitionId { get; }= definitionId;
+    public string DefinitionId { get; init; } = definitionId;
 
     /// <summary>
     /// Navigation property to the <see cref="WorkflowDefinition"/> entity
@@ -30,7 +30,7 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     /// The deserialized <see cref="StateSource"/>
     /// </summary>
     [NotMapped]
-    public WorkflowDefinitionState? State { get; set; }
+    public WorkflowDefinitionState State { get; set; } = default!;
 
     /// <summary>
     /// Shadow property that contains the serialized immutable state of this version
@@ -39,12 +39,13 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     public string? StateSource { get; set; } = stateSource;
 
     /// <summary>
-    /// Timestamp when this entity was created
+    /// Timestamp from the external source that authored this version (e.g. a git commit time,
+    /// a file mtime, a blob upload time). Populated by provisioners when the source is not the
+    /// Design API. <c>null</c> when this version was authored directly through the Design API.
+    /// Separate from <see cref="Entity.CreatedAt"/>, which is strictly the DB-side timestamp.
     /// </summary>
     [Immutable]
-    public DateTimeOffset CreatedAt { get; } = createdAt;
-
-    IWorkflowDefinitionState IWorkflowDefinitionVersion.State => State ?? throw new ArgumentNullException(nameof(State));
+    public DateTimeOffset? SourceCreatedAt { get; init; } = sourceCreatedAt;
 
     IWorkflowDefinition IWorkflowDefinitionVersion.Definition => Definition ?? throw new ArgumentNullException(nameof(Definition));
 }

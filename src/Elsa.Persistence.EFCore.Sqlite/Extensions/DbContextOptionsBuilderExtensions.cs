@@ -15,16 +15,20 @@ namespace Elsa.Persistence.EFCore.Sqlite.Extensions
         /// <summary>
         /// Configures Entity Framework Core with SQLite.
         /// </summary>
-        public static DbContextOptionsBuilder UseElsaSqlite(this DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString = SqliteConstants.DefaultConnectionString, ElsaDbContextOptions? options = null, Action<SqliteDbContextOptionsBuilder>? configure = null) =>
+        public static DbContextOptionsBuilder UseElsaSqlite(this DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString = SqliteConstants.DefaultConnectionString, ElsaDbContextOptions? options = null, Action<SqliteDbContextOptionsBuilder>? configure = null)
+        {
             builder
                 .UseElsaDbContextOptions(options)
-                .UseSqlite(connectionString, db =>
+                .UseSqlite(connectionString, builder =>
                 {
-                    db
+                    builder
                         .MigrationsAssembly(options.GetMigrationsAssemblyName(migrationsAssembly))
                         .MigrationsHistoryTable(options.GetMigrationsHistoryTableName(), options.GetSchemaName());
 
-                    configure?.Invoke(db);
+                    configure?.Invoke(builder);
                 });
+
+            return builder;
+        }
     }
 }

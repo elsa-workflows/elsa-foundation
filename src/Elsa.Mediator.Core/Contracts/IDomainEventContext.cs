@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Elsa.Mediator.Core.Contracts;
+﻿namespace Elsa.Mediator.Core.Contracts;
 
 public interface IDomainEventContext
 {

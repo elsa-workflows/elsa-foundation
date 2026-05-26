@@ -26,11 +26,13 @@
     <Project Path="src/Elsa.Workflows.Design.Provisioning.Core/Elsa.Workflows.Design.Provisioning.Core.csproj" Id="8b0346a3-b695-4bf0-8d84-1f98043ec447" />
     <Project Path="src/Elsa.Workflows.Primitives/Elsa.Workflows.Primitives.csproj" Id="e01e3cb1-d0db-41b9-b67e-da19f474160f" />
     <Project Path="src/Elsa.Workflows.Runtime.Core/Elsa.Workflows.Runtime.Core.csproj" Id="8c47eba7-039d-44fd-9162-6ebb9103102e" />
+    <Project Path="src/Elsa3.Models/Elsa3.Models.csproj" Id="52fb9cb8-2f0b-4c0c-8156-f3dee76d1bc4" />
   </Folder>
   <Folder Name="/modules/">
     <Project Path="src/Elsa.Activities.Design.Api/Elsa.Activities.Design.Api.csproj" Id="4005fc5c-7a43-44ae-b94c-38a4831b5293" />
     <Project Path="src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" Id="e6206c21-d91c-43e7-9d0b-437a621d461c" />
     <Project Path="src/Elsa.Activities.Design.Persistence.EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" Id="e6946c5a-db85-4ad3-af61-cce52d36b593" />
+    <Project Path="src/Elsa.Activities.Design.Provisioning/Elsa.Activities.Design.Provisioning.csproj" Id="517badee-e3d7-475d-a3f1-af0ad51a7f7d" />
     <Project Path="src/Elsa.Activities/Elsa.Activities.csproj" Id="5194d143-35cc-486b-b034-861cab62288b" />
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
     <Project Path="src/Elsa.Expressions.JavaScript.Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
@@ -58,5 +60,8 @@
     <Project Path="src/Elsa.Workflows.Runtime.Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj" Id="730e3ea0-8d78-48fd-ae5d-dae6b4c7cc8b" />
+    <Project Path="src/Elsa3.Mapping/Elsa3.Mapping.csproj" Id="137fa281-550a-4e12-8866-6683390ebeb3" />
+    <Project Path="src/Elsa3.Workflows.Design.Provisioning.Json/Elsa3.Workflows.Design.Import.csproj" Id="6bda3ff3-9578-44b1-b96c-d4e3482b9e53" />
+    <Project Path="src/Test.Activities.Import/Test.Activities.Import.csproj" Id="3a4dee71-96bf-427b-9d47-5a33b375e386" />
   </Folder>
 </Solution>

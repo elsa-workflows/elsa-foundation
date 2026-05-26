@@ -33,8 +33,15 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
                 .HasForeignKey(x => x.DefinitionId)
                 .IsRequired();
 
-            builder.HasIndex(x => x.DefinitionId).HasDatabaseName($"IX_{nameof(ActivityDefinitionVersion)}_{nameof(ActivityDefinitionVersion.DefinitionId)}");
-            builder.HasIndex(x => x.Version).HasDatabaseName($"IX_{nameof(ActivityDefinitionVersion)}_{nameof(ActivityDefinitionVersion.Version)}");
+            // Composite unique index on (DefinitionId, Version): prevents two rows with
+            // the same definition + version number, and serves "list versions for definition"
+            // queries via leftmost-prefix matching, so a standalone DefinitionId index is
+            // redundant. No queries filter on Version alone, so no standalone Version index.
+            builder
+                .HasIndex(x => new { x.DefinitionId, x.Version })
+                .HasDatabaseName($"UX_{nameof(ActivityDefinitionVersion)}_{nameof(ActivityDefinitionVersion.DefinitionId)}_{nameof(ActivityDefinitionVersion.Version)}")
+                .IsUnique();
+
             builder.HasIndex(x => x.TenantId).HasDatabaseName($"IX_{nameof(ActivityDefinitionVersion)}_{nameof(ActivityDefinitionVersion.TenantId)}");
         }
     }

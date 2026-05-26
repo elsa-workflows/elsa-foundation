@@ -8,7 +8,7 @@ public interface ICommandContext
 
     IServiceProvider ServiceProvider { get; }
 
-    CancellationToken CancellationToken { get;  }
+    CancellationToken CancellationToken { get; }
 
     object? Result { get; set; }
 }

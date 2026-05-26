@@ -3,7 +3,7 @@ using Elsa.Primitives.Entities;
 namespace Elsa.Persistence.Core
 {
     public interface ISaveCommand<TEntity>
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         /// <summary>
         /// Saves the entity.

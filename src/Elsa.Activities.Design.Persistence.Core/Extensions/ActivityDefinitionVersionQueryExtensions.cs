@@ -1,6 +1,5 @@
 ﻿using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
-using Elsa.Activities.Design.Persistence.Core.OrderDefinitions;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Persistence;
 

@@ -12,6 +12,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\Elsa.Mapping.Core\Elsa.Mapping.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
 	</ItemGroup>
 	
 </Project>

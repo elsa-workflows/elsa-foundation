@@ -3,7 +3,7 @@ using Elsa.Primitives.Entities;
 namespace Elsa.Persistence.Core
 {
     public interface IBulkUpsertCommand<TEntity>
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         /// <summary>
         /// Performs a bulk upsert operation on a list of entities in the specified database context using a key selector and optional batch size.

@@ -8,7 +8,7 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
     /// A definition of an activity type.                                                                                                                                                                                
     /// </summary>
     public sealed class ActivityDefinition : Entity, IActivityDefinition
-    {     
+    {
         /// <summary>
         /// The unique name of this activity definition.
         /// </summary>
@@ -28,7 +28,7 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
         /// <summary>
         /// The description of the activity type.
         /// </summary>
-        public string? Description { get; set; }       
+        public string? Description { get; set; }
 
         /// <summary>
         /// Whether this activity type is selectable from activity pickers.

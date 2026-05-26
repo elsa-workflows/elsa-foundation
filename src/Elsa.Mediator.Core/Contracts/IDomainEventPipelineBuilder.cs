@@ -11,7 +11,7 @@ public interface IDomainEventPipelineBuilder
     /// <summary>
     /// Gets the properties associated with the notification pipeline.
     /// </summary>
-    public IDictionary<string, object?> Properties { get; }
+    IDictionary<string, object?> Properties { get; }
 
     /// <summary>
     /// Gets the service provider.
@@ -28,5 +28,5 @@ public interface IDomainEventPipelineBuilder
     /// Builds the notification pipeline.
     /// </summary>
     /// <returns></returns>
-    public DomainEventMiddlewareDelegate Build();
+    DomainEventMiddlewareDelegate Build();
 }

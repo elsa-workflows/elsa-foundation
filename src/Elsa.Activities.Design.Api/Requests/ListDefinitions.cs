@@ -4,7 +4,7 @@ using Elsa.Mediator.Core.Contracts;
 namespace Elsa.Activities.Design.Api.Requests;
 
 public sealed record ListDefinitions(
-    string? Id,    
+    string? Id,
     string? Category,
     string? SearchTerm,
     string? DisplayName,

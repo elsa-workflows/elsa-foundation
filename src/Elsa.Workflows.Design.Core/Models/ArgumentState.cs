@@ -1,17 +1,23 @@
-﻿using Elsa.Primitives.Models;
-using Elsa.Workflows.Design.Core.Contracts;
+﻿using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
 
 public sealed record ArgumentState(
-    string ArgumentReferenceKey,
+    string ReferenceKey,
     ArgumentValue Value,
-    bool AutoEvaluate,
+    bool? AutoEvaluate,
     TypeInformation? EvaluatorType,
     TypeInformation? StorageDriverType,
-    bool IsSensitive)
-
-    : IArgumentState
+    bool? IsSensitive
+)
 {
-   
+    public static ArgumentState Null(string refKey) => new(
+        refKey,
+        new ArgumentValue(null),
+        null,
+        null,
+        null,
+        null
+    );
 }

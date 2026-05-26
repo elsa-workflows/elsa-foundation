@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript
                 await ((IActivity)activity).ExecuteAsync(executionContext);
 
                 var result = executionContext.Get(activity.Result);
-                
+
                 await Send.ResponseAsync(
                     new { success = true, value = result },
                     200,

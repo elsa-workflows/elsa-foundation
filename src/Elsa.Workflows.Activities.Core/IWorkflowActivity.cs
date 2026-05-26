@@ -1,4 +1,5 @@
-﻿using Elsa.Activities.Runtime.Core.Contracts;
+﻿using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Design.Core;
 
 namespace Elsa.Workflows.Activities.Core
@@ -8,12 +9,12 @@ namespace Elsa.Workflows.Activities.Core
         /// <summary>
         /// Gets or sets input definitions.
         /// </summary>
-        ICollection<IInputDefinition> Inputs { get; }
+        ICollection<InputDefinition> Inputs { get; }
 
         /// <summary>
         /// Gets or sets output definitions.
         /// </summary>
-        ICollection<IOutputDefinition> Outputs { get; }
+        ICollection<OutputDefinition> Outputs { get; }
 
         /// <summary>
         /// Gets or sets possible outcomes for this workflow.

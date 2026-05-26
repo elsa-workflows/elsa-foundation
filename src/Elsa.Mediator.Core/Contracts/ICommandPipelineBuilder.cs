@@ -10,7 +10,7 @@ public interface ICommandPipelineBuilder
     /// <summary>
     /// Gets a property bag that can be used to share data between middleware components.
     /// </summary>
-    public IDictionary<string, object?> Properties { get; }
+    IDictionary<string, object?> Properties { get; }
 
     /// <summary>
     /// Gets the service provider.
@@ -46,5 +46,5 @@ public interface ICommandPipelineBuilder
     /// Builds the pipeline.
     /// </summary>
     /// <returns>The pipeline.</returns>
-    public CommandMiddlewareDelegate Build();
+    CommandMiddlewareDelegate Build();
 }

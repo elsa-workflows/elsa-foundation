@@ -14,7 +14,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
         {
             if (entity == null)
                 return ValueTask.CompletedTask;
-            
+
             var inputsSourceProperty = dbContext
                 .Entry(entity)
                 .Property(nameof(ActivityDefinitionVersion.InputsSource));

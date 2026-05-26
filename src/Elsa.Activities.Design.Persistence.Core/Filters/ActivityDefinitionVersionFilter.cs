@@ -25,7 +25,7 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
     /// Filter by the name or id of the workflow definition.
     /// </summary>
     public string? SearchTerm { get; set; }
-    
+
     public bool? TenantAgnostic { get; set; }
 
     /// <summary>
@@ -35,17 +35,17 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
     /// <returns>The filtered queryable.</returns>
     public virtual IQueryable<ActivityDefinitionVersion> Apply(IQueryable<ActivityDefinitionVersion> queryable)
     {
-        if (Id != null) 
+        if (Id != null)
             queryable = queryable.Where(x => x.Id == Id);
-        if (Ids != null) 
+        if (Ids != null)
             queryable = queryable.Where(x => Ids.Contains(x.Id));
         if (Version != null)
             queryable = queryable.Where(x => x.TypeInfo.AssemblyVersion == Version);
         if (!string.IsNullOrWhiteSpace(DefinitionId))
             queryable = queryable.Where(x => x.DefinitionId == DefinitionId);
-        if (!string.IsNullOrWhiteSpace(SearchTerm)) 
+        if (!string.IsNullOrWhiteSpace(SearchTerm))
             queryable = queryable.Where(x => x.Id.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.DefinitionId!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase));
-        
+
         return queryable;
     }
 }

@@ -9,7 +9,8 @@ namespace Elsa.Activities.Design.Core.Models
     public record ArgumentDefinition(
         string ReferenceKey,
         string Name,
-        TypeInformation TypeInfo,
+        TypeInformation Type,
+        TypeInformation? StorageDriverType,
         string DisplayName,
         string? Category,
         bool? IsBrowsable = null,

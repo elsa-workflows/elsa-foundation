@@ -20,7 +20,7 @@ internal sealed class RenderEndpoint(IJavaScriptDeclarationsDocumentRenderer ren
 
             await Send.OkAsync(new { success = true, document = result }, ct);
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             await Send.ResponseAsync(
                 new { success = false, message = e.Message },

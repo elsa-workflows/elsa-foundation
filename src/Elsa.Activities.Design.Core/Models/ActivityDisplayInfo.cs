@@ -8,7 +8,7 @@
     )
     {
         public ActivityDisplayInfo() : this(0, 0, 0, 0)
-        {            
+        {
         }
     }
 }

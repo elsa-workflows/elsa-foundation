@@ -1,11 +1,14 @@
 using CShells.Features;
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Persistence.EFCore.Options;
+using Elsa.Persistence.EFCore.Services;
 using Elsa.Persistence.EFCore.Tasks;
+using Elsa.Primitives.Contracts;
 using Elsa.Tasks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using System.Reflection;
 
@@ -59,38 +62,41 @@ namespace Elsa.Persistence.EFCore
         /// </summary>
         protected virtual Action<IServiceProvider, DbContextOptionsBuilder> DbContextOptionsBuilder { get; set; } = (_, _) => { };
 
-
-        public void ConfigureServices(IServiceCollection services)
+        public virtual void ConfigureServices(IServiceCollection services)
         {
+            OnBeforeConfiguring(services);
+
+            // General services
+            services.TryAddScoped<IIdentityGenerator, EFCoreIdentityGenerator>();
+
             // Resolve pooling and lifetime settings with fallback
             // Note: These are resolved at configuration time, not runtime, but they'll use defaults if not set
             var useContextPooling = UseContextPooling ?? false;
-            var dbContextFactoryLifetime = DbContextFactoryLifetime ?? ServiceLifetime.Scoped;
-            var runMigrations = RunMigrations ?? true;
 
             if (useContextPooling)
                 services.AddPooledDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder);
             else
-                services.AddDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder, dbContextFactoryLifetime);
+                services.AddDbContextFactory<TDbContext>(SetupDbContextOptionsBuilder, DbContextFactoryLifetime ?? ServiceLifetime.Scoped);
 
+            // MIGRATION
+            var runMigrations = RunMigrations ?? true;
             services.Configure<MigrationOptions>(options =>
             {
                 options.RunMigrations[$"{typeof(TDbContext).FullName}"] = runMigrations;
-            });
+            })
+            .AddScoped<IStartupTask, RunMigrationsStartupTask<TDbContext>>();
 
-            services.AddScoped<IStartupTask, RunMigrationsStartupTask<TDbContext>>();
-
+            // COMMANDS & QUERIES
             if (UseCommands)
             {
-                services
-                    .ConfigureCommands<TDbContext>();
+                services.ConfigureCommands<TDbContext>();
             }
             if (UseQueries)
             {
                 services.ConfigureQueries<TDbContext>();
             }
 
-            OnConfiguring(services);
+            OnAfterConfigured(services);
         }
 
         // Resolve effective settings at runtime, falling back to shared settings
@@ -136,7 +142,11 @@ namespace Elsa.Persistence.EFCore
             ElsaDbContextOptions? options
         );
 
-        protected virtual void OnConfiguring(IServiceCollection services)
+        protected virtual void OnAfterConfigured(IServiceCollection services)
+        {
+        }
+
+        protected virtual void OnBeforeConfiguring(IServiceCollection services)
         {
         }
     }

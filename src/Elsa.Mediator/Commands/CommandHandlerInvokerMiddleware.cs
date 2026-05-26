@@ -2,10 +2,7 @@
 using Elsa.Mediator.Core.Middleware;
 using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 
 namespace Elsa.Mediator.Commands;
 
@@ -49,11 +46,11 @@ public sealed class CommandHandlerInvokerMiddleware(CommandMiddlewareDelegate ne
             ?? throw new InvalidProgramException($"Cannot find method 'Handle' on '{handlerType}'");
 
         // Execute command.
-        var task = (Task)executeMethod.Invoke(handler, [context])!
+        var task = (Task)executeMethod.Invoke(handler, [command, context.CancellationToken])!
             ?? throw new InvalidProgramException("'Handle' returned null");
 
         // Wait for completion.
-        if(task is not null)
+        if (task is not null)
             await task;
 
         // Get the result of the task.

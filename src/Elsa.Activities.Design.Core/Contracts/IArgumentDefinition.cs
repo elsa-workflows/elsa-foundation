@@ -6,7 +6,9 @@ public interface IArgumentDefinition
 {
     string ReferenceKey { get; }
 
-    TypeInformation TypeInfo { get; }
+    TypeInformation Type { get; }
+
+    TypeInformation? StorageDriverType { get; }
 
     /// <summary>
     /// The name.

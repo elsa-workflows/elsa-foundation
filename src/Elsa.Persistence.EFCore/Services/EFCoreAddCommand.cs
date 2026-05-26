@@ -7,7 +7,7 @@ namespace Elsa.Persistence.EFCore.Services
     public sealed class EFCoreAddCommand<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory)
         : IAddCommand<TEntity>
         where TDbContext : DbContext
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         private async Task<TDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => await dbContextFactory.CreateDbContextAsync(cancellationToken);
 

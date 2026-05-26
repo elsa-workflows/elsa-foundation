@@ -51,7 +51,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         /// <summary>
         /// Gets or sets a value indicating whether to include tenant matching in the filter.
         /// </summary>
-        public bool? TenantAgnostic { get; set; } 
+        public bool? TenantAgnostic { get; set; }
 
         /// <summary>
         /// Applies the filter to the specified queryable.
@@ -59,7 +59,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         /// <param name="queryable">The queryable to apply the filter to.</param>
         /// <returns>The filtered queryable.</returns>
         public virtual IQueryable<WorkflowDefinition> Apply(IQueryable<WorkflowDefinition> queryable)
-        {     
+        {
             if (Id != null) queryable = queryable.Where(x => x.Id == Id);
             if (Ids != null) queryable = queryable.Where(x => Ids.Contains(x.Id));
             if (MaterializerName != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.Materializer == MaterializerName);

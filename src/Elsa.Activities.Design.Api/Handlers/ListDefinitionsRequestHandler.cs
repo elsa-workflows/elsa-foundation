@@ -8,8 +8,8 @@ using Elsa.Persistence.Core;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class ListDefinitionsRequestHandler(IQueries<ActivityDefinition> queries, IObjectMapper mapper) 
-    
+public sealed class ListDefinitionsRequestHandler(IQueries<ActivityDefinition> queries, IObjectMapper mapper)
+
     : IRequestHandler<ListDefinitions, IEnumerable<ActivityDefinitionView>>
 {
     public async Task<IEnumerable<ActivityDefinitionView>> Handle(ListDefinitions request, CancellationToken cancellationToken)
@@ -25,8 +25,15 @@ public sealed class ListDefinitionsRequestHandler(IQueries<ActivityDefinition> q
             TenantAgnostic = request.TenantAgnostic
         };
 
-        var activities = await queries.Query(filter, cancellationToken);
+        var activities = (await queries.Query(filter, cancellationToken)).ToArray();
 
-        return mapper.Map<ActivityDefinitionView>(activities);
+        var result = new List<ActivityDefinitionView>(activities.Length);
+        var enumerable = mapper.Map<ActivityDefinitionView>(activities, cancellationToken);
+        await foreach (var item in enumerable)
+        {
+            result.Add(item);
+        }
+
+        return result;
     }
 }

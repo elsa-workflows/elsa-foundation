@@ -3,57 +3,55 @@ using System.Text.Json.Serialization;
 
 namespace Elsa.Primitives.Models
 {
-    public sealed class TypeInformation<TValue> : TypeInformation
+    public sealed record TypeInformation
     {
-        public TypeInformation()
-            : base(typeof(TValue).Name, $"{typeof(TValue).Namespace}", $"{typeof(TValue).Assembly.FullName}", $"{typeof(TValue).Assembly.GetName().Version}")
+        [JsonConstructor]
+        public TypeInformation(
+            string typeName,
+            string @namespace,
+            string assemblyName,
+            string assemblyVersion)
         {
-        }
-    }
-
-    [method: JsonConstructor]
-    public class TypeInformation(string typeName, string @namespace, string assemblyName, string assemblyVersion)
-    {
-        public TypeInformation(Type type) 
-            : this(type.Name, $"{type.Namespace}", $"{type.Assembly.FullName}", $"{type.Assembly.GetName().Version}")
-        {            
+            TypeName = typeName.TrimStart('.');
+            Namespace = @namespace.TrimEnd('.');
+            AssemblyName = assemblyName;
+            AssemblyVersion = assemblyVersion;
         }
 
-        public string TypeName => typeName.TrimStart('.');
-
-        public string Namespace => @namespace.TrimEnd('.');
-
-        public string AssemblyName => assemblyName;
-
-        public string AssemblyVersion => assemblyVersion;
+        public string TypeName { get; init; }
+        public string Namespace { get; init; }
+        public string AssemblyName { get; init; }
+        public string AssemblyVersion { get; init; }
 
         public static TypeInformation FromType(Type type)
         {
             return new TypeInformation(
                 type.Name,
                 type.Namespace ?? string.Empty,
-                type.AssemblyQualifiedName ?? string.Empty,
+                type.Assembly.GetName().Name ?? string.Empty,
                 type.Assembly.GetName().Version?.ToString() ?? string.Empty
             );
         }
 
-        public static readonly TypeInformation String = new TypeInformation<string>();
-        public static readonly TypeInformation Object = new TypeInformation<object>();
-        public static readonly TypeInformation Integer = new TypeInformation<int>();
-        public static readonly TypeInformation Double = new TypeInformation<double>();
-        public static readonly TypeInformation Float = new TypeInformation<float>();
-        public static readonly TypeInformation Decimal = new TypeInformation<decimal>();
-        public static readonly TypeInformation Bool = new TypeInformation<bool>();
-        public static readonly TypeInformation DateTimeOffset = new TypeInformation<DateTimeOffset>();
-        public static readonly TypeInformation DateTime = new TypeInformation<DateTime>();
-        public static readonly TypeInformation TimeSpan = new TypeInformation<TimeSpan>();
+        public static TypeInformation FromType<TValue>() => FromType(typeof(TValue));
+
+        public static readonly TypeInformation String = FromType<string>();
+        public static readonly TypeInformation Object = FromType<object>();
+        public static readonly TypeInformation Integer = FromType<int>();
+        public static readonly TypeInformation Double = FromType<double>();
+        public static readonly TypeInformation Float = FromType<float>();
+        public static readonly TypeInformation Decimal = FromType<decimal>();
+        public static readonly TypeInformation Bool = FromType<bool>();
+        public static readonly TypeInformation DateTimeOffset = FromType<DateTimeOffset>();
+        public static readonly TypeInformation DateTime = FromType<DateTime>();
+        public static readonly TypeInformation TimeSpan = FromType<TimeSpan>();
 
         public Type LoadType()
         {
             var assemblyName = new AssemblyName(AssemblyName)
             {
                 Version = new Version(AssemblyVersion)
-            };            
+            };
             var assembly = Assembly.Load(assemblyName);
 
             var typeName = GetTypeFullName();

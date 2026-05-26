@@ -7,6 +7,8 @@ public interface IActivityDefinitionVersion
 {
     string Id { get; }
 
+    int Version { get; }
+
     /// <summary>
     /// Information about the type where the activity lives
     /// </summary>
@@ -20,12 +22,12 @@ public interface IActivityDefinitionVersion
     /// <summary>
     /// 
     /// </summary>
-    IEnumerable<IInputDefinition> Inputs { get; }
+    IEnumerable<InputDefinition> Inputs { get; }
 
     /// <summary>
     /// 
     /// </summary>
-    IEnumerable<IOutputDefinition> Outputs { get; }
+    IEnumerable<OutputDefinition> Outputs { get; }
 
     /// <summary>
     /// 

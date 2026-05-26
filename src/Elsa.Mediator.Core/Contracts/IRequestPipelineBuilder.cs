@@ -10,7 +10,7 @@ public interface IRequestPipelineBuilder
     /// <summary>
     /// Gets the properties associated with the request pipeline.
     /// </summary>
-    public IDictionary<string, object?> Properties { get; }
+    IDictionary<string, object?> Properties { get; }
 
     /// <summary>
     /// Gets the service provider.
@@ -27,5 +27,5 @@ public interface IRequestPipelineBuilder
     /// Builds the request pipeline.
     /// </summary>
     /// <returns></returns>
-    public RequestMiddlewareDelegate Build();
+    RequestMiddlewareDelegate Build();
 }

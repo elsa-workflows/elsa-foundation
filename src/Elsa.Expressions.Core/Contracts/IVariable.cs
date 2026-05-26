@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Core.Contracts
         /// <summary>
         /// A default value for the variable.
         /// </summary>
-        object? Value { get; set; }
+        object? DefaultValue { get; set; }
 
         /// <summary>
         /// The storage driver type to use for persistence.

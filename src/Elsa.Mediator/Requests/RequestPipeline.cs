@@ -1,9 +1,8 @@
 ﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Mediator.Core.Middleware;
-using Elsa.Mediator.Requests;
 
-namespace Elsa.Mediator.Commands;
+namespace Elsa.Mediator.Requests;
 
 /// <inheritdoc />
 /// <summary>

@@ -11,11 +11,10 @@ using Elsa.Workflows.Design.Persistence.Core.Extensions;
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class AddVersionCommandHandler(
-    IIdentityGenerator identityGenerator, 
-    ISystemClock systemClock,
-    IAddCommand<WorkflowDefinitionVersion> addCommand, 
-    IQueries<WorkflowDefinitionVersion> queries, 
-    IQueries<WorkflowDefinition> definitionQueries, 
+    IIdentityGenerator identityGenerator,
+    IAddCommand<WorkflowDefinitionVersion> addCommand,
+    IQueries<WorkflowDefinitionVersion> queries,
+    IQueries<WorkflowDefinition> definitionQueries,
     IObjectMapper objectMapper)
 
     : ICommandHandler<AddVersion, WorkflowDefinitionVersionDetailsView>
@@ -29,18 +28,18 @@ public sealed class AddVersionCommandHandler(
         var lastVersion = await lastVersionTask;
 
         var nextVersionNumber = (lastVersion?.Version ?? 0) + 1;
-        var state = objectMapper.Map<WorkflowDefinitionState>(command.State);
+        var state = await objectMapper.Map<WorkflowDefinitionState>(command.State, cancellationToken);
         var version = CreateVersion(nextVersionNumber, definition, state);
 
-        await addCommand.Add(version, cancellationToken);        
+        await addCommand.Add(version, cancellationToken);
         var addedVersion = await queries.GetVersionIncludingDefinition(version.Id, cancellationToken);
 
-        return objectMapper.Map<WorkflowDefinitionVersionDetailsView>(addedVersion);
+        return await objectMapper.Map<WorkflowDefinitionVersionDetailsView>(addedVersion, cancellationToken);
     }
 
-    WorkflowDefinitionVersion CreateVersion(int version, WorkflowDefinition definition, WorkflowDefinitionState workflowDefinitionState)
+    private WorkflowDefinitionVersion CreateVersion(int version, WorkflowDefinition definition, WorkflowDefinitionState workflowDefinitionState)
     {
-        return new(definition.Id, version, systemClock.UtcNow, stateSource: null)
+        return new(definition.Id, version, stateSource: null)
         {
             Id = identityGenerator.Generate(),
             Definition = definition

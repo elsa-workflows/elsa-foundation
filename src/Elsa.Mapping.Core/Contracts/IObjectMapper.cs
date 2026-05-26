@@ -2,9 +2,9 @@
 
 public interface IObjectMapper
 {
-    object Map(object source, Type returnType);    
+    ValueTask<TValue> Map<TValue>(object source, CancellationToken cancellationToken)
+        where TValue : notnull;
 
-    public TValue Map<TValue>(object source) => (TValue)Map(source, typeof(TValue));
-
-    public IEnumerable<TValue> Map<TValue>(IEnumerable<object> sources) => sources.Select(Map<TValue>);
+    IAsyncEnumerable<TValue> Map<TValue>(IEnumerable<object> sources, CancellationToken cancellationToken)
+        where TValue : notnull;
 }

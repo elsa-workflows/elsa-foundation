@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 namespace Elsa.Persistence.Core
 {
     public interface IUpdateCommand<TEntity>
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         /// <summary>
         /// Updates the entity.

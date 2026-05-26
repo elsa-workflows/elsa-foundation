@@ -13,9 +13,11 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
 		<PackageReference Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
 		<PackageReference Include="System.CommandLine" Version="2.0.8" />
+		<PackageReference Include="Ulid" Version="1.4.1" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
 	  <ProjectReference Include="..\Elsa.Persistence.Core\Elsa.Persistence.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />

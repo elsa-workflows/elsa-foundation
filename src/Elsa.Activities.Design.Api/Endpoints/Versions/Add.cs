@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Versions;
 
-internal sealed class Add : ElsaCommandHandlerEndpoint<AddVersion, ActivityDefinitionVersionView>
+internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : ElsaCommandHandlerEndpoint<AddVersion, ActivityDefinitionVersionDetailsView>(commandSender, logger)
 {
-    public Add(ICommandSender commandSender, ILogger<Add> logger) : base(commandSender, logger)
+    public override void Configure()
     {
         Post(RouteConstants.Versions);
         AllowAnonymous();

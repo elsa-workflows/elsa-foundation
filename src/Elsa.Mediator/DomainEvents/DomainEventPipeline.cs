@@ -1,8 +1,6 @@
-﻿using Elsa.Mediator.Commands;
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Mediator.Core.Middleware;
-using Elsa.Mediator.Requests;
 
 namespace Elsa.Mediator.DomainEvents;
 

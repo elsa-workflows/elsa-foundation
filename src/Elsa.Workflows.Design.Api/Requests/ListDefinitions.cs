@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Api.Models;
 namespace Elsa.Workflows.Design.Api.Requests;
 
 public sealed record ListDefinitions(
-    string? Id,    
+    string? Id,
     string? Name,
     string? SearchTerm,
     string? Description,

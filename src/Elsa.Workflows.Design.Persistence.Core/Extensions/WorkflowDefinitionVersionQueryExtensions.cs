@@ -1,5 +1,4 @@
-﻿using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Persistence.Core;
+﻿using Elsa.Persistence.Core;
 using Elsa.Primitives.Persistence;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;

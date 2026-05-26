@@ -13,6 +13,6 @@ public sealed class GetVersionRequestHandler(IQueries<ActivityDefinitionVersion>
     public async Task<ActivityDefinitionVersionDetailsView> Handle(GetVersion request, CancellationToken cancellationToken)
     {
         var result = await queries.GetVersionInlcudingDefinition(request.VersionId, cancellationToken);
-        return mapper.Map<ActivityDefinitionVersionDetailsView>(result);
+        return await mapper.Map<ActivityDefinitionVersionDetailsView>(result, cancellationToken);
     }
 }

@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers
         {
             if (entity == null)
                 return ValueTask.CompletedTask;
-            
+
             var stateSourceProperty = dbContext
                 .Entry(entity)
                 .Property(nameof(WorkflowDefinitionDraft.StateSource));

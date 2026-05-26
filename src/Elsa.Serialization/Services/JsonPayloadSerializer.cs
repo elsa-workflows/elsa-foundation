@@ -17,14 +17,19 @@ namespace Elsa.Serialization.Services
         public string Serialize(object payload)
         {
             var options = GetOptions();
-            return JsonSerializer.Serialize(payload, options);
+            // Pass payload.GetType() so the input type is the runtime type, not 'object'.
+            // Without this, generic inference picks TValue = object and the
+            // PolymorphicObjectConverterFactory claims the call, wrapping collections in
+            // {_items: [...], _type: "..."}. With the runtime type, STJ uses built-in
+            // handling and produces plain JSON for ordinary classes/collections.
+            return JsonSerializer.Serialize(payload, payload.GetType(), options);
         }
 
         /// <inheritdoc />
         public JsonElement SerializeToElement(object payload)
         {
             var options = GetOptions();
-            return JsonSerializer.SerializeToElement(payload, options);
+            return JsonSerializer.SerializeToElement(payload, payload.GetType(), options);
         }
 
         /// <inheritdoc />

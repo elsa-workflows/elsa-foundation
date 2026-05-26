@@ -7,6 +7,6 @@ public sealed class DomainEventSender(IDomainEventPipeline requestPipeline, ISer
     public async Task Send(IDomainEvent @event, CancellationToken cancellationToken = default)
     {
         var context = new DomainEventContext(@event, serviceProvider, cancellationToken);
-        await requestPipeline.Execute(context);        
+        await requestPipeline.Execute(context);
     }
 }

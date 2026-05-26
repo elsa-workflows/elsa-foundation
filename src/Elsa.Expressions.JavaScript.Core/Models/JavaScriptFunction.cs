@@ -1,10 +1,9 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 
 namespace Elsa.Expressions.JavaScript.Core.Models
 {
     public class JavaScriptFunction(string name, Delegate @delegate) : IJavaScriptFunction
-    {   
+    {
         public static IJavaScriptFunction Build<TParam1>(string name, Func<TParam1, object?> execute)
             where TParam1 : notnull
             => new JavaScriptFunction<TParam1>(name, execute);

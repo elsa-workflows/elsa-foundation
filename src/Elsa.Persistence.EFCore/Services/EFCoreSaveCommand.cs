@@ -8,7 +8,7 @@ namespace Elsa.Persistence.EFCore.Services
 {
     public sealed class EFCoreSaveCommand<TDbContext, TEntity>(IDbContextFactory<TDbContext> dbContextFactory, IServiceProvider serviceProvider) : ISaveCommand<TEntity>
         where TDbContext : DbContext
-        where TEntity : Entity, new()
+        where TEntity : Entity
     {
         // ReSharper disable once StaticMemberInGenericType
         // Justification: This is a static member that is used to ensure that only one thread can access the database for TEntity at a time.

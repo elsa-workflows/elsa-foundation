@@ -23,12 +23,12 @@ namespace Elsa.Workflows.Runtime.JavaScript.EventHandlers
                 new JavaScriptFunction(WorkflowFunctionNames.GetWorkflowInstanceId, () => worklowExecution.InstanceId),
                 new JavaScriptFunction(WorkflowFunctionNames.GetCorrelationId, () => worklowExecution.CorrelationId),
                 new JavaScriptFunction<string>(WorkflowFunctionNames.SetCorrelationId, (string id) =>
-                {                    
+                {
                     worklowExecution.CorrelationId = id;
                     return null;
                 }),
                 new JavaScriptFunction<string>(WorkflowFunctionNames.SetWorkflowInstanceName, name =>
-                {                    
+                {
                     worklowExecution.Name = name;
                     return null;
                 }),

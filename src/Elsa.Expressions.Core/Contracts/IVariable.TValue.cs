@@ -16,7 +16,7 @@ namespace Elsa.Expressions.Core.Contracts
 
         IVariable<TValue> WithValue(TValue value)
         {
-            Value = value;
+            DefaultValue = value;
             return this;
         }
     }
