@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
@@ -18,8 +18,6 @@ public sealed class ListDefinitionsRequestHandler(IQueries<WorkflowDefinition> q
             Id = request.Id,
             Description = request.Description,
             Name = request.Name,
-            IsSystem = request.IsSystem,
-            MaterializerName = request.MaterializerName,
             SearchTerm = request.SearchTerm,
             TenantAgnostic = request.TenantAgnostic
         };

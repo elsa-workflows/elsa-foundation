@@ -47,7 +47,6 @@ public sealed class AddDefinitionCommandHandler(
         {
             Id = identityGenerator.Generate(),
             Description = def.Description,
-            MetaData = def.MetaData,
             Name = def.Name
         };
     }

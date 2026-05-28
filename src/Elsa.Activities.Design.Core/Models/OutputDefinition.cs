@@ -20,4 +20,5 @@ public sealed record OutputDefinition(
     float Order = 0,
     string? UiHint = null,
     IDictionary<string, object>? PropertyInfo = null,
-    IDictionary<string, object>? UISpecifications = null);
+    IDictionary<string, object>? UISpecifications = null,
+    bool IsRequired = false);

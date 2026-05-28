@@ -45,22 +45,22 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### IsRequired contract addition (FR-036)
 
-- [ ] T006 Add `bool IsRequired = false` constructor parameter to `src/Elsa.Activities.Design.Core/Models/InputDefinition.cs` (positioned after existing optional parameters; default `false` preserves backward compatibility per framework §2.21.1).
-- [ ] T007 Add `bool IsRequired = false` constructor parameter to `src/Elsa.Activities.Design.Core/Models/OutputDefinition.cs` (same shape as T006).
-- [ ] T008 Update EF configuration in `src/Elsa.Activities.Design.Persistence.EFCore/Configurations/` for the activity-side input/output mappings to map the new `IsRequired` column (boolean, default `false`).
+- [X] T006 Add `bool IsRequired = false` constructor parameter to `src/Elsa.Activities.Design.Core/Models/InputDefinition.cs` (positioned after existing optional parameters; default `false` preserves backward compatibility per framework §2.21.1).
+- [X] T007 Add `bool IsRequired = false` constructor parameter to `src/Elsa.Activities.Design.Core/Models/OutputDefinition.cs` (same shape as T006).
+- [X] T008 Update EF configuration in `src/Elsa.Activities.Design.Persistence.EFCore/Configurations/` for the activity-side input/output mappings to map the new `IsRequired` column (boolean, default `false`). **Resolved as no-op:** InputDefinition/OutputDefinition are serialized to JSON via `InputsSource`/`OutputsSource` in `ActivityDefinitionVersionSavingHandler`, not mapped column-by-column. The new `IsRequired` field flows through the JSON serializer automatically; no EF configuration change required. Note discovery for the next task-list regeneration pass.
 
 ### WorkflowMetadata deletion (FR-015 + FR-015a)
 
-- [ ] T009 Delete `src/Elsa.Workflows.Design.Core/Models/WorkflowMetadata.cs` (FR-015).
-- [ ] T010 Remove `MetaData` property from `WorkflowDefinition` in `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinition.cs` (FR-015).
-- [ ] T011 Remove the `IsSystem` shadow-column lift from `src/Elsa.Workflows.Design.Persistence.EFCore/EntityHandlers/WorkflowDefinitionSavingHandler.cs` (FR-015). If the handler becomes a no-op after removal, delete the file entirely (audit during the task).
-- [ ] T012 Remove any persistence-side mapping that references `WorkflowMetadata` in `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/` (FR-015).
-- [ ] T013 Walk the test surface for `WorkflowMetadata` references in `tests/Elsa.Activities.Design.Tests/` and any future test projects; per FR-015a: tests whose subject IS `WorkflowMetadata` are candidates for deletion (architect-approval-recorded per framework §2.21.1 — Joey's approval is documented in the Unit C follow-up). Tests whose subject is `WorkflowDefinition` and which incidentally exercise `MetaData` are adjusted to drop the `MetaData` field.
+- [X] T009 Delete `src/Elsa.Workflows.Design.Core/Models/WorkflowMetadata.cs` (FR-015).
+- [X] T010 Remove `MetaData` property from `WorkflowDefinition` in `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinition.cs` (FR-015). Also removed `MetaData` from `IWorkflowDefinition` contract; cascaded through `WorkflowsVersionProvisioner.Map`, Elsa3 `WorkflowDefinitionImport` + mapper.
+- [X] T011 Remove the `IsSystem` shadow-column lift from `src/Elsa.Workflows.Design.Persistence.EFCore/EntityHandlers/WorkflowDefinitionSavingHandler.cs` (FR-015). Handler was no-op after removal — deleted the file entirely. DI registration in `EFCoreWorkflowsPersistenceFeatureBase.AddEntitySavingHandlersFrom` is assembly-scan-based so survives without code change.
+- [X] T012 Remove any persistence-side mapping that references `WorkflowMetadata` in `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/` (FR-015). Removed `ConfigureMetaDataValueObject` from `WorkflowDefinitionConfiguration`. Also removed `IsSystem` + `MaterializerName` filters from `WorkflowDefinitionFilter`; `IWorkflowDefinitionLookup.ListDefinitions` signature dropped the `isSystem` parameter; API surface (`AddDefinition`, `WorkflowDefinitionView`, `ListDefinitions`, `Expressions.DefinitionSelector`, `DefinitionToView`, `ListDefinitionsRequestHandler`) cleaned up.
+- [X] T013 Walk the test surface for `WorkflowMetadata` references in `tests/Elsa.Activities.Design.Tests/` and any future test projects; per FR-015a: tests whose subject IS `WorkflowMetadata` are candidates for deletion. **Grep result: zero test references** to `WorkflowMetadata` / `MetaData` / `IsSystem`. No test deletion required; 31/31 pre-existing tests still pass.
 
 ### Fresh-init migration regeneration (R10)
 
-- [ ] T014 Delete existing `Migrations/` folder for `ActivitiesDesignDbContext` in `src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/`.
-- [ ] T015 Delete existing `Migrations/` folder for `WorkflowsDesignDbContext` in `src/Elsa.Workflows.Design.Persistence.EFCore.Sqlite/`.
+- [X] T014 Delete existing `Migrations/` folder for `ActivitiesDesignDbContext` in `src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/`.
+- [X] T015 Delete existing `Migrations/` folder for `WorkflowsDesignDbContext` in `src/Elsa.Workflows.Design.Persistence.EFCore.Sqlite/`.
 
 **Checkpoint**: Contract changes landed; downstream packages can rebuild against the new `IsRequired` field and the deleted `WorkflowMetadata`.
 

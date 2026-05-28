@@ -12,7 +12,6 @@ public sealed class DefinitionToView : IObjectMapping<WorkflowDefinition, Workfl
             source.Id,
             source.Name,
             source.Description,
-            source.MetaData?.IsSystem ?? false,
             source.CreatedAt,
             source.LastModifiedAt
         );

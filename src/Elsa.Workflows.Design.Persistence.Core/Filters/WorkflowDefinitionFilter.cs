@@ -39,16 +39,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         public ICollection<string>? Names { get; set; }
 
         /// <summary>
-        /// Filter by the name of the workflow definition materializer.
-        /// </summary>
-        public string? MaterializerName { get; set; }
-
-        /// <summary>
-        /// Filter on workflows that are system workflows.
-        /// </summary>
-        public bool? IsSystem { get; set; }
-
-        /// <summary>
         /// Gets or sets a value indicating whether to include tenant matching in the filter.
         /// </summary>
         public bool? TenantAgnostic { get; set; }
@@ -62,11 +52,9 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters
         {
             if (Id != null) queryable = queryable.Where(x => x.Id == Id);
             if (Ids != null) queryable = queryable.Where(x => Ids.Contains(x.Id));
-            if (MaterializerName != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.Materializer == MaterializerName);
             if (Name != null) queryable = queryable.Where(x => x.Name == Name);
             if (Names != null) queryable = queryable.Where(x => Names.Contains(x.Name!));
             if (!string.IsNullOrWhiteSpace(SearchTerm)) queryable = queryable.Where(x => x.Name!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Description!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Id.Contains(SearchTerm));
-            if (IsSystem != null) queryable = queryable.Where(x => x.MetaData != null && x.MetaData.IsSystem == IsSystem);
             if (Description != null) queryable = queryable.Where(x => x.Description == Description);
 
             return queryable;

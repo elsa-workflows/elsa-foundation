@@ -27,11 +27,10 @@ public sealed class WorkflowDefinitionLookup(IQueries<WorkflowDefinitionVersion>
         return result;
     }
 
-    public async Task<IEnumerable<IWorkflowDefinition>> ListDefinitions(bool? isSystem = null, string? searchTerm = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IWorkflowDefinition>> ListDefinitions(string? searchTerm = null, CancellationToken cancellationToken = default)
     {
         var filter = new WorkflowDefinitionFilter
         {
-            IsSystem = isSystem,
             SearchTerm = searchTerm
         };
 

@@ -15,22 +15,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .HasForeignKey<WorkflowDefinition>(def => def.DraftId);
 
             builder.HasIndex(x => x.Name).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.Name)}");
-
-            ConfigureMetaDataValueObject(builder);
-        }
-
-        private static void ConfigureMetaDataValueObject(EntityTypeBuilder<WorkflowDefinition> builder)
-        {
-            builder.OwnsOne(
-                def => def.MetaData,
-                metaData =>
-                {
-                    metaData.Property(m => m.ToolVersion);
-                    metaData.Property(m => m.Materializer);
-                    metaData.Property(m => m.MaterializerContext);
-                    metaData.Property(m => m.IsSystem);
-                }
-            );
         }
     }
 }

@@ -6,7 +6,7 @@ public interface IWorkflowDefinitionLookup
 {
     Task<IWorkflowDefinition> GetDefinition(string id, CancellationToken cancellationToken = default);
 
-    Task<IEnumerable<IWorkflowDefinition>> ListDefinitions(bool? isSystem = null, string? searchTerm = null, CancellationToken cancellationToken = default);
+    Task<IEnumerable<IWorkflowDefinition>> ListDefinitions(string? searchTerm = null, CancellationToken cancellationToken = default);
 
     Task<IWorkflowDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default);
 

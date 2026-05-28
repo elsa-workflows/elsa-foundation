@@ -124,7 +124,6 @@ public sealed class WorkflowsVersionProvisioner(
             Id = id,
             Description = definition.Description,
             DraftId = definition.Draft?.Id,
-            MetaData = definition.MetaData,
             Name = definition.Name
         };
     }

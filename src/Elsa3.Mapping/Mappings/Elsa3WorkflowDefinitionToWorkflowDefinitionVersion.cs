@@ -15,7 +15,6 @@ public sealed class Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(IObjectMa
           definition.DefinitionId,
           definition.Name,
           definition.Description,
-          new WorkflowMetadata(Materializer: null, MaterializerContext: null, definition.IsSystem, definition.ToolVersion),
           definition.CreatedAt,
           definition.CreatedAt,
           Draft: null
