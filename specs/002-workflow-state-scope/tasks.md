@@ -139,35 +139,39 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Event types in Workflows.Design.Core (FR-018 + FR-018a — 18 events)
 
-- [ ] T042 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftCreated.cs` per contracts/events.md.
-- [ ] T043 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityAddedToDraft.cs`.
-- [ ] T044 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityRemovedFromDraft.cs`.
-- [ ] T045 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityPropertyChangedInDraft.cs`.
-- [ ] T046 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityMovedInDraft.cs` (the layout event; folds into the Draft event stream per FR-017).
-- [ ] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionAddedToDraft.cs`.
-- [ ] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionRemovedFromDraft.cs`.
-- [ ] T049 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableDeclaredInDraft.cs`.
-- [ ] T050 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableUpdatedInDraft.cs`.
-- [ ] T051 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableRemovedFromDraft.cs`.
-- [ ] T052 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputAddedToDraft.cs`.
-- [ ] T053 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputUpdatedInDraft.cs`.
-- [ ] T054 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputRemovedFromDraft.cs`.
-- [ ] T055 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputAddedToDraft.cs`.
-- [ ] T056 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputUpdatedInDraft.cs`.
-- [ ] T057 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputRemovedFromDraft.cs`.
-- [ ] T058 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftClonedFromVersion.cs` (FR-018a lifecycle).
-- [ ] T059 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftDiscarded.cs` (FR-018a lifecycle).
+- [X] T042 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftCreated.cs`. Sealed class with primary ctor; payload `DraftId`, `WorkflowDefinitionId`.
+- [X] T043 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityAddedToDraft.cs`. **Decision:** passes `ActivityNode` directly (sealed record, immutable by structure) rather than the spec's phantom `IActivityNodeView`; introducing a parallel IView interface adds surface area without strengthening the non-mutating guarantee. Derived projections `NodeId` + `ActivityVersionId` expose convenience accessors.
+- [X] T044 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityRemovedFromDraft.cs`.
+- [X] T045 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityPropertyChangedInDraft.cs`. **Subsequently DELETED per Joey iteration 2026-05-28 round 2** — the generic event was redundant once the 6 specialized per-activity input/output CRUD events landed. All per-activity mutations now route through specialized commands; if a future non-input/non-output property surfaces (e.g. an `IsStart` toggle command), it gets its own dedicated event rather than a generic catch-all.
+- [X] T046 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityMovedInDraft.cs`.
+- [X] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionAddedToDraft.cs`. Passes `ActivityConnection` directly (same record-as-view rationale).
+- [X] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionRemovedFromDraft.cs`. **Decision:** passes the full `ActivityConnection` removed (no `Id` field exists on connections — source+target IS the identity); spec mentioned a `ConnectionId` field that doesn't exist on the model.
+- [X] T049 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableDeclaredInDraft.cs`. Passes `VariableDefinition` directly.
+- [X] T050 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableUpdatedInDraft.cs`.
+- [X] T051 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableRemovedFromDraft.cs`.
+- [X] T052 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputAddedToDraft.cs`. Passes `InputDefinition` directly.
+- [X] T053 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputUpdatedInDraft.cs`.
+- [X] T054 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputRemovedFromDraft.cs`.
+- [X] T055 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputAddedToDraft.cs`. Passes `OutputDefinition` directly.
+- [X] T056 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputUpdatedInDraft.cs`.
+- [X] T057 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputRemovedFromDraft.cs`.
+- [X] T058 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftClonedFromVersion.cs` (FR-018a lifecycle).
+- [X] T059 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftDiscarded.cs` (FR-018a lifecycle).
+
+**Pre-req added (not in original task list):** `Elsa.Workflows.Design.Core.csproj` gained `ProjectReference` to `Elsa.Mediator.Core` (required by all events for `IDomainEvent`); `Elsa.Workflows.Design.Validations.Core.csproj` gained the same for `OnDraftValidating`.
+
+**Joey iteration 2026-05-28 — per-activity input/output full CRUD + drop generic property event.** Six new specialized events landed for symmetry with workflow-level CRUD and variable CRUD: `OnActivityInputAddedToDraft`, `OnActivityInputUpdatedInDraft`, `OnActivityInputRemovedFromDraft`, `OnActivityOutputAddedToDraft`, `OnActivityOutputUpdatedInDraft`, `OnActivityOutputRemovedFromDraft`. Each carries `DraftId + NodeId + ArgumentState` (Add) or `+ ReferenceKey + Old/New` (Update) or `+ ReferenceKey` (Remove). The generic `OnActivityPropertyChangedInDraft` was then **deleted** — once specialized CRUD events covered inputs/outputs, the generic event was redundant; future non-input/non-output property mutations (e.g. `IsStart` toggle) get their own dedicated event when they surface, not a catch-all. Workflows.Design.Core now publishes **23 events** (21 mutation + 2 lifecycle). `EventNamingTests` asserts all 21 mutation event names + exact count 23. `DOMAIN_EVENTS.md` gained two new sections (Per-activity inputs CRUD + Per-activity outputs CRUD); removed the OnActivityPropertyChangedInDraft entry; catalog-parity test re-passes. **Spec regeneration flag:** FR-018's authoritative count in the spec narrative needs to become "21 mutation events / 23 events total" with the generic property event removed and the 6 input/output CRUD events added.
 
 ### `OnDraftValidating` in Validations.Core (FR-025)
 
-- [ ] T060 [P] Create `ValidationError` value record at `src/Elsa.Workflows.Design.Validations.Core/Models/ValidationError.cs` (Path, Type, Message — per FR-022 + R2 + R3).
-- [ ] T061 Create `src/Elsa.Workflows.Design.Validations.Core/Events/OnDraftValidating.cs` (sealed class; private `List<ValidationError> _errors`; public `AddValidationError(ValidationError)`; public `IReadOnlyList<ValidationError> Errors`; carries `IWorkflowDefinitionDraft Draft`). FR-025. Depends on T060 + cross-`.Core` reference to Workflows.Design.Core for `IWorkflowDefinitionDraft`.
+- [X] T060 [P] Create `ValidationError` value record at `src/Elsa.Workflows.Design.Validations.Core/Models/ValidationError.cs`. Sealed record `(Path, Type, Message)`. Doc header carries R2 Path format conventions + R3 Type categories.
+- [X] T061 Create `src/Elsa.Workflows.Design.Validations.Core/Events/OnDraftValidating.cs`. Canonical §2.6.1 contribution shape — sealed class, primary ctor, private `_errors`, `AddValidationError(ValidationError)`, `public IReadOnlyList<ValidationError> Errors`.
 
 ### Tests for the event surface
 
-- [ ] T062 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/EventNamingTests.cs` — assert all 16 FR-018 events exist with the verbatim names per FR-018 (1 lifecycle origination + 4 activity + 2 connection + 3 variable + 3 workflow-input + 3 workflow-output); assert zero events use the bare `Input`/`Output` names; the `WorkflowInput`/`WorkflowOutput` prefix is mandatory. SC-011.
-- [ ] T063 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/MethodPatternTests.cs` — assert every `IDomainEvent` in `Workflows.Design.Core` and `Workflows.Design.Validations.Core` is a `sealed class`, NOT a `record`. SC-015 + framework §2.6.1 sub-rule.
-- [ ] T064 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/NoRawCollectionsTests.cs` — assert no domain event in either assembly exposes a public mutable collection (`ICollection<T>`, `IList<T>`, `List<T>`). Acceptable: `IReadOnlyList<T>` read accessor + `Add*(...)` contribution methods. SC-015.
+- [X] T062 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/EventNamingTests.cs` — 4 tests: all 16 mutation event names present; both lifecycle event names present; no bare `Input`/`Output` names; exactly 18 events publish from `Workflows.Design.Core`. SC-011.
+- [X] T063 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/MethodPatternTests.cs` — parametrised over both `.Core` assemblies; asserts sealed class + not a record (uses synthesised `<Clone>$` + `EqualityContract` markers as record signal). SC-015.
+- [X] T064 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/EventSurfaceTests/NoRawCollectionsTests.cs` — parametrised over both assemblies; asserts no public property typed as `ICollection<T>` / `IList<T>` / `List<T>` / `HashSet<T>` / `IDictionary<,>` / `Dictionary<,>`. SC-015.
 
 **Checkpoint**: 19 events declared; tests confirm naming + shape + non-mutability invariants.
 
@@ -326,13 +330,13 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Catalog files
 
-- [ ] T134 [P] Create `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` listing every event in Workflows.Design.Core (18 events: 16 FR-018 mutation + 2 FR-018a lifecycle). Use the heading format `### <EventClassName>` per R4. Each entry carries: one-line semantic description, payload signature (intent-revealing method names + payload types), publication site (the command that publishes it), expected handler audiences, ordering guarantees, cross-references. Source content from contracts/events.md.
-- [ ] T135 [P] Create `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` listing `OnDraftValidating` (1 event). Same format and content as T134 (per FR-030 — the catalog rule applies to every domain whose `.Core` publishes events).
+- [X] T134 [P] Create `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` listing every event in Workflows.Design.Core (18 events). Heading format `### <EventClassName>` per R4; each entry carries semantic + payload + publication site + expected handlers + ordering + cross-references. Grouped by category (lifecycle / activities / connections / variables / workflow inputs / workflow outputs).
+- [X] T135 [P] Create `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` listing `OnDraftValidating` (1 event). Same format and content as T134.
 
 ### Parity test (FR-031 + FR-031a + R4)
 
-- [ ] T136 Test `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` — parametrised over BOTH `.Core` assemblies (`Workflows.Design.Core` + `Workflows.Design.Validations.Core`). For each (assembly, markdown-path) pair: (a) reflection-scan assembly for all public non-abstract concrete `IDomainEvent` types; (b) parse the corresponding `DOMAIN_EVENTS.md` and extract `### <EventClassName>` headings; (c) assert bidirectional set equality. Failure diagnostics: "event X has no catalog heading" or "catalog heading X has no corresponding event". SC-019 + SC-020 + FR-031.
-- [ ] T137 Test `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityNegativeTests.cs` — deliberately inject a stub `IDomainEvent` (in test scope) and assert the parity test from T136 fails with the diagnostic naming the stub; remove the stub and assert green. Same for catalog-heading-without-event. SC-020.
+- [X] T136 Test `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` — parametrised over both `.Core` assemblies. Two test methods (`Every_event_has_a_catalog_heading` + `Every_catalog_heading_maps_to_a_real_event`) provide bidirectional parity per SC-020 with named diagnostics. Resolves catalog path by walking up from the test bin folder to repo root.
+- [ ] T137 Test `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityNegativeTests.cs` — **deferred to next pass.** T136's positive bidirectional test already enforces SC-020 from both directions; T137 is a meta-test on T136's mechanism. Implementing it cleanly requires either refactoring the parity logic into a pure function (testable with synthetic inputs) or injecting a stub event + temporary catalog file via reflection — both add scope without strengthening the SC-020 guarantee. Flagged for future hardening.
 
 **Checkpoint**: Catalog ships for both Core assemblies; parity test confirms alignment and fails on drift.
 
