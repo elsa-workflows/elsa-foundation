@@ -1,0 +1,21 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+
+namespace Elsa.Activities.Design.Tests.Unit;
+
+/// <summary>
+/// Minimal <see cref="IActivity"/> used as a CLR-load target in the factory tests —
+/// top-level (not nested) so <c>TypeInformation.LoadType</c> can resolve it via the assembly.
+/// </summary>
+public sealed class NoopActivity : IActivity
+{
+    public string Id { get; set; } = "";
+    public string NodeId { get; set; } = "";
+    public string? Name { get; set; }
+    public string Type { get; set; } = "Test.Noop";
+    public int Version { get; set; } = 1;
+    public Dictionary<string, object> CustomProperties { get; set; } = [];
+    public Dictionary<string, object> SyntheticProperties { get; set; } = [];
+    public Dictionary<string, object> Metadata { get; set; } = [];
+    public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
+    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+}

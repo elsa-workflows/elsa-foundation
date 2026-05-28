@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities
     /// <summary>
     /// Represents a versioned workflow definition.
     /// </summary>
-    public sealed class WorkflowDefinition : Entity, IWorkflowDefinition
+    public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
     {
         public string Name { get; set; } = string.Empty;
 

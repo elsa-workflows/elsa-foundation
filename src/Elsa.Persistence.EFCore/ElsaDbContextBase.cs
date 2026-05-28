@@ -1,4 +1,6 @@
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
@@ -58,7 +60,7 @@ namespace Elsa.Persistence.EFCore
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             ConfigureEntityModel(modelBuilder);
-        }
+        }        
 
 
         #region SAVE HANDLING
@@ -78,6 +80,24 @@ namespace Elsa.Persistence.EFCore
             using var scope = ServiceProvider.CreateScope();
             await ApplyGlobalSavingHandlers(entries, scope, cancellationToken);
             await ApplyEntitySavingHandlers(entries, scope, cancellationToken);
+            await DispatchEntitySavingEvents(entries, scope, cancellationToken);
+        }
+
+        /// <summary>
+        /// Publishes <see cref="OnEntitySaving"/> for each modified <see cref="Entity"/>.
+        /// Coexists with the legacy <see cref="IGlobalEntitySavingHandler"/> and
+        /// <see cref="IEntitySavingHandler{TDbContext,TEntity}"/> dispatch paths — features migrated
+        /// to the §2.6.1 domain-event mechanism register against this event, while features still on
+        /// the legacy interfaces continue to run through the older paths until they're migrated.
+        /// </summary>
+        private async Task DispatchEntitySavingEvents(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
+        {
+            var sender = scope.ServiceProvider.GetService<IDomainEventSender>();
+            if (sender is null)
+                return;
+
+            foreach (var entry in entries.Where(IsModifiedEntity))
+                await sender.Send(new OnEntitySaving(this, entry), cancellationToken);
         }
 
 
@@ -184,8 +204,9 @@ namespace Elsa.Persistence.EFCore
             var additionalConfigurations = _elsaDbContextOptions?.GetModelConfigurations(this);
             additionalConfigurations?.Invoke(builder);
 
-            // Order is important. SQLite does not support RowNumber as non-ID column and it ignores the RowNumber property; hence this must be done before the ignore.         
+            // Order is important. SQLite does not support RowNumber as non-ID column and it ignores the RowNumber property; hence this must be done before the ignore.
             ApplyRowNumberIndex(builder);
+            ApplyTenantIdIndex(builder);
             ApplyEntityModelCreatingHandlers(this, builder);
             ApplyImmutability(builder);
         }
@@ -243,6 +264,18 @@ namespace Elsa.Persistence.EFCore
                     modelBuilder.Entity(entity.ClrType)
                         .HasIndex(nameof(Entity.RowNumber))
                         .IsUnique();
+                }
+            }
+        }
+
+        private static void ApplyTenantIdIndex(ModelBuilder modelBuilder)
+        {
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                if (typeof(TenantEntity).IsAssignableFrom(entity.ClrType))
+                {
+                    modelBuilder.Entity(entity.ClrType)
+                        .HasIndex(nameof(TenantEntity.TenantId));
                 }
             }
         }

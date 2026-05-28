@@ -73,8 +73,8 @@ namespace Elsa.Workflows.Runtime.Core.Abstractions
 
         ///// <summary>
         ///// A flag indicating if this activity should execute synchronously or asynchronously.
-        ///// By default, activities with an <see cref="ActivityKind"/> of <see cref="Action"/>, <see cref="Task"/> or <see cref="Trigger"/>
-        ///// will execute synchronously, while activities of the <see cref="ActivityKind.Job"/> kind will execute asynchronously.
+        ///// By default, activities with an <see cref="ActivityExecutionType"/> of <see cref="Action"/>, <see cref="Task"/> or <see cref="Trigger"/>
+        ///// will execute synchronously, while activities of the <see cref="ActivityExecutionType.Job"/> kind will execute asynchronously.
         ///// </summary>
         //[JsonIgnore]
         //public bool? RunAsynchronously

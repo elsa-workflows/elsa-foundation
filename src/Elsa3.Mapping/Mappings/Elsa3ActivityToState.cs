@@ -5,6 +5,8 @@ using Elsa.Mapping.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Models;
 using System.Text.Json;
+using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
+using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 
 namespace Elsa3.Mapping.Mappings;
 
@@ -105,8 +107,6 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         argument = null!;
 
         if (jsonElement.ValueKind != JsonValueKind.Object)
-            return false;
-        if (!jsonElement.TryGetProperty("typeName", out var typeName))
             return false;
         if (!jsonElement.TryGetProperty("expression", out var expression))
             return false;

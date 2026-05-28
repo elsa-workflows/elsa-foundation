@@ -2,6 +2,137 @@
 Sync Impact Report — Modular Software Design Framework Constitution
 =====================================================================
 
+Version change: 1.0.0 (draft, never ratified) → 2.0.0 (draft)
+  SemVer: MAJOR.
+  Rationale: §2.6 family restructured. §2.6.1 redefined from "Replacement vs
+  Contribution contracts" to "Domain events — the contribution mechanism";
+  old §2.6.1 content moved to new §2.6.2 (Replacement contracts only). Any
+  plan, spec, or external citation referencing §2.6.1's prior content must
+  rewrite to §2.6.2. v1.0.0 was never ratified; the practical impact of the
+  MAJOR bump is therefore confined to draft-state amendments, but the SemVer
+  classification stands per §4.2.
+
+v2.0.0 provenance — consolidated fold of:
+  1. The v1.1.0 amendment plan drafted 2026-05-19 (never folded as v1.1.0).
+  2. Sipke's 2026-05-26 architectural-clarification items 4, 5, 12 (from
+     `2026-05-26_ENTITY_DESIGN_RESPONSE_SIPKE.md`). Items 1, 2, 3, 6, 7, 8, 9,
+     10, 11, 13 are entity-design substance, deferred to Units B–G.
+  3. Matured candidate rules from the entity-design follow-up (Rule A, Rule B
+     → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
+     → Elsa §E2.7).
+
+Added sections (framework layer, relative to v1.0.0):
+  - §2.2 — "Secondary-domain naming sub-rule" (new subsection within §2.2):
+    when a feature only contributes implementations of another domain's
+    contributor/provider interfaces, the model-owning domain wins the prefix
+    (`<App>.<ModelDomain>.<ConsumerDomain>`). Cross-references Elsa §E3.8.
+  - §2.6 — Restructured umbrella: "Cross-feature composition mechanisms".
+    §2.6 head gained the "no tight logic coupling between implementations" rule.
+      - §2.6.1 — NEW (was: Replacement vs Contribution contracts). Now:
+        "Domain events — the contribution mechanism". Includes the Registry +
+        StartUp Task sub-pattern for sync access. Includes the dispatch
+        semantics ("sync = awaited end-to-end", not single-threaded sync).
+        Includes the inheritance-chain scope note (events apply within
+        specialization chains, not only cross-domain). Includes the
+        feature-documentation cross-reference to §2.22.
+      - §2.6.2 — NEW. Replacement contracts only (the prior §2.6.1's
+        "Replacement contracts" content, narrowed; the "Contribution contracts"
+        content is gone — contribution flows through §2.6.1).
+      - §2.6.3 — NEW. "Generic dispatch is not a coupling mechanism."
+        `IMediator` / `IEventBus` / `INotificationSender` for fire-and-forget
+        pub/sub only; specific-handler expectations go through §2.6.1.
+      - §2.6.4 — NEW. "Design-time vs runtime contract split." When a contract
+        has two phase-bound consumers, split into two contracts; orthogonal to
+        the §2.6.1/§2.6.2 mechanism choice. Worked example: Elsa §E3.7.
+      - §2.6.5 — NEW. "Sync contributor pattern — rare exception." Codifies
+        the narrow case where a provider interface resolved via DI as
+        `IEnumerable<TContributor>` is permitted because the contribution flow
+        is structurally incompatible with both §2.6.1 (domain events, async)
+        and its Registry + StartUp Task sub-pattern. Three criteria must all
+        hold: intrinsically sync dispatch site, contributor contributes
+        behaviour (not data), Registry + StartUp Task doesn't apply. Canonical
+        worked example: EF Core's `OnModelCreating` hook + `IEntityModelCreatingHandler`
+        (also recorded in Elsa §E3.9). Reviewers MUST challenge §2.6.5
+        invocations; the exception is rare.
+  - §2.9 — Persistence invariants paragraph (appended): invariants defined
+    independently of the persistence provider; `*.Persistence.Core` is the
+    provider-agnostic surface; provider-specific mechanism lives in
+    `*.Persistence.<Provider>`.
+  - §2.9.1 — NEW (Unit B fold, 2026-05-28). "Domain-level shadow properties
+    — real properties on entities, hidden at the interface boundary."
+    Persistence-only fields (serialised forms, denormalised lookups, backing
+    strings for `[NotMapped]` projections) MUST be real CLR properties on the
+    entity, not provider-side shadow properties. The interface controls
+    cross-domain visibility; provider shadow features bypass cross-cutting
+    attribute scanners (e.g. `[Immutable]`) and scatter the entity's surface
+    area into provider configuration. Provider shadow properties remain valid
+    only for fields that genuinely don't belong on the CLR class.
+  - §2.23.5 — NEW (Unit B fold, 2026-05-28). "Exception boundaries —
+    infrastructure exceptions are wrapped." `JsonException`, `DbUpdateException`,
+    third-party-library exceptions etc. MUST NOT escape a feature boundary
+    unwrapped. Translate at the infrastructure call site into a domain-scoped
+    exception with diagnostic context (row id, entry index, asset name).
+    Reviewers MUST challenge raw infrastructure exceptions crossing feature
+    boundaries.
+  - §2.23.5 (former) → §2.23.6 — renumbered (Integration testing — out of scope).
+  - §2.20 — Rule 3 (appended): feature modules MUST NOT depend on concrete
+    provider implementations unless the feature is itself provider-specific.
+  - §2.22 — NEW: "Feature documentation." Placeholder section. Minimum required
+    content: domain event handlers registered, tasks registered (startup,
+    recurring, scheduled). Expansion (settings, services registered, inheritance
+    relationships) deferred to future amendments.
+  - §2.23 — NEW: "Unit tests." Registration test (§2.23.1) + per-implementation
+    branch-covered tests (§2.23.2) + visibility rule (§2.23.3) + refactoring
+    obligations inherited from §2.21.1 (§2.23.4) + integration testing
+    out-of-scope (§2.23.5). The §2.23.4 "tight logic coupling" diagnostic
+    cross-references the §2.6 head rule.
+
+Renamed sections:
+  - §2.6 head: "Provider Interface Pattern" → "Cross-feature composition mechanisms".
+  - §2.6.1: "Replacement vs Contribution contracts" → "Domain events — the
+    contribution mechanism" (semantic redefinition; old content moved).
+
+Cross-reference updates:
+  - §2.7.1 — "(see §2.6.1)" → "(see §2.6.2)" for contract-kind declaration.
+  - §2.11 — "see §2.6.1 and §3" → "see §2.6.2 and §3" for DI graph validation.
+
+Removed sections: none.
+
+Plan-template gates:
+  - G1–G20 retained from v1.0.0; G5 wording sharpens but its semantic citation
+    (now §2.6.2) is preserved.
+  - G21–G30 ADDED for new v2.0.0 rules. Process-line range updated G1–G20 → G1–G30.
+
+Follow-up TODOs:
+  - TODO(RATIFICATION_DATE) — v2.0.0 is the target ratification version
+    (was v1.0.0; superseded). Awaiting Joey + Sipke + Frans formal ratification.
+  - §2.12 Configuration & Settings Classification — carry-over deferral.
+  - §2.22 Feature documentation expansion — placeholder; future amendments
+    will codify settings, services-registered inventory, inheritance
+    relationships.
+  - Integration-testing rule — deliberately not in §2.23; scoped in
+    `follow-up-items/2026-05-19_testing_infrastructure.md`.
+  - Compile-domain rules from `follow-up-items/2026-05-11_workflow_execution_seam.md`
+    (CR-1, CR-3, CR-3a, CR-4, CR-5) — deferred to Units B–G; their final
+    framing depends on entity-design substrate.
+
+Code-side commitments (tracked in Unit A follow-up
+`follow-up-items/2026-05-27_unitA_constitution_catchup.md`; required before
+ratification):
+  - Migrate `IExpressionDescriptorProvider`, `IPayloadSerializerConverterProvider`,
+    EF Core entity handlers to Registry + StartUp Task + Domain Event pattern.
+  - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).
+  - Update plan-template gate G24 entry (renumber if needed when v1.1.0-era
+    plans surface).
+  - Update entity-design summary doc `2026-05-24_ENTITY_DESIGN_SUMMARY_JOEY.md`
+    per Sipke 2026-05-26 items 8 and 9 ("read-only interfaces" wording;
+    Tier-2-churn argument narrowing).
+
+Structural deviation from speckit template: unchanged from v1.0.0. The numbered
+legal-document structure is preserved.
+
+---  (v1.0.0 SIR retained below for history)
+
 Version change: (initial) → 1.0.0
   Initial v1 population from the empty speckit template. Substance migrated from
   ../elsa-foundation-project-management/epic1-elsa-refactor-constitution/ARCHITECTURE_v2.md
@@ -89,7 +220,7 @@ Follow-up TODOs:
 
 # Modular Software Design Framework Constitution
 
-**Version:** 1.0.0 (draft)
+**Version:** 2.0.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -106,7 +237,7 @@ Follow-up TODOs:
   - [§2.3 The Framework Primitives Library](#23-the-framework-primitives-library)
   - [§2.4 Helper Libraries — domain-owned](#24-helper-libraries--domain-owned)
   - [§2.5 Feature Inheritance](#25-feature-inheritance)
-  - [§2.6 Provider Interface Pattern](#26-provider-interface-pattern) · [§2.6.1 Replacement vs Contribution contracts](#261-replacement-vs-contribution-contracts)
+  - [§2.6 Cross-feature composition mechanisms](#26-cross-feature-composition-mechanisms) · [§2.6.1 Domain events — the contribution mechanism](#261-domain-events--the-contribution-mechanism) · [§2.6.2 Replacement contracts — single-implementation services](#262-replacement-contracts--single-implementation-services) · [§2.6.3 Generic dispatch is not a coupling mechanism](#263-generic-dispatch-is-not-a-coupling-mechanism) · [§2.6.4 Design-time vs runtime contract split](#264-design-time-vs-runtime-contract-split)
   - [§2.7 Adapter / Bridge — as a design default](#27-adapter--bridge--as-a-design-default) · [§2.7.1 Decision rule](#271-decision-rule--inheritance-adapter-or-providercontributor)
   - [§2.8 Extension Methods — Decision Framework](#28-extension-methods--decision-framework)
   - [§2.9 Persistence Base Context — application-level](#29-persistence-base-context--application-level)
@@ -122,6 +253,8 @@ Follow-up TODOs:
   - [§2.19 Feature identity — the feature `name`](#219-feature-identity--the-feature-name)
   - [§2.20 Provider module decomposition](#220-provider-module-decomposition)
   - [§2.21 Test discipline](#221-test-discipline) · [§2.21.1 Golden rule of refactoring](#2211-the-golden-rule-of-refactoring) · [§2.21.2 Greenfield deferral](#2212-greenfield-test-discipline)
+  - [§2.22 Feature documentation](#222-feature-documentation)
+  - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Integration testing — out of scope](#2235-integration-testing--out-of-scope)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
 - [§4 Versioning](#4-versioning)
   - [§4.1 Per-Package Versioning](#41-per-package-versioning)
@@ -258,6 +391,18 @@ The `<Variation>` segment is optional. It is added only when a domain
 <App>.<Domain>[.<SubDomain>...].Testing
 ```
 
+**Secondary-domain naming sub-rule.** When a feature exists only to contribute implementations of another domain's contributor or provider interfaces — and brings no models of its own to the consumable surface — the **model-owning** domain wins the prefix. The naming form is:
+
+```
+<App>.<ModelDomain>.<ConsumerDomain>
+```
+
+The test is: *where do the models come from?* The domain whose `.Core` defines the models being contributed **is** the primary domain; the contributing feature is named under it.
+
+The reverse form (`<App>.<ConsumerDomain>.<ModelDomain>`) is an anti-pattern. It forces the consumer domain to grow one sub-branch per upstream consumer — `<ConsumerDomain>.<ModelDomainA>`, `<ConsumerDomain>.<ModelDomainB>`, … — until the namespace is a junk drawer of unrelated model branches glued together by their shared contributor surface. A domain that grows one branch per consumer is not a domain.
+
+The Elsa-specific worked example lives in §E3.8 of the application constitution.
+
 **Type-level `Feature` suffix is permitted.** The word `Feature` describes an activation unit, so a class implementing `IFeature` may be named e.g. `<Domain>RuntimeFeature`. The package, however, is `<App>.<Domain>.Runtime` — never `<App>.Features.<Domain>.Runtime`.
 
 **Avoid global layer-marker buckets** in package or namespace names: `Features.*`, `Modules.*`, `Implementations.*`, `Providers.*`, `Adapters.*`. They communicate nothing the domain hierarchy doesn't already say.
@@ -302,27 +447,155 @@ When Feature B must extend, decorate, or specialize Feature A:
 
 Compile-time inheritance is the load-bearing mechanism; runtime references between feature classes are not part of this pattern.
 
-### §2.6 Provider Interface Pattern
+### §2.6 Cross-feature composition mechanisms
 
-When inheritance is the wrong tool, define a provider interface in the relevant `<App>.<Domain>.Core` library. Each feature registers its own implementation. The hosting service collects all registrations at construction. Neither feature references the other.
+**The framework forbids tight logic coupling between concrete implementations.** Cross-feature dependencies MUST be expressed through one of the sanctioned mechanisms below; coupling that relies on side effects, observable behaviour, or implementation details of another concrete class is a smell. Only **contract-level coupling** is permitted — a contract (typically a domain event payload, sometimes a replacement-contract interface) is the agreement; the sender treats every handler/implementation uniformly; the system stays consistent and predictable. A test failure that exposes hidden side-effect coupling between implementations (§2.23.4) is the canonical signal that this rule was violated; the resolution is to lift the dependency to a contract, not to reproduce the side effect.
 
-#### §2.6.1 Replacement vs Contribution contracts
+When inheritance is the wrong tool for cross-feature composition (§2.5), three mechanisms govern how features compose:
 
-Different features may register different implementations of the same contract, but **contracts must be designed with explicit composition semantics.** The framework recognises two kinds of contracts and requires authors to declare which kind a contract is.
+1. **Domain events (§2.6.1) — the contribution mechanism.** Domains publish named events; features register handlers. Sync-await dispatch through a framework-managed pipeline. For sync access to contributions, the Registry + StartUp Task sub-pattern applies.
+2. **Replacement contracts (§2.6.2) — single-implementation services.** When exactly one implementation is meaningful per application, the contract is a replacement contract. Multiple registrations are a conflict, not a contribution.
+3. **Never** generic dispatch (§2.6.3) — `IMediator` / `IEventBus` / `INotificationSender` and equivalents are not coupling mechanisms. If a sender expects a specific handler to run, declare a domain event (§2.6.1) instead.
 
-**Replacement contracts.** One implementation is selected for a given application/runtime context. Multiple registrations against a replacement contract are a configuration smell, not an emergent capability. The selection mechanism (e.g., host-level chosen implementation, named option binding) is part of the contract's design.
+§2.6.4 governs the orthogonal question of design-time vs runtime contract split, which applies to whichever mechanism is chosen.
 
-> *Example (synthetic).* An `IServiceBus` contract — at runtime, the host uses one specific service bus implementation, not multiple. A second registration is a conflict the framework must detect (per the rule body above; silent last-write-wins is forbidden).
+§2.6.5 codifies the **rare exception** where a sync contributor pattern (provider interface, DI-resolved enumerable) is permitted because the contribution flow is structurally incompatible with both §2.6.1 (domain events) and its Registry + StartUp Task sub-pattern.
 
-**Contribution / provider contracts.** Many implementations are expected. Resolution is via `IEnumerable<T>`. Implementations accumulate from multiple features by design.
+#### §2.6.1 Domain events — the contribution mechanism
 
-> *Example (synthetic).* `IConverterProvider`, `IActivityProvider`, `IValidator<T>`, `IOptionsContributor`, `IHandler<T>` — in each case multiple registrations are the point.
+The contribution mechanism for cross-feature composition is the **domain event**. A domain that wants to be extensible enumerates a set of named domain event types in its `.Core` library. Those events are the domain's deliberate, documented extension points — the answer to *"what can other features hook into or act on?"*.
 
-**Constitutional requirements.**
+Features extend a domain by **registering a handler for one of its published domain events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
 
-- Every contract author declares the kind: replacement or contribution. The mechanism by which this is declared (marker interface, attribute, naming convention, contract metadata) is application-defined.
-- Replacement-contract conflicts must be either prevented at registration time or detected with a clear diagnostic; silent last-write-wins is discouraged but permissable.
-- Contribution contracts must not be retrofitted into replacement semantics by consuming code (no "first one wins"); the contract's kind dictates resolution.
+**The framework provides the dispatch mechanism.** The application supplies a domain-event sender and a pipeline with shared middleware (logging, exception handling, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
+
+**Dispatch semantics — await all handlers, never fire-and-forget.**
+
+- Handlers are async methods (return `ValueTask`).
+- The sender **awaits the completion of every handler** before continuing. *"Sync"* in this context means **awaited end-to-end** — not single-threaded sync in the C# language sense. Handlers run as async code; the sender's caller cannot proceed until the full handler set has finished.
+- There is **no parallel mode**, **no background mode**, **no fire-and-forget mode**. If a use case needs asynchrony or fire-and-forget delivery, that is a different concept (external-system notifications — see §2.6.3) and not in scope for the domain event mechanism.
+
+**Boundaries and expectations.**
+
+- **Intent.** Internal technical communication between features within the application.
+- **Scope.** Cross-feature contribution **and** intra-domain specialization. Domain events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
+- **Visibility.** Exceptions from handlers surface through the pipeline's exception middleware; they are not swallowed. Diagnostics attach uniformly via the same middleware surface.
+- **Completeness.** Every registered handler is dispatched. The sender does not skip handlers, does not return early, does not fire-and-forget some subset. Whether the *effects* of handlers are partial under failure is a domain concern, not the dispatcher's.
+
+**Sub-pattern — Registry initialization via StartUp Task (for sync access).**
+
+When a registry-style or index-style consumer needs access to contributions from sync code — e.g. a `JsonConverter` callback in a serializer, or any constructor that builds an index — the contribution is still gathered through a domain event. The async population happens once at startup; sync access happens afterwards. The pattern:
+
+1. The domain defines a **Registry** with a `Register<T>(item)` method (and accessor methods).
+2. The domain publishes an `On<RegistryName>Initializing` domain event whose payload is `List<T>` (or similar collection).
+3. The feature implementing the domain registers a **StartUp task** that dispatches the event and flushes the contributions into the registry:
+
+   ```
+   var items = new List<T>();
+   await domainEventSender.Publish(new On<RegistryName>Initializing(items));
+   registry.RegisterAll(items);
+   ```
+
+4. Other features extend the domain by registering handlers for the `On<RegistryName>Initializing` event and contributing items to the carried list.
+5. After startup, sync code accesses the populated registry directly — no async dispatch at the access site.
+
+The result: **all cross-feature contribution flows through the same domain-event pipeline**, including cases where the access pattern is sync. There is no separate "sync fallback" mechanism.
+
+**Domain-design consequence.** Enumerating a domain's domain events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named domain events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, notifications nobody can find handlers for) fails this rule.
+
+**Feature documentation requirement.** Every feature's documentation MUST contain a discoverable inventory of:
+
+- Which **domain event handlers** it registers.
+- Which **tasks** it registers (e.g. startup, recurring, scheduled).
+
+The full shape of the feature-documentation contract is governed by §2.22 (Feature documentation).
+
+The Elsa-specific worked example of the Registry + StartUp Task sub-pattern lives in §E3.3 of the application constitution.
+
+#### §2.6.2 Replacement contracts — single-implementation services
+
+Some contracts in a `.Core` library are **replacement contracts**: one implementation is selected per application/runtime context. They are *not* contribution contracts (§2.6.1) — they govern services where exactly one implementation is meaningful at a time.
+
+> *Example (synthetic).* An `IServiceBus` contract — the host uses one specific service bus implementation, not multiple. A second registration is a conflict the framework must detect.
+
+> *Example (synthetic).* A distributed-lock contract — the application chooses one lock implementation (file-system, Redis, …). Multiple registrations would be ambiguous; selection is part of the application's configuration.
+
+**Constitutional requirements** for replacement contracts:
+
+- The contract's kind (replacement) MUST be declared on the contract itself — by marker interface, attribute, naming convention, or contract metadata. The mechanism is application-defined; the obligation is not.
+- Replacement-contract conflicts (two implementations registered against the same replacement contract) MUST be either prevented at registration time or detected with a clear diagnostic at startup. Silent last-write-wins is forbidden.
+- Contribution-style consumers (`IEnumerable<T>` resolution, collection of behaviours) MUST NOT use a replacement-contract interface; they go through domain events per §2.6.1.
+
+#### §2.6.3 Generic dispatch is not a coupling mechanism
+
+Generic-dispatch surfaces — `IMediator`, `IEventBus`, `INotificationSender`, and equivalents — are appropriate **only for true fire-and-forget pub/sub**: an event is announced, listeners may or may not exist, the sender does not depend on any particular listener running to fulfil its own contract.
+
+The moment a sender **expects a specific handler to run** — because that handler updates state the sender depends on, validates a precondition, mutates a graph, or otherwise completes the sender's logical operation — the surface is **coupling, not pub/sub**. The dependency is real; only its visibility has been hidden.
+
+**The rule.** If a sender expects a specific handler to run, the contract MUST be a **domain event (§2.6.1)** instead. Domain events make the dependency visible:
+
+- The event type lives in the domain's `.Core`, so the dependency surface is discoverable.
+- The dispatch is awaited end-to-end; the sender knows when handlers have completed.
+- Exception and diagnostic infrastructure attach uniformly through the pipeline.
+- A refactor that removes a handler shows up at compile-time (missing handler registration) or at startup diagnostics (handler not registered for an event the domain explicitly publishes), not as silent runtime drift.
+
+**`INotificationSender` is parked.** A future amendment redefines it for *external system notifications* — outbound messages to systems outside the application boundary. That is a different concept and out of scope for this section. Until that amendment lands, `INotificationSender` MUST NOT be used as an in-process coupling mechanism.
+
+**The smell, named.** "Coupling smuggled through generic dispatch." The diagnostic question: *does the sender care that any particular handler ran?* If yes, it is coupling — replace with a domain event.
+
+#### §2.6.4 Design-time vs runtime contract split
+
+When a contract surface has both a **design-time consumer** (intellisense, schema validation, declaration generation, picker enumeration) and a **runtime consumer** (binding, execution, evaluation, dispatch), the contract MUST split into **two contracts**, each bound to its consumer.
+
+**Why.** A unified contract forces every contributor to satisfy both consumers even when it has business with only one — design-time tooling pays runtime cost, or runtime code drags design-time concerns into its dependency surface. Worse, a unified contract opens a sneaky channel for design-time code to reach runtime payloads (and vice versa) — bypassing any lifecycle/phase boundary the application maintains at higher levels.
+
+**Shape.**
+
+- The two contracts MAY share a `.Core` data record describing the *shape* of what is being contributed (function signature, schema, port definition, etc.).
+- The contracts themselves are distinct and live in their respective sub-domain `.Core`s (or in the same `.Core` clearly labelled).
+- Each contract is dispatched independently per §2.6.1 (domain events) — the design-time event is published when the design-time consumer needs the contributions; the runtime event is published when the runtime consumer needs them.
+- A single feature MAY register handlers for both events; it MAY register for only one. Neither is presumed.
+
+**Generalisation.** Many applications maintain a boundary between authoring/design-time concerns and execution/runtime concerns at the sub-domain level. This rule applies the same boundary at the contract level: a contract bound to a design-time consumer MUST NOT carry concerns of a runtime consumer, and vice versa. The application's derived constitution names that boundary concretely; the framework rule applies it at the contract level wherever such a boundary exists.
+
+The application-specific worked example lives in §E3.7 of the application constitution.
+
+#### §2.6.5 Sync contributor pattern — rare exception
+
+§2.6.1's domain-event mechanism (and its Registry + StartUp Task sub-pattern for sync access) is the **default** for cross-feature contribution. A small class of contribution flows fits neither mechanism cleanly. For these — and **only** these — a **sync contributor interface** (a provider interface resolved via DI as `IEnumerable<TContributor>` at the call site) is permitted.
+
+**The criteria — ALL must hold** for the exception to apply:
+
+1. **The contribution is intrinsically sync at its dispatch site.** The host pipeline that invokes contributors does not run async code at that boundary (e.g. `DbContext.OnModelCreating`, a `JsonConverter.Read`/`Write` callback that doesn't have an async path, a synchronous lifecycle hook from an external framework). Forcing async dispatch would require sync-over-async (`.GetAwaiter().GetResult()`) — a smell with no architectural upside.
+2. **What is contributed is behaviour, not data.** Domain events excel when the contribution is "items added to a carried collection". The sync contributor case is when each contributor runs *its own logic at the lifecycle moment*, mutating a shared external target. There is no payload list to populate at startup.
+3. **The Registry + StartUp Task sub-pattern does not apply.** Either (a) the contribution data is not knowable at startup (it depends on the lifecycle moment's runtime context), or (b) populating the registry at startup would still require a callback to be invoked at the lifecycle moment — adding indirection without structural benefit.
+
+**Mechanism for the exception.**
+
+- The contributor declares a **sync provider interface** in the domain's `.Core` library (e.g. `interface IEntityModelCreatingHandler { void Handle(ModelBuilder builder, IMutableEntityType entityType); }`).
+- Features implement the interface; instances are registered via DI as the interface type.
+- The dispatcher resolves `IEnumerable<TContributor>` at the call site and invokes each sync. The dispatcher MUST invoke **all** contributors (no early exit) — same completeness guarantee as §2.6.1.
+- Exceptions from a contributor surface up; the dispatcher does not swallow them.
+- The contributor interface MUST be declared with a stable contract; renames count as MAJOR per §4.2 (same as a `.Core` rename).
+
+**Hard rule on use.** The §2.6.5 exception is **rare**. Every use case MUST be analysed at design time:
+
+- Can the §2.6.1 domain-event mechanism apply? Try first.
+- Can the Registry + StartUp Task sub-pattern apply? Try second.
+- Is the contribution genuinely sync, behaviour-shaped, and runtime-context-dependent? Only then does §2.6.5 apply.
+
+**A use case that uses §2.6.5 without satisfying all three criteria is a §2.6.1 violation disguised.** Reviewers MUST challenge §2.6.5 invocations.
+
+**Worked example (constitutional record).** The first identified case is EF Core's `OnModelCreating` lifecycle hook in `Elsa.Persistence.EFCore`:
+
+- `IEntityModelCreatingHandler` is registered via DI; `ElsaDbContextBase.ApplyEntityModelCreatingHandlers` resolves `IEnumerable<IEntityModelCreatingHandler>` and invokes each sync during `OnModelCreating`.
+- Criterion 1: `OnModelCreating` is intrinsically sync — EF Core's own contract. ✓
+- Criterion 2: contributors customise the shared `ModelBuilder`; no payload list. ✓
+- Criterion 3: the contribution's data (per-entity-type model configuration) is per-lifecycle-moment, not pre-populatable at startup. The model builder doesn't exist yet at app startup. ✓
+
+This case is the canonical §2.6.5 worked example. Future §2.6.5 invocations should compare their structural shape to this case.
+
+The application-specific worked example also lives in §E3.9 of the application constitution.
 
 ### §2.7 Adapter / Bridge — as a design default
 
@@ -340,7 +613,7 @@ The adapter pattern is a **design default** whenever a feature contains function
 
 3. **Independent additive contribution?** Use a **provider / handler / contributor contract** when independent features need to contribute behaviour, metadata, options, converters, handlers, or other additive pieces to a service without referencing each other.
 
-**Always declare the contract's kind** (see §2.6.1): replacement contracts select one; contribution contracts collect many. The decision rule above is about *coupling pattern*; the replacement-vs-contribution distinction is about *contract semantics*. Both must be made explicit at design time.
+**Always declare the contract's kind** (see §2.6.2): replacement contracts select one and live in §2.6.2; contribution flows go through domain events per §2.6.1, not through provider/contributor interfaces. The decision rule above is about *coupling pattern*; the contract-semantics distinction is about *who-resolves-what*. Both must be made explicit at design time.
 
 ### §2.8 Extension Methods — Decision Framework
 
@@ -367,6 +640,32 @@ EF Core base classes, interceptors, entity mappings, and save/load hooks belong 
 
 How a particular application chooses to structure its persistence layer — including whether it offers a base context with save/load handler hooks — is an application-level design decision. It is documented in that application's derived constitution.
 
+**Persistence invariants are defined independently of the persistence provider.** Where an application's domain model imposes invariants on persisted data (immutability of certain entity properties, audit timestamps, tenant scoping, append-only semantics, etc.), those invariants belong in the model description, not in any specific provider's enforcement mechanism. An EF-Core-backed application may enforce them through `SaveChangesAsync` interceptors and property-save-behaviour configuration; a document-database-backed application may enforce them through write-policies and schema validators; the **same invariants** apply across providers.
+
+Correspondingly, `*.Persistence.Core` (the provider-agnostic persistence sub-domain `.Core`) carries store contracts, persistence-facing models, and the invariants those models must hold — never provider-specific mechanism. Provider-specific implementations live in `*.Persistence.<Provider>` (e.g. `*.Persistence.EFCore`, `*.Persistence.MongoDB`) and are responsible for honouring the invariants through whatever mechanism fits the provider.
+
+#### §2.9.1 Domain-level "shadow" properties — real properties on entities, hidden at the interface boundary
+
+When an entity needs a persistence-only field (e.g. the serialised form of a rich object that the entity also exposes in deserialised form, a denormalised lookup column, a backing string for a `[NotMapped]` projection), declare it as a **real property on the entity class** and **omit it from the read interface**. Do NOT use the provider's "shadow property" feature (e.g. EF Core's `Property<T>("...")` on the builder) for this purpose.
+
+**The distinction.** Provider-side terms like EF Core's "shadow property" mean *"a property the provider tracks but is not on the CLR class"*. Our usage is different: the property IS on the CLR class — it is just **not on the read interface** that other domains depend on. From a *domain* point of view it is a shadow (invisible to other domains); from a *provider* point of view it is a perfectly ordinary mapped property.
+
+**Why.**
+
+1. The central invariant scanner (e.g. an `[Immutable]` attribute scanner that walks the model and applies `PropertySaveBehavior.Throw`) only sees real CLR properties. Provider shadow properties bypass it.
+2. Cross-cutting attributes (immutability, audit, tenant scoping) must compose at one place — the entity class. Provider shadow properties scatter that surface area into the provider configuration.
+3. Test code and tooling read the entity directly; provider shadow accessors are awkward (string-keyed `Entry().Property("Name").CurrentValue`).
+4. Other providers (a document store, a different ORM) don't have a "shadow property" concept; the entity-as-CLR-class model is provider-portable.
+
+**Mechanism.**
+
+- The entity declares the property normally: `public string? SomePayload { get; set; }`.
+- The cross-cutting attribute scanner picks it up (`[Immutable]` etc.).
+- The read interface (`I<Entity>` in `*.Design.Core`) does NOT include the property — it stays a persistence-internal field.
+- The provider configuration is minimal (max-length, column type, etc.). No `Property<T>("...")` shadow registration.
+
+**Anti-pattern.** Declaring a provider shadow property purely to keep the field off the CLR class is a smell. If the field is part of the entity's persisted state, it belongs on the entity. The interface controls visibility; the provider's shadow mechanism is for cases where the field genuinely does not belong on the CLR class (provider-internal bookkeeping, e.g. a generated discriminator the application code never touches).
+
 ### §2.10 CQS at the Persistence Boundary
 
 Persistence contracts are split into commands and queries at the contract boundary:
@@ -382,7 +681,7 @@ The framework ships with two modes 'Fail-Fast' and 'Auto-Resolve'. The `DependsO
 
 Why supporting both modes is important:
 - Static dependency declarations diverge from runtime reality over time. The DI container is the runtime source of truth.
-- Validation tooling around the DI graph (see §2.6.1 and §3) can give the same diagnostic value without a separate declaration surface.
+- Validation tooling around the DI graph (see §2.6.2 and §3) can give the same diagnostic value without a separate declaration surface.
 - A missing dependency at startup is recoverable: add the feature, restart. A stale `DependsOn` declaration is a maintenance burden.
 
 ### §2.12 Configuration & Settings Classification — [DEFERRED]
@@ -533,6 +832,14 @@ When a domain has one or more **provider-specific** implementations (e.g. distri
 
 **Rule 2 — Replace meta NuGet packages with the specific provider sub-package.** When adding or auditing a package reference, check whether it is a meta-package fronting multiple sub-packages. If yes and only one sub-package is used, depend on the sub-package directly. This aligns with the dependency envelope principle: each module's dependency envelope should reflect what the module actually uses, not what its upstream conveniently bundles. A side effect is that the vulnerability surface shrinks proportionally to the trimmed dependency tree.
 
+**Rule 3 — Feature modules and provider implementations.** Feature modules MUST NOT depend on concrete provider implementations unless the feature is itself provider-specific.
+
+A **provider-specific feature** is one whose package name carries a provider suffix (`<App>.<Domain>.<Provider>` — e.g. distributed-locking-over-FileSystem, persistence-over-EFCore-Sqlite). Its purpose is the provider; it MAY depend on the provider's implementation layer.
+
+All other feature modules — generic APIs, CRUD features, source-contract packages, provisioner contracts, synchronisation features — depend on the domain's contract layer (`.Core`) or, where persistence participation is part of the feature's role, on the provider-agnostic persistence surface (`.Persistence.Core`). They **never** depend on a concrete provider implementation; doing so leaks the provider choice into every consumer of that feature.
+
+The diagnostic question: *would swapping the provider implementation require changes to this feature module?* If yes and the feature is not provider-suffixed, the dependency is misplaced.
+
 ### §2.21 Test discipline
 
 The framework does not mandate a specific test-creation cadence (TDD, test-after, or none) for greenfield application code. That choice is application-level (§2.21.2). The framework does, however, prescribe a hard rule for test continuity during refactoring (§2.21.1).
@@ -552,6 +859,100 @@ The rule prevents a class of silent refactor regressions: a test broken by reorg
 #### §2.21.2 Greenfield test discipline
 
 For new application code (greenfield), the choice between TDD, test-after, or no automated tests is an application-level decision. The application's derived constitution declares its discipline; the framework neither prescribes nor forbids any specific cadence.
+
+### §2.22 Feature documentation
+
+Every feature MUST be accompanied by documentation that lets operators, integrators, and other feature authors understand its behaviour without reading the implementation.
+
+**Minimum required content:**
+
+- The **domain event handlers** the feature registers — and which events they handle (§2.6.1).
+- The **tasks** the feature registers — startup tasks, recurring tasks, scheduled tasks, and their cadence.
+
+**Anticipated additional content** *(deferred to future amendments; this list is illustrative, not exhaustive)*:
+
+- Configuration / feature settings the feature consumes and exposes.
+- Services the feature registers (replacement contracts per §2.6.2, contribution handlers per §2.6.1, infrastructure singletons).
+- Inheritance relationships (which feature it extends per §2.5).
+- Dependencies on other features.
+
+The form of the documentation (README, manifest, generated reference, sidecar JSON) is application-defined. The obligation is the content, not the medium.
+
+### §2.23 Unit tests
+
+The framework prescribes a unit-test discipline that complements §2.21 (test discipline) and §2.21.1 (golden rule of refactoring). The unit-test layer carries two obligations; both are required.
+
+#### §2.23.1 Feature-class registration test
+
+Every feature class MUST have a unit test that:
+
+- Constructs the feature.
+- Invokes its registration entry point (`Configure`, or the equivalent on the activation type) against an `IServiceCollection`.
+- Builds the resulting `IServiceProvider`.
+- Asserts that every service the feature is expected to register **resolves**.
+
+The test proves the wiring. It does not prove behaviour.
+
+#### §2.23.2 Per-implementation unit test with stubbed dependencies
+
+Every logic-bearing implementation class within a feature MUST have its own unit tests:
+
+- Construct the class with stubbed/mocked dependencies.
+- Exercise its public surface (and relevant internal paths if needed).
+- **Every code branch MUST be covered.** Conditional paths, exception paths, default paths — each gets a test. Coverage is judged by branch, not by line.
+
+The test proves behaviour. It does not prove wiring.
+
+**The two obligations are independent.** Passing §2.23.1 (registration) does NOT excuse §2.23.2 (branch-covered implementation tests), and vice versa. Skipping either is forbidden.
+
+#### §2.23.3 Visibility rule
+
+To make §2.23.1 and §2.23.2 cleanly testable without reflection or `[InternalsVisibleTo]`:
+
+- **Feature classes** are `public` and NOT sealed. Feature inheritance (§2.5) requires inheritability; a sealed feature class would amputate the only sanctioned cross-feature coupling pattern.
+- **Logic-bearing implementations** are `public sealed`. They are not part of the §2.5 inheritance pattern; tests construct them directly. Sealing prevents accidental specialization.
+
+This replaces the historical `internal sealed` convention, which forced tests to use reflection or `[InternalsVisibleTo]` — both code smells.
+
+#### §2.23.4 Refactoring obligations inherited from §2.21.1
+
+The §2.21.1 golden rule applies: existing tests on refactored implementations MUST continue to succeed **without changes to the test cases themselves**. Test setup, fixtures, wiring, transitive dependencies, and test-project location MAY change; **the subject under test and the objective of the test MUST be preserved**.
+
+**When a test fails because of a refactor, intervention is collaborative.** The diagnosis is not a solo developer decision. Flag the failure, discuss with the architects, decide on the resolution path together, and record the decision durably (PR description, plan Complexity Tracking, follow-up file, or design notes — wherever the next reader will find it).
+
+Diagnostic questions:
+
+- **Has the subject moved?** Repair the test's wiring; no behaviour change.
+- **Has the test's objective become invalid because the refactor resolved a bug the test was silently relying on?** Architects record the bug, the resolution, and any consumers that may have depended on the buggy behaviour. Test removal still requires architect approval per §2.21.1.
+- **Has the refactor broken behaviour the test correctly asserted?** The refactor is wrong; fix the implementation, not the test.
+- **Has the refactor exposed hidden coupling — a side effect of a concrete dependency that another implementation silently relied on?** This is a smell, not a feature to preserve. **Tight logic coupling between implementations is forbidden** (§2.6); only contract-level coupling is permitted (e.g. a domain event whose payload shape is the agreement; the sender treats every handler uniformly; the system stays consistent and predictable). The resolution is to **lift the dependency to a contract** — typically a domain event (§2.6.1) — or to remove the dependency entirely. The stub does NOT reproduce the side effect to make the test pass; that re-buries the coupling rather than resolving it. Flag, discuss with architects, decide, document.
+
+New implementation classes that emerge from a refactor pick up new §2.23.2 obligations; new feature classes pick up §2.23.1 obligations.
+
+#### §2.23.5 Exception boundaries — infrastructure exceptions are wrapped
+
+Infrastructure exceptions (`JsonException`, `DbUpdateException`, `IOException`, `SqlException`, third-party-library exceptions, etc.) MUST NOT escape a feature boundary unwrapped. When a feature catches such an exception at the point where it interacts with infrastructure, it MUST translate it into a **domain-scoped exception** that carries the context needed to diagnose the failure.
+
+**Why.** A consumer of a feature is entitled to know *which exceptions can come out* and *what they mean in the feature's vocabulary*. `JsonException` thrown from a JSON-file reconciliation source tells the caller "something went wrong in JSON" — useful to a JSON library author, useless to the reconciliation pipeline. `InvalidJsonCatalogEntryException(entryIndex=37, activityTypeKey='Acme.Foo', message='no descriptor type registered for kind "Unknown"')` tells the caller exactly which row is bad and why. The first leaks an implementation detail; the second is a domain contract.
+
+**The rule.**
+
+- Every public method that can fail due to infrastructure documents (via XML doc or exception list) the **domain exceptions** it throws. Infrastructure exceptions are not part of the public contract.
+- At every infrastructure boundary inside the feature, wrap with `try/catch` and rethrow as a domain exception. Preserve the original as `InnerException` so the cause stays diagnosable.
+- Domain exception types live in the feature's `.Core` (or a sibling) so consumers can `catch` them by type.
+- The wrapping message is **specific** — it carries identifiers (row id, entry index, asset name) sufficient to localise the problem in operational logs.
+
+**What this rule is NOT.** It is NOT a license to swallow infrastructure exceptions silently. The wrap-and-rethrow is exposed to the caller; the caller decides whether to log, retry, abort, or surface to a user.
+
+**A use case that re-throws a raw `JsonException` past a feature boundary is a violation.** Reviewers MUST challenge such code paths.
+
+#### §2.23.6 Integration testing — out of scope
+
+Integration testing — composing multiple features, exercising real external systems, configuring deployed bundles of features (typically spun up in test containers and exercised end-to-end) — is **deliberately not prescribed by this constitution**.
+
+The category structure (cross-feature contract composition, external-system integration, deployment use-case verification) and the infrastructure (test containers, real-DB harnesses, deployed-bundle scaffolding) are open questions, scoped in a follow-up for a dedicated future architects' meeting.
+
+The unit-test discipline above does NOT depend on integration testing existing. A feature is testable through §2.23.1 and §2.23.2 alone.
 
 ---
 
@@ -629,4 +1030,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 1.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-11
+**Version:** 2.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-27

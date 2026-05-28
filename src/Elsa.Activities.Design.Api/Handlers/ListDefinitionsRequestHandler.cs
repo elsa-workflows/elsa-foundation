@@ -1,31 +1,29 @@
-﻿using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
-using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Filters;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class ListDefinitionsRequestHandler(IQueries<ActivityDefinition> queries, IObjectMapper mapper)
+/// <summary>
+/// Picker handler. Delegates the catalog query — including the reconciliation-state
+/// visibility filter — to <see cref="IActivityDefinitionLookup"/>. Per spec FR-007 and SC-009,
+/// the catalog store is the single source of truth; no live-provider enumeration path remains.
+/// </summary>
+public sealed class ListDefinitionsRequestHandler(IActivityDefinitionLookup lookup, IObjectMapper mapper)
 
     : IRequestHandler<ListDefinitions, IEnumerable<ActivityDefinitionView>>
 {
     public async Task<IEnumerable<ActivityDefinitionView>> Handle(ListDefinitions request, CancellationToken cancellationToken)
     {
-        var filter = new ActivityDefinitionFilter
-        {
-            Category = request.Category,
-            Description = request.Description,
-            DisplayName = request.DisplayName,
-            Id = request.Id,
-            IsBrowsable = request.IsBrowsable,
-            SearchTerm = request.SearchTerm,
-            TenantAgnostic = request.TenantAgnostic
-        };
-
-        var activities = (await queries.Query(filter, cancellationToken)).ToArray();
+        var activities = (await lookup.ListDefinitions(
+            id: request.Id,
+            category: request.Category,
+            searchTerm: request.SearchTerm,
+            displayName: request.DisplayName,
+            description: request.Description,
+            cancellationToken: cancellationToken)).ToArray();
 
         var result = new List<ActivityDefinitionView>(activities.Length);
         var enumerable = mapper.Map<ActivityDefinitionView>(activities, cancellationToken);

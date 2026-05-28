@@ -15,7 +15,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .HasForeignKey<WorkflowDefinition>(def => def.DraftId);
 
             builder.HasIndex(x => x.Name).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.Name)}");
-            builder.HasIndex(x => x.TenantId).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.TenantId)}");
 
             ConfigureMetaDataValueObject(builder);
         }

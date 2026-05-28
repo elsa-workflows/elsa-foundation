@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -12,6 +12,7 @@ namespace Elsa.Activities.Design.Api.Handlers;
 
 public sealed class AddDefinitionCommandHandler(
     IIdentityGenerator identityGenerator,
+    ISystemClock clock,
     IObjectMapper mapper,
     IQueries<ActivityDefinitionVersion> versionQueries,
     IAddActivityDefinitionCommand addCommand,
@@ -23,10 +24,12 @@ public sealed class AddDefinitionCommandHandler(
 
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
-        var exists = await definitionQueries.Any(d => d.UniqueName == command.UniqueName, cancellationToken);
+        var exists = await definitionQueries.Any(
+            d => d.SourceKind == command.SourceKind && d.SourceId == command.SourceId && d.ActivityTypeKey == command.ActivityTypeKey,
+            cancellationToken);
         if (exists)
         {
-            throw new ArgumentException($"Activity definition with UniqueName '{command.UniqueName}' already exists");
+            throw new ArgumentException($"Activity definition with identity (SourceKind='{command.SourceKind}', SourceId='{command.SourceId}', ActivityTypeKey='{command.ActivityTypeKey}') already exists");
         }
 
         var definition = CreateDefinition(command);
@@ -43,7 +46,11 @@ public sealed class AddDefinitionCommandHandler(
         return new()
         {
             Id = identityGenerator.Generate(),
-            UniqueName = def.UniqueName,
+            ActivityTypeKey = def.ActivityTypeKey,
+            SourceKind = def.SourceKind,
+            SourceId = def.SourceId,
+            ProvisionedAt = clock.UtcNow,
+            ProvisionedBy = Environment.MachineName,
             Category = def.Category,
             Description = def.Description,
             DisplayName = def.DisplayName
@@ -52,10 +59,12 @@ public sealed class AddDefinitionCommandHandler(
 
     private ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
     {
-        return new(initialVersion, definition.Id, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(initialVersion, definition.Id, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
-            TypeInfo = command.TypeInfo,
+            ActivityTypeKey = definition.ActivityTypeKey,
+            ImplementationKind = command.ImplementationDescriptor.Kind,
+            ImplementationDescriptor = command.ImplementationDescriptor,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
             Ports = command.Ports ?? []

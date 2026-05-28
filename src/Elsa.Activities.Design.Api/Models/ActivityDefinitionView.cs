@@ -1,10 +1,13 @@
-﻿namespace Elsa.Activities.Design.Api.Models;
+namespace Elsa.Activities.Design.Api.Models;
 
 public sealed record ActivityDefinitionView(
     string Id,
-    string UniqueName,
+    string ActivityTypeKey,
+    string SourceKind,
+    string SourceId,
+    DateTimeOffset ProvisionedAt,
+    string? ProvisionedBy,
     string Category,
     string? DisplayName,
-    string? Description,
-    bool IsBrowsable
+    string? Description
 );

@@ -15,8 +15,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
             builder
                 .Property(x => x.StateSource)
                 .HasMaxLength(-1);
-
-            builder.HasIndex(x => x.TenantId).HasDatabaseName($"IX_{nameof(WorkflowDefinitionDraft)}_{nameof(WorkflowDefinitionDraft.TenantId)}");
         }
     }
 }
