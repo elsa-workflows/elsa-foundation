@@ -33,6 +33,47 @@ Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification):
     project root. Worked example: Unit C creates `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md`
     covering FR-018 + FR-018a events.
 
+Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):
+  - §2.6.1 EXTENDED — "Visibility" bullet REWRITTEN as
+    "Visibility — subscriber MUST NEVER break publisher." Articulates Joey's
+    2026-05-28 rule (clarify Q1, fold session 2): cross-domain *failure
+    coupling* is forbidden; a handler exception MUST NOT propagate to the
+    publisher's caller and MUST NOT prevent the remaining handlers from
+    running. Adds the **default + escape hatch** framing: framework ships an
+    exception-shielding middleware as the default; an engineer composing a
+    custom pipeline MAY swap or remove it for aggregate-throw / fail-fast /
+    retry / dead-letter semantics. Adds explicit "Handler independence" and
+    "Diagnostics" bullets articulating the corollary rules.
+  - Code cascade (this branch, Elsa.Mediator domain-event pipeline):
+      - NEW: `DomainEventHandlerIteratorMiddleware` — resolves handlers,
+        iterates them, sets `IDomainEventContext.CurrentHandler` per
+        invocation, calls `next(context)` per handler. Enforces §2.6.1
+        completeness rule (every registered handler dispatched).
+      - NEW: `DomainEventExceptionShieldingMiddleware` — wraps each
+        per-handler invocation in `try/catch`, logs with handler+event
+        context, swallows. Default mechanism for the new rule.
+      - REFACTORED: `DomainEventHandlerInvokerMiddleware` — no longer
+        iterates; invokes only `context.CurrentHandler`. Iteration lifted
+        upstream so the shielding middleware can sit between iterator and
+        invoker per-handler-invocation-wise.
+      - EXTENDED: `IDomainEventContext` gains `CurrentHandler` (mutable
+        per-handler state, analogous to `HttpContext.User` in
+        ASP.NET Core). `DomainEventContext` record updated.
+      - REPLACED: `DomainEventPipeline.CreateDefaultPipeline()` now
+        composes `Iterator → ExceptionShielding → Invoker`.
+  - Cross-mediator note: the same architectural shape (Iterator + per-call
+    Shielding + Invoker) generalises to any multi-handler dispatch — i.e.
+    request handlers, command handlers, notification handlers, etc. Other
+    mediator variants in this codebase (commands, requests) currently have
+    single-handler invokers; if a multi-handler variant lands, it inherits
+    this rule and the same default mechanism. Code application to those
+    variants is out of Unit C's scope; constitutional codification covers
+    all of them via this §2.6.1 sub-rule.
+  - Test obligation per §2.23.2 (per-implementation branch coverage):
+    the three new middleware classes (Iterator, Shielding, Invoker)
+    require branch-covered unit tests. Tracked as a follow-on item in the
+    Unit C follow-up; not blocking ratification.
+
 Unit C Phase-3 amendment (2026-05-28, draft pending 2026-06-01 ratification):
   - §2.6.1 EXTENDED — NEW sub-pattern "Domain events expose intent-revealing
     methods, not raw collections." Codifies Joey's 2026-05-28 articulation:
@@ -511,8 +552,10 @@ Features extend a domain by **registering a handler for one of its published dom
 
 - **Intent.** Internal technical communication between features within the application.
 - **Scope.** Cross-feature contribution **and** intra-domain specialization. Domain events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
-- **Visibility.** Exceptions from handlers surface through the pipeline's exception middleware; they are not swallowed. Diagnostics attach uniformly via the same middleware surface.
-- **Completeness.** Every registered handler is dispatched. The sender does not skip handlers, does not return early, does not fire-and-forget some subset. Whether the *effects* of handlers are partial under failure is a domain concern, not the dispatcher's.
+- **Visibility — subscriber MUST NEVER break publisher.** Cross-domain coupling exists at the **contract level** (the event's shape); cross-domain **failure coupling is forbidden**. A handler exception MUST NOT propagate to the publisher's caller, and MUST NOT prevent the dispatcher from invoking the remaining registered handlers. The framework's default pipeline ships an **exception-shielding middleware** that wraps each per-handler invocation in `try/catch`, logs the exception with diagnostic context (handler type, event type, failure detail), and continues. The dispatch always completes; the publisher proceeds as if every handler succeeded; failures are observable only through the middleware's logs / telemetry. An engineer who deliberately wants different semantics (aggregate-throw, fail-fast, retry, dead-letter, etc.) MAY swap or remove the exception-shielding middleware when composing a custom pipeline — the rule is a **default with an escape hatch**, not a closed mandate — but the default is fail-isolated and that default is what every domain event publisher SHOULD assume holds.
+- **Completeness.** Every registered handler is dispatched. The sender does not skip handlers, does not return early, does not fire-and-forget some subset. Whether the *effects* of handlers are partial under failure is a domain concern, not the dispatcher's. Completeness is enforced upstream of the exception-shielding middleware; the shielding ensures one handler's failure does not undermine completeness.
+- **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. The exception-shielding behaviour above is only safe under this rule — a handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
+- **Diagnostics.** Logging, tracing, and diagnostics attach uniformly via the same middleware surface. A failing handler is observable in operational logs with full identifying context; the application's observability stack treats those entries as first-class signals.
 
 **Sub-pattern — Registry initialization via StartUp Task (for sync access).**
 

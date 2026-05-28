@@ -79,6 +79,22 @@ Unit C Phase-3 cascade (2026-05-28, draft pending 2026-06-01 ratification):
     Converters`. Earlier "payload carries `List<JsonConverter>`" wording
     superseded. Cross-references framework §2.6.1's new sub-pattern.
 
+Unit C Phase-7 cascade (2026-05-28, draft pending 2026-06-01 ratification):
+  - §E3.10 NEW worked example — "Three-segment secondary-domain naming with
+    phase split — `Elsa.Http.Activities.<Phase>`." Sibling to §E3.8 (the
+    two-segment `Elsa.Http.JavaScript` walkthrough). Documents the case where
+    a model-owning domain (HTTP, Email, Slack, …) contributes activities to
+    a consumer domain (Activities) that itself has a Design/Runtime phase
+    split. The structure: `Elsa.<Model>.Activities.Design` for design-time
+    contributions (+ co-located activity-specific validators per Unit C
+    session-3 Q2) and `Elsa.<Model>.Activities.Runtime` for runtime
+    activity execution. Section is additive — no existing rule conflicts;
+    framework §2.2 (model-owning domain wins prefix) + §2.20 (no empty
+    umbrella) + §E2.2 (Workflows-Design ↔ Runtime hard rule) already cover
+    the underlying mechanics. Cross-referenced from Unit C Spec 002 FR-034.
+    Status: provisional pending the 2026-06-01 architecture review meeting
+    (agenda Item 6).
+
 Added Elsa sections (relative to v1.0.0):
   - §E2.5 — Reinforced opening: "`ElsaDbContextBase` is shared EF-Core
     infrastructure, not a model/entity-design requirement." Cross-references
@@ -305,6 +321,7 @@ Follow-up TODOs (single index of deferred items, post-§E6-removal):
   - [§E3.7 Design-time vs runtime split — JS declarations vs functions](#e37-design-time-vs-runtime-contract-split--js-function-declarations-vs-functions-framework-264)
   - [§E3.8 `Elsa.Http.JavaScript` naming walkthrough](#e38-elsahttpjavascript--secondary-domain-naming-walkthrough-framework-22)
   - [§E3.9 Sync contributor pattern — `IEntityModelCreatingHandler`](#e39-sync-contributor-pattern--ientitymodelcreatinghandler-framework-265)
+  - [§E3.10 Three-segment secondary-domain naming with phase split — `Elsa.Http.Activities.<Phase>`](#e310-three-segment-secondary-domain-naming-with-phase-split--elsahttpactivitiesphase-framework-22--e22)
 - [§E4 Elsa configuration — \[DEFERRED\]](#e4-elsa-configuration--deferred)
 - [§E5 Elsa packaging snapshot](#e5-elsa-packaging-snapshot)
 - [Governance](#governance)
@@ -759,6 +776,70 @@ Worked example for framework §2.6.5's rare-exception sync contributor pattern. 
 **What this case is NOT.** It is NOT a license to use sync contributor interfaces for ANY contribution flow. The framework's §2.6.5 head explicitly demands that reviewers challenge every §2.6.5 invocation: "could the contribution be reshaped to fit §2.6.1 or Registry + StartUp Task?" If yes, §2.6.5 does not apply.
 
 **Cross-references.** Cross-references to this example land in plan-stage Constitution Check gates (Elsa-side plan-template G21 entry) so future plans aren't surprised by the legacy interface remaining in the codebase. The activity-catalog Unit B fold (Spec 001) is the first concrete plan that codifies this exemption.
+
+### §E3.10 Three-segment secondary-domain naming with phase split — `Elsa.Http.Activities.<Phase>` (framework §2.2 + §E2.2)
+
+*New worked example (Unit C clarify session 3, 2026-05-28; pending 2026-06-01 architecture review).*
+
+§E3.8 walked through two-segment secondary-domain naming (`Elsa.Http.JavaScript`) — a model-owning domain (HTTP) contributing to a consumer domain (JavaScript). This worked example extends that pattern to a **three-segment** case where the consumer domain itself has a phase split (Design ↔ Runtime), so the contributing modules need to express *both* the consumer domain *and* the phase.
+
+The canonical case is HTTP contributing activities. Activities have both a design-time variant (descriptors, picker entries, input/output schema, validators) and a runtime variant (the executable handler that runs HTTP). Per the §E2.2 hard rule, Design and Runtime cannot live in the same implementation module without breaking the dependency direction the rule enforces.
+
+#### The structure
+
+```
+Elsa.Activities.Design.Core           ← contracts for design-time activities (IActivityDefinition, InputDefinition, etc.)
+Elsa.Activities.Runtime.Core          ← contracts for runtime activity execution
+
+Elsa.Http.Activities.Design           ← HTTP-specific design-time activities + their validators
+  references: Elsa.Activities.Design.Core
+            + Elsa.Workflows.Design.Validations.Core   (for OnDraftValidating subscription)
+            + Elsa.Http                                (HTTP models)
+
+Elsa.Http.Activities.Runtime          ← HTTP-specific runtime activity execution
+  references: Elsa.Activities.Runtime.Core
+            + Elsa.Http                                (HTTP models)
+```
+
+The same pattern generalises to every model-owning domain contributing activities: `Elsa.Email.Activities.Design` + `Elsa.Email.Activities.Runtime`, `Elsa.Slack.Activities.Design` + `Elsa.Slack.Activities.Runtime`, etc.
+
+#### Why this shape
+
+**Model-owning domain wins the prefix (framework §2.2).** HTTP brings HttpRequest, headers, route values, body accessors — its own models, exposed through an activity surface. Activities is the consumer domain — it consumes contributed activity-shaped things. Per §2.2's secondary-domain rule, HTTP wins the prefix.
+
+**The reverse form is a junk drawer (framework §2.2's named anti-pattern).** Naming `Elsa.Activities.Design.Http` would force `Elsa.Activities.Design` to grow one sub-branch per upstream model-owner: `.Http`, `.Email`, `.Slack`, `.Database`, `.Files`, … — a namespace of unrelated model branches glued together only by their shared consumer surface. That is exactly the "namespace as a junk drawer" anti-pattern §2.2 calls out.
+
+**Three segments express the consumer-domain + phase pair atomically.** `Elsa.Http.Activities.Design` reads as "HTTP-contributing-design-time-activities" — a coherent purpose. `Elsa.Http.Activities.Runtime` reads as "HTTP-contributing-runtime-activities" — also coherent. The two modules are siblings under the model-owning domain.
+
+**§E2.2 hard rule preserved at the implementation level.** A consumer that wants only HTTP-runtime activities references `Elsa.Http.Activities.Runtime` directly; that package does not reference `Elsa.Http.Activities.Design`. The Design/Runtime dependency direction is enforced by the package boundary, not just by namespace convention.
+
+**§2.20 Rule 1 preserved — no empty `Elsa.Http.Activities` umbrella** unless real shared code emerges between Design and Runtime. When that shared code arrives, an `Elsa.Http.Activities` umbrella (or a `.Core` for the shared shape) can be extracted then per §2.1's impl-to-impl carve-out.
+
+**§2.6.4 satisfied — the design-time contract surface (`OnDraftValidating`) is consumed by the design-time module; the runtime contract surface is consumed by the runtime module.** The two sub-domain `.Core`s never bleed into each other.
+
+#### Where validators land
+
+Activity-specific validators co-locate with their **activity's design-time module**, not in a separate `Elsa.Workflows.Design.Validations.<Domain>` sub-module under Validations. The reason: HTTP-activity-validators read HTTP-activity-specific properties (auth policies, URL formats, etc.) — the validator and the activity definition share intimate knowledge of the HTTP-activity shape. Co-locating them keeps that knowledge in one module.
+
+The validator is just an `IDomainEventHandler<OnDraftValidating>` registered by the `Elsa.Http.Activities.Design` feature. It references `Elsa.Workflows.Design.Validations.Core` for the event + ValidationError contract. No new module is needed per activity — the validators are a small body of work alongside the definitions.
+
+#### What this case is NOT
+
+It is NOT a license to over-elaborate the namespace for *every* cross-domain contribution. The §2.2 secondary-domain test still applies: where do the models come from? If a feature brings no new models and contributes against existing ones, secondary-domain naming applies; otherwise, the feature lives in its own domain. The three-segment composition activates only when the consumer-domain ALSO has an internal axis (Design/Runtime) that must show up at the package boundary.
+
+For example, JavaScript exposing HTTP models (§E3.8) is two-segment because JavaScript itself is a consumer surface without a Design/Runtime split inside its consumption — there's `OnDeclarationsDocumentGenerating` (design-time) and `OnEvaluatingScript` (runtime) per §E3.7, but the JS package that contributes HTTP-typed bindings is a single module that registers handlers for both events. The Activities case is different — the runtime side genuinely runs code (executable handlers), the design side genuinely composes catalog data, and the §E2.2 hard rule says those cannot live in the same implementation module.
+
+#### Cross-references
+
+- Framework §2.2 (model-owning domain wins prefix; junk-drawer anti-pattern named).
+- Elsa §E2.2 (Workflows-Design ↔ Workflows-Runtime hard rule; Activities follows the same principle in its own variant).
+- Elsa §E3.8 (the two-segment precedent — `Elsa.Http.JavaScript`).
+- Spec 002 (Unit C) FR-034 (validator co-location rule cites this section).
+- Future units shipping HTTP activities (and Email, Slack, etc. activity contributions) follow this pattern.
+
+#### Status
+
+Provisional pending 2026-06-01 architecture review meeting (agenda Item 6). The pattern is purely additive — no existing rule conflicts; §2.2 + §2.20 + §E2.2 already cover it; this section is the worked example, not a new rule.
 
 ---
 

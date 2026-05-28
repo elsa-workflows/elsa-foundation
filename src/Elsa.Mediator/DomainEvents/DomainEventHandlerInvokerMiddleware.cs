@@ -1,11 +1,13 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Middleware;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Mediator.DomainEvents;
 
 /// <summary>
-/// A middleware component that invokes request handlers.
+/// Invokes the single handler currently bound on <see cref="IDomainEventContext.CurrentHandler"/>
+/// by <see cref="DomainEventHandlerIteratorMiddleware"/>. Per-handler iteration lives
+/// upstream in the iterator; per-handler exception shielding lives between the iterator
+/// and this invoker (<see cref="DomainEventExceptionShieldingMiddleware"/>).
 /// </summary>
 public sealed class DomainEventHandlerInvokerMiddleware(DomainEventMiddlewareDelegate next)
     : IDomainEventMiddleware
@@ -13,27 +15,22 @@ public sealed class DomainEventHandlerInvokerMiddleware(DomainEventMiddlewareDel
     /// <inheritdoc />
     public async ValueTask Invoke(IDomainEventContext context)
     {
-        // Find all handlers for the specified domain event
+        var handler = context.CurrentHandler;
+
+        if (handler is null)
+        {
+            await next(context);
+            return;
+        }
+
         var @event = context.Event;
         var eventType = @event.GetType();
         var handlerType = typeof(IDomainEventHandler<>).MakeGenericType(eventType);
-        var handlers = context
-            .ServiceProvider
-            .GetServices(handlerType)
-            .ToArray();
+        var handleMethod = handlerType.GetMethod(nameof(IDomainEventHandler<>.Handle))!;
 
-        if (handlers.Length == 0)
-            return;
+        var task = (Task)handleMethod.Invoke(handler, [@event, context.CancellationToken])!;
+        await task;
 
-        foreach (var handler in handlers)
-        {
-            var handleMethod = handlerType.GetMethod(nameof(IDomainEventHandler<>.Handle))!;
-
-            var task = (Task)handleMethod.Invoke(handler, [@event, context.CancellationToken])!;
-            await task;
-
-            // Invoke next middleware.
-            await next(context);
-        }
+        await next(context);
     }
 }
