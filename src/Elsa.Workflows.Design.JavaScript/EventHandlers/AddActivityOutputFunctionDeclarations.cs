@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.JavaScript.EventHandlers
 
             foreach (var activity in activitiesWithOutput)
             {
-                var activityName = $"{activity.Definition.UniqueName?.Pascalize()}";
+                var activityName = $"{activity.Definition.ActivityTypeKey?.Pascalize()}";
                 var outputs = activity.Outputs
                     .Where(x => VariableNameValidator.IsValidVariableName(x.Name))
                     .Select(x => x.Name.Pascalize());

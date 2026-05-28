@@ -5,6 +5,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Models;
+using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 
 namespace Elsa3.Mapping.Mappings;
 

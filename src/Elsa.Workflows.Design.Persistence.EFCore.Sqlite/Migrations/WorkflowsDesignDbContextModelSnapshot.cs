@@ -52,8 +52,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     b.HasIndex("Name")
                         .HasDatabaseName("IX_WorkflowDefinition_Name");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_WorkflowDefinition_TenantId");
+                    b.HasIndex("TenantId");
 
                     b.ToTable("WorkflowDefinitions", "Elsa");
                 });
@@ -80,8 +79,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_WorkflowDefinitionDraft_TenantId");
+                    b.HasIndex("TenantId");
 
                     b.ToTable("WorkflowDefinitionDrafts", "Elsa");
                 });
@@ -118,8 +116,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_WorkflowDefinitionVersion_TenantId");
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("DefinitionId", "Version")
                         .IsUnique()
@@ -143,15 +140,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                                 .HasColumnType("INTEGER");
 
                             b1.Property<string>("Materializer")
-                                .IsRequired()
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("MaterializerContext")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
-
-                            b1.Property<string>("Provider")
-                                .IsRequired()
                                 .HasColumnType("TEXT");
 
                             b1.Property<string>("ToolVersion")

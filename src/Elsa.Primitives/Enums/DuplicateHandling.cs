@@ -3,6 +3,5 @@
 public enum DuplicateHandling
 {
     Throw,
-    Skip,
-    Overwrite
+    Skip
 }

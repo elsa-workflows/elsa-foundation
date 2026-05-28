@@ -32,7 +32,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .HasDatabaseName($"UX_{nameof(WorkflowDefinitionVersion)}_{nameof(WorkflowDefinitionVersion.DefinitionId)}_{nameof(WorkflowDefinitionVersion.Version)}")
                 .IsUnique();
 
-            builder.HasIndex(x => x.TenantId).HasDatabaseName($"IX_{nameof(WorkflowDefinitionVersion)}_{nameof(WorkflowDefinitionVersion.TenantId)}");
         }
     }
 }

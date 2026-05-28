@@ -1,30 +1,23 @@
-﻿using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Primitives.Models;
 
-namespace Elsa.Activities.Design.Core.Models
-{
-    /// <summary>
-    /// 
-    /// </summary>
-    public record ArgumentDefinition(
-        string ReferenceKey,
-        string Name,
-        TypeInformation Type,
-        TypeInformation? StorageDriverType,
-        string DisplayName,
-        string? Category,
-        bool? IsBrowsable = null,
-        bool? IsSerializable = null,
-        string? Description = null,
-        float Order = 0,
-        string? UiHint = null,
-        IDictionary<string, object>? PropertyInfo = null,
-        IDictionary<string, object>? UISpecifications = null)
+namespace Elsa.Activities.Design.Core.Models;
 
-        : IArgumentDefinition
-    {
-        bool IArgumentDefinition.IsBrowsable => IsBrowsable ?? true;
-
-        bool IArgumentDefinition.IsSerializable => IsSerializable ?? true;
-    }
-}
+/// <summary>
+/// Design-time canvas description of a single argument on an activity. Sibling records
+/// <see cref="InputDefinition"/> and <see cref="OutputDefinition"/> carry the same structural
+/// shape by FR-030 (signature-clarity duplication).
+/// </summary>
+public sealed record ArgumentDefinition(
+    string ReferenceKey,
+    string Name,
+    TypeInformation Type,
+    TypeInformation? StorageDriverType,
+    string DisplayName,
+    string? Category,
+    bool? IsBrowsable = null,
+    bool? IsSerializable = null,
+    string? Description = null,
+    float Order = 0,
+    string? UiHint = null,
+    IDictionary<string, object>? PropertyInfo = null,
+    IDictionary<string, object>? UISpecifications = null);

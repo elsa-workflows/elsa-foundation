@@ -22,8 +22,7 @@ public sealed class WorkflowsVersionProvisioner(
     IQueries<WorkflowDefinition> definitionQueries,
     IQueries<WorkflowDefinitionVersion> versionQueries,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
-    IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
-    IDeleteCommand<WorkflowDefinitionVersion> deleteVersion
+    IAddCommand<WorkflowDefinitionVersion> addVersionCommand
 )
     : IWorkflowVersionProvisioner
 {
@@ -73,10 +72,6 @@ public sealed class WorkflowsVersionProvisioner(
     {
         switch (options.Value.DuplicateHandling)
         {
-            case DuplicateHandling.Overwrite:
-                await OverwriteVersion(def, version, cancellationToken);
-                break;
-
             case DuplicateHandling.Throw:
                 throw new InvalidOperationException($"Workflow definition version '{version.DefinitionId}' v{version.Version} already exists");
 
@@ -101,14 +96,6 @@ public sealed class WorkflowsVersionProvisioner(
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
     }
 
-    private async Task OverwriteVersion(WorkflowDefinition definition, WorkflowDefinitionVersion version, CancellationToken cancellationToken)
-    {
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("Overwriting workflow definition '{def}' v{v}", definition.Id, version.Version);
-
-        await deleteVersion.DeleteWhere(x => x.Id == version.Id, cancellationToken);
-        await addVersionCommand.Add(version, cancellationToken);
-    }
 
     private async Task<bool> VersionExists(string definitionId, int version, CancellationToken cancellationToken)
     {

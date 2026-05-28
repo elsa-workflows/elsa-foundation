@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 

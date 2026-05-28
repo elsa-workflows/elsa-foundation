@@ -1,23 +1,16 @@
-﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Attributes;
 using Elsa.Primitives.Entities;
-using Elsa.Primitives.Models;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action)
-    : Entity, IActivityDefinitionVersion
+public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
+    : TenantEntity, IActivityDefinitionVersion
 {
     /// <summary>
-    /// Type information: asssembly name, version, namespace, and fully qualified type name
-    /// </summary>
-    [Immutable]
-    public TypeInformation TypeInfo { get; set; } = default!;
-
-    /// <summary>
-    /// Navigation property to the <see cref="ActivityDefinition"/>
+    /// Navigation property to the <see cref="ActivityDefinition"/>.
     /// </summary>
     public ActivityDefinition? Definition { get; set; }
 
@@ -26,6 +19,40 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
 
     [Immutable]
     public string DefinitionId { get; init; } = definitionId;
+
+    /// <summary>
+    /// Denormalised from the parent on insert. Immutable.
+    /// </summary>
+    [Immutable]
+    public string ActivityTypeKey { get; set; } = null!;
+
+    /// <summary>
+    /// Registry lookup key matching <see cref="ImplementationDescriptor"/>.<c>Kind</c>.
+    /// Immutable.
+    /// </summary>
+    [Immutable]
+    public string ImplementationKind { get; set; } = null!;
+
+    /// <summary>
+    /// Serialized JSON form of <see cref="ImplementationDescriptor"/>. A real string property
+    /// on the entity (NOT an EF Core shadow property) so the central <c>[Immutable]</c>
+    /// scanner picks it up and the value follows the same lifecycle attributes as every
+    /// other invariant-bearing field. The interface boundary <see cref="IActivityDefinitionVersion"/>
+    /// does not expose it — the property is a "shadow" in our domain sense (invisible to
+    /// other domains), distinct from EF Core's "shadow" (not on the CLR class).
+    /// </summary>
+    [Immutable]
+    public string? ImplementationDescriptorPayload { get; set; }
+
+    /// <summary>
+    /// Polymorphic descriptor — the rich projection of
+    /// <see cref="ImplementationDescriptorPayload"/>. <see cref="NotMappedAttribute"/>:
+    /// EF Core does not persist this property directly. Hydrated by the loading handler
+    /// from the payload + the descriptor registry's kind→type lookup; written back to the
+    /// payload by the saving handler.
+    /// </summary>
+    [NotMapped]
+    public IImplementationDescriptor ImplementationDescriptor { get; set; } = null!;
 
     [Immutable]
     public string? InputsSource { get; set; } = inputsSource;
@@ -36,27 +63,15 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     [Immutable]
     public string? PortsSource { get; set; } = portsSource;
 
-    /// <summary>
-    /// The kind of activity.
-    /// </summary>
     [Immutable]
-    public ActivityKind Kind { get; init; } = kind;
+    public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
-    /// <summary>
-    /// The input properties of the activity type.
-    /// </summary>
     [NotMapped]
     public IEnumerable<InputDefinition> Inputs { get; set; } = [];
 
-    /// <summary>
-    /// The output properties of the activity type.
-    /// </summary>
     [NotMapped]
     public IEnumerable<OutputDefinition> Outputs { get; set; } = [];
 
-    /// <summary>
-    /// The ports of the activity type.
-    /// </summary>
     [NotMapped]
     public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];
 

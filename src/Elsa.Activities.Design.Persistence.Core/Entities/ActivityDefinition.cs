@@ -1,19 +1,47 @@
-﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Primitives.Attributes;
 using Elsa.Primitives.Entities;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities
 {
     /// <summary>
-    /// A definition of an activity type.                                                                                                                                                                                
+    /// A definition of an activity type. Identity layer of the catalog — pairs immutable
+    /// logical identity (<see cref="ActivityTypeKey"/>) with immutable creation provenance.
+    /// Operational reconciliation state (LastSeenAt, hashes, removal) lives on the sibling
+    /// <c>ActivityDefinitionReconciliationState</c>.
     /// </summary>
-    public sealed class ActivityDefinition : Entity, IActivityDefinition
+    public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
     {
         /// <summary>
-        /// The unique name of this activity definition.
+        /// Stable logical identity. Immutable.
         /// </summary>
         [Immutable]
-        public string UniqueName { get; set; } = null!;
+        public string ActivityTypeKey { get; set; } = null!;
+
+        /// <summary>
+        /// Provenance source identifier — free-form string owned by the source module
+        /// (e.g. "Json", "ClrDiscovery", "Workflow"). Immutable.
+        /// </summary>
+        [Immutable]
+        public string SourceKind { get; set; } = null!;
+
+        /// <summary>
+        /// Source-side asset identity. Immutable.
+        /// </summary>
+        [Immutable]
+        public string SourceId { get; set; } = null!;
+
+        /// <summary>
+        /// First-provisioning timestamp. Immutable.
+        /// </summary>
+        [Immutable]
+        public DateTimeOffset ProvisionedAt { get; set; }
+
+        /// <summary>
+        /// Identity that produced this row. Immutable.
+        /// </summary>
+        [Immutable]
+        public string? ProvisionedBy { get; set; }
 
         /// <summary>
         /// The category of the activity type.
@@ -29,10 +57,5 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
         /// The description of the activity type.
         /// </summary>
         public string? Description { get; set; }
-
-        /// <summary>
-        /// Whether this activity type is selectable from activity pickers.
-        /// </summary>
-        public bool IsBrowsable { get; set; } = true;
     }
 }

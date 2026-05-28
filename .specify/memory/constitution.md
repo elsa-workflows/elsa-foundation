@@ -20,6 +20,17 @@ v2.0.0 provenance — consolidated fold of:
      (artifact-only runtime) → §E2.6; CR-COMPAT (reframed as Elsa 3
      import-only via `Elsa3.Workflows.Import` adapter) → §E2.7.
 
+Unit B amendment (2026-05-28, draft pending ratification):
+  - §E2.8 NEW — "Activity catalog is the single source of truth for picker
+    visibility." Codifies Sipke item 7. Pins: picker presence = catalog
+    presence ⋂ ¬`RemovedAt`; no live-provider enumeration; `IsBrowsable`
+    field removed; context-aware visibility (tenant/role/feature-flag)
+    deferred to a separate policy layer. Read-contract surface pinned by
+    reflection test in `Elsa.Activities.Design.Tests/Unit/ReadContractSurfaceTests.cs`.
+  - §E3.9 + framework §2.6.5 already landed (worked example for the sync
+    contributor pattern); Unit B verified wording on 2026-05-28. No changes
+    to either section.
+
 Added Elsa sections (relative to v1.0.0):
   - §E2.5 — Reinforced opening: "`ElsaDbContextBase` is shared EF-Core
     infrastructure, not a model/entity-design requirement." Cross-references
@@ -490,6 +501,39 @@ Elsa 4's compatibility with Elsa 3 is bounded to **import**. A dedicated adapter
 The compatibility surface is **"one-way, one-time"** by design. This deliberate scoping simplifies the migration story and avoids accumulating long-lived translation infrastructure inside the Elsa 4 codebase.
 
 Mapping decisions per Elsa-3-entity → Elsa-4-entity pair are tracked in [`follow-up-items/2026-05-11_elsa3_compatibility_migration_strategy.md`](../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-11_elsa3_compatibility_migration_strategy.md) and refined as the entity design lands in Units B–G.
+
+---
+
+### §E2.8 Activity catalog is the single source of truth for picker visibility
+
+**Rule.** If an activity is visible in the design-time picker, it has a persisted catalog entry. The picker / design-time API surface MUST query the catalog store; it MUST NOT enumerate live providers, scan loaded assemblies, or otherwise produce picker entries that have no corresponding `ActivityDefinition` row.
+
+**Cross-references:**
+
+- Framework §2.6.4 (design-time vs runtime contract split): the picker reads design-time contracts; runtime construction happens elsewhere.
+- Sipke item 7 (2026-05-26): "the catalog is the source-of-truth for picker visibility" — adopted verbatim.
+
+**In scope of this rule (must follow):**
+
+- Every entry the picker can return is a `IActivityDefinition` row, with provenance fields populated (`SourceKind`, `SourceId`, `ProvisionedAt`, `ProvisionedBy`).
+- Activities contributed from a CLR module, a workflow definition, a JSON file, a script source, etc. all reach the picker through the catalog (the reconciler-with-source-modules pattern; Unit B implementation).
+- Non-CLR activities (Workflow descriptors, script descriptors) are first-class catalog citizens — the descriptor's `Kind` discriminator on each version row is the runtime resolver lookup key (Unit B §E2.6.1-style domain-failure path on unknown kinds).
+
+**Out of scope (deferred to a separate policy layer):**
+
+- **Context-aware visibility filtering** — tenant scoping, role-based access, feature flags, licensing gates, instance-level overrides. These are visibility refinements over the catalog; they reduce the catalog's output for a given context. They do NOT generate picker entries themselves.
+
+**Why the rule matters.**
+
+The Elsa 3 baseline (see §E1) enumerates loaded `IActivity` implementations at picker time. That makes the picker a function of the runtime's loaded-assembly state — implicit, untraceable, and impossible to scale to non-CLR activities. The catalog-as-source-of-truth rule makes the picker a function of an explicit, queryable, provenance-bearing dataset. The picker becomes auditable; the catalog becomes the integration point for any source (CLR, JSON, workflow, script).
+
+**Removed surface:**
+
+- `IsBrowsable` on `ActivityDefinition` is **not** the visibility mechanism. It does not exist. Visibility = catalog presence ∧ ¬`reconciliation-state.RemovedAt`. The "should this row appear in the picker?" question has no per-row toggle; it is structurally derived from the data.
+
+**Operational state lives on a sibling.** Reconciliation state (`LastSeenAt`, `ProvisioningHash`, `IsStale`, `RemovedAt`) is on `IActivityDefinitionReconciliationState`, NOT on `IActivityDefinition`. The read contract for the parent is identity + creation provenance + display only — pinned by reflection test in `Elsa.Activities.Design.Tests`.
+
+This section codifies the rule for the activity catalog. The same shape generalises to other catalogs as Elsa accrues them (workflow catalog, script catalog, expression-evaluator catalog); each will get its own catalog-as-source-of-truth section as that catalog matures.
 
 ---
 

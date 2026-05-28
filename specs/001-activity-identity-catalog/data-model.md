@@ -23,7 +23,7 @@ classDiagram
 
     class ActivityDefinition {
         +[Immutable] string ActivityTypeKey
-        +[Immutable] SourceKind SourceKind
+        +[Immutable] string SourceKind
         +[Immutable] string SourceId
         +[Immutable] DateTimeOffset ProvisionedAt
         +[Immutable] string? ProvisionedBy
@@ -36,7 +36,7 @@ classDiagram
         +[Immutable] int Version
         +[Immutable] string DefinitionId
         +[Immutable] string ActivityTypeKey
-        +[Immutable] ImplementationKind ImplementationKind
+        +[Immutable] string ImplementationKind
         +[Immutable] ActivityKind Kind
         +[Immutable] string? InputsSource
         +[Immutable] string? OutputsSource
@@ -61,35 +61,18 @@ classDiagram
 
     class IImplementationDescriptor {
         <<interface>>
+        +string Kind
     }
 
     class ClrImplementationDescriptor {
+        +string Kind = "Clr"
         +TypeInformation TypeInfo
     }
 
     class WorkflowImplementationDescriptor {
+        +string Kind = "Workflow"
         +string WorkflowDefinitionId
         +int WorkflowVersionId
-    }
-
-    class ImplementationKind {
-        <<smart-enum>>
-        +string Value
-        +Clr
-        +Workflow
-    }
-
-    class SourceKind {
-        <<smart-enum>>
-        +string Value
-        +Json
-        +ClrDiscovery
-        +Workflow
-        +Script
-        +PackageManifest
-        +Remote
-        +TenantScript
-        +System
     }
 
     Entity <|-- TenantEntity
@@ -105,8 +88,6 @@ classDiagram
 
     ActivityDefinitionVersion *-- IImplementationDescriptor : ImplementationDescriptor (NotMapped, hydrated from JSON)
     ClrImplementationDescriptor *-- TypeInformation
-    ActivityDefinitionVersion --> ImplementationKind
-    ActivityDefinition --> SourceKind
 ```
 
 ## `Elsa.Primitives.Entities` reshape
@@ -141,7 +122,7 @@ A `TenantId` index is registered centrally in `ElsaDbContextBase.OnModelCreating
 | *(inherited)* `Id`, `RowNumber`, `CreatedAt`, `LastModifiedAt` | | from `Entity` |
 | *(inherited)* `TenantId` | `string?` | from `TenantEntity` |
 | `ActivityTypeKey` | `string` | `[Immutable]`. Stable logical identity (renamed from `UniqueName`). |
-| `SourceKind` | `SourceKind` | `[Immutable]`. Smart-enum value-record; persisted as the wrapped `string Value`. |
+| `SourceKind` | `string` | `[Immutable]`. Free-form identifier owned by the source module (e.g. `"Json"`, `"ClrDiscovery"`, `"Workflow"`). Core does not enumerate the legal values; well-known constants live in the module that produces the kind. |
 | `SourceId` | `string` | `[Immutable]`. Source-side asset identity (e.g. assembly name for JSON, workflow definition id for workflow source). |
 | `ProvisionedAt` | `DateTimeOffset` | `[Immutable]`. First-provisioning timestamp. |
 | `ProvisionedBy` | `string?` | `[Immutable]`. Identity (user / machine / system) that produced this row. |
@@ -165,7 +146,7 @@ A `TenantId` index is registered centrally in `ElsaDbContextBase.OnModelCreating
 | `Version` | `int` | `[Immutable]`. |
 | `DefinitionId` | `string` | `[Immutable]`. FK to `ActivityDefinition.Id`. |
 | `ActivityTypeKey` | `string` | `[Immutable]`. Denormalised from parent for `(ActivityTypeKey, Version)` lookups without join. Set on insert; never updated. |
-| `ImplementationKind` | `ImplementationKind` | `[Immutable]`. Smart-enum value-record. Drives kind-→-type resolution in the loading handler. |
+| `ImplementationKind` | `string` | `[Immutable]`. Registry lookup key — drives kind-→-type resolution in the loading handler. Must match `ImplementationDescriptor.Kind` at write time. Core does not enumerate legal values. |
 | `Kind` | `ActivityKind` | `[Immutable]`. Existing closed enum (Action / Trigger / Job / Task) — unchanged. |
 | `InputsSource`, `OutputsSource`, `PortsSource` | `string?` | `[Immutable]`. CLR string properties — existing JSON shadow-string pattern preserved (these stay as `*Source` properties; the descriptor uses a different pattern). |
 | `ImplementationDescriptor` *(CLR property)* | `IImplementationDescriptor` | `[NotMapped]`. The rich projection. Hydrated by the loading handler from the EF shadow column `ImplementationDescriptor` + `ImplementationKind`; serialised back by the saving handler. |
@@ -201,50 +182,37 @@ A `TenantId` index is registered centrally in `ElsaDbContextBase.OnModelCreating
 
 ## `Elsa.Activities.Design.Core.Models` shape
 
-### Smart-enum value-records
+### Kind discriminators — plain strings, not smart-enums
+
+`ImplementationKind`, `SourceKind`, and `ExpressionType` are **plain `string`** fields throughout the model — no wrapping value-record, no exhaustive enumeration in core. Each concrete value (`"Clr"`, `"Json"`, `"Workflow"`, `"Literal"`, …) is owned by the module that produces it; that module is responsible for declaring its own well-known constant (e.g. `Elsa.Activities.Design.Reconciliation.Json` owns `"Json"`). Core never enumerates the legal set, keeping the discriminator open for downstream extension without modifying core.
+
+No EF Core value converter is required — the columns are plain string columns.
+
+### Descriptor types — self-declaring kind
 
 ```csharp
-public sealed record ImplementationKind(string Value)
+public interface IImplementationDescriptor
 {
-    public static readonly ImplementationKind Clr = new("Clr");
-    public static readonly ImplementationKind Workflow = new("Workflow");
+    /// Registry lookup key. Concrete descriptors hardcode their own kind.
+    string Kind { get; }
 }
 
-public sealed record SourceKind(string Value)
+public sealed record ClrImplementationDescriptor(TypeInformation TypeInfo) : IImplementationDescriptor
 {
-    public static readonly SourceKind Json = new("Json");
-    public static readonly SourceKind ClrDiscovery = new("ClrDiscovery");
-    public static readonly SourceKind Workflow = new("Workflow");
-    public static readonly SourceKind Script = new("Script");
-    public static readonly SourceKind PackageManifest = new("PackageManifest");
-    public static readonly SourceKind Remote = new("Remote");
-    public static readonly SourceKind TenantScript = new("TenantScript");
-    public static readonly SourceKind System = new("System");
+    public string Kind => "Clr";
 }
-
-public sealed record ExpressionType(string Value)
-{
-    public static readonly ExpressionType Literal = new("Literal");
-    public static readonly ExpressionType JavaScript = new("JavaScript");
-    public static readonly ExpressionType Liquid = new("Liquid");
-}
-```
-
-EF Core mappings convert via `HasConversion(kind => kind.Value, value => new ImplementationKind(value))`.
-
-### Descriptor types
-
-```csharp
-public interface IImplementationDescriptor { }
-
-public sealed record ClrImplementationDescriptor(TypeInformation TypeInfo) : IImplementationDescriptor;
 
 // Round-trip proof (Unit B-only; Workflow resolver lives in Unit G):
 public sealed record WorkflowImplementationDescriptor(
     string WorkflowDefinitionId,
     int WorkflowVersionId
-) : IImplementationDescriptor;
+) : IImplementationDescriptor
+{
+    public string Kind => "Workflow";
+}
 ```
+
+At save time the entity-saving handler reads `descriptor.Kind` and writes it to the `ImplementationKind` column. At load time the loading handler reads the `ImplementationKind` column, resolves the CLR descriptor type via `IImplementationDescriptorRegistry.Resolve(kind)`, and deserialises the JSON payload into that type.
 
 ### Sealed records — definitions
 
@@ -268,7 +236,7 @@ public sealed record InputState(string ReferenceKey, ArgumentValue Value)
 public sealed record OutputState(string ReferenceKey, ArgumentValue Value)
     : ArgumentState(ReferenceKey, Value);
 
-public sealed record ArgumentValue(object? Value, ExpressionType ExpressionType);
+public sealed record ArgumentValue(object? Value, string ExpressionType);
 ```
 
 ## Immutability summary

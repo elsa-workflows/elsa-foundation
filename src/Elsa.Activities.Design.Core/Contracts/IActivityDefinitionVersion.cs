@@ -1,5 +1,4 @@
-﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Primitives.Models;
+using Elsa.Activities.Design.Core.Models;
 
 namespace Elsa.Activities.Design.Core.Contracts;
 
@@ -9,34 +8,35 @@ public interface IActivityDefinitionVersion
 
     int Version { get; }
 
-    /// <summary>
-    /// Information about the type where the activity lives
-    /// </summary>
-    TypeInformation TypeInfo { get; }
+    string DefinitionId { get; }
 
     /// <summary>
-    /// 
+    /// Denormalised from the parent <see cref="IActivityDefinition.ActivityTypeKey"/>. Set on
+    /// insert; never updated. Lets consumers join by (ActivityTypeKey, Version) without a
+    /// round-trip to the parent table.
     /// </summary>
+    string ActivityTypeKey { get; }
+
+    /// <summary>
+    /// Registry lookup key. Equals <see cref="ImplementationDescriptor"/>.<c>Kind</c> for this
+    /// row; stored separately so the loading handler can resolve the deserialization target
+    /// before deserializing the descriptor JSON payload.
+    /// </summary>
+    string ImplementationKind { get; }
+
+    /// <summary>
+    /// Polymorphic descriptor — the concrete shape varies by <see cref="ImplementationKind"/>.
+    /// Hydrated by the loading handler from the EF shadow column.
+    /// </summary>
+    IImplementationDescriptor ImplementationDescriptor { get; }
+
     IActivityDefinition Definition { get; }
 
-    /// <summary>
-    /// 
-    /// </summary>
     IEnumerable<InputDefinition> Inputs { get; }
 
-    /// <summary>
-    /// 
-    /// </summary>
     IEnumerable<OutputDefinition> Outputs { get; }
 
-    /// <summary>
-    /// 
-    /// </summary>
     IEnumerable<ActivityPortDefinition> Ports { get; }
 
-
-    /// <summary>
-    /// The kind of activity.
-    /// </summary>
-    ActivityKind Kind { get; }
+    ActivityExecutionType ExecutionType { get; }
 }
