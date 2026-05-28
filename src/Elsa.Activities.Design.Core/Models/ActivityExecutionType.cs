@@ -1,9 +1,11 @@
-﻿namespace Elsa.Activities.Design.Core.Models
+namespace Elsa.Activities.Design.Core.Models
 {
     /// <summary>
-    /// Represents the kind of an activity, which affects how it is executed.
+    /// Execution shape of an activity — how the runtime drives it. Distinct from
+    /// <c>ImplementationKind</c> (which CLR / Workflow / etc. backs the activity) and
+    /// from <c>SourceKind</c> (which provenance source produced the catalog row).
     /// </summary>
-    public enum ActivityKind
+    public enum ActivityExecutionType
     {
         /// <summary>
         /// Always run synchronously.

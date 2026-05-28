@@ -6,7 +6,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityKind kind = ActivityKind.Action)
+public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
     : TenantEntity, IActivityDefinitionVersion
 {
     /// <summary>
@@ -34,11 +34,22 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     public string ImplementationKind { get; set; } = null!;
 
     /// <summary>
-    /// Polymorphic descriptor. <see cref="NotMappedAttribute"/> — not a CLR-mapped column.
-    /// The persisted form is the EF shadow column named <c>ImplementationDescriptor</c>
-    /// (declared with <c>PropertySaveBehavior.Throw</c> in the EF Core configuration).
-    /// The saving handler serializes this property into the shadow; the loading handler
-    /// deserializes the shadow into this property using the registry's kind→type lookup.
+    /// Serialized JSON form of <see cref="ImplementationDescriptor"/>. A real string property
+    /// on the entity (NOT an EF Core shadow property) so the central <c>[Immutable]</c>
+    /// scanner picks it up and the value follows the same lifecycle attributes as every
+    /// other invariant-bearing field. The interface boundary <see cref="IActivityDefinitionVersion"/>
+    /// does not expose it — the property is a "shadow" in our domain sense (invisible to
+    /// other domains), distinct from EF Core's "shadow" (not on the CLR class).
+    /// </summary>
+    [Immutable]
+    public string? ImplementationDescriptorPayload { get; set; }
+
+    /// <summary>
+    /// Polymorphic descriptor — the rich projection of
+    /// <see cref="ImplementationDescriptorPayload"/>. <see cref="NotMappedAttribute"/>:
+    /// EF Core does not persist this property directly. Hydrated by the loading handler
+    /// from the payload + the descriptor registry's kind→type lookup; written back to the
+    /// payload by the saving handler.
     /// </summary>
     [NotMapped]
     public IImplementationDescriptor ImplementationDescriptor { get; set; } = null!;
@@ -53,7 +64,7 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     public string? PortsSource { get; set; } = portsSource;
 
     [Immutable]
-    public ActivityKind Kind { get; init; } = kind;
+    public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
     [NotMapped]
     public IEnumerable<InputDefinition> Inputs { get; set; } = [];

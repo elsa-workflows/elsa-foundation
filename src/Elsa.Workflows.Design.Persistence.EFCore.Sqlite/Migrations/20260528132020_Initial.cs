@@ -20,9 +20,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     StateSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false)
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -37,15 +37,14 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     Name = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
-                    MetaData_Provider = table.Column<string>(type: "TEXT", nullable: true),
                     MetaData_Materializer = table.Column<string>(type: "TEXT", nullable: true),
                     MetaData_MaterializerContext = table.Column<string>(type: "TEXT", nullable: true),
                     MetaData_IsSystem = table.Column<bool>(type: "INTEGER", nullable: true),
                     MetaData_ToolVersion = table.Column<string>(type: "TEXT", nullable: true),
                     DraftId = table.Column<string>(type: "TEXT", nullable: true),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false)
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -68,9 +67,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     DefinitionId = table.Column<string>(type: "TEXT", nullable: false),
                     StateSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     SourceCreatedAt = table.Column<string>(type: "TEXT", nullable: true),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false)
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -85,7 +84,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_WorkflowDefinitionDraft_TenantId",
+                name: "IX_WorkflowDefinitionDrafts_TenantId",
                 schema: "Elsa",
                 table: "WorkflowDefinitionDrafts",
                 column: "TenantId");
@@ -97,12 +96,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 column: "Name");
 
             migrationBuilder.CreateIndex(
-                name: "IX_WorkflowDefinition_TenantId",
-                schema: "Elsa",
-                table: "WorkflowDefinitions",
-                column: "TenantId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_WorkflowDefinitions_DraftId",
                 schema: "Elsa",
                 table: "WorkflowDefinitions",
@@ -110,7 +103,13 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_WorkflowDefinitionVersion_TenantId",
+                name: "IX_WorkflowDefinitions_TenantId",
+                schema: "Elsa",
+                table: "WorkflowDefinitions",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_WorkflowDefinitionVersions_TenantId",
                 schema: "Elsa",
                 table: "WorkflowDefinitionVersions",
                 column: "TenantId");

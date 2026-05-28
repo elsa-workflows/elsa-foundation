@@ -34,7 +34,7 @@ public sealed class AddVersionCommandHandler(
 
     private ActivityDefinitionVersion CreateVersion(AddVersion command, int version, ActivityDefinition definition)
     {
-        return new(version, command.DefinitionId, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(version, command.DefinitionId, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
             ActivityTypeKey = definition.ActivityTypeKey,

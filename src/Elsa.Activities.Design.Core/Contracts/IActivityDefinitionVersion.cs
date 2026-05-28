@@ -38,5 +38,5 @@ public interface IActivityDefinitionVersion
 
     IEnumerable<ActivityPortDefinition> Ports { get; }
 
-    ActivityKind Kind { get; }
+    ActivityExecutionType ExecutionType { get; }
 }

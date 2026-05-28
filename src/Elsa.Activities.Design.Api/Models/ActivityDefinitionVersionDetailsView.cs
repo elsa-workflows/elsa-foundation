@@ -13,5 +13,5 @@ public sealed record ActivityDefinitionVersionDetailsView(
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,
     IEnumerable<ActivityPortDefinition>? Ports,
-    ActivityKind Kind
+    ActivityExecutionType ExecutionType
 );

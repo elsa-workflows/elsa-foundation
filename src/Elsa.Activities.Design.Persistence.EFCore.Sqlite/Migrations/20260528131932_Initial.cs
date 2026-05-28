@@ -14,19 +14,45 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 name: "Elsa");
 
             migrationBuilder.CreateTable(
+                name: "ActivityDefinitionReconciliationStates",
+                schema: "Elsa",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    ActivityDefinitionId = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceVersion = table.Column<string>(type: "TEXT", nullable: true),
+                    ProvisioningHash = table.Column<string>(type: "TEXT", nullable: true),
+                    LastSeenAt = table.Column<string>(type: "TEXT", nullable: false),
+                    LastProvisionedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    LastProvisionedBy = table.Column<string>(type: "TEXT", nullable: true),
+                    IsStale = table.Column<bool>(type: "INTEGER", nullable: false),
+                    RemovedAt = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ActivityDefinitionReconciliationStates", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ActivityDefinitions",
                 schema: "Elsa",
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    UniqueName = table.Column<string>(type: "TEXT", nullable: false),
+                    ActivityTypeKey = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceKind = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    ProvisionedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    ProvisionedBy = table.Column<string>(type: "TEXT", nullable: true),
                     Category = table.Column<string>(type: "TEXT", nullable: false),
                     DisplayName = table.Column<string>(type: "TEXT", nullable: true),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
-                    IsBrowsable = table.Column<bool>(type: "INTEGER", nullable: false),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false)
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -39,19 +65,18 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    TypeInfo_TypeName = table.Column<string>(type: "TEXT", nullable: false),
-                    TypeInfo_Namespace = table.Column<string>(type: "TEXT", nullable: false),
-                    TypeInfo_AssemblyName = table.Column<string>(type: "TEXT", nullable: false),
-                    TypeInfo_AssemblyVersion = table.Column<string>(type: "TEXT", nullable: false),
                     Version = table.Column<int>(type: "INTEGER", nullable: false),
                     DefinitionId = table.Column<string>(type: "TEXT", nullable: false),
+                    ActivityTypeKey = table.Column<string>(type: "TEXT", nullable: false),
+                    ImplementationKind = table.Column<string>(type: "TEXT", nullable: false),
+                    ImplementationDescriptorPayload = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     InputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     OutputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     PortsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
-                    Kind = table.Column<int>(type: "INTEGER", nullable: false),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true),
+                    ExecutionType = table.Column<int>(type: "INTEGER", nullable: false),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false)
+                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -66,32 +91,51 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_ActivityDefinitionReconciliationState_IsStale",
+                schema: "Elsa",
+                table: "ActivityDefinitionReconciliationStates",
+                column: "IsStale");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ActivityDefinitionReconciliationStates_TenantId",
+                schema: "Elsa",
+                table: "ActivityDefinitionReconciliationStates",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_ActivityDefinitionReconciliationState_ActivityDefinitionId",
+                schema: "Elsa",
+                table: "ActivityDefinitionReconciliationStates",
+                column: "ActivityDefinitionId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ActivityDefinition_Category",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
                 column: "Category");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinition_IsBrowsable",
+                name: "IX_ActivityDefinition_SourceKind_SourceId",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
-                column: "IsBrowsable");
+                columns: new[] { "SourceKind", "SourceId" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinition_TenantId",
+                name: "IX_ActivityDefinitions_TenantId",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinition_UniqueName",
+                name: "UX_ActivityDefinition_SourceKind_SourceId_ActivityTypeKey",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
-                column: "UniqueName",
+                columns: new[] { "SourceKind", "SourceId", "ActivityTypeKey" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinitionVersion_TenantId",
+                name: "IX_ActivityDefinitionVersions_TenantId",
                 schema: "Elsa",
                 table: "ActivityDefinitionVersions",
                 column: "TenantId");
@@ -107,6 +151,10 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "ActivityDefinitionReconciliationStates",
+                schema: "Elsa");
+
             migrationBuilder.DropTable(
                 name: "ActivityDefinitionVersions",
                 schema: "Elsa");

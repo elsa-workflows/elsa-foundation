@@ -36,12 +36,13 @@ public sealed class ImplementationDescriptorRoundTripTests
                 ActivityTypeKey = "Http.SendRequest",
                 ImplementationDescriptor = new ClrImplementationDescriptor(originalTypeInfo)
             };
-            ctx.ActivityDefinitionVersions.Add(version);
-            // Saving handler is invoked manually here. In production it runs through
-            // OnEntitySaving (US5) — for this test we exercise the descriptor-to-shadow
-            // serialisation path directly.
+            var entry = ctx.ActivityDefinitionVersions.Add(version);
+            // The handler now subscribes to OnEntitySaving (§2.6.1). The DbContext's
+            // dispatcher publishes the event in production; here we invoke the handler
+            // directly with a synthetic event so the test stays focused on the
+            // descriptor-to-shadow serialisation path.
             var saver = new ActivityDefinitionVersionSavingHandler(serializer);
-            await saver.Handle(ctx, version, CancellationToken.None);
+            await saver.Handle(new Elsa.Persistence.EFCore.Events.OnEntitySaving(ctx, entry), CancellationToken.None);
             await ctx.SaveChangesAsync();
         }
 
@@ -82,9 +83,9 @@ public sealed class ImplementationDescriptorRoundTripTests
                 ActivityTypeKey = "Wf.Approve",
                 ImplementationDescriptor = new WorkflowImplementationDescriptor("wf-42", 7)
             };
-            ctx.ActivityDefinitionVersions.Add(version);
+            var entry = ctx.ActivityDefinitionVersions.Add(version);
             var saver = new ActivityDefinitionVersionSavingHandler(serializer);
-            await saver.Handle(ctx, version, CancellationToken.None);
+            await saver.Handle(new Elsa.Persistence.EFCore.Events.OnEntitySaving(ctx, entry), CancellationToken.None);
             await ctx.SaveChangesAsync();
         }
 

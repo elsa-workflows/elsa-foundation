@@ -14,6 +14,6 @@ public sealed record ActivityDefinitionVersionImport(
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
     IEnumerable<ActivityPortDefinition> Ports,
-    ActivityKind Kind
+    ActivityExecutionType ExecutionType
 )
 : IActivityDefinitionVersion;

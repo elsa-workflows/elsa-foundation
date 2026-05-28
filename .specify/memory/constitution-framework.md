@@ -58,6 +58,23 @@ Added sections (framework layer, relative to v1.0.0):
     independently of the persistence provider; `*.Persistence.Core` is the
     provider-agnostic surface; provider-specific mechanism lives in
     `*.Persistence.<Provider>`.
+  - §2.9.1 — NEW (Unit B fold, 2026-05-28). "Domain-level shadow properties
+    — real properties on entities, hidden at the interface boundary."
+    Persistence-only fields (serialised forms, denormalised lookups, backing
+    strings for `[NotMapped]` projections) MUST be real CLR properties on the
+    entity, not provider-side shadow properties. The interface controls
+    cross-domain visibility; provider shadow features bypass cross-cutting
+    attribute scanners (e.g. `[Immutable]`) and scatter the entity's surface
+    area into provider configuration. Provider shadow properties remain valid
+    only for fields that genuinely don't belong on the CLR class.
+  - §2.23.5 — NEW (Unit B fold, 2026-05-28). "Exception boundaries —
+    infrastructure exceptions are wrapped." `JsonException`, `DbUpdateException`,
+    third-party-library exceptions etc. MUST NOT escape a feature boundary
+    unwrapped. Translate at the infrastructure call site into a domain-scoped
+    exception with diagnostic context (row id, entry index, asset name).
+    Reviewers MUST challenge raw infrastructure exceptions crossing feature
+    boundaries.
+  - §2.23.5 (former) → §2.23.6 — renumbered (Integration testing — out of scope).
   - §2.20 — Rule 3 (appended): feature modules MUST NOT depend on concrete
     provider implementations unless the feature is itself provider-specific.
   - §2.22 — NEW: "Feature documentation." Placeholder section. Minimum required
@@ -627,6 +644,28 @@ How a particular application chooses to structure its persistence layer — incl
 
 Correspondingly, `*.Persistence.Core` (the provider-agnostic persistence sub-domain `.Core`) carries store contracts, persistence-facing models, and the invariants those models must hold — never provider-specific mechanism. Provider-specific implementations live in `*.Persistence.<Provider>` (e.g. `*.Persistence.EFCore`, `*.Persistence.MongoDB`) and are responsible for honouring the invariants through whatever mechanism fits the provider.
 
+#### §2.9.1 Domain-level "shadow" properties — real properties on entities, hidden at the interface boundary
+
+When an entity needs a persistence-only field (e.g. the serialised form of a rich object that the entity also exposes in deserialised form, a denormalised lookup column, a backing string for a `[NotMapped]` projection), declare it as a **real property on the entity class** and **omit it from the read interface**. Do NOT use the provider's "shadow property" feature (e.g. EF Core's `Property<T>("...")` on the builder) for this purpose.
+
+**The distinction.** Provider-side terms like EF Core's "shadow property" mean *"a property the provider tracks but is not on the CLR class"*. Our usage is different: the property IS on the CLR class — it is just **not on the read interface** that other domains depend on. From a *domain* point of view it is a shadow (invisible to other domains); from a *provider* point of view it is a perfectly ordinary mapped property.
+
+**Why.**
+
+1. The central invariant scanner (e.g. an `[Immutable]` attribute scanner that walks the model and applies `PropertySaveBehavior.Throw`) only sees real CLR properties. Provider shadow properties bypass it.
+2. Cross-cutting attributes (immutability, audit, tenant scoping) must compose at one place — the entity class. Provider shadow properties scatter that surface area into the provider configuration.
+3. Test code and tooling read the entity directly; provider shadow accessors are awkward (string-keyed `Entry().Property("Name").CurrentValue`).
+4. Other providers (a document store, a different ORM) don't have a "shadow property" concept; the entity-as-CLR-class model is provider-portable.
+
+**Mechanism.**
+
+- The entity declares the property normally: `public string? SomePayload { get; set; }`.
+- The cross-cutting attribute scanner picks it up (`[Immutable]` etc.).
+- The read interface (`I<Entity>` in `*.Design.Core`) does NOT include the property — it stays a persistence-internal field.
+- The provider configuration is minimal (max-length, column type, etc.). No `Property<T>("...")` shadow registration.
+
+**Anti-pattern.** Declaring a provider shadow property purely to keep the field off the CLR class is a smell. If the field is part of the entity's persisted state, it belongs on the entity. The interface controls visibility; the provider's shadow mechanism is for cases where the field genuinely does not belong on the CLR class (provider-internal bookkeeping, e.g. a generated discriminator the application code never touches).
+
 ### §2.10 CQS at the Persistence Boundary
 
 Persistence contracts are split into commands and queries at the contract boundary:
@@ -890,7 +929,24 @@ Diagnostic questions:
 
 New implementation classes that emerge from a refactor pick up new §2.23.2 obligations; new feature classes pick up §2.23.1 obligations.
 
-#### §2.23.5 Integration testing — out of scope
+#### §2.23.5 Exception boundaries — infrastructure exceptions are wrapped
+
+Infrastructure exceptions (`JsonException`, `DbUpdateException`, `IOException`, `SqlException`, third-party-library exceptions, etc.) MUST NOT escape a feature boundary unwrapped. When a feature catches such an exception at the point where it interacts with infrastructure, it MUST translate it into a **domain-scoped exception** that carries the context needed to diagnose the failure.
+
+**Why.** A consumer of a feature is entitled to know *which exceptions can come out* and *what they mean in the feature's vocabulary*. `JsonException` thrown from a JSON-file reconciliation source tells the caller "something went wrong in JSON" — useful to a JSON library author, useless to the reconciliation pipeline. `InvalidJsonCatalogEntryException(entryIndex=37, activityTypeKey='Acme.Foo', message='no descriptor type registered for kind "Unknown"')` tells the caller exactly which row is bad and why. The first leaks an implementation detail; the second is a domain contract.
+
+**The rule.**
+
+- Every public method that can fail due to infrastructure documents (via XML doc or exception list) the **domain exceptions** it throws. Infrastructure exceptions are not part of the public contract.
+- At every infrastructure boundary inside the feature, wrap with `try/catch` and rethrow as a domain exception. Preserve the original as `InnerException` so the cause stays diagnosable.
+- Domain exception types live in the feature's `.Core` (or a sibling) so consumers can `catch` them by type.
+- The wrapping message is **specific** — it carries identifiers (row id, entry index, asset name) sufficient to localise the problem in operational logs.
+
+**What this rule is NOT.** It is NOT a license to swallow infrastructure exceptions silently. The wrap-and-rethrow is exposed to the caller; the caller decides whether to log, retry, abort, or surface to a user.
+
+**A use case that re-throws a raw `JsonException` past a feature boundary is a violation.** Reviewers MUST challenge such code paths.
+
+#### §2.23.6 Integration testing — out of scope
 
 Integration testing — composing multiple features, exercising real external systems, configuring deployed bundles of features (typically spun up in test containers and exercised end-to-end) — is **deliberately not prescribed by this constitution**.
 

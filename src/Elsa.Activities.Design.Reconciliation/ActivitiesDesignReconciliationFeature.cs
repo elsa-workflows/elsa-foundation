@@ -19,6 +19,11 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
     {
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
+
+        // Hasher is replaceable per §2.6.2: register a singleton default; provider modules
+        // may override by registering their own implementation first.
+        services.AddSingleton<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();
+
         services.AddScoped<IActivityVersionReconciler, ActivityVersionReconciler>();
     }
 }

@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.EFCore.Configurations;
+using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Serialization.Core;
@@ -20,34 +20,40 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
             if (entity == null)
                 return ValueTask.CompletedTask;
 
-            var entry = dbContext.Entry(entity);
-
-            var inputsSource = (string?)entry.Property(nameof(ActivityDefinitionVersion.InputsSource)).CurrentValue;
-            var outputsSource = (string?)entry.Property(nameof(ActivityDefinitionVersion.OutputsSource)).CurrentValue;
-            var portsSource = (string?)entry.Property(nameof(ActivityDefinitionVersion.PortsSource)).CurrentValue;
-            var descriptorJson = (string?)entry.Property(ActivityDefinitionVersionConfiguration.DescriptorShadowName).CurrentValue;
-
             try
             {
-                if (!string.IsNullOrWhiteSpace(inputsSource))
-                    entity.Inputs = payloadSerializer.Deserialize<IEnumerable<InputDefinition>>(inputsSource);
-                if (!string.IsNullOrWhiteSpace(outputsSource))
-                    entity.Outputs = payloadSerializer.Deserialize<IEnumerable<OutputDefinition>>(outputsSource);
-                if (!string.IsNullOrWhiteSpace(portsSource))
-                    entity.Ports = payloadSerializer.Deserialize<IEnumerable<ActivityPortDefinition>>(portsSource);
+                if (!string.IsNullOrWhiteSpace(entity.InputsSource))
+                    entity.Inputs = payloadSerializer.Deserialize<IEnumerable<InputDefinition>>(entity.InputsSource);
+                if (!string.IsNullOrWhiteSpace(entity.OutputsSource))
+                    entity.Outputs = payloadSerializer.Deserialize<IEnumerable<OutputDefinition>>(entity.OutputsSource);
+                if (!string.IsNullOrWhiteSpace(entity.PortsSource))
+                    entity.Ports = payloadSerializer.Deserialize<IEnumerable<ActivityPortDefinition>>(entity.PortsSource);
             }
             catch (Exception exp)
             {
                 logger.LogError(exp, "Could not deserialize activity version inputs/outputs/ports: {VersionId}. Reverting to default state", entity.Id);
             }
 
-            if (!string.IsNullOrWhiteSpace(descriptorJson))
+            if (!string.IsNullOrWhiteSpace(entity.ImplementationDescriptorPayload))
             {
                 var descriptorType = descriptorRegistry.Resolve(entity.ImplementationKind)
-                    ?? throw new InvalidOperationException(
+                    ?? throw new ActivityDescriptorDeserialisationException(
+                        entity.Id,
+                        entity.ImplementationKind,
                         $"No implementation descriptor type registered for kind '{entity.ImplementationKind}' on version '{entity.Id}'. The owning module may not be installed.");
 
-                entity.ImplementationDescriptor = (IImplementationDescriptor)payloadSerializer.Deserialize(descriptorJson, descriptorType);
+                try
+                {
+                    entity.ImplementationDescriptor = (IImplementationDescriptor)payloadSerializer.Deserialize(entity.ImplementationDescriptorPayload, descriptorType);
+                }
+                catch (Exception inner)
+                {
+                    throw new ActivityDescriptorDeserialisationException(
+                        entity.Id,
+                        entity.ImplementationKind,
+                        $"Failed to deserialise implementation descriptor payload for version '{entity.Id}' (kind '{entity.ImplementationKind}', target type '{descriptorType.FullName}'). Persisted row may be corrupt or the descriptor type may have changed shape.",
+                        inner);
+                }
             }
 
             return ValueTask.CompletedTask;

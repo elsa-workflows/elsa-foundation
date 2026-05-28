@@ -59,7 +59,7 @@ public sealed class AddDefinitionCommandHandler(
 
     private ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
     {
-        return new(initialVersion, definition.Id, kind: command.Kind ?? Core.Models.ActivityKind.Action)
+        return new(initialVersion, definition.Id, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
             ActivityTypeKey = definition.ActivityTypeKey,

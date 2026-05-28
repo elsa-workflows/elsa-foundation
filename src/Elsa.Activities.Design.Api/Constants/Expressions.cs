@@ -6,5 +6,5 @@ namespace Elsa.Activities.Design.Api.Constants;
 
 internal static class Expressions
 {
-    public static readonly Expression<Func<ActivityDefinitionVersion, ActivityDefinitionVersionInfo>> VersionInfoSelector = (e) => new(e.Id, e.Version, e.CreatedAt, e.Kind);
+    public static readonly Expression<Func<ActivityDefinitionVersion, ActivityDefinitionVersionInfo>> VersionInfoSelector = (e) => new(e.Id, e.Version, e.CreatedAt, e.ExecutionType);
 }

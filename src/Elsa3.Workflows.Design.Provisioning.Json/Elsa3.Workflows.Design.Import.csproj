@@ -17,7 +17,6 @@
     <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Design.Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Design.Provisioning.Core\Elsa.Workflows.Design.Provisioning.Core.csproj" />
-		<ProjectReference Include="..\Elsa.Activities.Design.Provisioning.Core\Elsa.Activities.Design.Provisioning.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Primitives\Elsa.Workflows.Primitives.csproj" />
   </ItemGroup>
 

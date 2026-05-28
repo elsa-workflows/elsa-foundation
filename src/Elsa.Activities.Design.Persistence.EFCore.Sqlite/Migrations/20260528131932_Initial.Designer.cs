@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
 {
     [DbContext(typeof(ActivitiesDesignDbContext))]
-    [Migration("20260525083434_Initial")]
+    [Migration("20260528131932_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -24,6 +24,10 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
             modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition", b =>
                 {
                     b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityTypeKey")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Category")
@@ -40,18 +44,26 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsBrowsable")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("LastModifiedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("TenantId")
+                    b.Property<string>("ProvisionedAt")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("UniqueName")
+                    b.Property<string>("ProvisionedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceId")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceKind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -59,22 +71,82 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.HasIndex("Category")
                         .HasDatabaseName("IX_ActivityDefinition_Category");
 
-                    b.HasIndex("IsBrowsable")
-                        .HasDatabaseName("IX_ActivityDefinition_IsBrowsable");
+                    b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_ActivityDefinition_TenantId");
+                    b.HasIndex("SourceKind", "SourceId")
+                        .HasDatabaseName("IX_ActivityDefinition_SourceKind_SourceId");
 
-                    b.HasIndex("UniqueName")
+                    b.HasIndex("SourceKind", "SourceId", "ActivityTypeKey")
                         .IsUnique()
-                        .HasDatabaseName("IX_ActivityDefinition_UniqueName");
+                        .HasDatabaseName("UX_ActivityDefinition_SourceKind_SourceId_ActivityTypeKey");
 
                     b.ToTable("ActivityDefinitions", "Elsa");
+                });
+
+            modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionReconciliationState", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityDefinitionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsStale")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastModifiedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastProvisionedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastProvisionedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSeenAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProvisioningHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RemovedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityDefinitionId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ActivityDefinitionReconciliationState_ActivityDefinitionId");
+
+                    b.HasIndex("IsStale")
+                        .HasDatabaseName("IX_ActivityDefinitionReconciliationState_IsStale");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("ActivityDefinitionReconciliationStates", "Elsa");
                 });
 
             modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion", b =>
                 {
                     b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityTypeKey")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CreatedAt")
@@ -85,12 +157,20 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("InputsSource")
+                    b.Property<int>("ExecutionType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImplementationDescriptorPayload")
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("ImplementationKind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InputsSource")
+                        .HasMaxLength(-1)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("LastModifiedAt")
                         .IsRequired()
@@ -112,8 +192,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("IX_ActivityDefinitionVersion_TenantId");
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("DefinitionId", "Version")
                         .IsUnique()
@@ -130,39 +209,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.OwnsOne("Elsa.Primitives.Models.TypeInformation", "TypeInfo", b1 =>
-                        {
-                            b1.Property<string>("ActivityDefinitionVersionId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<string>("AssemblyName")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
-
-                            b1.Property<string>("AssemblyVersion")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
-
-                            b1.Property<string>("Namespace")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
-
-                            b1.Property<string>("TypeName")
-                                .IsRequired()
-                                .HasColumnType("TEXT");
-
-                            b1.HasKey("ActivityDefinitionVersionId");
-
-                            b1.ToTable("ActivityDefinitionVersions", "Elsa");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ActivityDefinitionVersionId");
-                        });
-
                     b.Navigation("Definition");
-
-                    b.Navigation("TypeInfo")
-                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

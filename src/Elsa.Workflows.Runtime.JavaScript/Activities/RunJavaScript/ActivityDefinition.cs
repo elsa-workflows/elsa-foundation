@@ -39,7 +39,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript
         //            )
         //        ],
         //        IsBrowsable = true,
-        //        Kind = ActivityKind.Action
+        //        Kind = ActivityExecutionType.Action
         //    };
         //}
     }

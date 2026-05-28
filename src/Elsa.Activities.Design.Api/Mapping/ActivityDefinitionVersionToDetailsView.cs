@@ -23,7 +23,7 @@ public sealed class ActivityDefinitionVersionToDetailsView(IObjectMapping<Activi
             source.Inputs,
             source.Outputs,
             source.Ports,
-            source.Kind
+            source.ExecutionType
         );
     }
 }

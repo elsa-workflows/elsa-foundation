@@ -19,11 +19,14 @@ public sealed class ActivityVersionReconciler(
     IDomainEventSender sender,
     IOptions<ActivityVersionReconcilerOptions> options,
     IIdentityGenerator identityGenerator,
+    ISystemClock clock,
+    IActivityDefinitionHasher hasher,
     IQueries<ActivityDefinition> definitionQueries,
     IQueries<ActivityDefinitionVersion> versionQueries,
+    IQueries<ActivityDefinitionReconciliationState> stateQueries,
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddCommand<ActivityDefinitionVersion> addVersionCommand,
-    IDeleteCommand<ActivityDefinitionVersion> deleteVersion
+    ISaveCommand<ActivityDefinitionReconciliationState> saveReconciliationState
 )
     : IActivityVersionReconciler
 {
@@ -50,33 +53,34 @@ public sealed class ActivityVersionReconciler(
         if (definition is null)
         {
             await addNewDefinitionCommand.Execute(mappedDefinition, mappedVersion, cancellationToken);
+            await UpdateReconciliationState(mappedDefinition, version, mappedVersion, versionAppended: true, cancellationToken);
+            return;
         }
 
-        var latestVersion = await versionQueries.FindLastVersion(mappedDefinition.Id, cancellationToken);
+        var latestVersion = await versionQueries.FindLastVersion(definition.Id, cancellationToken);
         if (mappedVersion.Version < latestVersion?.Version)
         {
-            LogSkipOutdated(mappedDefinition.Id, mappedVersion.Version);
+            LogSkipOutdated(definition.Id, mappedVersion.Version);
+            await UpdateReconciliationState(definition, version, mappedVersion, versionAppended: false, cancellationToken);
             return;
         }
 
-        var versionExists = await VersionExists(mappedDefinition.Id, version.Version, cancellationToken);
+        var versionExists = await VersionExists(definition.Id, version.Version, cancellationToken);
         if (!versionExists)
         {
-            await addVersionCommand.Add(mappedVersion, cancellationToken);
+            await addVersionCommand.Add(WithDefinitionId(mappedVersion, definition.Id), cancellationToken);
+            await UpdateReconciliationState(definition, version, mappedVersion, versionAppended: true, cancellationToken);
             return;
         }
 
-        await HandleDuplicate(mappedDefinition, mappedVersion, cancellationToken);
+        await HandleDuplicate(definition, mappedVersion, cancellationToken);
+        await UpdateReconciliationState(definition, version, mappedVersion, versionAppended: false, cancellationToken);
     }
 
     private async Task HandleDuplicate(ActivityDefinition def, ActivityDefinitionVersion version, CancellationToken cancellationToken)
     {
         switch (options.Value.DuplicateHandling)
         {
-            case DuplicateHandling.Overwrite:
-                await OverwriteVersion(def, version, cancellationToken);
-                break;
-
             case DuplicateHandling.Throw:
                 throw new InvalidOperationException($"Activity definition version '{version.DefinitionId}' v{version.Version} already exists");
 
@@ -89,6 +93,46 @@ public sealed class ActivityVersionReconciler(
         }
     }
 
+    /// <summary>
+    /// Upsert the reconciliation-state sibling for the given parent. Refresh <c>LastSeenAt</c>
+    /// on every observation; refresh hash + <c>LastProvisionedAt</c> only when content
+    /// actually changed (hash mismatch OR a new version was appended). This keeps the parent
+    /// row's <c>LastModifiedAt</c> stable across no-op reconciliation passes (SC-013 idempotency).
+    /// </summary>
+    private async Task UpdateReconciliationState(
+        IActivityDefinition definition,
+        IActivityDefinitionVersion incomingVersion,
+        ActivityDefinitionVersion mappedVersion,
+        bool versionAppended,
+        CancellationToken cancellationToken)
+    {
+        var newHash = hasher.Hash(definition, incomingVersion);
+        var existing = await stateQueries.Find(s => s.ActivityDefinitionId == definition.Id, cancellationToken);
+        var now = clock.UtcNow;
+
+        var state = existing ?? new ActivityDefinitionReconciliationState
+        {
+            Id = identityGenerator.Generate(),
+            ActivityDefinitionId = definition.Id,
+            TenantId = definition.TenantId(),
+            LastProvisionedAt = now,
+            LastProvisionedBy = definition.ProvisionedBy,
+        };
+
+        state.LastSeenAt = now;
+
+        var contentChanged = versionAppended || existing is null || !string.Equals(existing.ProvisioningHash, newHash, StringComparison.Ordinal);
+        if (contentChanged)
+        {
+            state.ProvisioningHash = newHash;
+            state.LastProvisionedAt = now;
+            state.LastProvisionedBy = definition.ProvisionedBy;
+            state.SourceVersion = mappedVersion.Version.ToString();
+        }
+
+        await saveReconciliationState.SaveAsync(state, cancellationToken);
+    }
+
     private void LogSkipDuplicate(string definitionId, int version)
     {
         if (logger.IsEnabled(LogLevel.Information))
@@ -99,15 +143,6 @@ public sealed class ActivityVersionReconciler(
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping outdated activity definition '{def}' v{v}", definitionId, version);
-    }
-
-    private async Task OverwriteVersion(ActivityDefinition definition, ActivityDefinitionVersion version, CancellationToken cancellationToken)
-    {
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogInformation("Overwriting activity definition '{def}' v{v}", definition.Id, version.Version);
-
-        await deleteVersion.DeleteWhere(x => x.Id == version.Id, cancellationToken);
-        await addVersionCommand.Add(version, cancellationToken);
     }
 
     private async Task<bool> VersionExists(string definitionId, int version, CancellationToken cancellationToken)
@@ -170,7 +205,7 @@ public sealed class ActivityVersionReconciler(
             ? version.Id
             : identityGenerator.Generate();
 
-        return new(version.Version, version.Definition.Id, kind: version.Kind)
+        return new(version.Version, version.Definition.Id, executionType: version.ExecutionType)
         {
             Id = id,
             ActivityTypeKey = version.ActivityTypeKey,
@@ -181,4 +216,36 @@ public sealed class ActivityVersionReconciler(
             Ports = version.Ports
         };
     }
+
+    private static ActivityDefinitionVersion WithDefinitionId(ActivityDefinitionVersion version, string definitionId)
+    {
+        // Re-bind the version's FK to the resolved parent id, which may differ from the
+        // incoming candidate's nominal Definition.Id when find-by-(SourceKind, SourceId,
+        // ActivityTypeKey) matches a row whose generated Id is different.
+        return new ActivityDefinitionVersion(version.Version, definitionId, executionType: version.ExecutionType)
+        {
+            Id = version.Id,
+            ActivityTypeKey = version.ActivityTypeKey,
+            ImplementationKind = version.ImplementationKind,
+            ImplementationDescriptor = version.ImplementationDescriptor,
+            Inputs = version.Inputs,
+            Outputs = version.Outputs,
+            Ports = version.Ports,
+            InputsSource = version.InputsSource,
+            OutputsSource = version.OutputsSource,
+            PortsSource = version.PortsSource,
+        };
+    }
+}
+
+internal static class ActivityDefinitionReadExtensions
+{
+    /// <summary>
+    /// Tenant-id accessor over the read contract — <see cref="IActivityDefinition"/> doesn't
+    /// expose it (per the read-contract pin in spec FR-008), but the concrete entity does
+    /// via <c>TenantEntity</c>. Safe cast: every persisted <c>IActivityDefinition</c> is an
+    /// <c>ActivityDefinition</c> in this code path.
+    /// </summary>
+    internal static string? TenantId(this IActivityDefinition definition)
+        => (definition as ActivityDefinition)?.TenantId;
 }

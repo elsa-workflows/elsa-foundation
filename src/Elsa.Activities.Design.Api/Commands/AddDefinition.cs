@@ -13,7 +13,7 @@ public sealed record AddDefinition(
     string Category,
     string DisplayName,
     string? Description = null,
-    ActivityKind? Kind = null,
+    ActivityExecutionType? ExecutionType = null,
     IEnumerable<InputDefinition>? Inputs = null,
     IEnumerable<OutputDefinition>? Outputs = null,
     IEnumerable<ActivityPortDefinition>? Ports = null

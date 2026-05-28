@@ -88,7 +88,7 @@ public sealed class ActivityDefinitionLookup(
 
         var result = await versionQueries.Query<ActivityDefinitionVersionInfo>(
             filter,
-            (e) => new(e.Id, e.Version, e.CreatedAt, e.Kind),
+            (e) => new(e.Id, e.Version, e.CreatedAt, e.ExecutionType),
             cancellationToken
         );
 

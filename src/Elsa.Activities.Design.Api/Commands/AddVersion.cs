@@ -11,6 +11,6 @@ public sealed record AddVersion(
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,
     IEnumerable<ActivityPortDefinition>? Ports,
-    ActivityKind? Kind
+    ActivityExecutionType? ExecutionType
 )
 : ICommand<ActivityDefinitionVersionDetailsView>;

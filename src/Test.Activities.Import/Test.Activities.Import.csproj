@@ -10,8 +10,4 @@
 		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <ProjectReference Include="..\Elsa.Activities.Design.Provisioning.Core\Elsa.Activities.Design.Provisioning.Core.csproj" />
-	</ItemGroup>
-
 </Project>
