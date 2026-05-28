@@ -7,8 +7,11 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
-/// US2 — Picker = catalog visibility. The picker query returns rows whose reconciliation-state
-/// sibling does NOT mark them removed; no live-provider enumeration path exists.
+/// US2 — Picker = catalog visibility. Under Model X (Unit C 2026-05-28), visibility is
+/// catalog membership; there is no per-row removal mechanism at the reconciliation layer
+/// (source disappearance is intentionally not tracked — versions are never deleted).
+/// Context-aware visibility (tenant / role / feature-flag) is a separate policy layer
+/// per §E2.8.
 /// </summary>
 public sealed class PickerVisibilityTests
 {
@@ -27,9 +30,10 @@ public sealed class PickerVisibilityTests
     }
 
     [Fact]
-    public async Task CatalogRow_NoReconciliationSibling_IsVisible()
+    public async Task CatalogRow_IsAlwaysVisible_UnderModelX()
     {
-        // Admin-created rows have no reconciliation-state sibling. They appear in the picker.
+        // Under Model X, every persisted catalog row is visible. There is no per-row
+        // removal flag and no reconciliation-state sibling to LEFT JOIN against.
         using var host = ActivitiesDesignTestHost.Create();
         var lookup = CreateLookup(host);
 
@@ -43,34 +47,6 @@ public sealed class PickerVisibilityTests
 
         Assert.Single(result);
         Assert.Equal("Admin.Created", result[0].ActivityTypeKey);
-    }
-
-    [Fact]
-    public async Task CatalogRow_WithRemovedAtSibling_IsExcluded()
-    {
-        // A reconciliation-state sibling with RemovedAt set excludes the row from the picker.
-        using var host = ActivitiesDesignTestHost.Create();
-        var lookup = CreateLookup(host);
-
-        await using (var ctx = host.CreateContext())
-        {
-            ctx.ActivityDefinitions.Add(NewDefinition("def-1", "Live.One"));
-            ctx.ActivityDefinitions.Add(NewDefinition("def-2", "Removed.One"));
-            ctx.ActivityDefinitionReconciliationStates.Add(new ActivityDefinitionReconciliationState
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                ActivityDefinitionId = "def-2",
-                LastSeenAt = DateTimeOffset.UtcNow.AddDays(-10),
-                LastProvisionedAt = DateTimeOffset.UtcNow.AddDays(-10),
-                RemovedAt = DateTimeOffset.UtcNow.AddDays(-1)
-            });
-            await ctx.SaveChangesAsync(CancellationToken.None);
-        }
-
-        var result = (await lookup.ListDefinitions(cancellationToken: CancellationToken.None)).ToList();
-
-        Assert.Single(result);
-        Assert.Equal("Live.One", result[0].ActivityTypeKey);
     }
 
     [Fact]

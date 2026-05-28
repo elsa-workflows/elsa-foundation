@@ -18,8 +18,9 @@ public sealed class ContributeClrDescriptorType
     public ValueTask Handle(OnImplementationDescriptorsInitializing domainEvent, CancellationToken cancellationToken)
     {
         domainEvent.Registrations.Add(new ImplementationDescriptorRegistration(
-            ClrActivityImplementationResolver.KindValue,
-            typeof(ClrImplementationDescriptor)));
+            ClrImplementationDescriptor.KindValue,
+            typeof(ClrImplementationDescriptor))
+        );
         return ValueTask.CompletedTask;
     }
 }

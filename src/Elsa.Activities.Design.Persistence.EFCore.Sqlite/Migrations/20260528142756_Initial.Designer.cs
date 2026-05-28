@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
 {
     [DbContext(typeof(ActivitiesDesignDbContext))]
-    [Migration("20260528131932_Initial")]
+    [Migration("20260528142756_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -83,63 +83,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.ToTable("ActivityDefinitions", "Elsa");
                 });
 
-            modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionReconciliationState", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ActivityDefinitionId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CreatedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsStale")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("LastModifiedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LastProvisionedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LastProvisionedBy")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LastSeenAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProvisioningHash")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RemovedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SourceVersion")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TenantId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ActivityDefinitionId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ActivityDefinitionReconciliationState_ActivityDefinitionId");
-
-                    b.HasIndex("IsStale")
-                        .HasDatabaseName("IX_ActivityDefinitionReconciliationState_IsStale");
-
-                    b.HasIndex("TenantId");
-
-                    b.ToTable("ActivityDefinitionReconciliationStates", "Elsa");
-                });
-
             modelBuilder.Entity("Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion", b =>
                 {
                     b.Property<string>("Id")
@@ -182,6 +125,9 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.Property<string>("PortsSource")
                         .HasMaxLength(-1)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProvisioningHash")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")

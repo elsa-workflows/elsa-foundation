@@ -1,17 +1,17 @@
 using Elsa.Serialization.Core;
-using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Serialization.Services
 {
     /// <summary>
-    /// Serializes simple DTOs from and to JSON.
+    /// Serializes simple DTOs from and to JSON. Reads its <see cref="JsonConverter"/> set
+    /// from <see cref="JsonPayloadConverterRegistry"/> — populated once at startup by
+    /// <see cref="JsonPayloadConvertersInitializingStartupTask"/> dispatching the
+    /// <see cref="OnJsonPayloadConvertersInitializing"/> domain event (framework §2.6.1
+    /// Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).
     /// </summary>
-    /// <remarks>
-    /// Initializes a new instance of the <see cref="JsonPayloadSerializer"/> class.
-    /// </remarks>
-    public sealed class JsonPayloadSerializer(IServiceProvider serviceProvider) : IPayloadSerializer
+    public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
     {
         /// <inheritdoc />
         public string Serialize(object payload)
@@ -74,18 +74,13 @@ namespace Elsa.Serialization.Services
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             };
 
-            var converterProviders = serviceProvider.GetServices<IPayloadSerializerConverterProvider>();
-            foreach (var provider in converterProviders)
-            {
-                options.Converters.Add(
-                    provider.Get()
-                );
-            }
+            // Sync access to the registry populated at startup. No DI enumeration here —
+            // the registry is the seam between the async contribution pipeline and the
+            // sync System.Text.Json callbacks.
+            foreach (var converter in converterRegistry.Converters)
+                options.Converters.Add(converter);
 
             return options;
         }
-
-
     }
-
 }

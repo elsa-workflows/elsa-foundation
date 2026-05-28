@@ -7,8 +7,10 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
     /// <summary>
     /// A definition of an activity type. Identity layer of the catalog — pairs immutable
     /// logical identity (<see cref="ActivityTypeKey"/>) with immutable creation provenance.
-    /// Operational reconciliation state (LastSeenAt, hashes, removal) lives on the sibling
-    /// <c>ActivityDefinitionReconciliationState</c>.
+    /// Under the Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01 review),
+    /// there is no operational sibling; reconciliation is one-shot at creation time and the
+    /// immutable <c>ActivityDefinitionVersion.ProvisioningHash</c> carries the content hash
+    /// used by the duplicate-detection path.
     /// </summary>
     public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
     {

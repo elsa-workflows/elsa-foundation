@@ -42,7 +42,6 @@ public sealed class CrossContextLifecycleTests
 
         AssertTenantIndexRegistered(ctx, typeof(ActivityDefinition));
         AssertTenantIndexRegistered(ctx, typeof(ActivityDefinitionVersion));
-        AssertTenantIndexRegistered(ctx, typeof(ActivityDefinitionReconciliationState));
     }
 
     [Fact]

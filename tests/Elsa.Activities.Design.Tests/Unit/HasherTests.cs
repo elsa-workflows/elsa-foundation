@@ -103,6 +103,7 @@ public sealed class HasherTests
         string Id, int Version, string DefinitionId, string ActivityTypeKey,
         string ImplementationKind, IImplementationDescriptor ImplementationDescriptor,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
-        IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition
+        IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,
+        string? ProvisioningHash = null
     ) : IActivityDefinitionVersion;
 }

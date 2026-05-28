@@ -10,9 +10,7 @@ namespace Elsa.Activities.Runtime.Resolvers;
 /// </summary>
 public sealed class ClrActivityImplementationResolver : IActivityImplementationResolver<ClrImplementationDescriptor>
 {
-    public const string KindValue = "Clr";
-
-    public string Kind => KindValue;
+    public string Kind => ClrImplementationDescriptor.KindValue;
 
     public Type Resolve(ClrImplementationDescriptor descriptor) => descriptor.TypeInfo.LoadType();
 }

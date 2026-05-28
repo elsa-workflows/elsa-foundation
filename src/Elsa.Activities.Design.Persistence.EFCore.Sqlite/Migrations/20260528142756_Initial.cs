@@ -14,29 +14,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 name: "Elsa");
 
             migrationBuilder.CreateTable(
-                name: "ActivityDefinitionReconciliationStates",
-                schema: "Elsa",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    ActivityDefinitionId = table.Column<string>(type: "TEXT", nullable: false),
-                    SourceVersion = table.Column<string>(type: "TEXT", nullable: true),
-                    ProvisioningHash = table.Column<string>(type: "TEXT", nullable: true),
-                    LastSeenAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastProvisionedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastProvisionedBy = table.Column<string>(type: "TEXT", nullable: true),
-                    IsStale = table.Column<bool>(type: "INTEGER", nullable: false),
-                    RemovedAt = table.Column<string>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
-                    TenantId = table.Column<string>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ActivityDefinitionReconciliationStates", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "ActivityDefinitions",
                 schema: "Elsa",
                 columns: table => new
@@ -74,6 +51,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     OutputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     PortsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     ExecutionType = table.Column<int>(type: "INTEGER", nullable: false),
+                    ProvisioningHash = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
                     TenantId = table.Column<string>(type: "TEXT", nullable: true)
@@ -89,25 +67,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinitionReconciliationState_IsStale",
-                schema: "Elsa",
-                table: "ActivityDefinitionReconciliationStates",
-                column: "IsStale");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinitionReconciliationStates_TenantId",
-                schema: "Elsa",
-                table: "ActivityDefinitionReconciliationStates",
-                column: "TenantId");
-
-            migrationBuilder.CreateIndex(
-                name: "UX_ActivityDefinitionReconciliationState_ActivityDefinitionId",
-                schema: "Elsa",
-                table: "ActivityDefinitionReconciliationStates",
-                column: "ActivityDefinitionId",
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ActivityDefinition_Category",
@@ -151,10 +110,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "ActivityDefinitionReconciliationStates",
-                schema: "Elsa");
-
             migrationBuilder.DropTable(
                 name: "ActivityDefinitionVersions",
                 schema: "Elsa");

@@ -66,6 +66,16 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     [Immutable]
     public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
+    /// <summary>
+    /// Immutable content hash of this version's projection, computed by
+    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Under Model X this is the
+    /// only artefact carried forward between reconciliation passes: subsequent passes that
+    /// observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
+    /// against this stored value to detect source-side breakage.
+    /// </summary>
+    [Immutable]
+    public string? ProvisioningHash { get; set; }
+
     [NotMapped]
     public IEnumerable<InputDefinition> Inputs { get; set; } = [];
 

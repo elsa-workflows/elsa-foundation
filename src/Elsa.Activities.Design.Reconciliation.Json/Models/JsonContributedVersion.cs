@@ -21,4 +21,12 @@ internal sealed record JsonContributedVersion(
 {
     public string Id => string.Empty;
     public string DefinitionId => string.Empty;
+
+    /// <summary>
+    /// Contributed candidates do not know their persisted hash; the reconciler computes
+    /// it from the candidate's content via <c>IActivityDefinitionHasher</c> and writes
+    /// it onto the persisted <c>ActivityDefinitionVersion</c> at creation time. Under
+    /// Model X the persisted hash is immutable, so this null is correct contribution-side.
+    /// </summary>
+    public string? ProvisioningHash => null;
 }

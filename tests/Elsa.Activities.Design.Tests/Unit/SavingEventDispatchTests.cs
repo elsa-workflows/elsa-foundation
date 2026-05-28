@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Serialization.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -28,7 +29,7 @@ public sealed class SavingEventDispatchTests
         using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
             (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
 
-        var serializer = new JsonPayloadSerializer(new ServiceCollection().BuildServiceProvider());
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         var handler = new ActivityDefinitionVersionSavingHandler(serializer);
 
         await using var ctx = host.CreateContext();
@@ -66,7 +67,7 @@ public sealed class SavingEventDispatchTests
         // The handler filters by entity type. An OnEntitySaving for a row that isn't an
         // ActivityDefinitionVersion must pass through without touching it.
         using var host = ActivitiesDesignTestHost.Create();
-        var serializer = new JsonPayloadSerializer(new ServiceCollection().BuildServiceProvider());
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         var handler = new ActivityDefinitionVersionSavingHandler(serializer);
 
         await using var ctx = host.CreateContext();
@@ -93,7 +94,7 @@ public sealed class SavingEventDispatchTests
         // alongside the activity-catalog handler. DI resolves both — the mediator pipeline invokes
         // each in turn.
         var services = new ServiceCollection();
-        var serializer = new JsonPayloadSerializer(new ServiceCollection().BuildServiceProvider());
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         services.AddSingleton<Elsa.Serialization.Core.IPayloadSerializer>(serializer);
         services.AddScoped<IDomainEventHandler<OnEntitySaving>, ActivityDefinitionVersionSavingHandler>();
         services.AddScoped<IDomainEventHandler<OnEntitySaving>, ProbeOnEntitySavingHandler>();

@@ -1,9 +1,10 @@
 using CShells.Features;
 using Elsa.Expressions.Contracts;
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.JsonConverters;
+using Elsa.Expressions.Handlers;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;
+using Elsa.Mediator.Core.Extensions;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,23 +29,13 @@ namespace Elsa.Expressions
                 })
                 .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
                 .AddSingleton<IVariableMapper, VariableMapper>()
-                .AddSingleton<IPayloadSerializerConverterProvider>(GetVariableConverterProvider)
-                .AddSingleton<IPayloadSerializerConverterProvider>(GetFuncExpressionValueConverterProvider)
-
                 .AddScoped<IExpressionEvaluator, ExpressionEvaluator>()
-                .AddScoped<IVariableFactory, VariableFactory>()
-                ;
-        }
+                .AddScoped<IVariableFactory, VariableFactory>();
 
-        private static DefaultPayloadSerializerConverterProvider GetVariableConverterProvider(IServiceProvider sp)
-        {
-            return new DefaultPayloadSerializerConverterProvider(
-                () => new VariableConverterFactory(sp.GetRequiredService<IVariableMapper>()));
-        }
-
-        private static DefaultPayloadSerializerConverterProvider GetFuncExpressionValueConverterProvider(IServiceProvider sp)
-        {
-            return new DefaultPayloadSerializerConverterProvider(() => new FuncExpressionValueConverter());
+            // Contributes Variable<T> and FuncExpressionValue converters to the JSON payload
+            // serializer via the OnJsonPayloadConvertersInitializing domain event (framework
+            // §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3).
+            services.AddDomainEventHandler<OnJsonPayloadConvertersInitializing, ExpressionsJsonConvertersHandler>();
         }
     }
 }

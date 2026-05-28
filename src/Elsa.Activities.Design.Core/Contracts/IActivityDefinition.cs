@@ -1,9 +1,12 @@
 namespace Elsa.Activities.Design.Core.Contracts
 {
     /// <summary>
-    /// Read contract for the catalog parent — identity + creation provenance + display only.
-    /// Operational reconciliation state (LastSeenAt, hashes, IsStale, RemovedAt) lives on the
-    /// separate <c>IActivityDefinitionReconciliationState</c> sibling.
+    /// Read contract for the catalog parent — identity + creation provenance + display.
+    /// Under the Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01
+    /// architecture review), reconciliation is one-shot at creation time and all provenance
+    /// is immutable; there is no operational sibling, no per-pass mutating fields, and no
+    /// stale / removed tracking. <see cref="IActivityDefinitionVersion.ProvisioningHash"/> on
+    /// the version carries the immutable content hash used by the duplicate-detection path.
     /// </summary>
     public interface IActivityDefinition
     {

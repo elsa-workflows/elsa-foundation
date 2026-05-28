@@ -23,13 +23,61 @@ v2.0.0 provenance — consolidated fold of:
 Unit B amendment (2026-05-28, draft pending ratification):
   - §E2.8 NEW — "Activity catalog is the single source of truth for picker
     visibility." Codifies Sipke item 7. Pins: picker presence = catalog
-    presence ⋂ ¬`RemovedAt`; no live-provider enumeration; `IsBrowsable`
-    field removed; context-aware visibility (tenant/role/feature-flag)
-    deferred to a separate policy layer. Read-contract surface pinned by
-    reflection test in `Elsa.Activities.Design.Tests/Unit/ReadContractSurfaceTests.cs`.
+    presence; no live-provider enumeration; `IsBrowsable` field removed;
+    context-aware visibility (tenant/role/feature-flag) deferred to a
+    separate policy layer. Read-contract surface pinned by reflection test
+    in `Elsa.Activities.Design.Tests/Unit/ReadContractSurfaceTests.cs`.
+    *(Originally pinned with a `¬RemovedAt` clause + operational sibling;
+    superseded same-day by Unit C's Model X cascade — see "Unit C Model X
+    cascade" entry below.)*
   - §E3.9 + framework §2.6.5 already landed (worked example for the sync
     contributor pattern); Unit B verified wording on 2026-05-28. No changes
     to either section.
+
+Unit C Model X cascade (2026-05-28, draft pending 2026-06-01 ratification):
+  - §E2.8 REVISED — "Removed surface" paragraph: `Visibility = catalog
+    presence ∧ ¬reconciliation-state.RemovedAt` simplified to
+    `Visibility = catalog presence`. "Operational state lives on a sibling"
+    paragraph replaced by a "Reconciliation policy — Model X" paragraph
+    that codifies: reconciliation is one-shot at creation; no operational
+    sibling; immutable `ProvisioningHash` on `IActivityDefinitionVersion`;
+    skip-or-throw duplicate path with hash safety net (mismatch → throw
+    `ActivityVersionHashMismatchException`); source disappearance not
+    tracked; versions never deleted. Status: provisional pending the
+    2026-06-01 architecture review (agenda Items 1 + 2 in
+    `2026-06-01_AGENDA_review_meeting.md`).
+  - Cascade to Unit B's already-landed code (Joey's instruction: don't
+    rewrite Unit B's spec; rewrite Unit B's code so both reconciliation
+    surfaces are aligned under Model X):
+      - Deleted: `IActivityDefinitionReconciliationState` read contract,
+        `ActivityDefinitionReconciliationState` entity, its EF Core
+        configuration, the DbSet on `ActivitiesDesignDbContext`, and
+        the related stale-removal scaffolding.
+      - Added: `ProvisioningHash` immutable property on
+        `ActivityDefinitionVersion` (and on `IActivityDefinitionVersion`
+        read contract); `ActivityVersionHashMismatchException` in
+        `Elsa.Activities.Design.Reconciliation.Core`.
+      - Rewritten: `ActivityVersionReconciler.cs` to Model X semantics;
+        `ActivityDefinitionLookup.cs` query simplified to catalog
+        membership (no LEFT JOIN, no removal filter).
+      - Tests updated: `ReadContractSurfaceTests` (negative pin for the
+        per-pass mutating field names: `LastSeenAt`, `LastProvisionedAt`,
+        `LastProvisionedBy`, `SourceVersion`, `IsStale`, `RemovedAt`;
+        positive pin for `ProvisioningHash` on `IActivityDefinitionVersion`);
+        `PickerVisibilityTests` (removed `RemovedAt` scenario);
+        `ReconciliationStateTests.cs` deleted (subject removed per
+        framework §2.21.1 — recorded approval: Joey, as Unit C clarify
+        session 2026-05-28); `FeatureRegistrationTests` + `CrossContextLifecycleTests`
+        trimmed of sibling references.
+      - SQLite migration regenerated fresh per Unit B's "no preserved
+        production data" convention.
+
+Unit C Phase-3 cascade (2026-05-28, draft pending 2026-06-01 ratification):
+  - §E3.3 REWRITTEN under the new framework §2.6.1 intent-revealing-methods
+    sub-rule. `OnJsonPayloadConvertersInitializing` is now a `sealed class`
+    with `AddConverter(JsonConverter)` + `public IReadOnlyList<JsonConverter>
+    Converters`. Earlier "payload carries `List<JsonConverter>`" wording
+    superseded. Cross-references framework §2.6.1's new sub-pattern.
 
 Added Elsa sections (relative to v1.0.0):
   - §E2.5 — Reinforced opening: "`ElsaDbContextBase` is shared EF-Core
@@ -529,9 +577,15 @@ The Elsa 3 baseline (see §E1) enumerates loaded `IActivity` implementations at 
 
 **Removed surface:**
 
-- `IsBrowsable` on `ActivityDefinition` is **not** the visibility mechanism. It does not exist. Visibility = catalog presence ∧ ¬`reconciliation-state.RemovedAt`. The "should this row appear in the picker?" question has no per-row toggle; it is structurally derived from the data.
+- `IsBrowsable` on `ActivityDefinition` is **not** the visibility mechanism. It does not exist. Visibility = catalog presence. The "should this row appear in the picker?" question has no per-row toggle; it is structurally derived from catalog membership.
 
-**Operational state lives on a sibling.** Reconciliation state (`LastSeenAt`, `ProvisioningHash`, `IsStale`, `RemovedAt`) is on `IActivityDefinitionReconciliationState`, NOT on `IActivityDefinition`. The read contract for the parent is identity + creation provenance + display only — pinned by reflection test in `Elsa.Activities.Design.Tests`.
+**Reconciliation policy — Model X *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*.** The activity catalog is reconciled from trusted sources at creation time only. There is **no operational sibling entity**, no `LastSeenAt` heartbeat, no `IsStale` drift flag, no `RemovedAt` source-disappearance tracking. The immutable content hash for a version lives directly on `IActivityDefinitionVersion.ProvisioningHash` and is the basis of the duplicate-detection path:
+
+- Lookup by `(DefinitionId, Version)`. If absent → create with immutable provenance.
+- If present and hash differs → throw `ActivityVersionHashMismatchException` (the source is broken — same identity, different content).
+- If present and hash matches → skip or throw per the reconciliation source's duplicate-handling configuration.
+
+Source disappearance is intentionally not tracked at the entity layer; versions are never deleted. Context-aware visibility (tenant / role / feature-flag) is a separate policy layer that filters the catalog for a given context; it is not a reconciliation concern. This codification is **provisional** pending the 2026-06-01 review meeting (agenda Item 1 — Definition of Reconciliation; Item 2 — Model X mechanism); if the review revises, this section revises with it.
 
 This section codifies the rule for the activity catalog. The same shape generalises to other catalogs as Elsa accrues them (workflow catalog, script catalog, expression-evaluator catalog); each will get its own catalog-as-source-of-truth section as that catalog matures.
 
@@ -580,27 +634,36 @@ Additionally, **`DistributedLock 2.8.1`** (the meta-package fronting eleven `Dis
 
 ### §E3.3 Domain-event contribution with sync access — `JsonConverter` registry (framework §2.6.1)
 
-The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks synchronously and cannot await async dispatch at converter resolution time. Per framework §2.6.1, the contribution still flows through the domain-event pipeline — the access is sync because the population happened earlier, via the **Registry + StartUp Task sub-pattern**:
+The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks synchronously and cannot await async dispatch at converter resolution time. Per framework §2.6.1, the contribution still flows through the domain-event pipeline — the access is sync because the population happened earlier, via the **Registry + StartUp Task sub-pattern**, and the event itself follows §2.6.1's **intent-revealing-methods** sub-pattern (Unit C Phase-3 amendment 2026-05-28):
 
 1. **`Elsa.Serialization.Core`** defines:
    - `JsonPayloadConverterRegistry` — with `Register(JsonConverter)` and accessor methods.
-   - `OnJsonPayloadConvertersInitializing` — a domain event whose payload carries `List<JsonConverter>`.
+   - `OnJsonPayloadConvertersInitializing` — a `sealed class` domain event exposing `AddConverter(JsonConverter)` (intent-revealing contribution method) and `public IReadOnlyList<JsonConverter> Converters` (non-mutating read accessor for the dispatcher).
+
+   ```csharp
+   public sealed class OnJsonPayloadConvertersInitializing : IDomainEvent
+   {
+       private readonly List<JsonConverter> _converters = new();
+       public void AddConverter(JsonConverter converter) => _converters.Add(converter);
+       public IReadOnlyList<JsonConverter> Converters => _converters;
+   }
+   ```
 
 2. **`Elsa.Serialization.<Provider>`** (the feature implementing the serialization domain) registers a **StartUp task** that:
 
    ```csharp
-   var converters = new List<JsonConverter>();
-   await domainEventSender.Publish(new OnJsonPayloadConvertersInitializing(converters));
-   registry.RegisterAll(converters);
+   var @event = new OnJsonPayloadConvertersInitializing();
+   await domainEventSender.Publish(@event);
+   registry.RegisterAll(@event.Converters);
    ```
 
-3. **`Elsa.Expressions`** (and any other contributing feature) extends serialization by **handling the event** and adding entries to the carried list — e.g. contributing a `VariableJsonConverter` for `Variable<T>` payloads — without either feature referencing the other.
+3. **`Elsa.Expressions`** (and any other contributing feature) extends serialization by **handling the event** and contributing entries via the `AddConverter` method — e.g. `@event.AddConverter(new VariableJsonConverter())` — without either feature referencing the other.
 
 4. **At runtime**, the `JsonPayloadSerializer`'s sync code accesses the populated `JsonPayloadConverterRegistry` directly. No async dispatch at the read site.
 
-The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1.
+The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1, refactored under the §2.6.1 intent-revealing-methods sub-rule.
 
-*Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up — to land before v2.0.0 ratification.
+*Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up — to land before v2.0.0 ratification. When the migration lands, it adopts the method-based event shape shown here.
 
 ### §E3.4 Feature inheritance (framework §2.5)
 

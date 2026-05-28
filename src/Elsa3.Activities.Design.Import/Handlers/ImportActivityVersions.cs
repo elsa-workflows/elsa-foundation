@@ -27,7 +27,7 @@ public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IAc
             var enumerable = mapper.Map<IActivityDefinitionVersion>(definitions, cancellationToken);
             await foreach(var def in enumerable)
             {
-                domainEvent.Versions.Add(def);
+                domainEvent.AddVersion(def);
             }
         }
     }

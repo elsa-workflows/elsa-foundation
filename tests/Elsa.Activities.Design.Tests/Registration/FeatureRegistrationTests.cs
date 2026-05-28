@@ -78,7 +78,8 @@ public sealed class FeatureRegistrationTests
     {
         var services = MinimalServices();
         // The JSON source's handler depends on IPayloadSerializer + IImplementationDescriptorRegistry.
-        services.AddSingleton<IPayloadSerializer>(sp => new JsonPayloadSerializer(sp));
+        services.AddSingleton<JsonPayloadConverterRegistry>();
+        services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
         services.AddSingleton<IImplementationDescriptorRegistry, Elsa.Activities.Design.Core.Models.ImplementationDescriptorRegistry>();
 
         new ActivitiesDesignReconciliationJsonFeature
@@ -98,7 +99,8 @@ public sealed class FeatureRegistrationTests
     public void SqliteActivitiesDesignPersistenceShellFeature_RegistersLookupAndSavingHandler()
     {
         var services = MinimalServices();
-        services.AddSingleton<IPayloadSerializer>(sp => new JsonPayloadSerializer(sp));
+        services.AddSingleton<JsonPayloadConverterRegistry>();
+        services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
 
         new SqliteActivitiesDesignPersistenceShellFeature
         {
@@ -117,10 +119,6 @@ public sealed class FeatureRegistrationTests
         // IQueries<> for each entity resolves via ConfigureQueries<TDbContext>.
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinition>>());
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinitionVersion>>());
-        Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinitionReconciliationState>>());
-
-        // Save command for the reconciliation-state sibling (used by the reconciler).
-        Assert.NotNull(scope.ServiceProvider.GetService<ISaveCommand<ActivityDefinitionReconciliationState>>());
 
         // The migrated saving handler resolves through the OnEntitySaving domain-event
         // surface (Unit A code-checklist closure). Handlers register as non-generic.
@@ -144,17 +142,17 @@ public sealed class FeatureRegistrationTests
     /// <summary>
     /// Reconciler depends on a handful of cross-feature persistence services. Stub them so
     /// the registration test focuses on whether the Reconciliation feature itself wires
-    /// correctly — not on a full persistence stack.
+    /// correctly — not on a full persistence stack. Under Model X (Unit C 2026-05-28) the
+    /// reconciler no longer takes a clock, no longer queries / saves a reconciliation-state
+    /// sibling — those dependencies have been removed.
     /// </summary>
     private static void StubReconcilerDependencies(IServiceCollection services)
     {
         services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
         services.AddSingleton<IQueries<ActivityDefinition>, ThrowingQueriesForRegistration<ActivityDefinition>>();
         services.AddSingleton<IQueries<ActivityDefinitionVersion>, ThrowingQueriesForRegistration<ActivityDefinitionVersion>>();
-        services.AddSingleton<IQueries<ActivityDefinitionReconciliationState>, ThrowingQueriesForRegistration<ActivityDefinitionReconciliationState>>();
         services.AddSingleton<IAddActivityDefinitionCommand, StubAddActivityDefinitionCommand>();
         services.AddSingleton<IAddCommand<ActivityDefinitionVersion>, StubAddCommand<ActivityDefinitionVersion>>();
-        services.AddSingleton<ISaveCommand<ActivityDefinitionReconciliationState>, StubSaveCommand<ActivityDefinitionReconciliationState>>();
     }
 
     private sealed class StubDomainEventSender : IDomainEventSender
@@ -208,10 +206,5 @@ public sealed class FeatureRegistrationTests
     private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Elsa.Primitives.Entities.Entity
     {
         public Task Add(TEntity entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class StubSaveCommand<TEntity> : ISaveCommand<TEntity> where TEntity : Elsa.Primitives.Entities.Entity
-    {
-        public Task SaveAsync(TEntity entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

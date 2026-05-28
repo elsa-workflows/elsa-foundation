@@ -21,6 +21,38 @@ v2.0.0 provenance — consolidated fold of:
      → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
      → Elsa §E2.7).
 
+Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification):
+  - §2.22.1 NEW sub-rule — "Domain-level events catalog." Every domain whose
+    `.Core` declares contribution or lifecycle domain events MUST ship a
+    domain-events catalog at the `.Core` project level documenting every
+    event with semantic, payload, publication site, expected handlers,
+    ordering guarantees, and cross-references. Complements §2.22's
+    per-feature documentation requirement — the catalog is the
+    domain-level index for "what events does this domain publish?". Form
+    is application-defined; recommended `DOMAIN_EVENTS.md` at the `.Core`
+    project root. Worked example: Unit C creates `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md`
+    covering FR-018 + FR-018a events.
+
+Unit C Phase-3 amendment (2026-05-28, draft pending 2026-06-01 ratification):
+  - §2.6.1 EXTENDED — NEW sub-pattern "Domain events expose intent-revealing
+    methods, not raw collections." Codifies Joey's 2026-05-28 articulation:
+    domain events that gather handler contributions expose method-based
+    contribution APIs (e.g. `AddVersion(...)`, `AddValidationError(...)`)
+    rather than public mutable collections. Backing collection is private;
+    read access is via a public `IReadOnlyList<T>` property — non-mutating by
+    type, so public visibility is safe and `InternalsVisibleTo` is NOT
+    required (avoided as default). Events MUST be `sealed class` (not
+    `record`) to enforce encapsulation. Smell heuristic: too wide a variety
+    of methods on one event indicates two distinct events that should be
+    split.
+  - Code cascade (this branch): `OnActivityVersionsReconciling` (Unit B's
+    reconciliation event) refactored from record-with-ICollection to
+    sealed-class-with-`AddVersion(...)`; the reconciler and JSON handler
+    updated accordingly. Same retroactive cascade reasoning as Phase-1's
+    Model X rewrite: don't leave two patterns in the codebase.
+  - Worked examples queued for §E3.3 rewrite (in Elsa constitution) and Unit
+    C's `OnDraftValidating` (with `AddValidationError(ValidationError)` method).
+
 Added sections (framework layer, relative to v1.0.0):
   - §2.2 — "Secondary-domain naming sub-rule" (new subsection within §2.2):
     when a feature only contributes implementations of another domain's
@@ -501,6 +533,42 @@ When a registry-style or index-style consumer needs access to contributions from
 
 The result: **all cross-feature contribution flows through the same domain-event pipeline**, including cases where the access pattern is sync. There is no separate "sync fallback" mechanism.
 
+**Sub-pattern — Domain events expose intent-revealing methods, not raw collections.**
+
+A domain event that gathers handler contributions MUST expose **method-based contribution APIs** rather than a public collection that handlers mutate directly. The backing collection MUST be private; the dispatcher reads contributions via a **public `IReadOnlyList<T>`** property. Read access is public because `IReadOnlyList<T>` is structurally non-mutating — no caller can `Add`, `Remove`, `Clear`, or replace the list; only the event's own contribution method (`AddX`) can populate it. `InternalsVisibleTo` to expose the read surface to a specific dispatcher assembly is NOT required and SHOULD be avoided as default — `IReadOnlyList<T>` already prevents the misuse the rule is trying to prevent.
+
+> *Anti-pattern (synthetic).* An event with `public ICollection<TItem> Items { get; }` lets handlers call `Add`, `Remove`, `Clear`, replace, reorder. Any handler can accidentally undo another handler's contribution; there is no surface that documents what the event is *for*.
+>
+> *Pattern (synthetic).* The same event exposes `public void Add<MethodName>(TItem item)` (or several intent-revealing methods, one per contribution kind). Handlers can only contribute; the read view is `public IReadOnlyList<TItem> Items` — non-mutating by type. The dispatcher reads `Items` after the handler chain runs.
+
+**Why.**
+
+- **Encapsulation.** Handlers contribute through method calls; they cannot replace the backing list or mutate items in place via the read surface.
+- **Self-documenting contract.** The method names ARE the event's documentation. `AddVersion(IActivityDefinitionVersion)` says exactly what handlers may do; `Versions.Add(...)` says nothing about intent.
+- **Smell heuristic.** **Too wide a variety of methods on a single domain event indicates two distinct events that should be split.** If an event exposes `AddX`, `RemoveY`, `UpdateZ`, that event is conflating contribution kinds — split into separate events bound to separate semantic phases.
+- **Read access without ceremony.** `IReadOnlyList<T>` typing is the constraint, not visibility. Handlers MAY read what other handlers contributed during the same dispatch (useful for "have my dependencies already contributed?" patterns) but cannot mutate the result. This is sufficient for the encapsulation goal; `InternalsVisibleTo` to a dispatcher assembly would be over-engineering.
+
+**Mechanical rule.**
+
+```
+public sealed class On<Phase> : IDomainEvent
+{
+    private readonly List<TItem> _items = new();
+
+    public TContext Context { get; }              // anything handlers need to inspect
+    public On<Phase>(TContext context) => Context = context;
+
+    public void Add<MethodName>(TItem item) => _items.Add(item);
+    public IReadOnlyList<TItem> Items => _items; // read-only by type; safe public access
+}
+```
+
+Records with public collection properties (e.g. `record On<Event>(ICollection<TItem> Items)`) are an older shape this sub-rule supersedes. Domain events MUST be `sealed class` (not `record`) to enforce the encapsulation — record auto-properties bypass the private-backing-list constraint.
+
+**Cross-reference.** The Registry + StartUp Task sub-pattern's example above is rewritten under this rule: `On<RegistryName>Initializing` exposes `void Add(T item)` rather than carrying a `List<T>` payload; the StartUp task reads the populated `Items` (internal accessor) after the dispatch and flushes into the Registry.
+
+The Elsa-specific worked examples land in §E3.3 (`OnJsonPayloadConvertersInitializing` rewritten) and in Unit C's `OnActivityVersionsReconciling` + `OnDraftValidating` (per Unit C's Phase-3 cascade — `follow-up-items/2026-05-28_unitC_workflow_definition_state_scope.md` + `2026-06-01_AGENDA_review_meeting.md` Item 4).
+
 **Domain-design consequence.** Enumerating a domain's domain events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named domain events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, notifications nobody can find handlers for) fails this rule.
 
 **Feature documentation requirement.** Every feature's documentation MUST contain a discoverable inventory of:
@@ -877,6 +945,32 @@ Every feature MUST be accompanied by documentation that lets operators, integrat
 - Dependencies on other features.
 
 The form of the documentation (README, manifest, generated reference, sidecar JSON) is application-defined. The obligation is the content, not the medium.
+
+#### §2.22.1 Domain-level events catalog
+
+*New sub-rule (Unit C Phase-5 amendment, 2026-05-28; draft pending 2026-06-01 ratification).*
+
+Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library declares contribution or lifecycle domain events MUST ship a **domain-events catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what events does this domain publish?* Without re-reading every feature implementation.
+
+**Minimum required content per event in the catalog:**
+
+- **Event class name** (e.g. `OnDraftClonedFromVersion`).
+- **One-line semantic description** — what just happened in the domain.
+- **Payload signature** — intent-revealing method names (per the §2.6.1 sub-rule) and payload types handlers receive.
+- **Publication site** — which command, pipeline step, or lifecycle hook fires the event.
+- **Expected handler audiences** — typical contributors (built-in feature, optional features that may subscribe, cross-domain consumers).
+- **Ordering guarantees** if any — e.g., "fires after the materialized snapshot is updated but before the persistence flush."
+- **Cross-references** to other domains' catalogs that consumers should be aware of (e.g., a Workflows.Design event that's also relevant to a future Workflows.Build subscriber).
+
+**Why a separate catalog.**
+
+- The §2.22 per-feature documentation answers *"what does THIS feature register?"* — useful when investigating a feature.
+- The domain-events catalog answers *"what extension points does THIS domain expose?"* — useful when *consuming* the domain, designing a new contributor, or onboarding into the domain cold.
+- The two views are complementary; the catalog is the index humans and AI sessions reach for first.
+
+**Form.** Application-defined. Recommended: a single `DOMAIN_EVENTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/DOMAIN_EVENTS.md`). Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
+
+**Worked example.** Unit C creates the initial Elsa worked example: `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` covering the Draft mutation events (FR-018) + Draft lifecycle events (FR-018a). As subsequent units add events to other Design domains, each domain ships its own catalog.
 
 ### §2.23 Unit tests
 

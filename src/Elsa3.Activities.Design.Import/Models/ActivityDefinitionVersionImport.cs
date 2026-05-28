@@ -16,4 +16,12 @@ public sealed record ActivityDefinitionVersionImport(
     IEnumerable<ActivityPortDefinition> Ports,
     ActivityExecutionType ExecutionType
 )
-: IActivityDefinitionVersion;
+: IActivityDefinitionVersion
+{
+    /// <summary>
+    /// Imported Elsa-3 versions do not carry a Model-X content hash; the reconciler
+    /// computes it at creation time on the Elsa-4 side. Under Model X the persisted
+    /// hash is immutable, so this null is correct on the import surface.
+    /// </summary>
+    public string? ProvisioningHash => null;
+}

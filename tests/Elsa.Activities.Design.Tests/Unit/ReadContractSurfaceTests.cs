@@ -1,65 +1,78 @@
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.EFCore.DbContext;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.EFCore.Extensions;
-using Elsa.Persistence.EFCore.Sqlite;
-using Elsa.Persistence.EFCore.Contracts;
-using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Services;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US6 — Read-contract surface pinning. The picker/designer/runtime consumer-set sees
-/// <see cref="IActivityDefinition"/> only; operational reconciliation state lives on the
-/// separate <see cref="IActivityDefinitionReconciliationState"/> contract. Reflection tests
-/// fail loudly if a future refactor leaks reconciliation-state fields onto the parent
-/// contract (or vice versa).
+/// US6 — Read-contract surface pinning. Under the Model X reconciliation policy (Unit C
+/// 2026-05-28), the parent <see cref="IActivityDefinition"/> exposes identity + creation
+/// provenance + display only; per-pass mutating reconciliation state (LastSeenAt, IsStale,
+/// RemovedAt, etc.) does NOT exist anywhere in the domain because reconciliation is one-shot
+/// at creation time. The Version's content hash lives on
+/// <see cref="IActivityDefinitionVersion.ProvisioningHash"/> as an immutable read-only
+/// property. Reflection tests fail loudly if a future refactor reintroduces operational
+/// per-pass fields onto these contracts.
 /// </summary>
 public sealed class ReadContractSurfaceTests
 {
-    private static readonly string[] ReconciliationStateFieldNames =
+    /// <summary>
+    /// Operational per-pass field names that MUST NOT appear on any catalog read contract
+    /// under Model X. If a future refactor adds one of these to <see cref="IActivityDefinition"/>
+    /// or <see cref="IActivityDefinitionVersion"/>, the reconciliation policy has silently
+    /// drifted back toward the pre-Model-X model.
+    /// </summary>
+    private static readonly string[] ForbiddenPerPassFieldNames =
     [
-        nameof(IActivityDefinitionReconciliationState.SourceVersion),
-        nameof(IActivityDefinitionReconciliationState.ProvisioningHash),
-        nameof(IActivityDefinitionReconciliationState.LastSeenAt),
-        nameof(IActivityDefinitionReconciliationState.LastProvisionedAt),
-        nameof(IActivityDefinitionReconciliationState.LastProvisionedBy),
-        nameof(IActivityDefinitionReconciliationState.IsStale),
-        nameof(IActivityDefinitionReconciliationState.RemovedAt),
+        "LastSeenAt",
+        "LastProvisionedAt",
+        "LastProvisionedBy",
+        "SourceVersion",
+        "IsStale",
+        "RemovedAt",
     ];
 
     [Fact]
-    public void IActivityDefinition_DoesNotExposeReconciliationStateFields()
+    public void IActivityDefinition_DoesNotExposeAnyPerPassReconciliationField()
     {
         var properties = typeof(IActivityDefinition)
             .GetProperties()
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var fieldName in ReconciliationStateFieldNames)
+        foreach (var fieldName in ForbiddenPerPassFieldNames)
         {
             Assert.DoesNotContain(fieldName, properties);
         }
     }
 
     [Fact]
-    public void IActivityDefinitionReconciliationState_ExposesAllReconciliationStateFields()
+    public void IActivityDefinitionVersion_DoesNotExposeAnyPerPassReconciliationField()
     {
-        var properties = typeof(IActivityDefinitionReconciliationState)
+        // ProvisioningHash IS allowed on the Version (it's an immutable artefact, not a
+        // per-pass mutating field). The forbidden list excludes it explicitly.
+        var properties = typeof(IActivityDefinitionVersion)
             .GetProperties()
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var fieldName in ReconciliationStateFieldNames)
+        foreach (var fieldName in ForbiddenPerPassFieldNames)
         {
-            Assert.Contains(fieldName, properties);
+            Assert.DoesNotContain(fieldName, properties);
         }
+    }
+
+    [Fact]
+    public void IActivityDefinitionVersion_ExposesProvisioningHash()
+    {
+        // Model X depends on the hash being on the Version (immutable) so the duplicate
+        // detection path can compare incoming hash to persisted hash without re-loading
+        // the version's full content.
+        var properties = typeof(IActivityDefinitionVersion)
+            .GetProperties()
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains(nameof(IActivityDefinitionVersion.ProvisioningHash), properties);
     }
 
     [Fact]
@@ -74,26 +87,5 @@ public sealed class ReadContractSurfaceTests
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.DoesNotContain("IsBrowsable", properties);
-    }
-
-    [Fact]
-    public void IQueries_OfReconciliationState_IsResolvable_FromDI()
-    {
-        // The reconciliation-state sibling is a first-class entity reachable via the
-        // standard IQueries<TEntity> contract. Audit endpoints and the stale-removal sweep
-        // (Unit F) consume it through this surface.
-        using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
-
-        var services = new ServiceCollection();
-        services.AddSingleton<ISystemClock, SystemClock>();
-        services.AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
-        services.AddDbContextFactory<ActivitiesDesignDbContext>(o => o.UseSqlite(connection));
-        services.ConfigureQueries<ActivitiesDesignDbContext>();
-
-        using var provider = services.BuildServiceProvider();
-        var queries = provider.GetService<IQueries<ActivityDefinitionReconciliationState>>();
-
-        Assert.NotNull(queries);
     }
 }

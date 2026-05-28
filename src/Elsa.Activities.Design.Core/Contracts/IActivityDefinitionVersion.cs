@@ -39,4 +39,15 @@ public interface IActivityDefinitionVersion
     IEnumerable<ActivityPortDefinition> Ports { get; }
 
     ActivityExecutionType ExecutionType { get; }
+
+    /// <summary>
+    /// Immutable content hash of this version's projection, computed by
+    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Used by the Model X
+    /// duplicate-detection path: when a subsequent reconciliation pass observes the same
+    /// <c>(DefinitionId, Version)</c>, the incoming candidate's hash is compared to this
+    /// stored value. Mismatch signals "the source is broken — same identity, different
+    /// content" and the reconciler throws; match → skip or throw per duplicate-handling
+    /// configuration.
+    /// </summary>
+    string? ProvisioningHash { get; }
 }

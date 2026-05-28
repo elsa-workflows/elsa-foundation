@@ -62,7 +62,7 @@ public sealed class JsonActivityVersionsReconcilingHandler(
                 Definition: definition
             );
 
-            domainEvent.Versions.Add(version);
+            domainEvent.AddVersion(version);
         }
     }
 

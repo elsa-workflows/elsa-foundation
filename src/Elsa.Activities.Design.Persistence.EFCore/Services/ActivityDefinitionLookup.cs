@@ -49,14 +49,12 @@ public sealed class ActivityDefinitionLookup(
     {
         await using var ctx = await contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // LEFT JOIN reconciliation-state; exclude rows whose state has RemovedAt set.
-        // Rows without a sibling (admin-created) pass through.
-        var query = from def in ctx.ActivityDefinitions
-                    join state in ctx.ActivityDefinitionReconciliationStates
-                        on def.Id equals state.ActivityDefinitionId into states
-                    from state in states.DefaultIfEmpty()
-                    where state == null || state.RemovedAt == null
-                    select def;
+        // Model X: picker visibility = catalog membership. No RemovedAt filter; no LEFT JOIN
+        // against a reconciliation-state sibling (which has been removed under Model X).
+        // Source disappearance is intentionally not tracked at the entity layer; activities
+        // that were once provisioned remain in the catalog. Context-aware visibility
+        // (tenant / role / feature-flag) is a separate policy layer per §E2.8.
+        var query = ctx.ActivityDefinitions.AsQueryable();
 
         if (id != null)
             query = query.Where(x => x.Id == id);

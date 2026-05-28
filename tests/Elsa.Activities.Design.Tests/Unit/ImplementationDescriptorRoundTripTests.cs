@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Serialization.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,7 +26,7 @@ public sealed class ImplementationDescriptorRoundTripTests
         var defId = Guid.NewGuid().ToString("N");
         var vId = Guid.NewGuid().ToString("N");
         var originalTypeInfo = new TypeInformation("SendRequest", "Acme.Http", "Acme.Http", "1.0.0.0");
-        var serializer = new JsonPayloadSerializer(new ServiceCollection().BuildServiceProvider());
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
         await using (var ctx = host.CreateContext())
         {
@@ -72,7 +73,7 @@ public sealed class ImplementationDescriptorRoundTripTests
 
         var defId = Guid.NewGuid().ToString("N");
         var vId = Guid.NewGuid().ToString("N");
-        var serializer = new JsonPayloadSerializer(new ServiceCollection().BuildServiceProvider());
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
         await using (var ctx = host.CreateContext())
         {
