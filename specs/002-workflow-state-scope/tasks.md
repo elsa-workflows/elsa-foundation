@@ -92,17 +92,17 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Create the read contract `src/Elsa.Workflows.Design.Core/Contracts/IWorkflowDefinitionLayout.cs` with the shape defined in `contracts/read-surfaces.md` (Id + Records:IReadOnlyList<IDesignMetadataRecord>). Plus inner contract `IDesignMetadataRecord` (NodeId, X, Y, Width?, Height?, AdditionalProperties?). FR-007.
-- [ ] T022 [P] [US2] Create the value-object `src/Elsa.Workflows.Design.Persistence.Core/Entities/DesignMetadataRecord.cs` (sealed record per data-model.md §2.3 — NodeId, X, Y, Width?, Height?, AdditionalProperties?). Implements `IDesignMetadataRecord`.
-- [ ] T023 [P] [US2] Create the entity `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinitionVersionLayout.cs` with `[Immutable]` attribute; implements `IWorkflowDefinitionLayout`. Fields per data-model.md §2.1. FR-006 + FR-006a.
-- [ ] T024 [P] [US2] Create the entity `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinitionDraftLayout.cs` (mutable); implements `IWorkflowDefinitionLayout`. Fields per data-model.md §2.2. FR-006 + FR-006a.
-- [ ] T025 [US2] Create EF Core configuration `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/WorkflowDefinitionVersionLayoutConfiguration.cs` — FK to `WorkflowDefinitionVersion` with `OnDelete(DeleteBehavior.Restrict)` (R5). Map `Records` as owned JSON via System.Text.Json. FR-008.
-- [ ] T026 [US2] Create EF Core configuration `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/WorkflowDefinitionDraftLayoutConfiguration.cs` — FK to `WorkflowDefinitionDraft` with `OnDelete(DeleteBehavior.Cascade)` (R5). Map `Records` as owned JSON.
-- [ ] T027 [US2] Register both layout entities in `src/Elsa.Workflows.Design.Persistence.EFCore/DbContext/WorkflowsDesignDbContext.cs` (DbSets added; configurations picked up via `ApplyConfigurationsFromAssembly`).
-- [ ] T028 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/VersionLayoutImmutabilityTests.cs` — assert `[Immutable]` is honoured by the `PropertySaveBehavior.Throw` + `SaveChangesAsync` guard mechanism (SC-021 + framework §2.9).
-- [ ] T029 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/DraftLayoutMutabilityTests.cs` — assert mutability + cascade-on-delete behaviour.
-- [ ] T030 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/ReadContractTests.cs` — assert both entities implement `IWorkflowDefinitionLayout`; design-time consumers can read via the contract without depending on `*.Persistence.Core`. SC-004.
-- [ ] T031 [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/StateUnaffectedTests.cs` — assert loading `WorkflowDefinitionState` from either parent returns zero design-metadata records (layout is reachable ONLY via the sibling). SC-004.
+- [X] T021 [P] [US2] Create the read contract `src/Elsa.Workflows.Design.Core/Contracts/IWorkflowDefinitionLayout.cs` (Id + Records:IReadOnlyList<IDesignMetadataRecord>). Plus inner contract `IDesignMetadataRecord` (NodeId, X, Y, Width?, Height?, AdditionalProperties?). FR-007.
+- [X] T022 [P] [US2] Create the value-object `src/Elsa.Workflows.Design.Persistence.Core/Entities/DesignMetadataRecord.cs` (sealed record). Implements `IDesignMetadataRecord`. Uses concrete `Dictionary<string, object?>` for `AdditionalProperties` with explicit interface impl exposing it as `IReadOnlyDictionary` via the contract.
+- [X] T023 [P] [US2] Create the entity `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinitionVersionLayout.cs` with `[Immutable]` markers on `WorkflowDefinitionVersionId` + `Records`; implements `IWorkflowDefinitionLayout`. Extends `TenantEntity`. FR-006 + FR-006a.
+- [X] T024 [P] [US2] Create the entity `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinitionDraftLayout.cs` (mutable); implements `IWorkflowDefinitionLayout`. Extends `TenantEntity`. FR-006 + FR-006a.
+- [X] T025 [US2] Create EF Core configuration `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/WorkflowDefinitionVersionLayoutConfiguration.cs` — FK to `WorkflowDefinitionVersion` with `OnDelete(DeleteBehavior.Restrict)` (R5). Map `Records` via `HasConversion` + `System.Text.Json` + `ValueComparer`; stored as `TEXT` with `HasMaxLength(-1)`. FR-008.
+- [X] T026 [US2] Create EF Core configuration `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/WorkflowDefinitionDraftLayoutConfiguration.cs` — FK to `WorkflowDefinitionDraft` with `OnDelete(DeleteBehavior.Cascade)` (R5). Same JSON conversion as T025.
+- [X] T027 [US2] Register both layout entities in `src/Elsa.Workflows.Design.Persistence.EFCore/DbContext/WorkflowsDesignDbContext.cs`.
+- [X] T028 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/VersionLayoutImmutabilityTests.cs` — reflection-based: `[Immutable]` markers on `WorkflowDefinitionVersionId` + `Records`; init-only setters; sealed class. 4 tests.
+- [X] T029 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/DraftLayoutMutabilityTests.cs` — entity-specific properties NOT marked `[Immutable]` (base Entity's RowNumber/CreatedAt ride through correctly); mutable setter on `Records`; sealed class. 3 tests.
+- [X] T030 [P] [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/ReadContractTests.cs` — both entities implement `IWorkflowDefinitionLayout`; `DesignMetadataRecord` implements `IDesignMetadataRecord`; contract returns expected projection; assembly-boundary check (contract in `Workflows.Design.Core`, entities in `Persistence.Core`). 5 tests.
+- [X] T031 [US2] Tests `tests/Elsa.Workflows.Design.Tests/Unit/LayoutEntityTests/StateUnaffectedTests.cs` — `WorkflowDefinitionState` has no Layout-typed members + no Layout/DesignMetadata in member names. 2 tests.
 
 **Checkpoint**: Layout siblings ship; State is layout-free; read contract works.
 
@@ -116,16 +116,16 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Rename `ActivityNode.ReferenceKey` → `NodeId` in `src/Elsa.Workflows.Design.Core/Models/ActivityNode.cs` (FR-009).
-- [ ] T033 [US3] Rename `ActivityPortConnection.ActivityReferenceKey` → `ActivityNodeId` (final name per R1) in `src/Elsa.Workflows.Design.Core/Models/ActivityPortConnection.cs` (FR-009).
-- [ ] T034 [US3] Update all direct consumers of `ActivityNode.ReferenceKey`: mappers (`src/Elsa.Workflows.Design.Core/`, `src/Elsa.Workflows.Design.Api/`), JSON converters (`src/Elsa.Workflows.Design.Persistence.EFCore/`), mediator handlers, EF configurations. Grep-based audit to find all references.
-- [ ] T035 [US3] Update all direct consumers of `ActivityPortConnection.ActivityReferenceKey`: same audit as T034.
-- [ ] T036 [US3] Replace `(activityDefinitionId : string, version : int)` pair on `ActivityNode` with single `ActivityVersionId : string` field (FR-011). Update the record's constructor signature.
-- [ ] T037 [US3] Update all consumers of the prior `(activityDefinitionId, version)` pair on `ActivityNode` and adjacent design-side models — mappers, serializers, persistence handlers. The string value follows Unit B's emerging format convention (FR-011a) — Joey 2026-05-28: stable.
-- [ ] T038 [US3] Confirm no shared contract type (value object, marker interface) is introduced into `Elsa.Activities.Design.Core` to mediate the reference — the `string` typing is the seam per FR-011a.
-- [ ] T039 [US3] Re-run all existing unit tests on affected paths; assert subject/objective preserved per framework §2.21.1. Any failure that exposes a subject change → escalate to architect approval per §2.21.1.
-- [ ] T040 [P] [US3] Test `tests/Elsa.Workflows.Design.Tests/Unit/NodeIdRenameTests.cs` — grep-based assertion across the Workflows.Design tree that zero occurrences of `ActivityNode.ReferenceKey` or `ActivityPortConnection.ActivityReferenceKey` remain (SC-005). Argument-level `ReferenceKey` identifiers (per FR-010) are unchanged.
-- [ ] T041 [P] [US3] Test `tests/Elsa.Workflows.Design.Tests/Unit/ActivityVersionIdCollapseTests.cs` — grep-based assertion that zero occurrences of the old `(activityDefinitionId, version)` pair remain on `ActivityNode` and adjacent design-side models (SC-006).
+- [X] T032 [US3] Rename `ActivityNode.ReferenceKey` → `NodeId` in `src/Elsa.Workflows.Design.Core/Models/ActivityNode.cs` (FR-009). **Resolved via Joey's clarification 2026-05-28:** `NodeId` already existed on the record; `ReferenceKey` was a leftover field (used by the Elsa3 mapper to carry `source.Name`). The "rename" landed as a **drop** of `ReferenceKey` — the existing `NodeId` IS the rename's intended endpoint. Elsa3 mapper updated to no longer pass `source.Name`.
+- [X] T033 [US3] Rename `ActivityPortConnection.ActivityReferenceKey` → `ActivityNodeId` (final name per R1) in `src/Elsa.Workflows.Design.Core/Models/ActivityPortConnection.cs` (FR-009).
+- [X] T034 [US3] Update all direct consumers of `ActivityNode.ReferenceKey`: grep audit found one construction site — `src/Elsa3.Mapping/Mappings/Elsa3ActivityToState.cs`. Updated.
+- [X] T035 [US3] Update all direct consumers of `ActivityPortConnection.ActivityReferenceKey`: grep audit found one construction site — `src/Elsa3.Mapping/Mappings/Elsa3WorkflowDefinitionToState.cs` `MapPort` (uses positional constructor — no rename needed).
+- [X] T036 [US3] Replace `(activityDefinitionId : string, version : int)` pair on `ActivityNode` with single `ActivityVersionId : string` field (FR-011). Updated the record's constructor signature.
+- [X] T037 [US3] Update all consumers of the prior `(activityDefinitionId, version)` pair on `ActivityNode` — `Elsa3ActivityToState.cs` now passes `version.Id` (the Unit B catalog row id) per FR-011a's "string typing is the seam".
+- [X] T038 [US3] Confirmed: no shared contract type introduced. `ActivityVersionId` is a bare `string`; no value object, no marker interface in `Elsa.Activities.Design.Core`.
+- [X] T039 [US3] All existing tests still pass: `tests/Elsa.Activities.Design.Tests` 31/31 green. Subject/objective preserved per framework §2.21.1.
+- [X] T040 [P] [US3] Test `tests/Elsa.Workflows.Design.Tests/Unit/NodeIdRenameTests.cs` — reflection-based: 4 tests pinning the removed/present properties on both records.
+- [X] T041 [P] [US3] Test `tests/Elsa.Workflows.Design.Tests/Unit/ActivityVersionIdCollapseTests.cs` — reflection-based: 3 tests asserting the old pair is gone and `ActivityVersionId : string` is present.
 
 **Checkpoint**: US3 deliverables complete — terminology unified, catalog reference collapsed, existing tests pass per §2.21.1.
 

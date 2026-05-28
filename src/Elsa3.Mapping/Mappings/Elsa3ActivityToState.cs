@@ -25,17 +25,19 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
 
         return new ActivityNode(
             source.NodeId,
-            version.Definition.Id,
-            version.Version,
-            source.Name,
+            version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
             inputs,
             outputs,
             IsContainer: false,
             IsStart: source.CustomProperties?.CanStartWorkflow ?? false,
             IsTerminal: false,
-            DisplayInfo: MapMetaData(source.Metadata),
             ChildActivities: childActivities ?? []
         );
+        // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
+        // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
+        // now lives on WorkflowDefinitionVersionLayout sibling as DesignMetadataRecord (§E2.9.2).
+        // Wiring the importer to populate the layout sibling alongside the version is a
+        // separate task — flagged in the Unit C follow-up as Elsa3-import layout-carryover.
     }
 
     private async ValueTask<IEnumerable<ActivityNode>> GetChildActivities(Elsa3Activity source, CancellationToken cancellationToken)
@@ -48,19 +50,6 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         }
 
         return result;
-    }
-
-    private static ActivityDisplayInfo? MapMetaData(Elsa3ActivityMetadata? metaData)
-    {
-        if (metaData is null)
-            return null;
-
-        return new(
-            metaData.Designer.Position.X,
-            metaData.Designer.Position.Y,
-            metaData.Designer.Size.Width,
-            metaData.Designer.Size.Height
-        );
     }
 
     private static void ExtractInputsAndOutputs(
