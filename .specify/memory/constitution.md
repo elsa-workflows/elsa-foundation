@@ -453,6 +453,8 @@ Rejected names for the sub-domains:
 - `Elsa.Workflows.Definitions.*` — rejected as ambiguous; both Design and Runtime ultimately concern workflow definitions in different forms.
 - **`Elsa.Workflows.Design.*` (current)** — names the activity (designing workflows), not the artefact, which makes the asymmetry with Runtime clearer.
 
+**See also §E2.9** — the `WorkflowDefinitionState` scope policy and the architectural triplet `WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable` formalise the Design-side artefacts and name the seam by which they reach Runtime.
+
 ### §E2.3 `Elsa.Primitives` charter
 
 **framework §2.3 — Elsa specialization.** The historical `Elsa.Common` package was the leakage vector through which `IronCompress`, `DistributedLock.Core`, and configuration types bled into every consumer in elsa-core (§E1, anti-pattern 6).
@@ -548,6 +550,8 @@ Visualisation of an executed instance happens at the application layer, traversi
 
 **Hard rule.** A runtime that needs to load design-side data to execute is a §E2.2 hard-rule violation. The seam between Design and Runtime is the runnable artifact; nothing else crosses it at execution time.
 
+**See also §E2.9** — `WorkflowExecutable` is named in the architectural triplet `WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable`. State is the source; `WorkflowExecutable` is the derived runnable form the Runtime sub-domain consumes per this section's artifact-only contract.
+
 ### §E2.7 Elsa 3 backward compatibility — import-only
 
 Elsa 4's compatibility with Elsa 3 is bounded to **import**. A dedicated adapter module — `Elsa3.Workflows.Import` (and analogous siblings as needed for activities, instances, or other Elsa 3 artefacts) — maps Elsa 3 workflow definitions, activity descriptors, and persistence schemas into the Elsa 4 entity model. Once imported, Elsa 4 runs them natively through its own runtime.
@@ -605,6 +609,66 @@ The Elsa 3 baseline (see §E1) enumerates loaded `IActivity` implementations at 
 Source disappearance is intentionally not tracked at the entity layer; versions are never deleted. Context-aware visibility (tenant / role / feature-flag) is a separate policy layer that filters the catalog for a given context; it is not a reconciliation concern. This codification is **provisional** pending the 2026-06-01 review meeting (agenda Item 1 — Definition of Reconciliation; Item 2 — Model X mechanism); if the review revises, this section revises with it.
 
 This section codifies the rule for the activity catalog. The same shape generalises to other catalogs as Elsa accrues them (workflow catalog, script catalog, expression-evaluator catalog); each will get its own catalog-as-source-of-truth section as that catalog matures.
+
+---
+
+### §E2.9 `WorkflowDefinitionState` scope policy + architectural triplet *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*
+
+`WorkflowDefinitionState` is persisted as the `StateSource` shadow JSON on `WorkflowDefinitionVersion` (immutable) and `WorkflowDefinitionDraft` (mutable) inside the `Elsa.Workflows.Design` sub-domain. It is **the canonical authored document of a workflow definition** — the structured shape an author produces and the system promotes through Draft → Version. Pinning its scope explicitly prevents the god-object failure mode flagged in Sipke's 2026-05-26 entity-design review (item 2): as Units D–G crystallize, `WorkflowDefinitionState` is the natural dumping ground for any workflow-related concern unless its boundary is constitutional.
+
+#### §E2.9.1 In scope of `WorkflowDefinitionState`
+
+Members of State carry **authored content** — the structured representation of what the author drew, declared, and configured:
+
+- Variables (the workflow's variable declarations).
+- The activity graph: `Activities` (placed activity nodes) + `ActivityConnections` (edges).
+- Workflow-level input/output declarations (`Inputs`, `Outputs`).
+- Workflow-level authored options (`WorkflowActivityOptions`, `StrategyOptions`).
+
+Today's State carries exactly these members. The 2026-05-28 audit (Unit C FR-005) confirms they are clean against the policy.
+
+#### §E2.9.2 Out of scope of `WorkflowDefinitionState`
+
+Members that are NOT authored content live elsewhere. Categories explicitly excluded:
+
+- **Instance / runtime / operational state.** Workflow instances, execution log, current activity-execution state, runtime variable bindings, scheduled activations. Owned by the Runtime sub-domain per §E2.2 + §E2.6.
+- **Executable / build metadata.** Compiled runtime artifact, build pipeline outputs, materialised executables. Owned by `WorkflowExecutable` (see §E2.9.3) — Units E/G's territory.
+- **Publication / deployment state.** Publication status, deployment target, environment-specific configuration overlays. A separate concern with its own entity surface; never folded into State.
+- **Search / listing-projection types.** Listing views, dashboard projections, full-text indexes. Derived read models (see §E2.9.3); never fields on State.
+- **Security / ownership types.** Tenant ownership, permission grants, audit-of-author identifiers. Carried by ambient `TenantEntity` columns and a separate security model; not authored content.
+- **Designer layout metadata.** Canvas positions, sizes, visual node grouping, designer-only annotations. Owned by the sibling entities `WorkflowDefinitionVersionLayout` / `WorkflowDefinitionDraftLayout` (Unit C FR-006), unified by `IWorkflowDefinitionLayout` (FR-007); never nested into `ActivityNode` and never reachable through `WorkflowDefinitionState`.
+- **Validation errors.** Owned by the sibling entity `WorkflowDefinitionDraftValidation` (Unit C FR-021) — derived from State, not part of it.
+
+A property newly proposed for `WorkflowDefinitionState` whose category is genuinely ambiguous between authored content and one of these out-of-State categories surfaces as an architecture-meeting escalation; resolution is constitutional (amend this section), not silent.
+
+#### §E2.9.3 Architectural triplet
+
+`WorkflowDefinitionState` participates in an irreducible triplet that names the three artefacts every workflow definition produces in the system:
+
+1. **`WorkflowDefinitionState`** — the canonical authored document (above).
+2. **Read models / projections** — derived views over State for listing, search, dashboarding, and any non-authoring read need. These live in `Elsa.Workflows.Design.Api` or downstream domains' query layers; they are projection-shaped, not authoring-shaped. They are never persisted back into State.
+3. **`WorkflowExecutable`** — the compiled runtime artifact (substance owned by Units E/G; named here so the triplet is complete). Build/Compile produces it from an immutable `WorkflowDefinitionVersion.State`; the Runtime sub-domain executes it per §E2.6's artifact-only contract. State is the source; `WorkflowExecutable` is the derived runnable form.
+
+The three sit at separate scopes — **authoring**, **reading**, **executing** — and **must not be merged**. Conflating authoring and projection collapses the read side back into State and creates the god-object Sipke flagged. Conflating authoring and executable conflates source with output, breaking §E2.6's artifact-only rule. The triplet is the load-bearing structural rule that lets Design and Runtime stay separable per §E2.2.
+
+#### §E2.9.4 Enforcement
+
+The in-State / out-of-State boundary is enforced by:
+
+1. **The XML documentation header** on the `WorkflowDefinitionState` record (Unit C FR-003), quoting the scope and pointing at this section.
+2. **PR review discipline** against this constitutional rule — reviewers reject creep.
+
+Automated compile-/build-time enforcement (scope-policy static analyser) is **deferred to a future *Code Analysers* epic** that approaches the platform's static analysis as a unified bundle, rather than shipping ad-hoc per-rule micro-validators. The list of categories in §E2.9.2 will inform the eventual analyser when that epic opens (registered in [`follow-up-items/2026-05-28_future_epic_code_analysers.md`](../../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-28_future_epic_code_analysers.md)).
+
+#### §E2.9.5 Reconciliation policy applies here too
+
+`WorkflowDefinition` / `WorkflowDefinitionVersion` / `WorkflowDefinitionDraft` reconciliation follows **Model X** — the same immutable-provenance, skip-or-throw-with-hash-safety-net policy codified for the activity catalog at the end of §E2.8. No per-pass mutating fields (no `LastSeenAt`, no `IsStale`, no `RemovedAt`) live on any workflow-design entity; reconciliation is transactional at creation time only. Where the provenance fields (`SourceKind` / `SourceId` / `SourceVersion` / `ProvisioningHash` / `ProvisionedAt` / `ProvisionedBy`) ultimately live on workflow-design entities is Unit D's allocation pass; Unit C codifies the policy and leaves the field allocation to Unit D.
+
+#### §E2.9.6 Status
+
+**Provisional pending 2026-06-01 architecture-review ratification.** Joey's adopted position, recorded as a draft sub-section per Unit C FR-016c / FR-020 / FR-024a pattern (constitutional drafts adopted ahead of review per working-loop §5). The 2026-06-01 agenda Items 1, 2, 3, 4, 4b, 5, 6 cover the surrounding provisional sub-rules; if any are revised at the review, this section revises in tandem.
+
+**Cross-references:** §E2.2 (Design ↔ Runtime split — the triplet operates within Design and seams into Runtime via `WorkflowExecutable`); §E2.6 (artifact-only runtime — the seam terminates at `WorkflowExecutable`, not at State); §E2.8 (Model X reconciliation policy, applies symmetrically per §E2.9.5).
 
 ---
 
