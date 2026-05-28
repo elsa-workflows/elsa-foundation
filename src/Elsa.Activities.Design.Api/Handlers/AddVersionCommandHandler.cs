@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Extensions;
@@ -37,7 +37,9 @@ public sealed class AddVersionCommandHandler(
         return new(version, command.DefinitionId, kind: command.Kind ?? Core.Models.ActivityKind.Action)
         {
             Id = identityGenerator.Generate(),
-            TypeInfo = command.TypeInfo,
+            ActivityTypeKey = definition.ActivityTypeKey,
+            ImplementationKind = command.ImplementationDescriptor.Kind,
+            ImplementationDescriptor = command.ImplementationDescriptor,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
             Ports = command.Ports ?? [],

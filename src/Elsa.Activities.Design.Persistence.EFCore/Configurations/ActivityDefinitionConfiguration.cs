@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,12 +12,15 @@ public sealed class ActivityDefinitionConfiguration : IEntityTypeConfiguration<A
             .HasKey(x => x.Id);
 
         builder
-            .HasIndex(x => x.UniqueName)
-            .HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.UniqueName)}")
+            .HasIndex(x => new { x.SourceKind, x.SourceId, x.ActivityTypeKey })
+            .HasDatabaseName($"UX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.SourceKind)}_{nameof(ActivityDefinition.SourceId)}_{nameof(ActivityDefinition.ActivityTypeKey)}")
             .IsUnique();
 
-        builder.HasIndex(x => x.TenantId).HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.TenantId)}");
-        builder.HasIndex(x => x.IsBrowsable).HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.IsBrowsable)}");
-        builder.HasIndex(x => x.Category).HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.Category)}");
+        builder
+            .HasIndex(x => new { x.SourceKind, x.SourceId })
+            .HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.SourceKind)}_{nameof(ActivityDefinition.SourceId)}");
+
+        builder.HasIndex(x => x.Category)
+            .HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.Category)}");
     }
 }

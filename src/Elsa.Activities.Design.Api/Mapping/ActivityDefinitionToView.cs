@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Mapping.Core.Contracts;
 
@@ -10,11 +10,14 @@ public sealed class ActivityDefinitionToView : IObjectMapping<ActivityDefinition
     {
         var result = new ActivityDefinitionView(
             source.Id,
-            source.UniqueName,
+            source.ActivityTypeKey,
+            source.SourceKind,
+            source.SourceId,
+            source.ProvisionedAt,
+            source.ProvisionedBy,
             source.Category,
             source.DisplayName,
-            source.Description,
-            source.IsBrowsable
+            source.Description
         );
 
         return new(result);

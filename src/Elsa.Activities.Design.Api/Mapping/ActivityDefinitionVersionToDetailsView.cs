@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Mapping.Core.Contracts;
 
@@ -16,7 +16,9 @@ public sealed class ActivityDefinitionVersionToDetailsView(IObjectMapping<Activi
         return new(
             source.Id,
             source.Version,
-            source.TypeInfo,
+            source.ActivityTypeKey,
+            source.ImplementationKind,
+            source.ImplementationDescriptor,
             definition,
             source.Inputs,
             source.Outputs,

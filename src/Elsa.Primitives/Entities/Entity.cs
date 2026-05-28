@@ -18,11 +18,6 @@ namespace Elsa.Primitives.Entities
         public string Id { get; set; } = string.Empty;
 
         /// <summary>
-        /// Gets or sets the ID of the tenant that own this entity.
-        /// </summary>
-        public string? TenantId { get; set; }
-
-        /// <summary>
         /// Gets or sets the timestamp at which this row first appeared in the database.
         /// Auto-stamped by <c>ElsaDbContextBase</c> on insert. Treated as immutable post-save.
         /// External / source-side timestamps belong in their own field, not here.

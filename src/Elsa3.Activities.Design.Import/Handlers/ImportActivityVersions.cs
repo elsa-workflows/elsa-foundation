@@ -1,17 +1,18 @@
-﻿using Elsa.Mapping.Core.Contracts;
-using Elsa.Serialization.Core;
-using Elsa.Activities.Design.Provisioning.Core;
-using Elsa3.Models;
-using Microsoft.Extensions.Logging;
-using System.Text.Json;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Serialization.Core;
+using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Models;
+using System.Text.Json;
 
 namespace Elsa3.Activities.Design.Import.Handlers;
 
-public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IWorkflowCollectionSource> collectionSources, IPayloadSerializer payloadSerializer) 
-    : IDomainEventHandler<OnActivityVersionsProvisioning>
+public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IActivityCollectionJsonSource> collectionSources, IPayloadSerializer payloadSerializer)
+    : IDomainEventHandler<OnActivityVersionsReconciling>
 {
-    public async ValueTask Handle(OnActivityVersionsProvisioning domainEvent, CancellationToken cancellationToken)
+    public async ValueTask Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach(var source in collectionSources)
         {
@@ -23,7 +24,7 @@ public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IWo
                 .Deserialize<IEnumerable<Elsa3WorkflowDefinition>>(versionsDocument.RootElement)
                 .ToList();
 
-            var enumerable = mapper.Map<IWorkflowDefinitionVersion>(definitions, cancellationToken);
+            var enumerable = mapper.Map<IActivityDefinitionVersion>(definitions, cancellationToken);
             await foreach(var def in enumerable)
             {
                 domainEvent.Versions.Add(def);

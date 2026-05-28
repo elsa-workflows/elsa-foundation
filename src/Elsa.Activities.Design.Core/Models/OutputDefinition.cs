@@ -1,7 +1,12 @@
-﻿using Elsa.Primitives.Models;
+using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
 
+/// <summary>
+/// Design-time canvas description of an activity output. Standalone sealed record by FR-030
+/// — duplicates the structural shape of <see cref="ArgumentDefinition"/> rather than inheriting,
+/// keeping the output signature clear and decoupled.
+/// </summary>
 public sealed record OutputDefinition(
     string ReferenceKey,
     string Name,
@@ -15,6 +20,4 @@ public sealed record OutputDefinition(
     float Order = 0,
     string? UiHint = null,
     IDictionary<string, object>? PropertyInfo = null,
-    IDictionary<string, object>? UISpecifications = null)
-
-    : ArgumentDefinition(ReferenceKey, Name, Type, StorageDriverType, DisplayName, Category, IsBrowsable, IsSerializable, Description, Order, UiHint, PropertyInfo, UISpecifications);
+    IDictionary<string, object>? UISpecifications = null);

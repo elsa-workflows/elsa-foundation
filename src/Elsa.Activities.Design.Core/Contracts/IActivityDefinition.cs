@@ -1,19 +1,46 @@
-﻿namespace Elsa.Activities.Design.Core.Contracts
+namespace Elsa.Activities.Design.Core.Contracts
 {
+    /// <summary>
+    /// Read contract for the catalog parent — identity + creation provenance + display only.
+    /// Operational reconciliation state (LastSeenAt, hashes, IsStale, RemovedAt) lives on the
+    /// separate <c>IActivityDefinitionReconciliationState</c> sibling.
+    /// </summary>
     public interface IActivityDefinition
     {
         string Id { get; }
 
         /// <summary>
-        /// Unique, immutable name that identifies the instance within its defined scope.
+        /// Stable logical identity for the activity type. Survives CLR renames, source-side
+        /// repackaging, and provider migrations. Immutable once a row is persisted.
         /// </summary>
-        /// <remarks>The name must be stable for the lifetime of the instance and unique within the
-        /// relevant context (for example, a collection, namespace, or registry). Use this value as a key when
-        /// consistent identification is required.</remarks>
-        string UniqueName { get; }
+        string ActivityTypeKey { get; }
 
         /// <summary>
-        /// The category of the activity type.
+        /// Free-form string identifying the provenance source that produced this row (e.g.
+        /// "Json", "ClrDiscovery", "Workflow"). Owned by the source module that produced the
+        /// row; core does not enumerate the legal values. Immutable; part of the natural
+        /// uniqueness key <c>(SourceKind, SourceId, ActivityTypeKey)</c>.
+        /// </summary>
+        string SourceKind { get; }
+
+        /// <summary>
+        /// Source-side asset identity (e.g. assembly name for JSON, workflow definition id for
+        /// workflow source). Immutable; part of the natural uniqueness key.
+        /// </summary>
+        string SourceId { get; }
+
+        /// <summary>
+        /// Timestamp at which this row was first provisioned. Immutable.
+        /// </summary>
+        DateTimeOffset ProvisionedAt { get; }
+
+        /// <summary>
+        /// Identity (user, machine, or system) that produced this row. Immutable.
+        /// </summary>
+        string? ProvisionedBy { get; }
+
+        /// <summary>
+        /// The category of the activity type. Mutable — picker grouping.
         /// </summary>
         string Category { get; }
 
@@ -26,10 +53,5 @@
         /// The description of the activity type.
         /// </summary>
         string? Description { get; }
-
-        /// <summary>
-        /// Whether this activity type is selectable from activity pickers.
-        /// </summary>
-        bool IsBrowsable { get; }
     }
 }

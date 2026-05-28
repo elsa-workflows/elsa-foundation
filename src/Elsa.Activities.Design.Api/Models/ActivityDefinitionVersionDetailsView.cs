@@ -1,12 +1,14 @@
-﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Primitives.Models;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 
 namespace Elsa.Activities.Design.Api.Models;
 
 public sealed record ActivityDefinitionVersionDetailsView(
     string Id,
     int Version,
-    TypeInformation TypeInfo,
+    string ActivityTypeKey,
+    string ImplementationKind,
+    IImplementationDescriptor ImplementationDescriptor,
     ActivityDefinitionView Definition,
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,

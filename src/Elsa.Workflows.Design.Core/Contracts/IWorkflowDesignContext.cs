@@ -12,10 +12,10 @@ namespace Elsa.Workflows.Design.Core.Contracts
 
         IEnumerable<IActivityDefinitionVersion> Activities { get; }
 
-        IActivityDefinitionVersion? FindActivity(string uniqueName) => Activities.FirstOrDefault(x => x.Definition.UniqueName == uniqueName);
+        IActivityDefinitionVersion? FindActivity(string activityTypeKey) => Activities.FirstOrDefault(x => x.Definition.ActivityTypeKey == activityTypeKey);
 
         IEnumerable<IActivityDefinitionVersion> GetActivitiesWithOutput() => Activities
-            .Where(x => x.Definition.UniqueName.IsValidVariableName());
+            .Where(x => x.Definition.ActivityTypeKey.IsValidVariableName());
 
         IEnumerable<InputDefinition> GetWorkflowInputs() => Draft.Inputs.Where(x => VariableNameValidator.IsValidVariableName(x.Name));
 
