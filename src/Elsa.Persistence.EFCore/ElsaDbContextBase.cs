@@ -58,7 +58,7 @@ namespace Elsa.Persistence.EFCore
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             ConfigureEntityModel(modelBuilder);
-        }
+        }        
 
 
         #region SAVE HANDLING

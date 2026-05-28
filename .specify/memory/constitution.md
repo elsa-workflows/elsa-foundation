@@ -2,6 +2,108 @@
 Sync Impact Report — Elsa Workflow Engine Constitution
 ========================================================
 
+Version change: 1.0.0 (draft, never ratified) → 2.0.0 (draft)
+Derives from: framework constitution v2.0.0 (was v1.0.0).
+  SemVer: MAJOR.
+  Rationale: pairs with framework v2.0.0 MAJOR (§2.6 family restructured;
+  any plan/spec/Elsa-section citing §2.6.1's old content must rewrite to
+  §2.6.2). Elsa §E3.3 worked example also reshaped to demonstrate the new
+  Registry + StartUp Task sub-pattern instead of the legacy provider pattern.
+  v1.0.0 was never ratified; v2.0.0 is the target ratification.
+
+v2.0.0 provenance — consolidated fold of:
+  1. The v1.1.0 amendment plan drafted 2026-05-19 (never folded as v1.1.0).
+  2. Sipke's 2026-05-26 architectural-clarification items 4, 5, 12 (from
+     `2026-05-26_ENTITY_DESIGN_RESPONSE_SIPKE.md`). Items 1, 2, 3, 6, 7, 8, 9,
+     10, 11, 13 are entity-design substance, deferred to Units B–G.
+  3. Matured candidate rules: Rule A (executable-always-runs) + Rule B
+     (artifact-only runtime) → §E2.6; CR-COMPAT (reframed as Elsa 3
+     import-only via `Elsa3.Workflows.Import` adapter) → §E2.7.
+
+Added Elsa sections (relative to v1.0.0):
+  - §E2.5 — Reinforced opening: "`ElsaDbContextBase` is shared EF-Core
+    infrastructure, not a model/entity-design requirement." Cross-references
+    framework §2.9's new persistence-invariants paragraph.
+  - §E2.6 — NEW: "Runtime contract — executable-always-runs and artifact-only
+    design." Two coupled invariants:
+      - §E2.6.1 Executable-always-runs: if an artifact is published as runnable,
+        the runtime MUST be able to load and execute it. Domain gates may deny
+        execution; system failures violate the contract.
+      - §E2.6.2 Artifact-only runtime: Runtime depends only on the runnable
+        artifact + configured runtime features. Hard rule (cross-refs §E2.2):
+        runtime never loads design-side data to execute.
+    Promotes Rule A + Rule B from `follow-up-items/2026-05-08_entity_design.md`
+    to constitutional content. Generic-framework analogues remain candidate
+    rules (not yet promoted to framework).
+  - §E2.7 — NEW: "Elsa 3 backward compatibility — import-only." Reframes the
+    earlier CR-COMPAT-1/2/3 trio. Scope: `Elsa3.<Domain>.Import` adapter
+    modules; one-way one-time mapping. Out of scope: dual-run, ongoing
+    viewmodel mapping, round-trip translation.
+  - §E3.3 — REWRITTEN: title "Provider contract" → "Domain-event contribution
+    with sync access — `JsonConverter` registry." Shows the Registry +
+    StartUp Task + DomainEvent pattern. Legacy `IPayloadSerializerConverterProvider`
+    flagged as code-side migration item in Unit A follow-up.
+  - §E3.5 — Status revision: untangling resolved 2026-05-19; section now
+    serves as the dual-integration smell record + cross-reference hub for
+    §E3.6/§E3.7/§E3.8.
+  - §E3.6 — NEW: "Adapter pattern — `IJavaScriptExecutionContext` over Jint."
+    Second worked example for framework §2.7 (alongside `Elsa.Locking.FileSystem`
+    in §E3.2). Jint isolated to implementation feature; `.Core` is engine-free.
+  - §E3.7 — NEW: "Design-time vs runtime contract split — JS function
+    declarations vs functions." Worked example for framework §2.6.4. Uses the
+    existing `OnDeclarationsDocumentGenerating` (design-time) and
+    `OnEvaluatingScript` (runtime) domain events.
+  - §E3.8 — NEW: "`Elsa.Http.JavaScript` — secondary-domain naming walkthrough."
+  - §E3.9 — NEW: "Sync contributor pattern — `IEntityModelCreatingHandler`."
+    Worked example for framework §2.6.5's rare-exception sync contributor
+    pattern. The canonical case: EF Core's `OnModelCreating` lifecycle hook +
+    `IEntityModelCreatingHandler` provider interface. All three §2.6.5 criteria
+    hold (intrinsically sync, behaviour-not-data, Registry + StartUp Task
+    inapplicable). Reviewers cite this case when challenging future §2.6.5
+    invocations.
+    Worked example for framework §2.2 secondary-domain rule.
+
+Renamed sections:
+  - §E3.3 title — see above.
+
+Cross-reference updates:
+  - SIR Follow-up TODOs (Elsa side, original v1.0.0 footer): reference to
+    "(framework §2.6.1)" updated to "(framework §2.6.2)" for replacement-
+    contract enforcement; companion note added that contribution flows now
+    go through domain events (framework §2.6.1, not provider/contributor
+    interfaces).
+
+Removed sections: none.
+
+Framework derivation: re-pinned from v1.0.0 to v2.0.0. Both the header
+("Derives from: framework constitution v2.0.0") and the Governance "Sync rule"
+paragraph (header version reference) are updated.
+
+Follow-up TODOs:
+  - TODO(RATIFICATION_DATE) — v2.0.0 is the target ratification version.
+  - Entity-design Units B–G — substance of Sipke 2026-05-26 items 1, 2, 3,
+    6, 7, 8, 9, 10, 11, 13 lands there. Master thread:
+    `follow-up-items/2026-05-08_entity_design.md`.
+  - Compile-domain seam follow-up
+    (`follow-up-items/2026-05-11_workflow_execution_seam.md`) — CR-1, CR-3,
+    CR-3a, CR-4, CR-5 still open; deferred to Units B–G (compile-domain
+    substrate).
+  - §E4 Elsa configuration — carry-over deferral; awaiting Configuration &
+    Infrastructure follow-up meeting.
+
+Code-side commitments (tracked in Unit A follow-up
+`follow-up-items/2026-05-27_unitA_constitution_catchup.md`; required before
+ratification):
+  - Migrate `IPayloadSerializerConverterProvider` and friends to Registry +
+    StartUp Task + Domain Event pattern (matches §E3.3's new prose).
+  - Migrate EF Core entity handlers (`IGlobalEntitySavingHandler`,
+    `IEntityModelCreatingHandler`) to `OnEntitySaving` / `OnEntityModelCreating`
+    domain events.
+  - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).
+  - Update entity-design summary doc per Sipke 2026-05-26 items 8 and 9.
+
+---  (v1.0.0 SIR retained below for history)
+
 Version change: (initial) → 1.0.0
 Derives from: framework constitution v1.0.0.
 
@@ -101,9 +203,11 @@ Follow-up TODOs (single index of deferred items, post-§E6-removal):
     vs WorkflowInstance separation; three API distributions (WorkflowExecutor,
     WorkflowBuilder, RuntimeMonitor); graphical/UI extraction. Overlaps with the
     Workflow execution seam follow-up; scope together when Runtime refactor opens.
-  - DI Container Observability & Resolve Behaviour — replacement-vs-contribution
-    contract enforcement (framework §2.6.1) + explicit feature-dependency graph
-    (replaces the old DependsOn from framework §2.11).
+  - DI Container Observability & Resolve Behaviour — replacement-contract
+    enforcement (framework §2.6.2) + explicit feature-dependency graph
+    (replaces the old DependsOn from framework §2.11). Contribution flows
+    now go through domain events (framework §2.6.1), not provider/contributor
+    interfaces.
   - Packaging & Versioning + Branching Strategy
     (`follow-up-items/2026-05-11_branching_strategy_github_flow.md`) — multi-iteration
     packaging meeting will refine §E2.4 and §E5.
@@ -111,10 +215,10 @@ Follow-up TODOs (single index of deferred items, post-§E6-removal):
 
 # Elsa Workflow Engine Constitution
 
-**Version:** 1.0.0 (draft)
+**Version:** 2.0.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v1.0.0**.
+**Derives from:** framework constitution **v2.0.0**.
 
 ---
 
@@ -130,12 +234,18 @@ Follow-up TODOs (single index of deferred items, post-§E6-removal):
   - [§E2.3 `Elsa.Primitives` charter](#e23-elsaprimitives-charter)
   - [§E2.4 Elsa foundation repo composition](#e24-elsa-foundation-repo-composition)
   - [§E2.5 `ElsaDbContextBase` — opt-in capability](#e25-elsadbcontextbase--opt-in-capability-not-requirement)
+  - [§E2.6 Runtime contract — executable-always-runs and artifact-only design](#e26-runtime-contract--executable-always-runs-and-artifact-only-design) · [§E2.6.1 Executable-always-runs](#e261-executable-always-runs) · [§E2.6.2 Artifact-only runtime](#e262-artifact-only-runtime)
+  - [§E2.7 Elsa 3 backward compatibility — import-only](#e27-elsa-3-backward-compatibility--import-only)
 - [§E3 Elsa-specific worked examples](#e3-elsa-specific-worked-examples)
   - [§E3.1 Cross-`.Core` composition](#e31-cross-core-composition-framework-21)
   - [§E3.2 Adapter pattern](#e32-adapter-pattern-framework-27--220)
-  - [§E3.3 Provider contract](#e33-provider-contract-framework-26-261)
+  - [§E3.3 Domain-event contribution with sync access](#e33-domain-event-contribution-with-sync-access--jsonconverter-registry-framework-261)
   - [§E3.4 Feature inheritance](#e34-feature-inheritance-framework-25)
   - [§E3.5 Dual-integration smell](#e35-dual-integration-smell--elsahttp--elsaexpressionsjavascript)
+  - [§E3.6 Adapter — `IJavaScriptExecutionContext` over Jint](#e36-adapter-pattern--ijavascriptexecutioncontext-over-jint-framework-27)
+  - [§E3.7 Design-time vs runtime split — JS declarations vs functions](#e37-design-time-vs-runtime-contract-split--js-function-declarations-vs-functions-framework-264)
+  - [§E3.8 `Elsa.Http.JavaScript` naming walkthrough](#e38-elsahttpjavascript--secondary-domain-naming-walkthrough-framework-22)
+  - [§E3.9 Sync contributor pattern — `IEntityModelCreatingHandler`](#e39-sync-contributor-pattern--ientitymodelcreatinghandler-framework-265)
 - [§E4 Elsa configuration — \[DEFERRED\]](#e4-elsa-configuration--deferred)
 - [§E5 Elsa packaging snapshot](#e5-elsa-packaging-snapshot)
 - [Governance](#governance)
@@ -322,6 +432,8 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 
 **framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). These hooks are invoked before `SaveChangesAsync` reaches EF Core and are useful for shadow properties, custom deserializers, and similar cross-cutting concerns.
 
+**`ElsaDbContextBase` is shared EF-Core infrastructure, not a model/entity-design requirement.** The persistence invariants Elsa enforces (immutability of Version entities, audit timestamps, etc. — see framework §2.9's "Persistence invariants are defined independently of the persistence provider") are defined independently of EF Core. An EF-Core-backed application MAY enforce those invariants through `ElsaDbContextBase`; another persistence provider MAY enforce the same invariants through interceptors, mappings, store logic, or whatever its native mechanism is. Inheriting from `ElsaDbContextBase` is one integration path, not the only one.
+
 **Hard rules per framework §2.9:**
 
 - The base context is **opt-in only**. Consumer-owned `DbContext` types remain first-class.
@@ -329,6 +441,55 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 - Consumers must be able to install Elsa's entity mappings and contracts **without** inheriting from `ElsaDbContextBase`.
 
 The save/load handler hooks are documented as an opt-in feature in the relevant module's README. They are not a constitutional requirement.
+
+### §E2.6 Runtime contract — executable-always-runs and artifact-only design
+
+Elsa imposes two coupled invariants on its runtime contract. Together they make the Runtime sub-domain self-sufficient and predictable: given a published runnable artifact, the runtime always runs it; given that artifact, the runtime needs nothing else.
+
+#### §E2.6.1 Executable-always-runs
+
+If an artifact is published as a runnable representation of a workflow, the runtime MUST be able to load and execute it. **No condition internal to the runtime system** — missing activity types, missing module installation, in-memory registry drift, version misconfiguration of runtime infrastructure — may break this contract.
+
+**Whether** an artifact is allowed to run in a given context — per tenant, per environment, per role, per workflow-business state — is a **domain/business gate**, implemented in domain code. The runtime's ability to load and run is a **storage/system contract** that is not subject to those gates.
+
+The separation:
+
+- Domain gates may deny execution; they may not destroy executability.
+- System failures to execute (missing types, broken loaders, infrastructure errors) are bugs, not features. They violate the contract.
+
+The runtime artifact format carries enough information to be executed independently of any non-runtime concern. The specific artifact name and shape are settled in the entity-design pass (follow-up `2026-05-08_entity_design.md`).
+
+#### §E2.6.2 Artifact-only runtime
+
+The Runtime sub-domain depends on **only** two things:
+
+1. The **runnable artifact** (the entity carrying the structured runtime-oriented representation produced by Build/Compile).
+2. The **configured runtime features** that interpret that artifact's format.
+
+Source artefacts (the design-time workflow definition the artifact was built from), authoring history, draft revisions, designer layout metadata, and visualisation projections live in the Design sub-domain and adjacent application-layer projections. They are reachable from the runtime artifact via foreign keys, **but the runtime does not require them to execute**.
+
+Visualisation of an executed instance happens at the application layer, traversing the FK chain from the executed-instance entity → runnable artifact → source-design entities. The runtime sub-domain is not aware of, and does not load, the source side.
+
+**Hard rule.** A runtime that needs to load design-side data to execute is a §E2.2 hard-rule violation. The seam between Design and Runtime is the runnable artifact; nothing else crosses it at execution time.
+
+### §E2.7 Elsa 3 backward compatibility — import-only
+
+Elsa 4's compatibility with Elsa 3 is bounded to **import**. A dedicated adapter module — `Elsa3.Workflows.Import` (and analogous siblings as needed for activities, instances, or other Elsa 3 artefacts) — maps Elsa 3 workflow definitions, activity descriptors, and persistence schemas into the Elsa 4 entity model. Once imported, Elsa 4 runs them natively through its own runtime.
+
+**In scope:**
+
+- One-way one-time mapping: read Elsa 3 source, produce Elsa 4 entities, persist.
+- Adapter modules named `Elsa3.<Domain>.Import` per the Elsa-3-side concern they map.
+
+**Out of scope:**
+
+- **Dual-run support.** Elsa 3 and Elsa 4 do not run side-by-side from the same process. A migrating consumer imports, then switches.
+- **Ongoing viewmodel mapping** for Elsa-3-shaped endpoints in `elsa-studio`. The Elsa 4 API surface is the API; elsa-studio adapts to it, not the other way around.
+- **Round-trip translation** back to Elsa 3 entity shapes after import. Imports are terminal.
+
+The compatibility surface is **"one-way, one-time"** by design. This deliberate scoping simplifies the migration story and avoids accumulating long-lived translation infrastructure inside the Elsa 4 codebase.
+
+Mapping decisions per Elsa-3-entity → Elsa-4-entity pair are tracked in [`follow-up-items/2026-05-11_elsa3_compatibility_migration_strategy.md`](../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-11_elsa3_compatibility_migration_strategy.md) and refined as the entity design lands in Units B–G.
 
 ---
 
@@ -373,14 +534,29 @@ Replacing file-system locks with Redis means shipping `Elsa.Locking.Redis` as a 
 
 Additionally, **`DistributedLock 2.8.1`** (the meta-package fronting eleven `DistributedLock.<Provider>` sub-packages) was replaced with a direct `DistributedLock.FileSystem` reference. The MongoDB sub-package's transitive dependencies (`Snappier`, `SharpCompress`) had known CVEs, none of which Elsa.Locking actually used. This is the §2.20 Rule 2 application.
 
-### §E3.3 Provider contract (framework §2.6, §2.6.1)
+### §E3.3 Domain-event contribution with sync access — `JsonConverter` registry (framework §2.6.1)
 
-`IPayloadSerializerConverterProvider` is defined in `Elsa.Serialization.Core` as a **contribution contract** (framework §2.6.1).
+The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks synchronously and cannot await async dispatch at converter resolution time. Per framework §2.6.1, the contribution still flows through the domain-event pipeline — the access is sync because the population happened earlier, via the **Registry + StartUp Task sub-pattern**:
 
-- `JsonPayloadSerializer` (in `Elsa.Serialization.Newtonsoft`) collects all registered `IPayloadSerializerConverterProvider` instances and uses their converters.
-- The expressions implementation registers its own `IPayloadSerializerConverterProvider` to contribute a `VariableJsonConverter` — without either feature referencing the other.
+1. **`Elsa.Serialization.Core`** defines:
+   - `JsonPayloadConverterRegistry` — with `Register(JsonConverter)` and accessor methods.
+   - `OnJsonPayloadConvertersInitializing` — a domain event whose payload carries `List<JsonConverter>`.
 
-Multiple registrations against `IPayloadSerializerConverterProvider` are the point. Resolution is via `IEnumerable<IPayloadSerializerConverterProvider>`.
+2. **`Elsa.Serialization.<Provider>`** (the feature implementing the serialization domain) registers a **StartUp task** that:
+
+   ```csharp
+   var converters = new List<JsonConverter>();
+   await domainEventSender.Publish(new OnJsonPayloadConvertersInitializing(converters));
+   registry.RegisterAll(converters);
+   ```
+
+3. **`Elsa.Expressions`** (and any other contributing feature) extends serialization by **handling the event** and adding entries to the carried list — e.g. contributing a `VariableJsonConverter` for `Variable<T>` payloads — without either feature referencing the other.
+
+4. **At runtime**, the `JsonPayloadSerializer`'s sync code accesses the populated `JsonPayloadConverterRegistry` directly. No async dispatch at the read site.
+
+The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1.
+
+*Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up — to land before v2.0.0 ratification.
 
 ### §E3.4 Feature inheritance (framework §2.5)
 
@@ -406,7 +582,76 @@ This violates framework §2.14: a consumption-shape that depends on two external
 
 Consumers who want HTTP without JavaScript reference only `Elsa.Http`.
 
-**Status.** Untangling `Elsa.Http` ↔ `Elsa.Expressions.JavaScript` is on the *Next features* list in `PERSONAL_TODO.md`. It is the real-life worked example for framework §2.14's dual-integration rule.
+**Status.** Resolved. The untangling was performed in the 2026-05-19 refactor session: the cross-cutting module was extracted as **`Elsa.Http.JavaScript`** under the framework §2.2 secondary-domain naming rule (HTTP is the model-owning domain; JavaScript is the consumer contributing functions/declarations against HTTP models). The naming-decision walkthrough lives in §E3.8; the adapter that isolates Jint from `.Core` consumers lives in §E3.6; the design-time vs runtime contract split that drove the contribution shape lives in §E3.7. This section now serves as the dual-integration smell record and the cross-reference hub for the three resolution worked examples.
+
+### §E3.6 Adapter pattern — `IJavaScriptExecutionContext` over Jint (framework §2.7)
+
+Second worked example for framework §2.7's adapter pattern. The first (`Elsa.Locking.FileSystem` in §E3.2) wrapped an infrastructure library; this one wraps a script engine — same pattern, different domain, evidence that §2.7 generalises.
+
+**The seam.** `IJavaScriptExecutionContext` is defined in `Elsa.Expressions.JavaScript.Core` with **zero Jint reference**. Consumers of the JavaScript expression domain (e.g. activities that evaluate JS, the rendering domain that asks for declarations) depend only on `IJavaScriptExecutionContext` — they never see Jint types.
+
+**The adapter.** `Elsa.Expressions.JavaScript.Jint` (the implementation feature) holds a `JintJavaScriptExecutionContext` that wraps Jint's `Engine`, options, and runtime types. The adapter exposes the `IJavaScriptExecutionContext` surface (register function, register object, register type, evaluate); Jint stays entirely inside the implementation package.
+
+**Consequence.** Replacing Jint with a different JS engine means shipping a new feature module that supplies a different `IJavaScriptExecutionContext` adapter — no changes anywhere in the rest of Elsa. Consumers that want JS evaluation but want to choose the engine reference only `Elsa.Expressions.JavaScript.Core` plus the chosen `Elsa.Expressions.JavaScript.<Engine>` feature.
+
+### §E3.7 Design-time vs runtime contract split — JS function declarations vs functions (framework §2.6.4)
+
+Worked example for framework §2.6.4. The JS expression domain has two distinct consumers of "contributed function" data:
+
+- **Design-time consumer.** The rendering / intellisense layer generates a declarations document so the editor knows what functions exist, what they accept, and what they return. It cares about *shape*, not *binding*.
+- **Runtime consumer.** The evaluator (Jint, via §E3.6's adapter) needs the actual function bindings — a delegate that, when called, executes the contributed function. It cares about *binding*, not *shape*.
+
+A unified provider would force every contributing feature to satisfy both consumers even when only one is relevant. The split:
+
+| Phase | Domain event | Dispatch site | Where handlers live |
+|---|---|---|---|
+| Design-time | `OnDeclarationsDocumentGenerating` (in `Elsa.Expressions.JavaScript.Rendering.Core`) | The rendering domain when it builds a declarations document | `Elsa.Workflows.Design.JavaScript`, `Elsa.Http.JavaScript`, and other design-time contributors |
+| Runtime | `OnEvaluatingScript` (in `Elsa.Expressions.JavaScript.Core`) | The script evaluator just before it runs the script | `Elsa.Workflows.Runtime.JavaScript`, and other runtime contributors |
+
+Both events may carry a shared `.Core` data record describing the *shape* of a contributed function (name, parameter types, return type, documentation). Each event binds to its own consumer; the contribution flows through the framework's domain-event pipeline (framework §2.6.1) in both directions.
+
+**A single feature MAY register handlers for both events** — e.g. `Elsa.Http.JavaScript` contributes both HTTP-type declarations (design-time) and HTTP-type bindings (runtime). It MAY register for only one — e.g. a feature that only needs intellisense (because the runtime side is provided elsewhere) handles only the design-time event.
+
+**Generalisation.** The contract-level split mirrors the Elsa §E2.2 sub-domain split (Workflows.Design ↔ Workflows.Runtime) at finer granularity. The framework rule (§2.6.4) is independent of any specific Elsa-side sub-domain split, but the JS case is its cleanest worked example: same data, two consumers, two events, two handler audiences.
+
+### §E3.8 `Elsa.Http.JavaScript` — secondary-domain naming walkthrough (framework §2.2)
+
+Worked example for framework §2.2's secondary-domain naming sub-rule. The decision: name the cross-cutting module `Elsa.Http.JavaScript` rather than `Elsa.JavaScript.Http`.
+
+**The test: where do the models come from?**
+
+The cross-cutting module contributes function declarations and function bindings *for HTTP-domain concepts* — `HttpRequest`, headers, route values, body accessors, query data. Those are HTTP models. The JS side ships only the **consumer machinery**:
+
+- A handler for `OnDeclarationsDocumentGenerating` that adds HTTP-type declarations (so intellisense sees `httpRequest.headers`, `httpRequest.body`, etc.).
+- A handler for `OnEvaluatingScript` that adds HTTP-type bindings (so the evaluator can resolve `httpRequest` to the current HTTP context).
+
+Neither handler defines a new HTTP model. They expose HTTP's existing models to a different consumer (a JS evaluator).
+
+**The model-owning domain wins the prefix.** HTTP is the model-owning domain; JavaScript is the consumer. Therefore: **`Elsa.Http.JavaScript`**.
+
+**What the reverse form would produce.** `Elsa.JavaScript.Http` would force `Elsa.JavaScript` to grow one sub-branch per model-owning domain it exposes to JS: `Elsa.JavaScript.Http`, `Elsa.JavaScript.Workflows`, `Elsa.JavaScript.Activities`, … — a namespace that holds unrelated model branches glued together only by their shared script-engine consumer. The framework calls this out as a junk-drawer anti-pattern in §2.2; the test prevents it.
+
+**The pattern for future cross-cutting modules.** A cross-cutting `Elsa.<ModelDomain>.<ConsumerDomain>` is created whenever a consumer domain (JavaScript, Liquid, GraphQL, OpenAPI, …) needs to expose models from another domain. The naming decision takes 30 seconds: identify the model-owning domain; prepend it.
+
+### §E3.9 Sync contributor pattern — `IEntityModelCreatingHandler` (framework §2.6.5)
+
+Worked example for framework §2.6.5's rare-exception sync contributor pattern. The case: EF Core's `OnModelCreating` lifecycle hook needs to invoke contributing handlers synchronously at the moment EF Core builds the model. Async domain-event dispatch via `IDomainEventSender.Send` cannot apply because `OnModelCreating` is intrinsically sync in EF Core's contract. The Registry + StartUp Task sub-pattern does not apply because what's being contributed is *behaviour* (each handler customises the shared `ModelBuilder`), not *data* — and that behaviour is bound to the specific lifecycle moment EF Core invokes.
+
+**The mechanism in Elsa.**
+
+- `Elsa.Persistence.EFCore` declares `IEntityModelCreatingHandler` with `void Handle(ElsaDbContextBase dbContext, ModelBuilder modelBuilder, IMutableEntityType entityType)`.
+- Features that need to customise the EF model (e.g. `Elsa.Activities.Design.Persistence.EFCore` for activity-catalog mappings, `Elsa.Workflows.Design.Persistence.EFCore` for workflow-design mappings, the SQLite provider feature for shadow-column conventions) register their `IEntityModelCreatingHandler` implementations via DI.
+- `ElsaDbContextBase.ApplyEntityModelCreatingHandlers` (invoked inside `OnModelCreating`) resolves `IEnumerable<IEntityModelCreatingHandler>` from a fresh DI scope and invokes each handler sync per registered entity type.
+
+**Why §2.6.5 applies — the three criteria.**
+
+1. **Intrinsically sync dispatch site.** EF Core's `OnModelCreating(ModelBuilder)` is sync. There is no async equivalent. Forcing async domain-event dispatch (`IDomainEventSender.Send(...).GetAwaiter().GetResult()`) would be sync-over-async, with no benefit.
+2. **Behaviour, not data.** Each handler MUTATES the shared `ModelBuilder` — it doesn't return data the caller collects. Domain events excel at "contribute items to a carried list" (Registry + StartUp Task); the model-creating case is "act on the shared lifecycle target."
+3. **Registry + StartUp Task doesn't apply.** The `ModelBuilder` instance doesn't exist at application startup — it's constructed by EF Core when the first `DbContext` is instantiated. Even if we pre-registered "behaviours to run later", we'd still need to invoke them at the lifecycle moment — adding indirection without removing the structural sync requirement.
+
+**What this case is NOT.** It is NOT a license to use sync contributor interfaces for ANY contribution flow. The framework's §2.6.5 head explicitly demands that reviewers challenge every §2.6.5 invocation: "could the contribution be reshaped to fit §2.6.1 or Registry + StartUp Task?" If yes, §2.6.5 does not apply.
+
+**Cross-references.** Cross-references to this example land in plan-stage Constitution Check gates (Elsa-side plan-template G21 entry) so future plans aren't surprised by the legacy interface remaining in the codebase. The activity-catalog Unit B fold (Spec 001) is the first concrete plan that codifies this exemption.
 
 ---
 
@@ -448,7 +693,7 @@ This constitution is amended together with the framework constitution where the 
 
 ### Sync rule with framework constitution
 
-This document declares the framework constitution version it derives from in the header (currently **v1.0.0**). When the framework constitution bumps:
+This document declares the framework constitution version it derives from in the header (currently **v2.0.0**). When the framework constitution bumps:
 
 - **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
 - **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.
@@ -470,4 +715,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 1.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-11 | **Derives from framework constitution:** v1.0.0
+**Version:** 2.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-27 | **Derives from framework constitution:** v2.0.0

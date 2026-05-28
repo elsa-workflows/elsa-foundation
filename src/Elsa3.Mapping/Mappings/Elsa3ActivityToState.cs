@@ -106,8 +106,6 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
 
         if (jsonElement.ValueKind != JsonValueKind.Object)
             return false;
-        if (!jsonElement.TryGetProperty("typeName", out var typeName))
-            return false;
         if (!jsonElement.TryGetProperty("expression", out var expression))
             return false;
         if (expression.ValueKind is not JsonValueKind.Object and not JsonValueKind.Null)
