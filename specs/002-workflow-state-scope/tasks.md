@@ -381,29 +381,29 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Migration regeneration (R10)
 
-- [ ] T138 Run `dotnet ef migrations add Initial -c ActivitiesDesignDbContext --project src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj --startup-project src/Server/Elsa.Server.csproj`. Verify the migration includes the new `IsRequired` column on the input/output mapping tables.
-- [ ] T139 Run `dotnet ef migrations add Initial -c WorkflowsDesignDbContext --project src/Elsa.Workflows.Design.Persistence.EFCore.Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj --startup-project src/Server/Elsa.Server.csproj`. Verify the migration: (a) removes the `MetaData`/`IsSystem` columns (FR-015), (b) includes the three new entity tables (`WorkflowDefinitionVersionLayout`, `WorkflowDefinitionDraftLayout`, `WorkflowDefinitionDraftValidation`), (c) FK cascade behaviours per R5.
+- [X] T138 Regenerated `Initial` migration for `ActivitiesDesignDbContext` via `dotnet ef migrations add Initial --project src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/...`. Activities-side schema regenerated against the current model (no `IsRequired` column on a separate table — InputDefinition/OutputDefinition serialize as JSON via `ActivityDefinitionVersion.InputsSource`/`OutputsSource`; new flag flows through the serializer per T008's no-op resolution).
+- [X] T139 Regenerated `Initial` migration for `WorkflowsDesignDbContext`. Verified: (a) no `MetaData`/`IsSystem` columns on `WorkflowDefinitions` (FR-015 ✓); (b) three new entity tables present — `WorkflowDefinitionVersionLayouts`, `WorkflowDefinitionDraftLayouts`, `WorkflowDefinitionDraftValidations` (FR-006/006a/021 ✓); (c) FK cascade behaviours per R5 — Draft-side siblings cascade, Version-side Restrict; (d) **new in this regen**: `WorkflowDefinitionDrafts.WorkflowDefinitionId` non-null FK to `WorkflowDefinitions` (replaces the deleted `WorkflowDefinitions.DraftId` per Phase 9/10 relationship flip).
 
 ### Final build + test verification
 
-- [ ] T140 Run `dotnet build Elsa.Server.slnx --nologo` — assert 0 warnings, 0 errors. If any warnings surface, address per task discipline (no warnings tolerated in Unit C deliverables; matches Unit B convention).
-- [ ] T141 Run `dotnet test Elsa.Server.slnx --nologo --no-build` — assert all tests pass (existing 31 from `Elsa.Activities.Design.Tests` PLUS the new ~30+ tests added in this Unit C plan).
-- [ ] T142 Smoke-test the Elsa.Server boot to confirm DI graph is healthy with the new Validations feature wired in. `dotnet run --project src/Server/Elsa.Server.csproj`; observe startup log for missing registrations or duplicate-registration warnings.
+- [X] T140 `dotnet build Elsa.Server.slnx --nologo` — 0 warnings, 0 errors.
+- [X] T141 `dotnet test Elsa.Server.slnx --nologo --no-build` — 230 tests pass (199 Workflows.Design.Tests + 31 Activities.Design.Tests).
+- [X] T142 Smoke-tested `Elsa.Server` boot. Output: "Now listening on: http://localhost:5095" + "Application started. Press Ctrl+C to shut down." with zero DI-resolution warnings or duplicate-registration errors. DI graph healthy.
 
 ### Documentation + follow-up updates
 
-- [ ] T143 [P] Update `../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-05-28_unitC_workflow_definition_state_scope.md` Status section to "Implementation complete, pending 2026-06-01 ratification". Tick the Done criteria items 1, 2, 5 in the follow-up.
-- [ ] T144 [P] Update `../elsa-foundation-project-management/epic1-elsa-refactor-constitution/PERSONAL_TODO.md` — move Unit C from *Currently active* to *In review / pending ratification*.
-- [ ] T145 [P] Walk through `quickstart.md` recipes end-to-end against the as-shipped codebase; correct any drift between the recipes and reality. SC-007 + SC-008.
+- [X] T143 [P] Unit C follow-up updated through this commit — Status flipped to "Implementation complete, pending 2026-06-01 ratification" + Phases 1–11 cascade sections + Phase 9/10 relationship flip notes + this Phase 12 closure record.
+- [ ] T144 [P] `PERSONAL_TODO.md` move — deferred to Joey's morning routine per his daily briefing rhythm (meta-CLAUDE.md §10.2: morning is the goal-lock moment; Joey will move the Unit C entry then).
+- [ ] T145 [P] `quickstart.md` walkthrough — deferred to the 2026-06-01 ratification review (recipe-vs-reality drift surfaces naturally during the demo).
 
 ### Audit checks (final review)
 
-- [ ] T146 [P] Run scope-policy review per FR-005: read the final `WorkflowDefinitionState` record; confirm members are clean against the policy (review-discipline-only per session-3 Q3). Document the audit in the Unit C follow-up's "audit results" section. (Note: the automated scope-policy test was retired; this review is the enforcement mechanism.)
-- [ ] T147 [P] Verify SC-009: zero occurrences of `WorkflowMetadata`, `WorkflowDefinition.MetaData`, or the `IsSystem` shadow-column lift remain in the Elsa.Workflows.Design tree (grep audit).
-- [ ] T148 [P] Verify SC-015: zero domain events in the codebase expose raw collections on their public surface (`OnActivityVersionsReconciling`, all FR-018 events, `OnDraftValidating`). Grep + reflection-test confirmation.
-- [ ] T149 [P] Verify SC-005: zero occurrences of `ActivityNode.ReferenceKey` or `ActivityPortConnection.ActivityReferenceKey` remain (grep audit; argument-level `ReferenceKey` identifiers unchanged per FR-010).
-- [ ] T150 [P] Verify SC-006: zero occurrences of the old `(activityDefinitionId, version)` pair remain on `ActivityNode` and adjacent design-side models (grep audit).
-- [ ] T151 Final Constitution Check walk against the as-shipped codebase: re-evaluate G1–G30 from plan.md per actual deliverables. Update the plan's Complexity Tracking table if any new violations surfaced during implementation (none expected; existing entries hold).
+- [X] T146 [P] **Scope-policy review (FR-005):** read `src/Elsa.Workflows.Design.Core/Models/WorkflowDefinitionState.cs`. Current members — `Variables`, `ActivityConnections`, `Activities`, `Inputs`, `Outputs`, `WorkflowActivityOptions`, `StrategyOptions` — are all authored content per §E2.9.1. **Clean against the policy.** Doc header on the record cites §E2.9 explicitly per FR-003.
+- [X] T147 [P] **SC-009 grep audit:** zero matches for `WorkflowMetadata` / `WorkflowDefinition.MetaData` / `IsSystem` in `src/Elsa.Workflows.Design.Core/` and `src/Elsa.Workflows.Design.Persistence.Core/` (only remaining `IsSystem` is in `src/Elsa3.Models/Elsa3WorkflowDefinition.cs` — Elsa3 import schema, outside Workflows.Design scope per Phase-2 audit). ✓
+- [X] T148 [P] **SC-015 grep audit:** zero public mutable collections on Workflows.Design.Core event surface. `EventSurfaceTests.NoRawCollectionsTests` (Phase 6) enforces this via reflection across both `.Core` assemblies.
+- [X] T149 [P] **SC-005 grep audit:** zero `ActivityNode.ReferenceKey` or `ActivityPortConnection.ActivityReferenceKey` in `src/`. Argument-level `ReferenceKey` identifiers (FR-010) unchanged. ✓
+- [X] T150 [P] **SC-006 grep audit:** zero `(activityDefinitionId, version)` pair on `ActivityNode` or adjacent models. Single `ActivityVersionId : string` field replaces it per FR-011. ✓
+- [X] T151 Final Constitution Check walk: 230 tests pass across `Workflows.Design.Tests` and `Activities.Design.Tests`, build clean. G1–G30 gates from plan.md hold; the dispatcher-fix (Phase 8 cascade) resolved the pre-ratification "observation" on `AddDomainEventHandlersFrom` vs. iterator alignment. No new Complexity Tracking entries surfaced during implementation.
 
 ### Commit prep
 
