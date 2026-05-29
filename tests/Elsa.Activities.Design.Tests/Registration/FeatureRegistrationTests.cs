@@ -4,9 +4,6 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Design.Reconciliation.Json;
-using Elsa.Activities.Design.Reconciliation.Json.Options;
-using Elsa.Activities.Design.Reconciliation.Json.Services;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Resolvers;
@@ -63,7 +60,7 @@ public sealed class FeatureRegistrationTests
     {
         var services = MinimalServices();
         StubReconcilerDependencies(services);
-        new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+        new TestActivitiesDesignReconciliationFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
         // Hasher is a singleton and must resolve directly.
@@ -73,27 +70,7 @@ public sealed class FeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<IActivityVersionReconciler>());
     }
 
-    [Fact]
-    public void ActivitiesDesignReconciliationJsonFeature_RegistersReaderAndHandler()
-    {
-        var services = MinimalServices();
-        // The JSON source's handler depends on IPayloadSerializer + IImplementationDescriptorRegistry.
-        services.AddSingleton<JsonPayloadConverterRegistry>();
-        services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
-        services.AddSingleton<IImplementationDescriptorRegistry, Elsa.Activities.Design.Core.Models.ImplementationDescriptorRegistry>();
-
-        new ActivitiesDesignReconciliationJsonFeature
-        {
-            Options = new JsonReconciliationOptions { FilePath = "fake.json", SourceId = "TestSource" }
-        }.ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetService<JsonActivityCatalogReader>());
-
-        var handlers = scope.ServiceProvider.GetServices<IDomainEventHandler>().ToList();
-        Assert.Contains(handlers, h => h is IDomainEventHandler<OnActivityVersionsReconciling>);
-    }
+    private sealed class TestActivitiesDesignReconciliationFeature : ActivitiesDesignReconciliationFeature;
 
     [Fact]
     public void SqliteActivitiesDesignPersistenceShellFeature_RegistersLookupAndSavingHandler()

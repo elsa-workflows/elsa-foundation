@@ -18,7 +18,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
         {
             if (domainEvent.Entry.Entity is not ActivityDefinitionVersion entity)
                 return ValueTask.CompletedTask;
-
+                        
             entity.InputsSource = payloadSerializer.Serialize(entity.Inputs);
             entity.OutputsSource = payloadSerializer.Serialize(entity.Outputs);
             entity.PortsSource = payloadSerializer.Serialize(entity.Ports);

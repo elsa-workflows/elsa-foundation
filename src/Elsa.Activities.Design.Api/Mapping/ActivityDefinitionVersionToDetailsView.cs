@@ -16,7 +16,6 @@ public sealed class ActivityDefinitionVersionToDetailsView(IObjectMapping<Activi
         return new(
             source.Id,
             source.Version,
-            source.ActivityTypeKey,
             source.ImplementationKind,
             source.ImplementationDescriptor,
             definition,

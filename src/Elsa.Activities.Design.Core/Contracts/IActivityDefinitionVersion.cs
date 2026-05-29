@@ -9,13 +9,7 @@ public interface IActivityDefinitionVersion
     int Version { get; }
 
     string DefinitionId { get; }
-
-    /// <summary>
-    /// Denormalised from the parent <see cref="IActivityDefinition.ActivityTypeKey"/>. Set on
-    /// insert; never updated. Lets consumers join by (ActivityTypeKey, Version) without a
-    /// round-trip to the parent table.
-    /// </summary>
-    string ActivityTypeKey { get; }
+    
 
     /// <summary>
     /// Registry lookup key. Equals <see cref="ImplementationDescriptor"/>.<c>Kind</c> for this
@@ -49,5 +43,5 @@ public interface IActivityDefinitionVersion
     /// content" and the reconciler throws; match → skip or throw per duplicate-handling
     /// configuration.
     /// </summary>
-    string? ProvisioningHash { get; }
+    string? ReconcilliationHash { get; }
 }

@@ -76,8 +76,8 @@ public sealed class PickerVisibilityTests
         ActivityTypeKey = activityTypeKey,
         SourceKind = sourceKind,
         SourceId = "Elsa.Test",
-        ProvisionedAt = DateTimeOffset.UtcNow,
-        ProvisionedBy = "test",
+        ReconciledAt = DateTimeOffset.UtcNow,
+        ReconciledBy = "test",
         Category = "Test"
     };
 

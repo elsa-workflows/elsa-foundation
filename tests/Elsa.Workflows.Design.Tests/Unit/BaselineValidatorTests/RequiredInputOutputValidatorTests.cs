@@ -167,6 +167,6 @@ public sealed class RequiredInputOutputValidatorTests
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;
         public IEnumerable<ActivityPortDefinition> Ports => [];
         public ActivityExecutionType ExecutionType => default;
-        public string? ProvisioningHash => null;
+        public string? ReconcilliationHash => null;
     }
 }

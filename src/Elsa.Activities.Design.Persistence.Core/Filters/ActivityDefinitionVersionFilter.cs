@@ -9,8 +9,6 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
 
     public string? DefinitionId { get; set; }
 
-    public string? ActivityTypeKey { get; set; }
-
     public string? ImplementationKind { get; set; }
 
     public ICollection<string>? Ids { get; set; }
@@ -27,8 +25,6 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
             queryable = queryable.Where(x => Ids.Contains(x.Id));
         if (!string.IsNullOrWhiteSpace(DefinitionId))
             queryable = queryable.Where(x => x.DefinitionId == DefinitionId);
-        if (!string.IsNullOrWhiteSpace(ActivityTypeKey))
-            queryable = queryable.Where(x => x.ActivityTypeKey == ActivityTypeKey);
         if (!string.IsNullOrWhiteSpace(ImplementationKind))
             queryable = queryable.Where(x => x.ImplementationKind == ImplementationKind);
         if (!string.IsNullOrWhiteSpace(SearchTerm))

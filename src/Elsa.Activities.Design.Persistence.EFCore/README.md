@@ -26,7 +26,7 @@ Provider-agnostic EF Core persistence layer for the activity catalog. Inherits t
 
 | Entity | Notes |
 |---|---|
-| `ActivityDefinition` | Identity layer. Immutable: `ActivityTypeKey`, `SourceKind`, `SourceId`, `ProvisionedAt`, `ProvisionedBy`. Unique composite index `(SourceKind, SourceId, ActivityTypeKey)`. |
+| `ActivityDefinition` | Identity layer. Immutable: `ActivityTypeKey`, `SourceKind`, `SourceId`, `ReconciledAt`, `ReconciledBy`. Unique composite index `(SourceKind, SourceId, ActivityTypeKey)`. |
 | `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `ImplementationDescriptorPayload`, `ExecutionType`, `Inputs/Outputs/Ports*Source`, `ProvisioningHash`. `ImplementationDescriptor` is `[NotMapped]` — hydrated by the loading handler from the payload. |
 
 ## Persistence invariants

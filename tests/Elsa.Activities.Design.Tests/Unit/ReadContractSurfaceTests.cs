@@ -9,7 +9,7 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// provenance + display only; per-pass mutating reconciliation state (LastSeenAt, IsStale,
 /// RemovedAt, etc.) does NOT exist anywhere in the domain because reconciliation is one-shot
 /// at creation time. The Version's content hash lives on
-/// <see cref="IActivityDefinitionVersion.ProvisioningHash"/> as an immutable read-only
+/// <see cref="IActivityDefinitionVersion.ReconcilliationHash"/> as an immutable read-only
 /// property. Reflection tests fail loudly if a future refactor reintroduces operational
 /// per-pass fields onto these contracts.
 /// </summary>
@@ -24,8 +24,8 @@ public sealed class ReadContractSurfaceTests
     private static readonly string[] ForbiddenPerPassFieldNames =
     [
         "LastSeenAt",
-        "LastProvisionedAt",
-        "LastProvisionedBy",
+        "LastReconciledAt",
+        "LastReconciledBy",
         "SourceVersion",
         "IsStale",
         "RemovedAt",
@@ -72,7 +72,7 @@ public sealed class ReadContractSurfaceTests
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains(nameof(IActivityDefinitionVersion.ProvisioningHash), properties);
+        Assert.Contains(nameof(IActivityDefinitionVersion.ReconcilliationHash), properties);
     }
 
     [Fact]

@@ -1,6 +1,8 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
@@ -11,12 +13,12 @@ namespace Elsa.Activities.Design.Tests.Unit;
 public sealed class ActivityDefinitionIdentityTests
 {
     [Fact]
-    public async Task ActivityTypeKey_SourceKind_SourceId_ProvisionedAt_AreImmutable_AfterInsert()
+    public async Task ActivityTypeKey_SourceKind_SourceId_ReconciledAt_AreImmutable_AfterInsert()
     {
         using var host = ActivitiesDesignTestHost.Create();
 
         var id = Guid.NewGuid().ToString("N");
-        var initialProvisionedAt = new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
+        var initialReconciledAt = new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
 
         await using (var ctx = host.CreateContext())
         {
@@ -26,17 +28,26 @@ public sealed class ActivityDefinitionIdentityTests
                 ActivityTypeKey = "Foo",
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
-                ProvisionedAt = initialProvisionedAt,
-                ProvisionedBy = "test",
+                ReconciledAt = initialReconciledAt,
+                ReconciledBy = "test",
                 Category = "Test"
             });
             await ctx.SaveChangesAsync();
         }
 
-        await AssertImmutable(host, id, def => def.ActivityTypeKey = "Bar");
-        await AssertImmutable(host, id, def => def.SourceKind = "ClrDiscovery");
-        await AssertImmutable(host, id, def => def.SourceId = "Elsa.Other");
-        await AssertImmutable(host, id, def => def.ProvisionedAt = initialProvisionedAt.AddDays(1));
+        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.ReconciledAt)).CurrentValue = initialReconciledAt.AddDays(1));
+        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.ReconciledBy)).CurrentValue = "Foo");
+        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.SourceKind)).CurrentValue = "Bar");
+        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.SourceId)).CurrentValue = "Bar");
+    }
+
+    private static PropertyEntry GetDefinitionEntryProperty(ActivitiesDesignDbContext ctx, string id, string propertyName)
+    {
+        var entityEntry = ctx.Entry(
+            ctx.Set<ActivityDefinition>().First(x => x.Id == id)
+        );
+
+        return entityEntry.Property(propertyName);
     }
 
     [Fact]
@@ -56,17 +67,20 @@ public sealed class ActivityDefinitionIdentityTests
                 ActivityTypeKey = "Foo",
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
-                ProvisionedAt = DateTimeOffset.UtcNow,
-                ProvisionedBy = "test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test",
                 Category = "Test"
             });
             ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion(1, defId)
             {
                 Id = v1Id,
-                ActivityTypeKey = "Foo",
                 ImplementationKind = "Clr",
                 ImplementationDescriptor = new Elsa.Activities.Design.Core.Models.ClrImplementationDescriptor(
-                    new Elsa.Primitives.Models.TypeInformation("Foo", "Acme.X", "Acme.X", "1.0.0.0"))
+                    new Elsa.Primitives.Models.TypeInformation("Foo", "Acme.X", "Acme.X", "1.0.0.0")),
+                SourceKind = "Json",
+                SourceId = "Elsa.Test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test"
             });
             await ctx.SaveChangesAsync();
         }
@@ -76,10 +90,13 @@ public sealed class ActivityDefinitionIdentityTests
             ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion(2, defId)
             {
                 Id = v2Id,
-                ActivityTypeKey = "Foo",
                 ImplementationKind = "Clr",
                 ImplementationDescriptor = new Elsa.Activities.Design.Core.Models.ClrImplementationDescriptor(
-                    new Elsa.Primitives.Models.TypeInformation("FooRenamed", "Acme.Y", "Acme.Y", "2.0.0.0"))
+                    new Elsa.Primitives.Models.TypeInformation("FooRenamed", "Acme.Y", "Acme.Y", "2.0.0.0")),
+                SourceKind = "Json",
+                SourceId = "Elsa.Test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test"
             });
             await ctx.SaveChangesAsync();
         }
@@ -112,8 +129,8 @@ public sealed class ActivityDefinitionIdentityTests
                 ActivityTypeKey = "Foo",
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
-                ProvisionedAt = DateTimeOffset.UtcNow,
-                ProvisionedBy = "test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test",
                 Category = "Test"
             });
             await ctx.SaveChangesAsync();
@@ -127,8 +144,8 @@ public sealed class ActivityDefinitionIdentityTests
                 ActivityTypeKey = "Foo",
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
-                ProvisionedAt = DateTimeOffset.UtcNow,
-                ProvisionedBy = "test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test",
                 Category = "Other"
             });
 
@@ -136,11 +153,10 @@ public sealed class ActivityDefinitionIdentityTests
         }
     }
 
-    private static async Task AssertImmutable(ActivitiesDesignTestHost host, string id, Action<ActivityDefinition> mutation)
+    private static async Task AssertImmutable(ActivitiesDesignTestHost host, Action<ActivitiesDesignDbContext> mutation)
     {
-        await using var ctx = host.CreateContext();
-        var def = await ctx.ActivityDefinitions.SingleAsync(x => x.Id == id);
-        mutation(def);
+        await using var ctx = host.CreateContext();        
+        mutation(ctx);
         await Assert.ThrowsAnyAsync<Exception>(() => ctx.SaveChangesAsync());
     }
 }

@@ -1,8 +1,6 @@
 using CShells.Features;
-using Elsa.Activities.Design.Reconciliation.Json.Handlers;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Elsa.Activities.Design.Reconciliation.Json.Services;
-using Elsa.Mediator.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Design.Reconciliation.Json;
@@ -19,7 +17,6 @@ public class ActivitiesDesignReconciliationJsonFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(Options));
-        services.AddScoped<JsonActivityCatalogReader>();
-        services.AddDomainEventHandler<Core.OnActivityVersionsReconciling, JsonActivityVersionsReconcilingHandler>();
+        services.AddScoped<JsonActivityCatalogReader>();        
     }
 }

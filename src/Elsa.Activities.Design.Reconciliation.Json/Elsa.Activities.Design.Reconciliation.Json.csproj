@@ -20,4 +20,9 @@
     <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Exceptions\" />
+    <Folder Include="Handlers\" />
+  </ItemGroup>
+
 </Project>

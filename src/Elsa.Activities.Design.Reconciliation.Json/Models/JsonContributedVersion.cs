@@ -28,5 +28,5 @@ internal sealed record JsonContributedVersion(
     /// it onto the persisted <c>ActivityDefinitionVersion</c> at creation time. Under
     /// Model X the persisted hash is immutable, so this null is correct contribution-side.
     /// </summary>
-    public string? ProvisioningHash => null;
+    public string? ReconcilliationHash => null;
 }

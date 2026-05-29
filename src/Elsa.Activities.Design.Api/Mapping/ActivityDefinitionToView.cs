@@ -13,8 +13,8 @@ public sealed class ActivityDefinitionToView : IObjectMapping<ActivityDefinition
             source.ActivityTypeKey,
             source.SourceKind,
             source.SourceId,
-            source.ProvisionedAt,
-            source.ProvisionedBy,
+            source.ReconciledAt,
+            source.ReconciledBy,
             source.Category,
             source.DisplayName,
             source.Description

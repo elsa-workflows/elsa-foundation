@@ -34,8 +34,11 @@ public sealed class ImplementationDescriptorRoundTripTests
             var version = new ActivityDefinitionVersion(1, defId)
             {
                 Id = vId,
-                ActivityTypeKey = "Http.SendRequest",
-                ImplementationDescriptor = new ClrImplementationDescriptor(originalTypeInfo)
+                ImplementationDescriptor = new ClrImplementationDescriptor(originalTypeInfo),
+                SourceKind = "Json",
+                SourceId = "Elsa.Test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test"
             };
             var entry = ctx.ActivityDefinitionVersions.Add(version);
             // The handler now subscribes to OnEntitySaving (§2.6.1). The DbContext's
@@ -81,8 +84,11 @@ public sealed class ImplementationDescriptorRoundTripTests
             var version = new ActivityDefinitionVersion(1, defId)
             {
                 Id = vId,
-                ActivityTypeKey = "Wf.Approve",
-                ImplementationDescriptor = new WorkflowImplementationDescriptor("wf-42", 7)
+                ImplementationDescriptor = new WorkflowImplementationDescriptor("wf-42", 7),
+                SourceKind = "Json",
+                SourceId = "Elsa.Test",
+                ReconciledAt = DateTimeOffset.UtcNow,
+                ReconciledBy = "test"
             };
             var entry = ctx.ActivityDefinitionVersions.Add(version);
             var saver = new ActivityDefinitionVersionSavingHandler(serializer);
@@ -112,8 +118,8 @@ public sealed class ImplementationDescriptorRoundTripTests
         ActivityTypeKey = activityTypeKey,
         SourceKind = "Json",
         SourceId = "Elsa.Test",
-        ProvisionedAt = DateTimeOffset.UtcNow,
-        ProvisionedBy = "test",
+        ReconciledAt = DateTimeOffset.UtcNow,
+        ReconciledBy = "test",
         Category = "Test"
     };
 }

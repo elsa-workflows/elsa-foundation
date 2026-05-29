@@ -19,7 +19,7 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 /// 1. Find the parent definition by its surrogate Id or by the natural key
 ///    <c>(SourceKind, SourceId, ActivityTypeKey)</c>.
 /// 2. If no parent exists, persist a fresh Definition + Version with immutable provenance.
-///    The version carries an immutable <see cref="ActivityDefinitionVersion.ProvisioningHash"/>
+///    The version carries an immutable <see cref="ActivityDefinitionVersion.ReconcilliationHash"/>
 ///    computed from its content.
 /// 3. If the parent exists but the specific Version number does not, append the Version
 ///    with immutable provenance (including ProvisioningHash).
@@ -96,14 +96,14 @@ public sealed class ActivityVersionReconciler(
         }
 
         // (DefinitionId, Version) is already persisted — Model X duplicate path.
-        if (!string.Equals(existingVersion.ProvisioningHash, incomingHash, StringComparison.Ordinal))
+        if (!string.Equals(existingVersion.ReconcilliationHash, incomingHash, StringComparison.Ordinal))
         {
             // Same identity, different content — the source is broken. Throw loudly.
             throw new ActivityVersionHashMismatchException(
                 definitionId: definition.Id,
                 activityTypeKey: definition.ActivityTypeKey,
                 version: incomingVersion.Version,
-                persistedHash: existingVersion.ProvisioningHash,
+                persistedHash: existingVersion.ReconcilliationHash,
                 incomingHash: incomingHash);
         }
 
@@ -184,8 +184,8 @@ public sealed class ActivityVersionReconciler(
             ActivityTypeKey = definition.ActivityTypeKey,
             SourceKind = definition.SourceKind,
             SourceId = definition.SourceId,
-            ProvisionedAt = definition.ProvisionedAt,
-            ProvisionedBy = definition.ProvisionedBy,
+            ReconciledAt = definition.ReconciledAt,
+            ReconciledBy = definition.ReconciledBy,
             Category = definition.Category,
             Description = definition.Description,
             DisplayName = definition.DisplayName,
@@ -201,13 +201,12 @@ public sealed class ActivityVersionReconciler(
         return new(version.Version, definitionId, executionType: version.ExecutionType)
         {
             Id = id,
-            ActivityTypeKey = version.ActivityTypeKey,
             ImplementationKind = version.ImplementationKind,
             ImplementationDescriptor = version.ImplementationDescriptor,
             Outputs = version.Outputs,
             Inputs = version.Inputs,
             Ports = version.Ports,
-            ProvisioningHash = hash,
+            ReconcilliationHash = hash,
         };
     }
 }

@@ -25,9 +25,9 @@ public sealed class HasherTests
     }
 
     [Fact]
-    public void Hash_IsStable_AcrossProvisionedAtDifferences()
+    public void Hash_IsStable_AcrossReconciledAtDifferences()
     {
-        // The hasher excludes ProvisionedAt/ProvisionedBy — two definitions that differ
+        // The hasher excludes ReconciledAt/ReconciledBy — two definitions that differ
         // ONLY in those fields must hash to the same value, otherwise idempotency breaks
         // (every reconciliation pass would generate a fresh hash and trigger a rewrite).
         var hasher = new DefaultActivityDefinitionHasher();
@@ -70,8 +70,8 @@ public sealed class HasherTests
             ActivityTypeKey: "Acme.Foo",
             SourceKind: "Json",
             SourceId: "Acme.Pkg",
-            ProvisionedAt: provisionedAt ?? new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
-            ProvisionedBy: "test",
+            ReconciledAt: provisionedAt ?? new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
+            ReconciledBy: "test",
             Category: "Test",
             DisplayName: displayName,
             Description: null);
@@ -95,7 +95,7 @@ public sealed class HasherTests
 
     private sealed record FakeDefinition(
         string Id, string ActivityTypeKey, string SourceKind, string SourceId,
-        DateTimeOffset ProvisionedAt, string? ProvisionedBy,
+        DateTimeOffset ReconciledAt, string? ReconciledBy,
         string Category, string? DisplayName, string? Description
     ) : IActivityDefinition;
 
@@ -104,6 +104,6 @@ public sealed class HasherTests
         string ImplementationKind, IImplementationDescriptor ImplementationDescriptor,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
         IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,
-        string? ProvisioningHash = null
+        string? ReconcilliationHash = null
     ) : IActivityDefinitionVersion;
 }

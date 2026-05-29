@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Json.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Microsoft.Extensions.Logging;
@@ -48,12 +47,14 @@ public sealed class JsonActivityCatalogReader(
         }
         catch (JsonException inner)
         {
-            throw new InvalidJsonCatalogEntryException(
-                entryIndex: -1,
-                activityTypeKey: null,
-                implementationKind: null,
-                message: $"Failed to parse JSON catalog file '{path}': {inner.Message}",
-                inner);
+            //throw new InvalidJsonCatalogEntryException(
+            //    entryIndex: -1,
+            //    activityTypeKey: null,
+            //    implementationKind: null,
+            //    message: $"Failed to parse JSON catalog file '{path}': {inner.Message}",
+            //    inner);
+
+            throw;
         }
     }
 }

@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Design.Reconciliation.Json.Exceptions;
+namespace Elsa.Activities.Design.Reconciliation.Exceptions;
 
 /// <summary>
 /// Raised when a JSON catalog entry cannot be validated or mapped into the activity
@@ -7,13 +7,13 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 /// localise the failure in the source file. Replaces raw <c>JsonException</c> /
 /// <c>InvalidOperationException</c> escaping the JSON reader.
 /// </summary>
-public sealed class InvalidJsonCatalogEntryException : Exception
+public sealed class InvalidActivityVersionReconciliationEntryException : Exception
 {
     public int EntryIndex { get; }
     public string? ActivityTypeKey { get; }
     public string? ImplementationKind { get; }
 
-    public InvalidJsonCatalogEntryException(int entryIndex, string? activityTypeKey, string? implementationKind, string message)
+    public InvalidActivityVersionReconciliationEntryException(int entryIndex, string? activityTypeKey, string? implementationKind, string message)
         : base(BuildMessage(entryIndex, activityTypeKey, implementationKind, message))
     {
         EntryIndex = entryIndex;
@@ -21,7 +21,7 @@ public sealed class InvalidJsonCatalogEntryException : Exception
         ImplementationKind = implementationKind;
     }
 
-    public InvalidJsonCatalogEntryException(int entryIndex, string? activityTypeKey, string? implementationKind, string message, Exception inner)
+    public InvalidActivityVersionReconciliationEntryException(int entryIndex, string? activityTypeKey, string? implementationKind, string message, Exception inner)
         : base(BuildMessage(entryIndex, activityTypeKey, implementationKind, message), inner)
     {
         EntryIndex = entryIndex;
@@ -38,6 +38,6 @@ public sealed class InvalidJsonCatalogEntryException : Exception
             implementationKind is null ? null : $"implementationKind='{implementationKind}'",
         }.Where(x => x is not null));
 
-        return $"Invalid JSON catalog entry ({context}): {message}";
+        return $"Invalid activity version reconciliation entry ({context}): {message}";
     }
 }

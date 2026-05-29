@@ -5,7 +5,7 @@ namespace Elsa.Activities.Design.Core.Contracts
     /// Under the Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01
     /// architecture review), reconciliation is one-shot at creation time and all provenance
     /// is immutable; there is no operational sibling, no per-pass mutating fields, and no
-    /// stale / removed tracking. <see cref="IActivityDefinitionVersion.ProvisioningHash"/> on
+    /// stale / removed tracking. <see cref="IActivityDefinitionVersion.ReconcilliationHash"/> on
     /// the version carries the immutable content hash used by the duplicate-detection path.
     /// </summary>
     public interface IActivityDefinition
@@ -35,12 +35,12 @@ namespace Elsa.Activities.Design.Core.Contracts
         /// <summary>
         /// Timestamp at which this row was first provisioned. Immutable.
         /// </summary>
-        DateTimeOffset ProvisionedAt { get; }
+        DateTimeOffset ReconciledAt { get; }
 
         /// <summary>
         /// Identity (user, machine, or system) that produced this row. Immutable.
         /// </summary>
-        string? ProvisionedBy { get; }
+        string? ReconciledBy { get; }
 
         /// <summary>
         /// The category of the activity type. Mutable — picker grouping.

@@ -1,46 +1,51 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Extensions;
-using Elsa.Workflows.Design.Provisioning.Core.Contracts;
-using Elsa.Workflows.Design.Provisioning.Core.Events;
-using Elsa.Workflows.Design.Provisioning.Options;
+using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Reconciliation.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.ObjectModel;
 
-namespace Elsa.Workflows.Design.Provisioning.Services;
+namespace Elsa.Workflows.Design.Reconciliation.Services;
 
-public sealed class WorkflowsVersionProvisioner(
-    ILogger<WorkflowsVersionProvisioner> logger,
+/// <summary>
+/// Workflow-side reconciler. Each pass publishes <see cref="OnWorkflowVersionsReconciling"/>
+/// to gather candidate versions from source modules, then upserts the catalog. Mirrors the
+/// Activities-side reconciler pattern but without the content-hash check — workflow-version
+/// provenance fields (<c>SourceKind</c> / <c>SourceId</c> / hash) are Unit D's allocation per
+/// FR-016a; until they land, duplicate detection falls back to the configured
+/// <see cref="DuplicateHandling"/> mode.
+/// </summary>
+public sealed class WorkflowsVersionReconciler(
+    ILogger<WorkflowsVersionReconciler> logger,
     IDomainEventSender sender,
-    IOptions<WorkflowVersionProvisionerOptions> options,
+    IOptions<WorkflowVersionReconcilerOptions> options,
     IIdentityGenerator identityGenerator,
     IQueries<WorkflowDefinition> definitionQueries,
     IQueries<WorkflowDefinitionVersion> versionQueries,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
     IAddCommand<WorkflowDefinitionVersion> addVersionCommand
 )
-    : IWorkflowVersionProvisioner
+    : IWorkflowVersionReconciler
 {
-    public async Task Provision(CancellationToken cancellationToken)
+    public async Task Reconcile(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var versions = new Collection<IWorkflowDefinitionVersion>();
-        var @event = new OnWorkflowVersionsProvisioning(versions);
+        var @event = new OnWorkflowVersionsReconciling();
         await sender.Send(@event, cancellationToken);
 
-        foreach (var version in versions)
+        foreach (var version in @event.Versions)
         {
-            await ProvisionVersion(version, cancellationToken);
+            await ReconcileVersion(version, cancellationToken);
         }
     }
 
-    private async Task ProvisionVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
+    private async Task ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {
         var mappedVersion = Map(version);
         var mappedDefinition = Map(version.Definition);
@@ -65,10 +70,10 @@ public sealed class WorkflowsVersionProvisioner(
             return;
         }
 
-        await HandleDuplicate(mappedDefinition, mappedVersion, cancellationToken);
+        HandleDuplicate(mappedDefinition, mappedVersion);
     }
 
-    private async Task HandleDuplicate(WorkflowDefinition def, WorkflowDefinitionVersion version, CancellationToken cancellationToken)
+    private void HandleDuplicate(WorkflowDefinition def, WorkflowDefinitionVersion version)
     {
         switch (options.Value.DuplicateHandling)
         {
@@ -95,7 +100,6 @@ public sealed class WorkflowsVersionProvisioner(
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
     }
-
 
     private async Task<bool> VersionExists(string definitionId, int version, CancellationToken cancellationToken)
     {
@@ -140,4 +144,3 @@ public sealed class WorkflowsVersionProvisioner(
         };
     }
 }
-

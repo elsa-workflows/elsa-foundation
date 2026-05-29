@@ -23,5 +23,5 @@ public sealed record ActivityDefinitionVersionImport(
     /// computes it at creation time on the Elsa-4 side. Under Model X the persisted
     /// hash is immutable, so this null is correct on the import surface.
     /// </summary>
-    public string? ProvisioningHash => null;
+    public string? ReconcilliationHash => null;
 }

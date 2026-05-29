@@ -23,7 +23,7 @@
     <Project Path="src/Elsa.Tasks.Schedules/Elsa.Tasks.Schedules.csproj" Id="91fb8ac3-4a22-40b0-a108-d06c2a453ca6" />
     <Project Path="src/Elsa.Workflows.Design.Core/Elsa.Workflows.Design.Core.csproj" Id="44fd2fe7-0762-472f-80cd-b1ff1d3fd618" />
     <Project Path="src/Elsa.Workflows.Design.Persistence.Core/Elsa.Workflows.Design.Persistence.Core.csproj" Id="90497690-6709-40d8-8a15-0a12b5140e96" />
-    <Project Path="src/Elsa.Workflows.Design.Provisioning.Core/Elsa.Workflows.Design.Provisioning.Core.csproj" Id="8b0346a3-b695-4bf0-8d84-1f98043ec447" />
+    <Project Path="src/Elsa.Workflows.Design.Reconciliation.Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa.Workflows.Design.Validations.Core/Elsa.Workflows.Design.Validations.Core.csproj" />
     <Project Path="src/Elsa.Workflows.Primitives/Elsa.Workflows.Primitives.csproj" Id="e01e3cb1-d0db-41b9-b67e-da19f474160f" />
     <Project Path="src/Elsa.Workflows.Runtime.Core/Elsa.Workflows.Runtime.Core.csproj" Id="8c47eba7-039d-44fd-9162-6ebb9103102e" />
@@ -34,7 +34,6 @@
     <Project Path="src/Elsa.Activities.Design.Persistence.EFCore.Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" Id="e6206c21-d91c-43e7-9d0b-437a621d461c" />
     <Project Path="src/Elsa.Activities.Design.Persistence.EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" Id="e6946c5a-db85-4ad3-af61-cce52d36b593" />
     <Project Path="src/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
-    <Project Path="src/Elsa.Activities.Design.Reconciliation.Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
     <Project Path="src/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <Project Path="src/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
@@ -58,13 +57,12 @@
     <Project Path="src/Elsa.Workflows.Design.JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
     <Project Path="src/Elsa.Workflows.Design.Persistence.EFCore.Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" Id="640a7089-7fc1-41bf-a9af-030029768134" />
     <Project Path="src/Elsa.Workflows.Design.Persistence.EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" Id="92a70432-2e17-427a-89cf-ac35f850a352" />
-    <Project Path="src/Elsa.Workflows.Design.Provisioning/Elsa.Workflows.Design.Provisioning.csproj" Id="71a7015e-0a14-407b-94de-ffcc54e373bf" />
+    <Project Path="src/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj" Id="730e3ea0-8d78-48fd-ae5d-dae6b4c7cc8b" />
     <Project Path="src/Elsa3.Mapping/Elsa3.Mapping.csproj" Id="137fa281-550a-4e12-8866-6683390ebeb3" />
-    <Project Path="src/Elsa3.Workflows.Design.Provisioning.Json/Elsa3.Workflows.Design.Import.csproj" Id="6bda3ff3-9578-44b1-b96c-d4e3482b9e53" />
     <Project Path="src/Test.Activities.Import/Test.Activities.Import.csproj" Id="3a4dee71-96bf-427b-9d47-5a33b375e386" />
   </Folder>
   <Folder Name="/tests/">

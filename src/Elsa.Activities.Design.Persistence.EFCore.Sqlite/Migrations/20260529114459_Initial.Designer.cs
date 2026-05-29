@@ -48,11 +48,11 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProvisionedAt")
+                    b.Property<string>("ReconciledAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ProvisionedBy")
+                    b.Property<string>("ReconciledBy")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SourceId")

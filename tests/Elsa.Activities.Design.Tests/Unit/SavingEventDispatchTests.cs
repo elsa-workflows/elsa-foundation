@@ -40,14 +40,13 @@ public sealed class SavingEventDispatchTests
             ActivityTypeKey = "Foo",
             SourceKind = "Json",
             SourceId = "Acme",
-            ProvisionedAt = DateTimeOffset.UtcNow,
-            ProvisionedBy = "test",
+            ReconciledAt = DateTimeOffset.UtcNow,
+            ReconciledBy = "test",
             Category = "Test"
         });
         var version = new ActivityDefinitionVersion(1, defId)
         {
             Id = Guid.NewGuid().ToString("N"),
-            ActivityTypeKey = "Foo",
             ImplementationDescriptor = new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
         };
         var entry = ctx.ActivityDefinitionVersions.Add(version);
@@ -77,8 +76,8 @@ public sealed class SavingEventDispatchTests
             ActivityTypeKey = "X",
             SourceKind = "Json",
             SourceId = "Acme",
-            ProvisionedAt = DateTimeOffset.UtcNow,
-            ProvisionedBy = "test",
+            ReconciledAt = DateTimeOffset.UtcNow,
+            ReconciledBy = "test",
             Category = "Test"
         };
         var entry = ctx.ActivityDefinitions.Add(unrelated);

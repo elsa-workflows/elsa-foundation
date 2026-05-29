@@ -49,8 +49,8 @@ public sealed class AddDefinitionCommandHandler(
             ActivityTypeKey = def.ActivityTypeKey,
             SourceKind = def.SourceKind,
             SourceId = def.SourceId,
-            ProvisionedAt = clock.UtcNow,
-            ProvisionedBy = Environment.MachineName,
+            ReconciledAt = clock.UtcNow,
+            ReconciledBy = Environment.MachineName,
             Category = def.Category,
             Description = def.Description,
             DisplayName = def.DisplayName
@@ -62,7 +62,6 @@ public sealed class AddDefinitionCommandHandler(
         return new(initialVersion, definition.Id, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
-            ActivityTypeKey = definition.ActivityTypeKey,
             ImplementationKind = command.ImplementationDescriptor.Kind,
             ImplementationDescriptor = command.ImplementationDescriptor,
             Inputs = command.Inputs ?? [],

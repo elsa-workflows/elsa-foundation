@@ -32,8 +32,8 @@ None.
 
 - `SourceKind = "Json"`
 - `SourceId = options.SourceId` (default `"JsonFile"`)
-- `ProvisionedAt = clock.UtcNow`
-- `ProvisionedBy = Environment.MachineName`
+- `ReconciledAt = clock.UtcNow`
+- `ReconciledBy = Environment.MachineName`
 - `ImplementationKind = entry.implementationKind` (from JSON)
 - `ImplementationDescriptor` — deserialised from `entry.implementationDescriptor` JSON via the `IImplementationDescriptorRegistry`
 

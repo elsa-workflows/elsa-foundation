@@ -50,7 +50,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     }
 
     // Projects the definition to a plain object containing only the content-bearing fields.
-    // ProvisionedAt/ProvisionedBy are deliberately excluded — they're operational provenance
+    // ReconciledAt/ReconciledBy are deliberately excluded — they're operational provenance
     // that shifts each pass (UtcNow on the incoming candidate, frozen on the persisted row);
     // including them would prevent the second-pass hash from matching the first, defeating
     // the hasher's purpose. Id is also out (random per pass).
@@ -66,8 +66,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 
     private static object ProjectVersion(IActivityDefinitionVersion v) => new
     {
-        v.Version,
-        v.ActivityTypeKey,
+        v.Version,        
         v.ImplementationKind,
         v.ImplementationDescriptor,
         v.ExecutionType,

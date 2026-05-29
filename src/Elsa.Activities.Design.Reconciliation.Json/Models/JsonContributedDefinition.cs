@@ -11,8 +11,8 @@ internal sealed record JsonContributedDefinition(
     string ActivityTypeKey,
     string SourceKind,
     string SourceId,
-    DateTimeOffset ProvisionedAt,
-    string? ProvisionedBy,
+    DateTimeOffset ReconciledAt,
+    string? ReconciledBy,
     string Category,
     string? DisplayName,
     string? Description

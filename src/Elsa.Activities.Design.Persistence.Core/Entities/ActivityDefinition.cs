@@ -18,32 +18,32 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
         /// Stable logical identity. Immutable.
         /// </summary>
         [Immutable]
-        public string ActivityTypeKey { get; set; } = null!;
+        public string ActivityTypeKey { get; init; } = null!;
 
         /// <summary>
         /// Provenance source identifier — free-form string owned by the source module
         /// (e.g. "Json", "ClrDiscovery", "Workflow"). Immutable.
         /// </summary>
         [Immutable]
-        public string SourceKind { get; set; } = null!;
+        public string SourceKind { get; init; } = null!;
 
         /// <summary>
         /// Source-side asset identity. Immutable.
         /// </summary>
         [Immutable]
-        public string SourceId { get; set; } = null!;
+        public string SourceId { get; init; } = null!;
 
         /// <summary>
         /// First-provisioning timestamp. Immutable.
         /// </summary>
         [Immutable]
-        public DateTimeOffset ProvisionedAt { get; set; }
+        public DateTimeOffset ReconciledAt { get; init; }
 
         /// <summary>
         /// Identity that produced this row. Immutable.
         /// </summary>
         [Immutable]
-        public string? ProvisionedBy { get; set; }
+        public string? ReconciledBy { get; init; }
 
         /// <summary>
         /// The category of the activity type.

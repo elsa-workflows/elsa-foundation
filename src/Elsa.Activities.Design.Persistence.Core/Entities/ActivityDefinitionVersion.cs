@@ -19,13 +19,7 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
 
     [Immutable]
     public string DefinitionId { get; init; } = definitionId;
-
-    /// <summary>
-    /// Denormalised from the parent on insert. Immutable.
-    /// </summary>
-    [Immutable]
-    public string ActivityTypeKey { get; set; } = null!;
-
+    
     /// <summary>
     /// Registry lookup key matching <see cref="ImplementationDescriptor"/>.<c>Kind</c>.
     /// Immutable.
@@ -66,16 +60,6 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     [Immutable]
     public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
-    /// <summary>
-    /// Immutable content hash of this version's projection, computed by
-    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Under Model X this is the
-    /// only artefact carried forward between reconciliation passes: subsequent passes that
-    /// observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
-    /// against this stored value to detect source-side breakage.
-    /// </summary>
-    [Immutable]
-    public string? ProvisioningHash { get; set; }
-
     [NotMapped]
     public IEnumerable<InputDefinition> Inputs { get; set; } = [];
 
@@ -84,6 +68,41 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
 
     [NotMapped]
     public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];
+
+    /// <summary>
+    /// Provenance source identifier — free-form string owned by the source module
+    /// (e.g. "Json", "ClrDiscovery", "Workflow"). Immutable.
+    /// </summary>
+    [Immutable]
+    public string SourceKind { get; set; } = null!;
+
+    /// <summary>
+    /// Source-side asset identity. Immutable.
+    /// </summary>
+    [Immutable]
+    public string SourceId { get; set; } = null!;
+
+    /// <summary>
+    /// First-provisioning timestamp. Immutable.
+    /// </summary>
+    [Immutable]
+    public DateTimeOffset ReconciledAt { get; set; }
+
+    /// <summary>
+    /// Identity that produced this row. Immutable.
+    /// </summary>
+    [Immutable]
+    public string? ReconciledBy { get; set; }
+
+    /// <summary>
+    /// Immutable content hash of this version's projection, computed by
+    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Under Model X this is the
+    /// only artefact carried forward between reconciliation passes: subsequent passes that
+    /// observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
+    /// against this stored value to detect source-side breakage.
+    /// </summary>
+    [Immutable]
+    public string? ReconcilliationHash { get; set; }
 
     IEnumerable<ActivityPortDefinition> IActivityDefinitionVersion.Ports => Ports;
 
