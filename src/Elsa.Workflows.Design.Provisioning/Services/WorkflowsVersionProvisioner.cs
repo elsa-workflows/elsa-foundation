@@ -123,7 +123,6 @@ public sealed class WorkflowsVersionProvisioner(
         {
             Id = id,
             Description = definition.Description,
-            DraftId = definition.Draft?.Id,
             Name = definition.Name
         };
     }

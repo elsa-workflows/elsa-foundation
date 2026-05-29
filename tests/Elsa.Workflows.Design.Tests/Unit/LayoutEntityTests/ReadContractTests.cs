@@ -37,15 +37,15 @@ public sealed class ReadContractTests
         {
             Id = "layout-1",
             WorkflowDefinitionVersionId = "ver-1",
-            Records = { record }
+            Records = [record]
         };
 
         IWorkflowDefinitionLayout contractView = entity;
-
+        var records = contractView.Records.ToArray();
         Assert.Single(contractView.Records);
-        Assert.Equal("node-1", contractView.Records[0].NodeId);
-        Assert.Equal(10, contractView.Records[0].X);
-        Assert.Equal(20, contractView.Records[0].Y);
+        Assert.Equal("node-1", records[0].NodeId);
+        Assert.Equal(10, records[0].X);
+        Assert.Equal(20, records[0].Y);
     }
 
     [Fact]

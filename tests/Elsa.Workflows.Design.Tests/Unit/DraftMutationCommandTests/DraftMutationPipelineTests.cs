@@ -156,6 +156,7 @@ public sealed class DraftMutationPipelineTests
     public async Task CreateDraft_creates_draft_with_layout_sibling_and_publishes_OnDraftCreated_and_OnDraftValidated()
     {
         using var host = WorkflowsDesignTestHost.Create();
+        await host.EnsureDefinition("wf-1");
 
         string draftId;
         using (var scope = host.Services.CreateScope())
@@ -203,6 +204,7 @@ public sealed class DraftMutationPipelineTests
 
     private static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId)
     {
+        await host.EnsureDefinition(workflowDefinitionId);
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>();
         return await command.Execute(workflowDefinitionId);

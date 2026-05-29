@@ -71,6 +71,7 @@ internal static class ValidatorTestHelpers
     private sealed class StubDraft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft
     {
         public string Id => "draft-1";
+        public string WorkflowDefinitionId => "wf-1";
         public WorkflowDefinitionState State { get; } = state;
         public DateTimeOffset CreatedAt => DateTimeOffset.UtcNow;
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;

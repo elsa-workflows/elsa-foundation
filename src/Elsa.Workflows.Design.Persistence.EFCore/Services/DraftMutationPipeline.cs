@@ -3,6 +3,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -63,8 +64,6 @@ public sealed class DraftMutationPipeline(
     IEnumerable<IEntityLoadingHandler<WorkflowsDesignDbContext, WorkflowDefinitionDraft>> draftLoadingHandlers
 )
 {
-    private const string lockKeyFormat = "workflow-draft:{0}";
-
     public async Task ExecuteMutation(
         string draftId,
         Func<WorkflowDefinitionDraft, WorkflowsDesignDbContext, ValueTask<ILifecycleEvent>> mutateDelegate,
@@ -75,7 +74,7 @@ public sealed class DraftMutationPipeline(
         WorkflowDefinitionDraft draft;
         IReadOnlyList<ValidationError> errors;
 
-        var lockKey = GetLockKey(draftId);
+        var lockKey = LockKeys.DraftKey(draftId);
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         await using (var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken))
@@ -108,7 +107,7 @@ public sealed class DraftMutationPipeline(
     {
         IReadOnlyList<ValidationError> errors;
 
-        var lockKey = GetLockKey(newDraft.Id);
+        var lockKey = LockKeys.DraftKey(newDraft.Id);
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         await using (var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken))
@@ -210,7 +209,5 @@ public sealed class DraftMutationPipeline(
         // Consequence second.
         var validatedEvent = new OnDraftValidated(draft, errors);
         await lifecycleEventSender.Send(validatedEvent, cancellationToken);
-    }
-
-    private static string GetLockKey(string draftId) => string.Format(lockKeyFormat, draftId);
+    }    
 }

@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 public interface IWorkflowDefinitionLayout
 {
     string Id { get; }
-    IReadOnlyList<IDesignMetadataRecord> Records { get; }
+    IEnumerable<IDesignMetadataRecord> Records { get; }
 }
 
 /// <summary>

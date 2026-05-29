@@ -19,7 +19,7 @@ public sealed class WorkflowDefinitionVersionLayout : TenantEntity, IWorkflowDef
     public WorkflowDefinitionVersion? WorkflowDefinitionVersion { get; init; }
 
     [Immutable]
-    public List<DesignMetadataRecord> Records { get; init; } = new();
+    public IEnumerable<DesignMetadataRecord> Records { get; init; } = [];
 
-    IReadOnlyList<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records;
+    IEnumerable<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records;
 }

@@ -9,10 +9,11 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
         public void Configure(EntityTypeBuilder<WorkflowDefinition> builder)
         {
             builder.HasKey(x => x.Id);
-            builder
-                .HasOne(def => def.Draft)
-                .WithOne()
-                .HasForeignKey<WorkflowDefinition>(def => def.DraftId);
+
+            // The Draft → Definition relationship is configured on the child side
+            // (WorkflowDefinitionDraftConfiguration). The Definition no longer holds an inverse
+            // DraftId pointer; the FK lives on each Draft per the 1-Definition-to-many-Drafts
+            // cardinality.
 
             builder.HasIndex(x => x.Name).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.Name)}");
         }

@@ -6,6 +6,11 @@ public interface IWorkflowDefinitionDraft
 {
     string Id { get; }
 
+    /// <summary>
+    /// Foreign key to the owning workflow definition. Many Drafts may belong to one Definition.
+    /// </summary>
+    string WorkflowDefinitionId { get; }
+
     WorkflowDefinitionState State { get; }
 
     /// <summary>

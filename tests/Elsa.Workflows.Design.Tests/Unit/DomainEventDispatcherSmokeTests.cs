@@ -128,6 +128,7 @@ public sealed class DomainEventDispatcherSmokeTests
     private sealed class StubDraft : IWorkflowDefinitionDraft
     {
         public string Id => "draft-smoke";
+        public string WorkflowDefinitionId => "wf-smoke";
         public WorkflowDefinitionState State { get; } = new(
             Variables: [],
             ActivityConnections: [],

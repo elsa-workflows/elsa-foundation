@@ -28,11 +28,6 @@ namespace Elsa.Workflows.Design.Core.Contracts
         DateTimeOffset LastModifiedAt { get; }
 
         /// <summary>
-        ///
-        /// </summary>
-        IWorkflowDefinitionDraft? Draft { get; }
-
-        /// <summary>
         /// Creates and returns a shallow copy of the workflow definition.
         /// </summary>
         IWorkflowDefinition ShallowClone();

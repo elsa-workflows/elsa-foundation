@@ -18,8 +18,10 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
                 services
                     .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinitionCommand>()
                     .AddScoped<DraftMutationPipeline>()
-                    // Lifecycle origination
+                    // Lifecycle origination + cloning + discard
                     .AddScoped<ICreateDraftCommand, CreateDraftCommand>()
+                    .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
+                    .AddScoped<IDiscardDraftCommand, DiscardDraftCommand>()
                     // Activities (graph)
                     .AddScoped<IAddActivityToDraftCommand, AddActivityToDraftCommand>()
                     .AddScoped<IRemoveActivityFromDraftCommand, RemoveActivityFromDraftCommand>()

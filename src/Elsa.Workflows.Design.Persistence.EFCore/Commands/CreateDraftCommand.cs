@@ -25,6 +25,7 @@ public sealed class CreateDraftCommand(IIdentityGenerator identityGenerator, Dra
         var draft = new WorkflowDefinitionDraft
         {
             Id = draftId,
+            WorkflowDefinitionId = workflowDefinitionId,
             State = state,
         };
 

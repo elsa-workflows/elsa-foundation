@@ -303,24 +303,24 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Persistence sibling
 
-- [ ] T118 Create entity `src/Elsa.Workflows.Design.Persistence.Core/Entities/WorkflowDefinitionDraftValidation.cs` per data-model.md §2.4. Implements `IWorkflowDefinitionDraftValidation`. Holds `List<ValidationError> Errors`. FR-021.
-- [ ] T119 Create EF configuration `src/Elsa.Workflows.Design.Persistence.EFCore/Configurations/WorkflowDefinitionDraftValidationConfiguration.cs` — FK to `WorkflowDefinitionDraft` with `OnDelete(DeleteBehavior.Cascade)` per R5. Map `Errors` as owned JSON via System.Text.Json.
-- [ ] T120 Register the entity in `WorkflowsDesignDbContext` (DbSet added; configuration picked up via `ApplyConfigurationsFromAssembly`).
+- [X] T118 Entity `WorkflowDefinitionDraftValidation` exists in `Persistence.Core/Entities/` (landed alongside `DraftMutationPipeline` in Phase 7's cascade).
+- [X] T119 EF configuration `WorkflowDefinitionDraftValidationConfiguration` exists with `OnDelete(Cascade)` + JSON-serialized `Errors` per R5 (Phase 7 cascade).
+- [X] T120 Entity registered in `WorkflowsDesignDbContext` as `WorkflowDefinitionDraftValidations` DbSet (Phase 7 cascade).
 
 ### Delete-and-re-add wiring (in mutation commands)
 
-- [ ] T121 Update `DraftMutationPipelineBase` (T081) to flush the validation sibling on every mutation: after `OnDraftValidating` dispatch, read `event.Errors`, replace `WorkflowDefinitionDraftValidation.Errors` wholesale, save changes inside the transactional flush. FR-023.
+- [X] T121 `DraftMutationPipeline.ExecuteValidationGate` + `UpsertValidationSibling` already flush the sibling on every mutation per FR-023 — landed in Phase 7. Verified by `ValidationSiblingPersistenceTests` (Phase 7) + `ValidationLifecycleTests` (T125).
 
 ### Promotion gate
 
-- [ ] T122 Create `src/Elsa.Workflows.Design.Persistence.Core/Exceptions/DraftHasValidationErrorsException.cs` — domain exception thrown by the promotion command per FR-024. Carries `DraftId` + error count. Sealed.
-- [ ] T123 Stub the promotion command name `IPromoteDraftToVersionCommand` (provisional per R8) — create a placeholder contract file at `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IPromoteDraftToVersionCommand.cs` with a doc comment marking it Unit D's allocation. The contract may be a marker interface for now; the actual implementation lives in Unit D. FR-024.
-- [ ] T124 Test `tests/Elsa.Workflows.Design.Tests/Unit/PromotionGateTests.cs` — stub a minimal promotion-command implementation in test code; assert: (a) attempting promotion when `WorkflowDefinitionDraftValidation.Errors.Count > 0` throws `DraftHasValidationErrorsException` with `DraftId` + error count; (b) attempting promotion when `Errors.IsEmpty` succeeds. SC-014.
+- [X] T122 `src/Elsa.Workflows.Design.Persistence.Core/Exceptions/DraftHasValidationErrorsException.cs` — sealed; carries `DraftId` + `ErrorCount` + descriptive message.
+- [X] T123 `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IPromoteDraftToVersionCommand.cs` — placeholder contract with `Execute(string draftId, CT)` signature; doc-header documents the gate + lock invariants and flags implementation as Unit D's allocation per R8.
+- [X] T124 `tests/Elsa.Workflows.Design.Tests/Unit/PromotionGateTests.cs` — stub in-test `StubPromotionGate` reads the sibling and either throws or returns a synthetic version id. Two tests: throws when sibling has errors (DraftId + ErrorCount preserved); succeeds when empty. SC-014.
 
 ### Tests for the validation lifecycle
 
-- [ ] T125 Test `tests/Elsa.Workflows.Design.Tests/Unit/ValidationLifecycleTests.cs` — exercise the full FR-023 delete-and-re-add: introduce a forbidden condition (orphan activity); assert validation sibling rebuilt with the error; remove the offending condition; assert validation sibling rebuilt without the error. SC-013 + SC-022.
-- [ ] T126 Test `tests/Elsa.Workflows.Design.Tests/Unit/ValidationReadAccessTests.cs` — assert `IWorkflowDefinitionDraftValidation` is reachable from `Elsa.Workflows.Design.Validations.Core` without referencing `*.Persistence.Core`; UI consumers see errors grouped by `(Path, Type)` scope (verify via test that exercises both `Path` and `Type` parsing per R2 + R3). SC-013.
+- [X] T125 `tests/Elsa.Workflows.Design.Tests/Unit/ValidationLifecycleTests.cs` — wires the real `OrphanActivityValidator` into `CapturingDomainEventSender.OnSend` so the production validator runs against the test pipeline. Round-trips an orphan: add orphan → sibling carries `Graph/OrphanActivity` error; add start + wire connection → sibling rewritten empty. SC-013 + SC-022.
+- [X] T126 `tests/.../ValidationReadAccessTests.cs` — reflection check confirms `IWorkflowDefinitionDraftValidation` + `ValidationError` live in `Elsa.Workflows.Design.Validations.Core` (NOT in Persistence.Core); `(Path, Type)` grouping demonstrated against representative validator outputs; theory matrices over the 7 R2 Path forms + 6 R3 Type categories. SC-013.
 
 **Checkpoint**: Validation sibling persists; delete-and-re-add lifecycle works end-to-end; promotion gate throws on non-empty errors.
 
@@ -332,19 +332,26 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Contracts
 
-- [ ] T127 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/ICloneDraftFromVersionCommand.cs` per contracts/commands.md.
-- [ ] T128 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IDiscardDraftCommand.cs` per contracts/commands.md.
+- [X] T127 [P] `src/Elsa.Workflows.Design.Persistence.Core/Contracts/ICloneDraftFromVersionCommand.cs`. Signature `Execute(sourceVersionId, CT) → newDraftId`. The target Definition id is derived from `sourceVersion.DefinitionId` inside the impl — cloning never crosses Definitions, so taking it as a parameter would be redundant and invite drift. Doc-header flags `ClonedFromVersionId` back-pointer field as deferred to Unit D (audit trail lives on the lifecycle event for now).
+- [X] T128 [P] `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IDiscardDraftCommand.cs`. Signature `Execute(draftId, workflowDefinitionId, CT)`. Doc-header documents idempotency + cascade behaviour + why `workflowDefinitionId` is a parameter (no persistent FK on Draft entity in Unit C — Unit D's allocation).
 
 ### Implementations
 
-- [ ] T129 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/CloneDraftFromVersionCommand.cs` per data-model.md §4.3: generate new DraftId; acquire lock on new DraftId; deep-copy `WorkflowDefinitionState` from source Version → new Draft; deep-copy Layout from source Version's layout sibling → new Draft's layout sibling; set `ClonedFromVersionId` FK (provisional name per FR-028); publish `OnDraftClonedFromVersion`; transactional flush; release lock. FR-028.
-- [ ] T130 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DiscardDraftCommand.cs` per data-model.md §4.4: acquire lock on DraftId; load Draft (return-cleanly-if-null for idempotency); delete Draft + cascade siblings (Layout + Validation) per R5; publish `OnDraftDiscarded`; transactional flush; release lock. Never touches any `WorkflowDefinitionVersion` per FR-029.
-- [ ] T131 Register both implementations against their contracts in the persistence feature's `Configure` method.
+- [X] T129 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/CloneDraftFromVersionCommand.cs`. Loads source Version + invokes version loading handlers to hydrate State; loads source VersionLayout; deep-copies State (collection-expression spread `[.. xs]`) + layout records into a new Draft + DraftLayout; routes through `DraftMutationPipeline.ExecuteCreation` so the new Draft acquires its per-Draft lock, gets its validation sibling populated, and emits the standard lifecycle-event sequence (OnDraftClonedFromVersion + OnDraftValidated). FR-028.
+- [X] T130 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DiscardDraftCommand.cs`. Custom flow (NOT via DraftMutationPipeline — different shape: no validation rebuild, no granular event). Uses `LockKeys.DraftKey(draftId)` helper. Acquires lock; loads Draft (return-cleanly-null for idempotency); `Remove(draft)` → cascade deletes Layout + Validation per R5; SaveChangesAsync; release lock; publishes OnDraftDiscarded.
+- [X] T131 Registered in `EFCoreWorkflowsPersistenceFeatureBase.OnAfterConfigured` ("Lifecycle origination + cloning + discard" group, alongside `ICreateDraftCommand`). Mirrored in `WorkflowsDesignTestHost.RegisterCommands`.
 
 ### Tests
 
-- [ ] T132 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/CloneDraftFromVersionTests.cs` — assert: (a) new Draft's State is deep-equal to source Version's State; (b) new Draft's Layout is deep-equal to source Version's Layout; (c) NodeIds match 1:1 between source-Version's State and target-Draft's State (per FR-009a copy semantics); (d) `ClonedFromVersionId` is set on the new Draft; (e) `OnDraftClonedFromVersion` published with `NewDraftId` + `SourceVersionId` + `TargetDefinitionId`. SC-017.
-- [ ] T133 [P] Test `tests/Elsa.Workflows.Design.Tests/Unit/DiscardDraftTests.cs` — assert: (a) Draft + Layout + Validation siblings deleted atomically; (b) querying by DraftId returns null; querying siblings by parent FK returns no rows; (c) no `WorkflowDefinitionVersion` is affected; (d) `OnDraftDiscarded` published with `DraftId` + `WorkflowDefinitionId`; (e) idempotent — second Discard on same DraftId is a no-op (load returns null; command exits cleanly). SC-018.
+- [X] T132 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/CloneDraftFromVersionTests.cs` — 4 tests: State deep-copy verified by re-hydrating from StateSource; Layout records carried 1:1 (incl. Width/Height); NodeIds match as sets; `OnDraftClonedFromVersion` published with NewDraftId + SourceVersionId + TargetDefinitionId. SC-017. **ClonedFromVersionId field check (FR-028(d))** deferred per the contract's note — Unit D's field allocation.
+- [X] T133 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/DiscardDraftTests.cs` — 4 tests: atomic delete of Draft + Layout + Validation via cascade; no Version touched; OnDraftDiscarded published with DraftId + WorkflowDefinitionId; second Discard on same id is a no-op (exactly one OnDraftDiscarded published across two calls). SC-018.
+
+**Phase 10 architectural notes:**
+
+- **Test SeedVersion gotcha.** `WorkflowDefinitionVersionSavingHandler` re-serializes from `entity.State` on every save; if you only pass `stateSource` via constructor and don't set `entity.State`, the handler overwrites StateSource to `string.Empty`. Test helpers now set `State` directly and let the handler serialize on save.
+- **`ClonedFromVersionId` not added.** Per FR-028(d) the back-pointer field is "provisional; Unit D's call". Unit C declines to pre-empt by leaving the field off the entity. The `OnDraftClonedFromVersion` event payload carries `SourceVersionId` so audit subscribers can reconstruct the lineage; Unit D may persist the back-pointer if cardinality requires it.
+- **Draft → Definition relationship flipped (2026-05-29).** The prior model had `WorkflowDefinition.DraftId` (parent → child pointer, 1:0..1). Joey's call: stage the future 1-Definition-to-many-Drafts cardinality now by moving the FK to `WorkflowDefinitionDraft.WorkflowDefinitionId` (child → parent, many:1, required, cascade). Removes the reverse-lookup the Discard command needed, simplifies the Clone command (target Definition derived from source Version), aligns the data model with where multi-Draft semantics will land. Touches: `WorkflowDefinitionDraft` + `WorkflowDefinition` entities + read contracts; `WorkflowDefinitionConfiguration` (drop relationship) + `WorkflowDefinitionDraftConfiguration` (add FK); `CreateDraftCommand` + `CloneDraftFromVersionCommand` (set FK); `DiscardDraftCommand` (drop parameter); `WorkflowsVersionProvisioner.Map` (drop `DraftId` line); `GetDefinitionRequestHandler` + `AddDefinitionCommandHandler` + `WorkflowDefinitionQueryExtensions` (query Draft via the new direction). Test infra gains `WorkflowsDesignTestHost.EnsureDefinition` since the FK is now required.
+- **`IDiscardDraftCommand.Execute(string draftId, CT)` — single id.** Reads `draft.WorkflowDefinitionId` after loading; no caller-supplied parent id. Symmetric with `ICloneDraftFromVersionCommand.Execute(string sourceVersionId, CT)` — the FK on the entity is the single source of truth for parent linkage.
 
 **Checkpoint**: Clone-from-Version + Discard commands ship; per-Draft lock isolation extends to lifecycle operations.
 

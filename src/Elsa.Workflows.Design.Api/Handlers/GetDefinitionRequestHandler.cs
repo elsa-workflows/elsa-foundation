@@ -9,21 +9,27 @@ using Elsa.Workflows.Design.Persistence.Core.Filters;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
-public sealed class GetDefinitionRequestHandler(IQueries<WorkflowDefinitionVersion> versionQueries, IQueries<WorkflowDefinition> defQueries, IObjectMapper mapper)
+public sealed class GetDefinitionRequestHandler(
+    IQueries<WorkflowDefinitionVersion> versionQueries,
+    IQueries<WorkflowDefinition> defQueries,
+    IQueries<WorkflowDefinitionDraft> draftQueries,
+    IObjectMapper mapper)
     : IRequestHandler<GetDefinition, WorkflowDefinitionDetailsView>
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
-        var filter = new WorkflowDefinitionVersionFilter { DefinitionId = request.Id };
+        var versionFilter = new WorkflowDefinitionVersionFilter { DefinitionId = request.Id };
 
-        var definitionTask = defQueries.GetDefinitionInlcudingDraft(request.Id, cancellationToken);
-        var versionsTask = versionQueries.Query(filter, Constants.Expressions.VersionSelector, cancellationToken);
+        var definitionTask = defQueries.Get(request.Id, cancellationToken);
+        var versionsTask = versionQueries.Query(versionFilter, Constants.Expressions.VersionSelector, cancellationToken);
+        var draftTask = draftQueries.Find(d => d.WorkflowDefinitionId == request.Id, cancellationToken);
 
         var definition = await definitionTask;
         var versions = await versionsTask;
+        var draft = await draftTask;
 
-        var mappedDraft = definition.Draft is not null
-            ? await mapper.Map<WorkflowDefinitionStateView>(definition.Draft, cancellationToken)
+        var mappedDraft = draft is not null
+            ? await mapper.Map<WorkflowDefinitionStateView>(draft, cancellationToken)
             : null;
 
         return new WorkflowDefinitionDetailsView(

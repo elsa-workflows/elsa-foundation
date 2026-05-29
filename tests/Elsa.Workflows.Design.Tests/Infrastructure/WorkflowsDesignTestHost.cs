@@ -58,6 +58,25 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         return new WorkflowsDesignDbContext(options, _services);
     }
 
+    /// <summary>
+    /// Idempotently seeds a <see cref="Persistence.Core.Entities.WorkflowDefinition"/> with the
+    /// supplied id. Required before any test that calls <c>ICreateDraftCommand</c> —
+    /// <c>WorkflowDefinitionDraft.WorkflowDefinitionId</c> is a non-null FK to this row.
+    /// </summary>
+    public async Task EnsureDefinition(string workflowDefinitionId, string? name = null)
+    {
+        await using var ctx = CreateContext();
+        if (await ctx.WorkflowDefinitions.AnyAsync(d => d.Id == workflowDefinitionId))
+            return;
+
+        ctx.WorkflowDefinitions.Add(new Persistence.Core.Entities.WorkflowDefinition
+        {
+            Id = workflowDefinitionId,
+            Name = name ?? workflowDefinitionId,
+        });
+        await ctx.SaveChangesAsync();
+    }
+
     public static WorkflowsDesignTestHost Create()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -112,6 +131,8 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     {
         services
             .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraftCommand>()
+            .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
+            .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraftCommand>()
             .AddScoped<Persistence.Core.Contracts.IAddActivityToDraftCommand, AddActivityToDraftCommand>()
             .AddScoped<Persistence.Core.Contracts.IRemoveActivityFromDraftCommand, RemoveActivityFromDraftCommand>()
             .AddScoped<Persistence.Core.Contracts.IMoveActivityInDraftCommand, MoveActivityInDraftCommand>()

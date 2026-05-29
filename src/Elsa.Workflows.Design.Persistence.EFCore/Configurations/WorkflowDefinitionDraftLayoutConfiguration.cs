@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .HasConversion(
                     v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
                     v => JsonSerializer.Deserialize<List<DesignMetadataRecord>>(v, (JsonSerializerOptions?)null) ?? new List<DesignMetadataRecord>(),
-                    new ValueComparer<List<DesignMetadataRecord>>(
+                    new ValueComparer<ICollection<DesignMetadataRecord>>(
                         (a, b) => ReferenceEquals(a, b) || (a != null && b != null && a.SequenceEqual(b)),
                         v => v.Aggregate(0, (h, r) => HashCode.Combine(h, r.GetHashCode())),
                         v => v.ToList()

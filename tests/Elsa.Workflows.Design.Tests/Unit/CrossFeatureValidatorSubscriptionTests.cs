@@ -87,6 +87,7 @@ public sealed class CrossFeatureValidatorSubscriptionTests
 
     private static async Task<string> CreateDraft(WorkflowsDesignTestHost host, string workflowDefinitionId)
     {
+        await host.EnsureDefinition(workflowDefinitionId);
         using var scope = host.Services.CreateScope();
         var command = scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>();
         return await command.Execute(workflowDefinitionId);

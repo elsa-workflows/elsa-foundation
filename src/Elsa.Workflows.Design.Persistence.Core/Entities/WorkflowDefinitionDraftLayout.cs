@@ -16,7 +16,7 @@ public sealed class WorkflowDefinitionDraftLayout : TenantEntity, IWorkflowDefin
 
     public WorkflowDefinitionDraft? WorkflowDefinitionDraft { get; set; }
 
-    public List<DesignMetadataRecord> Records { get; set; } = new();
+    public ICollection<DesignMetadataRecord> Records { get; set; } = [];
 
-    IReadOnlyList<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records;
+    IEnumerable<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records.AsEnumerable();
 }

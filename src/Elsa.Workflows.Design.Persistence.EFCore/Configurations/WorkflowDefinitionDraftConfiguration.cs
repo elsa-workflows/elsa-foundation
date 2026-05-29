@@ -15,6 +15,15 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
             builder
                 .Property(x => x.StateSource)
                 .HasMaxLength(-1);
+
+            // 1 Definition : many Drafts. Cascade-deletes Drafts when the Definition is removed;
+            // the Draft's own Layout + Validation siblings cascade in turn (R5).
+            builder
+                .HasOne(x => x.WorkflowDefinition)
+                .WithMany()
+                .HasForeignKey(x => x.WorkflowDefinitionId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired();
         }
     }
 }
