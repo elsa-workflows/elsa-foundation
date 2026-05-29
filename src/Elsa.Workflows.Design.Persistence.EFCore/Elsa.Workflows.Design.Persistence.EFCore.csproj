@@ -8,8 +8,11 @@
   </PropertyGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Workflows.Design.Persistence.Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Workflows.Design.Validations.Core\Elsa.Workflows.Design.Validations.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Persistence.EFCore\Elsa.Persistence.EFCore.csproj" />
 	</ItemGroup>
 

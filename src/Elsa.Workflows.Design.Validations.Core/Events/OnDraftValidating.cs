@@ -27,7 +27,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Events;
 /// </remarks>
 public sealed class OnDraftValidating(IWorkflowDefinitionDraft draft) : IDomainEvent
 {
-    private readonly List<ValidationError> _errors = new();
+    private readonly List<ValidationError> _errors = [];
 
     /// <summary>The post-mutation Draft being validated. Cross-<c>.Core</c> reference per §2.1.</summary>
     public IWorkflowDefinitionDraft Draft { get; } = draft;

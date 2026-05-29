@@ -8,10 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Workflows.Design.Validations.Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
     <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>

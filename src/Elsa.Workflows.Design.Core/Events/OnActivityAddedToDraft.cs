@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -10,11 +10,11 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// </summary>
 /// <remarks>
 /// The payload carries the placed <see cref="ActivityNode"/> directly. The spec named a phantom
-/// <c>IActivityNodeView</c> read-only view — Unit C ships the existing <see cref="ActivityNode"/>
+/// <c>IActivityNodeView</c> read-only view â€” Unit C ships the existing <see cref="ActivityNode"/>
 /// record (sealed, immutable by structure) instead; introducing a parallel IView interface adds
 /// surface area without strengthening the non-mutating guarantee that records already provide.
 /// </remarks>
-public sealed class OnActivityAddedToDraft(string draftId, ActivityNode activity) : IDomainEvent
+public sealed class OnActivityAddedToDraft(string draftId, ActivityNode activity) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityNode Activity { get; } = activity;

@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -9,11 +9,11 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// </summary>
 /// <remarks>
 /// Payload carries the full <see cref="ActivityConnection"/> that was removed (sealed record;
-/// no separate <c>ConnectionId</c> concept exists on the connection — its identity IS the
+/// no separate <c>ConnectionId</c> concept exists on the connection â€” its identity IS the
 /// source+target pair). The spec mentioned a <c>ConnectionId : string</c> field; Unit C
 /// elects to pass the full edge so subscribers know which connection vanished.
 /// </remarks>
-public sealed class OnConnectionRemovedFromDraft(string draftId, ActivityConnection connection) : IDomainEvent
+public sealed class OnConnectionRemovedFromDraft(string draftId, ActivityConnection connection) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityConnection Connection { get; } = connection;

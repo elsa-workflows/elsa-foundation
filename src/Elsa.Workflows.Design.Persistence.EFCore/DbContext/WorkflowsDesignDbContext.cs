@@ -20,6 +20,8 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.DbContext
 
         public DbSet<WorkflowDefinitionDraftLayout> WorkflowDefinitionDraftLayouts { get; set; } = null!;
 
+        public DbSet<WorkflowDefinitionDraftValidation> WorkflowDefinitionDraftValidations { get; set; } = null!;
+
         /// <inheritdoc />
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

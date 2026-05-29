@@ -103,10 +103,16 @@ public sealed class EventNamingTests
 
     private static IReadOnlyList<string> GetWorkflowDesignCoreEventNames()
     {
+        // After the 2026-05-29 lifecycle/domain split, the FR-018 / FR-018a events in this
+        // .Core are ILifecycleEvent (derives from INotification). Scan for both markers so
+        // future additions in either category are picked up.
         return typeof(OnDraftCreated).Assembly
             .GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
-            .Where(t => typeof(IDomainEvent).IsAssignableFrom(t))
+            .Where(t =>
+                typeof(IDomainEvent).IsAssignableFrom(t)
+                || typeof(INotification).IsAssignableFrom(t)
+            )
             .Select(t => t.Name)
             .ToList();
     }

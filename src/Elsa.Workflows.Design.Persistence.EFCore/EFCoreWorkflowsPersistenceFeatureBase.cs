@@ -2,6 +2,7 @@ using Elsa.Persistence.EFCore;
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.EFCore.Commands;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,36 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
             {
                 services
                     .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinitionCommand>()
+                    .AddScoped<DraftMutationPipeline>()
+                    // Lifecycle origination
+                    .AddScoped<ICreateDraftCommand, CreateDraftCommand>()
+                    // Activities (graph)
+                    .AddScoped<IAddActivityToDraftCommand, AddActivityToDraftCommand>()
+                    .AddScoped<IRemoveActivityFromDraftCommand, RemoveActivityFromDraftCommand>()
+                    .AddScoped<IMoveActivityInDraftCommand, MoveActivityInDraftCommand>()
+                    // Per-activity inputs
+                    .AddScoped<IAddActivityInputToDraftCommand, AddActivityInputToDraftCommand>()
+                    .AddScoped<IUpdateActivityInputInDraftCommand, UpdateActivityInputInDraftCommand>()
+                    .AddScoped<IRemoveActivityInputFromDraftCommand, RemoveActivityInputFromDraftCommand>()
+                    // Per-activity outputs
+                    .AddScoped<IAddActivityOutputToDraftCommand, AddActivityOutputToDraftCommand>()
+                    .AddScoped<IUpdateActivityOutputInDraftCommand, UpdateActivityOutputInDraftCommand>()
+                    .AddScoped<IRemoveActivityOutputFromDraftCommand, RemoveActivityOutputFromDraftCommand>()
+                    // Connections
+                    .AddScoped<IAddConnectionToDraftCommand, AddConnectionToDraftCommand>()
+                    .AddScoped<IRemoveConnectionFromDraftCommand, RemoveConnectionFromDraftCommand>()
+                    // Variables
+                    .AddScoped<IDeclareVariableInDraftCommand, DeclareVariableInDraftCommand>()
+                    .AddScoped<IUpdateVariableInDraftCommand, UpdateVariableInDraftCommand>()
+                    .AddScoped<IRemoveVariableFromDraftCommand, RemoveVariableFromDraftCommand>()
+                    // Workflow inputs
+                    .AddScoped<IAddWorkflowInputToDraftCommand, AddWorkflowInputToDraftCommand>()
+                    .AddScoped<IUpdateWorkflowInputInDraftCommand, UpdateWorkflowInputInDraftCommand>()
+                    .AddScoped<IRemoveWorkflowInputFromDraftCommand, RemoveWorkflowInputFromDraftCommand>()
+                    // Workflow outputs
+                    .AddScoped<IAddWorkflowOutputToDraftCommand, AddWorkflowOutputToDraftCommand>()
+                    .AddScoped<IUpdateWorkflowOutputInDraftCommand, UpdateWorkflowOutputInDraftCommand>()
+                    .AddScoped<IRemoveWorkflowOutputFromDraftCommand, RemoveWorkflowOutputFromDraftCommand>()
                     .AddEntitySavingHandlersFrom(GetType().Assembly)
                     .AddEntitySavingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
             }

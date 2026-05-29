@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Core.Models;
+﻿using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -12,7 +12,7 @@ public sealed class OnWorkflowInputUpdatedInDraft(
     string draftId,
     string inputReferenceKey,
     InputDefinition oldValue,
-    InputDefinition newValue) : IDomainEvent
+    InputDefinition newValue) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public string InputReferenceKey { get; } = inputReferenceKey;

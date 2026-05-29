@@ -21,17 +21,25 @@ v2.0.0 provenance — consolidated fold of:
      → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
      → Elsa §E2.7).
 
-Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification):
+Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification;
+filename + scope refined 2026-05-29):
   - §2.22.1 NEW sub-rule — "Domain-level events catalog." Every domain whose
-    `.Core` declares contribution or lifecycle domain events MUST ship a
-    domain-events catalog at the `.Core` project level documenting every
-    event with semantic, payload, publication site, expected handlers,
-    ordering guarantees, and cross-references. Complements §2.22's
-    per-feature documentation requirement — the catalog is the
-    domain-level index for "what events does this domain publish?". Form
-    is application-defined; recommended `DOMAIN_EVENTS.md` at the `.Core`
-    project root. Worked example: Unit C creates `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md`
-    covering FR-018 + FR-018a events.
+    `.Core` publishes events (domain events under §2.6.1 AND/OR lifecycle
+    events under §2.6.2) MUST ship an events catalog at the `.Core` project
+    level documenting every event with category, semantic, payload,
+    publication site, expected handlers, ordering guarantees, and
+    cross-references. The catalog distinguishes the two categories under
+    separate headings — domain events (contribution; publisher reads back)
+    vs lifecycle events (notification; fire-and-forget by default).
+    Complements §2.22's per-feature documentation requirement — the catalog
+    is the domain-level index for "what events does this domain publish?".
+    Form is application-defined; recommended `EVENTS.md` at the `.Core`
+    project root (renamed from the original `DOMAIN_EVENTS.md` on 2026-05-29
+    once the two-category split landed; the prior name was misleading
+    because lifecycle events are not domain events). Worked examples: Unit C
+    creates `src/Elsa.Workflows.Design.Core/EVENTS.md` (all lifecycle) and
+    `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (mixed —
+    `OnDraftValidating` domain, `OnDraftValidated` lifecycle).
 
 Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):
   - §2.6.1 EXTENDED — "Visibility" bullet REWRITTEN as
@@ -708,6 +716,33 @@ This case is the canonical §2.6.5 worked example. Future §2.6.5 invocations sh
 
 The application-specific worked example also lives in §E3.9 of the application constitution.
 
+#### §2.6.6 Notifications and lifecycle events — state-transition signals
+
+*New sub-section (Unit C Phase-7 amendment, 2026-05-29; draft pending 2026-06-01 ratification.)*
+
+A different shape of in-process pub/sub exists alongside the §2.6.1 domain-event contribution mechanism: **notifications**. They share a marker-interface shape (`INotification` resolved with `INotificationHandler<T>` instances) but their **purpose is the opposite of a domain event**, and conflating them breaks both.
+
+| | §2.6.1 Domain events | §2.6.6 Notifications |
+|---|---|---|
+| **Intent** | "I'm about to do X — who wants to participate?" | "X happened — react if you want." |
+| **Marker** | `IDomainEvent` | `INotification` |
+| **Sender** | `IDomainEventSender` | `INotificationSender` (and the typed `ILifecycleEventSender` for state-management transitions — see below) |
+| **Dispatch** | Awaited end-to-end. Subscribers run synchronously in sequence; the publisher waits for them. | Pluggable strategy — Sequential / Parallel / Background. Default per call is application-defined. Background = fire-and-forget. |
+| **Publisher reads back?** | **Yes.** That's the point. Subscribers contribute via intent-revealing methods (§2.6.1) and the publisher reads the populated collection / accumulator after dispatch. | **No.** The publisher returns before subscribers run (in the Background strategy) or alongside their completion (in Sequential / Parallel). Either way the publisher does not consume their output. |
+| **Subscriber failure rule** | MUST NOT break publisher — exception-shielding middleware is the §2.6.1 default. | Same — MUST NOT break publisher. A flaky background subscriber becomes a log entry, not a failed publish. |
+| **Ordering** | Strict — sequential dispatch in DI-resolution order. | FIFO across the channel for Background; in-order for Sequential; unordered for Parallel. |
+| **Crash semantics** | In-process; subscribers run synchronously; no durability concern beyond the publisher's own. | In-process channel for Background; a process crash drops queued events. Persistence-grade durability is a subscriber-side concern (audit subscriber writes its own log, etc.). |
+
+**Lifecycle events — `ILifecycleEvent : INotification`.** A typed-narrowed marker for **state-transition notifications** emitted by a domain that manages a lifecycle (a Draft's mutation lifecycle, an instance's execution lifecycle, a catalog's reconciliation lifecycle). Lifecycle events have the same characteristics as plain notifications today — distinct marker so the two roles can diverge without re-classifying every notification call site. The accompanying `ILifecycleEventSender` defaults to the Background strategy: by the time the lifecycle event is fired, the transition has ALREADY been persisted; the publisher should not block on subscribers.
+
+**Hard rule — don't conflate.** A publisher who needs the result of dispatch (validators contributing errors, providers contributing items, converters contributing instances) MUST use §2.6.1 domain events. A publisher whose dispatch is purely informational (audit subscribers, event-sourcing-stream subscribers, telemetry, UI-push notifiers) MUST use §2.6.6 notifications / lifecycle events. The categorisation is fixed at the event's marker; it is not a per-call strategy choice.
+
+**Hybrid pattern — `OnXxxing` (domain event) + `OnXxxed` (lifecycle event).** When a domain has both a participation gate and an outcome notification for the same transition, the present-participle form is the domain event (validators / contributors run synchronously, publisher reads back) and the past-tense form is the lifecycle event (notifies that the transition happened, with the outcome carried in the payload). Worked example: `OnDraftValidating` (domain event — validators contribute errors) followed by `OnDraftValidated` (lifecycle event — fires after the errors are persisted; audit / UI-push react).
+
+**Sender selection at the publisher site.** The publisher picks the sender by the event's marker — `IDomainEventSender.Send` for an `IDomainEvent`; `ILifecycleEventSender.SendAsync` for an `ILifecycleEvent`; `INotificationSender.SendAsync` for a plain `INotification`. The type system enforces the categorisation: a domain event cannot be fire-and-forgotten through the lifecycle sender, and a lifecycle event cannot be awaited-for-contribution through the domain sender.
+
+**Cross-references.** §2.6.1 (domain events as contribution mechanism); §2.22.1 (events catalog documents both categories under separate headings); §4.2 (semantic-versioning rule applies the same to both — adding an event is MINOR, renaming or removing is MAJOR).
+
 ### §2.7 Adapter / Bridge — as a design default
 
 The adapter pattern is a **design default** whenever a feature contains functionality that may be reusable outside its current consumer. When building a feature, the framework expects the author to ask: *"is this functionality potentially useful to consumers other than the one I'm building it for, and if so, can I expose it via a clean adapter or bridge so those other consumers do not have to take on my dependencies?"*
@@ -991,29 +1026,37 @@ The form of the documentation (README, manifest, generated reference, sidecar JS
 
 #### §2.22.1 Domain-level events catalog
 
-*New sub-rule (Unit C Phase-5 amendment, 2026-05-28; draft pending 2026-06-01 ratification).*
+*New sub-rule (Unit C Phase-5 amendment, 2026-05-28; draft pending 2026-06-01 ratification. Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md` to reflect that a .Core publishes BOTH domain events AND lifecycle events.)*
 
-Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library declares contribution or lifecycle domain events MUST ship a **domain-events catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what events does this domain publish?* Without re-reading every feature implementation.
+Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library publishes events MUST ship an **events catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what events does this domain publish?* Without re-reading every feature implementation.
+
+**Two event categories MUST be distinguished in the catalog.** Per §2.6.1 (domain events as contribution mechanism) and §2.6.6 (notifications + lifecycle events as state-transition signals), the two categories serve opposite intents and have opposite dispatch semantics. The catalog SHOULD organise them under separate headings or columns so a reader can tell at a glance which surface they're looking at:
+
+- **Domain events** (`IDomainEvent`) — contribution mechanism. Publisher awaits the dispatch and reads handler contributions back (e.g. `OnDraftValidating` collects validation errors via `AddValidationError`). Used when the publisher needs the result.
+- **Lifecycle events** (`ILifecycleEvent`, which derives from `INotification`) — state-transition notifications. Publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). Default dispatch strategy is background (the publisher returns before subscribers run); per-call override available via `ILifecycleEventSender`.
+
+A domain may publish only one category, both, or have an event that's clearly named in one bucket but with a sibling in the other (e.g. `OnDraftValidating` = domain event "validation is happening, contribute"; `OnDraftValidated` = lifecycle event "validation just completed, here's the outcome"). The catalog documents whichever events the domain ships; the categorisation pins the dispatch contract for each.
 
 **Minimum required content per event in the catalog:**
 
 - **Event class name** (e.g. `OnDraftClonedFromVersion`).
-- **One-line semantic description** — what just happened in the domain.
-- **Payload signature** — intent-revealing method names (per the §2.6.1 sub-rule) and payload types handlers receive.
+- **Category** — Domain event or Lifecycle event. Implied by section heading if the catalog groups them.
+- **One-line semantic description** — what just happened in the domain (lifecycle) or what gate has opened (domain).
+- **Payload signature** — intent-revealing method names (per the §2.6.1 sub-rule for domain events) and payload types handlers receive.
 - **Publication site** — which command, pipeline step, or lifecycle hook fires the event.
 - **Expected handler audiences** — typical contributors (built-in feature, optional features that may subscribe, cross-domain consumers).
-- **Ordering guarantees** if any — e.g., "fires after the materialized snapshot is updated but before the persistence flush."
-- **Cross-references** to other domains' catalogs that consumers should be aware of (e.g., a Workflows.Design event that's also relevant to a future Workflows.Build subscriber).
+- **Ordering guarantees** if any — e.g., "fires after the materialised snapshot is updated but before the persistence flush."
+- **Cross-references** to other domains' catalogs that consumers should be aware of.
 
 **Why a separate catalog.**
 
 - The §2.22 per-feature documentation answers *"what does THIS feature register?"* — useful when investigating a feature.
-- The domain-events catalog answers *"what extension points does THIS domain expose?"* — useful when *consuming* the domain, designing a new contributor, or onboarding into the domain cold.
+- The events catalog answers *"what extension points does THIS domain expose?"* — useful when *consuming* the domain, designing a new contributor, or onboarding into the domain cold.
 - The two views are complementary; the catalog is the index humans and AI sessions reach for first.
 
-**Form.** Application-defined. Recommended: a single `DOMAIN_EVENTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/DOMAIN_EVENTS.md`). Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
+**Form.** Application-defined. Recommended: a single `EVENTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/EVENTS.md`). Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** Unit C creates the initial Elsa worked example: `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` covering the Draft mutation events (FR-018) + Draft lifecycle events (FR-018a). As subsequent units add events to other Design domains, each domain ships its own catalog.
+**Worked example.** Unit C creates the initial Elsa worked examples: `src/Elsa.Workflows.Design.Core/EVENTS.md` (catalogs the Draft mutation + lifecycle events — all `ILifecycleEvent`s after the 2026-05-29 lifecycle/domain split) and `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (catalogs `OnDraftValidating` as a domain event AND `OnDraftValidated` as a lifecycle event — the canonical mixed-category example). As subsequent units add events to other Design domains, each domain ships its own catalog.
 
 ### §2.23 Unit tests
 

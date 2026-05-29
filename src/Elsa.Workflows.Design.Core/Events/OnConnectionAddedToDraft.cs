@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -9,10 +9,10 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// </summary>
 /// <remarks>
 /// Payload carries the full <see cref="ActivityConnection"/> (source + target endpoints)
-/// rather than a phantom <c>IActivityPortConnectionView</c> — the record is sealed and
+/// rather than a phantom <c>IActivityPortConnectionView</c> â€” the record is sealed and
 /// immutable by structure.
 /// </remarks>
-public sealed class OnConnectionAddedToDraft(string draftId, ActivityConnection connection) : IDomainEvent
+public sealed class OnConnectionAddedToDraft(string draftId, ActivityConnection connection) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityConnection Connection { get; } = connection;

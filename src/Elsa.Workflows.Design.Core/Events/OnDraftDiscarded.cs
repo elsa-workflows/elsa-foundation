@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
 
@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// Published by <c>IDiscardDraftCommand</c> after the Draft + its sibling rows (layout +
 /// validation) are atomically deleted per Unit C FR-029. Per FR-018a lifecycle bullet.
 /// </summary>
-public sealed class OnDraftDiscarded(string draftId, string workflowDefinitionId) : IDomainEvent
+public sealed class OnDraftDiscarded(string draftId, string workflowDefinitionId) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public string WorkflowDefinitionId { get; } = workflowDefinitionId;

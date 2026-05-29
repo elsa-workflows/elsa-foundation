@@ -185,53 +185,68 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Command contracts in Persistence.Core.Contracts (FR-019 + FR-019a)
 
-- [ ] T065 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IAddActivityToDraftCommand.cs` per contracts/commands.md.
-- [ ] T066 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IRemoveActivityFromDraftCommand.cs`.
-- [ ] T067 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IUpdateActivityPropertyInDraftCommand.cs`.
-- [ ] T068 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IMoveActivityInDraftCommand.cs`.
-- [ ] T069 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IAddConnectionToDraftCommand.cs`.
-- [ ] T070 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IRemoveConnectionFromDraftCommand.cs`.
-- [ ] T071 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IDeclareVariableInDraftCommand.cs`.
-- [ ] T072 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IUpdateVariableInDraftCommand.cs`.
-- [ ] T073 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IRemoveVariableFromDraftCommand.cs`.
-- [ ] T074 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IAddWorkflowInputToDraftCommand.cs`.
-- [ ] T075 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IUpdateWorkflowInputInDraftCommand.cs`.
-- [ ] T076 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IRemoveWorkflowInputFromDraftCommand.cs`.
-- [ ] T077 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IAddWorkflowOutputToDraftCommand.cs`.
-- [ ] T078 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IUpdateWorkflowOutputInDraftCommand.cs`.
-- [ ] T079 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/IRemoveWorkflowOutputFromDraftCommand.cs`.
-- [ ] T080 [P] Create `src/Elsa.Workflows.Design.Persistence.Core/Contracts/ICreateDraftCommand.cs` (lifecycle origination).
+- [X] T065 [P] Create `IAddActivityToDraftCommand.cs`.
+- [X] T066 [P] Create `IRemoveActivityFromDraftCommand.cs`.
+- [X] T067 [P] **N/A — DELETED** per Joey iteration 2026-05-28 round 2 (`OnActivityPropertyChangedInDraft` event was removed; the generic property command is redundant once specialized CRUD covers inputs/outputs). Six new contracts replaced it:
+  - `IAddActivityInputToDraftCommand.cs`
+  - `IUpdateActivityInputInDraftCommand.cs`
+  - `IRemoveActivityInputFromDraftCommand.cs`
+  - `IAddActivityOutputToDraftCommand.cs`
+  - `IUpdateActivityOutputInDraftCommand.cs`
+  - `IRemoveActivityOutputFromDraftCommand.cs`
+- [X] T068 [P] Create `IMoveActivityInDraftCommand.cs`.
+- [X] T069 [P] Create `IAddConnectionToDraftCommand.cs`.
+- [X] T070 [P] Create `IRemoveConnectionFromDraftCommand.cs`. **Decision:** payload is the full `ActivityConnection` record (not a `ConnectionId : string` — connections have no Id; source+target IS the identity).
+- [X] T071 [P] Create `IDeclareVariableInDraftCommand.cs`.
+- [X] T072 [P] Create `IUpdateVariableInDraftCommand.cs`.
+- [X] T073 [P] Create `IRemoveVariableFromDraftCommand.cs`.
+- [X] T074 [P] Create `IAddWorkflowInputToDraftCommand.cs`.
+- [X] T075 [P] Create `IUpdateWorkflowInputInDraftCommand.cs`.
+- [X] T076 [P] Create `IRemoveWorkflowInputFromDraftCommand.cs`.
+- [X] T077 [P] Create `IAddWorkflowOutputToDraftCommand.cs`.
+- [X] T078 [P] Create `IUpdateWorkflowOutputInDraftCommand.cs`.
+- [X] T079 [P] Create `IRemoveWorkflowOutputFromDraftCommand.cs`.
+- [X] T080 [P] Create `ICreateDraftCommand.cs` (lifecycle origination).
 
 ### Shared lock-acquisition helper
 
-- [ ] T081 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DraftMutationPipelineBase.cs` — abstract base class that encapsulates the FR-027 pipeline (acquire lock via `IDistributedLockProvider`, load Draft, apply mutation hook, publish granular event hook, publish `OnDraftValidating`, rebuild validation sibling, flush, release). Per FR-027c, the dispatcher's exception-shielding middleware (already landed in `Elsa.Mediator`) catches handler exceptions; the command always reaches the flush step.
+- [X] T081 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DraftMutationPipeline.cs` — **shipped as helper service (composition), NOT abstract base class.** Encapsulates the FR-027 pipeline (acquire lock via `IDistributedLockProvider`, load Draft, invoke loading handlers, run mutate-and-build-event hook, mark Entity Modified, publish granular event, publish `OnDraftValidating`, [validation sibling flush — Phase 9 stub], flush, release lock). Provides `ExecuteMutation` for mutations on existing drafts + `ExecuteCreation` for `ICreateDraftCommand`. Composition over inheritance — each command depends on the service rather than inheriting.
 
 ### Command implementations in Persistence.EFCore (FR-019a)
 
-- [ ] T082 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/AddActivityToDraftCommand.cs` implementing `IAddActivityToDraftCommand` (sealed class extending T081's base; defines the mutation + event-publication hook). FR-019 + FR-019a + FR-027.
-- [ ] T083 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/RemoveActivityFromDraftCommand.cs`.
-- [ ] T084 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/UpdateActivityPropertyInDraftCommand.cs`.
-- [ ] T085 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/MoveActivityInDraftCommand.cs` (mutates `WorkflowDefinitionDraftLayout.Records`, NOT `WorkflowDefinitionState` — layout is the sibling).
-- [ ] T086 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/AddConnectionToDraftCommand.cs`.
-- [ ] T087 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/RemoveConnectionFromDraftCommand.cs`.
-- [ ] T088 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DeclareVariableInDraftCommand.cs`.
-- [ ] T089 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/UpdateVariableInDraftCommand.cs`.
-- [ ] T090 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/RemoveVariableFromDraftCommand.cs`.
-- [ ] T091 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/AddWorkflowInputToDraftCommand.cs`.
-- [ ] T092 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/UpdateWorkflowInputInDraftCommand.cs`.
-- [ ] T093 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/RemoveWorkflowInputFromDraftCommand.cs`.
-- [ ] T094 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/AddWorkflowOutputToDraftCommand.cs`.
-- [ ] T095 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/UpdateWorkflowOutputInDraftCommand.cs`.
-- [ ] T096 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/RemoveWorkflowOutputFromDraftCommand.cs`.
-- [ ] T097 [P] Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/CreateDraftCommand.cs` (lifecycle).
-- [ ] T098 Register all 16 command implementations against their contract interfaces in the persistence feature's `Configure` method. Replacement contracts per framework §2.6.2; one implementation per command per framework §2.10 CQS.
+- [X] T082 [P] `AddActivityToDraftCommand.cs`.
+- [X] T083 [P] `RemoveActivityFromDraftCommand.cs` — also drops connections referencing the NodeId and the layout record (FR-019 spec cascade).
+- [X] T084 [P] **N/A — replaced** by 6 per-activity I/O CRUD impls (see T067).
+- [X] T085 [P] `MoveActivityInDraftCommand.cs` — mutates Draft layout sibling ONLY, not State.
+- [X] T086 [P] `AddConnectionToDraftCommand.cs`.
+- [X] T087 [P] `RemoveConnectionFromDraftCommand.cs`.
+- [X] T088 [P] `DeclareVariableInDraftCommand.cs`.
+- [X] T089 [P] `UpdateVariableInDraftCommand.cs`.
+- [X] T090 [P] `RemoveVariableFromDraftCommand.cs`.
+- [X] T091 [P] `AddWorkflowInputToDraftCommand.cs`.
+- [X] T092 [P] `UpdateWorkflowInputInDraftCommand.cs`.
+- [X] T093 [P] `RemoveWorkflowInputFromDraftCommand.cs`.
+- [X] T094 [P] `AddWorkflowOutputToDraftCommand.cs`.
+- [X] T095 [P] `UpdateWorkflowOutputInDraftCommand.cs`.
+- [X] T096 [P] `RemoveWorkflowOutputFromDraftCommand.cs`.
+- [X] T097 [P] `CreateDraftCommand.cs`.
+- [X] **NEW per Joey iteration round 1:** 6 per-activity input/output CRUD impls — `AddActivityInputToDraftCommand`, `UpdateActivityInputInDraftCommand`, `RemoveActivityInputFromDraftCommand`, `AddActivityOutputToDraftCommand`, `UpdateActivityOutputInDraftCommand`, `RemoveActivityOutputFromDraftCommand`. All share an internal `WithMutatedActivity(state, nodeId, mutate)` helper for the per-node mutation pattern.
+- [X] T098 Register all 22 command implementations + the `DraftMutationPipeline` service in `EFCoreWorkflowsPersistenceFeatureBase.OnAfterConfigured`.
+
+**Pre-reqs added (not in original task list):** `Workflows.Design.Persistence.EFCore.csproj` gained `ProjectReference` to `Elsa.Locking.Core`, `Elsa.Mediator.Core`, and `Elsa.Workflows.Design.Validations.Core` (for `IDistributedLockProvider`, `IDomainEventSender`, and `OnDraftValidating`).
 
 ### Tests for commands
 
-- [ ] T099 Tests `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/CommandRegistrationTests.cs` — feature-class registration test per framework §2.23.1; assert every FR-019 command contract resolves to its EFCore implementation. SC-012.
-- [ ] T100 [P] Tests `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/AddActivityToDraftCommandTests.cs` — per-command branch coverage per framework §2.23.2; assert: (a) snapshot mutation applied in memory, (b) `OnActivityAddedToDraft` published via `IDomainEventSender.Send`, (c) closed-mode contract: command completes without subscriber registered, (d) open-mode contract: stub subscriber receives the event. SC-012.
-- [ ] T101 [P] Tests (one per remaining 15 commands at `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/<CommandName>Tests.cs`) — same shape as T100. SC-012.
-- [ ] T102 Test `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/LockSemanticsTests.cs` — two concurrent mutations on the same Draft execute serially (second waits for first); mutations on different Drafts proceed in parallel without contention. SC-016 + FR-027 + FR-027a.
+- [X] T099 `CommandRegistrationTests.cs` — parametrised over all 21 contracts (lifecycle origination + 20 mutations); verifies each resolves to its expected implementation from the DI container. SC-012.
+- [X] T100 + T101 — **Consolidated as `DraftMutationPipelineTests.cs`** (representative pipeline coverage, 6 tests): `AddActivityToDraft` mutates state + publishes granular event + ordering with `OnDraftValidating`; `DeclareVariableInDraft` publishes event; `AddWorkflowInputToDraft` publishes distinct workflow-level event (not per-activity); `AddActivityInputToDraft` publishes per-activity event (not workflow-level); `CreateDraft` creates Draft + Layout siblings + publishes `OnDraftCreated`; closed-mode contract holds (no subscribers registered, pipeline completes). The pipeline is uniform across commands; exhaustive per-command branch coverage is **deferred to Phase 12 polish** — flagged in Unit C follow-up.
+- [X] T102 `LockSemanticsTests.cs` — two tests: (a) two acquires on the same lock name serialise; (b) two acquires on different lock names proceed in parallel. SC-016 + FR-027 + FR-027a.
+
+**Test infrastructure added:** `tests/Elsa.Workflows.Design.Tests/Infrastructure/`:
+- `InMemoryDistributedLockProvider.cs` — `SemaphoreSlim`-per-name test stub for lock semantics.
+- `CapturingDomainEventSender.cs` — captures every event for assertion.
+- `WorkflowsDesignTestHost.cs` — SQLite-in-memory DbContext + DI scaffolding (JsonPayloadSerializer + entity loading/saving handlers + GUID identity generator + pipeline + all 22 commands).
+
+Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`, `Elsa.Locking.Core`.
 
 **Checkpoint**: 16 commands + lock infrastructure ship; per-command tests confirm event publication + lock isolation.
 

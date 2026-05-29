@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -13,7 +13,7 @@ public sealed class OnActivityOutputUpdatedInDraft(
     string nodeId,
     string outputReferenceKey,
     ArgumentState oldValue,
-    ArgumentState newValue) : IDomainEvent
+    ArgumentState newValue) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public string NodeId { get; } = nodeId;

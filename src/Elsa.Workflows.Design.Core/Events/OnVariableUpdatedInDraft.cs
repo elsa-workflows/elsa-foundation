@@ -1,4 +1,4 @@
-using Elsa.Expressions.Core.Models;
+﻿using Elsa.Expressions.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -12,7 +12,7 @@ public sealed class OnVariableUpdatedInDraft(
     string draftId,
     string variableReferenceKey,
     VariableDefinition oldValue,
-    VariableDefinition newValue) : IDomainEvent
+    VariableDefinition newValue) : ILifecycleEvent
 {
     public string DraftId { get; } = draftId;
     public string VariableReferenceKey { get; } = variableReferenceKey;
