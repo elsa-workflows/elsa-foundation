@@ -25,11 +25,11 @@ public sealed class AddDefinitionCommandHandler(
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
         var exists = await definitionQueries.Any(
-            d => d.SourceKind == command.SourceKind && d.SourceId == command.SourceId && d.ActivityTypeKey == command.ActivityTypeKey,
+            d => d.ActivityTypeKey == command.ActivityTypeKey,
             cancellationToken);
         if (exists)
         {
-            throw new ArgumentException($"Activity definition with identity (SourceKind='{command.SourceKind}', SourceId='{command.SourceId}', ActivityTypeKey='{command.ActivityTypeKey}') already exists");
+            throw new ArgumentException($"Activity definition with ActivityTypeKey='{command.ActivityTypeKey}' already exists");
         }
 
         var definition = CreateDefinition(command);
@@ -47,10 +47,6 @@ public sealed class AddDefinitionCommandHandler(
         {
             Id = identityGenerator.Generate(),
             ActivityTypeKey = def.ActivityTypeKey,
-            SourceKind = def.SourceKind,
-            SourceId = def.SourceId,
-            ReconciledAt = clock.UtcNow,
-            ReconciledBy = Environment.MachineName,
             Category = def.Category,
             Description = def.Description,
             DisplayName = def.DisplayName
@@ -66,7 +62,11 @@ public sealed class AddDefinitionCommandHandler(
             ImplementationDescriptor = command.ImplementationDescriptor,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
-            Ports = command.Ports ?? []
+            Ports = command.Ports ?? [],
+            SourceKind = command.SourceKind,
+            SourceId = command.SourceId,
+            ReconciledAt = clock.UtcNow,
+            ReconciledBy = Environment.MachineName,
         };
     }
 }

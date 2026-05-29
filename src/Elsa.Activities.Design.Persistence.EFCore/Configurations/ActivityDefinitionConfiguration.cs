@@ -8,17 +8,11 @@ public sealed class ActivityDefinitionConfiguration : IEntityTypeConfiguration<A
 {
     public void Configure(EntityTypeBuilder<ActivityDefinition> builder)
     {
-        builder
-            .HasKey(x => x.Id);
+        builder.HasKey(x => x.Id);
 
-        builder
-            .HasIndex(x => new { x.SourceKind, x.SourceId, x.ActivityTypeKey })
-            .HasDatabaseName($"UX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.SourceKind)}_{nameof(ActivityDefinition.SourceId)}_{nameof(ActivityDefinition.ActivityTypeKey)}")
+        builder.HasIndex(x => x.ActivityTypeKey)
+            .HasDatabaseName($"UX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.ActivityTypeKey)}")
             .IsUnique();
-
-        builder
-            .HasIndex(x => new { x.SourceKind, x.SourceId })
-            .HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.SourceKind)}_{nameof(ActivityDefinition.SourceId)}");
 
         builder.HasIndex(x => x.Category)
             .HasDatabaseName($"IX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.Category)}");

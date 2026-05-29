@@ -58,8 +58,8 @@ public sealed class PickerVisibilityTests
 
         await using (var ctx = host.CreateContext())
         {
-            ctx.ActivityDefinitions.Add(NewDefinition("clr-1", "Clr.A", "Json"));
-            ctx.ActivityDefinitions.Add(NewDefinition("wf-1", "Workflow.A", "Workflow"));
+            ctx.ActivityDefinitions.Add(NewDefinition("clr-1", "Clr.A"));
+            ctx.ActivityDefinitions.Add(NewDefinition("wf-1", "Workflow.A"));
             await ctx.SaveChangesAsync(CancellationToken.None);
         }
 
@@ -70,14 +70,10 @@ public sealed class PickerVisibilityTests
         Assert.Contains(result, x => x.ActivityTypeKey == "Workflow.A");
     }
 
-    private static ActivityDefinition NewDefinition(string id, string activityTypeKey, string sourceKind = "Json") => new()
+    private static ActivityDefinition NewDefinition(string id, string activityTypeKey) => new()
     {
         Id = id,
         ActivityTypeKey = activityTypeKey,
-        SourceKind = sourceKind,
-        SourceId = "Elsa.Test",
-        ReconciledAt = DateTimeOffset.UtcNow,
-        ReconciledBy = "test",
         Category = "Test"
     };
 

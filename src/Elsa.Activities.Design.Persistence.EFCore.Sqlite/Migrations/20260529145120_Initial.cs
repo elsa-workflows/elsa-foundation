@@ -20,10 +20,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     ActivityTypeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    SourceKind = table.Column<string>(type: "TEXT", nullable: false),
-                    SourceId = table.Column<string>(type: "TEXT", nullable: false),
-                    ReconciledAt = table.Column<string>(type: "TEXT", nullable: false),
-                    ReconciledBy = table.Column<string>(type: "TEXT", nullable: true),
                     Category = table.Column<string>(type: "TEXT", nullable: false),
                     DisplayName = table.Column<string>(type: "TEXT", nullable: true),
                     Description = table.Column<string>(type: "TEXT", nullable: true),
@@ -44,14 +40,17 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     Version = table.Column<int>(type: "INTEGER", nullable: false),
                     DefinitionId = table.Column<string>(type: "TEXT", nullable: false),
-                    ActivityTypeKey = table.Column<string>(type: "TEXT", nullable: false),
                     ImplementationKind = table.Column<string>(type: "TEXT", nullable: false),
                     ImplementationDescriptorPayload = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     InputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     OutputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     PortsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     ExecutionType = table.Column<int>(type: "INTEGER", nullable: false),
-                    ProvisioningHash = table.Column<string>(type: "TEXT", nullable: true),
+                    SourceKind = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceId = table.Column<string>(type: "TEXT", nullable: false),
+                    ReconciledAt = table.Column<string>(type: "TEXT", nullable: false),
+                    ReconciledBy = table.Column<string>(type: "TEXT", nullable: true),
+                    ReconcilliationHash = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
                     TenantId = table.Column<string>(type: "TEXT", nullable: true)
@@ -75,22 +74,16 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                 column: "Category");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ActivityDefinition_SourceKind_SourceId",
-                schema: "Elsa",
-                table: "ActivityDefinitions",
-                columns: new[] { "SourceKind", "SourceId" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_ActivityDefinitions_TenantId",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
                 column: "TenantId");
 
             migrationBuilder.CreateIndex(
-                name: "UX_ActivityDefinition_SourceKind_SourceId_ActivityTypeKey",
+                name: "UX_ActivityDefinition_ActivityTypeKey",
                 schema: "Elsa",
                 table: "ActivityDefinitions",
-                columns: new[] { "SourceKind", "SourceId", "ActivityTypeKey" },
+                column: "ActivityTypeKey",
                 unique: true);
 
             migrationBuilder.CreateIndex(

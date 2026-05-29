@@ -21,10 +21,6 @@ public class ActivityDefinitionFilter : IFilter<ActivityDefinition>
 
     public string? Description { get; init; }
 
-    public string? SourceKind { get; init; }
-
-    public string? SourceId { get; init; }
-
     public IQueryable<ActivityDefinition> Apply(IQueryable<ActivityDefinition> queryable)
     {
         if (Id != null) queryable = queryable.Where(x => x.Id == Id);
@@ -33,8 +29,6 @@ public class ActivityDefinitionFilter : IFilter<ActivityDefinition>
         if (Category != null) queryable = queryable.Where(x => x.Category == Category);
         if (Description != null) queryable = queryable.Where(x => x.Description!.Contains(Description));
         if (ActivityTypeKey != null) queryable = queryable.Where(x => x.ActivityTypeKey == ActivityTypeKey);
-        if (SourceKind != null) queryable = queryable.Where(x => x.SourceKind == SourceKind);
-        if (SourceId != null) queryable = queryable.Where(x => x.SourceId == SourceId);
 
         return queryable;
     }

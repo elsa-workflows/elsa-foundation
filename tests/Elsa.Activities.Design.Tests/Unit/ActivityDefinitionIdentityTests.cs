@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
@@ -8,17 +7,19 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US1 — Logical activity identity survives normal refactors.
+/// US1 — Logical activity identity survives normal refactors. After the
+/// Definition-is-a-visual-shell refactor (2026-05-29), provenance fields
+/// (SourceKind / SourceId / ReconciledAt / ReconciledBy) live on the version only;
+/// the Definition's immutability surface is reduced to <c>ActivityTypeKey</c>.
 /// </summary>
 public sealed class ActivityDefinitionIdentityTests
 {
     [Fact]
-    public async Task ActivityTypeKey_SourceKind_SourceId_ReconciledAt_AreImmutable_AfterInsert()
+    public async Task ActivityTypeKey_IsImmutable_AfterInsert()
     {
         using var host = ActivitiesDesignTestHost.Create();
 
         var id = Guid.NewGuid().ToString("N");
-        var initialReconciledAt = new DateTimeOffset(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
 
         await using (var ctx = host.CreateContext())
         {
@@ -26,19 +27,12 @@ public sealed class ActivityDefinitionIdentityTests
             {
                 Id = id,
                 ActivityTypeKey = "Foo",
-                SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = initialReconciledAt,
-                ReconciledBy = "test",
                 Category = "Test"
             });
             await ctx.SaveChangesAsync();
         }
 
-        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.ReconciledAt)).CurrentValue = initialReconciledAt.AddDays(1));
-        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.ReconciledBy)).CurrentValue = "Foo");
-        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.SourceKind)).CurrentValue = "Bar");
-        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.SourceId)).CurrentValue = "Bar");
+        await AssertImmutable(host, c => GetDefinitionEntryProperty(c, id, nameof(ActivityDefinition.ActivityTypeKey)).CurrentValue = "Bar");
     }
 
     private static PropertyEntry GetDefinitionEntryProperty(ActivitiesDesignDbContext ctx, string id, string propertyName)
@@ -65,10 +59,6 @@ public sealed class ActivityDefinitionIdentityTests
             {
                 Id = defId,
                 ActivityTypeKey = "Foo",
-                SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = DateTimeOffset.UtcNow,
-                ReconciledBy = "test",
                 Category = "Test"
             });
             ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion(1, defId)
@@ -117,7 +107,7 @@ public sealed class ActivityDefinitionIdentityTests
     }
 
     [Fact]
-    public async Task DuplicateIdentityTuple_ThrowsOnInsert()
+    public async Task DuplicateActivityTypeKey_ThrowsOnInsert()
     {
         using var host = ActivitiesDesignTestHost.Create();
 
@@ -127,10 +117,6 @@ public sealed class ActivityDefinitionIdentityTests
             {
                 Id = Guid.NewGuid().ToString("N"),
                 ActivityTypeKey = "Foo",
-                SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = DateTimeOffset.UtcNow,
-                ReconciledBy = "test",
                 Category = "Test"
             });
             await ctx.SaveChangesAsync();
@@ -142,10 +128,6 @@ public sealed class ActivityDefinitionIdentityTests
             {
                 Id = Guid.NewGuid().ToString("N"),
                 ActivityTypeKey = "Foo",
-                SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = DateTimeOffset.UtcNow,
-                ReconciledBy = "test",
                 Category = "Other"
             });
 
@@ -155,7 +137,7 @@ public sealed class ActivityDefinitionIdentityTests
 
     private static async Task AssertImmutable(ActivitiesDesignTestHost host, Action<ActivitiesDesignDbContext> mutation)
     {
-        await using var ctx = host.CreateContext();        
+        await using var ctx = host.CreateContext();
         mutation(ctx);
         await Assert.ThrowsAnyAsync<Exception>(() => ctx.SaveChangesAsync());
     }

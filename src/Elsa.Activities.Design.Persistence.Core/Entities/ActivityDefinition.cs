@@ -5,12 +5,13 @@ using Elsa.Primitives.Entities;
 namespace Elsa.Activities.Design.Persistence.Core.Entities
 {
     /// <summary>
-    /// A definition of an activity type. Identity layer of the catalog — pairs immutable
-    /// logical identity (<see cref="ActivityTypeKey"/>) with immutable creation provenance.
-    /// Under the Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01 review),
-    /// there is no operational sibling; reconciliation is one-shot at creation time and the
-    /// immutable <c>ActivityDefinitionVersion.ProvisioningHash</c> carries the content hash
-    /// used by the duplicate-detection path.
+    /// A definition of an activity type. The catalog's visual shell — identity
+    /// (<see cref="ActivityTypeKey"/>) plus the display fields (category, display name,
+    /// description) the picker shows. Source provenance lives on
+    /// <c>ActivityDefinitionVersion</c>; if you want to know where a Definition came from,
+    /// look at the first version's <c>SourceKind</c>/<c>SourceId</c>. Implementation details
+    /// (CLR type info, workflow id, …) live on the version's
+    /// <c>IImplementationDescriptor</c> — the Definition itself is implementation-agnostic.
     /// </summary>
     public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
     {
@@ -19,31 +20,6 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
         /// </summary>
         [Immutable]
         public string ActivityTypeKey { get; init; } = null!;
-
-        /// <summary>
-        /// Provenance source identifier — free-form string owned by the source module
-        /// (e.g. "Json", "ClrDiscovery", "Workflow"). Immutable.
-        /// </summary>
-        [Immutable]
-        public string SourceKind { get; init; } = null!;
-
-        /// <summary>
-        /// Source-side asset identity. Immutable.
-        /// </summary>
-        [Immutable]
-        public string SourceId { get; init; } = null!;
-
-        /// <summary>
-        /// First-provisioning timestamp. Immutable.
-        /// </summary>
-        [Immutable]
-        public DateTimeOffset ReconciledAt { get; init; }
-
-        /// <summary>
-        /// Identity that produced this row. Immutable.
-        /// </summary>
-        [Immutable]
-        public string? ReconciledBy { get; init; }
 
         /// <summary>
         /// The category of the activity type.

@@ -69,9 +69,8 @@ public sealed class ActivityVersionReconciler(
         var definition = await FindDefinition(
             incomingVersion.Definition.Id,
             incomingVersion.Definition.ActivityTypeKey,
-            incomingVersion.Definition.SourceKind,
-            incomingVersion.Definition.SourceId,
-            cancellationToken);
+            cancellationToken
+        );
 
         if (definition is null)
         {
@@ -85,7 +84,8 @@ public sealed class ActivityVersionReconciler(
         // Definition exists. Lookup the specific version by (DefinitionId, Version).
         var existingVersion = await versionQueries.Find(
             v => v.DefinitionId == definition.Id && v.Version == incomingVersion.Version,
-            cancellationToken);
+            cancellationToken
+        );
 
         if (existingVersion is null)
         {
@@ -104,7 +104,8 @@ public sealed class ActivityVersionReconciler(
                 activityTypeKey: definition.ActivityTypeKey,
                 version: incomingVersion.Version,
                 persistedHash: existingVersion.ReconcilliationHash,
-                incomingHash: incomingHash);
+                incomingHash: incomingHash
+            );
         }
 
         // Hash matches → genuine duplicate.
@@ -139,34 +140,26 @@ public sealed class ActivityVersionReconciler(
     private async Task<ActivityDefinition?> FindDefinition(
         string definitionId,
         string activityTypeKey,
-        string sourceKind,
-        string sourceId,
         CancellationToken cancellationToken)
     {
         var definition = await definitionQueries.Find(
-            x => x.Id == definitionId
-                 || (x.SourceKind == sourceKind && x.SourceId == sourceId && x.ActivityTypeKey == activityTypeKey),
+            x => x.Id == definitionId || x.ActivityTypeKey == activityTypeKey,
             cancellationToken
         );
 
         if (definition is null)
-        {
             return null;
-        }
 
         // Sanity check: if the surrogate Id matched but the natural key disagrees (or vice
         // versa), that's a real identity collision. Throw — the source has produced a row
         // whose logical identity contradicts an existing row's.
         var idMatches = definition.Id == definitionId;
-        var naturalKeyMatches = definition.SourceKind == sourceKind
-            && definition.SourceId == sourceId
-            && definition.ActivityTypeKey == activityTypeKey;
+        var naturalKeyMatches = definition.ActivityTypeKey == activityTypeKey;
 
         if (!idMatches && !naturalKeyMatches)
         {
             throw new InvalidOperationException(
-                $"Activity definition identity mismatch. Trying to reconcile definition (id = '{definitionId}', SourceKind = '{sourceKind}', SourceId = '{sourceId}', ActivityTypeKey = '{activityTypeKey}'); found existing definition (id = '{definition.Id}', SourceKind = '{definition.SourceKind}', SourceId = '{definition.SourceId}', ActivityTypeKey = '{definition.ActivityTypeKey}')."
-            );
+                $"Activity definition identity mismatch. Trying to reconcile definition (id = '{definitionId}', ActivityTypeKey = '{activityTypeKey}'); found existing definition (id = '{definition.Id}', ActivityTypeKey = '{definition.ActivityTypeKey}').");
         }
 
         return definition;
@@ -182,10 +175,6 @@ public sealed class ActivityVersionReconciler(
         {
             Id = id,
             ActivityTypeKey = definition.ActivityTypeKey,
-            SourceKind = definition.SourceKind,
-            SourceId = definition.SourceId,
-            ReconciledAt = definition.ReconciledAt,
-            ReconciledBy = definition.ReconciledBy,
             Category = definition.Category,
             Description = definition.Description,
             DisplayName = definition.DisplayName,

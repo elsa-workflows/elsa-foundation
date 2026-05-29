@@ -15,26 +15,31 @@ public sealed class LockSemanticsTests
     {
         var provider = new InMemoryDistributedLockProvider();
         var sequence = new List<string>();
-        var firstReleased = new TaskCompletionSource();
+        var firstAcquired = new TaskCompletionSource();
+        var releaseFirst = new TaskCompletionSource();
 
         var task1 = Task.Run(async () =>
         {
             await using var handle = await provider.AcquireLockAsync("workflow-draft:A");
             sequence.Add("first-acquired");
-            // Hold the lock briefly while task2 attempts to acquire.
-            await Task.Delay(50);
+            firstAcquired.SetResult();
+            await releaseFirst.Task;
             sequence.Add("first-releasing");
-            firstReleased.SetResult();
         });
 
-        // Make sure task1 acquires first by giving it a head start.
-        await Task.Delay(10);
+        // Deterministic handoff: wait until task1 has the lock before task2 starts trying.
+        await firstAcquired.Task;
 
         var task2 = Task.Run(async () =>
         {
             await using var handle = await provider.AcquireLockAsync("workflow-draft:A");
             sequence.Add("second-acquired");
         });
+
+        // Give task2 a moment to attempt the lock (it must end up waiting on the semaphore),
+        // then release task1 — the order must be first-releasing → second-acquired.
+        await Task.Delay(20);
+        releaseFirst.SetResult();
 
         await Task.WhenAll(task1, task2);
 

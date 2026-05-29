@@ -38,10 +38,6 @@ public sealed class SavingEventDispatchTests
         {
             Id = defId,
             ActivityTypeKey = "Foo",
-            SourceKind = "Json",
-            SourceId = "Acme",
-            ReconciledAt = DateTimeOffset.UtcNow,
-            ReconciledBy = "test",
             Category = "Test"
         });
         var version = new ActivityDefinitionVersion(1, defId)
@@ -74,10 +70,6 @@ public sealed class SavingEventDispatchTests
         {
             Id = Guid.NewGuid().ToString("N"),
             ActivityTypeKey = "X",
-            SourceKind = "Json",
-            SourceId = "Acme",
-            ReconciledAt = DateTimeOffset.UtcNow,
-            ReconciledBy = "test",
             Category = "Test"
         };
         var entry = ctx.ActivityDefinitions.Add(unrelated);

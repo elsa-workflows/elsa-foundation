@@ -116,10 +116,6 @@ public sealed class ImplementationDescriptorRoundTripTests
     {
         Id = id,
         ActivityTypeKey = activityTypeKey,
-        SourceKind = "Json",
-        SourceId = "Elsa.Test",
-        ReconciledAt = DateTimeOffset.UtcNow,
-        ReconciledBy = "test",
         Category = "Test"
     };
 }

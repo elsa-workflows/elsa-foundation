@@ -11,10 +11,6 @@ public sealed class ActivityDefinitionToView : IObjectMapping<ActivityDefinition
         var result = new ActivityDefinitionView(
             source.Id,
             source.ActivityTypeKey,
-            source.SourceKind,
-            source.SourceId,
-            source.ReconciledAt,
-            source.ReconciledBy,
             source.Category,
             source.DisplayName,
             source.Description

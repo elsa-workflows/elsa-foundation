@@ -54,10 +54,6 @@ public sealed class ActivityVersionsReconcilingHandler(
                     Category = entry.Category ?? string.Empty,
                     Description = entry.Description,
                     DisplayName = entry.DisplayName,
-                    ReconciledAt = now,
-                    ReconciledBy = provisionedBy,
-                    SourceId = source.SourceId,
-                    SourceKind = source.SourceKind
                 };
 
                 var version = new ActivityDefinitionVersion(entry.Version, definition.Id, executionType: entry.ExecutionType)
