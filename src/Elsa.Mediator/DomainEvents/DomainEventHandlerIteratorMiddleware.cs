@@ -15,6 +15,15 @@ namespace Elsa.Mediator.DomainEvents;
 /// <see cref="DomainEventExceptionShieldingMiddleware"/>, and the actual handler
 /// invocation lives in <see cref="DomainEventHandlerInvokerMiddleware"/>.
 /// </summary>
+/// <remarks>
+/// Handlers are resolved via the non-generic <see cref="IDomainEventHandler"/> marker
+/// (which is the surface <c>AddDomainEventHandlersFrom</c> / <c>AddDomainEventHandler</c>
+/// register against) and filtered by the closed-generic
+/// <c>IDomainEventHandler&lt;TEvent&gt;</c> using <see cref="Type.IsInstanceOfType"/>.
+/// This mirrors the request- and command-dispatcher patterns
+/// (<c>RequestHandlerInvokerMiddleware</c>, <c>CommandHandlerInvokerMiddleware</c>) so all
+/// three mediator dispatchers share one registration story.
+/// </remarks>
 public sealed class DomainEventHandlerIteratorMiddleware(DomainEventMiddlewareDelegate next)
     : IDomainEventMiddleware
 {
@@ -23,7 +32,12 @@ public sealed class DomainEventHandlerIteratorMiddleware(DomainEventMiddlewareDe
     {
         var eventType = context.Event.GetType();
         var handlerType = typeof(IDomainEventHandler<>).MakeGenericType(eventType);
-        var handlers = context.ServiceProvider.GetServices(handlerType).ToArray();
+
+        var handlers = context.ServiceProvider
+            .GetServices<IDomainEventHandler>()
+            .DistinctBy(x => x.GetType())
+            .Where(handlerType.IsInstanceOfType)
+            .ToArray();
 
         if (handlers.Length == 0)
             return;
@@ -32,7 +46,7 @@ public sealed class DomainEventHandlerIteratorMiddleware(DomainEventMiddlewareDe
         {
             foreach (var handler in handlers)
             {
-                context.CurrentHandler = (IDomainEventHandler?)handler;
+                context.CurrentHandler = handler;
                 await next(context);
             }
         }
