@@ -23,6 +23,7 @@ namespace Elsa.Expressions
         {
             services
                 .AddSingleton<IExpressionDescriptorRegistry, ExpressionDescriptorRegistry>()
+                .AddSingleton<IExpressionDescriptorProvider, DefaultExpressionDescriptorProvider>()
                 .Configure<ExpressionEvaluatorOptions>(o =>
                 {
                     o.Arguments = EvaluatorOptions.Arguments;
