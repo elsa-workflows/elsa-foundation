@@ -1,11 +1,15 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Constants;
+using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Options;
+using Elsa.Expressions.JavaScript.Handlers;
 using Elsa.Expressions.JavaScript.Options;
+using Elsa.Expressions.JavaScript.PreProcessors;
 using Elsa.Expressions.JavaScript.Services;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript
@@ -34,7 +38,13 @@ namespace Elsa.Expressions.JavaScript
                     TypeDescriptors.ToList().ForEach(o.TypeDescriptors.Add);
                 })
 
-                .AddDomainEventHandlersFrom(typeof(JavaScriptFeature).Assembly)
+                .AddEventHandler<OnEvaluatingScript, PreProcessScript>()
+                .AddEventHandler<OnScriptEvaluated, PostProcessScript>()
+                .AddScoped<IScriptPreProcessor, ArgsObjectPreProcessor>()
+                .AddScoped<IScriptPreProcessor, CommonFunctionsPreProcessor>()
+                .AddScoped<IScriptPreProcessor, ArgumentFunctionsPreProcessor>()
+                .AddScoped<IScriptPreProcessor, ConfigurationAccessFunctionPreProcessor>()
+                .AddScoped<IScriptPreProcessor, TypeRegistrationPreProcessor>()
 
                 .AddScoped<IExpressionHandler, JavaScriptExpressionHandler>()
                 .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();

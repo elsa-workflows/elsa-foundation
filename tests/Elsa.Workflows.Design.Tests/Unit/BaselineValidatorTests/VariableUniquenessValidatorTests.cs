@@ -15,22 +15,18 @@ public sealed class VariableUniquenessValidatorTests
     public async Task Distinct_variable_names_emit_no_error()
     {
         var state = State(variables: [Variable("v1", "MyVar"), Variable("v2", "OtherVar")]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
     public async Task Case_insensitive_collision_emits_one_error_per_group()
     {
         var state = State(variables: [Variable("v1", "MyVar"), Variable("v2", "myvar")]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("Variables/Uniqueness", error.Type);
         Assert.StartsWith("$workflow/variables/", error.Path);
     }
@@ -43,11 +39,9 @@ public sealed class VariableUniquenessValidatorTests
             Variable("v2", "X"),
             Variable("v3", "x")
         ]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Contains("3 times", error.Message);
     }
 }

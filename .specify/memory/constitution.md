@@ -2,14 +2,42 @@
 Sync Impact Report — Elsa Workflow Engine Constitution
 ========================================================
 
-Version change: 1.0.0 (draft, never ratified) → 2.0.0 (draft)
-Derives from: framework constitution v2.0.0 (was v1.0.0).
+Version change: 2.0.0 (draft, never ratified) → 3.0.0 (draft)
+Derives from: framework constitution v3.0.0 (was v2.0.0).
   SemVer: MAJOR.
-  Rationale: pairs with framework v2.0.0 MAJOR (§2.6 family restructured;
-  any plan/spec/Elsa-section citing §2.6.1's old content must rewrite to
-  §2.6.2). Elsa §E3.3 worked example also reshaped to demonstrate the new
-  Registry + StartUp Task sub-pattern instead of the legacy provider pattern.
-  v1.0.0 was never ratified; v2.0.0 is the target ratification.
+  Rationale: pairs with framework v3.0.0 MAJOR (Unit 1 — three in-process
+  pub/sub concepts collapsed into one `IEvent`; exception-shielding-by-default
+  reversed; event handling moved to its own `Elsa.Events.Core` / `Elsa.Events`
+  library family). Elsa §E3.x worked examples realigned: §E3.3
+  (`OnJsonPayloadConvertersInitializing` now `IEvent`, published Sequential),
+  §E3.7 (JS declaration/binding events as Sequential contribution), §E3.9
+  (`IEventPublisher.Publish` in the sync-over-async note), §E3.10 (validators).
+  Any plan/spec/Elsa-section citing `IDomainEvent` / `INotification` /
+  `ILifecycleEvent` must rewrite to `IEvent`.
+
+  Unit 1 addendum (2026-06-02, folded into 3.0.0 draft): pairs with framework
+  §2.6.1's contributor-interface + single-handler revert. §E3.3 rewritten
+  (`IJsonConverterSource` returns; one `RegisterJsonConverters` handler
+  aggregates; event exposes a directly-accessible `ICollection<JsonConverter>`).
+  §E3.7 rewritten: the declarations cluster keeps the `Contributor` kind
+  (`IJavaScriptDeclarationContributor` receives the rich
+  `IJavaScriptDeclarationsContributionContext` — renamed from the old
+  `IJavaScriptRenderingContext` — and adds declarations; one
+  `BuildDeclarationsDocument` handler). The script-evaluation cluster moves to
+  the **PreProcessor / PostProcessor** kind because `OnEvaluatingScript` /
+  `OnScriptEvaluated` are a before/after pair: `IScriptPreProcessor` runs at
+  `OnEvaluatingScript` (one `PreProcessScript` handler) and `IScriptPostProcessor`
+  runs at `OnScriptEvaluated` (one `PostProcessScript` handler; the existing
+  variable copy-back is the canonical post-processor). The Jint evaluator now
+  publishes `OnScriptEvaluated` after evaluation. §E3.8 + §E3.10 rewritten
+  (validators are `IDraftValidator` contributor impls, not per-feature
+  `IEventHandler<OnDraftValidating>`; the single `ExecuteValidations` handler
+  aggregates). "Source" (returns) vs "Contributor" (receives context + acts) vs
+  "PreProcessor/PostProcessor" (acts on a lifecycle context, bound to an
+  OnXxxing/OnXxxed pair) naming pinned framework-side.
+
+  [Prior bump] 1.0.0 → 2.0.0: paired with framework v2.0.0 (§2.6 family
+  restructured; §E3.3 reshaped to the Registry + StartUp Task sub-pattern).
 
 v2.0.0 provenance — consolidated fold of:
   1. The v1.1.0 amendment plan drafted 2026-05-19 (never folded as v1.1.0).
@@ -73,6 +101,9 @@ Unit C Model X cascade (2026-05-28, draft pending 2026-06-01 ratification):
         production data" convention.
 
 Unit C Phase-3 cascade (2026-05-28, draft pending 2026-06-01 ratification):
+  [SUPERSEDED by the Unit 1 addendum 2026-06-02 — the intent-revealing-methods
+  sub-rule was withdrawn; §E3.3 now uses `IJsonConverterSource` + the single
+  `RegisterJsonConverters` handler + a directly-accessible `ICollection`.]
   - §E3.3 REWRITTEN under the new framework §2.6.1 intent-revealing-methods
     sub-rule. `OnJsonPayloadConvertersInitializing` is now a `sealed class`
     with `AddConverter(JsonConverter)` + `public IReadOnlyList<JsonConverter>
@@ -290,10 +321,10 @@ Follow-up TODOs (single index of deferred items, post-§E6-removal):
 
 # Elsa Workflow Engine Constitution
 
-**Version:** 2.0.0 (draft)
+**Version:** 3.0.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v2.0.0**.
+**Derives from:** framework constitution **v3.0.0**.
 
 ---
 
@@ -470,8 +501,8 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 **Anticipated further decomposition.** As code reviews land, additional concerns are split out per framework §2.3:
 
 - `Elsa.Serialization` — already present.
-- `Elsa.Notifications` — charter pending.
-- `Elsa.Mediator` — charter pending if a mediator pattern materialises.
+- `Elsa.Events.Core` / `Elsa.Events` — the single in-process event concept (`IEvent` / `IEventHandler<T>` / `IEventPublisher`), landed by Unit 1 (2026-06-02) over the shared `Elsa.Pipelines.Core` engine. Supersedes the previously-pending `Elsa.Notifications` charter — notifications are no longer a separate concept (framework §2.6.6).
+- `Elsa.Mediator.Core` / `Elsa.Mediator` — command + request dispatch only (an API concern), trimmed of event handling by Unit 1. Shares `Elsa.Pipelines.Core` with `Elsa.Events.Core`; the two do not reference each other.
 
 **`Elsa.Foundation.Core` is held back.** Elsa does not eagerly create a framework-foundation `.Core` package. If a coherent set of framework-foundation contracts emerges that does not fit in existing packages, the package can be introduced at that point. 
 
@@ -713,38 +744,56 @@ Replacing file-system locks with Redis means shipping `Elsa.Locking.Redis` as a 
 
 Additionally, **`DistributedLock 2.8.1`** (the meta-package fronting eleven `DistributedLock.<Provider>` sub-packages) was replaced with a direct `DistributedLock.FileSystem` reference. The MongoDB sub-package's transitive dependencies (`Snappier`, `SharpCompress`) had known CVEs, none of which Elsa.Locking actually used. This is the §2.20 Rule 2 application.
 
-### §E3.3 Domain-event contribution with sync access — `JsonConverter` registry (framework §2.6.1)
+### §E3.3 Event contribution with sync access — `JsonConverter` registry (framework §2.6.1)
 
-The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks synchronously and cannot await async dispatch at converter resolution time. Per framework §2.6.1, the contribution still flows through the domain-event pipeline — the access is sync because the population happened earlier, via the **Registry + StartUp Task sub-pattern**, and the event itself follows §2.6.1's **intent-revealing-methods** sub-pattern (Unit C Phase-3 amendment 2026-05-28):
+The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks synchronously and cannot await async dispatch at converter resolution time. Per framework §2.6.1, the contribution still flows through the event pipeline — the access is sync because the population happened earlier, via the **Registry + StartUp Task sub-pattern**, and the event itself follows §2.6.1's **contributor-interface + single-handler** sub-pattern: features implement a return-style `IJsonConverterSource` and one `RegisterJsonConverters` handler aggregates. The event is published **Sequential** (the default) so the StartUp task can read the contributed converters back (Unit C Phase-3 amendment 2026-05-28; unified-event naming Unit 1 2026-06-02; contributor-interface revert Unit 1 addendum 2026-06-02):
 
 1. **`Elsa.Serialization.Core`** defines:
    - `JsonPayloadConverterRegistry` — with `Register(JsonConverter)` and accessor methods.
-   - `OnJsonPayloadConvertersInitializing` — a `sealed class` domain event exposing `AddConverter(JsonConverter)` (intent-revealing contribution method) and `public IReadOnlyList<JsonConverter> Converters` (non-mutating read accessor for the dispatcher).
+   - `OnJsonPayloadConvertersInitializing` — a `sealed class` event (`IEvent`, in `Elsa.Events.Core.Contracts`) exposing a **directly-accessible `ICollection<JsonConverter> Converters`** that the single handler writes into.
+   - `IJsonConverterSource` — the return-style contributor interface (a *Source*: it yields converters, it does not act on a shared object).
 
    ```csharp
-   public sealed class OnJsonPayloadConvertersInitializing : IDomainEvent
+   public sealed class OnJsonPayloadConvertersInitializing : IEvent
    {
-       private readonly List<JsonConverter> _converters = new();
-       public void AddConverter(JsonConverter converter) => _converters.Add(converter);
-       public IReadOnlyList<JsonConverter> Converters => _converters;
+       public ICollection<JsonConverter> Converters { get; } = [];
+   }
+
+   public interface IJsonConverterSource
+   {
+       IEnumerable<JsonConverter> GetConverters();
    }
    ```
 
-2. **`Elsa.Serialization.<Provider>`** (the feature implementing the serialization domain) registers a **StartUp task** that:
+2. **`Elsa.Serialization.<Provider>`** (the feature implementing the serialization domain) registers the StartUp task **and the single `RegisterJsonConverters` handler** — the only `IEventHandler<OnJsonPayloadConvertersInitializing>`, which injects `IEnumerable<IJsonConverterSource>` and aggregates:
 
    ```csharp
+   // single handler
+   public sealed class RegisterJsonConverters(IEnumerable<IJsonConverterSource> sources)
+       : IEventHandler<OnJsonPayloadConvertersInitializing>
+   {
+       public Task Handle(OnJsonPayloadConvertersInitializing e, CancellationToken ct)
+       {
+           foreach (var source in sources)
+               foreach (var converter in source.GetConverters())
+                   e.Converters.Add(converter);
+           return Task.CompletedTask;
+       }
+   }
+
+   // startup task
    var @event = new OnJsonPayloadConvertersInitializing();
-   await domainEventSender.Publish(@event);
+   await eventPublisher.Publish(@event);   // default Sequential — contributions read back
    registry.RegisterAll(@event.Converters);
    ```
 
-3. **`Elsa.Expressions`** (and any other contributing feature) extends serialization by **handling the event** and contributing entries via the `AddConverter` method — e.g. `@event.AddConverter(new VariableJsonConverter())` — without either feature referencing the other.
+3. **`Elsa.Expressions`** (and any other contributing feature) extends serialization by **implementing `IJsonConverterSource`** and registering it via DI (`services.AddScoped<IJsonConverterSource, ExpressionsJsonConverterSource>()`) — it does NOT register its own event handler. Neither feature references the other.
 
 4. **At runtime**, the `JsonPayloadSerializer`'s sync code accesses the populated `JsonPayloadConverterRegistry` directly. No async dispatch at the read site.
 
-The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1, refactored under the §2.6.1 intent-revealing-methods sub-rule.
+The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1, refactored under the §2.6.1 contributor-interface + single-handler sub-rule.
 
-*Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up — to land before v2.0.0 ratification. When the migration lands, it adopts the method-based event shape shown here.
+*Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up. When the migration lands, it adopts the source + single-handler shape shown here.
 
 ### §E3.4 Feature inheritance (framework §2.5)
 
@@ -791,14 +840,24 @@ Worked example for framework §2.6.4. The JS expression domain has two distinct 
 
 A unified provider would force every contributing feature to satisfy both consumers even when only one is relevant. The split:
 
-| Phase | Domain event | Dispatch site | Where handlers live |
-|---|---|---|---|
-| Design-time | `OnDeclarationsDocumentGenerating` (in `Elsa.Expressions.JavaScript.Rendering.Core`) | The rendering domain when it builds a declarations document | `Elsa.Workflows.Design.JavaScript`, `Elsa.Http.JavaScript`, and other design-time contributors |
-| Runtime | `OnEvaluatingScript` (in `Elsa.Expressions.JavaScript.Core`) | The script evaluator just before it runs the script | `Elsa.Workflows.Runtime.JavaScript`, and other runtime contributors |
+| Phase | Event | Contributor interface (`.Core`) | Kind | Single handler | Where impls live |
+|---|---|---|---|---|---|
+| Design-time | `OnDeclarationsDocumentGenerating` (in `Elsa.Expressions.JavaScript.Rendering.Core`) | `IJavaScriptDeclarationContributor` | Contributor | `BuildDeclarationsDocument` | `Elsa.Workflows.Design.JavaScript`, `Elsa.Http.JavaScript`, and other design-time contributors |
+| Runtime — before | `OnEvaluatingScript` (in `Elsa.Expressions.JavaScript.Core`) | `IScriptPreProcessor` | PreProcessor | `PreProcessScript` | `Elsa.Expressions.JavaScript`, `Elsa.Workflows.Runtime.JavaScript`, `Elsa.Expressions.JavaScript.Libraries`, and other runtime contributors |
+| Runtime — after | `OnScriptEvaluated` (in `Elsa.Expressions.JavaScript.Core`) | `IScriptPostProcessor` | PostProcessor | `PostProcessScript` | `Elsa.Workflows.Runtime.JavaScript` (variable copy-back) |
 
-Both events may carry a shared `.Core` data record describing the *shape* of a contributed function (name, parameter types, return type, documentation). Each event binds to its own consumer; the contribution flows through the framework's domain-event pipeline (framework §2.6.1) in both directions.
+Both phases may carry a shared `.Core` data record describing the *shape* of a contributed function (name, parameter types, return type, documentation). Each event binds to its own consumer; all are published Sequential (contribution — the publisher reads the contributed declarations / bindings back) through the framework's event pipeline (framework §2.6.1).
 
-**A single feature MAY register handlers for both events** — e.g. `Elsa.Http.JavaScript` contributes both HTTP-type declarations (design-time) and HTTP-type bindings (runtime). It MAY register for only one — e.g. a feature that only needs intellisense (because the runtime side is provided elsewhere) handles only the design-time event.
+**The declarations cluster uses the `Contributor` kind** (framework §2.6.1 sub-pattern). The sink is a **rich mutable context**, not a flat collection: the declarations context — `IJavaScriptDeclarationsContributionContext` (renamed from the old `IJavaScriptRenderingContext` so the name states its purpose: a context contributors add declarations to) — exposes `AddVariable(...)` / `AddType(...)` / `AddFunction(...)`. A contributor **receives the context and acts on it** — `ValueTask Contribute(IJavaScriptDeclarationsContributionContext, CancellationToken)` returning void — rather than returning values. The one `BuildDeclarationsDocument` handler injects `IEnumerable<IJavaScriptDeclarationContributor>` and hands the context to each in turn.
+
+**The script-evaluation cluster uses the `PreProcessor` / `PostProcessor` kind** because `OnEvaluatingScript` / `OnScriptEvaluated` are a before/after pair (framework §2.6.1 — pre/post kind). Both act on the live `IJavaScriptExecutionContext` (which exposes `RegisterFunction(...)`, value get/set, etc.), so the contract is "act on the lifecycle context", not "return items":
+
+- `IScriptPreProcessor.PreProcess(script, executionContext, expressionContext, options, ct)` runs at `OnEvaluatingScript` (before the script executes) to register functions, types, and values. The one `PreProcessScript` handler aggregates every registered pre-processor.
+- `IScriptPostProcessor.PostProcess(executionContext, expressionContext, options, ct)` runs at `OnScriptEvaluated` (after the script executes) to act on the result. The canonical post-processor copies engine variables back into the workflow context (`CopyVariablesToWorkflowContext`). The one `PostProcessScript` handler aggregates every registered post-processor.
+
+The Jint adapter (§E3.6) publishes `OnEvaluatingScript` before `Evaluate(...)` and `OnScriptEvaluated` after, so both single handlers fire around every evaluation.
+
+**A single feature MAY implement several of these interfaces** — e.g. `Elsa.Http.JavaScript` ships an `IJavaScriptDeclarationContributor` (HTTP-type declarations, design-time) and an `IScriptPreProcessor` (HTTP-type bindings, registered before evaluation), registering each via DI. It MAY implement only one — e.g. a feature that only needs intellisense implements just the declaration contributor.
 
 **Generalisation.** The contract-level split mirrors the Elsa §E2.2 sub-domain split (Workflows.Design ↔ Workflows.Runtime) at finer granularity. The framework rule (§2.6.4) is independent of any specific Elsa-side sub-domain split, but the JS case is its cleanest worked example: same data, two consumers, two events, two handler audiences.
 
@@ -810,10 +869,10 @@ Worked example for framework §2.2's secondary-domain naming sub-rule. The decis
 
 The cross-cutting module contributes function declarations and function bindings *for HTTP-domain concepts* — `HttpRequest`, headers, route values, body accessors, query data. Those are HTTP models. The JS side ships only the **consumer machinery**:
 
-- A handler for `OnDeclarationsDocumentGenerating` that adds HTTP-type declarations (so intellisense sees `httpRequest.headers`, `httpRequest.body`, etc.).
-- A handler for `OnEvaluatingScript` that adds HTTP-type bindings (so the evaluator can resolve `httpRequest` to the current HTTP context).
+- An `IJavaScriptDeclarationContributor` that adds HTTP-type declarations (so intellisense sees `httpRequest.headers`, `httpRequest.body`, etc.).
+- An `IScriptPreProcessor` that adds HTTP-type bindings before evaluation (so the evaluator can resolve `httpRequest` to the current HTTP context).
 
-Neither handler defines a new HTTP model. They expose HTTP's existing models to a different consumer (a JS evaluator).
+Neither contributor defines a new HTTP model. They expose HTTP's existing models to a different consumer (a JS evaluator).
 
 **The model-owning domain wins the prefix.** HTTP is the model-owning domain; JavaScript is the consumer. Therefore: **`Elsa.Http.JavaScript`**.
 
@@ -823,7 +882,7 @@ Neither handler defines a new HTTP model. They expose HTTP's existing models to 
 
 ### §E3.9 Sync contributor pattern — `IEntityModelCreatingHandler` (framework §2.6.5)
 
-Worked example for framework §2.6.5's rare-exception sync contributor pattern. The case: EF Core's `OnModelCreating` lifecycle hook needs to invoke contributing handlers synchronously at the moment EF Core builds the model. Async domain-event dispatch via `IDomainEventSender.Send` cannot apply because `OnModelCreating` is intrinsically sync in EF Core's contract. The Registry + StartUp Task sub-pattern does not apply because what's being contributed is *behaviour* (each handler customises the shared `ModelBuilder`), not *data* — and that behaviour is bound to the specific lifecycle moment EF Core invokes.
+Worked example for framework §2.6.5's rare-exception sync contributor pattern. The case: EF Core's `OnModelCreating` lifecycle hook needs to invoke contributing handlers synchronously at the moment EF Core builds the model. Async event dispatch via `IEventPublisher.Publish` cannot apply because `OnModelCreating` is intrinsically sync in EF Core's contract. The Registry + StartUp Task sub-pattern does not apply because what's being contributed is *behaviour* (each handler customises the shared `ModelBuilder`), not *data* — and that behaviour is bound to the specific lifecycle moment EF Core invokes.
 
 **The mechanism in Elsa.**
 
@@ -833,8 +892,8 @@ Worked example for framework §2.6.5's rare-exception sync contributor pattern. 
 
 **Why §2.6.5 applies — the three criteria.**
 
-1. **Intrinsically sync dispatch site.** EF Core's `OnModelCreating(ModelBuilder)` is sync. There is no async equivalent. Forcing async domain-event dispatch (`IDomainEventSender.Send(...).GetAwaiter().GetResult()`) would be sync-over-async, with no benefit.
-2. **Behaviour, not data.** Each handler MUTATES the shared `ModelBuilder` — it doesn't return data the caller collects. Domain events excel at "contribute items to a carried list" (Registry + StartUp Task); the model-creating case is "act on the shared lifecycle target."
+1. **Intrinsically sync dispatch site.** EF Core's `OnModelCreating(ModelBuilder)` is sync. There is no async equivalent. Forcing async event dispatch (`IEventPublisher.Publish(...).GetAwaiter().GetResult()`) would be sync-over-async, with no benefit.
+2. **Behaviour, not data.** Each handler MUTATES the shared `ModelBuilder` — it doesn't return data the caller collects. Contribution events excel at "contribute items to a carried list" (Registry + StartUp Task); the model-creating case is "act on the shared lifecycle target."
 3. **Registry + StartUp Task doesn't apply.** The `ModelBuilder` instance doesn't exist at application startup — it's constructed by EF Core when the first `DbContext` is instantiated. Even if we pre-registered "behaviours to run later", we'd still need to invoke them at the lifecycle moment — adding indirection without removing the structural sync requirement.
 
 **What this case is NOT.** It is NOT a license to use sync contributor interfaces for ANY contribution flow. The framework's §2.6.5 head explicitly demands that reviewers challenge every §2.6.5 invocation: "could the contribution be reshaped to fit §2.6.1 or Registry + StartUp Task?" If yes, §2.6.5 does not apply.
@@ -857,7 +916,7 @@ Elsa.Activities.Runtime.Core          ← contracts for runtime activity executi
 
 Elsa.Http.Activities.Design           ← HTTP-specific design-time activities + their validators
   references: Elsa.Activities.Design.Core
-            + Elsa.Workflows.Design.Validations.Core   (for OnDraftValidating subscription)
+            + Elsa.Workflows.Design.Validations.Core   (for the IDraftValidator contributor interface)
             + Elsa.Http                                (HTTP models)
 
 Elsa.Http.Activities.Runtime          ← HTTP-specific runtime activity execution
@@ -885,13 +944,13 @@ The same pattern generalises to every model-owning domain contributing activitie
 
 Activity-specific validators co-locate with their **activity's design-time module**, not in a separate `Elsa.Workflows.Design.Validations.<Domain>` sub-module under Validations. The reason: HTTP-activity-validators read HTTP-activity-specific properties (auth policies, URL formats, etc.) — the validator and the activity definition share intimate knowledge of the HTTP-activity shape. Co-locating them keeps that knowledge in one module.
 
-The validator is just an `IDomainEventHandler<OnDraftValidating>` registered by the `Elsa.Http.Activities.Design` feature. It references `Elsa.Workflows.Design.Validations.Core` for the event + ValidationError contract. No new module is needed per activity — the validators are a small body of work alongside the definitions.
+The validator is just an `IDraftValidator` (the return-style contributor interface) registered via DI by the `Elsa.Http.Activities.Design` feature — NOT its own `IEventHandler<OnDraftValidating>`. The single `ExecuteValidations` handler (in `Elsa.Workflows.Design.Validations`) resolves every `IDraftValidator` and aggregates their returned errors. The HTTP feature references `Elsa.Workflows.Design.Validations.Core` for the `IDraftValidator` interface + `ValidationError` contract. No new module is needed per activity — the validators are a small body of work alongside the definitions.
 
 #### What this case is NOT
 
 It is NOT a license to over-elaborate the namespace for *every* cross-domain contribution. The §2.2 secondary-domain test still applies: where do the models come from? If a feature brings no new models and contributes against existing ones, secondary-domain naming applies; otherwise, the feature lives in its own domain. The three-segment composition activates only when the consumer-domain ALSO has an internal axis (Design/Runtime) that must show up at the package boundary.
 
-For example, JavaScript exposing HTTP models (§E3.8) is two-segment because JavaScript itself is a consumer surface without a Design/Runtime split inside its consumption — there's `OnDeclarationsDocumentGenerating` (design-time) and `OnEvaluatingScript` (runtime) per §E3.7, but the JS package that contributes HTTP-typed bindings is a single module that registers handlers for both events. The Activities case is different — the runtime side genuinely runs code (executable handlers), the design side genuinely composes catalog data, and the §E2.2 hard rule says those cannot live in the same implementation module.
+For example, JavaScript exposing HTTP models (§E3.8) is two-segment because JavaScript itself is a consumer surface without a Design/Runtime split inside its consumption — there's `OnDeclarationsDocumentGenerating` (design-time) and `OnEvaluatingScript` (runtime) per §E3.7, but the JS package that contributes HTTP-typed bindings is a single module that implements both contributor interfaces (`IJavaScriptDeclarationContributor` + `IScriptPreProcessor`). The Activities case is different — the runtime side genuinely runs code (executable handlers), the design side genuinely composes catalog data, and the §E2.2 hard rule says those cannot live in the same implementation module.
 
 #### Cross-references
 
@@ -967,4 +1026,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 2.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-27 | **Derives from framework constitution:** v2.0.0
+**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-02 | **Derives from framework constitution:** v3.0.0

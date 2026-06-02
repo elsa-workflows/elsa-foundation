@@ -15,6 +15,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
+	  <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
 	  <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
 	</ItemGroup>
 

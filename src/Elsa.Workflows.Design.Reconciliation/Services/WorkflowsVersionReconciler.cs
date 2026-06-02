@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// </summary>
 public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
-    IDomainEventSender sender,
+    IEventPublisher sender,
     IOptions<WorkflowVersionReconcilerOptions> options,
     IIdentityGenerator identityGenerator,
     IQueries<WorkflowDefinition> definitionQueries,
@@ -37,7 +37,7 @@ public sealed class WorkflowsVersionReconciler(
         cancellationToken.ThrowIfCancellationRequested();
 
         var @event = new OnWorkflowVersionsReconciling();
-        await sender.Send(@event, cancellationToken);
+        await sender.Publish(@event, cancellationToken: cancellationToken);
 
         foreach (var version in @event.Versions)
         {

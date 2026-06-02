@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Xunit;
 
@@ -103,16 +103,12 @@ public sealed class EventNamingTests
 
     private static IReadOnlyList<string> GetWorkflowDesignCoreEventNames()
     {
-        // After the 2026-05-29 lifecycle/domain split, the FR-018 / FR-018a events in this
-        // .Core are ILifecycleEvent (derives from INotification). Scan for both markers so
-        // future additions in either category are picked up.
+        // After Unit 1's event unification, the FR-018 / FR-018a events in this .Core all
+        // implement the single IEvent marker. Scan for it so future additions are picked up.
         return typeof(OnDraftCreated).Assembly
             .GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
-            .Where(t =>
-                typeof(IDomainEvent).IsAssignableFrom(t)
-                || typeof(INotification).IsAssignableFrom(t)
-            )
+            .Where(t => typeof(IEvent).IsAssignableFrom(t))
             .Select(t => t.Name)
             .ToList();
     }

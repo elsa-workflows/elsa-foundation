@@ -1,5 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -17,7 +17,7 @@ public sealed class AddWorkflowInputToDraftCommand(DraftMutationPipeline pipelin
                 var inputs = draft.State.Inputs.Append(input);
                 draft.State = draft.State with { Inputs = inputs };
 
-                return ValueTask.FromResult<ILifecycleEvent>(
+                return ValueTask.FromResult<IEvent>(
                     new OnWorkflowInputAddedToDraft(draftId, input)
                 );
             }, 

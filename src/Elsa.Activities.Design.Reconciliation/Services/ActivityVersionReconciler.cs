@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Options;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
@@ -34,7 +34,7 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 /// </summary>
 public sealed class ActivityVersionReconciler(
     ILogger<ActivityVersionReconciler> logger,
-    IDomainEventSender sender,
+    IEventPublisher sender,
     IOptions<ActivityVersionReconcilerOptions> options,
     IIdentityGenerator identityGenerator,
     IActivityDefinitionHasher hasher,
@@ -49,12 +49,10 @@ public sealed class ActivityVersionReconciler(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Method-based contribution per framework §2.6.1's "intent-revealing methods" sub-rule.
-        // Handlers contribute via OnActivityVersionsReconciling.AddVersion(...); the dispatcher
-        // reads the accumulated contributions via the public Versions read-only property
-        // (typed IReadOnlyList — no caller can replace or mutate the list).
+        // Handlers contribute by adding to the event's directly-accessible Versions collection;
+        // the reconciler reads the accumulated set after dispatch.
         var @event = new OnActivityVersionsReconciling();
-        await sender.Send(@event, cancellationToken);
+        await sender.Publish(@event, cancellationToken: cancellationToken);
 
         foreach (var version in @event.Versions)
         {

@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Activities.Design.Persistence.Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.FastEndpoints\Elsa.FastEndpoints.csproj" />
     <ProjectReference Include="..\Elsa.Mapping\Elsa.Mapping.csproj" />
     <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />

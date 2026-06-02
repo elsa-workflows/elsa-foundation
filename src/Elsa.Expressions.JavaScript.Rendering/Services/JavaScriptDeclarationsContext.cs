@@ -3,7 +3,7 @@ using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services
 {
-    internal sealed class JavaScriptDeclarationsContext : IJavaScriptRenderingContext
+    internal sealed class JavaScriptDeclarationsContext : IJavaScriptDeclarationsContributionContext
     {
         private readonly List<JavaScriptFunctionDeclaration> functions = [];
         private readonly List<JavaScriptTypeDeclaration> types = [];

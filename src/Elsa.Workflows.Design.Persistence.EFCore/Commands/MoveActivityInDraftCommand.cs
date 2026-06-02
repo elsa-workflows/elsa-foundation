@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -32,7 +32,7 @@ public sealed class MoveActivityInDraftCommand(DraftMutationPipeline pipeline) :
         );
     }
 
-    private static async ValueTask<ILifecycleEvent> Execute(
+    private static async ValueTask<IEvent> Execute(
         WorkflowsDesignDbContext dbContext,
         string draftId,
         string nodeId,

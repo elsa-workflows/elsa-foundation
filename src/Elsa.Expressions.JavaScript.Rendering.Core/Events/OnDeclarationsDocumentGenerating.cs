@@ -1,7 +1,7 @@
 ﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Core.Events
 {
-    public sealed record OnDeclarationsDocumentGenerating(IJavaScriptRenderingContext Context) : IDomainEvent;
+    public sealed record OnDeclarationsDocumentGenerating(IJavaScriptDeclarationsContributionContext Context) : IEvent;
 }

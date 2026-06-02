@@ -9,15 +9,22 @@ Runtime-side composition for activity construction. Hosts the activity factory, 
 - **`IImplementationDescriptorRegistry`** → `Elsa.Activities.Design.Core.Models.ImplementationDescriptorRegistry` — kind→CLR descriptor type for persistence-side deserialisation. Singleton; populated at startup.
 - **`ClrActivityImplementationResolver`** — owns the `"Clr"` kind. Resolves `ClrImplementationDescriptor` to a live `Type` via `TypeInformation.LoadType()`.
 
-## Cross-feature contributions (handlers this feature registers)
+## Cross-feature contributions (contributor interfaces this feature implements + registers)
 
-- **`IDomainEventHandler<OnActivityImplementationResolversInitializing>`** → `ContributeClrResolver` (adds `ClrActivityImplementationResolver` to the runtime registry).
-- **`IDomainEventHandler<OnImplementationDescriptorsInitializing>`** → `ContributeClrDescriptorType` (registers `("Clr", typeof(ClrImplementationDescriptor))` in the descriptor registry).
+Both clusters use the **return-style contributor (`I…Source`) + single aggregating handler** pattern:
+a source returns its items; one action-named `IEventHandler<T>` resolves `IEnumerable<TSource>`,
+iterates, and writes the aggregate into the event's `ICollection` once.
+
+- **`IActivityImplementationResolverSource`** → `ClrActivityImplementationResolverSource` (returns `ClrActivityImplementationResolver`). The single handler `RegisterActivityImplementationResolvers : IEventHandler<OnActivityImplementationResolversInitializing>` aggregates all sources into the runtime registry event.
+- **`IImplementationDescriptorSource`** → `ClrImplementationDescriptorSource` (returns the `("Clr", typeof(ClrImplementationDescriptor))` registration). The single handler `RegisterImplementationDescriptors : IEventHandler<OnImplementationDescriptorsInitializing>` aggregates all sources.
+
+Other kind-owning modules contribute by implementing `IActivityImplementationResolverSource` /
+`IImplementationDescriptorSource` and registering via DI — **not** by adding their own event handler.
 
 ## Cross-feature contributions (events this feature publishes)
 
-- **`OnActivityImplementationResolversInitializing`** — carried by `ActivityImplementationResolverRegistryStartupTask`. Other kind-owning modules (Unit G workflow bridge, future remote bridge) handle this event to contribute their resolvers.
-- **`OnImplementationDescriptorsInitializing`** — carried by `ImplementationDescriptorRegistryStartupTask`. Other kind-owning modules handle this event to register their descriptor types so the persistence-side loader can deserialise.
+- **`OnActivityImplementationResolversInitializing`** — carried by `ActivityImplementationResolverRegistryStartupTask`. Other kind-owning modules (Unit G workflow bridge, future remote bridge) contribute resolvers by implementing `IActivityImplementationResolverSource`.
+- **`OnImplementationDescriptorsInitializing`** — carried by `ImplementationDescriptorRegistryStartupTask`. Other kind-owning modules register their descriptor types by implementing `IImplementationDescriptorSource` so the persistence-side loader can deserialise.
 
 ## Startup tasks
 
@@ -26,7 +33,7 @@ Runtime-side composition for activity construction. Hosts the activity factory, 
 
 ## Owned well-known values
 
-- `ClrActivityImplementationResolver.KindValue = "Clr"` — the kind string this module owns. Three places agree on this value: the resolver, the descriptor (`ClrImplementationDescriptor.Kind => "Clr"`), and the contributing handler. The framework constitution does not enumerate the legal set.
+- `ClrActivityImplementationResolver.KindValue = "Clr"` — the kind string this module owns. Three places agree on this value: the resolver, the descriptor (`ClrImplementationDescriptor.Kind => "Clr"`), and the contributing source (`ClrImplementationDescriptorSource`). The framework constitution does not enumerate the legal set.
 
 ## Failure modes
 

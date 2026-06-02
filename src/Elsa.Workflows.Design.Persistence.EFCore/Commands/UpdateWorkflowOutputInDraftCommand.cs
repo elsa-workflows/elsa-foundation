@@ -1,5 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -20,7 +20,7 @@ public sealed class UpdateWorkflowOutputInDraftCommand(DraftMutationPipeline pip
                 var outputs = draft.State.Outputs.Select(o => o.ReferenceKey == outputReferenceKey ? newValue : o).ToList();
                 draft.State = draft.State with { Outputs = outputs };
 
-                return ValueTask.FromResult<ILifecycleEvent>(
+                return ValueTask.FromResult<IEvent>(
                     new OnWorkflowOutputUpdatedInDraft(draftId, outputReferenceKey, oldValue, newValue)
                 );
             }, 

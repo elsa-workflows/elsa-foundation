@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// rather than a phantom <c>IActivityPortConnectionView</c> â€” the record is sealed and
 /// immutable by structure.
 /// </remarks>
-public sealed class OnConnectionAddedToDraft(string draftId, ActivityConnection connection) : ILifecycleEvent
+public sealed class OnConnectionAddedToDraft(string draftId, ActivityConnection connection) : IEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityConnection Connection { get; } = connection;

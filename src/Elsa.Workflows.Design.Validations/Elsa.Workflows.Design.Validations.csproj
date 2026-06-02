@@ -13,9 +13,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Workflows.Design.Validations.Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>
 
 </Project>

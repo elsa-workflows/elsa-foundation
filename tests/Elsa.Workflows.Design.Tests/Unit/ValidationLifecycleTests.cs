@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// </summary>
 /// <remarks>
 /// Uses the actual <see cref="OrphanActivityValidator"/> wired into the
-/// <c>CapturingDomainEventSender.OnSend</c> hook — this exercises the validator's real logic
+/// <c>CapturingEventPublisher.OnPublish</c> hook — this exercises the validator's real logic
 /// end-to-end against the pipeline's persistence flow, rather than re-testing the sibling
 /// wholesale-rewrite mechanism (which <c>ValidationSiblingPersistenceTests</c> already covers
 /// with a stub error).
@@ -32,10 +32,11 @@ public sealed class ValidationLifecycleTests
         // Wire the real OrphanActivityValidator into the capturing sender's hook so every
         // OnDraftValidating dispatch runs the production validator code against the snapshot.
         var validator = new OrphanActivityValidator();
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
-                validator.Handle(validating, CancellationToken.None).GetAwaiter().GetResult();
+                foreach (var error in validator.Validate(validating.Draft, CancellationToken.None).GetAwaiter().GetResult())
+                    validating.Errors.Add(error);
         };
 
         var draftId = await CreateDraft(host);

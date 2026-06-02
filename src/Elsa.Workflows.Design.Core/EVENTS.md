@@ -1,22 +1,22 @@
 # Events — `Elsa.Workflows.Design.Core`
 
-Catalog per framework §2.22.1. Every event the `Workflows.Design.Core` `.Core` library publishes is documented here, grouped by category.
+Catalog per framework §2.22.1. Every event the `Workflows.Design.Core` `.Core` library publishes is documented here. Every event is an `IEvent` (framework §2.6.1); they are grouped by **delivery strategy** (§2.6.6).
 
-**Domain events** (§2.6.1) — contribution mechanism. Publisher awaits the dispatch and reads handler contributions back. *None in this `.Core` after the 2026-05-29 lifecycle/domain split — the FR-018/FR-018a events are all notifications-shaped. The validation domain event (`OnDraftValidating`) lives in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md).*
+**Sequential / contribution** (§2.6.6) — publisher awaits the dispatch and reads handler contributions back. *None in this `.Core` — the FR-018/FR-018a mutation events are all notification-shaped. The contribution event (`OnDraftValidating`, published Sequential) lives in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md).*
 
-**Lifecycle events** (§2.6.6) — state-transition notifications. Publisher fires; subscribers (audit, event-sourcing stream, UI push, telemetry) observe but don't feed back. Default dispatch strategy: `NotificationStrategy.Background` — the publisher returns before subscribers run.
+**Background / notification** (§2.6.6) — publisher fires and returns; subscribers (audit, event-sourcing stream, UI push, telemetry) observe but don't feed back. Published via `EventPublishingStrategy.Background`.
 
-Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test in `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` (Unit C FR-031) asserts bidirectional alignment between the `### On…` headings here and the assembly's published-event types (both `IDomainEvent` and `ILifecycleEvent`).
+Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test in `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` (Unit C FR-031) asserts bidirectional alignment between the `### On…` headings here and the assembly's published `IEvent` types.
 
 ---
 
-## Lifecycle events (`ILifecycleEvent`)
+## Background / notification events
 
 **Pipeline behaviour for every event in this section.**
 
-- Sender: `ILifecycleEventSender.SendAsync` (delegates to `INotificationSender` with the Background strategy by default).
-- Dispatch: queued on `INotificationsChannel`; the `BackgroundEventPublisher` hosted task drains the channel and runs each subscriber via `SequentialProcessingStrategy`. The publisher's call returns before subscribers run.
-- Subscriber exception isolation: caught + logged + swallowed; one flaky subscriber cannot stall the queue.
+- Published via `IEventPublisher.Publish(..., EventPublishingStrategy.Background, ...)`.
+- Dispatch: queued on `IEventChannel`; the `BackgroundEventPublisher` hosted task drains the channel and runs each subscriber. The publisher's call returns before subscribers run.
+- Subscriber exception isolation: caught + logged by the Background strategy + worker; one flaky subscriber cannot stall the queue or break the publisher.
 - Order: FIFO at enqueue, preserved at dispatch.
 - Crash semantics: queued events are in-memory; a process crash drops them. Subscribers that need durability persist their own log.
 
@@ -168,6 +168,6 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 
 ## Cross-references
 
-- The validation domain event + lifecycle event for the same transition live in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md): `OnDraftValidating` (domain event, the gate) and `OnDraftValidated` (lifecycle event, the outcome).
-- Event-sourcing subscribers (Unit C FR-017's opt-in feature, deferred to a follow-on unit) subscribe to every lifecycle event listed above to materialise the Draft's event stream.
-- Audit / telemetry subscribers may subscribe selectively per category.
+- The validation events for the same transition live in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md): `OnDraftValidating` (Sequential, the gate) and `OnDraftValidated` (Background, the outcome).
+- Event-sourcing subscribers (Unit C FR-017's opt-in feature, deferred to a follow-on unit) subscribe to every Background event listed above to materialise the Draft's event stream.
+- Audit / telemetry subscribers may subscribe selectively per strategy.

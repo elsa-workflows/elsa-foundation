@@ -1,9 +1,13 @@
 using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Events;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Events;
+using Elsa.Activities.Runtime.Handlers;
 using Elsa.Activities.Runtime.Resolvers;
 using Elsa.Activities.Runtime.Services;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Activities.Runtime.Sources;
+using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,9 +41,12 @@ namespace Elsa.Activities.Runtime
             services.AddScoped<IStartupTask, ImplementationDescriptorRegistryStartupTask>();
             services.AddScoped<IStartupTask, ActivityImplementationResolverRegistryStartupTask>();
 
-            // Pick up the domain-event handlers in this assembly (Clr-resolver contributor,
-            // Clr-descriptor-type contributor).
-            services.AddDomainEventHandlersFrom(GetType().Assembly);
+            // Single aggregating handlers + the CLR sources they iterate. Other modules contribute
+            // by registering an IActivityImplementationResolverSource / IImplementationDescriptorSource.
+            services.AddEventHandler<OnActivityImplementationResolversInitializing, RegisterActivityImplementationResolvers>();
+            services.AddEventHandler<OnImplementationDescriptorsInitializing, RegisterImplementationDescriptors>();
+            services.AddScoped<IActivityImplementationResolverSource, ClrActivityImplementationResolverSource>();
+            services.AddScoped<IImplementationDescriptorSource, ClrImplementationDescriptorSource>();
         }
     }
 }

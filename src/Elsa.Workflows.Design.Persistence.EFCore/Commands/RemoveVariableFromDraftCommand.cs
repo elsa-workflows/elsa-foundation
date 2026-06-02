@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -16,7 +16,7 @@ public sealed class RemoveVariableFromDraftCommand(DraftMutationPipeline pipelin
                 var variables = draft.State.Variables.Where(v => v.ReferenceKey != variableReferenceKey);
                 draft.State = draft.State with { Variables = variables };
 
-                return ValueTask.FromResult<ILifecycleEvent>(
+                return ValueTask.FromResult<IEvent>(
                     new OnVariableRemovedFromDraft(draftId, variableReferenceKey)
                 );
             }, 

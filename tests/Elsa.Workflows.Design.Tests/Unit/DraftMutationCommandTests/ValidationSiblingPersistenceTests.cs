@@ -1,11 +1,9 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
-using Elsa.Workflows.Design.Validations.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -48,10 +46,10 @@ public sealed class ValidationSiblingPersistenceTests
             Type: "Graph/StartActivity",
             Message: "No start activity"
         );
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
-                validating.AddValidationError(stubbedError);
+                validating.Errors.Add(stubbedError);
         };
 
         var draftId = await CreateDraft(host, "wf-1");
@@ -71,17 +69,17 @@ public sealed class ValidationSiblingPersistenceTests
 
         // First validator pass yields an error.
         var initialError = new ValidationError("$workflow", "Graph/StartActivity", "No start activity");
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
-                validating.AddValidationError(initialError);
+                validating.Errors.Add(initialError);
         };
 
         var draftId = await CreateDraft(host, "wf-1");
 
         // Subsequent pass: no error contributed. The sibling's Errors must be rewritten to empty
         // — FR-023 delete-and-re-add (not appended to the existing list).
-        host.DomainEventSender.OnSend = null;
+        host.EventPublisher.OnPublish = null;
 
         var activity = NewActivityNode("node-1", "av-1");
 
@@ -101,15 +99,15 @@ public sealed class ValidationSiblingPersistenceTests
         using var host = WorkflowsDesignTestHost.Create();
 
         var stubbedError = new ValidationError("$workflow", "Graph/StartActivity", "No start activity");
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
-                validating.AddValidationError(stubbedError);
+                validating.Errors.Add(stubbedError);
         };
 
         var draftId = await CreateDraft(host, "wf-1");
 
-        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
+        var validated = host.EventPublisher.LastOf<OnDraftValidated>();
         Assert.NotNull(validated);
         Assert.True(validated!.HasErrors);
         Assert.Single(validated.Errors);

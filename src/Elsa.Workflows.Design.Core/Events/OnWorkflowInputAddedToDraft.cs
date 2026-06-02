@@ -1,5 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
 
@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// composed as an activity inside another workflow. Published by
 /// <c>IAddWorkflowInputToDraftCommand</c>. Per Unit C FR-018 workflow-inputs bullet.
 /// </summary>
-public sealed class OnWorkflowInputAddedToDraft(string draftId, InputDefinition input) : ILifecycleEvent
+public sealed class OnWorkflowInputAddedToDraft(string draftId, InputDefinition input) : IEvent
 {
     public string DraftId { get; } = draftId;
     public InputDefinition Input { get; } = input;

@@ -1,8 +1,10 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -13,8 +15,9 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <summary>
 /// Framework §2.23.1 + Unit C SC-021. Activates <see cref="WorkflowDesignValidationsFeature"/>
 /// against a real <see cref="IServiceCollection"/>, builds the provider, and asserts every
-/// baseline validator (FR-033) resolves as both <c>IDomainEventHandler</c> and
-/// <c>IDomainEventHandler&lt;OnDraftValidating&gt;</c>.
+/// baseline validator (FR-033) resolves as an <see cref="IDraftValidator"/> and that the feature
+/// registers exactly one <c>IEventHandler&lt;OnDraftValidating&gt;</c> — the aggregating
+/// <see cref="ExecuteValidations"/> handler.
 /// </summary>
 public sealed class ValidationsFeatureRegistrationTests
 {
@@ -23,8 +26,7 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         using var provider = BuildProvider(_ => { });
 
-        var handlers = provider.GetServices<IDomainEventHandler>().ToList();
-        var validatorTypes = handlers.Select(h => h.GetType()).ToList();
+        var validatorTypes = provider.GetServices<IDraftValidator>().Select(v => v.GetType()).ToList();
 
         Assert.Contains(typeof(OrphanActivityValidator), validatorTypes);
         Assert.Contains(typeof(StartActivityValidator), validatorTypes);
@@ -34,14 +36,13 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     [Fact]
-    public void All_validators_implement_IDomainEventHandler_of_OnDraftValidating()
+    public void Feature_registers_exactly_one_OnDraftValidating_handler()
     {
         using var provider = BuildProvider(_ => { });
 
-        var handlers = provider.GetServices<IDomainEventHandler>().ToList();
-
-        Assert.All(handlers, h =>
-            Assert.IsAssignableFrom<IDomainEventHandler<OnDraftValidating>>(h));
+        var handler = Assert.Single(provider.GetServices<IEventHandler>());
+        Assert.IsType<ExecuteValidations>(handler);
+        Assert.IsAssignableFrom<IEventHandler<OnDraftValidating>>(handler);
     }
 
     [Fact]

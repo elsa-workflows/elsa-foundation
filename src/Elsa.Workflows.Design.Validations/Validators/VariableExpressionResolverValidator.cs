@@ -1,7 +1,7 @@
 using Elsa.Expressions.Core.Constants;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Internal;
 using Microsoft.Extensions.Options;
@@ -24,31 +24,32 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </remarks>
 public sealed class VariableExpressionResolverValidator(
     IOptions<WorkflowDesignValidatorOptions> options
-) : IDomainEventHandler<OnDraftValidating>
-{    
-    public ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
+) : IDraftValidator
+{
+    public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
-        var state = domainEvent.Draft.State;
+        var state = draft.State;
         var knownReferenceKeys = state.Variables
             .Select(v => v.ReferenceKey)
             .ToHashSet(StringComparer.Ordinal);
 
         var maxDepth = options.Value.MaxRecursionDepth;
+        var errors = new List<ValidationError>();
 
         foreach (var node in ActivityTreeWalker.Walk(state.Activities, maxDepth))
         {
             foreach (var argument in node.Inputs)
-                CheckArgument(domainEvent, node.NodeId, "inputs", argument, knownReferenceKeys);
+                CheckArgument(errors, node.NodeId, "inputs", argument, knownReferenceKeys);
 
             foreach (var argument in node.Outputs)
-                CheckArgument(domainEvent, node.NodeId, "outputs", argument, knownReferenceKeys);
+                CheckArgument(errors, node.NodeId, "outputs", argument, knownReferenceKeys);
         }
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult<IEnumerable<ValidationError>>(errors);
     }
 
     private static void CheckArgument(
-        OnDraftValidating domainEvent,
+        ICollection<ValidationError> errors,
         string nodeId,
         string argumentBag,
         ArgumentState argument,
@@ -66,7 +67,7 @@ public sealed class VariableExpressionResolverValidator(
         if (!string.IsNullOrEmpty(variableReferenceKey) && knownReferenceKeys.Contains(variableReferenceKey))
             return;
 
-        domainEvent.AddValidationError(new ValidationError(
+        errors.Add(new ValidationError(
             Path: $"{nodeId}/{argumentBag}/{argument.ReferenceKey}",
             Type: "Expressions/UnresolvedVariable",
             Message: string.IsNullOrEmpty(variableReferenceKey)

@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -25,7 +25,7 @@ public sealed class UpdateActivityInputInDraftCommand(DraftMutationPipeline pipe
         );
     }
 
-    private static ValueTask<ILifecycleEvent> Execute(        
+    private static ValueTask<IEvent> Execute(        
         WorkflowDefinitionDraft draft, 
         string nodeId,
         string inputReferenceKey,
@@ -63,6 +63,6 @@ public sealed class UpdateActivityInputInDraftCommand(DraftMutationPipeline pipe
             newValue
         );
 
-        return ValueTask.FromResult<ILifecycleEvent>(lifecycleEvent);
+        return ValueTask.FromResult<IEvent>(lifecycleEvent);
     }
 }

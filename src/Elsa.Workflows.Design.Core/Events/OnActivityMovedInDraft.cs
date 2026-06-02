@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
 
@@ -15,7 +15,7 @@ public sealed class OnActivityMovedInDraft(
     double newX,
     double newY,
     double? newWidth = null,
-    double? newHeight = null) : ILifecycleEvent
+    double? newHeight = null) : IEvent
 {
     public string DraftId { get; } = draftId;
     public string NodeId { get; } = nodeId;

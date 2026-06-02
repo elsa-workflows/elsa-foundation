@@ -52,12 +52,13 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
 
         await handler.Handle(evt, CancellationToken.None);
 
-        Assert.Equal(2, evt.Versions.Count);
-        Assert.Equal("wf-a", evt.Versions[0].Definition.Id);
-        Assert.Equal("Workflow A", evt.Versions[0].Definition.Name);
-        Assert.Equal(1, evt.Versions[0].Version);
-        Assert.Equal("wf-b", evt.Versions[1].Definition.Id);
-        Assert.Equal(2, evt.Versions[1].Version);
+        var versions = evt.Versions.ToList();
+        Assert.Equal(2, versions.Count);
+        Assert.Equal("wf-a", versions[0].Definition.Id);
+        Assert.Equal("Workflow A", versions[0].Definition.Name);
+        Assert.Equal(1, versions[0].Version);
+        Assert.Equal("wf-b", versions[1].Definition.Id);
+        Assert.Equal(2, versions[1].Version);
     }
 
     [Fact]

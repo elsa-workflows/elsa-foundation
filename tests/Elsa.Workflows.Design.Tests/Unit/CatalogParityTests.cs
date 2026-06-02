@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using System.Reflection;
@@ -10,9 +10,8 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <summary>
 /// SC-019 + SC-020 + Unit C FR-031 + research item R4: parametrised parity test over both
 /// <c>.Core</c> assemblies that publish events. For each (assembly, markdown path) pair:
-/// (a) reflection-scan the assembly for all public non-abstract concrete event types — both
-/// <see cref="IDomainEvent"/>s AND <see cref="INotification"/>s (which includes
-/// <see cref="ILifecycleEvent"/> by derivation);
+/// (a) reflection-scan the assembly for all public non-abstract concrete event types
+/// (every <see cref="IEvent"/>);
 /// (b) parse the corresponding <c>EVENTS.md</c> and extract level-3 markdown headings
 /// (<c>### &lt;EventClassName&gt;</c>); (c) assert bidirectional set equality.
 /// </summary>
@@ -63,10 +62,7 @@ public sealed class CatalogParityTests
     private static IEnumerable<Type> PublishedEventTypesIn(Assembly assembly) =>
         assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
-            .Where(t =>
-                typeof(IDomainEvent).IsAssignableFrom(t)
-                || typeof(INotification).IsAssignableFrom(t)
-            );
+            .Where(t => typeof(IEvent).IsAssignableFrom(t));
 
     /// <summary>
     /// Extracts level-3 markdown headings from <c>src/&lt;projectDirName&gt;/EVENTS.md</c>.

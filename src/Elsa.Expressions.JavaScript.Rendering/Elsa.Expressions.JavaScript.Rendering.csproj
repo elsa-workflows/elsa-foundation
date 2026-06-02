@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.FastEndpoints\Elsa.FastEndpoints.csproj" />
     <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>

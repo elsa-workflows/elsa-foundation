@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// record (sealed, immutable by structure) instead; introducing a parallel IView interface adds
 /// surface area without strengthening the non-mutating guarantee that records already provide.
 /// </remarks>
-public sealed class OnActivityAddedToDraft(string draftId, ActivityNode activity) : ILifecycleEvent
+public sealed class OnActivityAddedToDraft(string draftId, ActivityNode activity) : IEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityNode Activity { get; } = activity;

@@ -1,10 +1,9 @@
 using CShells.Features;
 using Elsa.Expressions.Contracts;
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Handlers;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Expressions.Sources;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,9 +33,9 @@ namespace Elsa.Expressions
                 .AddScoped<IVariableFactory, VariableFactory>();
 
             // Contributes Variable<T> and FuncExpressionValue converters to the JSON payload
-            // serializer via the OnJsonPayloadConvertersInitializing domain event (framework
-            // §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3).
-            services.AddDomainEventHandler<OnJsonPayloadConvertersInitializing, ExpressionsJsonConvertersHandler>();
+            // serializer by registering an IJsonConverterSource; the Serialization feature's single
+            // RegisterJsonConverters handler aggregates all sources (Elsa §E3.3).
+            services.AddScoped<IJsonConverterSource, ExpressionsJsonConverterSource>();
         }
     }
 }

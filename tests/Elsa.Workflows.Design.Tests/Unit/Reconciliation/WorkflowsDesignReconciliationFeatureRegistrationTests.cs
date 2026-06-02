@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
@@ -30,8 +30,8 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetService<IWorkflowVersionReconciler>());
 
-        var handlers = scope.ServiceProvider.GetServices<IDomainEventHandler>().ToList();
-        Assert.Contains(handlers, h => h is IDomainEventHandler<OnWorkflowVersionsReconciling>);
+        var handlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
+        Assert.Contains(handlers, h => h is IEventHandler<OnWorkflowVersionsReconciling>);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();
         services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
-        services.AddSingleton<IDomainEventSender, StubDomainEventSender>();
+        services.AddSingleton<IEventPublisher, StubEventPublisher>();
         services.AddSingleton<IQueries<WorkflowDefinition>, ThrowingQueries<WorkflowDefinition>>();
         services.AddSingleton<IQueries<WorkflowDefinitionVersion>, ThrowingQueries<WorkflowDefinitionVersion>>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
@@ -80,9 +80,9 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         public string Generate() => Guid.NewGuid().ToString("N");
     }
 
-    private sealed class StubDomainEventSender : IDomainEventSender
+    private sealed class StubEventPublisher : IEventPublisher
     {
-        public Task Send(IDomainEvent domainEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity

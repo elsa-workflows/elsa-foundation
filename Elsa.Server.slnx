@@ -16,6 +16,8 @@
     <Project Path="src/Elsa.Locking.Core/Elsa.Locking.Core.csproj" />
     <Project Path="src/Elsa.Mapping.Core/Elsa.Mapping.Core.csproj" />
     <Project Path="src/Elsa.Mediator.Core/Elsa.Mediator.Core.csproj" Id="a3621d18-ab71-455e-b8ec-84b9ac165608" />
+    <Project Path="src/Elsa.Events.Core/Elsa.Events.Core.csproj" />
+    <Project Path="src/Elsa.Pipelines.Core/Elsa.Pipelines.Core.csproj" />
     <Project Path="src/Elsa.Persistence.Core/Elsa.Persistence.Core.csproj" Id="a6989f18-a2ac-4127-9a2a-0756fc8ffbc1" />
     <Project Path="src/Elsa.Primitives/Elsa.Primitives.csproj" Id="d2aeee95-6087-4d0f-b690-3d4ed411e61c" />
     <Project Path="src/Elsa.Serialization.Core/Elsa.Serialization.Core.csproj" Id="4a14cffe-bedf-4cad-9f88-740bb087e5ad" />
@@ -49,6 +51,7 @@
     <Project Path="src/Elsa.Locking.FileSystem/Elsa.Locking.FileSystem.csproj" Id="d3c5ba84-c00b-4357-9095-3f3d74d995c3" />
     <Project Path="src/Elsa.Mapping/Elsa.Mapping.csproj" Id="cc07cf93-05f8-4226-9060-1c8ccd8d0817" />
     <Project Path="src/Elsa.Mediator/Elsa.Mediator.csproj" Id="0f0d0ba0-8e28-4782-9af8-a45a5b94becb" />
+    <Project Path="src/Elsa.Events/Elsa.Events.csproj" />
     <Project Path="src/Elsa.Persistence.EFCore.Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" Id="73c61d76-90cb-4e55-a714-ba549b8375c9" />
     <Project Path="src/Elsa.Persistence.EFCore/Elsa.Persistence.EFCore.csproj" Id="c64a3ea5-6b27-4872-8ecd-341221f74208" />
     <Project Path="src/Elsa.Serialization/Elsa.Serialization.csproj" Id="296f6c59-d41d-469b-a70c-8b2dfa9b02cc" />

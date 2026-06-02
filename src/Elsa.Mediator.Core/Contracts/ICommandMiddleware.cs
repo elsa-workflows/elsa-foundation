@@ -1,4 +1,6 @@
-﻿namespace Elsa.Mediator.Core.Contracts;
+﻿using Elsa.Pipelines.Core.Contracts;
+
+namespace Elsa.Mediator.Core.Contracts;
 
 /// <summary>
 /// Represents a command middleware.

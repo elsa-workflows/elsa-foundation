@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Options;
@@ -92,12 +92,12 @@ namespace Elsa.Persistence.EFCore
         /// </summary>
         private async Task DispatchEntitySavingEvents(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
         {
-            var sender = scope.ServiceProvider.GetService<IDomainEventSender>();
+            var sender = scope.ServiceProvider.GetService<IEventPublisher>();
             if (sender is null)
                 return;
 
             foreach (var entry in entries.Where(IsModifiedEntity))
-                await sender.Send(new OnEntitySaving(this, entry), cancellationToken);
+                await sender.Publish(new OnEntitySaving(this, entry), cancellationToken: cancellationToken);
         }
 
 

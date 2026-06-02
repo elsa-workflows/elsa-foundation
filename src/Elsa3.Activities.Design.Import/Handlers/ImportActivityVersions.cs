@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Mapping.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Serialization.Core;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Models;
@@ -10,9 +10,9 @@ using System.Text.Json;
 namespace Elsa3.Activities.Design.Import.Handlers;
 
 public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IActivityCollectionJsonSource> collectionSources, IPayloadSerializer payloadSerializer)
-    : IDomainEventHandler<OnActivityVersionsReconciling>
+    : IEventHandler<OnActivityVersionsReconciling>
 {
-    public async ValueTask Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach(var source in collectionSources)
         {
@@ -27,7 +27,7 @@ public sealed class ImportActivityVersions(IObjectMapper mapper, IEnumerable<IAc
             var enumerable = mapper.Map<IActivityDefinitionVersion>(definitions, cancellationToken);
             await foreach(var def in enumerable)
             {
-                domainEvent.AddVersion(def);
+                domainEvent.Versions.Add(def);
             }
         }
     }

@@ -2,15 +2,26 @@
 Sync Impact Report — Modular Software Design Framework Constitution
 =====================================================================
 
-Version change: 1.0.0 (draft, never ratified) → 2.0.0 (draft)
+Version change: 2.0.0 (draft, never ratified) → 3.0.0 (draft)
   SemVer: MAJOR.
-  Rationale: §2.6 family restructured. §2.6.1 redefined from "Replacement vs
-  Contribution contracts" to "Domain events — the contribution mechanism";
-  old §2.6.1 content moved to new §2.6.2 (Replacement contracts only). Any
-  plan, spec, or external citation referencing §2.6.1's prior content must
-  rewrite to §2.6.2. v1.0.0 was never ratified; the practical impact of the
-  MAJOR bump is therefore confined to draft-state amendments, but the SemVer
-  classification stands per §4.2.
+  Rationale: Unit 1 (2026-06-02) collapsed the three in-process pub/sub
+  concepts (`IDomainEvent` + `INotification` + `ILifecycleEvent`) into ONE
+  `IEvent` concept (§2.6.1), removed the exception-shielding-by-default
+  position (default Sequential publish CAN break the caller; resilience is the
+  Background strategy's job), and moved event handling into its own library
+  family (`Elsa.Events.Core` / `Elsa.Events` over shared `Elsa.Pipelines.Core`,
+  separate from command/request `Elsa.Mediator.*`). §2.6.3 un-parked
+  `IEventPublisher` as THE in-process mechanism; §2.6.6 restated the
+  two-concept table as a single concept + delivery-strategy taxonomy. Any
+  plan, spec, or citation referencing `IDomainEvent` / `INotification` /
+  `ILifecycleEvent` / their senders must rewrite to `IEvent` / `IEventHandler`
+  / `IEventPublisher` + a delivery strategy.
+
+  [Prior bump] 1.0.0 → 2.0.0: §2.6 family restructured. §2.6.1 redefined from
+  "Replacement vs Contribution contracts" to "Domain events — the contribution
+  mechanism"; old §2.6.1 content moved to new §2.6.2 (Replacement contracts
+  only). v1.0.0 was never ratified; impact confined to draft-state amendments,
+  but the SemVer classification stands per §4.2.
 
 v2.0.0 provenance — consolidated fold of:
   1. The v1.1.0 amendment plan drafted 2026-05-19 (never folded as v1.1.0).
@@ -20,6 +31,86 @@ v2.0.0 provenance — consolidated fold of:
   3. Matured candidate rules from the entity-design follow-up (Rule A, Rule B
      → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
      → Elsa §E2.7).
+
+Unit 1 amendment (2026-06-02 — "Unified event sending"):
+  - §2.6 family REWRITTEN around a single event concept. The three prior
+    in-process pub/sub markers (`IDomainEvent`, `INotification`,
+    `ILifecycleEvent`) and their senders (`IDomainEventSender`,
+    `INotificationSender`, `ILifecycleEventSender`) are DELETED, replaced by
+    `IEvent` + `IEventHandler<T>` (`Task Handle`) + `IEventPublisher.Publish`
+    with a pluggable `IEventPublishingStrategy`.
+  - §2.6.1 retitled "Events — the in-process pub/sub + contribution mechanism."
+    Default dispatch is Sequential, synchronous, awaited, and **CAN break the
+    caller** — the exception-shielding-by-default position (old Unit C Phase-6)
+    is REVERSED. The default path ships NO shielding middleware; resilience
+    lives ONLY in the Background strategy + `BackgroundEventPublisher`. The
+    contribution sub-pattern (intent-revealing `Add` methods, read-back) is
+    retained, now framed as "an event published Sequential."
+  - §2.6.3 retitled "Named events, not anonymous generic dispatch." `IEventPublisher`
+    is un-parked and is THE in-process mechanism; what's forbidden is anonymous
+    indirection where the expected handler/event is not a named type in a
+    domain's `.Core`. Read-back requires Sequential + a contribution payload.
+  - §2.6.6 retitled "Delivery strategies — one event concept, three dispatch
+    behaviours." The two-concept table + "don't conflate" rule + `ILifecycleEvent`
+    are replaced by a strategy taxonomy: Sequential (default, propagates) /
+    Parallel / Background (isolated). The `OnXxxing`/`OnXxxed` hybrid is
+    restated as Sequential gate + Background outcome (both `IEvent`).
+  - §2.22.1 + §2.24.2 (rows 3/3a–c/4/9) reworded to the single-concept model;
+    Strategy worked example is now `IEventPublishingStrategy`.
+  - Library home: events live in `Elsa.Events.Core` (contracts) / `Elsa.Events`
+    (impl) over shared `Elsa.Pipelines.Core`, separate from command/request
+    dispatch (`Elsa.Mediator.Core` / `Elsa.Mediator`). Rationale: event handling
+    is a core-domain concern, command/request dispatch is an API concern.
+  - Elsa §E3.x worked examples realigned to the unified naming.
+
+Unit 1 addendum (2026-06-02 — "Contributor interfaces + intent-method revert";
+folded into the 3.0.0 draft):
+  - §2.6.1 sub-pattern REPLACED. The Phase-3 "intent-revealing `AddX()` methods +
+    private list + `IReadOnlyList<T>` read accessor" sub-rule is WITHDRAWN (too
+    much ceremony; it grew every contribution event and folded contribution logic
+    into the payload). Contribution events now expose a **directly-accessible
+    `ICollection<T>`** (or a rich mutable context) written solely by ONE
+    aggregating handler. Joey's call 2026-06-02: "just use ICollection that is
+    directly accessible by event handlers."
+  - §2.6.1 NEW sub-pattern "Contributor interface + single aggregating handler."
+    Each fan-in event gets ONE action-named `IEventHandler<On<Phase>>` (e.g.
+    `ExecuteValidations`, `RegisterJsonConverters`) injecting
+    `IEnumerable<TContributor>`; features implement + DI-register a contributor
+    interface instead of shipping their own handler. Sipke proposed 2026-06-01;
+    Joey confirmed 2026-06-02. Centralises contribution logic in the pipeline,
+    drops per-feature handler sprawl.
+  - Naming: contributor interfaces split by method shape into THREE kinds —
+    **`I<X>Source`** (the impl RETURNS its items; flat-collection sink) vs
+    **`I<X>Contributor`** (the impl RECEIVES a context and ACTS on it via
+    `Contribute`; rich-context sink) vs **`I<X>PreProcessor`/`I<X>PostProcessor`**
+    (the impl ACTS on a lifecycle context at the *before*/*after* event of an
+    OnXxxing/OnXxxed pair). "Source" is preferred over "Provider." Joey
+    2026-06-02: "Sources always return something, they dont act on an object.
+    Make a distinction between these two concepts." Joey 2026-06-02 on the pre/post
+    kind: "especially when there are OnBefore and OnAfter events, the pre/post
+    processor interface naming is much more suitable" — the JS script-evaluation
+    cluster (`OnEvaluatingScript`/`OnScriptEvaluated`) is the canonical example.
+  - §2.24.2 row 3b REWRITTEN: was "Intent-revealing methods on events" → now
+    "Contributor interface + single aggregating handler" (architect-ratified
+    addition per the §2.24.3 gate: Sipke 2026-06-01, Joey 2026-06-02).
+  - §2.22 + §2.22.1 EXTENDED: per-feature docs MUST list the contributor
+    interfaces a feature implements; the events catalog MUST document each
+    fan-in event's contributor interface (Source vs Contributor, signature, DI
+    registration note).
+  - Elsa §E3.3 / §E3.7 / §E3.10 worked examples realigned to the new pattern.
+  - Code cascade: the five fan-in clusters (validation, JSON converters, JS
+    declarations, JS runtime functions, activity resolvers/descriptors) plus
+    the two reconciliation events refactored to the new shape; the four
+    contribution events flattened to directly-accessible `ICollection<T>`.
+  - Code cascade follow-up (Joey 2026-06-02): the JS script-evaluation cluster
+    moved from the Contributor kind to the PreProcessor/PostProcessor kind —
+    `IScriptEvaluationContributor` split into `IScriptPreProcessor` (at
+    `OnEvaluatingScript`, handler `PreProcessScript`) + `IScriptPostProcessor`
+    (at `OnScriptEvaluated`, handler `PostProcessScript`); the variable copy-back
+    became the canonical post-processor; the Jint adapter now publishes
+    `OnScriptEvaluated` after evaluation (it previously published only the before
+    event). The JS declarations context `IJavaScriptRenderingContext` was renamed
+    `IJavaScriptDeclarationsContributionContext` so the name states its purpose.
 
 Unit C Phase-8 amendment (2026-05-29, draft pending 2026-06-01 ratification):
   - §2.24 NEW — "Sanctioned patterns — the closed catalog." Articulates Joey's
@@ -97,6 +188,9 @@ Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):
     Unit C follow-up; not blocking ratification.
 
 Unit C Phase-3 amendment (2026-05-28, draft pending 2026-06-01 ratification):
+  [SUPERSEDED by the Unit 1 addendum 2026-06-02 — the intent-revealing-methods
+  sub-pattern was withdrawn; contribution events now expose a directly-accessible
+  `ICollection<T>` with a single aggregating handler. Retained here for history.]
   - §2.6.1 EXTENDED — NEW sub-pattern "Domain events expose intent-revealing
     methods, not raw collections." Codifies Joey's 2026-05-28 articulation:
     domain events that gather handler contributions expose method-based
@@ -315,7 +409,7 @@ Follow-up TODOs:
 
 # Modular Software Design Framework Constitution
 
-**Version:** 2.0.0 (draft)
+**Version:** 3.0.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -332,7 +426,7 @@ Follow-up TODOs:
   - [§2.3 The Framework Primitives Library](#23-the-framework-primitives-library)
   - [§2.4 Helper Libraries — domain-owned](#24-helper-libraries--domain-owned)
   - [§2.5 Feature Inheritance](#25-feature-inheritance)
-  - [§2.6 Cross-feature composition mechanisms](#26-cross-feature-composition-mechanisms) · [§2.6.1 Domain events — the contribution mechanism](#261-domain-events--the-contribution-mechanism) · [§2.6.2 Replacement contracts — single-implementation services](#262-replacement-contracts--single-implementation-services) · [§2.6.3 Generic dispatch is not a coupling mechanism](#263-generic-dispatch-is-not-a-coupling-mechanism) · [§2.6.4 Design-time vs runtime contract split](#264-design-time-vs-runtime-contract-split)
+  - [§2.6 Cross-feature composition mechanisms](#26-cross-feature-composition-mechanisms) · [§2.6.1 Events — the in-process pub/sub + contribution mechanism](#261-events--the-in-process-pubsub--contribution-mechanism) · [§2.6.2 Replacement contracts — single-implementation services](#262-replacement-contracts--single-implementation-services) · [§2.6.3 Named events, not anonymous generic dispatch](#263-named-events-not-anonymous-generic-dispatch) · [§2.6.4 Design-time vs runtime contract split](#264-design-time-vs-runtime-contract-split)
   - [§2.7 Adapter / Bridge — as a design default](#27-adapter--bridge--as-a-design-default) · [§2.7.1 Decision rule](#271-decision-rule--inheritance-adapter-or-providercontributor)
   - [§2.8 Extension Methods — Decision Framework](#28-extension-methods--decision-framework)
   - [§2.9 Persistence Base Context — application-level](#29-persistence-base-context--application-level)
@@ -545,101 +639,130 @@ Compile-time inheritance is the load-bearing mechanism; runtime references betwe
 
 ### §2.6 Cross-feature composition mechanisms
 
-**The framework forbids tight logic coupling between concrete implementations.** Cross-feature dependencies MUST be expressed through one of the sanctioned mechanisms below; coupling that relies on side effects, observable behaviour, or implementation details of another concrete class is a smell. Only **contract-level coupling** is permitted — a contract (typically a domain event payload, sometimes a replacement-contract interface) is the agreement; the sender treats every handler/implementation uniformly; the system stays consistent and predictable. A test failure that exposes hidden side-effect coupling between implementations (§2.23.4) is the canonical signal that this rule was violated; the resolution is to lift the dependency to a contract, not to reproduce the side effect.
+**The framework forbids tight logic coupling between concrete implementations.** Cross-feature dependencies MUST be expressed through one of the sanctioned mechanisms below; coupling that relies on side effects, observable behaviour, or implementation details of another concrete class is a smell. Only **contract-level coupling** is permitted — a contract (typically an event payload, sometimes a replacement-contract interface) is the agreement; the publisher treats every handler/implementation uniformly; the system stays consistent and predictable. A test failure that exposes hidden side-effect coupling between implementations (§2.23.4) is the canonical signal that this rule was violated; the resolution is to lift the dependency to a contract, not to reproduce the side effect.
 
 When inheritance is the wrong tool for cross-feature composition (§2.5), three mechanisms govern how features compose:
 
-1. **Domain events (§2.6.1) — the contribution mechanism.** Domains publish named events; features register handlers. Sync-await dispatch through a framework-managed pipeline. For sync access to contributions, the Registry + StartUp Task sub-pattern applies.
+1. **Events (§2.6.1) — the in-process pub/sub + contribution mechanism.** Domains publish named events (`IEvent`); features register handlers (`IEventHandler<T>`). A single `IEventPublisher.Publish` dispatches through a framework-managed pipeline; the **delivery strategy** is pluggable, defaulting to **Sequential** (synchronous, awaited end-to-end, CAN break the caller). Contribution — "I'm about to do X, who wants to participate?" — is the Sequential strategy applied to an event whose payload exposes intent-revealing `Add` methods; the publisher reads the accumulated contributions back. Pure notification — "X happened, react if you want" — is the same mechanism, often the Background strategy. For sync access to contributions, the Registry + StartUp Task sub-pattern applies. Events live in their own contracts library (`Elsa.Events.Core`), separate from command/request dispatch (`Elsa.Mediator.Core`), over a shared pipeline engine (`Elsa.Pipelines.Core`).
 2. **Replacement contracts (§2.6.2) — single-implementation services.** When exactly one implementation is meaningful per application, the contract is a replacement contract. Multiple registrations are a conflict, not a contribution.
-3. **Never** generic dispatch (§2.6.3) — `IMediator` / `IEventBus` / `INotificationSender` and equivalents are not coupling mechanisms. If a sender expects a specific handler to run, declare a domain event (§2.6.1) instead.
+3. **Events are the in-process mechanism; `IMediator` / `IEventBus` indirection is not (§2.6.3).** If a publisher expects a specific handler to run, it publishes a named `IEvent` (§2.6.1) — making the dependency discoverable — rather than hiding it behind anonymous generic dispatch.
 
 §2.6.4 governs the orthogonal question of design-time vs runtime contract split, which applies to whichever mechanism is chosen.
 
-§2.6.5 codifies the **rare exception** where a sync contributor pattern (provider interface, DI-resolved enumerable) is permitted because the contribution flow is structurally incompatible with both §2.6.1 (domain events) and its Registry + StartUp Task sub-pattern.
+§2.6.5 codifies the **rare exception** where a sync contributor pattern (provider interface, DI-resolved enumerable) is permitted because the contribution flow is structurally incompatible with both §2.6.1 (events) and its Registry + StartUp Task sub-pattern.
 
-#### §2.6.1 Domain events — the contribution mechanism
+#### §2.6.1 Events — the in-process pub/sub + contribution mechanism
 
-The contribution mechanism for cross-feature composition is the **domain event**. A domain that wants to be extensible enumerates a set of named domain event types in its `.Core` library. Those events are the domain's deliberate, documented extension points — the answer to *"what can other features hook into or act on?"*.
+The in-process composition mechanism is the **event**. A domain that wants to be extensible enumerates a set of named event types (`IEvent`) in its `.Core` library. Those events are the domain's deliberate, documented extension points — the answer to *"what can other features hook into, contribute to, or react to?"*.
 
-Features extend a domain by **registering a handler for one of its published domain events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
+Features extend a domain by **registering a handler (`IEventHandler<T>`) for one of its published events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
 
-**The framework provides the dispatch mechanism.** The application supplies a domain-event sender and a pipeline with shared middleware (logging, exception handling, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
+**One concept, one publisher, pluggable strategy.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axis is *delivery strategy* + *break behaviour*, selected per publish, not baked into the marker.
 
-**Dispatch semantics — await all handlers, never fire-and-forget.**
+**The framework provides the dispatch mechanism.** The application supplies the publisher and a pipeline with shared middleware (logging, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
 
-- Handlers are async methods (return `ValueTask`).
-- The sender **awaits the completion of every handler** before continuing. *"Sync"* in this context means **awaited end-to-end** — not single-threaded sync in the C# language sense. Handlers run as async code; the sender's caller cannot proceed until the full handler set has finished.
-- There is **no parallel mode**, **no background mode**, **no fire-and-forget mode**. If a use case needs asynchrony or fire-and-forget delivery, that is a different concept (external-system notifications — see §2.6.3) and not in scope for the domain event mechanism.
+**Default dispatch semantics — Sequential, synchronous, CAN break the caller.**
+
+- Handlers are async methods (return `Task`).
+- The default strategy is **Sequential**: the publisher invokes handlers in DI-resolution order and **awaits the completion of every handler** before returning. *"Synchronous"* here means **awaited end-to-end** — not single-threaded sync in the C# language sense.
+- **A handler exception propagates to the publisher's caller.** The default path ships **no exception-shielding middleware**. If a handler throws under the Sequential strategy, the publish fails and the caller sees the exception — exactly as a direct method call would. This is deliberate: when a publisher needs its handlers to have run (contribution, validation, precondition), a swallowed handler failure is a silent correctness bug. Fail-fast is the safe default.
+- **Resilience is a strategy choice, not a default.** Fire-and-forget isolation lives **only** in the Background strategy (and its `BackgroundEventPublisher`), which owns the `try`/`catch` + silent logging. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly (§2.6.6). It does not get that behaviour for free on the default path.
 
 **Boundaries and expectations.**
 
 - **Intent.** Internal technical communication between features within the application.
-- **Scope.** Cross-feature contribution **and** intra-domain specialization. Domain events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
-- **Visibility — subscriber MUST NEVER break publisher.** Cross-domain coupling exists at the **contract level** (the event's shape); cross-domain **failure coupling is forbidden**. A handler exception MUST NOT propagate to the publisher's caller, and MUST NOT prevent the dispatcher from invoking the remaining registered handlers. The framework's default pipeline ships an **exception-shielding middleware** that wraps each per-handler invocation in `try/catch`, logs the exception with diagnostic context (handler type, event type, failure detail), and continues. The dispatch always completes; the publisher proceeds as if every handler succeeded; failures are observable only through the middleware's logs / telemetry. An engineer who deliberately wants different semantics (aggregate-throw, fail-fast, retry, dead-letter, etc.) MAY swap or remove the exception-shielding middleware when composing a custom pipeline — the rule is a **default with an escape hatch**, not a closed mandate — but the default is fail-isolated and that default is what every domain event publisher SHOULD assume holds.
-- **Completeness.** Every registered handler is dispatched. The sender does not skip handlers, does not return early, does not fire-and-forget some subset. Whether the *effects* of handlers are partial under failure is a domain concern, not the dispatcher's. Completeness is enforced upstream of the exception-shielding middleware; the shielding ensures one handler's failure does not undermine completeness.
-- **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. The exception-shielding behaviour above is only safe under this rule — a handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
-- **Diagnostics.** Logging, tracing, and diagnostics attach uniformly via the same middleware surface. A failing handler is observable in operational logs with full identifying context; the application's observability stack treats those entries as first-class signals.
+- **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
+- **Failure coupling follows the strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). Whether a handler failure breaks the publisher is governed by the chosen strategy: **Sequential / Parallel propagate** (the caller is responsible for the handlers having run); **Background isolates** (a flaky subscriber becomes a log entry, not a failed publish). A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
+- **Completeness under Sequential.** Every registered handler is dispatched in order; the publisher does not skip handlers or return early. Because the default does not shield, the first throwing handler halts the chain — that is the intended fail-fast behaviour, not a completeness violation. Background completeness is FIFO across the channel and isolated per subscriber.
+- **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. A handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
+- **Diagnostics.** Logging, tracing, and diagnostics attach uniformly via the same middleware surface. A failing handler under Background is observable in operational logs with full identifying context; the application's observability stack treats those entries as first-class signals.
 
 **Sub-pattern — Registry initialization via StartUp Task (for sync access).**
 
-When a registry-style or index-style consumer needs access to contributions from sync code — e.g. a `JsonConverter` callback in a serializer, or any constructor that builds an index — the contribution is still gathered through a domain event. The async population happens once at startup; sync access happens afterwards. The pattern:
+When a registry-style or index-style consumer needs access to contributions from sync code — e.g. a `JsonConverter` callback in a serializer, or any constructor that builds an index — the contribution is still gathered through an event. The async population happens once at startup; sync access happens afterwards. The pattern:
 
 1. The domain defines a **Registry** with a `Register<T>(item)` method (and accessor methods).
-2. The domain publishes an `On<RegistryName>Initializing` domain event whose payload is `List<T>` (or similar collection).
-3. The feature implementing the domain registers a **StartUp task** that dispatches the event and flushes the contributions into the registry:
+2. The domain publishes an `On<RegistryName>Initializing` event whose payload exposes a directly-accessible `ICollection<T>`.
+3. The feature implementing the domain registers a **StartUp task** that publishes the event Sequentially and flushes the contributions into the registry:
 
    ```
-   var items = new List<T>();
-   await domainEventSender.Publish(new On<RegistryName>Initializing(items));
-   registry.RegisterAll(items);
+   var event = new On<RegistryName>Initializing();
+   await eventPublisher.Publish(event);   // default Sequential — contributions read back
+   registry.RegisterAll(event.Items);
    ```
 
-4. Other features extend the domain by registering handlers for the `On<RegistryName>Initializing` event and contributing items to the carried list.
+4. Other features extend the domain by implementing the registry's contributor interface (`I<X>Source`) and registering it via DI; the single aggregating handler (§2.6.1 sub-pattern below) flushes every source's items into the event's carried `ICollection<T>`.
 5. After startup, sync code accesses the populated registry directly — no async dispatch at the access site.
 
-The result: **all cross-feature contribution flows through the same domain-event pipeline**, including cases where the access pattern is sync. There is no separate "sync fallback" mechanism.
+The result: **all cross-feature contribution flows through the same event pipeline**, including cases where the access pattern is sync. There is no separate "sync fallback" mechanism.
 
-**Sub-pattern — Domain events expose intent-revealing methods, not raw collections.**
+**Sub-pattern — Contributor interface + single aggregating handler.**
 
-A domain event that gathers handler contributions MUST expose **method-based contribution APIs** rather than a public collection that handlers mutate directly. The backing collection MUST be private; the dispatcher reads contributions via a **public `IReadOnlyList<T>`** property. Read access is public because `IReadOnlyList<T>` is structurally non-mutating — no caller can `Add`, `Remove`, `Clear`, or replace the list; only the event's own contribution method (`AddX`) can populate it. `InternalsVisibleTo` to expose the read surface to a specific dispatcher assembly is NOT required and SHOULD be avoided as default — `IReadOnlyList<T>` already prevents the misuse the rule is trying to prevent.
+A fan-in event that gathers contributions from many features MUST use the **contributor-interface + single-handler** shape — NOT one `IEventHandler<On<Phase>>` per contributing feature:
 
-> *Anti-pattern (synthetic).* An event with `public ICollection<TItem> Items { get; }` lets handlers call `Add`, `Remove`, `Clear`, replace, reorder. Any handler can accidentally undo another handler's contribution; there is no surface that documents what the event is *for*.
->
-> *Pattern (synthetic).* The same event exposes `public void Add<MethodName>(TItem item)` (or several intent-revealing methods, one per contribution kind). Handlers can only contribute; the read view is `public IReadOnlyList<TItem> Items` — non-mutating by type. The dispatcher reads `Items` after the handler chain runs.
+- The domain `.Core` defines a **contributor interface** that describes the *intent* of the contribution (e.g. `IDraftValidator`, `IJsonConverterSource`). Features implement it and register it via DI (`services.AddScoped<TContributor, Impl>()`) — they do **not** register their own event handler.
+- The owning feature registers **exactly one** action-named `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `RegisterJsonConverters`) that injects `IEnumerable<TContributor>`, iterates every contributor, and writes the aggregate into the event.
+- The event payload exposes a **directly-accessible `ICollection<T>`** (for flat-collection sinks) or a rich mutable context object (for heterogeneous sinks). No private backing list, no `AddX()` methods, no `IReadOnlyList<T>` read accessor — the single handler is the only writer, so encapsulation is met without ceremony.
+
+**The three contributor-interface kinds.** The suffix MUST match the method shape AND the event topology:
+
+- **`I<X>Source`** — the contributor **returns** its items and touches no shared object (a *pull*). Used when the sink is a flat collection. Signature returns `IEnumerable<T>` (or `ValueTask<IEnumerable<T>>`). The single handler aggregates every source's return into the event's `ICollection<T>`. **"Source" is preferred over "Provider".**
+- **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
+- **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **OnXxxing / OnXxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
+
+Never name a return-style interface `Contributor`, nor a context-acting interface `Source`. A *Source* yields data; a *Contributor* performs operations against a target; a *PreProcessor*/*PostProcessor* performs operations against a target at a named point in a before/after lifecycle.
 
 **Why.**
 
-- **Encapsulation.** Handlers contribute through method calls; they cannot replace the backing list or mutate items in place via the read surface.
-- **Self-documenting contract.** The method names ARE the event's documentation. `AddVersion(IActivityDefinitionVersion)` says exactly what handlers may do; `Versions.Add(...)` says nothing about intent.
-- **Smell heuristic.** **Too wide a variety of methods on a single domain event indicates two distinct events that should be split.** If an event exposes `AddX`, `RemoveY`, `UpdateZ`, that event is conflating contribution kinds — split into separate events bound to separate semantic phases.
-- **Read access without ceremony.** `IReadOnlyList<T>` typing is the constraint, not visibility. Handlers MAY read what other handlers contributed during the same dispatch (useful for "have my dependencies already contributed?" patterns) but cannot mutate the result. This is sufficient for the encapsulation goal; `InternalsVisibleTo` to a dispatcher assembly would be over-engineering.
+- **Centralised contribution logic.** One handler runs inside the event pipeline and owns iteration + aggregation + any ordering/error policy — instead of N scattered handlers each with ad-hoc try/catch. Contribution still runs *inside the event pipeline* (the reason events were chosen for contribution at all); only the per-feature handler sprawl is gone.
+- **The interface describes the intent.** `IDraftValidator.Validate(...)` says exactly what a feature contributes; a bare `IEventHandler<OnDraftValidating>` says nothing. Features implement the intent, not the dispatch plumbing.
+- **Smell heuristic.** **Too wide a variety of operations on a single context sink indicates two distinct events that should be split.** If one event's context conflates unrelated contribution kinds, split into separate events bound to separate semantic phases.
 
 **Mechanical rule.**
 
 ```
-public sealed class On<Phase> : IDomainEvent
+// domain .Core
+public sealed class On<Phase>(TContext context) : IEvent
 {
-    private readonly List<TItem> _items = new();
-
-    public TContext Context { get; }              // anything handlers need to inspect
-    public On<Phase>(TContext context) => Context = context;
-
-    public void Add<MethodName>(TItem item) => _items.Add(item);
-    public IReadOnlyList<TItem> Items => _items; // read-only by type; safe public access
+    public TContext Context { get; } = context;
+    public ICollection<TItem> Items { get; } = [];   // directly accessible; written only by the single handler
 }
+
+public interface I<X>Source              // returns — flat-collection sink
+{
+    IEnumerable<TItem> Get<Items>();
+}
+// or, for a rich-context sink:
+public interface I<X>Contributor          // receives + acts — context sink
+{
+    ValueTask Contribute(TContext context, CancellationToken ct);
+}
+
+// owning feature — the ONE handler
+public sealed class <Action>(IEnumerable<I<X>Source> sources) : IEventHandler<On<Phase>>
+{
+    public Task Handle(On<Phase> e, CancellationToken ct)
+    {
+        foreach (var source in sources)
+            foreach (var item in source.Get<Items>())
+                e.Items.Add(item);
+        return Task.CompletedTask;
+    }
+}
+
+// contributing features — register the interface impl, NOT an event handler
+services.AddScoped<I<X>Source, ThisFeaturesSource>();
 ```
 
-Records with public collection properties (e.g. `record On<Event>(ICollection<TItem> Items)`) are an older shape this sub-rule supersedes. Domain events MUST be `sealed class` (not `record`) to enforce the encapsulation — record auto-properties bypass the private-backing-list constraint.
+**Superseded shape.** The earlier "intent-revealing `AddX()` methods + private list + `IReadOnlyList<T>` read accessor" sub-rule is **withdrawn** — it added ceremony to every contribution event and folded contribution logic into the payload. Contribution events now expose a directly-accessible `ICollection<T>` written solely by the single aggregating handler. Records remain discouraged for events carrying a mutable contribution sink — use `sealed class` with a get-only collection auto-property initialised to `[]`.
 
-**Cross-reference.** The Registry + StartUp Task sub-pattern's example above is rewritten under this rule: `On<RegistryName>Initializing` exposes `void Add(T item)` rather than carrying a `List<T>` payload; the StartUp task reads the populated `Items` (internal accessor) after the dispatch and flushes into the Registry.
+The Elsa-specific worked examples land in §E3.3 (`OnJsonPayloadConvertersInitializing` + `IJsonConverterSource` — the Source kind), §E3.7 (the JS declarations cluster as the Contributor kind, and the JS script-evaluation cluster as the PreProcessor/PostProcessor kind over the `OnEvaluatingScript`/`OnScriptEvaluated` pair), and §E3.10 (`OnDraftValidating` + `IDraftValidator`).
 
-The Elsa-specific worked examples land in §E3.3 (`OnJsonPayloadConvertersInitializing` rewritten) and in Unit C's `OnActivityVersionsReconciling` + `OnDraftValidating` (per Unit C's Phase-3 cascade — `follow-up-items/2026-05-28_unitC_workflow_definition_state_scope.md` + `2026-06-01_AGENDA_review_meeting.md` Item 4).
-
-**Domain-design consequence.** Enumerating a domain's domain events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named domain events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, notifications nobody can find handlers for) fails this rule.
+**Domain-design consequence.** Enumerating a domain's events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, events nobody can find handlers for) fails this rule.
 
 **Feature documentation requirement.** Every feature's documentation MUST contain a discoverable inventory of:
 
-- Which **domain event handlers** it registers.
+- Which **event handlers** it registers.
 - Which **tasks** it registers (e.g. startup, recurring, scheduled).
 
 The full shape of the feature-documentation contract is governed by §2.22 (Feature documentation).
@@ -658,24 +781,23 @@ Some contracts in a `.Core` library are **replacement contracts**: one implement
 
 - The contract's kind (replacement) MUST be declared on the contract itself — by marker interface, attribute, naming convention, or contract metadata. The mechanism is application-defined; the obligation is not.
 - Replacement-contract conflicts (two implementations registered against the same replacement contract) MUST be either prevented at registration time or detected with a clear diagnostic at startup. Silent last-write-wins is forbidden.
-- Contribution-style consumers (`IEnumerable<T>` resolution, collection of behaviours) MUST NOT use a replacement-contract interface; they go through domain events per §2.6.1.
+- Contribution-style consumers (`IEnumerable<T>` resolution, collection of behaviours) MUST NOT use a replacement-contract interface; they go through events per §2.6.1.
 
-#### §2.6.3 Generic dispatch is not a coupling mechanism
+#### §2.6.3 Named events, not anonymous generic dispatch
 
-Generic-dispatch surfaces — `IMediator`, `IEventBus`, `INotificationSender`, and equivalents — are appropriate **only for true fire-and-forget pub/sub**: an event is announced, listeners may or may not exist, the sender does not depend on any particular listener running to fulfil its own contract.
+`IEventPublisher` **is** the sanctioned in-process pub/sub mechanism (§2.6.1). What this section forbids is **anonymous indirection** — hiding a real dependency behind an `IMediator` / `IEventBus` / generic message-bus abstraction where the sender depends on a particular handler running but the dependency is invisible.
 
-The moment a sender **expects a specific handler to run** — because that handler updates state the sender depends on, validates a precondition, mutates a graph, or otherwise completes the sender's logical operation — the surface is **coupling, not pub/sub**. The dependency is real; only its visibility has been hidden.
+The distinction is the **named, discoverable event type**, not the dispatch surface. Publishing a named `IEvent` that lives in the domain's `.Core` is fine — encouraged. Reaching for an opaque `mediator.Send(someObject)` where neither the event type nor the expected handler is part of any domain's published vocabulary is the smell.
 
-**The rule.** If a sender expects a specific handler to run, the contract MUST be a **domain event (§2.6.1)** instead. Domain events make the dependency visible:
+The moment a publisher **expects a specific handler to run** — because that handler updates state the publisher depends on, validates a precondition, mutates a graph, or otherwise completes the publisher's logical operation — the dependency is real and MUST be made visible:
 
-- The event type lives in the domain's `.Core`, so the dependency surface is discoverable.
-- The dispatch is awaited end-to-end; the sender knows when handlers have completed.
-- Exception and diagnostic infrastructure attach uniformly through the pipeline.
-- A refactor that removes a handler shows up at compile-time (missing handler registration) or at startup diagnostics (handler not registered for an event the domain explicitly publishes), not as silent runtime drift.
+- Publish a **named `IEvent` (§2.6.1)** whose type lives in the domain's `.Core`, so the dependency surface is discoverable.
+- Publish it **Sequential** (the default) so the dispatch is awaited end-to-end and the publisher knows handlers have completed — and, for contribution events, can read the result back.
+- A refactor that removes a handler shows up at compile-time (missing handler registration) or at startup diagnostics, not as silent runtime drift.
 
-**`INotificationSender` is parked.** A future amendment redefines it for *external system notifications* — outbound messages to systems outside the application boundary. That is a different concept and out of scope for this section. Until that amendment lands, `INotificationSender` MUST NOT be used as an in-process coupling mechanism.
+**Read-back needs Sequential + a contribution payload.** If a publisher needs to consume what handlers produced, it MUST publish Sequential with a contribution payload exposing a directly-accessible `ICollection<T>` (or rich context) written by the single aggregating handler (§2.6.1) and read the accumulated result after the chain — never infer results from an out-of-band side channel. Background publishing returns before subscribers run; reading anything back from it is a bug.
 
-**The smell, named.** "Coupling smuggled through generic dispatch." The diagnostic question: *does the sender care that any particular handler ran?* If yes, it is coupling — replace with a domain event.
+**The smell, named.** "Coupling smuggled through anonymous dispatch." The diagnostic question: *does the publisher care that any particular handler ran, and is the event a named type in a domain's `.Core`?* If it cares but the event is anonymous, surface it as a named `IEvent`.
 
 #### §2.6.4 Design-time vs runtime contract split
 
@@ -687,7 +809,7 @@ When a contract surface has both a **design-time consumer** (intellisense, schem
 
 - The two contracts MAY share a `.Core` data record describing the *shape* of what is being contributed (function signature, schema, port definition, etc.).
 - The contracts themselves are distinct and live in their respective sub-domain `.Core`s (or in the same `.Core` clearly labelled).
-- Each contract is dispatched independently per §2.6.1 (domain events) — the design-time event is published when the design-time consumer needs the contributions; the runtime event is published when the runtime consumer needs them.
+- Each contract is dispatched independently per §2.6.1 (events) — the design-time event is published when the design-time consumer needs the contributions; the runtime event is published when the runtime consumer needs them.
 - A single feature MAY register handlers for both events; it MAY register for only one. Neither is presumed.
 
 **Generalisation.** Many applications maintain a boundary between authoring/design-time concerns and execution/runtime concerns at the sub-domain level. This rule applies the same boundary at the contract level: a contract bound to a design-time consumer MUST NOT carry concerns of a runtime consumer, and vice versa. The application's derived constitution names that boundary concretely; the framework rule applies it at the contract level wherever such a boundary exists.
@@ -696,12 +818,12 @@ The application-specific worked example lives in §E3.7 of the application const
 
 #### §2.6.5 Sync contributor pattern — rare exception
 
-§2.6.1's domain-event mechanism (and its Registry + StartUp Task sub-pattern for sync access) is the **default** for cross-feature contribution. A small class of contribution flows fits neither mechanism cleanly. For these — and **only** these — a **sync contributor interface** (a provider interface resolved via DI as `IEnumerable<TContributor>` at the call site) is permitted.
+§2.6.1's event mechanism (and its Registry + StartUp Task sub-pattern for sync access) is the **default** for cross-feature contribution. A small class of contribution flows fits neither mechanism cleanly. For these — and **only** these — a **sync contributor interface** (a provider interface resolved via DI as `IEnumerable<TContributor>` at the call site) is permitted.
 
 **The criteria — ALL must hold** for the exception to apply:
 
 1. **The contribution is intrinsically sync at its dispatch site.** The host pipeline that invokes contributors does not run async code at that boundary (e.g. `DbContext.OnModelCreating`, a `JsonConverter.Read`/`Write` callback that doesn't have an async path, a synchronous lifecycle hook from an external framework). Forcing async dispatch would require sync-over-async (`.GetAwaiter().GetResult()`) — a smell with no architectural upside.
-2. **What is contributed is behaviour, not data.** Domain events excel when the contribution is "items added to a carried collection". The sync contributor case is when each contributor runs *its own logic at the lifecycle moment*, mutating a shared external target. There is no payload list to populate at startup.
+2. **What is contributed is behaviour, not data.** Contribution events excel when the contribution is "items added to a carried collection". The sync contributor case is when each contributor runs *its own logic at the lifecycle moment*, mutating a shared external target. There is no payload list to populate at startup.
 3. **The Registry + StartUp Task sub-pattern does not apply.** Either (a) the contribution data is not knowable at startup (it depends on the lifecycle moment's runtime context), or (b) populating the registry at startup would still require a callback to be invoked at the lifecycle moment — adding indirection without structural benefit.
 
 **Mechanism for the exception.**
@@ -714,7 +836,7 @@ The application-specific worked example lives in §E3.7 of the application const
 
 **Hard rule on use.** The §2.6.5 exception is **rare**. Every use case MUST be analysed at design time:
 
-- Can the §2.6.1 domain-event mechanism apply? Try first.
+- Can the §2.6.1 event mechanism apply? Try first.
 - Can the Registry + StartUp Task sub-pattern apply? Try second.
 - Is the contribution genuinely sync, behaviour-shaped, and runtime-context-dependent? Only then does §2.6.5 apply.
 
@@ -731,32 +853,29 @@ This case is the canonical §2.6.5 worked example. Future §2.6.5 invocations sh
 
 The application-specific worked example also lives in §E3.9 of the application constitution.
 
-#### §2.6.6 Notifications and lifecycle events — state-transition signals
+#### §2.6.6 Delivery strategies — one event concept, three dispatch behaviours
 
-*New sub-section (Unit C Phase-7 amendment, 2026-05-29; draft pending 2026-06-01 ratification.)*
+*Rewritten (Unit 1, 2026-06-02): the prior two-concept model (`IDomainEvent` + `INotification`/`ILifecycleEvent`) was collapsed into a single `IEvent`. The distinction it tried to capture — "participate" vs "react" — is now expressed as a **delivery strategy** chosen per publish, not as a separate marker type.*
 
-A different shape of in-process pub/sub exists alongside the §2.6.1 domain-event contribution mechanism: **notifications**. They share a marker-interface shape (`INotification` resolved with `INotificationHandler<T>` instances) but their **purpose is the opposite of a domain event**, and conflating them breaks both.
+There is **one** event concept (`IEvent`, §2.6.1). The behavioural axis that used to motivate separate markers is the **delivery strategy** passed to `IEventPublisher.Publish`:
 
-| | §2.6.1 Domain events | §2.6.6 Notifications |
-|---|---|---|
-| **Intent** | "I'm about to do X — who wants to participate?" | "X happened — react if you want." |
-| **Marker** | `IDomainEvent` | `INotification` |
-| **Sender** | `IDomainEventSender` | `INotificationSender` (and the typed `ILifecycleEventSender` for state-management transitions — see below) |
-| **Dispatch** | Awaited end-to-end. Subscribers run synchronously in sequence; the publisher waits for them. | Pluggable strategy — Sequential / Parallel / Background. Default per call is application-defined. Background = fire-and-forget. |
-| **Publisher reads back?** | **Yes.** That's the point. Subscribers contribute via intent-revealing methods (§2.6.1) and the publisher reads the populated collection / accumulator after dispatch. | **No.** The publisher returns before subscribers run (in the Background strategy) or alongside their completion (in Sequential / Parallel). Either way the publisher does not consume their output. |
-| **Subscriber failure rule** | MUST NOT break publisher — exception-shielding middleware is the §2.6.1 default. | Same — MUST NOT break publisher. A flaky background subscriber becomes a log entry, not a failed publish. |
-| **Ordering** | Strict — sequential dispatch in DI-resolution order. | FIFO across the channel for Background; in-order for Sequential; unordered for Parallel. |
-| **Crash semantics** | In-process; subscribers run synchronously; no durability concern beyond the publisher's own. | In-process channel for Background; a process crash drops queued events. Persistence-grade durability is a subscriber-side concern (audit subscriber writes its own log, etc.). |
+| Strategy | Dispatch | Failure behaviour | Publisher reads back? | Use for |
+|---|---|---|---|---|
+| **Sequential** *(default)* | Handlers run in DI-resolution order; publisher awaits the whole chain end-to-end. | **Propagates.** First handler throw fails the publish and surfaces to the caller. No shielding. | **Yes** — for contribution events whose payload exposes intent-revealing `Add` methods, the publisher reads the accumulated result after the chain. | A participation gate / contribution ("I'm about to do X — who wants to participate?"); any case where the publisher's own correctness depends on handlers having run. |
+| **Parallel** | Handlers dispatched concurrently; publisher awaits all. | **Propagates** (aggregated). | No — ordering is unspecified, so reading back is meaningless. | Independent reactions where latency matters and no handler can break the publisher's contract. |
+| **Background** | Queued to an in-process channel; publisher returns immediately; a hosted worker (`BackgroundEventPublisher`) drains it. | **Isolated.** The Background strategy + worker own the `try`/`catch` + silent logging. A flaky subscriber becomes a log entry, never a failed publish. | **No** — publisher has already returned. | "X happened — react if you want": audit, event-sourcing stream, telemetry, UI-push. Especially state-transition signals fired *after* the transition is persisted. |
 
-**Lifecycle events — `ILifecycleEvent : INotification`.** A typed-narrowed marker for **state-transition notifications** emitted by a domain that manages a lifecycle (a Draft's mutation lifecycle, an instance's execution lifecycle, a catalog's reconciliation lifecycle). Lifecycle events have the same characteristics as plain notifications today — distinct marker so the two roles can diverge without re-classifying every notification call site. The accompanying `ILifecycleEventSender` defaults to the Background strategy: by the time the lifecycle event is fired, the transition has ALREADY been persisted; the publisher should not block on subscribers.
+**Resilience lives in the Background strategy, not in a default middleware.** Unit 1 removed the exception-shielding-by-default position. The default Sequential path ships **no shielding** — fail-fast is the safe default for any publisher whose handlers must have run. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly. There is no separate `ILifecycleEventSender` and no typed lifecycle marker; a "lifecycle event" is simply an `IEvent` published Background after the transition is persisted.
 
-**Hard rule — don't conflate.** A publisher who needs the result of dispatch (validators contributing errors, providers contributing items, converters contributing instances) MUST use §2.6.1 domain events. A publisher whose dispatch is purely informational (audit subscribers, event-sourcing-stream subscribers, telemetry, UI-push notifiers) MUST use §2.6.6 notifications / lifecycle events. The categorisation is fixed at the event's marker; it is not a per-call strategy choice.
+**Choosing a strategy — the diagnostic question.** *Does my own correctness depend on these handlers having run?*
 
-**Hybrid pattern — `OnXxxing` (domain event) + `OnXxxed` (lifecycle event).** When a domain has both a participation gate and an outcome notification for the same transition, the present-participle form is the domain event (validators / contributors run synchronously, publisher reads back) and the past-tense form is the lifecycle event (notifies that the transition happened, with the outcome carried in the payload). Worked example: `OnDraftValidating` (domain event — validators contribute errors) followed by `OnDraftValidated` (lifecycle event — fires after the errors are persisted; audit / UI-push react).
+- **Yes** → Sequential (the default). If you also need their output, give the event a contribution payload and read it back.
+- **No, and a subscriber failure must not break me** → Background.
+- **No, but I must wait for them and they're independent** → Parallel (rare).
 
-**Sender selection at the publisher site.** The publisher picks the sender by the event's marker — `IDomainEventSender.Send` for an `IDomainEvent`; `ILifecycleEventSender.SendAsync` for an `ILifecycleEvent`; `INotificationSender.SendAsync` for a plain `INotification`. The type system enforces the categorisation: a domain event cannot be fire-and-forgotten through the lifecycle sender, and a lifecycle event cannot be awaited-for-contribution through the domain sender.
+**Hybrid pattern — `OnXxxing` (Sequential gate) + `OnXxxed` (Background outcome).** When a domain has both a participation gate and an outcome signal for the same transition, the present-participle form is published **Sequential** (validators / contributors run, publisher reads back) and the past-tense form is published **Background** (notifies that the transition happened, outcome carried in the payload, fired after persistence). Worked example: `OnDraftValidating` (Sequential — validators contribute errors) followed by `OnDraftValidated` (Background — fires after the errors are persisted; audit / UI-push react). Both are `IEvent`; only the strategy differs.
 
-**Cross-references.** §2.6.1 (domain events as contribution mechanism); §2.22.1 (events catalog documents both categories under separate headings); §4.2 (semantic-versioning rule applies the same to both — adding an event is MINOR, renaming or removing is MAJOR).
+**Cross-references.** §2.6.1 (the single event concept + contribution sub-pattern); §2.6.3 (named events, not anonymous dispatch — read-back requires Sequential); §2.22.1 (events catalog); §4.2 (adding an event is MINOR, renaming or removing is MAJOR).
 
 ### §2.7 Adapter / Bridge — as a design default
 
@@ -774,7 +893,7 @@ The adapter pattern is a **design default** whenever a feature contains function
 
 3. **Independent additive contribution?** Use a **provider / handler / contributor contract** when independent features need to contribute behaviour, metadata, options, converters, handlers, or other additive pieces to a service without referencing each other.
 
-**Always declare the contract's kind** (see §2.6.2): replacement contracts select one and live in §2.6.2; contribution flows go through domain events per §2.6.1, not through provider/contributor interfaces. The decision rule above is about *coupling pattern*; the contract-semantics distinction is about *who-resolves-what*. Both must be made explicit at design time.
+**Always declare the contract's kind** (see §2.6.2): replacement contracts select one and live in §2.6.2; contribution flows go through events per §2.6.1, not through provider/contributor interfaces. The decision rule above is about *coupling pattern*; the contract-semantics distinction is about *who-resolves-what*. Both must be made explicit at design time.
 
 ### §2.8 Extension Methods — Decision Framework
 
@@ -1027,7 +1146,8 @@ Every feature MUST be accompanied by documentation that lets operators, integrat
 
 **Minimum required content:**
 
-- The **domain event handlers** the feature registers — and which events they handle (§2.6.1).
+- The **event handlers** the feature registers — and which events they handle (§2.6.1).
+- The **contributor interfaces** the feature implements and registers via DI (`I<X>Source` / `I<X>Contributor` / `IDraftValidator`-style) — and which fan-in event each feeds (§2.6.1 sub-pattern).
 - The **tasks** the feature registers — startup tasks, recurring tasks, scheduled tasks, and their cadence.
 
 **Anticipated additional content** *(deferred to future amendments; this list is illustrative, not exhaustive)*:
@@ -1041,25 +1161,26 @@ The form of the documentation (README, manifest, generated reference, sidecar JS
 
 #### §2.22.1 Domain-level events catalog
 
-*New sub-rule (Unit C Phase-5 amendment, 2026-05-28; draft pending 2026-06-01 ratification. Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md` to reflect that a .Core publishes BOTH domain events AND lifecycle events.)*
+*New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy.*
 
 Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library publishes events MUST ship an **events catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what events does this domain publish?* Without re-reading every feature implementation.
 
-**Two event categories MUST be distinguished in the catalog.** Per §2.6.1 (domain events as contribution mechanism) and §2.6.6 (notifications + lifecycle events as state-transition signals), the two categories serve opposite intents and have opposite dispatch semantics. The catalog SHOULD organise them under separate headings or columns so a reader can tell at a glance which surface they're looking at:
+**Events are one concept; the catalog records each event's delivery strategy.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses and whether it reads contributions back. The catalog SHOULD make the strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
 
-- **Domain events** (`IDomainEvent`) — contribution mechanism. Publisher awaits the dispatch and reads handler contributions back (e.g. `OnDraftValidating` collects validation errors via `AddValidationError`). Used when the publisher needs the result.
-- **Lifecycle events** (`ILifecycleEvent`, which derives from `INotification`) — state-transition notifications. Publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). Default dispatch strategy is background (the publisher returns before subscribers run); per-call override available via `ILifecycleEventSender`.
+- **Sequential / contribution** — publisher awaits the chain and reads handler contributions back (e.g. `OnDraftValidating` exposes a directly-accessible `ICollection<ValidationError> Errors` that the single `ExecuteValidations` handler fills from every `IDraftValidator`). Used when the publisher needs the result; a handler throw breaks the publish.
+- **Background / notification** — publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). A subscriber failure is isolated (logged, never breaks the publish); typically fired after the transition is persisted.
 
-A domain may publish only one category, both, or have an event that's clearly named in one bucket but with a sibling in the other (e.g. `OnDraftValidating` = domain event "validation is happening, contribute"; `OnDraftValidated` = lifecycle event "validation just completed, here's the outcome"). The catalog documents whichever events the domain ships; the categorisation pins the dispatch contract for each.
+A domain may publish events of either strategy, or have a present-participle gate with a past-tense outcome sibling (e.g. `OnDraftValidating` = Sequential "validation is happening, contribute"; `OnDraftValidated` = Background "validation completed, here's the outcome"). The catalog documents whichever events the domain ships; the recorded strategy pins the dispatch contract for each.
 
 **Minimum required content per event in the catalog:**
 
 - **Event class name** (e.g. `OnDraftClonedFromVersion`).
-- **Category** — Domain event or Lifecycle event. Implied by section heading if the catalog groups them.
-- **One-line semantic description** — what just happened in the domain (lifecycle) or what gate has opened (domain).
-- **Payload signature** — intent-revealing method names (per the §2.6.1 sub-rule for domain events) and payload types handlers receive.
+- **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
+- **One-line semantic description** — what just happened in the domain (notification) or what gate has opened (contribution).
+- **Payload signature** — the directly-accessible `ICollection<T>` (or rich context) the contribution sink exposes (per the §2.6.1 contribution sub-rule) and payload types handlers receive.
+- **Contributor interface** *(fan-in / contribution events only)* — the `I<X>Source` / `I<X>Contributor` (or `IDraftValidator`-style) interface features implement, its method signature, whether it **returns** (Source) or **receives a context and acts** (Contributor), and the note "implement + register via DI; the single `<Action>Handler` aggregates."
 - **Publication site** — which command, pipeline step, or lifecycle hook fires the event.
-- **Expected handler audiences** — typical contributors (built-in feature, optional features that may subscribe, cross-domain consumers).
+- **Expected handler audiences** — for fan-in events, the single aggregating handler plus the contributor-interface implementors; for notifications, typical subscribers (built-in feature, optional features, cross-domain consumers).
 - **Ordering guarantees** if any — e.g., "fires after the materialised snapshot is updated but before the persistence flush."
 - **Cross-references** to other domains' catalogs that consumers should be aware of.
 
@@ -1071,7 +1192,7 @@ A domain may publish only one category, both, or have an event that's clearly na
 
 **Form.** Application-defined. Recommended: a single `EVENTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/EVENTS.md`). Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** Unit C creates the initial Elsa worked examples: `src/Elsa.Workflows.Design.Core/EVENTS.md` (catalogs the Draft mutation + lifecycle events — all `ILifecycleEvent`s after the 2026-05-29 lifecycle/domain split) and `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (catalogs `OnDraftValidating` as a domain event AND `OnDraftValidated` as a lifecycle event — the canonical mixed-category example). As subsequent units add events to other Design domains, each domain ships its own catalog.
+**Worked example.** Unit C creates the initial Elsa worked examples: `src/Elsa.Workflows.Design.Core/EVENTS.md` (catalogs the Draft mutation events — all published Background) and `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (catalogs `OnDraftValidating` published Sequential AND `OnDraftValidated` published Background — the canonical mixed-strategy example). As subsequent units add events to other Design domains, each domain ships its own catalog.
 
 ### §2.23 Unit tests
 
@@ -1120,7 +1241,7 @@ Diagnostic questions:
 - **Has the subject moved?** Repair the test's wiring; no behaviour change.
 - **Has the test's objective become invalid because the refactor resolved a bug the test was silently relying on?** Architects record the bug, the resolution, and any consumers that may have depended on the buggy behaviour. Test removal still requires architect approval per §2.21.1.
 - **Has the refactor broken behaviour the test correctly asserted?** The refactor is wrong; fix the implementation, not the test.
-- **Has the refactor exposed hidden coupling — a side effect of a concrete dependency that another implementation silently relied on?** This is a smell, not a feature to preserve. **Tight logic coupling between implementations is forbidden** (§2.6); only contract-level coupling is permitted (e.g. a domain event whose payload shape is the agreement; the sender treats every handler uniformly; the system stays consistent and predictable). The resolution is to **lift the dependency to a contract** — typically a domain event (§2.6.1) — or to remove the dependency entirely. The stub does NOT reproduce the side effect to make the test pass; that re-buries the coupling rather than resolving it. Flag, discuss with architects, decide, document.
+- **Has the refactor exposed hidden coupling — a side effect of a concrete dependency that another implementation silently relied on?** This is a smell, not a feature to preserve. **Tight logic coupling between implementations is forbidden** (§2.6); only contract-level coupling is permitted (e.g. an event whose payload shape is the agreement; the publisher treats every handler uniformly; the system stays consistent and predictable). The resolution is to **lift the dependency to a contract** — typically a named event (§2.6.1) — or to remove the dependency entirely. The stub does NOT reproduce the side effect to make the test pass; that re-buries the coupling rather than resolving it. Flag, discuss with architects, decide, document.
 
 New implementation classes that emerge from a refactor pick up new §2.23.2 obligations; new feature classes pick up §2.23.1 obligations.
 
@@ -1170,16 +1291,16 @@ This rule is a **discipline rule**, not a behaviour rule. It does not change wha
 |---|---|---|---|---|
 | 1 | **Three-layer separation per feature** | §2.1 | Decompose a feature into `.Core` (contracts) / helper (optional thin impl) / implementation (DI activation). | Every new feature follows this shape; cross-feature consumption happens through `.Core`. |
 | 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
-| 3 | **Domain events — contribution mechanism** | §2.6.1 | Publisher gathers contributions from any number of features; publisher reads back. | The sender CARES that handlers ran (validators, contributors, converters). |
+| 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IEventPublisher.Publish` with a pluggable delivery strategy. Sequential (default) for contribution; Background for notification. | Cross-feature composition through named events in a domain's `.Core`. |
 | 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
-| 3b | *sub-pattern:* Intent-revealing methods on events | §2.6.1 | Encapsulate event payload; handlers can only contribute, not mutate. | Every contribution event: private list + `AddX()` + public `IReadOnlyList<T>` read accessor. |
-| 3c | *sub-rule:* Subscriber MUST NEVER break publisher | §2.6.1 | Exception-shielding middleware as default; handler failures don't propagate. | Default for every domain-event pipeline; engineers may swap for fail-fast in specific cases. |
-| 4 | **Notifications + Lifecycle events** | §2.6.6 | Fire-and-forget pub/sub: "X happened, react if you want." | The sender does NOT care that any particular handler ran. Lifecycle events (`ILifecycleEvent`) for state transitions; default Background strategy. |
+| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. *(Architect-ratified addition: Sipke 2026-06-01, Joey 2026-06-02; supersedes the withdrawn intent-revealing-methods sub-rule. Pre/post kind added Joey 2026-06-02.)* |
+| 3c | *sub-rule:* Default Sequential CAN break the caller | §2.6.1 | No exception-shielding on the default path; a handler throw fails the publish (fail-fast). | Default for every Sequential publish. Resilience is opt-in via the Background strategy, NOT a default middleware. |
+| 4 | **Delivery strategies** | §2.6.6 | Select dispatch behaviour per publish: Sequential (default, awaited, propagates), Parallel, Background (isolated fire-and-forget). | Background for "X happened, react if you want" (audit, telemetry, UI-push). No separate marker type — strategy is the axis. |
 | 5 | **Replacement contracts** | §2.6.2 | One implementation per application (e.g. one `IDistributedLockProvider`). | Multiple registrations = conflict, not contribution. Detect at startup. |
 | 6 | **Design-time vs runtime contract split** | §2.6.4 | Split a contract when it has both a design-time consumer (intellisense, picker) and a runtime consumer (binding, execution). | Two consumers, two contracts. Each may share a shape record. |
 | 7 | **Sync contributor pattern — rare exception** | §2.6.5 | A sync-dispatched, behaviour-shaped contribution that cannot fit §2.6.1 or Registry + StartUp Task. | All three criteria hold (sync site, behaviour-not-data, registry-inapplicable). Reviewers MUST challenge every invocation. |
 | 8 | **Adapter / Bridge** | §2.7 | Isolate a heavy or external dependency behind a stable domain contract. | Wrap third-party libraries so consumers of `.Core` never see them. |
-| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `INotificationSender` publishing strategies (Sequential / Parallel / Background) per §2.6.6. Proposed worked example: `IReconciliationStrategy` per agenda Item 2 addendum. |
+| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `IEventPublishingStrategy` (Sequential / Parallel / Background) per §2.6.6. Proposed worked example: `IReconciliationStrategy` per agenda Item 2 addendum. |
 | 10 | **Factory** *(candidate, pending Monday)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. Promoted to first-class pattern at 2026-06-01 ratification if Monday confirms. |
 | 11 | **Provider module decomposition** | §2.20 | One domain, multiple provider-specific implementations packaged as siblings. | When a domain accrues a second provider with real shared logic. Rule 1 forbids premature umbrellas. |
 | 12 | **Domain-level shadow properties** | §2.9.1 | Persistence-only field that exists on the CLR entity but is hidden from the read interface. | Use real CLR property + omit from `I<Entity>` — never the provider's shadow mechanism. |
@@ -1203,7 +1324,7 @@ A candidate pattern that does not yet appear in §2.24.2 follows this gate befor
 
 A pattern adopted *before* going through this gate is technical debt — surface it retroactively for ratification, and either ratify or refactor.
 
-**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (notifications + worked-strategy example); §2.7 (adapter); §2.20 (provider module decomposition). Application-specific worked examples land in the application's derived constitution.
+**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (delivery strategies + worked-strategy example); §2.7 (adapter); §2.20 (provider module decomposition). Application-specific worked examples land in the application's derived constitution.
 
 ---
 
@@ -1281,4 +1402,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 2.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-05-27
+**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-02

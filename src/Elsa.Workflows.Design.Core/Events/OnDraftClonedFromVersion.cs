@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
 
@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 public sealed class OnDraftClonedFromVersion(
     string newDraftId,
     string sourceVersionId,
-    string targetDefinitionId) : ILifecycleEvent
+    string targetDefinitionId) : IEvent
 {
     public string NewDraftId { get; } = newDraftId;
     public string SourceVersionId { get; } = sourceVersionId;

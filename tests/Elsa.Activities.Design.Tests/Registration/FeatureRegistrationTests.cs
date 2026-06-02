@@ -7,7 +7,7 @@ using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Resolvers;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
@@ -48,11 +48,11 @@ public sealed class FeatureRegistrationTests
         var startupTasks = scope.ServiceProvider.GetServices<IStartupTask>().ToList();
         Assert.True(startupTasks.Count >= 2);
 
-        // Handlers register as non-generic IDomainEventHandler (the mediator's pipeline
+        // Handlers register as non-generic IEventHandler (the event pipeline
         // filters by interface). Two contributors expected: CLR resolver + CLR descriptor type.
-        var allHandlers = scope.ServiceProvider.GetServices<IDomainEventHandler>().ToList();
-        Assert.Contains(allHandlers, h => h is IDomainEventHandler<Elsa.Activities.Runtime.Core.Events.OnActivityImplementationResolversInitializing>);
-        Assert.Contains(allHandlers, h => h is IDomainEventHandler<Elsa.Activities.Design.Core.Events.OnImplementationDescriptorsInitializing>);
+        var allHandlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
+        Assert.Contains(allHandlers, h => h is IEventHandler<Elsa.Activities.Runtime.Core.Events.OnActivityImplementationResolversInitializing>);
+        Assert.Contains(allHandlers, h => h is IEventHandler<Elsa.Activities.Design.Core.Events.OnImplementationDescriptorsInitializing>);
     }
 
     [Fact]
@@ -97,9 +97,9 @@ public sealed class FeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinition>>());
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinitionVersion>>());
 
-        // The migrated saving handler resolves through the OnEntitySaving domain-event
+        // The migrated saving handler resolves through the OnEntitySaving event
         // surface (Unit A code-checklist closure). Handlers register as non-generic.
-        var allHandlers = scope.ServiceProvider.GetServices<IDomainEventHandler>().ToList();
+        var allHandlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
         Assert.Contains(allHandlers, h => h is Elsa.Activities.Design.Persistence.EFCore.EntityHandlers.ActivityDefinitionVersionSavingHandler);
     }
 
@@ -110,7 +110,7 @@ public sealed class FeatureRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISystemClock, SystemClock>();
-        services.AddSingleton<IDomainEventSender, StubDomainEventSender>();
+        services.AddSingleton<IEventPublisher, StubEventPublisher>();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();
         return services;
@@ -132,9 +132,9 @@ public sealed class FeatureRegistrationTests
         services.AddSingleton<IAddCommand<ActivityDefinitionVersion>, StubAddCommand<ActivityDefinitionVersion>>();
     }
 
-    private sealed class StubDomainEventSender : IDomainEventSender
+    private sealed class StubEventPublisher : IEventPublisher
     {
-        public Task Send(IDomainEvent domainEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubIdentityGenerator : IIdentityGenerator

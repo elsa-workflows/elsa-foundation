@@ -2,6 +2,7 @@
 using Elsa.FastEndpoints;
 using Elsa.Mapping.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Design.Api;
@@ -20,7 +21,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
 
         services.AddMappingsFrom(assembly);
 
-        services.AddDomainEventHandlersFrom(assembly);
+        services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
     }

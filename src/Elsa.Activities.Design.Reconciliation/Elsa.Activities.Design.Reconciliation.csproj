@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.Activities.Design.Persistence.Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\Elsa.Activities.Design.Reconciliation.Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\Elsa.Locking.Core\Elsa.Locking.Core.csproj" />

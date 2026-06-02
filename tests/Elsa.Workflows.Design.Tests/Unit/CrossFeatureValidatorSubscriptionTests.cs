@@ -1,6 +1,7 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -12,19 +13,19 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <summary>
 /// SC-023 + FR-034. A validator defined in a *separate assembly* (here: the test assembly,
 /// simulating an activity feature like <c>Elsa.Http.Activities.Design</c> that ships its
-/// own <c>IDomainEventHandler&lt;OnDraftValidating&gt;</c>) contributes a
-/// <see cref="ValidationError"/> via <c>AddValidationError</c>; the mutation pipeline reads
-/// <c>event.Errors</c> after dispatch and persists the contribution to the
+/// own <see cref="IDraftValidator"/>) contributes a <see cref="ValidationError"/> by returning
+/// it from <c>Validate</c>; the aggregating handler writes it onto <c>event.Errors</c> and the
+/// mutation pipeline reads that collection after dispatch and persists the contribution to the
 /// <c>WorkflowDefinitionDraftValidation</c> sibling.
 /// </summary>
 /// <remarks>
-/// The exact wiring of <see cref="IDomainEventSender"/> → handler dispatch via the
-/// production <c>DomainEventPipeline</c> (Iterator + Shielding + Invoker middleware) is
-/// covered by the deferred <c>Elsa.Mediator.Tests</c> follow-on (see Unit C plan.md
-/// Complexity Tracking). This test verifies the contribution-flow contract end-to-end
-/// against the validation sibling using the established <c>CapturingDomainEventSender.OnSend</c>
-/// hook — the same pattern <see cref="DraftMutationCommandTests.ValidationSiblingPersistenceTests"/>
-/// uses to simulate validator contributions without spinning up the full pipeline.
+/// The exact wiring of <see cref="Elsa.Events.Core.Contracts.IEventPublisher"/> → handler dispatch
+/// via the production event pipeline (invoker middleware) is covered by the deferred
+/// <c>Elsa.Events.Tests</c> follow-on. This test verifies the contribution-flow contract
+/// end-to-end against the validation sibling using the established
+/// <c>CapturingEventPublisher.OnPublish</c> hook — the same pattern
+/// <see cref="DraftMutationCommandTests.ValidationSiblingPersistenceTests"/> uses to simulate
+/// validator contributions without spinning up the full pipeline.
 /// </remarks>
 public sealed class CrossFeatureValidatorSubscriptionTests
 {
@@ -38,10 +39,11 @@ public sealed class CrossFeatureValidatorSubscriptionTests
         // activity-feature-co-located validator per FR-034.
         var crossFeatureValidator = new HttpActivityAuthPolicyValidatorStub();
 
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
-                crossFeatureValidator.Handle(validating, CancellationToken.None).GetAwaiter().GetResult();
+                foreach (var error in crossFeatureValidator.Validate(validating.Draft, CancellationToken.None).GetAwaiter().GetResult())
+                    validating.Errors.Add(error);
         };
 
         var draftId = await CreateDraft(host, "wf-1");
@@ -63,14 +65,15 @@ public sealed class CrossFeatureValidatorSubscriptionTests
         var crossFeatureValidator = new HttpActivityAuthPolicyValidatorStub();
         var baselineSimulation = new ValidationError("$workflow", "Graph/StartActivity", "No start activity");
 
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
             {
                 // Baseline-style contribution (analogue of StartActivityValidator).
-                validating.AddValidationError(baselineSimulation);
+                validating.Errors.Add(baselineSimulation);
                 // Cross-feature contribution (analogue of an Elsa.Http validator).
-                crossFeatureValidator.Handle(validating, CancellationToken.None).GetAwaiter().GetResult();
+                foreach (var error in crossFeatureValidator.Validate(validating.Draft, CancellationToken.None).GetAwaiter().GetResult())
+                    validating.Errors.Add(error);
             }
         };
 
@@ -96,21 +99,19 @@ public sealed class CrossFeatureValidatorSubscriptionTests
     /// <summary>
     /// Stand-in for a validator that an activity feature (e.g. <c>Elsa.Http.Activities.Design</c>)
     /// would ship per FR-034. Lives in the test assembly — deliberately *not* in
-    /// <c>Elsa.Workflows.Design.Validations</c> — to exercise the cross-assembly subscription
-    /// pattern.
+    /// <c>Elsa.Workflows.Design.Validations</c> — to exercise the cross-assembly contribution
+    /// pattern. It returns its errors; the pipeline aggregates them onto <c>event.Errors</c>.
     /// </summary>
-    private sealed class HttpActivityAuthPolicyValidatorStub : IDomainEventHandler<OnDraftValidating>
+    private sealed class HttpActivityAuthPolicyValidatorStub : IDraftValidator
     {
         public const string ExpectedPath = "$workflow";
 
-        public ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
-        {
-            domainEvent.AddValidationError(new ValidationError(
-                Path: ExpectedPath,
-                Type: "Http/AuthPolicyUnknown",
-                Message: "Configured authorization policy is unknown (simulated)."
-            ));
-            return ValueTask.CompletedTask;
-        }
+        public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IEnumerable<ValidationError>>([
+                new ValidationError(
+                    Path: ExpectedPath,
+                    Type: "Http/AuthPolicyUnknown",
+                    Message: "Configured authorization policy is unknown (simulated).")
+            ]);
     }
 }

@@ -18,8 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\Elsa.Tasks.Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 

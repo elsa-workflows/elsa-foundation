@@ -1,7 +1,6 @@
 ﻿using CShells.Features;
-using Elsa.Mediator.Core.Extensions;
-using Elsa.Primitives.Extensions;
-using Elsa.Workflows.Design.JavaScript.EventHandlers;
+using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+using Elsa.Workflows.Design.JavaScript.Contributors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.JavaScript
@@ -15,13 +14,12 @@ namespace Elsa.Workflows.Design.JavaScript
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .AddDomainEventHandlersFrom(typeof(JavaScriptWorkflowsDesignFeature).Assembly)
-
-                .AddAsInterfaces<AddActivityOutputFunctionDeclarations>()
-                .AddAsInterfaces<AddWorkflowFunctionDeclarationsProvider>()
-                .AddAsInterfaces<AddWorkflowInputFunctionDeclarations>()
-                .AddAsInterfaces<AddWorkflowVariableFunctionDeclarations>()
-                .AddAsInterfaces<AddWorkflowVariablesDeclaration>()
+                .AddScoped<IJavaScriptDeclarationContributor, ActivityOutputFunctionDeclarationContributor>()
+                .AddScoped<IJavaScriptDeclarationContributor, WorkflowFunctionDeclarationContributor>()
+                .AddScoped<IJavaScriptDeclarationContributor, WorkflowInputFunctionDeclarationContributor>()
+                .AddScoped<IJavaScriptDeclarationContributor, WorkflowVariableFunctionDeclarationContributor>()
+                .AddScoped<IJavaScriptDeclarationContributor, WorkflowVariablesDeclarationContributor>()
+                .AddScoped<IJavaScriptDeclarationContributor, OutcomeFunctionDeclarationContributor>()
                 ;
         }
     }

@@ -1,9 +1,8 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.JavaScript.Core.Options;
-using Elsa.Expressions.JavaScript.Rendering.Core.Events;
+using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Http.JavaScript.Constants;
-using Elsa.Http.JavaScript.EventHandlers;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Http.JavaScript.Contributors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Http.JavaScript
@@ -21,7 +20,7 @@ namespace Elsa.Http.JavaScript
                 HttpTypeDescriptors.GetDescriptors().ToList().ForEach(o.TypeDescriptors.Add);
             });
 
-            services.AddDomainEventHandler<OnDeclarationsDocumentGenerating, AddHttpTypeDeclarations>();
+            services.AddScoped<IJavaScriptDeclarationContributor, HttpTypeDeclarationContributor>();
         }
     }
 }

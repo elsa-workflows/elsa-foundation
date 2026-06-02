@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;

@@ -15,11 +15,9 @@ public sealed class StartActivityValidatorTests
     public async Task Zero_start_activities_emits_error()
     {
         var state = State(activities: [Node("a"), Node("b")]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("$workflow", error.Path);
         Assert.Equal("Graph/StartActivity", error.Type);
         Assert.Contains("no start", error.Message, StringComparison.OrdinalIgnoreCase);
@@ -29,22 +27,18 @@ public sealed class StartActivityValidatorTests
     public async Task Exactly_one_start_activity_emits_no_error()
     {
         var state = State(activities: [Node("a", isStart: true), Node("b")]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
     public async Task Two_start_activities_emits_error()
     {
         var state = State(activities: [Node("a", isStart: true), Node("b", isStart: true)]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("$workflow", error.Path);
         Assert.Equal("Graph/StartActivity", error.Type);
         Assert.Contains("2", error.Message);

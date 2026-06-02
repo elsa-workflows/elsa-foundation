@@ -1,9 +1,10 @@
 using CShells.Features;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Handlers;
 using Elsa.Serialization.JsonConverters;
 using Elsa.Serialization.Services;
+using Elsa.Serialization.Sources;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,12 +33,12 @@ namespace Elsa.Serialization
             services.AddSingleton<JsonPayloadConverterRegistry>();
 
             // Startup task: dispatch OnJsonPayloadConvertersInitializing → flush contributions
-            // into the registry. Other features (e.g. Expressions) register handlers for the
-            // event to contribute their own converters.
+            // into the registry. Other features (e.g. Expressions) contribute by registering an
+            // IJsonConverterSource; the single RegisterJsonConverters handler aggregates them.
             services.AddScoped<IStartupTask, JsonPayloadConvertersInitializingStartupTask>();
 
-            // Built-in converters subscribe via this feature's own handler.
-            services.AddDomainEventHandler<OnJsonPayloadConvertersInitializing, BuiltInJsonConvertersHandler>();
+            services.AddEventHandler<OnJsonPayloadConvertersInitializing, RegisterJsonConverters>();
+            services.AddScoped<IJsonConverterSource, BuiltInJsonConverterSource>();
         }
     }
 }

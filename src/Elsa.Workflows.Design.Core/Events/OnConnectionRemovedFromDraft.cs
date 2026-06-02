@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// source+target pair). The spec mentioned a <c>ConnectionId : string</c> field; Unit C
 /// elects to pass the full edge so subscribers know which connection vanished.
 /// </remarks>
-public sealed class OnConnectionRemovedFromDraft(string draftId, ActivityConnection connection) : ILifecycleEvent
+public sealed class OnConnectionRemovedFromDraft(string draftId, ActivityConnection connection) : IEvent
 {
     public string DraftId { get; } = draftId;
     public ActivityConnection Connection { get; } = connection;

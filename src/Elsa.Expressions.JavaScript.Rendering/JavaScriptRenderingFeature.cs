@@ -3,9 +3,10 @@ using Elsa.Expressions.JavaScript.Rendering.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
-using Elsa.Expressions.JavaScript.Rendering.EventHandlers;
+using Elsa.Expressions.JavaScript.Rendering.Handlers;
 using Elsa.Expressions.JavaScript.Rendering.Services;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Expressions.JavaScript.Rendering.Contributors;
+using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Rendering
@@ -25,7 +26,8 @@ namespace Elsa.Expressions.JavaScript.Rendering
         public void ConfigureServices(IServiceCollection services)
         {
             services
-                .AddDomainEventHandler<OnDeclarationsDocumentGenerating, AddDeclarations>()
+                .AddEventHandler<OnDeclarationsDocumentGenerating, BuildDeclarationsDocument>()
+                .AddScoped<IJavaScriptDeclarationContributor, CommonDeclarationContributor>()
 
                 .AddScoped<IJavaScriptDeclarationsDocumentFactory, JavaScriptDeclarationsDocumentFactory>()
                 .AddScoped<IJavaScriptDeclarationsDocumentRenderer, JavaScriptTypeDefinitionDocumentRenderer>()

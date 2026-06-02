@@ -26,12 +26,12 @@ public sealed class PromotionGateTests
     {
         using var host = WorkflowsDesignTestHost.Create();
 
-        host.DomainEventSender.OnSend = evt =>
+        host.EventPublisher.OnPublish = evt =>
         {
             if (evt is OnDraftValidating validating)
             {
-                validating.AddValidationError(new ValidationError("$workflow", "Graph/StartActivity", "No start"));
-                validating.AddValidationError(new ValidationError("n1", "Graph/OrphanActivity", "Orphan node"));
+                validating.Errors.Add(new ValidationError("$workflow", "Graph/StartActivity", "No start"));
+                validating.Errors.Add(new ValidationError("n1", "Graph/OrphanActivity", "Orphan node"));
             }
         };
 

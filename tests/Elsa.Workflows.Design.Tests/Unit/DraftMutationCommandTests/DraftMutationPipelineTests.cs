@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
-using Elsa.Workflows.Design.Validations.Core.Notifications;
 
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
@@ -21,10 +20,10 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// <list type="bullet">
 /// <item>Mutates the materialised snapshot in place.</item>
 /// <item>Publishes the granular FR-018 / FR-018a lifecycle event via
-///       <see cref="Elsa.Mediator.Core.Contracts.ILifecycleEventSender"/> after the lock is released.</item>
-/// <item>Synchronously dispatches <c>OnDraftValidating</c> as a domain event via
-///       <see cref="Elsa.Mediator.Core.Contracts.IDomainEventSender"/> inside the lock (the gate).</item>
-/// <item>Publishes <c>OnDraftValidated</c> as a lifecycle event after the granular event
+///       <see cref="Elsa.Events.Core.Contracts.IEventPublisher"/> (Background) after the lock is released.</item>
+/// <item>Synchronously dispatches <c>OnDraftValidating</c> via
+///       <see cref="Elsa.Events.Core.Contracts.IEventPublisher"/> (Sequential) inside the lock (the gate).</item>
+/// <item>Publishes <c>OnDraftValidated</c> after the granular event
 ///       (cause-effect order preserved across the lifecycle stream).</item>
 /// <item>Completes without subscribers (SC-012 closed-mode contract).</item>
 /// </list>
@@ -59,7 +58,7 @@ public sealed class DraftMutationPipelineTests
         }
 
         // (b) granular FR-018 lifecycle event published.
-        var granular = host.LifecycleEventSender.LastOf<OnActivityAddedToDraft>();
+        var granular = host.EventPublisher.LastOf<OnActivityAddedToDraft>();
         Assert.NotNull(granular);
         Assert.Equal(draftId, granular!.DraftId);
         Assert.Equal("node-1", granular.NodeId);
@@ -68,16 +67,16 @@ public sealed class DraftMutationPipelineTests
         // its own OnDraftValidating too, so we just assert the event was captured at all —
         // the gate ran for the mutation and we'll be able to read its errors via
         // OnDraftValidated below.
-        Assert.NotEmpty(host.DomainEventSender.CapturedEvents.OfType<OnDraftValidating>());
+        Assert.NotEmpty(host.EventPublisher.CapturedEvents.OfType<OnDraftValidating>());
 
         // (d) OnDraftValidated fires after the granular lifecycle event (cause before consequence).
-        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
+        var validated = host.EventPublisher.LastOf<OnDraftValidated>();
         Assert.NotNull(validated);
         Assert.Empty(validated!.Errors);
 
-        var lifecycleEvents = host.LifecycleEventSender.CapturedEvents.ToList();
+        var lifecycleEvents = host.EventPublisher.CapturedEvents.ToList();
         var granularIdx = lifecycleEvents.FindLastIndex(e => e is OnActivityAddedToDraft);
-        var validatedIdx = lifecycleEvents.FindLastIndex(e => e is DraftValidated);
+        var validatedIdx = lifecycleEvents.FindLastIndex(e => e is OnDraftValidated);
         Assert.True(granularIdx >= 0);
         Assert.True(
             validatedIdx > granularIdx,
@@ -98,7 +97,7 @@ public sealed class DraftMutationPipelineTests
             await command.Execute(draftId, variable);
         }
 
-        var declaredEvent = host.LifecycleEventSender.LastOf<OnVariableDeclaredInDraft>();
+        var declaredEvent = host.EventPublisher.LastOf<OnVariableDeclaredInDraft>();
         Assert.NotNull(declaredEvent);
         Assert.Equal("MyVar", declaredEvent!.Variable.Name);
     }
@@ -125,8 +124,8 @@ public sealed class DraftMutationPipelineTests
         }
 
         // FR-018 naming discipline pins workflow-level vs per-activity events as distinct.
-        Assert.NotNull(host.LifecycleEventSender.LastOf<OnWorkflowInputAddedToDraft>());
-        Assert.Null(host.LifecycleEventSender.LastOf<OnActivityInputAddedToDraft>());
+        Assert.NotNull(host.EventPublisher.LastOf<OnWorkflowInputAddedToDraft>());
+        Assert.Null(host.EventPublisher.LastOf<OnActivityInputAddedToDraft>());
     }
 
     [Fact]
@@ -144,13 +143,13 @@ public sealed class DraftMutationPipelineTests
         using (var scope = host.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IAddActivityInputToDraftCommand>().Execute(draftId, "node-1", input);
 
-        var perActivityEvent = host.LifecycleEventSender.LastOf<OnActivityInputAddedToDraft>();
+        var perActivityEvent = host.EventPublisher.LastOf<OnActivityInputAddedToDraft>();
         Assert.NotNull(perActivityEvent);
         Assert.Equal("node-1", perActivityEvent!.NodeId);
         Assert.Equal("ak1", perActivityEvent.InputReferenceKey);
 
         // Joey iteration symmetry: per-activity event is distinct from workflow-level event.
-        Assert.Null(host.LifecycleEventSender.LastOf<OnWorkflowInputAddedToDraft>());
+        Assert.Null(host.EventPublisher.LastOf<OnWorkflowInputAddedToDraft>());
     }
 
     [Fact]
@@ -173,13 +172,13 @@ public sealed class DraftMutationPipelineTests
         Assert.NotNull(draft);
         Assert.NotNull(layout);
 
-        var created = host.LifecycleEventSender.LastOf<OnDraftCreated>();
+        var created = host.EventPublisher.LastOf<OnDraftCreated>();
         Assert.NotNull(created);
         Assert.Equal(draftId, created!.DraftId);
         Assert.Equal("wf-1", created.WorkflowDefinitionId);
 
         // OnDraftValidated fires after creation too — the empty Draft's validation pass returns no errors.
-        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
+        var validated = host.EventPublisher.LastOf<OnDraftValidated>();
         Assert.NotNull(validated);
         Assert.False(validated!.HasErrors);
     }
@@ -187,9 +186,8 @@ public sealed class DraftMutationPipelineTests
     [Fact]
     public async Task Pipeline_completes_without_subscribers()
     {
-        // SC-012 closed-mode contract: with no IDomainEventHandler / INotificationHandler
-        // registered, the pipeline still completes — capturing senders swallow + record but
-        // never throw.
+        // SC-012 closed-mode contract: with no IEventHandler registered, the pipeline still
+        // completes — the capturing publisher swallows + records but never throws.
         using var host = WorkflowsDesignTestHost.Create();
         var draftId = await SeedEmptyDraft(host, "wf-1");
         var activity = NewActivityNode("node-1", "av-1");

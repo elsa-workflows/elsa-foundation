@@ -1,5 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Activities.Design.Core.Events;
 
@@ -11,4 +11,4 @@ namespace Elsa.Activities.Design.Core.Events;
 /// </summary>
 public sealed record OnImplementationDescriptorsInitializing(
     ICollection<ImplementationDescriptorRegistration> Registrations)
-    : IDomainEvent;
+    : IEvent;

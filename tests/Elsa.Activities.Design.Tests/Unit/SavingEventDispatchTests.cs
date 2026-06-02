@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US5 — activity-catalog saving handler runs via <see cref="OnEntitySaving"/> domain event
+/// US5 — activity-catalog saving handler runs via <see cref="OnEntitySaving"/> event
 /// dispatch. Tests verify (a) the handler's behaviour through the event-shaped Handle signature
 /// and (b) the §2.6.1 contribution-shaped DI surface: many handlers can subscribe to the same
 /// event, each gets invoked.
@@ -25,7 +25,7 @@ public sealed class SavingEventDispatchTests
         // Hands a synthetic OnEntitySaving to the handler and asserts the descriptor JSON
         // lands in the shadow column. This is the same code path the DbContext dispatch
         // calls in production — we exercise the contract without standing up the full
-        // mediator pipeline.
+        // event pipeline.
         using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
             (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
 
@@ -81,27 +81,27 @@ public sealed class SavingEventDispatchTests
     [Fact]
     public void MultipleHandlers_CanSubscribeToOnEntitySaving()
     {
-        // §2.6.1 contribution shape: any feature may register its own IDomainEventHandler<OnEntitySaving>
-        // alongside the activity-catalog handler. DI resolves both — the mediator pipeline invokes
+        // §2.6.1 contribution shape: any feature may register its own IEventHandler<OnEntitySaving>
+        // alongside the activity-catalog handler. DI resolves both — the event pipeline invokes
         // each in turn.
         var services = new ServiceCollection();
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         services.AddSingleton<Elsa.Serialization.Core.IPayloadSerializer>(serializer);
-        services.AddScoped<IDomainEventHandler<OnEntitySaving>, ActivityDefinitionVersionSavingHandler>();
-        services.AddScoped<IDomainEventHandler<OnEntitySaving>, ProbeOnEntitySavingHandler>();
+        services.AddScoped<IEventHandler<OnEntitySaving>, ActivityDefinitionVersionSavingHandler>();
+        services.AddScoped<IEventHandler<OnEntitySaving>, ProbeOnEntitySavingHandler>();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        var handlers = scope.ServiceProvider.GetServices<IDomainEventHandler<OnEntitySaving>>().ToList();
+        var handlers = scope.ServiceProvider.GetServices<IEventHandler<OnEntitySaving>>().ToList();
 
         Assert.Equal(2, handlers.Count);
         Assert.Contains(handlers, h => h is ActivityDefinitionVersionSavingHandler);
         Assert.Contains(handlers, h => h is ProbeOnEntitySavingHandler);
     }
 
-    private sealed class ProbeOnEntitySavingHandler : IDomainEventHandler<OnEntitySaving>
+    private sealed class ProbeOnEntitySavingHandler : IEventHandler<OnEntitySaving>
     {
-        public ValueTask Handle(OnEntitySaving domainEvent, CancellationToken cancellationToken) => ValueTask.CompletedTask;
+        public Task Handle(OnEntitySaving @event, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

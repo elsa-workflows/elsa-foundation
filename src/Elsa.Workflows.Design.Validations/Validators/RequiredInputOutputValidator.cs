@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Internal;
 using Microsoft.Extensions.Options;
@@ -35,13 +35,14 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 public sealed class RequiredInputOutputValidator(
     IActivityDefinitionLookup catalog,
     IOptions<WorkflowDesignValidatorOptions> options
-) : IDomainEventHandler<OnDraftValidating>
+) : IDraftValidator
 {
-    public async ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
+    public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
         var maxDepth = options.Value.MaxRecursionDepth;
+        var errors = new List<ValidationError>();
 
-        foreach (var node in ActivityTreeWalker.Walk(domainEvent.Draft.State.Activities, maxDepth))
+        foreach (var node in ActivityTreeWalker.Walk(draft.State.Activities, maxDepth))
         {
             var version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
             if (version is null)
@@ -57,7 +58,7 @@ public sealed class RequiredInputOutputValidator(
                 if (providedInputKeys.Contains(definition.ReferenceKey))
                     continue;
 
-                domainEvent.AddValidationError(new ValidationError(
+                errors.Add(new ValidationError(
                     Path: $"{node.NodeId}/inputs/{definition.ReferenceKey}",
                     Type: "InputOutput/MissingRequired",
                     Message: $"Required input '{definition.Name}' on activity '{node.NodeId}' is missing or empty."
@@ -74,13 +75,15 @@ public sealed class RequiredInputOutputValidator(
                 if (providedOutputKeys.Contains(definition.ReferenceKey))
                     continue;
 
-                domainEvent.AddValidationError(new ValidationError(
+                errors.Add(new ValidationError(
                     Path: $"{node.NodeId}/outputs/{definition.ReferenceKey}",
                     Type: "InputOutput/MissingRequired",
                     Message: $"Required output '{definition.Name}' on activity '{node.NodeId}' is missing or empty."
                 ));
             }
         }
+
+        return errors;
     }
 
     private static bool IsBound(ArgumentState state)

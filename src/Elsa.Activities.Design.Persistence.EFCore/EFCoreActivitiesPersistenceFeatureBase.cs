@@ -2,7 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Activities.Design.Persistence.EFCore.Services;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Elsa.Persistence.EFCore;
 using Elsa.Persistence.EFCore.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,8 +22,8 @@ public abstract class EFCoreActivitiesPersistenceFeatureBase : EFCorePersistence
                 // any other features that haven't migrated yet — it is a no-op for the
                 // activity-catalog assembly because its saving handler is now a domain-event
                 // handler.
-                .AddDomainEventHandlersFrom(GetType().Assembly)
-                .AddDomainEventHandlersFrom(typeof(EFCoreActivitiesPersistenceFeatureBase).Assembly)
+                .AddEventHandlersFrom(GetType().Assembly)
+                .AddEventHandlersFrom(typeof(EFCoreActivitiesPersistenceFeatureBase).Assembly)
                 .AddEntitySavingHandlersFrom(GetType().Assembly)
                 .AddEntitySavingHandlersFrom(typeof(EFCoreActivitiesPersistenceFeatureBase).Assembly);
         }

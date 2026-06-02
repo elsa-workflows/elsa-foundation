@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -17,7 +17,7 @@ public sealed class AddActivityToDraftCommand(DraftMutationPipeline pipeline) : 
                 var activities = draft.State.Activities.Append(activity);
                 draft.State = draft.State with { Activities = activities };
 
-                return ValueTask.FromResult<ILifecycleEvent>(
+                return ValueTask.FromResult<IEvent>(
                     new OnActivityAddedToDraft(draftId, activity)
                 );
             }, 

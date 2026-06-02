@@ -1,5 +1,5 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Sqlite;
 using Elsa.Primitives.Contracts;
@@ -20,10 +20,10 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// <summary>
 /// SQLite-in-memory test host for the Workflows.Design.Persistence.EFCore pipeline. Builds
 /// a real <see cref="WorkflowsDesignDbContext"/> + a real <see cref="DraftMutationPipeline"/>
-/// composed against an <see cref="InMemoryDistributedLockProvider"/>, a
-/// <see cref="CapturingDomainEventSender"/> (for the synchronous <c>OnDraftValidating</c>
-/// gate), and a <see cref="CapturingLifecycleEventSender"/> (for FR-018/FR-018a lifecycle
-/// events + <c>OnDraftValidated</c>) so command behaviour can be asserted end-to-end.
+/// composed against an <see cref="InMemoryDistributedLockProvider"/> and a single
+/// <see cref="CapturingEventPublisher"/> (for the synchronous <c>OnDraftValidating</c> gate
+/// AND the FR-018/FR-018a lifecycle events + <c>OnDraftValidated</c>) so command behaviour can
+/// be asserted end-to-end.
 /// </summary>
 internal sealed class WorkflowsDesignTestHost : IDisposable
 {
@@ -31,22 +31,19 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     private readonly ServiceProvider _services;
 
     public IServiceProvider Services => _services;
-    public CapturingDomainEventSender DomainEventSender { get; }
-    public CapturingLifecycleEventSender LifecycleEventSender { get; }
+    public CapturingEventPublisher EventPublisher { get; }
     public InMemoryDistributedLockProvider LockProvider { get; }
 
     private WorkflowsDesignTestHost(
         SqliteConnection connection,
         ServiceProvider services,
-        CapturingDomainEventSender domainEventSender,
-        CapturingLifecycleEventSender lifecycleEventSender,
+        CapturingEventPublisher eventPublisher,
         InMemoryDistributedLockProvider lockProvider
     )
     {
         _connection = connection;
         _services = services;
-        DomainEventSender = domainEventSender;
-        LifecycleEventSender = lifecycleEventSender;
+        EventPublisher = eventPublisher;
         LockProvider = lockProvider;
     }
 
@@ -83,8 +80,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         connection.Open();
 
         var lockProvider = new InMemoryDistributedLockProvider();
-        var domainEventSender = new CapturingDomainEventSender();
-        var lifecycleEventSender = new CapturingLifecycleEventSender();
+        var eventPublisher = new CapturingEventPublisher();
 
         var services = new ServiceCollection();
         services.AddSingleton<ISystemClock, SystemClock>();
@@ -103,11 +99,10 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // Logging (entity handlers need ILogger<>)
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(NullLogger<>));
 
-        // Lock + event sender stubs (capturing variants — see CapturingDomainEventSender /
-        // CapturingLifecycleEventSender for the bypass-the-pipeline rationale).
+        // Lock + event publisher stubs (capturing variant — see CapturingEventPublisher for
+        // the bypass-the-pipeline rationale).
         services.AddSingleton<IDistributedLockProvider>(lockProvider);
-        services.AddSingleton<IDomainEventSender>(domainEventSender);
-        services.AddSingleton<ILifecycleEventSender>(lifecycleEventSender);
+        services.AddSingleton<IEventPublisher>(eventPublisher);
 
         // The DbContext factory bridges to the in-memory connection.
         services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
@@ -124,7 +119,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         using (var ctx = new WorkflowsDesignDbContext(optionsBuilder.Options, provider))
             ctx.Database.EnsureCreated();
 
-        return new WorkflowsDesignTestHost(connection, provider, domainEventSender, lifecycleEventSender, lockProvider);
+        return new WorkflowsDesignTestHost(connection, provider, eventPublisher, lockProvider);
     }
 
     private static void RegisterCommands(IServiceCollection services)

@@ -4,6 +4,7 @@ using CShells.DependencyInjection;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Caching.Memory;
+using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mapping;
@@ -41,6 +42,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(TasksFeature).Assembly,
             typeof(MemoryCacheFeature).Assembly,
             typeof(MediatorFeature).Assembly,
+            typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
             typeof(SqliteWorkflowsDesignPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,

@@ -1,5 +1,5 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Serialization.Core;
 
@@ -12,12 +12,12 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
     /// features' handlers may subscribe to the same event independently.
     /// </summary>
     public sealed class ActivityDefinitionVersionSavingHandler(IPayloadSerializer payloadSerializer)
-        : IDomainEventHandler<OnEntitySaving>
+        : IEventHandler<OnEntitySaving>
     {
-        public ValueTask Handle(OnEntitySaving domainEvent, CancellationToken cancellationToken)
+        public Task Handle(OnEntitySaving domainEvent, CancellationToken cancellationToken)
         {
             if (domainEvent.Entry.Entity is not ActivityDefinitionVersion entity)
-                return ValueTask.CompletedTask;
+                return Task.CompletedTask;
                         
             entity.InputsSource = payloadSerializer.Serialize(entity.Inputs);
             entity.OutputsSource = payloadSerializer.Serialize(entity.Outputs);
@@ -29,7 +29,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
             entity.ImplementationKind = entity.ImplementationDescriptor.Kind;
             entity.ImplementationDescriptorPayload = payloadSerializer.Serialize(entity.ImplementationDescriptor);
 
-            return ValueTask.CompletedTask;
+            return Task.CompletedTask;
         }
     }
 }

@@ -53,7 +53,7 @@ public sealed class DiscardDraftTests
 
         await Discard(host, draftId);
 
-        var published = host.LifecycleEventSender.LastOf<OnDraftDiscarded>();
+        var published = host.EventPublisher.LastOf<OnDraftDiscarded>();
         Assert.NotNull(published);
         Assert.Equal(draftId, published!.DraftId);
         Assert.Equal(WorkflowDefinitionId, published.WorkflowDefinitionId);
@@ -69,7 +69,7 @@ public sealed class DiscardDraftTests
         await Discard(host, draftId); // Second call: Draft doesn't exist; command exits cleanly.
 
         // Exactly one OnDraftDiscarded — the second call did not re-publish.
-        var discardEvents = host.LifecycleEventSender.CapturedEvents.OfType<OnDraftDiscarded>().ToArray();
+        var discardEvents = host.EventPublisher.CapturedEvents.OfType<OnDraftDiscarded>().ToArray();
         Assert.Single(discardEvents);
     }
 

@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Extensions;
@@ -33,7 +33,7 @@ public sealed class RemoveActivityOutputFromDraftCommand(DraftMutationPipeline p
                     outputReferenceKey
                 );
 
-                return ValueTask.FromResult<ILifecycleEvent>(lifecycleEvent);
+                return ValueTask.FromResult<IEvent>(lifecycleEvent);
             },
             cancellationToken
         );

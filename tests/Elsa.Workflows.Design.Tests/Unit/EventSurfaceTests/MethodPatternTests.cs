@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Xunit;
@@ -8,8 +8,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 /// <summary>
 /// SC-015 + framework §2.6.1 intent-revealing-methods sub-rule (Unit C Phase-3): every
 /// event in <c>Workflows.Design.Core</c> and <c>Workflows.Design.Validations.Core</c> is a
-/// <c>sealed class</c> — NOT a <c>record</c>. Scans both <see cref="IDomainEvent"/>s and
-/// <see cref="INotification"/>s (which includes <see cref="ILifecycleEvent"/> by derivation).
+/// <c>sealed class</c> — NOT a <c>record</c>. Scans every <see cref="IEvent"/>.
 /// Records' value-equality semantics conflict with the contribution pattern (two events
 /// with the same payload would compare equal); the sealed-class form is the canonical
 /// per-§2.6.1 shape.
@@ -59,8 +58,5 @@ public sealed class MethodPatternTests
     private static IEnumerable<Type> PublishedEventTypesIn(System.Reflection.Assembly assembly) =>
         assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
-            .Where(t =>
-                typeof(IDomainEvent).IsAssignableFrom(t)
-                || typeof(INotification).IsAssignableFrom(t)
-            );
+            .Where(t => typeof(IEvent).IsAssignableFrom(t));
 }

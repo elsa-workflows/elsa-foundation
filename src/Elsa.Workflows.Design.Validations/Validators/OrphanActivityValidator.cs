@@ -1,5 +1,5 @@
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
@@ -12,12 +12,13 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// child activities are container-driven, not connection-driven, and are not part of this
 /// check.
 /// </summary>
-public sealed class OrphanActivityValidator : IDomainEventHandler<OnDraftValidating>
+public sealed class OrphanActivityValidator : IDraftValidator
 {
-    public ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
+    public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
-        var state = domainEvent.Draft.State;
+        var state = draft.State;
         var connections = state.ActivityConnections.ToList();
+        var errors = new List<ValidationError>();
 
         foreach (var node in state.Activities)
         {
@@ -30,13 +31,13 @@ public sealed class OrphanActivityValidator : IDomainEventHandler<OnDraftValidat
             if (hasInbound || hasOutbound)
                 continue;
 
-            domainEvent.AddValidationError(new ValidationError(
+            errors.Add(new ValidationError(
                 Path: node.NodeId,
                 Type: "Graph/OrphanActivity",
                 Message: $"Activity '{node.NodeId}' has no inbound or outbound connection."
             ));
         }
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult<IEnumerable<ValidationError>>(errors);
     }
 }

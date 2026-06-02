@@ -13,8 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Activities.Design.Reconciliation.Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Elsa.Mapping.Core\Elsa.Mapping.Core.csproj" />
-    <ProjectReference Include="..\Elsa.Mediator.Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\Elsa3.Models\Elsa3.Models.csproj" />
     <ProjectReference Include="..\Elsa.Serialization.Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>

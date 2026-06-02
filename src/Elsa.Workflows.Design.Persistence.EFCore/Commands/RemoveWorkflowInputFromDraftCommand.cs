@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -16,7 +16,7 @@ public sealed class RemoveWorkflowInputFromDraftCommand(DraftMutationPipeline pi
                 var inputs = draft.State.Inputs.Where(i => i.ReferenceKey != inputReferenceKey);
                 draft.State = draft.State with { Inputs = inputs };
 
-                return ValueTask.FromResult<ILifecycleEvent>(
+                return ValueTask.FromResult<IEvent>(
                     new OnWorkflowInputRemovedFromDraft(draftId, inputReferenceKey)
                 );
             }, 

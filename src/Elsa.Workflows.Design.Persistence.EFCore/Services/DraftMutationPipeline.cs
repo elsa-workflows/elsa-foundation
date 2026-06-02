@@ -1,5 +1,6 @@
 using Elsa.Locking.Core;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -7,7 +8,6 @@ using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
-using Elsa.Workflows.Design.Validations.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -21,10 +21,11 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <list type="number">
 /// <item>Acquire <c>workflow-draft:{DraftId}</c> distributed lock.</item>
 /// <item>Load Draft; invoke loading handlers to hydrate <c>State</c> from <c>StateSource</c>.</item>
-/// <item>Run the hook — closure mutates State + returns the granular <see cref="ILifecycleEvent"/>.</item>
+/// <item>Run the hook — closure mutates State + returns the granular <see cref="IEvent"/>.</item>
 /// <item>Mark the Draft entity <c>Modified</c> (State is <c>[NotMapped]</c>; EF can't observe the mutation on its own).</item>
-/// <item><b>Synchronously</b> publish <c>OnDraftValidating</c> as a domain event — validators
-///       contribute errors via <c>AddValidationError(...)</c>. This is the gate.</item>
+/// <item><b>Synchronously</b> publish <c>OnDraftValidating</c> as a domain event — the single
+///       <c>ExecuteValidations</c> handler runs every <c>IDraftValidator</c> and aggregates their
+///       returned errors onto <c>OnDraftValidating.Errors</c>. This is the gate.</item>
 /// <item>Upsert the <see cref="WorkflowDefinitionDraftValidation"/> sibling with the
 ///       collected errors (delete-and-re-add per FR-023 — rewritten wholesale on every pass).</item>
 /// <item><c>SaveChangesAsync</c> — state + validation sibling persist atomically.</item>
@@ -37,13 +38,14 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// </list>
 /// </para>
 /// <para>
-/// <b>Two senders, two roles.</b>
+/// <b>One publisher, two strategies.</b> A single <see cref="IEventPublisher"/> dispatches both
+/// roles; the strategy per call selects the behaviour:
 /// <list type="bullet">
-/// <item><see cref="IDomainEventSender"/> — for the synchronous gate <c>OnDraftValidating</c>.
-///       Contribution pattern; publisher awaits + reads errors back (§2.6.1).</item>
-/// <item><see cref="ILifecycleEventSender"/> — for the post-lock-release lifecycle events
-///       (granular mutation + validation outcome). Notification pattern; publisher fires +
-///       returns; subscribers run later on the background worker (§2.6.6).</item>
+/// <item><c>Sequential</c> — the synchronous gate <c>OnDraftValidating</c>. Contribution
+///       pattern; publisher awaits + reads errors back (§2.6.1).</item>
+/// <item><c>Background</c> — the post-lock-release lifecycle events (granular mutation +
+///       validation outcome). Publisher fires + returns; subscribers run later on the
+///       background worker (§2.6.6).</item>
 /// </list>
 /// </para>
 /// <para>
@@ -59,19 +61,18 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 public sealed class DraftMutationPipeline(
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
-    IDomainEventSender domainEventSender,
-    ILifecycleEventSender lifecycleEventSender,
+    IEventPublisher eventPublisher,
     IIdentityGenerator identityGenerator,
     IEnumerable<IEntityLoadingHandler<WorkflowsDesignDbContext, WorkflowDefinitionDraft>> draftLoadingHandlers
 )
 {
     public async Task ExecuteMutation(
         string draftId,
-        Func<WorkflowDefinitionDraft, WorkflowsDesignDbContext, ValueTask<ILifecycleEvent>> mutateDelegate,
+        Func<WorkflowDefinitionDraft, WorkflowsDesignDbContext, ValueTask<IEvent>> mutateDelegate,
         CancellationToken cancellationToken = default
     )
     {
-        ILifecycleEvent granularEvent;
+        IEvent granularEvent;
         WorkflowDefinitionDraft draft;
         IReadOnlyList<ValidationError> errors;
 
@@ -102,7 +103,7 @@ public sealed class DraftMutationPipeline(
     public async Task ExecuteCreation(
         WorkflowDefinitionDraft newDraft,
         WorkflowDefinitionDraftLayout? newLayout,
-        ILifecycleEvent originationEvent,
+        IEvent originationEvent,
         CancellationToken cancellationToken = default
     )
     {
@@ -154,7 +155,10 @@ public sealed class DraftMutationPipeline(
     )
     {
         var validatingEvent = new OnDraftValidating(draft);
-        await domainEventSender.Send(validatingEvent, cancellationToken);
+        // Sequential gate: the single ExecuteValidations handler runs every IDraftValidator and
+        // aggregates their errors onto the event; the publisher awaits the full chain and reads
+        // the accumulated errors back (§2.6.1 contribution).
+        await eventPublisher.Publish(validatingEvent, EventPublishingStrategy.Sequential, cancellationToken);
 
         var errors = validatingEvent.Errors.ToArray();
 
@@ -198,17 +202,17 @@ public sealed class DraftMutationPipeline(
     }
 
     private async Task PublishLifecycleEvents(
-        ILifecycleEvent granularEvent,
+        IEvent granularEvent,
         WorkflowDefinitionDraft draft,
         IReadOnlyList<ValidationError> errors,
         CancellationToken cancellationToken
     )
     {
-        // Cause first.
-        await lifecycleEventSender.Send(granularEvent, cancellationToken);
+        // Cause first. Background: fire-and-forget, subscribers must not break the publisher.
+        await eventPublisher.Publish(granularEvent, EventPublishingStrategy.Background, cancellationToken);
 
         // Consequence second.
-        var validatedEvent = new DraftValidated(draft, errors);
-        await lifecycleEventSender.Send(validatedEvent, cancellationToken);
+        var validatedEvent = new OnDraftValidated(draft, errors);
+        await eventPublisher.Publish(validatedEvent, EventPublishingStrategy.Background, cancellationToken);
     }    
 }

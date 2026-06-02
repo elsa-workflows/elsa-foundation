@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Design.Reconciliation.Options;
@@ -35,6 +35,6 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
 
         services.AddScoped<IWorkflowVersionReconciler, WorkflowsVersionReconciler>();
 
-        services.AddDomainEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);
+        services.AddEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);
     }
 }

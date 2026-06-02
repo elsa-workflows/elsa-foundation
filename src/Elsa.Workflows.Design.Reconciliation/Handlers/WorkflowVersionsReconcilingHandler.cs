@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
@@ -9,16 +9,16 @@ namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 /// <summary>
 /// Universal handler for <see cref="OnWorkflowVersionsReconciling"/>. Reads every registered
 /// <see cref="IWorkflowReconciliationSource"/> in turn and contributes one
-/// <c>WorkflowDefinitionVersion</c> per entry via <c>event.AddVersion(...)</c>. Source modules
+/// <c>WorkflowDefinitionVersion</c> per entry by adding to <c>event.Versions</c>. Source modules
 /// extend the reconciliation feature by registering their own
 /// <see cref="IWorkflowReconciliationSource"/>; they do not write their own handlers.
 /// </summary>
 public sealed class WorkflowVersionsReconcilingHandler(
     IIdentityGenerator identityGenerator,
     IEnumerable<IWorkflowReconciliationSource> sources)
-    : IDomainEventHandler<OnWorkflowVersionsReconciling>
+    : IEventHandler<OnWorkflowVersionsReconciling>
 {
-    public async ValueTask Handle(OnWorkflowVersionsReconciling domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(OnWorkflowVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach (var source in sources)
         {
@@ -42,7 +42,7 @@ public sealed class WorkflowVersionsReconcilingHandler(
                     State = entry.State,
                 };
 
-                domainEvent.AddVersion(version);
+                domainEvent.Versions.Add(version);
             }
         }
     }

@@ -2,7 +2,7 @@
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Events;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services
 {
@@ -11,7 +11,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
     /// </summary>
     internal sealed class JintJavaScriptEvaluator(
         Serialization.Core.IObjectConverter objectConverter,
-        IDomainEventSender mediator,
+        IEventPublisher mediator,
         IJintEngineFactory jintEngineFactory,
         IPreparedScriptFactory preparedScriptFactory) : IJavaScriptEvaluator
     {
@@ -33,6 +33,8 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
 
             var result = evaluationContext.Evaluate(expression);
 
+            await PublishOnEvaluated(evaluationContext, context, options, cancellationToken);
+
             return objectConverter.ConvertTo(result, returnType);
         }
 
@@ -41,7 +43,15 @@ namespace Elsa.Expressions.JavaScript.Jint.Services
             var notification = new OnEvaluatingScript(
                 script, executionContext, expressionContext, options
             );
-            return mediator.Send(notification, cancellationToken);
+            return mediator.Publish(notification, cancellationToken: cancellationToken);
+        }
+
+        private Task PublishOnEvaluated(JintExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken)
+        {
+            var notification = new OnScriptEvaluated(
+                executionContext, expressionContext, options
+            );
+            return mediator.Publish(notification, cancellationToken: cancellationToken);
         }
     }
 }

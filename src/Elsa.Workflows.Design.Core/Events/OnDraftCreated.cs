@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Core.Events;
 
@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <c>ICreateDraftCommand</c> after the Draft is persisted but before the command returns. Per
 /// Unit C FR-018 lifecycle bullet. Sealed class per framework Â§2.6.1.
 /// </summary>
-public sealed class OnDraftCreated(string draftId, string workflowDefinitionId) : ILifecycleEvent
+public sealed class OnDraftCreated(string draftId, string workflowDefinitionId) : IEvent
 {
     public string DraftId { get; } = draftId;
     public string WorkflowDefinitionId { get; } = workflowDefinitionId;

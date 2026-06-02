@@ -1,5 +1,5 @@
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Events;
 
@@ -11,4 +11,4 @@ namespace Elsa.Activities.Runtime.Core.Events;
 /// </summary>
 public sealed record OnActivityImplementationResolversInitializing(
     ICollection<IActivityImplementationResolver> Resolvers)
-    : IDomainEvent;
+    : IEvent;

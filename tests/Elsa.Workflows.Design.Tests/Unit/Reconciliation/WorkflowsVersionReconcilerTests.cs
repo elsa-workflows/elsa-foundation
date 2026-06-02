@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
@@ -105,7 +105,7 @@ public sealed class WorkflowsVersionReconcilerTests
     }
 
     private static WorkflowsVersionReconciler NewReconciler(
-        IDomainEventSender sender,
+        IEventPublisher sender,
         IQueries<WorkflowDefinition> defs,
         IQueries<WorkflowDefinitionVersion> versions,
         IAddCommand<WorkflowDefinition> addDef,
@@ -155,14 +155,14 @@ public sealed class WorkflowsVersionReconcilerTests
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
     }
 
-    private sealed class CapturingSender : IDomainEventSender
+    private sealed class CapturingSender : IEventPublisher
     {
         public List<IWorkflowDefinitionVersion> ToContribute { get; init; } = new();
-        public Task Send(IDomainEvent domainEvent, CancellationToken cancellationToken)
+        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
         {
-            if (domainEvent is OnWorkflowVersionsReconciling rec)
+            if (@event is OnWorkflowVersionsReconciling rec)
                 foreach (var v in ToContribute)
-                    rec.AddVersion(v);
+                    rec.Versions.Add(v);
             return Task.CompletedTask;
         }
     }

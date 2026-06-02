@@ -17,11 +17,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [LiteralInput("body", "hello")])],
             variables: []
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
@@ -31,11 +29,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-1")])],
             variables: [Variable("var-1", "MyVar")]
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
@@ -45,11 +41,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-missing")])],
             variables: [Variable("var-1", "MyVar")]
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("n1/inputs/body", error.Path);
         Assert.Equal("Expressions/UnresolvedVariable", error.Type);
         Assert.Contains("var-missing", error.Message);
@@ -62,11 +56,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "")])],
             variables: []
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        Assert.Single(evt.Errors);
+        Assert.Single(errors);
     }
 
     [Fact]
@@ -77,11 +69,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-1")])],
             variables: [Variable("var-1", "DifferentName")]
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 
     [Fact]
@@ -93,11 +83,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [root],
             variables: []
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        Assert.Contains(evt.Errors, e => e.Path == "child/inputs/body");
+        Assert.Contains(errors, e => e.Path == "child/inputs/body");
     }
 
     [Fact]
@@ -107,11 +95,9 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", outputs: [VariableInput("result", "var-missing")])],
             variables: []
         );
-        var evt = EventFor(state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
 
-        await new VariableExpressionResolverValidator(Options()).Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("n1/outputs/result", error.Path);
     }
 }

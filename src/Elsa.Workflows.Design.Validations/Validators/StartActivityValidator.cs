@@ -1,5 +1,5 @@
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
@@ -10,25 +10,28 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// MUST have exactly one start. Nested child activities are container-driven; the start
 /// concept is workflow-scoped, so the check is root-level only.
 /// </summary>
-public sealed class StartActivityValidator : IDomainEventHandler<OnDraftValidating>
+public sealed class StartActivityValidator : IDraftValidator
 {
-    public ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
+    public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
-        var startCount = domainEvent.Draft.State.Activities.Count(a => a.IsStart);
+        var startCount = draft.State.Activities.Count(a => a.IsStart);
 
         if (startCount == 1)
-            return ValueTask.CompletedTask;
+            return ValueTask.FromResult(Enumerable.Empty<ValidationError>());
 
         var message = startCount == 0
             ? "Workflow has no start activity. Exactly one activity must be marked as the start."
             : $"Workflow has {startCount} start activities. Exactly one activity must be marked as the start.";
 
-        domainEvent.AddValidationError(new ValidationError(
-            Path: "$workflow",
-            Type: "Graph/StartActivity",
-            Message: message
-        ));
+        IEnumerable<ValidationError> errors =
+        [
+            new ValidationError(
+                Path: "$workflow",
+                Type: "Graph/StartActivity",
+                Message: message
+            )
+        ];
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(errors);
     }
 }

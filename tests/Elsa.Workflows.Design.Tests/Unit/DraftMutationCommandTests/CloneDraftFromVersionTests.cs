@@ -99,7 +99,7 @@ public sealed class CloneDraftFromVersionTests
 
         var newDraftId = await Clone(host, versionId);
 
-        var published = host.LifecycleEventSender.LastOf<OnDraftClonedFromVersion>();
+        var published = host.EventPublisher.LastOf<OnDraftClonedFromVersion>();
         Assert.NotNull(published);
         Assert.Equal(newDraftId, published!.NewDraftId);
         Assert.Equal(versionId, published.SourceVersionId);

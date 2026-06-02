@@ -2,7 +2,9 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.Extensions.Options;
 using InputDefinition = Elsa.Activities.Design.Core.Models.InputDefinition;
 using OutputDefinition = Elsa.Activities.Design.Core.Models.OutputDefinition;
@@ -29,6 +31,9 @@ internal static class ValidatorTestHelpers
 
     public static OnDraftValidating EventFor(WorkflowDefinitionState state) =>
         new(new StubDraft(state));
+
+    public static async Task<IReadOnlyList<ValidationError>> Validate(IDraftValidator validator, WorkflowDefinitionState state) =>
+        [.. await validator.Validate(new StubDraft(state), CancellationToken.None)];
 
     public static IOptions<WorkflowDesignValidatorOptions> Options(int maxRecursionDepth = 100) =>
         Microsoft.Extensions.Options.Options.Create(new WorkflowDesignValidatorOptions { MaxRecursionDepth = maxRecursionDepth });

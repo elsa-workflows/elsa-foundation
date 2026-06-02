@@ -1,5 +1,5 @@
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Validators;
@@ -10,23 +10,25 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// case-insensitive (<c>MyVar</c> and <c>myvar</c> collide). One error per offending name,
 /// regardless of how many definitions share it.
 /// </summary>
-public sealed class VariableUniquenessValidator : IDomainEventHandler<OnDraftValidating>
+public sealed class VariableUniquenessValidator : IDraftValidator
 {
-    public ValueTask Handle(OnDraftValidating domainEvent, CancellationToken cancellationToken)
+    public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
-        var duplicates = domainEvent.Draft.State.Variables
+        var duplicates = draft.State.Variables
             .GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1);
 
+        var errors = new List<ValidationError>();
+
         foreach (var group in duplicates)
         {
-            domainEvent.AddValidationError(new ValidationError(
+            errors.Add(new ValidationError(
                 Path: $"$workflow/variables/{group.Key}",
                 Type: "Variables/Uniqueness",
                 Message: $"Variable name '{group.Key}' is declared {group.Count()} times (case-insensitive). Variable names must be unique within the workflow."
             ));
         }
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult<IEnumerable<ValidationError>>(errors);
     }
 }

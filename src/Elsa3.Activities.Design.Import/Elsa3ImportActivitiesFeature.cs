@@ -1,5 +1,5 @@
 ﻿using CShells.Features;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +26,6 @@ public class Elsa3ImportActivitiesFeature : IShellFeature
             services.AddScoped(typeof(IActivityCollectionJsonSource), type);
         }
 
-        services.AddDomainEventHandlersFrom(GetType().Assembly);
+        services.AddEventHandlersFrom(GetType().Assembly);
     }
 }

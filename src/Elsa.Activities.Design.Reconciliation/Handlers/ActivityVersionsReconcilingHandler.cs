@@ -5,7 +5,7 @@ using Elsa.Activities.Design.Reconciliation.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Models;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -28,9 +28,9 @@ public sealed class ActivityVersionsReconcilingHandler(
     IEnumerable<IActivityReconciliationSource> sources,
     IImplementationDescriptorRegistry descriptorRegistry,
     ISystemClock clock)
-    : IDomainEventHandler<OnActivityVersionsReconciling>
+    : IEventHandler<OnActivityVersionsReconciling>
 {    
-    public async ValueTask Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach (var source in sources)
         {
@@ -73,7 +73,7 @@ public sealed class ActivityVersionsReconcilingHandler(
                 var hash = activityDefinitionHasher.Hash(definition, version);
                 version.ReconcilliationHash = hash;
 
-                domainEvent.AddVersion(version);
+                domainEvent.Versions.Add(version);
             }
         }
     }

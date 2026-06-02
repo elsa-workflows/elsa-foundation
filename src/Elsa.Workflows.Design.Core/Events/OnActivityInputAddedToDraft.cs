@@ -1,4 +1,4 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Events;
@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// Distinct from <c>OnWorkflowInputAddedToDraft</c>, which adds a workflow-definition-level
 /// input declaration. This event is per-activity binding state.
 /// </remarks>
-public sealed class OnActivityInputAddedToDraft(string draftId, string nodeId, ArgumentState input) : ILifecycleEvent
+public sealed class OnActivityInputAddedToDraft(string draftId, string nodeId, ArgumentState input) : IEvent
 {
     public string DraftId { get; } = draftId;
     public string NodeId { get; } = nodeId;

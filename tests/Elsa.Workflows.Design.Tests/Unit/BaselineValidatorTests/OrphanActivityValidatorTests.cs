@@ -15,11 +15,9 @@ public sealed class OrphanActivityValidatorTests
     public async Task Orphan_activity_emits_error()
     {
         var state = State(activities: [Node("orphan")]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        var error = Assert.Single(evt.Errors);
+        var error = Assert.Single(errors);
         Assert.Equal("orphan", error.Path);
         Assert.Equal("Graph/OrphanActivity", error.Type);
     }
@@ -31,11 +29,9 @@ public sealed class OrphanActivityValidatorTests
             activities: [Node("a"), Node("b")],
             connections: [Edge("a", "b")]
         );
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        Assert.DoesNotContain(evt.Errors, e => e.Path == "b");
+        Assert.DoesNotContain(errors, e => e.Path == "b");
     }
 
     [Fact]
@@ -45,21 +41,17 @@ public sealed class OrphanActivityValidatorTests
             activities: [Node("a"), Node("b")],
             connections: [Edge("a", "b")]
         );
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        Assert.DoesNotContain(evt.Errors, e => e.Path == "a");
+        Assert.DoesNotContain(errors, e => e.Path == "a");
     }
 
     [Fact]
     public async Task IsStart_activity_is_excluded_even_when_disconnected()
     {
         var state = State(activities: [Node("start", isStart: true)]);
-        var evt = EventFor(state);
+        var errors = await Validate(Validator(), state);
 
-        await Validator().Handle(evt, CancellationToken.None);
-
-        Assert.Empty(evt.Errors);
+        Assert.Empty(errors);
     }
 }
