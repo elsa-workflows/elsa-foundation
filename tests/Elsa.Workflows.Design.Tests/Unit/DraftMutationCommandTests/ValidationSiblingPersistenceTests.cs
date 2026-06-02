@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -108,7 +109,7 @@ public sealed class ValidationSiblingPersistenceTests
 
         var draftId = await CreateDraft(host, "wf-1");
 
-        var validated = host.LifecycleEventSender.LastOf<OnDraftValidated>();
+        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
         Assert.NotNull(validated);
         Assert.True(validated!.HasErrors);
         Assert.Single(validated.Errors);

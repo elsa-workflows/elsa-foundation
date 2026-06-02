@@ -1,8 +1,9 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
-namespace Elsa.Workflows.Design.Validations.Core.Events;
+namespace Elsa.Workflows.Design.Validations.Core.Notifications;
 
 /// <summary>
 /// Lifecycle counterpart to <see cref="OnDraftValidating"/>. Fires AFTER the validation pass
@@ -22,7 +23,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Events;
 /// empty if validation found no issues.
 /// </para>
 /// </remarks>
-public sealed class OnDraftValidated(IWorkflowDefinitionDraft draft, IReadOnlyList<ValidationError> errors) : ILifecycleEvent
+public sealed class DraftValidated(IWorkflowDefinitionDraft draft, IReadOnlyList<ValidationError> errors) : ILifecycleEvent
 {
     public IWorkflowDefinitionDraft Draft { get; } = draft;
 

@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
+using Elsa.Workflows.Design.Validations.Core.Notifications;
 
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
@@ -70,13 +71,13 @@ public sealed class DraftMutationPipelineTests
         Assert.NotEmpty(host.DomainEventSender.CapturedEvents.OfType<OnDraftValidating>());
 
         // (d) OnDraftValidated fires after the granular lifecycle event (cause before consequence).
-        var validated = host.LifecycleEventSender.LastOf<OnDraftValidated>();
+        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
         Assert.NotNull(validated);
         Assert.Empty(validated!.Errors);
 
         var lifecycleEvents = host.LifecycleEventSender.CapturedEvents.ToList();
         var granularIdx = lifecycleEvents.FindLastIndex(e => e is OnActivityAddedToDraft);
-        var validatedIdx = lifecycleEvents.FindLastIndex(e => e is OnDraftValidated);
+        var validatedIdx = lifecycleEvents.FindLastIndex(e => e is DraftValidated);
         Assert.True(granularIdx >= 0);
         Assert.True(
             validatedIdx > granularIdx,
@@ -178,7 +179,7 @@ public sealed class DraftMutationPipelineTests
         Assert.Equal("wf-1", created.WorkflowDefinitionId);
 
         // OnDraftValidated fires after creation too — the empty Draft's validation pass returns no errors.
-        var validated = host.LifecycleEventSender.LastOf<OnDraftValidated>();
+        var validated = host.LifecycleEventSender.LastOf<DraftValidated>();
         Assert.NotNull(validated);
         Assert.False(validated!.HasErrors);
     }

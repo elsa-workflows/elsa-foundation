@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -207,7 +208,7 @@ public sealed class DraftMutationPipeline(
         await lifecycleEventSender.Send(granularEvent, cancellationToken);
 
         // Consequence second.
-        var validatedEvent = new OnDraftValidated(draft, errors);
+        var validatedEvent = new DraftValidated(draft, errors);
         await lifecycleEventSender.Send(validatedEvent, cancellationToken);
     }    
 }

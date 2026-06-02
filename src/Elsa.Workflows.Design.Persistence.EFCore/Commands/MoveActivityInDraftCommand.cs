@@ -32,7 +32,7 @@ public sealed class MoveActivityInDraftCommand(DraftMutationPipeline pipeline) :
         );
     }
 
-    private async ValueTask<ILifecycleEvent> Execute(
+    private static async ValueTask<ILifecycleEvent> Execute(
         WorkflowsDesignDbContext dbContext,
         string draftId,
         string nodeId,

@@ -21,6 +21,20 @@ v2.0.0 provenance — consolidated fold of:
      → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
      → Elsa §E2.7).
 
+Unit C Phase-8 amendment (2026-05-29, draft pending 2026-06-01 ratification):
+  - §2.24 NEW — "Sanctioned patterns — the closed catalog." Articulates Joey's
+    2026-05-29 rule: the framework recognises a closed catalog of architectural
+    patterns; code MUST resolve problems using a pattern from the catalog;
+    new patterns require architect evaluation + documented use case + criteria
+    + worked example + ratification before adoption. Random ad-hoc patterns
+    are not permitted. §2.24.1 carries the rationale (predictability,
+    AI-session continuity, review surface). §2.24.2 carries the catalog as a
+    table cross-referencing the existing § identifiers, plus two new
+    catalogue rows — **Strategy** (already in implicit use at §2.6.6's
+    publishing strategies; codified for general use) and **Factory**
+    (candidate; promotion pending Monday's discussion). §2.24.3 carries the
+    gate for adding a new pattern. Cross-references the agenda Item 7.
+
 Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification;
 filename + scope refined 2026-05-29):
   - §2.22.1 NEW sub-rule — "Domain-level events catalog." Every domain whose
@@ -336,6 +350,7 @@ Follow-up TODOs:
   - [§2.21 Test discipline](#221-test-discipline) · [§2.21.1 Golden rule of refactoring](#2211-the-golden-rule-of-refactoring) · [§2.21.2 Greenfield deferral](#2212-greenfield-test-discipline)
   - [§2.22 Feature documentation](#222-feature-documentation)
   - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Integration testing — out of scope](#2235-integration-testing--out-of-scope)
+  - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Why this rule](#2241-why-this-rule) · [§2.24.2 The catalog](#2242-the-catalog-snapshot-2026-05-29-pending-2026-06-01-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
 - [§4 Versioning](#4-versioning)
   - [§4.1 Per-Package Versioning](#41-per-package-versioning)
@@ -1133,6 +1148,62 @@ Integration testing — composing multiple features, exercising real external sy
 The category structure (cross-feature contract composition, external-system integration, deployment use-case verification) and the infrastructure (test containers, real-DB harnesses, deployed-bundle scaffolding) are open questions, scoped in a follow-up for a dedicated future architects' meeting.
 
 The unit-test discipline above does NOT depend on integration testing existing. A feature is testable through §2.23.1 and §2.23.2 alone.
+
+### §2.24 Sanctioned patterns — the closed catalog
+
+*New section (Unit C Phase-8 amendment, 2026-05-29; draft pending 2026-06-01 ratification.)*
+
+The framework recognises a **closed catalog** of architectural patterns for resolving the recurring problems of modular design. **Code MUST resolve problems using a pattern from this catalog.** If a recurring problem genuinely does not fit any catalogued pattern, that gap is brought to the architects, evaluated, documented (with use case + criteria + worked example), ratified, and added to the catalog *before* the new pattern is adopted across the codebase. **Ad-hoc patterns invented at the call site are not permitted.**
+
+This rule is a **discipline rule**, not a behaviour rule. It does not change what the existing sections (§2.1–§2.23) prescribe; it asserts that the union of those sections IS the sanctioned vocabulary, and that the catalog grows only through the gate in §2.24.3.
+
+#### §2.24.1 Why this rule
+
+- **Predictability.** A code reader (human or AI) opens a feature and finds patterns they have seen elsewhere in the same form. Inventing a new pattern fragments the surface area readers must learn.
+- **AI-session continuity.** Future AI sessions plan against the constitution. If the constitution names the patterns the codebase uses, the AI's planning surface matches the codebase's structural surface. Random patterns force the AI to either re-derive the structure (expensive, error-prone) or document the deviation (debt).
+- **Review surface.** Reviewers ask "which pattern applies?" rather than "is this pattern OK?". A bounded vocabulary makes the question answerable mechanically.
+- **Recurring problems have recurring shapes.** The patterns in this catalog were discovered by hitting the same problem repeatedly. New problems may need new patterns — but the right answer is to *codify* the new pattern, not to reinvent it ad hoc each time.
+
+#### §2.24.2 The catalog (snapshot 2026-05-29; pending 2026-06-01 ratification)
+
+| # | Pattern | Canonical § | One-line use case | Trigger / criteria |
+|---|---|---|---|---|
+| 1 | **Three-layer separation per feature** | §2.1 | Decompose a feature into `.Core` (contracts) / helper (optional thin impl) / implementation (DI activation). | Every new feature follows this shape; cross-feature consumption happens through `.Core`. |
+| 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
+| 3 | **Domain events — contribution mechanism** | §2.6.1 | Publisher gathers contributions from any number of features; publisher reads back. | The sender CARES that handlers ran (validators, contributors, converters). |
+| 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
+| 3b | *sub-pattern:* Intent-revealing methods on events | §2.6.1 | Encapsulate event payload; handlers can only contribute, not mutate. | Every contribution event: private list + `AddX()` + public `IReadOnlyList<T>` read accessor. |
+| 3c | *sub-rule:* Subscriber MUST NEVER break publisher | §2.6.1 | Exception-shielding middleware as default; handler failures don't propagate. | Default for every domain-event pipeline; engineers may swap for fail-fast in specific cases. |
+| 4 | **Notifications + Lifecycle events** | §2.6.6 | Fire-and-forget pub/sub: "X happened, react if you want." | The sender does NOT care that any particular handler ran. Lifecycle events (`ILifecycleEvent`) for state transitions; default Background strategy. |
+| 5 | **Replacement contracts** | §2.6.2 | One implementation per application (e.g. one `IDistributedLockProvider`). | Multiple registrations = conflict, not contribution. Detect at startup. |
+| 6 | **Design-time vs runtime contract split** | §2.6.4 | Split a contract when it has both a design-time consumer (intellisense, picker) and a runtime consumer (binding, execution). | Two consumers, two contracts. Each may share a shape record. |
+| 7 | **Sync contributor pattern — rare exception** | §2.6.5 | A sync-dispatched, behaviour-shaped contribution that cannot fit §2.6.1 or Registry + StartUp Task. | All three criteria hold (sync site, behaviour-not-data, registry-inapplicable). Reviewers MUST challenge every invocation. |
+| 8 | **Adapter / Bridge** | §2.7 | Isolate a heavy or external dependency behind a stable domain contract. | Wrap third-party libraries so consumers of `.Core` never see them. |
+| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `INotificationSender` publishing strategies (Sequential / Parallel / Background) per §2.6.6. Proposed worked example: `IReconciliationStrategy` per agenda Item 2 addendum. |
+| 10 | **Factory** *(candidate, pending Monday)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. Promoted to first-class pattern at 2026-06-01 ratification if Monday confirms. |
+| 11 | **Provider module decomposition** | §2.20 | One domain, multiple provider-specific implementations packaged as siblings. | When a domain accrues a second provider with real shared logic. Rule 1 forbids premature umbrellas. |
+| 12 | **Domain-level shadow properties** | §2.9.1 | Persistence-only field that exists on the CLR entity but is hidden from the read interface. | Use real CLR property + omit from `I<Entity>` — never the provider's shadow mechanism. |
+| 13 | **CQS at persistence boundary** | §2.10 | Split persistence contracts into commands (mutate) and queries (read). | Every persistence-facing interface. Combined-mutate-and-query methods are a smell. |
+| 14 | **Integration vs Consumption-Shape — separate modules** | §2.14 | Integration code (`<App>.<Integration>`) and the consumption-shape (`<App>.<Integration>.<Consumer>`) ship as separate modules. | Activities or other consumer-facing modules adapting an external-system integration. |
+
+**Patterns not in the catalog are not sanctioned.** A code reviewer who sees a pattern not in this catalog applied to a problem MUST flag it. The fix is either (a) refactor to use a catalogued pattern, or (b) bring the pattern to the architects per §2.24.3.
+
+**The catalog is not a coding style guide.** Naming conventions, test discipline, refactor rules, versioning, packaging — all governed by their own § identifiers (§2.2, §2.16, §2.17, §2.21, §2.22, §2.23, §4) — are not *patterns* in this catalog's sense. The catalog enumerates **structural solution shapes** for cross-feature composition and modular decomposition.
+
+#### §2.24.3 Adding a new pattern
+
+A candidate pattern that does not yet appear in §2.24.2 follows this gate before adoption:
+
+1. **Surface the candidate.** An architect raises it via the agenda mechanism (Governance > Amendment process).
+2. **Document the use case.** What recurring problem does the pattern solve? In which features or units has the problem appeared? Why doesn't an existing catalogued pattern apply?
+3. **Define the criteria.** Under what specific conditions does this pattern apply? Equally important: under what conditions does it *not* apply? (The criteria prevent the pattern from drifting into a junk-drawer general-purpose solution.)
+4. **Provide a worked example.** A concrete worked example in the codebase (preferred) or a synthetic example using `<App>` placeholders. The worked example becomes part of the constitutional record.
+5. **Ratify by architect consensus** per Governance.
+6. **Catalog.** Add a row to §2.24.2 with the canonical § reference (a new sub-section under §2.24 or an extension of an existing pattern's §). Update plan-template Constitution Check gates if the new pattern's compliance can be checked mechanically.
+
+A pattern adopted *before* going through this gate is technical debt — surface it retroactively for ratification, and either ratify or refactor.
+
+**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (notifications + worked-strategy example); §2.7 (adapter); §2.20 (provider module decomposition). Application-specific worked examples land in the application's derived constitution.
 
 ---
 
