@@ -3,6 +3,7 @@ using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
+using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,15 +17,15 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
             if (UseCommands)
             {
                 services
-                    .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinitionCommand>()
+                    .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
                     // Lifecycle origination + cloning + discard (NOT mutations — kept distinct, FR-003)
-                    .AddScoped<ICreateDraftCommand, CreateDraftCommand>()
-                    .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
-                    .AddScoped<IDiscardDraftCommand, DiscardDraftCommand>()
+                    .AddScoped<ICreateDraftCommand, CreateDraft>()
+                    .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
+                    .AddScoped<IDiscardDraftCommand, DiscardDraft>()
                     // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
                     // Supersedes the former 20 granular mutation commands.
-                    .AddScoped<DraftStateDiffer>()
-                    .AddScoped<IUpdateDraftCommand, UpdateDraftCommand>()
+                    .AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>()
+                    .AddScoped<IUpdateDraftCommand, UpdateDraft>()
                     .AddEntitySavingHandlersFrom(GetType().Assembly)
                     .AddEntitySavingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
             }

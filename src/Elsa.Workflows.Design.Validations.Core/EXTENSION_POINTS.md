@@ -1,16 +1,40 @@
-# Events — `Elsa.Workflows.Design.Validations.Core`
+# Extension points — `Elsa.Workflows.Design.Validations.Core`
 
-Catalog per framework §2.22.1. Both events are `IEvent` (framework §2.6.1); they differ only in **delivery strategy** (§2.6.6). This `.Core` is the canonical mixed-strategy example.
+The per-domain catalog (framework §2.22.1) of everything you can implement or override in this domain, plus the events it publishes. Three sections:
 
-**Sequential / contribution** (§2.6.6) — `OnDraftValidating`. The gate. Features implement the `IDraftValidator` contributor interface and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's directly-accessible `Errors` collection. The mutation pipeline publishes it Sequential, awaits the dispatch, and reads the collected errors back.
+- **Overridable contracts** — `.Core` interfaces with a default implementation you can *replace* (`services.Replace(...)` / register-your-own). You bring one implementation and the built-in one steps aside.
+- **Implementable contributor interfaces** — *add-don't-replace* seams. You register an additional implementation alongside any others; a single aggregating handler runs them all (framework §2.6.1, §2.24.2).
+- **Events** — what this `.Core` publishes (category, semantic, payload, strategy, publication site, expected handlers, ordering). Events are the dispatch mechanism behind the contributor interfaces and the observation surface for subscribers.
 
-**Background / notification** (§2.6.6) — `OnDraftValidated`. The outcome notification. Published Background after the validation pass completed and the errors were persisted alongside the state. Audit, UI push, telemetry react.
-
-Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test scans every `IEvent` type in this `.Core` assembly and asserts bidirectional alignment with the headings here.
+This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's entry for this domain; the index links here for detail.
 
 ---
 
-## Sequential / contribution events
+## Overridable contracts
+
+This `.Core` exposes no swappable default-impl service of its own — the validation *behaviour* is contributed (see below), and the validation *outcome* is persisted by whichever command owns the transition. The validation-result sibling contract `IWorkflowDefinitionDraftValidation` is a read-model abstraction realised by the persistence layer, not a behavioural seam.
+
+---
+
+## Implementable contributor interfaces
+
+### `IDraftValidator`
+- **Kind:** Validator (action-named contributor — inspects and **returns** findings). **Lives in:** `Elsa.Workflows.Design.Validations.Core` (`Contracts/`).
+- **Signature:** `ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken);`
+- **Returns** the validation errors it found (empty when valid); it never mutates the event.
+- **Register:** `services.AddScoped<IDraftValidator, MyValidator>()`.
+- **Consumed by:** the single `ExecuteValidations : IEventHandler<OnDraftValidating>` (`Elsa.Workflows.Design.Validations`), which injects `IEnumerable<IDraftValidator>` and aggregates every implementation's errors onto the event's `Errors` collection.
+- **Adding one does not replace the others:** the 5 baseline validators and every activity-feature-co-located validator all run. This is the *extend* path, not the *override* path.
+
+---
+
+## Events
+
+Both events are `IEvent` (framework §2.6.1); they differ only in **delivery strategy** (§2.6.6). This `.Core` is the canonical mixed-strategy example.
+
+Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test scans every `IEvent` type in this `.Core` assembly and asserts bidirectional alignment with the `### On…` headings in this section.
+
+**Sequential / contribution** (§2.6.6) — `OnDraftValidating`. The gate. Features implement the `IDraftValidator` contributor interface and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's directly-accessible `Errors` collection. The mutation pipeline publishes it Sequential, awaits the dispatch, and reads the collected errors back.
 
 ### OnDraftValidating
 
@@ -20,9 +44,7 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 - `Draft : IWorkflowDefinitionDraft` — the post-mutation Draft (cross-`.Core` reference to `Elsa.Workflows.Design.Core` per framework §2.1).
 - `Errors : ICollection<ValidationError>` — a directly-accessible collection the aggregating handler writes into. Individual validators never touch the event; they return errors via `IDraftValidator.Validate`.
 
-**Contributor interface.** `IDraftValidator` (this `.Core`):
-- `ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)`.
-- Return-style contributor (it **returns** its errors; it does not mutate the event). Implement it in any feature and register it via DI (`services.AddScoped<IDraftValidator, MyValidator>()`); the `ExecuteValidations` handler resolves `IEnumerable<IDraftValidator>` and aggregates. Per framework §2.24.2 (contributor interface + single aggregating handler).
+**Contributor interface.** `IDraftValidator` (this `.Core`) — see the Implementable contributor interfaces section above for signature + registration.
 
 **Delivery strategy.** Sequential (the default) — the publisher must read contributions back.
 
@@ -41,9 +63,7 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 - Validators run in DI-resolution order (no guaranteed inter-validator ordering — independent per framework §2.6.1).
 - The Sequential path ships **no exception-shielding** (framework §2.6.6, Unit 1): a validator that throws fails the publish and the mutation. Validators are expected to return errors, not throw.
 
----
-
-## Background / notification events
+**Background / notification** (§2.6.6) — `OnDraftValidated`. The outcome notification. Published Background after the validation pass completed and the errors were persisted alongside the state. Audit, UI push, telemetry react.
 
 ### OnDraftValidated
 
@@ -73,6 +93,7 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 
 ## Cross-references
 
-- Granular FR-018 / FR-018a mutation events live in [`Elsa.Workflows.Design.Core/EVENTS.md`](../Elsa.Workflows.Design.Core/EVENTS.md).
+- Granular FR-018 / FR-018a mutation events live in [`Elsa.Workflows.Design.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Core/EXTENSION_POINTS.md).
 - The validation pair is published by whichever command owns the transition: `OnDraftValidating` (Sequential gate) then `OnDraftValidated` (Background outcome) fire from `CreateDraftCommand` (origination + clone, by delegation) and `UpdateDraftCommand` (mutation); see each command's doc-header for the in-lock order. There is no shared "pipeline" collaborator — each command owns its shell inline.
-- Constitutional basis: §2.6.1 (the single `IEvent` concept + contribution sub-pattern) + §2.6.6 (delivery strategies) + §2.22.1 (events catalog).
+- Repo-wide interface index: [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Constitutional basis: §2.6.1 (the single `IEvent` concept + contribution sub-pattern; action-named contributor suffixes) + §2.6.6 (delivery strategies) + §2.22.1 (per-domain extension-points catalog) + §2.24.2 (contributor interface + single aggregating handler).

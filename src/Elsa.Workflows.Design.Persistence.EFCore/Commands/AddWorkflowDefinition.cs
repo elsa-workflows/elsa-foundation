@@ -3,10 +3,10 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
-namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
+namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
 
-public sealed class AddWorkflowDefinitionCommand(IDbContextFactory<WorkflowsDesignDbContext> factory) : IAddWorkflowDefinitionCommand
+public sealed class AddWorkflowDefinition(IDbContextFactory<WorkflowsDesignDbContext> factory) : IAddWorkflowDefinitionCommand
 {
     public async Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {

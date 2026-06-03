@@ -97,10 +97,19 @@ public sealed class FeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinition>>());
         Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinitionVersion>>());
 
-        // The migrated saving handler resolves through the OnEntitySaving event
-        // surface (Unit A code-checklist closure). Handlers register as non-generic.
-        var allHandlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
-        Assert.Contains(allHandlers, h => h is Elsa.Activities.Design.Persistence.EFCore.EntityHandlers.ActivityDefinitionVersionSavingHandler);
+        // The migrated saving handler is a typed IEntitySavingHandler<,> contributor (the assembly
+        // scan registers it); the single ApplyEntitySavingHandlers aggregator — registered once by
+        // the EF Core base feature — is the sole IEventHandler<OnEntitySaving> that dispatches it.
+        Assert.NotNull(scope.ServiceProvider.GetService<Elsa.Persistence.EFCore.Contracts.IEntitySavingHandler<
+            Elsa.Activities.Design.Persistence.EFCore.DbContext.ActivitiesDesignDbContext,
+            ActivityDefinitionVersion>>());
+
+        var savingSubscribers = scope.ServiceProvider
+            .GetServices<IEventHandler>()
+            .OfType<IEventHandler<OnEntitySaving>>()
+            .ToList();
+        Assert.Single(savingSubscribers);
+        Assert.IsType<Elsa.Persistence.EFCore.Handlers.ApplyEntitySavingHandlers>(savingSubscribers[0]);
     }
 
     /// <summary>

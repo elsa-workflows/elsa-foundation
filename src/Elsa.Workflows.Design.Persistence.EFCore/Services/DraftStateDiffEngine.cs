@@ -4,11 +4,13 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.EFCore.Commands;
+using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 
-namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
+namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 
 /// <summary>
-/// Pure, internal diff engine for <see cref="UpdateDraftCommand"/> (Unit 2). Given the stored
+/// Pure, internal diff engine for <see cref="UpdateDraft"/> (Unit 2). Given the stored
 /// Draft state+layout and the complete desired state+layout, derives the ordered list of
 /// per-concept mutation events — one event per detected difference — using the existing 20
 /// <c>Elsa.Workflows.Design.Core.Events</c> mutation event types. The per-concept derivation
@@ -39,9 +41,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// <c>public sealed</c> per G27 for cross-assembly test visibility via the test project.
 /// </para>
 /// </remarks>
-public sealed class DraftStateDiffer
+public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
 {
-    public IReadOnlyList<IEvent> Diff(
+    public IReadOnlyList<IEvent> Evaluate(
         string draftId,
         WorkflowDefinitionState stored,
         IReadOnlyCollection<DesignMetadataRecord> storedLayout,

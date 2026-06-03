@@ -8,13 +8,15 @@ Provider-agnostic EF Core persistence layer for the activity catalog. Inherits t
 - **EF Core configurations** for each entity (composite unique indexes, foreign keys, max-length conventions).
 - **`IAddActivityDefinitionCommand`** → `AddActivityDefinitionCommand` (transactional parent+version insert).
 - **`IActivityDefinitionLookup`** → `ActivityDefinitionLookup` — the picker query (Model X: catalog membership only; no removal filter).
-- **`ActivityDefinitionVersionSavingHandler`** — migrated to the §2.6.1 `OnEntitySaving` domain-event surface (Unit B US5 / Unit A code-checklist closure). Serialises `Inputs`/`Outputs`/`Ports` + the implementation descriptor; derives `ImplementationKind` from `descriptor.Kind`.
-- **`ActivityDefinitionVersionLoadingHandler`** — `IEntityLoadingHandler<,>`. Deserialises `*Source` columns + the `ImplementationDescriptorPayload` (using the descriptor registry's kind→type lookup) back into rich projections. Failures throw `ActivityDescriptorDeserialisationException` with version id + kind context.
+- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`Ports` + the implementation descriptor; derives `ImplementationKind` from `descriptor.Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
+- **`ActivityDefinitionVersionLoadingHandler`** — a typed `IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor. Deserialises `*Source` columns + the `ImplementationDescriptorPayload` (using the descriptor registry's kind→type lookup) back into rich projections. Dispatched by the single `ApplyEntityLoadingHandlers` aggregator on `OnEntityLoading`. Failures throw `ActivityDescriptorDeserialisationException` with version id + kind context.
 
 ## Cross-feature contributions (handlers this feature registers)
 
-- **`IDomainEventHandler<OnEntitySaving>`** → `ActivityDefinitionVersionSavingHandler` (registered via `AddDomainEventHandlersFrom` in `EFCoreActivitiesPersistenceFeatureBase`).
-- **`IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>`** → `ActivityDefinitionVersionLoadingHandler`. Registered explicitly by provider features (e.g. `SqliteActivitiesDesignPersistenceShellFeature`).
+- **`IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>`** → `ActivityDefinitionVersionSavingHandler` (registered via the `AddEntitySavingHandlersFrom` assembly scan in `EFCoreActivitiesPersistenceFeatureBase`). Dispatched by the single `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>` aggregator — this feature does NOT register its own `IEventHandler<OnEntitySaving>`.
+- **`IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>`** → `ActivityDefinitionVersionLoadingHandler`. Registered explicitly by provider features (e.g. `SqliteActivitiesDesignPersistenceShellFeature`). Dispatched by the single `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` aggregator.
+
+See [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md) for the saving/loading event contract (Events section) plus that domain's overridable contracts and contributor interfaces, and the repo-root [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) for the cross-domain index.
 
 ## Feature inheritance chain
 

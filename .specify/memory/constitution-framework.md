@@ -112,6 +112,46 @@ folded into the 3.0.0 draft):
     event). The JS declarations context `IJavaScriptRenderingContext` was renamed
     `IJavaScriptDeclarationsContributionContext` so the name states its purpose.
 
+Unit 1 consistency fix (2026-06-03 — "EF Core save/load on the contributor +
+single-aggregating-handler shape"):
+  - §2.6.1 extended — action-named contributor suffixes (`…Validator`,
+    `…Handler`) are now explicitly sanctioned alongside Source / Contributor /
+    PreProcessor / PostProcessor. They are context-receiving (Contributor-kind)
+    but keep an action-specific, intent-revealing name; the single aggregating
+    `IEventHandler<OnXxx>` still owns the event subscription.
+  - §2.22.1 broadened — the per-domain `EVENTS.md` becomes a per-domain
+    `EXTENSION_POINTS.md` with three sections (Overridable contracts /
+    Implementable contributor interfaces / Events), distinguishing the two
+    extension axes: **override** (replace a `.Core` contract's default impl) vs
+    **extend** (add a contributor the single aggregating handler runs). Events
+    are absorbed as the third section. The three existing `EVENTS.md` files
+    (Workflows.Design.Core, Workflows.Design.Validations.Core, Persistence.EFCore)
+    were converted; the `CatalogParityTests` filename was retargeted.
+  - §2.22.2 NEW — the repo-wide `EXTENSION_POINTS.md` is recognised as an
+    **index** alongside per-feature READMEs and the per-domain catalogs: it maps
+    every extension point and links to the owning domain's `EXTENSION_POINTS.md`
+    for detail (inlining only the not-yet-migrated domains). Index and per-domain
+    catalogs share the filename, distinguished by location (repo root vs `.Core`
+    project root).
+  - Code cascade: the EF Core entity save/load extension points finished their
+    migration off the "coexist" half-state onto the canonical contributor +
+    single-aggregating-handler shape (mirror of `IDraftValidator` +
+    `ExecuteValidations`). `Elsa.Persistence.EFCore` now ships two single
+    aggregators — `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>`
+    and `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (registered
+    once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`) — that
+    reflect the typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>`
+    contributors over the runtime DbContext + entity types. The legacy
+    direct-dispatch loops in `ElsaDbContextBase` / `EFCoreQueries` were removed;
+    `ActivityDefinitionVersionSavingHandler` was re-homed onto the typed
+    `IEntitySavingHandler<,>`; mutate-then-save commands (`UpdateDraft`) now
+    publish `OnEntityLoading` Sequential against their own tracked context rather
+    than hand-rolling a handler loop. `Elsa.Persistence.EFCore` gains an
+    `EXTENSION_POINTS.md`; the repo root gains the `EXTENSION_POINTS.md` index.
+    The out-of-band
+    `IGlobalEntitySavingHandler` + `IEntityModelCreatingHandler` remain on their
+    own dispatch mechanisms (unchanged).
+
 Unit C Phase-8 amendment (2026-05-29, draft pending 2026-06-01 ratification):
   - §2.24 NEW — "Sanctioned patterns — the closed catalog." Articulates Joey's
     2026-05-29 rule: the framework recognises a closed catalog of architectural
@@ -710,7 +750,9 @@ A fan-in event that gathers contributions from many features MUST use the **cont
 - **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
 - **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **OnXxxing / OnXxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
 
-Never name a return-style interface `Contributor`, nor a context-acting interface `Source`. A *Source* yields data; a *Contributor* performs operations against a target; a *PreProcessor*/*PostProcessor* performs operations against a target at a named point in a before/after lifecycle.
+**Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
+
+Never name a return-style interface `Contributor`, nor a context-acting interface `Source`. A *Source* yields data; a *Contributor* (incl. its action-named forms `Validator`/`Handler`) performs operations against a target; a *PreProcessor*/*PostProcessor* performs operations against a target at a named point in a before/after lifecycle.
 
 **Why.**
 
@@ -1159,11 +1201,18 @@ Every feature MUST be accompanied by documentation that lets operators, integrat
 
 The form of the documentation (README, manifest, generated reference, sidecar JSON) is application-defined. The obligation is the content, not the medium.
 
-#### §2.22.1 Domain-level events catalog
+#### §2.22.1 Domain-level extension-points catalog
 
-*New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy.*
+*New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy. Broadened Unit 1 (2026-06-03): the standalone `EVENTS.md` becomes a per-domain `EXTENSION_POINTS.md` whose Events section absorbs the former events catalog — because events are only one of the seams a domain exposes; overridable contracts and implementable contributor interfaces are the rest, and a consumer needs all three in one place.*
 
-Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library publishes events MUST ship an **events catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what events does this domain publish?* Without re-reading every feature implementation.
+Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library exposes extension points (overridable contracts, implementable contributor interfaces, AND/OR published events) MUST ship an **extension-points catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what can I override, what can I implement, and what events does this domain publish?* — without re-reading every feature implementation.
+
+**Two axes of extension the catalog distinguishes.**
+
+- **Override** — *replace* a default implementation of a `.Core` contract (the seam is the contract; one implementation wins via `services.Replace(...)` / register-your-own). A consumer may override one contract and keep the rest (e.g. swap the commands, keep the built-in queries).
+- **Extend** — *add* a contributor implementation alongside the built-ins; the single aggregating handler runs every registered implementation (adding one never removes another). The §2.6.1 contributor-interface + single-aggregating-handler pattern.
+
+The catalog has three sections: **Overridable contracts**, **Implementable contributor interfaces**, and **Events** (the former standalone catalog, now a section — since events are the dispatch mechanism behind the contributor interfaces and the observation surface for subscribers).
 
 **Events are one concept; the catalog records each event's delivery strategy.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses and whether it reads contributions back. The catalog SHOULD make the strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
 
@@ -1184,15 +1233,36 @@ A domain may publish events of either strategy, or have a present-participle gat
 - **Ordering guarantees** if any — e.g., "fires after the materialised snapshot is updated but before the persistence flush."
 - **Cross-references** to other domains' catalogs that consumers should be aware of.
 
-**Why a separate catalog.**
+For the **Overridable contracts** section, each entry records: the contract, its default implementation (and owning project — a seam may live in a sibling project of the same domain per §2.1), its signature, when/why to override, and what depends on it. For the **Implementable contributor interfaces** section, each entry records the interface name + kind, signature, registration call, and the single aggregating handler that consumes it.
+
+**Why one catalog per domain.**
 
 - The §2.22 per-feature documentation answers *"what does THIS feature register?"* — useful when investigating a feature.
-- The events catalog answers *"what extension points does THIS domain expose?"* — useful when *consuming* the domain, designing a new contributor, or onboarding into the domain cold.
+- The extension-points catalog answers *"what can I override, implement, or subscribe to in THIS domain?"* — useful when *consuming* the domain, designing a new contributor, swapping a default, or onboarding into the domain cold.
 - The two views are complementary; the catalog is the index humans and AI sessions reach for first.
 
-**Form.** Application-defined. Recommended: a single `EVENTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/EVENTS.md`). Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
+**Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/EXTENSION_POINTS.md`), with the three sections above. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** Unit C creates the initial Elsa worked examples: `src/Elsa.Workflows.Design.Core/EVENTS.md` (catalogs the Draft mutation events — all published Background) and `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (catalogs `OnDraftValidating` published Sequential AND `OnDraftValidated` published Background — the canonical mixed-strategy example). As subsequent units add events to other Design domains, each domain ships its own catalog.
+**Worked example.** Unit C created the initial Elsa worked examples as standalone `EVENTS.md` files; Unit 1 (2026-06-03) folded each into a per-domain `EXTENSION_POINTS.md` (Events section + overridable-contracts + contributor sections): `src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md` (the Draft mutation events — all Background — plus the lookup/command/diff-engine override seams), `src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md` (`OnDraftValidating` Sequential + `OnDraftValidated` Background — the canonical mixed-strategy example — plus the `IDraftValidator` contributor), and `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md` (the `OnEntitySaving` + `OnEntityLoading` seams, the `IEntitySavingHandler<,>`/`IEntityLoadingHandler<,>` contributors, and the `IQueries<>`/`IUpsertCommandGenerator` override contracts — the canonical "swap one implementation, keep the rest" example). As subsequent units expose extension points in other domains, each domain ships its own catalog.
+
+#### §2.22.2 Repo-wide extension-points index
+
+*New sub-rule (Unit 1, 2026-06-03).*
+
+Beyond the per-feature documentation (§2.22 — *what does THIS feature register?*) and the per-domain extension-points catalogs (§2.22.1 — *what can I override/implement/subscribe to in THIS domain?*), the repo SHIPS one **repo-wide index of every extension point** — the sanctioned answer to *"how do I extend the system?"* gathered into a single discoverable map rather than scattered across domains.
+
+**Relationship to the per-domain catalogs.** The repo-wide index is a *map*, not a second copy: the authoritative detail for a domain lives in that domain's §2.22.1 catalog, and the index links to it. For domains that do not yet ship their own §2.22.1 catalog, the index MAY inline the entries until they do (a recognised, temporary state — not a permanent fork of the detail). Both the index and the per-domain catalogs are named `EXTENSION_POINTS.md`, distinguished by location: one at the repo root, one per `.Core` project root.
+
+**Minimum required content per interface (when inlined in the index):**
+
+- **Interface name** and the **kind** (Source / Contributor / PreProcessor+PostProcessor / Validator / entity Handler per §2.6.1), or the **overridable contract** name + default impl.
+- **Where it lives** (the owning `.Core` / contracts project).
+- **Method signature(s)**, and whether the implementation **returns** values (Source) or **receives a context and acts** (Contributor and its action-named forms).
+- **How to register it via DI** (the `AddXxx` call or assembly scan; for an override, the `Replace` / register-your-own note).
+- **Which single aggregating handler consumes it** (the one `IEventHandler<On<Phase>>`), for contributor interfaces.
+- **A cross-link** to the owning domain's `EXTENSION_POINTS.md`.
+
+**Form.** Application-defined; recommended a single `EXTENSION_POINTS.md` at the repo root. Unit 1 creates the initial Elsa example: a root index linking the three per-domain catalogs (EF Core persistence, Workflows.Design, Workflow draft validation) and inlining the not-yet-migrated domains (`IJsonConverterSource`, `IActivityImplementationResolverSource`, `IImplementationDescriptorSource`, `IJavaScriptDeclarationContributor`, `IScriptPreProcessor`/`IScriptPostProcessor`, `IActivityReconciliationSource` + the workflow equivalent).
 
 ### §2.23 Unit tests
 
@@ -1402,4 +1472,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-02
+**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-03

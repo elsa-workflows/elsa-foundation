@@ -57,5 +57,5 @@ None (no startup / recurring / scheduled tasks).
 - **Activity-specific validators** ship in their owning activity feature per FR-034 (e.g.
   `Elsa.Http.Activities.Design` ships HTTP validators), NOT here.
 
-See [`../Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md)
-for the `OnDraftValidating` / `OnDraftValidated` event surface.
+See [`../Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md)
+for the `IDraftValidator` contributor interface and the `OnDraftValidating` / `OnDraftValidated` event surface (Events section).

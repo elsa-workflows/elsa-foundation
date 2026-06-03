@@ -44,7 +44,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// a clone), surfaced on <see cref="OnDraftCreated.SourceVersionId"/>.
 /// </para>
 /// </remarks>
-public sealed class CreateDraftCommand(
+public sealed class CreateDraft(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,

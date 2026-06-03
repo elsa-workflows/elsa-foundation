@@ -12,16 +12,20 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <c>.Core</c> assemblies that publish events. For each (assembly, markdown path) pair:
 /// (a) reflection-scan the assembly for all public non-abstract concrete event types
 /// (every <see cref="IEvent"/>);
-/// (b) parse the corresponding <c>EVENTS.md</c> and extract level-3 markdown headings
-/// (<c>### &lt;EventClassName&gt;</c>); (c) assert bidirectional set equality.
+/// (b) parse the corresponding <c>EXTENSION_POINTS.md</c> and extract level-3 markdown
+/// headings (<c>### &lt;EventClassName&gt;</c>) — which live in that file's Events section;
+/// (c) assert bidirectional set equality.
 /// </summary>
 /// <remarks>
 /// The catalog filename was renamed from <c>DOMAIN_EVENTS.md</c> to <c>EVENTS.md</c> on
-/// 2026-05-29 when the lifecycle/domain split landed (framework §2.22.1 amendment).
+/// 2026-05-29 when the lifecycle/domain split landed (framework §2.22.1 amendment), then
+/// folded into the per-domain <c>EXTENSION_POINTS.md</c> (with the events as an "Events"
+/// section) on 2026-06-03 (framework §2.22.1 amendment). Only <c>### On…</c> headings are
+/// matched, so the contract/contributor headings in the other sections are ignored.
 /// </remarks>
 public sealed class CatalogParityTests
 {
-    private const string CatalogFileName = "EVENTS.md";
+    private const string CatalogFileName = "EXTENSION_POINTS.md";
 
     public static IEnumerable<object[]> CoreAssembliesWithCatalogs()
     {
@@ -65,7 +69,7 @@ public sealed class CatalogParityTests
             .Where(t => typeof(IEvent).IsAssignableFrom(t));
 
     /// <summary>
-    /// Extracts level-3 markdown headings from <c>src/&lt;projectDirName&gt;/EVENTS.md</c>.
+    /// Extracts level-3 markdown headings from <c>src/&lt;projectDirName&gt;/EXTENSION_POINTS.md</c>.
     /// Filters to headings that look like event class names per R4 — alphanumeric + starts
     /// with <c>On</c> + no decoration. Prose like <c>### OnDraftValidating: domain gate</c>
     /// would be ignored (the regex requires the heading to end at the class name).

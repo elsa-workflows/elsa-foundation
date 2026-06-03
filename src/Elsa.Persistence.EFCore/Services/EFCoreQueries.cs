@@ -1,6 +1,5 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Primitives.Entities;
@@ -40,7 +39,7 @@ namespace Elsa.Persistence.EFCore.Services
             if (entity == null)
                 return null;
 
-            await ApplyEntityLoadingHandlers(dbContext, entity, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, [entity], cancellationToken);
 
             return entity;
         }
@@ -70,7 +69,7 @@ namespace Elsa.Persistence.EFCore.Services
             if (entity == null)
                 return null;
 
-            await ApplyEntityLoadingHandlers(dbContext, entity, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, [entity], cancellationToken);
 
             return entity;
         }
@@ -89,7 +88,7 @@ namespace Elsa.Persistence.EFCore.Services
             var set = dbContext.Set<TEntity>().AsNoTracking();
             var entities = await set.Where(predicate).ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -102,7 +101,7 @@ namespace Elsa.Persistence.EFCore.Services
             set = ApplyOrder(set, order);
             var entities = await set.Where(predicate).ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -130,7 +129,7 @@ namespace Elsa.Persistence.EFCore.Services
                 set = set.Where(predicate);
 
             var page = await set.PaginateAsync(pageArgs);
-            await ApplyEntityLoadingHandlers(dbContext, page, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, page.Items, cancellationToken);
 
             return page;
         }
@@ -149,7 +148,7 @@ namespace Elsa.Persistence.EFCore.Services
                 set = set.Where(predicate);
 
             var page = await set.PaginateAsync(pageArgs);
-            await ApplyEntityLoadingHandlers(dbContext, page, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, page.Items, cancellationToken);
 
             return page;
         }
@@ -161,7 +160,7 @@ namespace Elsa.Persistence.EFCore.Services
             set = query(set);
             var entities = await set.ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -172,7 +171,7 @@ namespace Elsa.Persistence.EFCore.Services
             var set = dbContext.Set<TEntity>().AsNoTracking();
             var entities = await set.ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -181,16 +180,12 @@ namespace Elsa.Persistence.EFCore.Services
         public async Task<IEnumerable<TEntity>> Query(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContext(cancellationToken);
-
-            var loadingHandlersRegistered = LoadingHandlersRegistered();
-            var set = loadingHandlersRegistered
-                ? dbContext.Set<TEntity>()
-                : dbContext.Set<TEntity>().AsNoTracking();
+            var set = dbContext.Set<TEntity>().AsNoTracking();
 
             var queryable = query(set.AsQueryable());
             var entities = await queryable.ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -199,18 +194,13 @@ namespace Elsa.Persistence.EFCore.Services
         public async Task<IEnumerable<TEntity>> Query<TProp>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default)
         {
             await using var dbContext = await CreateDbContext(cancellationToken);
-
-            var loadingHandlersRegistered = LoadingHandlersRegistered();
-            var set = loadingHandlersRegistered
-                ? dbContext.Set<TEntity>()
-                : dbContext.Set<TEntity>().AsNoTracking();
-
+            var set = dbContext.Set<TEntity>().AsNoTracking();
             set = ApplyOrder(set, order);
 
             var queryable = query(set.AsQueryable());
             var entities = await queryable.ToListAsync(cancellationToken);
 
-            await ApplyEntityLoadingHandlers(dbContext, entities, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, entities, cancellationToken);
 
             return entities;
         }
@@ -334,7 +324,7 @@ namespace Elsa.Persistence.EFCore.Services
             set = query(set);
 
             var page = await set.PaginateAsync(pageArgs);
-            await ApplyEntityLoadingHandlers(dbContext, page, cancellationToken);
+            await PublishEntityLoadingEvents(dbContext, page.Items, cancellationToken);
 
             return page;
         }
@@ -399,60 +389,22 @@ namespace Elsa.Persistence.EFCore.Services
                 .CountAsync(cancellationToken);
         }
 
-        private Task ApplyEntityLoadingHandlers(TDbContext dbContext, List<TEntity> entities, CancellationToken cancellationToken)
-        {
-            using var scope = serviceProvider.CreateScope();
-            var tasks = entities.Select(e => ApplyEntityLoadingHandlers(dbContext, scope, e, cancellationToken));
-            return Task.WhenAll(tasks);
-        }
-
-        private Task ApplyEntityLoadingHandlers(TDbContext dbContext, Page<TEntity> entities, CancellationToken cancellationToken)
-        {
-            using var scope = serviceProvider.CreateScope();
-            var tasks = entities.Items.Select(e => ApplyEntityLoadingHandlers(dbContext, scope, e, cancellationToken));
-            return Task.WhenAll(tasks);
-        }
-
-        private static async Task ApplyEntityLoadingHandlers(TDbContext dbContext, IServiceScope scope, TEntity entity, CancellationToken cancellationToken)
-        {
-            var handlers = scope.ServiceProvider
-                .GetServices<IEntityLoadingHandler<TDbContext, TEntity>>()
-                .ToList();
-
-            foreach (var handler in handlers)
-            {
-                await handler.Handle(dbContext, entity, cancellationToken);
-            }
-
-            await DispatchEntityLoadingEvent(dbContext, scope, entity, cancellationToken);
-        }
-
         /// <summary>
-        /// Publishes <see cref="OnEntityLoading"/> for the materialised <see cref="Entity"/> on the
-        /// default (Sequential) strategy, so hydration completes before the entity is handed back to
-        /// the caller. Coexists with the legacy <see cref="IEntityLoadingHandler{TDbContext,TEntity}"/>
-        /// dispatch path — the read-side mirror of <c>ElsaDbContextBase.DispatchEntitySavingEvents</c>.
+        /// Publishes <see cref="OnEntityLoading"/> for each materialised <see cref="Entity"/> on the
+        /// default (Sequential) strategy, so hydration completes before the entities are handed back
+        /// to the caller. The single <c>ApplyEntityLoadingHandlers</c> aggregator subscribes and
+        /// dispatches every registered <see cref="IEntityLoadingHandler{TDbContext,TEntity}"/>
+        /// contributor — the read-side mirror of <c>ElsaDbContextBase.DispatchEntitySavingEvents</c>.
         /// </summary>
-        private static async Task DispatchEntityLoadingEvent(TDbContext dbContext, IServiceScope scope, TEntity entity, CancellationToken cancellationToken)
+        private async Task PublishEntityLoadingEvents(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
         {
+            using var scope = serviceProvider.CreateScope();
             var publisher = scope.ServiceProvider.GetService<IEventPublisher>();
             if (publisher is null)
                 return;
 
-            await publisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken: cancellationToken);
-        }
-
-        private Task ApplyEntityLoadingHandlers(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken)
-        {
-            using var scope = serviceProvider.CreateScope();
-            return ApplyEntityLoadingHandlers(dbContext, scope, entity, cancellationToken);
-        }
-
-        private bool LoadingHandlersRegistered()
-        {
-            return serviceProvider
-                .GetServices<IEntityLoadingHandler<TDbContext, TEntity>>()
-                .Any();
+            foreach (var entity in entities)
+                await publisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken: cancellationToken);
         }
 
         private static Func<IQueryable<TEntity>, IQueryable<TEntity>> GetQuery(IFilter<TEntity> filter)

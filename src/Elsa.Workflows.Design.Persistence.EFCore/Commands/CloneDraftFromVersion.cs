@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// context — is the preferred path. The mutation (the new Draft) is owned entirely by the create
 /// command, which opens its own tracked context under the per-Draft lock.
 /// </remarks>
-public sealed class CloneDraftFromVersionCommand(
+public sealed class CloneDraftFromVersion(
     IQueries<WorkflowDefinitionVersion> versionQueries,
     IQueries<WorkflowDefinitionVersionLayout> layoutQueries,
     ICreateDraftCommand createDraftCommand

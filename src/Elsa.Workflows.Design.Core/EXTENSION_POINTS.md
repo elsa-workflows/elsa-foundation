@@ -1,16 +1,61 @@
-# Events — `Elsa.Workflows.Design.Core`
+# Extension points — `Elsa.Workflows.Design.Core`
 
-Catalog per framework §2.22.1. Every event the `Workflows.Design.Core` `.Core` library publishes is documented here. Every event is an `IEvent` (framework §2.6.1); they are grouped by **delivery strategy** (§2.6.6).
+The per-domain catalog (framework §2.22.1) of everything you can implement or override in the Workflows.Design domain, plus the events it publishes. Three sections:
 
-**Sequential / contribution** (§2.6.6) — publisher awaits the dispatch and reads handler contributions back. *None in this `.Core` — the FR-018/FR-018a mutation events are all notification-shaped. The contribution event (`OnDraftValidating`, published Sequential) lives in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md).*
+- **Overridable contracts** — interfaces with a default implementation you can *replace*. Bring one implementation and the built-in one steps aside. This is the *override* axis ("I'll bring my own commands but keep the built-in queries").
+- **Implementable contributor interfaces** — *add-don't-replace* seams aggregated by a single handler (framework §2.6.1, §2.24.2). This is the *extend* axis.
+- **Events** — the FR-018/FR-018a mutation + lifecycle events this `.Core` publishes.
 
-**Background / notification** (§2.6.6) — publisher fires and returns; subscribers (audit, event-sourcing stream, UI push, telemetry) observe but don't feed back. Published via `EventPublishingStrategy.Background`.
+> **Domain spans several projects.** The Workflows.Design *domain model* lives in this `.Core`, but its behavioural seams are split across sibling projects per the three-layer rule (framework §2.1): the **commands** live in `Elsa.Workflows.Design.Persistence.Core` and their EF Core implementations + the diff engine live in `Elsa.Workflows.Design.Persistence.EFCore`. Those seams are catalogued here (with their owning project noted) because they publish *this* `.Core`'s events; their persistence-lifecycle seams (`OnEntitySaving`/`OnEntityLoading`) are catalogued in [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md).
 
-Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test in `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` (Unit C FR-031) asserts bidirectional alignment between the `### On…` headings here and the assembly's published `IEvent` types.
+This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's entry for this domain; the index links here for detail.
 
 ---
 
-## Background / notification events
+## Overridable contracts
+
+| Contract | Owning project | Default impl | Override when |
+|---|---|---|---|
+| `IWorkflowDefinitionLookup` | `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.EFCore`) | You want a different read strategy for definitions/versions (caching, projection store) while keeping the write path. The *keep-queries-swap-commands* counterpart. |
+| `IWorkflowDesignContextFactory` | `Elsa.Workflows.Design.Core` | *(persistence-supplied)* | You need a custom ambient design context (multi-tenant scoping, alternate graph source). |
+| `IUpdateDraftCommand` and the 5 lifecycle commands | `Elsa.Workflows.Design.Persistence.Core` | EF Core command impls (`.Persistence.EFCore`) | You want different mutation/lifecycle behaviour (alternate diff, custom locking, non-EF store) while keeping the built-in `IWorkflowDefinitionLookup`. The canonical *swap-commands-keep-queries* example. |
+| `IDraftStateDiffEngine` | `Elsa.Workflows.Design.Persistence.EFCore` | `DraftStateDiffEngine` | You want to change *which* mutation events are emitted or the match-key semantics that decide add/update/remove. |
+
+### `IWorkflowDefinitionLookup`
+- **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
+- **Default impl:** `WorkflowDefinitionLookup` (in `.Persistence.EFCore`), backed by `IQueries<WorkflowDefinitionVersion>` + `IQueries<WorkflowDefinition>`. Override the lookup, or override the underlying `IQueries<>` (see [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
+
+### The commands — `IUpdateDraftCommand` + 5 lifecycle commands
+- **Live in:** `Elsa.Workflows.Design.Persistence.Core` (`Contracts/`). **Default impls:** EF Core commands in `.Persistence.EFCore` (`Commands/`).
+- `IUpdateDraftCommand.Execute(UpdateDraftRequest, ct)` — the single coarse Draft-mutation command (Unit 2). Under the per-Draft lock it diffs desired-vs-stored state (via `IDraftStateDiffEngine`), emits one mutation event per difference (the Events section below), runs the validation gate, and persists.
+- Lifecycle (not mutations, kept distinct per FR-003): `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, plus `IAddWorkflowDefinitionCommand`.
+- **Override** any of these to change behaviour while leaving the read seam (`IWorkflowDefinitionLookup`) and the events intact — this is exactly Joey's "I don't like the commands, I'll implement those myself, but I still want the built-in Queries" scenario.
+
+### `IDraftStateDiffEngine`
+- **Lives in:** `Elsa.Workflows.Design.Persistence.EFCore` (`Contracts/`). **Default impl:** `DraftStateDiffEngine`.
+- **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout);`
+- Returns the mutation events for the detected differences. Match keys (FR-023): activities by `NodeId`, activity I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple, variables/inputs/outputs by `ReferenceKey`, layout by `NodeId`. Override to change emission/matching.
+
+### Domain-model abstractions
+`IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph`, `IWorkflowDesignContext` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.
+
+---
+
+## Implementable contributor interfaces
+
+This `.Core` owns no add-don't-replace contributor interface of its own. The Draft-validation contributor (`IDraftValidator`) that runs against this domain's Drafts lives in [`Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md). Subscribers extend this domain by handling the Background events below.
+
+---
+
+## Events
+
+Every event the `Workflows.Design.Core` library publishes is an `IEvent` (framework §2.6.1), grouped by **delivery strategy** (§2.6.6).
+
+**Sequential / contribution** (§2.6.6) — publisher awaits the dispatch and reads handler contributions back. *None in this `.Core` — the FR-018/FR-018a mutation events are all notification-shaped. The contribution event (`OnDraftValidating`, published Sequential) lives in [`Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md).*
+
+Heading convention per research item R4: `### <EventClassName>`. The catalog-parity test in `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs` (Unit C FR-031) asserts bidirectional alignment between the `### On…` headings here and the assembly's published `IEvent` types.
+
+**Background / notification** (§2.6.6) — publisher fires and returns; subscribers (audit, event-sourcing stream, UI push, telemetry) observe but don't feed back. Published via `EventPublishingStrategy.Background`.
 
 **Pipeline behaviour for every event in this section.**
 
@@ -163,6 +208,9 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 
 ## Cross-references
 
-- The validation events for the same transition live in [`Elsa.Workflows.Design.Validations.Core/EVENTS.md`](../Elsa.Workflows.Design.Validations.Core/EVENTS.md): `OnDraftValidating` (Sequential, the gate) and `OnDraftValidated` (Background, the outcome).
+- The validation events for the same transition live in [`Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md): `OnDraftValidating` (Sequential, the gate) and `OnDraftValidated` (Background, the outcome).
+- The persistence-lifecycle seams (`OnEntitySaving` / `OnEntityLoading`) the commands flow through live in [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md).
 - Event-sourcing subscribers (Unit C FR-017's opt-in feature, deferred to a follow-on unit) subscribe to every Background event listed above to materialise the Draft's event stream.
 - Audit / telemetry subscribers may subscribe selectively per strategy.
+- Repo-wide interface index: [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.

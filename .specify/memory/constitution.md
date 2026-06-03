@@ -202,11 +202,19 @@ Code-side commitments (tracked in Unit A follow-up
 ratification):
   - Migrate `IPayloadSerializerConverterProvider` and friends to Registry +
     StartUp Task + Domain Event pattern (matches §E3.3's new prose).
-  - Migrate EF Core entity handlers (`IGlobalEntitySavingHandler`,
-    `IEntityModelCreatingHandler`, `IEntityLoadingHandler`) to `OnEntitySaving` /
-    `OnEntityModelCreating` / `OnEntityLoading` domain events. The
-    `OnEntityLoading` read-side mirror (published Sequential by `EFCoreQueries`,
-    coexisting with the legacy `IEntityLoadingHandler`) landed Unit 2 (2026-06-03).
+  - Migrate EF Core entity save/load handlers to the unified-event pattern.
+    **DONE** (Unit 1 consistency fix, 2026-06-03): `OnEntitySaving` +
+    `OnEntityLoading` are now each consumed by a **single aggregating**
+    `IEventHandler` (`ApplyEntitySavingHandlers` / `ApplyEntityLoadingHandlers`,
+    registered once by `EFCorePersistenceShellFeatureBase`) that dispatches every
+    registered typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>`
+    contributor — the §2.6.1 contributor-interface + single-aggregating-handler
+    shape (action-named `…Handler` suffix). The legacy reflection/`GetServices`
+    direct-dispatch loops on `ElsaDbContextBase` / `EFCoreQueries` are removed; the
+    publication sites now only publish. Catalogued in
+    `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`. The `IGlobalEntitySavingHandler` (runs
+    for every entity, no per-type fan-in) and `IEntityModelCreatingHandler` (runs
+    during `OnModelCreating`) remain on their own dispatch paths by design.
   - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).
   - Update entity-design summary doc per Sipke 2026-05-26 items 8 and 9.
 
@@ -708,7 +716,7 @@ Automated compile-/build-time enforcement (scope-policy static analyser) is **de
 The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a **single coarse, diff-based command** — `IUpdateDraftCommand` — not a family of granular per-concept mutation commands.
 
 - **One mutation command.** `IUpdateDraftCommand.Execute(UpdateDraftRequest)` accepts the **complete desired** `WorkflowDefinitionState` (+ its layout sibling, carried beside State per §E2.9.2 — never inside it). Full-state-always: there is no patch API. Inside the per-Draft distributed lock (`workflow-draft:{DraftId}`) it loads the stored state, wholesale-assigns the desired state (last-writer-wins — no version check), **diffs** stored vs desired per concept (Variables/Inputs/Outputs by `ReferenceKey`, Activities and layout by `NodeId`, activity I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple), runs the in-lock validation gate, persists atomically, then publishes **one event per detected difference**.
-- **The event surface is preserved, not collapsed.** The diff emits the same 20 per-concept mutation events the former granular commands published (catalogued in `EVENTS.md`); their *types* and catalog headings are unchanged — only the publication site moved onto `IUpdateDraftCommand`. This keeps the event-sourcing seam open for a later event-sourcing unit (Unit H): subscribers observe the per-diff stream regardless of whether the mutation arrived via 20 commands or one.
+- **The event surface is preserved, not collapsed.** The diff emits the same 20 per-concept mutation events the former granular commands published (catalogued in the Events section of `Elsa.Workflows.Design.Core/EXTENSION_POINTS.md`); their *types* and catalog headings are unchanged — only the publication site moved onto `IUpdateDraftCommand`. This keeps the event-sourcing seam open for a later event-sourcing unit (Unit H): subscribers observe the per-diff stream regardless of whether the mutation arrived via 20 commands or one.
 - **Lifecycle commands remain distinct.** `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, and `IPromoteDraftToVersionCommand` are **not** mutations of an existing Draft's content and stay as separate commands with their own lifecycle events (`OnDraftCreated`, `OnDraftDiscarded`). `IUpdateDraftCommand` emits none of these.
 - **One origination event, not two.** A cloned Draft and a fresh Draft share the single origination event `OnDraftCreated`; there is **no** separate `OnDraftClonedFromVersion`. `ICloneDraftFromVersionCommand` delegates to `ICreateDraftCommand` (the single origination path), and clone-vs-fresh is distinguished solely by the immutable optional `WorkflowDefinitionDraft.SourceVersionId` — a plain provenance column (no navigation property) surfaced on `OnDraftCreated.SourceVersionId` (`null` for a fresh Draft).
 - **Reads route through the query service.** Commands that only read (no change tracking) — e.g. `ICloneDraftFromVersionCommand` loading the source Version + layout — use `IQueries<T>` rather than a hand-rolled `DbContextFactory` + loading-handler loop. The query service runs the read-side hydration pipeline (legacy `IEntityLoadingHandler` + the `OnEntityLoading` Sequential event, the read-side mirror of `OnEntitySaving`) and disposes its own short-lived context. A command opens its own tracked context only when it queries, mutates, and saves the *same* entity.
@@ -811,6 +819,8 @@ The `JsonPayloadSerializer` runs `System.Text.Json` `JsonConverter` callbacks sy
 4. **At runtime**, the `JsonPayloadSerializer`'s sync code accesses the populated `JsonPayloadConverterRegistry` directly. No async dispatch at the read site.
 
 The mechanism is identical to a cross-domain contribution; only the access pattern differs (registry-mediated). This is the canonical worked example of the Registry + StartUp Task sub-pattern from framework §2.6.1, refactored under the §2.6.1 contributor-interface + single-handler sub-rule.
+
+*Further worked examples of the contributor-interface + single-aggregating-handler shape.* The EF Core persistence save/load seam ships the same shape with action-named contributor suffixes (`IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>` dispatched by the single `ApplyEntitySavingHandlers` / `ApplyEntityLoadingHandlers` aggregators) — see [`src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../../src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md) for that domain's overridable contracts, contributor interfaces, and Events section, and the repo-root [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index for every extension point across the codebase (framework §2.22.1, §2.22.2).
 
 *Legacy state.* The historical implementation used `IPayloadSerializerConverterProvider` (provider-pattern, `IEnumerable<T>` resolution at the read site). The migration to the pattern above is a code item tracked in the Unit A follow-up. When the migration lands, it adopts the source + single-handler shape shown here.
 
@@ -1045,4 +1055,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-02 | **Derives from framework constitution:** v3.0.0
+**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-03 | **Derives from framework constitution:** v3.0.0

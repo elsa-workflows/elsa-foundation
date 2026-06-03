@@ -1,5 +1,7 @@
-﻿using Elsa.Persistence.Core;
+﻿using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,9 +32,12 @@ namespace Elsa.Persistence.EFCore.Services
                 // Loop through batched entities
                 foreach (var batch in entities.Chunk(batchSize))
                 {
-                    // The reason why we manually need to execute SavingHandlers here is because this command bypasses the DbContext.SaveChanges,
-                    // which is overridden in ElsaDbContextBase to execute the handlers
-                    await HandleOnBeforeExecuting(dbContext, batch, cancellationToken);
+                    // This command bypasses DbContext.SaveChanges (which is overridden in
+                    // ElsaDbContextBase to publish OnEntitySaving), so we publish the event here
+                    // ourselves — the single ApplyEntitySavingHandlers aggregator then runs every
+                    // registered IEntitySavingHandler<,> so source columns are populated before the
+                    // raw upsert SQL is generated.
+                    await PublishEntitySavingEvents(dbContext, batch, cancellationToken);
 
                     // Generate SQL and parameters
                     var generatedCommand = upsertCommandGenerator.Generate(dbContext, batch, e => e.Id);
@@ -53,15 +58,18 @@ namespace Elsa.Persistence.EFCore.Services
             }
         }
 
-        private async Task HandleOnBeforeExecuting(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
+        private async Task PublishEntitySavingEvents(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
         {
-            var entitySaveHandlers = serviceProvider.GetServices<IEntitySavingHandler<TDbContext, TEntity>>();
+            using var scope = serviceProvider.CreateScope();
+            var publisher = scope.ServiceProvider.GetService<IEventPublisher>();
+            if (publisher is null)
+                return;
 
+            // dbContext.Entry(entity) materialises the EntityEntry the event carries; it begins
+            // tracking the entity as Unchanged, which is inert here since this path never calls
+            // SaveChanges (it executes raw upsert SQL instead).
             foreach (var entity in entities)
-            {
-                foreach (var handler in entitySaveHandlers)
-                    await handler.Handle(dbContext, entity, cancellationToken);
-            }
+                await publisher.Publish(new OnEntitySaving(dbContext, dbContext.Entry(entity)), cancellationToken: cancellationToken);
         }
     }
 }

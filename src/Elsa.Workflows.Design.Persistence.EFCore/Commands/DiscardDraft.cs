@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// flow with create or update. The lock + lifecycle-event semantics are preserved by invoking
 /// <see cref="IDistributedLockProvider"/> and <see cref="IEventPublisher"/> directly.
 /// </remarks>
-public sealed class DiscardDraftCommand(
+public sealed class DiscardDraft(
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
     IEventPublisher eventPublisher

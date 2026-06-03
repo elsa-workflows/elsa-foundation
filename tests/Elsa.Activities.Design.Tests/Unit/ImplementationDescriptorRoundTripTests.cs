@@ -40,13 +40,13 @@ public sealed class ImplementationDescriptorRoundTripTests
                 ReconciledAt = DateTimeOffset.UtcNow,
                 ReconciledBy = "test"
             };
-            var entry = ctx.ActivityDefinitionVersions.Add(version);
-            // The handler now subscribes to OnEntitySaving (§2.6.1). The DbContext's
-            // dispatcher publishes the event in production; here we invoke the handler
-            // directly with a synthetic event so the test stays focused on the
-            // descriptor-to-shadow serialisation path.
+            ctx.ActivityDefinitionVersions.Add(version);
+            // The handler is a typed IEntitySavingHandler<,>. In production the single
+            // ApplyEntitySavingHandlers aggregator dispatches it when the DbContext publishes
+            // OnEntitySaving; here we invoke the typed Handle directly so the test stays focused
+            // on the descriptor-to-shadow serialisation path.
             var saver = new ActivityDefinitionVersionSavingHandler(serializer);
-            await saver.Handle(new Elsa.Persistence.EFCore.Events.OnEntitySaving(ctx, entry), CancellationToken.None);
+            await saver.Handle(ctx, version, CancellationToken.None);
             await ctx.SaveChangesAsync();
         }
 
@@ -90,9 +90,9 @@ public sealed class ImplementationDescriptorRoundTripTests
                 ReconciledAt = DateTimeOffset.UtcNow,
                 ReconciledBy = "test"
             };
-            var entry = ctx.ActivityDefinitionVersions.Add(version);
+            ctx.ActivityDefinitionVersions.Add(version);
             var saver = new ActivityDefinitionVersionSavingHandler(serializer);
-            await saver.Handle(new Elsa.Persistence.EFCore.Events.OnEntitySaving(ctx, entry), CancellationToken.None);
+            await saver.Handle(ctx, version, CancellationToken.None);
             await ctx.SaveChangesAsync();
         }
 

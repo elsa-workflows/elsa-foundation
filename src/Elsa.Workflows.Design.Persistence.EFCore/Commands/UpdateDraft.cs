@@ -1,11 +1,12 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
-using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.Constants;
+using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -37,13 +38,12 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// </list>
 /// </para>
 /// </remarks>
-public sealed class UpdateDraftCommand(
+public sealed class UpdateDraft(
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
     IEventPublisher eventPublisher,
     IIdentityGenerator identityGenerator,
-    IEnumerable<IEntityLoadingHandler<WorkflowsDesignDbContext, WorkflowDefinitionDraft>> draftLoadingHandlers,
-    DraftStateDiffer differ
+    IDraftStateDiffEngine diffEngine
 ) : IUpdateDraftCommand
 {
     public async Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
@@ -69,10 +69,9 @@ public sealed class UpdateDraftCommand(
 
             // Wholesale assign the desired state + layout (last-writer-wins, FR-022).
             draft.State = request.State;
-            if (layout is not null)
-                layout.Records = [.. request.Layout];
+            layout?.Records = [.. request.Layout];
 
-            diffEvents = differ.Diff(request.DraftId, storedState, storedLayout, request.State, request.Layout);
+            diffEvents = diffEngine.Evaluate(request.DraftId, storedState, storedLayout, request.State, request.Layout);
 
             // State is [NotMapped]; force-mark Modified so the saving handler re-serialises it.
             dbContext.Entry(draft).State = EntityState.Modified;
@@ -94,8 +93,12 @@ public sealed class UpdateDraftCommand(
         var draft = await dbContext.WorkflowDefinitionDrafts.FirstOrDefaultAsync(d => d.Id == draftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition draft '{draftId}' not found");
 
-        foreach (var handler in draftLoadingHandlers)
-            await handler.Handle(dbContext, draft, cancellationToken);
+        // Hydrate the already-tracked draft by publishing OnEntityLoading on the same context that
+        // will SaveChangesAsync — the single ApplyEntityLoadingHandlers aggregator runs every
+        // registered IEntityLoadingHandler<,>. Sequential so hydration completes before we read State.
+        // (We deliberately do NOT route through IQueries.Find, which returns an AsNoTracking entity
+        // that this command could not save without re-attaching.)
+        await eventPublisher.Publish(new OnEntityLoading(dbContext, draft), EventPublishingStrategy.Sequential, cancellationToken);
 
         return draft;
     }

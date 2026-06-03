@@ -1,7 +1,9 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Persistence.EFCore.Handlers;
 using Elsa.Persistence.EFCore.Sqlite;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Services;
@@ -118,6 +120,23 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
         var provider = services.BuildServiceProvider();
 
+        // Wire the single saving/loading aggregators onto the capturing publisher. Production
+        // resolves these as IEventHandler<OnEntitySaving>/<OnEntityLoading> through the event
+        // pipeline; the stub publisher bypasses that pipeline, so we subscribe the aggregators
+        // explicitly. Each runs in its own scope (the typed IEntity*Handler<,> contributors are
+        // scoped) and reflects over the registered handlers exactly as the real aggregator does —
+        // this is what re-serialises State → StateSource on save and hydrates it back on load.
+        eventPublisher.Subscribe<OnEntitySaving>(async e =>
+        {
+            using var scope = provider.CreateScope();
+            await new ApplyEntitySavingHandlers(scope.ServiceProvider).Handle(e, CancellationToken.None);
+        });
+        eventPublisher.Subscribe<OnEntityLoading>(async e =>
+        {
+            using var scope = provider.CreateScope();
+            await new ApplyEntityLoadingHandlers(scope.ServiceProvider).Handle(e, CancellationToken.None);
+        });
+
         // Initialise schema.
         var optionsBuilder = new DbContextOptionsBuilder<WorkflowsDesignDbContext>().UseSqlite(connection);
         using (var ctx = new WorkflowsDesignDbContext(optionsBuilder.Options, provider))
@@ -130,12 +149,12 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     {
         services
             // Lifecycle commands (NOT mutations — kept distinct, FR-003).
-            .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
-            .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraftCommand>()
+            .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraft>()
+            .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
+            .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraft>()
             // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
-            .AddScoped<DraftStateDiffer>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraftCommand>();
+            .AddScoped<Persistence.EFCore.Contracts.IDraftStateDiffEngine, DraftStateDiffEngine>()
+            .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraft>();
     }
 
     public void Dispose()

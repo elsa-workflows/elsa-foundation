@@ -79,16 +79,15 @@ namespace Elsa.Persistence.EFCore
 
             using var scope = ServiceProvider.CreateScope();
             await ApplyGlobalSavingHandlers(entries, scope, cancellationToken);
-            await ApplyEntitySavingHandlers(entries, scope, cancellationToken);
             await DispatchEntitySavingEvents(entries, scope, cancellationToken);
         }
 
         /// <summary>
-        /// Publishes <see cref="OnEntitySaving"/> for each modified <see cref="Entity"/>.
-        /// Coexists with the legacy <see cref="IGlobalEntitySavingHandler"/> and
-        /// <see cref="IEntitySavingHandler{TDbContext,TEntity}"/> dispatch paths — features migrated
-        /// to the §2.6.1 domain-event mechanism register against this event, while features still on
-        /// the legacy interfaces continue to run through the older paths until they're migrated.
+        /// Publishes <see cref="OnEntitySaving"/> for each modified <see cref="Entity"/>. The single
+        /// <c>ApplyEntitySavingHandlers</c> aggregator is the sole subscriber and dispatches every
+        /// registered <see cref="IEntitySavingHandler{TDbContext,TEntity}"/> contributor. The
+        /// unrelated <see cref="IGlobalEntitySavingHandler"/> (runs for every entity, no per-type
+        /// fan-in) keeps its own dispatch path above.
         /// </summary>
         private async Task DispatchEntitySavingEvents(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
         {
@@ -162,27 +161,6 @@ namespace Elsa.Persistence.EFCore
             {
                 foreach (var handler in handlers)
                     await handler.Handle(this, entry, cancellationToken);
-            }
-        }
-
-        private async Task ApplyEntitySavingHandlers(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
-        {
-            foreach (var entry in entries.Where(IsModifiedEntity))
-            {
-                var handlerType = typeof(IEntitySavingHandler<,>).MakeGenericType(
-                    GetType(),
-                    entry.Entity.GetType()
-                );
-                var handlers = scope.ServiceProvider.GetServices(handlerType).ToList();
-                foreach (var handler in handlers)
-                {
-                    var method = handlerType.GetMethod(nameof(IEntitySavingHandler<,>.Handle));
-                    if (method is not null)
-                    {
-                        var task = (ValueTask)method.Invoke(handler, [this, entry.Entity, cancellationToken])!;
-                        await task;
-                    }
-                }
             }
         }
 

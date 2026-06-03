@@ -1,24 +1,22 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.EFCore.Events;
+using Elsa.Activities.Design.Persistence.EFCore.DbContext;
+using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Serialization.Core;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
 {
     /// <summary>
-    /// Domain-event-driven entity-saving handler for <see cref="ActivityDefinitionVersion"/>.
-    /// Migrated from the legacy <c>IEntitySavingHandler&lt;TDbContext,TEntity&gt;</c> mechanism
-    /// to the canonical §2.6.1 domain-event dispatch. Filters by entity type inline; other
-    /// features' handlers may subscribe to the same event independently.
+    /// Entity-saving handler for <see cref="ActivityDefinitionVersion"/>. Serialises the rich
+    /// projections into their <c>*Source</c> columns and derives the implementation kind +
+    /// descriptor payload before the row is flushed. Dispatched by the single
+    /// <c>ApplyEntitySavingHandlers</c> aggregator when <c>OnEntitySaving</c> is published — the
+    /// typed interface does the entity-type filtering, so no inline <c>is</c> check is needed.
     /// </summary>
     public sealed class ActivityDefinitionVersionSavingHandler(IPayloadSerializer payloadSerializer)
-        : IEventHandler<OnEntitySaving>
+        : IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>
     {
-        public Task Handle(OnEntitySaving domainEvent, CancellationToken cancellationToken)
+        public ValueTask Handle(ActivitiesDesignDbContext dbContext, ActivityDefinitionVersion entity, CancellationToken cancellationToken)
         {
-            if (domainEvent.Entry.Entity is not ActivityDefinitionVersion entity)
-                return Task.CompletedTask;
-                        
             entity.InputsSource = payloadSerializer.Serialize(entity.Inputs);
             entity.OutputsSource = payloadSerializer.Serialize(entity.Outputs);
             entity.PortsSource = payloadSerializer.Serialize(entity.Ports);
@@ -29,7 +27,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
             entity.ImplementationKind = entity.ImplementationDescriptor.Kind;
             entity.ImplementationDescriptorPayload = payloadSerializer.Serialize(entity.ImplementationDescriptor);
 
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 }

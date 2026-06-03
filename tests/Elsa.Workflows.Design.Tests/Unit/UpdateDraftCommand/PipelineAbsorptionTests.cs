@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 // The enclosing namespace ends in `.UpdateDraftCommand`, which shadows the command type's
 // simple name — alias the implementation type explicitly.
-using CreateDraftCommandType = Elsa.Workflows.Design.Persistence.EFCore.Commands.CreateDraftCommand;
-using UpdateDraftCommandType = Elsa.Workflows.Design.Persistence.EFCore.Commands.UpdateDraftCommand;
+using CreateDraftCommandType = Elsa.Workflows.Design.Persistence.EFCore.Commands.CreateDraft;
+using UpdateDraftCommandType = Elsa.Workflows.Design.Persistence.EFCore.Commands.UpdateDraft;
 
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 

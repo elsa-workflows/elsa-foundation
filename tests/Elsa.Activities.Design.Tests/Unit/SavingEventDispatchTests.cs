@@ -1,8 +1,11 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
+using Elsa.Persistence.EFCore.Handlers;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Services;
@@ -12,20 +15,22 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US5 — activity-catalog saving handler runs via <see cref="OnEntitySaving"/> event
-/// dispatch. Tests verify (a) the handler's behaviour through the event-shaped Handle signature
-/// and (b) the §2.6.1 contribution-shaped DI surface: many handlers can subscribe to the same
-/// event, each gets invoked.
+/// US5 — activity-catalog saving handler runs on the converged contributor + single-aggregator
+/// shape. <see cref="ActivityDefinitionVersionSavingHandler"/> is a typed
+/// <see cref="IEntitySavingHandler{TDbContext,TEntity}"/>; the single
+/// <see cref="ApplyEntitySavingHandlers"/> aggregator is the sole
+/// <see cref="IEventHandler{OnEntitySaving}"/> and dispatches every registered typed contributor.
+/// Tests verify (a) the typed handler's behaviour through its Handle signature, (b) the aggregator
+/// fans out to every registered typed handler, and (c) exactly one
+/// <see cref="IEventHandler{OnEntitySaving}"/> exists (the aggregator).
 /// </summary>
 public sealed class SavingEventDispatchTests
 {
     [Fact]
-    public async Task SavingHandler_ProducesShadowDescriptor_FromOnEntitySaving()
+    public async Task SavingHandler_ProducesShadowDescriptor()
     {
-        // Hands a synthetic OnEntitySaving to the handler and asserts the descriptor JSON
-        // lands in the shadow column. This is the same code path the DbContext dispatch
-        // calls in production — we exercise the contract without standing up the full
-        // event pipeline.
+        // Invokes the typed handler directly and asserts the descriptor JSON lands in the shadow
+        // column + the kind is derived. This is the same work the aggregator drives in production.
         using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
             (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
 
@@ -33,38 +38,58 @@ public sealed class SavingEventDispatchTests
         var handler = new ActivityDefinitionVersionSavingHandler(serializer);
 
         await using var ctx = host.CreateContext();
-        var defId = Guid.NewGuid().ToString("N");
-        ctx.ActivityDefinitions.Add(new ActivityDefinition
-        {
-            Id = defId,
-            ActivityTypeKey = "Foo",
-            Category = "Test"
-        });
-        var version = new ActivityDefinitionVersion(1, defId)
-        {
-            Id = Guid.NewGuid().ToString("N"),
-            ImplementationDescriptor = new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
-        };
-        var entry = ctx.ActivityDefinitionVersions.Add(version);
+        var version = NewVersion();
 
-        await handler.Handle(new OnEntitySaving(ctx, entry), CancellationToken.None);
+        await handler.Handle(ctx, version, CancellationToken.None);
 
         Assert.Equal("Clr", version.ImplementationKind);
         Assert.False(string.IsNullOrWhiteSpace(version.ImplementationDescriptorPayload));
         Assert.Contains("Acme", version.ImplementationDescriptorPayload);
-        _ = entry; // suppress unused
-
     }
 
     [Fact]
-    public async Task SavingHandler_IsNoOp_ForUnrelatedEntities()
+    public async Task Aggregator_DispatchesToEveryRegisteredTypedHandler()
     {
-        // The handler filters by entity type. An OnEntitySaving for a row that isn't an
-        // ActivityDefinitionVersion must pass through without touching it.
-        using var host = ActivitiesDesignTestHost.Create();
+        // The converged shape: the single aggregator resolves every IEntitySavingHandler<,>
+        // closed over the runtime DbContext + entity types and invokes each. We register the
+        // real activity-catalog handler alongside a probe and assert both run.
+        var probe = new ProbeSavingHandler();
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-        var handler = new ActivityDefinitionVersionSavingHandler(serializer);
 
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer>(serializer);
+        services.AddScoped<IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>, ActivityDefinitionVersionSavingHandler>();
+        services.AddSingleton<IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>>(probe);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
+            (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
+        await using var ctx = host.CreateContext();
+        var version = NewVersion();
+        var entry = ctx.ActivityDefinitionVersions.Add(version);
+
+        var aggregator = new ApplyEntitySavingHandlers(scope.ServiceProvider);
+        await aggregator.Handle(new OnEntitySaving(ctx, entry), CancellationToken.None);
+
+        // Probe ran (fan-out reached every typed contributor)…
+        Assert.True(probe.WasInvoked);
+        // …and the real handler ran (shadow column populated).
+        Assert.Equal("Clr", version.ImplementationKind);
+        Assert.Contains("Acme", version.ImplementationDescriptorPayload);
+    }
+
+    [Fact]
+    public async Task Aggregator_IsNoOp_ForUnrelatedEntities()
+    {
+        // The aggregator closes over the runtime entity type. With no IEntitySavingHandler<,>
+        // registered for ActivityDefinition, publishing OnEntitySaving for it is inert.
+        var services = new ServiceCollection();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        using var host = ActivitiesDesignTestHost.Create();
         await using var ctx = host.CreateContext();
         var unrelated = new ActivityDefinition
         {
@@ -74,34 +99,49 @@ public sealed class SavingEventDispatchTests
         };
         var entry = ctx.ActivityDefinitions.Add(unrelated);
 
-        // Should complete without throwing; nothing to assert beyond no-throw.
-        await handler.Handle(new OnEntitySaving(ctx, entry), CancellationToken.None);
+        var aggregator = new ApplyEntitySavingHandlers(scope.ServiceProvider);
+        // No registered handler for ActivityDefinition → completes without throwing.
+        await aggregator.Handle(new OnEntitySaving(ctx, entry), CancellationToken.None);
     }
 
     [Fact]
-    public void MultipleHandlers_CanSubscribeToOnEntitySaving()
+    public void ExactlyOneEventHandler_HandlesOnEntitySaving()
     {
-        // §2.6.1 contribution shape: any feature may register its own IEventHandler<OnEntitySaving>
-        // alongside the activity-catalog handler. DI resolves both — the event pipeline invokes
-        // each in turn.
+        // The audience for OnEntitySaving is the single aggregator — features contribute via the
+        // typed interface, never their own IEventHandler<OnEntitySaving>.
         var services = new ServiceCollection();
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-        services.AddSingleton<Elsa.Serialization.Core.IPayloadSerializer>(serializer);
-        services.AddScoped<IEventHandler<OnEntitySaving>, ActivityDefinitionVersionSavingHandler>();
-        services.AddScoped<IEventHandler<OnEntitySaving>, ProbeOnEntitySavingHandler>();
+        services.AddScoped<IEventHandler, ApplyEntitySavingHandlers>();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        var handlers = scope.ServiceProvider.GetServices<IEventHandler<OnEntitySaving>>().ToList();
+        var savingSubscribers = scope.ServiceProvider
+            .GetServices<IEventHandler>()
+            .OfType<IEventHandler<OnEntitySaving>>()
+            .ToList();
 
-        Assert.Equal(2, handlers.Count);
-        Assert.Contains(handlers, h => h is ActivityDefinitionVersionSavingHandler);
-        Assert.Contains(handlers, h => h is ProbeOnEntitySavingHandler);
+        Assert.Single(savingSubscribers);
+        Assert.IsType<ApplyEntitySavingHandlers>(savingSubscribers[0]);
     }
 
-    private sealed class ProbeOnEntitySavingHandler : IEventHandler<OnEntitySaving>
+    private static ActivityDefinitionVersion NewVersion()
     {
-        public Task Handle(OnEntitySaving @event, CancellationToken cancellationToken) => Task.CompletedTask;
+        var defId = Guid.NewGuid().ToString("N");
+        return new ActivityDefinitionVersion(1, defId)
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ImplementationDescriptor = new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
+        };
+    }
+
+    private sealed class ProbeSavingHandler : IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>
+    {
+        public bool WasInvoked { get; private set; }
+
+        public ValueTask Handle(ActivitiesDesignDbContext dbContext, ActivityDefinitionVersion entity, CancellationToken cancellationToken)
+        {
+            WasInvoked = true;
+            return ValueTask.CompletedTask;
+        }
     }
 }
