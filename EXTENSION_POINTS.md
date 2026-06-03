@@ -11,21 +11,11 @@ Every seam below is one of two kinds (framework §2.22.1):
 | **Override** | *Replace* a default implementation of a `.Core` contract — "bring my own data access / my own commands". | One implementation wins: `services.Replace(...)` / register-your-own. You can override one contract and keep the rest (e.g. swap the commands, keep the built-in queries). |
 | **Extend** | *Add* an implementation alongside the built-ins. | A single aggregating handler resolves **all** registered implementations and runs each. Adding one never removes another. |
 
-## The doc layering
+## Intra-domain vs. cross-domain contributions
 
-- **per-feature READMEs** — what THIS feature registers/provides.
-- **per-domain `EXTENSION_POINTS.md`** — the authoritative catalog for THAT domain: its overridable contracts, its implementable contributor interfaces, and (as an **Events** section) the events it publishes. Folds in what used to be a separate `EVENTS.md` (framework §2.22.1, 2026-06-03).
-- **this file** — the repo-wide index that points into each per-domain catalog and inlines the seams for domains that do not yet ship their own.
+When a contributor-interface implementation ships in the **same domain** as the `.Core` contract it satisfies it is an *intra-domain default* — the feature delivers on its Core's promises. When it ships from an **unrelated domain** it is a *cross-domain contribution* — the primary mechanism by which domains extend each other's pipelines without direct coupling (framework §2.6.1).
 
-### Per-domain catalogs (authoritative detail)
-
-| Domain | Catalog |
-|---|---|
-| EF Core persistence | [`src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md) |
-| Workflows.Design model + mutation events | [`src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md) |
-| Workflow draft validation | [`src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md) |
-
-> Domains below **without** a linked per-domain catalog (serialization, JavaScript expressions, activities, reconciliation) are inlined here until they ship their own `EXTENSION_POINTS.md`.
+Each per-domain catalog lists **Known implementations** for every contributor interface, tagged `*(intra-domain — default)*` or `*(cross-domain)*`. Features that implement contracts from other domains note it in their own `README.md` under **Cross-domain contributions**.
 
 ## How to read the kinds
 
@@ -39,120 +29,84 @@ Per framework §2.6.1 contributor sub-pattern, an extension interface is one of:
 | **Validator** | Action-named contributor: inspects and **returns** findings. | `I…Validator` |
 | **entity Handler** | Action-named contributor: receives ctx + entity and **acts** at a persistence lifecycle point. | `I…Handler` |
 
-The action-named suffixes (`…Validator`, `…Handler`) are semantically sanctioned alongside Source / Contributor / PreProcessor / PostProcessor (framework §2.6.1): the suffix names the specific action the interface performs on the received context. They are Contributor-kind (context-receiving); the single aggregating `IEventHandler<OnXxx>` still owns the event subscription.
+The action-named suffixes (`…Validator`, `…Handler`) are semantically sanctioned alongside Source / Contributor / PreProcessor / PostProcessor (framework §2.6.1).
 
-**The universal rule:** features implement the interface and register it via DI as the interface type (or an assembly scan). They do **NOT** register their own `IEventHandler<OnXxx>`. Exactly one aggregating handler per event resolves `IEnumerable<TContributor>` (or reflects the typed contributor) and dispatches every implementation. See each row's "Consumed by".
+**The rule for fan-in contribution flows:** when contributing to a domain's fan-in contribution flow, features implement the typed contributor interface and register it via DI — they do **NOT** register a dedicated `IEventHandler<T>` for that contribution purpose. Exactly one aggregating handler per contribution event resolves `IEnumerable<TContributor>` and dispatches every implementation. Independent subscriptions — auditing, cache invalidation, reacting to an event for a feature's own unrelated purpose — are unrestricted and use `IEventHandler<T>` directly.
 
----
+## The doc layering
 
-## Serialization — `Elsa.Serialization.Core`
-
-### `IJsonConverterSource`
-- **Kind:** Source. **Lives in:** `Elsa.Serialization.Core`.
-- **Signature:** `IEnumerable<JsonConverter> GetConverters();`
-- **Returns** the `JsonConverter` instances this source contributes (does not receive a context).
-- **Register:** `services.AddScoped<IJsonConverterSource, MyConverterSource>()`.
-- **Consumed by:** the single `RegisterJsonConverters : IEventHandler<OnJsonPayloadConvertersInitializing>` (`Elsa.Serialization`), which injects `IEnumerable<IJsonConverterSource>` and aggregates.
+- **per-feature READMEs** — what THIS feature registers/provides; includes a **Cross-domain contributions** section when the feature implements contracts from other domains.
+- **per-domain `EXTENSION_POINTS.md`** — the authoritative catalog for THAT domain: its overridable contracts, its implementable contributor interfaces, and (as an **Events** section) the events it publishes.
+- **this file** — the repo-wide index that points into each per-domain catalog.
 
 ---
 
-## JavaScript expressions — `Elsa.Expressions.JavaScript.Core` / `.Rendering.Core`
+## Per-domain catalogs
 
-### `IScriptPreProcessor`
-- **Kind:** PreProcessor. **Lives in:** `Elsa.Expressions.JavaScript.Core`.
-- **Signature:** `ValueTask PreProcess(string script, IJavaScriptExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken);`
-- **Receives** the execution contexts and acts (e.g. injects globals) before the script runs.
-- **Register:** `services.AddScoped<IScriptPreProcessor, MyPreProcessor>()`.
-- **Consumed by:** the single `PreProcessScript` handler (`Elsa.Expressions.JavaScript`), which injects `IEnumerable<IScriptPreProcessor>`.
+### Infrastructure
 
-### `IScriptPostProcessor`
-- **Kind:** PostProcessor. **Lives in:** `Elsa.Expressions.JavaScript.Core`.
-- **Signature:** `ValueTask PostProcess(IJavaScriptExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? options, CancellationToken cancellationToken);`
-- **Receives** the execution contexts and acts after the script runs.
-- **Register:** `services.AddScoped<IScriptPostProcessor, MyPostProcessor>()`.
-- **Consumed by:** the single `PostProcessScript` handler (`Elsa.Expressions.JavaScript`).
+| Domain | Catalog |
+|---|---|
+| Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`src/Elsa.Events/EXTENSION_POINTS.md`](src/Elsa.Events/EXTENSION_POINTS.md) |
+| Mediator (command / request pipelines) | [`src/Elsa.Mediator/EXTENSION_POINTS.md`](src/Elsa.Mediator/EXTENSION_POINTS.md) |
+| Pipelines (middleware — Core-only, no feature project) | [`src/Elsa.Pipelines.Core/EXTENSION_POINTS.md`](src/Elsa.Pipelines.Core/EXTENSION_POINTS.md) |
+| Tasks (startup / recurring / background tasks) | [`src/Elsa.Tasks/EXTENSION_POINTS.md`](src/Elsa.Tasks/EXTENSION_POINTS.md) |
+| Caching (cache manager + change-token signaling) | [`src/Elsa.Caching.Memory/EXTENSION_POINTS.md`](src/Elsa.Caching.Memory/EXTENSION_POINTS.md) |
+| Mapping (object mapper + per-type mappings) | [`src/Elsa.Mapping/EXTENSION_POINTS.md`](src/Elsa.Mapping/EXTENSION_POINTS.md) |
+| Serialization (JSON converter sources) | [`src/Elsa.Serialization/EXTENSION_POINTS.md`](src/Elsa.Serialization/EXTENSION_POINTS.md) |
+| Locking (distributed lock provider) | [`src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md`](src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md) |
 
-### `IJavaScriptDeclarationContributor`
-- **Kind:** Contributor. **Lives in:** `Elsa.Expressions.JavaScript.Rendering.Core`.
-- **Signature:** `ValueTask Contribute(IJavaScriptDeclarationsContributionContext context, CancellationToken cancellationToken);`
-- **Receives** the declarations context and pushes variable/type/function declarations onto it (`AddVariable` / `AddType` / `AddFunction`).
-- **Register:** `services.AddScoped<IJavaScriptDeclarationContributor, MyContributor>()`.
-- **Consumed by:** the single `BuildDeclarationsDocument` handler (`Elsa.Expressions.JavaScript.Rendering`), which injects `IEnumerable<IJavaScriptDeclarationContributor>`.
+### Expressions
 
----
+| Domain | Catalog |
+|---|---|
+| Expressions (evaluator + descriptor providers) | [`src/Elsa.Expressions/EXTENSION_POINTS.md`](src/Elsa.Expressions/EXTENSION_POINTS.md) |
+| JavaScript expressions (pre/post-processors) | [`src/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](src/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
+| JavaScript rendering (declaration contributors) | [`src/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](src/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md) |
+| Liquid expressions (rendering lifecycle) | [`src/Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](src/Elsa.Expressions.Liquid/EXTENSION_POINTS.md) |
 
-## Activities (runtime) — `Elsa.Activities.Runtime.Core`
+### HTTP
 
-### `IActivityImplementationResolverSource`
-- **Kind:** Source. **Lives in:** `Elsa.Activities.Runtime.Core`.
-- **Signature:** `IEnumerable<IActivityImplementationResolver> GetResolvers();`
-- **Returns** the resolver(s) this source contributes.
-- **Register:** `services.AddScoped<IActivityImplementationResolverSource, MySource>()`.
-- **Consumed by:** the single `RegisterActivityImplementationResolvers : IEventHandler<OnActivityImplementationResolversInitializing>` (`Elsa.Activities.Runtime`).
+| Domain | Catalog |
+|---|---|
+| HTTP (downloadable content handlers) | [`src/Elsa.Http/EXTENSION_POINTS.md`](src/Elsa.Http/EXTENSION_POINTS.md) |
 
----
+### Persistence
 
-## Activities (design) — `Elsa.Activities.Design.Core`
+| Domain | Catalog |
+|---|---|
+| EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md) |
 
-### `IImplementationDescriptorSource`
-- **Kind:** Source. **Lives in:** `Elsa.Activities.Design.Core`.
-- **Signature:** `IEnumerable<ImplementationDescriptorRegistration> GetRegistrations();`
-- **Returns** the `(Kind, DescriptorType)` registration(s) this source contributes.
-- **Register:** `services.AddScoped<IImplementationDescriptorSource, MySource>()`.
-- **Consumed by:** the single `RegisterImplementationDescriptors : IEventHandler<OnImplementationDescriptorsInitializing>` (`Elsa.Activities.Runtime`).
+### Activities
 
----
+| Domain | Catalog |
+|---|---|
+| Activities runtime (resolver sources + implementation descriptor sources) | [`src/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](src/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
+| Activities design — reconciliation sources | [`src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md) |
+| Activities design — persistence commands + lookup | [`src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md) |
 
-## Reconciliation — `Elsa.Activities.Design.Reconciliation` / `Elsa.Workflows.Design.Reconciliation`
+### Workflows
 
-### `IActivityReconciliationSource`
-- **Kind:** Source (carries `SourceId` + `SourceKind`). **Lives in:** `Elsa.Activities.Design.Reconciliation` (Contracts).
-- **Signature:** `ValueTask<IEnumerable<ActivityVersionReconciliationModel>> Read(CancellationToken cancellationToken);` + `string SourceId { get; }` + `string SourceKind { get; }`.
-- **Returns** the desired activity-version set for its source. Extend via inheritance of the abstract base feature, not via `.Json`-style sub-packages.
-- **Register:** `services.AddScoped<IActivityReconciliationSource, MySource>()`.
-- **Consumed by:** `ActivityVersionReconciler` (`Elsa.Activities.Design.Reconciliation`), which reads every registered source on each reconciliation pass.
+| Domain | Catalog |
+|---|---|
+| Workflows design — model, mutation events, commands, diff engine | [`src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md) |
+| Workflows design — draft validators | [`src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
+| Workflows design — reconciliation sources | [`src/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
+| Workflows design — persistence commands + diff engine | [`src/Elsa.Workflows.Design.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Persistence.EFCore/EXTENSION_POINTS.md) |
+| Workflows runtime (signal handler, completion handler — Core-only) | [`src/Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md) |
+| Workflows runtime — HTTP endpoint behaviour | [`src/Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](src/Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md) |
 
-### `IWorkflowReconciliationSource`
-- **Kind:** Source (carries `SourceId` + `SourceKind`). **Lives in:** `Elsa.Workflows.Design.Reconciliation` (Contracts).
-- **Signature:** `ValueTask<IEnumerable<WorkflowVersionReconciliationModel>> Read(CancellationToken cancellationToken);` + `string SourceId { get; }` + `string SourceKind { get; }`.
-- **Register / Consumed by:** mirror of the activity source — `WorkflowsVersionReconciler` (`Elsa.Workflows.Design.Reconciliation`).
+### Legacy
 
----
-
-## Workflow draft validation — `Elsa.Workflows.Design.Validations.Core`
-
-→ **Authoritative catalog:** [`src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md).
-
-- **`IDraftValidator`** — Validator (action-named contributor). `ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken ct)`. Register `services.AddScoped<IDraftValidator, MyValidator>()`. Consumed by the single `ExecuteValidations : IEventHandler<OnDraftValidating>`. *Extend axis.*
-
----
-
-## Workflows.Design model + mutation/lifecycle commands — `Elsa.Workflows.Design.Core`
-
-→ **Authoritative catalog:** [`src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md).
-
-- **Override:** `IWorkflowDefinitionLookup`, `IWorkflowDesignContextFactory`, the mutation/lifecycle commands (`IUpdateDraftCommand` + the 5 lifecycle commands, in `Elsa.Workflows.Design.Persistence.Core`), and `IDraftStateDiffEngine` (in `Elsa.Workflows.Design.Persistence.EFCore`). The canonical "swap the commands, keep the queries" example.
-- **Events:** the 20 FR-018 mutation events + 2 lifecycle events (`OnDraftCreated` / `OnDraftDiscarded`), all Background.
-
----
-
-## EF Core persistence — `Elsa.Persistence.EFCore`
-
-→ **Authoritative catalog:** [`src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md).
-
-- **Override:** `IQueries<TEntity>` (default `EFCoreQueries<,>`), `IUpsertCommandGenerator`, `IElsaDbContextSchema`.
-- **Extend (entity Handlers):**
-  - **`IEntitySavingHandler<TDbContext, TEntity>`** — `ValueTask Handle(TDbContext, TEntity, CancellationToken)`. Register `services.AddEntitySavingHandler<…>()` / `AddEntitySavingHandlersFrom(assembly)`. Consumed by the single `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>` (registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`).
-  - **`IEntityLoadingHandler<TDbContext, TEntity>`** — `ValueTask Handle(TDbContext, TEntity, CancellationToken)`. Register `services.AddEntityLoadingHandler<…>()` / `AddEntityLoadingHandlersFrom(assembly)`. Consumed by the single `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>`.
-- **Out-of-band hooks (NOT event-dispatched):**
-  - **`IGlobalEntitySavingHandler`** — `ValueTask Handle(DbContext, EntityEntry, CancellationToken)`. Runs for **every** modified entity directly from `ElsaDbContextBase.ApplyGlobalSavingHandlers`.
-  - **`IEntityModelCreatingHandler`** — `void Handle(ElsaDbContextBase, ModelBuilder, IMutableEntityType)`. Runs during `OnModelCreating`, dispatched by `ElsaDbContextBase.ApplyEntityModelCreatingHandlers`.
+| Domain | Catalog |
+|---|---|
+| Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](src/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
 
 ---
 
 ## Constitutional basis
 
-- §2.6.1 — the single `IEvent` concept + contribution sub-pattern; Source vs Contributor naming; sanctioned action-named suffixes (`…Validator`, `…Handler`).
-- §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section).
-- §2.22.2 — this repo-wide extension-points index.
+- §2.6.1 — the single `IEvent` concept + contribution sub-pattern; intra-domain vs cross-domain contributions; Source vs Contributor naming; sanctioned action-named suffixes (`…Validator`, `…Handler`).
+- §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
+- §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).

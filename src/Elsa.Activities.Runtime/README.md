@@ -9,7 +9,14 @@ Runtime-side composition for activity construction. Hosts the activity factory, 
 - **`IImplementationDescriptorRegistry`** → `Elsa.Activities.Design.Core.Models.ImplementationDescriptorRegistry` — kind→CLR descriptor type for persistence-side deserialisation. Singleton; populated at startup.
 - **`ClrActivityImplementationResolver`** — owns the `"Clr"` kind. Resolves `ClrImplementationDescriptor` to a live `Type` via `TypeInformation.LoadType()`.
 
-## Cross-feature contributions (contributor interfaces this feature implements + registers)
+## Cross-domain contributions
+
+This feature implements contracts whose definitions live in other domains' Core:
+
+- **`IImplementationDescriptorSource`** *(Core — `Elsa.Activities.Design.Core`)* — `ClrImplementationDescriptorSource` contributes the `("Clr", typeof(ClrImplementationDescriptor))` registration. Catalog: [`Elsa.Activities.Runtime/EXTENSION_POINTS.md`](EXTENSION_POINTS.md) (aggregated here by `RegisterImplementationDescriptors`).
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — two startup tasks: `ActivityImplementationResolverRegistryStartupTask` (populates the resolver registry) and `ImplementationDescriptorRegistryStartupTask` (populates the descriptor registry). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+
+## Contributor interfaces implemented (detail)
 
 Both clusters use the **return-style contributor (`I…Source`) + single aggregating handler** pattern:
 a source returns its items; one action-named `IEventHandler<T>` resolves `IEnumerable<TSource>`,

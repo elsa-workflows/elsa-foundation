@@ -8,11 +8,11 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 - **`DefaultActivityDefinitionHasher`** — default `IActivityDefinitionHasher` (SHA-256 over canonical JSON of definition + version). Replaceable per §2.6.2.
 - **`ActivityVersionReconcilerStartupTask`** — registered as an `IStartupTask`, acquires a distributed lock, runs `IActivityVersionReconciler.Reconcile()`. `[SingleNodeTask] [Order(1)]`.
 
-## Cross-feature contributions (handlers this feature registers)
+## Cross-domain contributions
 
-None — this feature is the **publisher** of the reconciliation event.
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `ActivityVersionReconcilerStartupTask` runs the reconciliation pass at startup under a distributed lock. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
 
-## Cross-feature contributions (events this feature publishes)
+## Events published
 
 - **`OnActivityVersionsReconciling`** (declared in `Elsa.Activities.Design.Reconciliation.Core`). Carries a mutable `ICollection<IActivityDefinitionVersion>`. Source modules handle the event and contribute the activities they observe. The reconciler then upserts the catalog and the reconciliation-state sibling.
 

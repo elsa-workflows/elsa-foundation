@@ -112,6 +112,53 @@ folded into the 3.0.0 draft):
     event). The JS declarations context `IJavaScriptRenderingContext` was renamed
     `IJavaScriptDeclarationsContributionContext` so the name states its purpose.
 
+Unit 1 extension follow-up (2026-06-03 — "Startup-task cross-domain contributions + fan-in rule scope clarification"):
+  - §2.6.1 sub-pattern CLARIFIED — the contributor-interface + single-aggregating-handler
+    rule is scoped to the *contribution axis* (fan-in flows). Features are explicitly
+    permitted to register `IEventHandler<T>` for independent purposes (auditing, cache
+    invalidation, cross-cutting reactions). The rule prevents scattered handlers all doing
+    the same fan-in contribution; it does not restrict general event observation.
+  - §2.22.1 / README pattern EXTENDED — `IStartupTask`, `IRecurringTask`, `IBackgroundTask`
+    implementations are cross-domain contributions on equal standing with
+    `IEntitySavingHandler`, `IScriptPreProcessor`, etc. Features implementing task
+    interfaces from `Elsa.Tasks.Core` MUST list them in their README's
+    "Cross-domain contributions" section. Documentation cascade: READMEs created/updated
+    for Elsa.Serialization, Elsa.Persistence.EFCore, Elsa.Workflows.Design.Reconciliation,
+    Elsa.Events, Elsa.Activities.Design.Reconciliation, Elsa.Activities.Runtime.
+  - Root EXTENSION_POINTS.md "universal rule" wording corrected to scope the restriction
+    to fan-in contribution flows; independent subscriptions stated as unrestricted.
+
+Unit 1 extension (2026-06-03 — "Per-domain EXTENSION_POINTS.md rollout + intra/cross-domain pattern"):
+  - §2.6.1 EXTENDED — "Intra-domain vs. cross-domain contributions" named as a
+    formal pattern: intra-domain default = same domain's feature implements its
+    own Core's contract; cross-domain contribution = different domain implements
+    another domain's Core contract (the inter-domain dependency map). Owning
+    feature's EXTENSION_POINTS.md MUST list all Known implementations tagged
+    accordingly; contributing feature MUST add a "Cross-domain contributions"
+    section to its README with a link back.
+  - §2.22.1 EXTENDED — Catalog placement clarified: catalog lives at the
+    composition-root feature project (NOT .Core, which is contracts-only);
+    exception for domains with no separate feature project. Format spec extended:
+    every entry gains a layer badge (*(Core — Proj)*  vs *(Feature contract)*);
+    contributor-interface entries gain a Known implementations list with
+    intra/cross-domain tags.
+  - §2.22.1 MANDATORY maintenance obligation NEW — five trigger conditions:
+    (a) new interface, (b) new implementation (intra or cross), (c) rename/remove,
+    (d) new aggregator, (e) new feature/.Core project. CatalogParityTests covers
+    events; code review covers contributor-interface drift.
+  - §2.22.1 worked example UPDATED — 24 per-domain catalogs at composition-root
+    feature projects; catalog set declared complete for current domain set.
+  - §2.22.2 UPDATED — "inlined until migrated" clause removed; index is pure
+    links (no inline entries); "one per .Core root" → "one per composition-root
+    feature project."
+  - Documentation cascade: 24 new/updated EXTENSION_POINTS.md catalogs across
+    all domains; root EXTENSION_POINTS.md converted to pure-links index with
+    24-row domain table; CatalogParityTests extended with 7 new assembly→catalog
+    pairs + multi-assembly catalog support (union check on reverse direction);
+    2 catalogs relocated from .Core to composition-root feature projects
+    (Workflows.Design.Core → .Api; Validations.Core → .Validations); cross-domain
+    README sections added to 8 feature projects.
+
 Unit 1 consistency fix (2026-06-03 — "EF Core save/load on the contributor +
 single-aggregating-handler shape"):
   - §2.6.1 extended — action-named contributor suffixes (`…Validator`,
@@ -738,9 +785,9 @@ The result: **all cross-feature contribution flows through the same event pipeli
 
 **Sub-pattern — Contributor interface + single aggregating handler.**
 
-A fan-in event that gathers contributions from many features MUST use the **contributor-interface + single-handler** shape — NOT one `IEventHandler<On<Phase>>` per contributing feature:
+A fan-in event that gathers contributions from many features MUST use the **contributor-interface + single-handler** shape — NOT one `IEventHandler<On<Phase>>` per contributing feature. **This rule is scoped to the contribution axis.** Features are free to register `IEventHandler<T>` for independent subscriptions — observing an event for auditing, cache invalidation, cross-cutting reactions, or any purpose unrelated to the fan-in aggregation — without any restriction. The constraint is: if you are *contributing to a fan-in*, use the typed interface rather than a scatter of handlers all doing the same kind of thing (imagine 100 JavaScript declaration contributors each implemented as a separate `IEventHandler<OnDeclarationsDocumentGenerating>` — that is the chaos this rule prevents).
 
-- The domain `.Core` defines a **contributor interface** that describes the *intent* of the contribution (e.g. `IDraftValidator`, `IJsonConverterSource`). Features implement it and register it via DI (`services.AddScoped<TContributor, Impl>()`) — they do **not** register their own event handler.
+- The domain `.Core` defines a **contributor interface** that describes the *intent* of the contribution (e.g. `IDraftValidator`, `IJsonConverterSource`). Features implement it and register it via DI (`services.AddScoped<TContributor, Impl>()`) — they do **not** register a separate event handler for *this contribution purpose*.
 - The owning feature registers **exactly one** action-named `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `RegisterJsonConverters`) that injects `IEnumerable<TContributor>`, iterates every contributor, and writes the aggregate into the event.
 - The event payload exposes a **directly-accessible `ICollection<T>`** (for flat-collection sinks) or a rich mutable context object (for heterogeneous sinks). No private backing list, no `AddX()` methods, no `IReadOnlyList<T>` read accessor — the single handler is the only writer, so encapsulation is met without ceremony.
 
@@ -753,6 +800,8 @@ A fan-in event that gathers contributions from many features MUST use the **cont
 **Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<On<Phase>>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
 
 Never name a return-style interface `Contributor`, nor a context-acting interface `Source`. A *Source* yields data; a *Contributor* (incl. its action-named forms `Validator`/`Handler`) performs operations against a target; a *PreProcessor*/*PostProcessor* performs operations against a target at a named point in a before/after lifecycle.
+
+**Intra-domain vs. cross-domain contributions.** When a contributor-interface implementation ships in the **same domain** as the `.Core` contract it satisfies, it is an *intra-domain default* — the feature delivers on its own Core's promises. When it ships from an **unrelated domain**, it is a *cross-domain contribution* — the primary mechanism by which domains extend each other's pipelines without direct coupling. The owning feature's `EXTENSION_POINTS.md` catalog (§2.22.1) MUST list all known implementations of each contributor interface, tagged accordingly (`*(intra-domain — default)*` / `*(cross-domain)*`). The contributing feature MUST note in its own `README.md` (under a **Cross-domain contributions** section) which contracts from other domains it satisfies and link back to the owning domain's catalog. This makes the inter-domain dependency map visible from both ends.
 
 **Why.**
 
@@ -1205,7 +1254,7 @@ The form of the documentation (README, manifest, generated reference, sidecar JS
 
 *New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy. Broadened Unit 1 (2026-06-03): the standalone `EVENTS.md` becomes a per-domain `EXTENSION_POINTS.md` whose Events section absorbs the former events catalog — because events are only one of the seams a domain exposes; overridable contracts and implementable contributor interfaces are the rest, and a consumer needs all three in one place.*
 
-Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library exposes extension points (overridable contracts, implementable contributor interfaces, AND/OR published events) MUST ship an **extension-points catalog** as a documentation deliverable inside (or alongside) the domain's `.Core` project. The catalog answers, in one discoverable place: *what can I override, what can I implement, and what events does this domain publish?* — without re-reading every feature implementation.
+Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library exposes extension points (overridable contracts, implementable contributor interfaces, AND/OR published events) MUST ship an **extension-points catalog** as a documentation deliverable at the domain's **composition root** — the feature project that wires the defaults and registers the aggregating handlers (typically the `<Domain>` or `<Domain>.<Provider>` project, NOT the `.Core` which is contracts-only). Exception: domains with no separate feature project keep the catalog in their `.Core`. The catalog answers, in one discoverable place: *what can I override, what can I implement, and what events does this domain publish?* — without re-reading every feature implementation.
 
 **Two axes of extension the catalog distinguishes.**
 
@@ -1233,7 +1282,7 @@ A domain may publish events of either strategy, or have a present-participle gat
 - **Ordering guarantees** if any — e.g., "fires after the materialised snapshot is updated but before the persistence flush."
 - **Cross-references** to other domains' catalogs that consumers should be aware of.
 
-For the **Overridable contracts** section, each entry records: the contract, its default implementation (and owning project — a seam may live in a sibling project of the same domain per §2.1), its signature, when/why to override, and what depends on it. For the **Implementable contributor interfaces** section, each entry records the interface name + kind, signature, registration call, and the single aggregating handler that consumes it.
+For the **Overridable contracts** section, each entry records: a **layer badge** (`*(Core — <OwningProject>)*` when the contract is in a `.Core` and can be used without a feature-project reference, or `*(Feature contract — <FeatureProject>)*` when defined in the feature), its default implementation (and owning project — a seam may live in a sibling project of the same domain per §2.1), its signature, when/why to override, and what depends on it. For the **Implementable contributor interfaces** section, each entry records the interface name + kind + layer badge, signature, registration call, the single aggregating handler that consumes it, and a **Known implementations** list that tags every shipped implementation as `*(intra-domain — default)*` (same domain's feature) or `*(cross-domain)*` (a different domain's feature). The Known implementations list is the inter-domain dependency map navigable from the owning feature's catalog.
 
 **Why one catalog per domain.**
 
@@ -1241,9 +1290,23 @@ For the **Overridable contracts** section, each entry records: the contract, its
 - The extension-points catalog answers *"what can I override, implement, or subscribe to in THIS domain?"* — useful when *consuming* the domain, designing a new contributor, swapping a default, or onboarding into the domain cold.
 - The two views are complementary; the catalog is the index humans and AI sessions reach for first.
 
-**Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the `.Core` project root of the domain (e.g. `src/<App>.<Domain>.Core/EXTENSION_POINTS.md`), with the three sections above. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
+**Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the **composition-root feature project** of the domain (e.g. `src/<App>.<Domain>/EXTENSION_POINTS.md`), co-located with the feature's `README.md`. The `.Core` project is contracts-only (§2.1) and cannot describe defaults or wiring; the composition root can. Exception: domains with no separate feature project place the catalog in their `.Core`. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** Unit C created the initial Elsa worked examples as standalone `EVENTS.md` files; Unit 1 (2026-06-03) folded each into a per-domain `EXTENSION_POINTS.md` (Events section + overridable-contracts + contributor sections): `src/Elsa.Workflows.Design.Core/EXTENSION_POINTS.md` (the Draft mutation events — all Background — plus the lookup/command/diff-engine override seams), `src/Elsa.Workflows.Design.Validations.Core/EXTENSION_POINTS.md` (`OnDraftValidating` Sequential + `OnDraftValidated` Background — the canonical mixed-strategy example — plus the `IDraftValidator` contributor), and `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md` (the `OnEntitySaving` + `OnEntityLoading` seams, the `IEntitySavingHandler<,>`/`IEntityLoadingHandler<,>` contributors, and the `IQueries<>`/`IUpsertCommandGenerator` override contracts — the canonical "swap one implementation, keep the rest" example). As subsequent units expose extension points in other domains, each domain ships its own catalog.
+**Worked example.** Unit 1 (2026-06-03) created a complete set of 24 per-domain catalogs at composition-root feature projects, covering all domains with extension points: `src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md` (Draft mutation events — all Background — plus lookup/command/diff-engine override seams; composition root is `WorkflowsDesignApiFeature`), `src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md` (`OnDraftValidating` Sequential + `OnDraftValidated` Background — the canonical mixed-strategy example — plus the `IDraftValidator` contributor with intra-domain defaults tagged; composition root is `WorkflowDesignValidationsFeature`), and `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md` (the `OnEntitySaving` + `OnEntityLoading` seams, the `IEntitySavingHandler<,>`/`IEntityLoadingHandler<,>` contributors with cross-domain implementations tagged, and the `IQueries<>`/`IUpsertCommandGenerator` override contracts — the canonical "swap one implementation, keep the rest" example). The repo-root `EXTENSION_POINTS.md` links all 24 catalogs grouped by domain family (infrastructure, expressions, HTTP, persistence, activities, workflows, legacy). The catalog set is considered **complete** for the current set of domains; the repo-root index is pure links (no inline entries).
+
+**Maintenance obligation (MANDATORY).** The extension-points catalog is a **living document**. Updating it is MANDATORY in the same unit-of-work (commit / PR / unit) as any change that touches an extension point. The following events always trigger a catalog update:
+
+**(a) New interface** — a new overridable contract, contributor interface, or event is added to a `.Core` or feature project → add an entry to the owning feature's catalog (and a row to the repo-root index if not already linked).
+
+**(b) New implementation** — a class implementing a contributor interface is added to ANY feature (intra or cross-domain) → add it to the "Known implementations" list in the owning feature's catalog, tagged as intra-domain or cross-domain; add a **Cross-domain contributions** note in the implementing feature's README.
+
+**(c) Renamed or removed interface or implementation** — update every catalog entry and known-implementations list that references it; treat as MAJOR version change per §4.
+
+**(d) New aggregating handler or change to how a contributor interface is consumed** — update the catalog entry for every interface that handler aggregates.
+
+**(e) New feature or `.Core` project that exposes extension points** — the feature ships a new `EXTENSION_POINTS.md` as part of its initial deliverable, before merge.
+
+The `CatalogParityTests` reflection guard (§2.23-adjacent) catches event-heading drift automatically; contributor-interface and known-implementations drift is caught at code review. Both layers are required.
 
 #### §2.22.2 Repo-wide extension-points index
 
@@ -1251,18 +1314,9 @@ For the **Overridable contracts** section, each entry records: the contract, its
 
 Beyond the per-feature documentation (§2.22 — *what does THIS feature register?*) and the per-domain extension-points catalogs (§2.22.1 — *what can I override/implement/subscribe to in THIS domain?*), the repo SHIPS one **repo-wide index of every extension point** — the sanctioned answer to *"how do I extend the system?"* gathered into a single discoverable map rather than scattered across domains.
 
-**Relationship to the per-domain catalogs.** The repo-wide index is a *map*, not a second copy: the authoritative detail for a domain lives in that domain's §2.22.1 catalog, and the index links to it. For domains that do not yet ship their own §2.22.1 catalog, the index MAY inline the entries until they do (a recognised, temporary state — not a permanent fork of the detail). Both the index and the per-domain catalogs are named `EXTENSION_POINTS.md`, distinguished by location: one at the repo root, one per `.Core` project root.
+**Relationship to the per-domain catalogs.** The repo-wide index is a *map*, not a second copy: the authoritative detail for a domain lives in that domain's §2.22.1 catalog, and the index links to it. The index contains **no inline entries** — every domain that exposes extension points ships its own §2.22.1 catalog (§2.22.1 maintenance obligation), so the index is pure links. Both the index and the per-domain catalogs are named `EXTENSION_POINTS.md`, distinguished by location: one at the repo root, one at each domain's composition-root feature project.
 
-**Minimum required content per interface (when inlined in the index):**
-
-- **Interface name** and the **kind** (Source / Contributor / PreProcessor+PostProcessor / Validator / entity Handler per §2.6.1), or the **overridable contract** name + default impl.
-- **Where it lives** (the owning `.Core` / contracts project).
-- **Method signature(s)**, and whether the implementation **returns** values (Source) or **receives a context and acts** (Contributor and its action-named forms).
-- **How to register it via DI** (the `AddXxx` call or assembly scan; for an override, the `Replace` / register-your-own note).
-- **Which single aggregating handler consumes it** (the one `IEventHandler<On<Phase>>`), for contributor interfaces.
-- **A cross-link** to the owning domain's `EXTENSION_POINTS.md`.
-
-**Form.** Application-defined; recommended a single `EXTENSION_POINTS.md` at the repo root. Unit 1 creates the initial Elsa example: a root index linking the three per-domain catalogs (EF Core persistence, Workflows.Design, Workflow draft validation) and inlining the not-yet-migrated domains (`IJsonConverterSource`, `IActivityImplementationResolverSource`, `IImplementationDescriptorSource`, `IJavaScriptDeclarationContributor`, `IScriptPreProcessor`/`IScriptPostProcessor`, `IActivityReconciliationSource` + the workflow equivalent).
+**Form.** Application-defined; recommended a single `EXTENSION_POINTS.md` at the repo root containing a per-domain table grouped by domain family, with one row per catalog (domain name, catalog link, brief description). The §2.22.1 worked example (Unit 1) creates the Elsa instance: 24 per-domain catalogs linked from the root index, grouped as infrastructure, expressions, HTTP, persistence, activities, workflows, and legacy.
 
 ### §2.23 Unit tests
 

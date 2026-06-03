@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Activities.Design.Reconciliation.Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Expressions.JavaScript.Core\Elsa.Expressions.JavaScript.Core.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Expressions.JavaScript.Rendering.Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Events.Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Mediator\Elsa.Mediator.csproj" />

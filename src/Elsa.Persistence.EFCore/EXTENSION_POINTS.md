@@ -18,15 +18,15 @@ This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's
 | `IUpsertCommandGenerator` | `UpsertCommandGenerator` | A provider needs different bulk-upsert SQL (dialect-specific `MERGE` / `ON CONFLICT`). |
 | `IElsaDbContextSchema` | *(none — optional)* | A deployment needs the Elsa tables under a custom schema name during migration. |
 
-### `IQueries<TEntity>`
+### `IQueries<TEntity>` *(Core — `Elsa.Persistence.Core`)*
 - **Lives in:** `Elsa.Persistence.Core` (provider-agnostic). **Default impl:** `EFCoreQueries<TDbContext, TEntity>` (this assembly) — the `AsNoTracking` read path that publishes `OnEntityLoading` for every materialised entity.
 - **Replace:** register your own `IQueries<TEntity>` (or a decorator) before/after the EF Core feature wires its default. Mutate-then-save commands that need change tracking do **not** go through `IQueries` (they use a tracked `DbContextFactory` context directly), so overriding Queries does not affect the write path.
 
-### `IUpsertCommandGenerator`
+### `IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Signature:** `GeneratedCommand Generate<TDbContext, TEntity>(TDbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector) where TDbContext : DbContext where TEntity : Entity;`
 - **Default impl:** `UpsertCommandGenerator`. Consumed by `EFCoreBulkUpsert` to build the raw upsert SQL.
 
-### `IElsaDbContextSchema`
+### `IElsaDbContextSchema` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Signature:** `string Schema { get; }` — the schema name applied during migration.
 
 ---
@@ -35,26 +35,34 @@ This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's
 
 These are registered alongside any others and dispatched by a single aggregating handler — you never register your own `IEventHandler`.
 
-### `IEntitySavingHandler<TDbContext, TEntity>`
+### `IEntitySavingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Kind:** entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).
 - **Signature:** `ValueTask Handle(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken);`
 - **Receives** the context + typed entity and **acts** — serialises `[NotMapped]` projections into backing `*Source` / payload columns before the row is flushed. The typed generics do the entity-type filtering (no inline `is` check).
 - **Register:** `services.AddEntitySavingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntitySavingHandlersFrom(assembly)`.
 - **Consumed by:** the single `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
-### `IEntityLoadingHandler<TDbContext, TEntity>`
+**Known implementations (shipped):**
+- `Elsa.Activities.Design.Persistence.EFCore` — `ActivityDefinitionVersionSavingHandler` *(cross-domain)*
+- `Elsa.Workflows.Design.Persistence.EFCore` — `WorkflowDefinitionVersionSavingHandler`, `WorkflowDefinitionDraftSavingHandler` *(cross-domain)*
+
+### `IEntityLoadingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Kind:** entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).
 - **Signature:** `ValueTask Handle(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken);`
 - **Receives** the context + just-materialised entity and **acts** — hydrates `[NotMapped]` projections from the backing columns.
 - **Register:** `services.AddEntityLoadingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntityLoadingHandlersFrom(assembly)`.
 - **Consumed by:** the single `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
+**Known implementations (shipped):**
+- `Elsa.Activities.Design.Persistence.EFCore` — `ActivityDefinitionVersionLoadingHandler` *(cross-domain)*
+- `Elsa.Workflows.Design.Persistence.EFCore` — `WorkflowDefinitionVersionLoadingHandler`, `WorkflowDefinitionDraftLoadingHandler` *(cross-domain)*
+
 ### Out-of-band hooks (NOT event-dispatched)
 
 These contributor interfaces run through their own dispatch mechanism, not through `OnEntitySaving` / `OnEntityLoading` — listed here for completeness:
 
-- **`IGlobalEntitySavingHandler`** — `ValueTask Handle(DbContext dbContext, EntityEntry entity, CancellationToken cancellationToken);`. Runs for **every** modified entity (no per-type fan-in) directly from `ElsaDbContextBase.ApplyGlobalSavingHandlers`.
-- **`IEntityModelCreatingHandler`** — `void Handle(ElsaDbContextBase dbContext, ModelBuilder modelBuilder, IMutableEntityType entityType);`. Runs during `OnModelCreating` (before any request scope exists), dispatched by `ElsaDbContextBase.ApplyEntityModelCreatingHandlers`.
+- **`IGlobalEntitySavingHandler`** *(Feature contract — `Elsa.Persistence.EFCore`)* — `ValueTask Handle(DbContext dbContext, EntityEntry entity, CancellationToken cancellationToken);`. Runs for **every** modified entity (no per-type fan-in) directly from `ElsaDbContextBase.ApplyGlobalSavingHandlers`.
+- **`IEntityModelCreatingHandler`** *(Feature contract — `Elsa.Persistence.EFCore`)* — `void Handle(ElsaDbContextBase dbContext, ModelBuilder modelBuilder, IMutableEntityType entityType);`. Runs during `OnModelCreating` (before any request scope exists), dispatched by `ElsaDbContextBase.ApplyEntityModelCreatingHandlers`.
 
 ---
 
