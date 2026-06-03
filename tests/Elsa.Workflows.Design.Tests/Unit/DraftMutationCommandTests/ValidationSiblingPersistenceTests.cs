@@ -1,12 +1,11 @@
-using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
@@ -81,10 +80,8 @@ public sealed class ValidationSiblingPersistenceTests
         // — FR-023 delete-and-re-add (not appended to the existing list).
         host.EventPublisher.OnPublish = null;
 
-        var activity = NewActivityNode("node-1", "av-1");
-
-        using (var scope = host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<IAddActivityToDraftCommand>().Execute(draftId, activity);
+        // A subsequent coarse update (FR-001 full-state) drives the next validation pass.
+        await Update(host, draftId, State(activities: [Node("node-1")]));
 
         using var ctx = host.CreateContext();
         var sibling = await ctx.WorkflowDefinitionDraftValidations
@@ -145,15 +142,4 @@ public sealed class ValidationSiblingPersistenceTests
         var command = scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>();
         return await command.Execute(workflowDefinitionId);
     }
-
-    private static ActivityNode NewActivityNode(string nodeId, string activityVersionId) => new(
-        NodeId: nodeId,
-        ActivityVersionId: activityVersionId,
-        Inputs: [],
-        Outputs: [],
-        IsContainer: false,
-        IsStart: false,
-        IsTerminal: false,
-        ChildActivities: []
-    );
 }

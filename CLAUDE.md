@@ -64,5 +64,5 @@ Per the constitution v1 (2026-05-11):
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at [`specs/002-workflow-state-scope/plan.md`](specs/002-workflow-state-scope/plan.md).
+at [`specs/003-single-update-command/plan.md`](specs/003-single-update-command/plan.md).
 <!-- SPECKIT END -->

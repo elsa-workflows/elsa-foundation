@@ -1,5 +1,7 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
@@ -421,6 +423,23 @@ namespace Elsa.Persistence.EFCore.Services
             {
                 await handler.Handle(dbContext, entity, cancellationToken);
             }
+
+            await DispatchEntityLoadingEvent(dbContext, scope, entity, cancellationToken);
+        }
+
+        /// <summary>
+        /// Publishes <see cref="OnEntityLoading"/> for the materialised <see cref="Entity"/> on the
+        /// default (Sequential) strategy, so hydration completes before the entity is handed back to
+        /// the caller. Coexists with the legacy <see cref="IEntityLoadingHandler{TDbContext,TEntity}"/>
+        /// dispatch path — the read-side mirror of <c>ElsaDbContextBase.DispatchEntitySavingEvents</c>.
+        /// </summary>
+        private static async Task DispatchEntityLoadingEvent(TDbContext dbContext, IServiceScope scope, TEntity entity, CancellationToken cancellationToken)
+        {
+            var publisher = scope.ServiceProvider.GetService<IEventPublisher>();
+            if (publisher is null)
+                return;
+
+            await publisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken: cancellationToken);
         }
 
         private Task ApplyEntityLoadingHandlers(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken)

@@ -15,12 +15,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// atomically inside the per-Draft distributed lock. Versions are never touched.
 /// </summary>
 /// <remarks>
-/// Does NOT route through <see cref="Services.DraftMutationPipeline"/> — that pipeline is
-/// shaped for snapshot mutation + validation gate + lifecycle pair. Discard is a different
-/// shape (deletion, no validation rebuild, no granular event); a custom flow keeps the
-/// pipeline's hot path simple. The lock + lifecycle-event semantics are preserved by
-/// invoking <see cref="IDistributedLockProvider"/> and <see cref="IEventPublisher"/>
-/// directly.
+/// Discard is its own shape (deletion, no validation rebuild, no granular event) and shares no
+/// flow with create or update. The lock + lifecycle-event semantics are preserved by invoking
+/// <see cref="IDistributedLockProvider"/> and <see cref="IEventPublisher"/> directly.
 /// </remarks>
 public sealed class DiscardDraftCommand(
     IDistributedLockProvider lockProvider,

@@ -13,7 +13,9 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// <summary>
 /// SC-017 + Unit C FR-028. <see cref="ICloneDraftFromVersionCommand"/> produces a new Draft
 /// whose State and Layout are deep-equal to the source Version's, with NodeIds carrying 1:1
-/// per FR-009a's copy semantics. The clone publishes <c>OnDraftClonedFromVersion</c>.
+/// per FR-009a's copy semantics. Clone delegates to <see cref="ICreateDraftCommand"/>, so it
+/// publishes the single origination event <c>OnDraftCreated</c> carrying the source version id;
+/// the same id is persisted on the Draft entity's <c>SourceVersionId</c>.
 /// </summary>
 public sealed class CloneDraftFromVersionTests
 {
@@ -91,7 +93,7 @@ public sealed class CloneDraftFromVersionTests
     }
 
     [Fact]
-    public async Task Clone_publishes_OnDraftClonedFromVersion()
+    public async Task Clone_publishes_OnDraftCreated_carrying_the_source_version_id()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
@@ -99,11 +101,25 @@ public sealed class CloneDraftFromVersionTests
 
         var newDraftId = await Clone(host, versionId);
 
-        var published = host.EventPublisher.LastOf<OnDraftClonedFromVersion>();
+        var published = host.EventPublisher.LastOf<OnDraftCreated>();
         Assert.NotNull(published);
-        Assert.Equal(newDraftId, published!.NewDraftId);
+        Assert.Equal(newDraftId, published!.DraftId);
+        Assert.Equal(definitionId, published.WorkflowDefinitionId);
         Assert.Equal(versionId, published.SourceVersionId);
-        Assert.Equal(definitionId, published.TargetDefinitionId);
+    }
+
+    [Fact]
+    public async Task Clone_persists_the_source_version_id_on_the_Draft_entity()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+
+        var (versionId, _) = await SeedVersion(host, StateWithActivities([Node("only", isStart: true)]), layoutRecords: []);
+
+        var newDraftId = await Clone(host, versionId);
+
+        using var ctx = host.CreateContext();
+        var newDraft = await ctx.WorkflowDefinitionDrafts.FirstAsync(d => d.Id == newDraftId);
+        Assert.Equal(versionId, newDraft.SourceVersionId);
     }
 
     private static async Task<string> Clone(WorkflowsDesignTestHost host, string sourceVersionId)

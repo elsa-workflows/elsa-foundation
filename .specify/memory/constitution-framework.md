@@ -1174,7 +1174,7 @@ A domain may publish events of either strategy, or have a present-participle gat
 
 **Minimum required content per event in the catalog:**
 
-- **Event class name** (e.g. `OnDraftClonedFromVersion`).
+- **Event class name** (e.g. `OnDraftCreated`).
 - **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
 - **One-line semantic description** — what just happened in the domain (notification) or what gate has opened (contribution).
 - **Payload signature** — the directly-accessible `ICollection<T>` (or rich context) the contribution sink exposes (per the §2.6.1 contribution sub-rule) and payload types handlers receive.

@@ -13,12 +13,22 @@ public sealed class InMemoryDistributedLockProvider : IDistributedLockProvider
 {
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _semaphores = new();
 
+    /// <summary>
+    /// Per-name count of successful lock acquisitions. Lets tests assert the
+    /// "lock-once-per-call against <c>workflow-draft:{DraftId}</c>" contract (SC-003).
+    /// </summary>
+    public ConcurrentDictionary<string, int> AcquireCounts { get; } = new();
+
     private SemaphoreSlim GetSemaphore(string name) => _semaphores.GetOrAdd(name, _ => new SemaphoreSlim(1, 1));
+
+    private void CountAcquire(string name) => AcquireCounts.AddOrUpdate(name, 1, (_, n) => n + 1);
 
     public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         var sem = GetSemaphore(name);
         var acquired = sem.Wait(timeout ?? TimeSpan.Zero, cancellationToken);
+        if (acquired)
+            CountAcquire(name);
         return acquired ? new Handle(sem) : null;
     }
 
@@ -26,6 +36,8 @@ public sealed class InMemoryDistributedLockProvider : IDistributedLockProvider
     {
         var sem = GetSemaphore(name);
         var acquired = await sem.WaitAsync(timeout ?? TimeSpan.Zero, cancellationToken);
+        if (acquired)
+            CountAcquire(name);
         return acquired ? new Handle(sem) : null;
     }
 
@@ -33,6 +45,7 @@ public sealed class InMemoryDistributedLockProvider : IDistributedLockProvider
     {
         var sem = GetSemaphore(name);
         await sem.WaitAsync(cancellationToken);
+        CountAcquire(name);
         return new Handle(sem);
     }
 

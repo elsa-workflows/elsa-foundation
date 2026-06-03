@@ -17,6 +17,7 @@
     <Project Path="src/Elsa.Mapping.Core/Elsa.Mapping.Core.csproj" />
     <Project Path="src/Elsa.Mediator.Core/Elsa.Mediator.Core.csproj" Id="a3621d18-ab71-455e-b8ec-84b9ac165608" />
     <Project Path="src/Elsa.Events.Core/Elsa.Events.Core.csproj" />
+    <Project Path="src/Elsa.Events.Strategies/Elsa.Events.Strategies.csproj" />
     <Project Path="src/Elsa.Pipelines.Core/Elsa.Pipelines.Core.csproj" />
     <Project Path="src/Elsa.Persistence.Core/Elsa.Persistence.Core.csproj" Id="a6989f18-a2ac-4127-9a2a-0756fc8ffbc1" />
     <Project Path="src/Elsa.Primitives/Elsa.Primitives.csproj" Id="d2aeee95-6087-4d0f-b690-3d4ed411e61c" />

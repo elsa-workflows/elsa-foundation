@@ -48,7 +48,8 @@ public sealed class EventNamingTests
 
     private static readonly string[] ExpectedLifecycleEventNames =
     [
-        nameof(OnDraftClonedFromVersion),
+        // OnDraftClonedFromVersion was dropped: clone delegates to ICreateDraftCommand, so a
+        // cloned Draft's origination is the single OnDraftCreated event (carrying SourceVersionId).
         nameof(OnDraftDiscarded),
     ];
 
@@ -62,7 +63,7 @@ public sealed class EventNamingTests
     }
 
     [Fact]
-    public void Both_FR_018a_lifecycle_events_exist()
+    public void The_FR_018a_lifecycle_events_exist()
     {
         var actual = GetWorkflowDesignCoreEventNames();
 
@@ -88,17 +89,19 @@ public sealed class EventNamingTests
     }
 
     [Fact]
-    public void Workflows_Design_Core_publishes_exactly_23_events()
+    public void Workflows_Design_Core_publishes_exactly_22_events()
     {
         // 21 FR-018 mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
         // 3 activity input CRUD + 3 activity output CRUD + 2 connection + 3 variable CRUD +
-        // 3 wf-input CRUD + 3 wf-output CRUD = 21) plus 2 FR-018a lifecycle = 23 total.
+        // 3 wf-input CRUD + 3 wf-output CRUD = 21) plus 1 FR-018a lifecycle (OnDraftDiscarded) = 22.
+        // OnDraftClonedFromVersion was dropped — clone delegates to ICreateDraftCommand, so a
+        // cloned Draft's origination is the single OnDraftCreated event (carrying SourceVersionId).
         // Generic OnActivityPropertyChangedInDraft was removed per Joey iteration 2026-05-28 —
         // all per-activity mutations now go through the specialized CRUD events (Add/Remove
         // the whole activity for placement; CRUD on Inputs/Outputs for binding state).
         var actual = GetWorkflowDesignCoreEventNames();
 
-        Assert.Equal(23, actual.Count);
+        Assert.Equal(22, actual.Count);
     }
 
     private static IReadOnlyList<string> GetWorkflowDesignCoreEventNames()

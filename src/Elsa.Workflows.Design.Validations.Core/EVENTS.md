@@ -74,5 +74,5 @@ Heading convention per research item R4: `### <EventClassName>`. The catalog-par
 ## Cross-references
 
 - Granular FR-018 / FR-018a mutation events live in [`Elsa.Workflows.Design.Core/EVENTS.md`](../Elsa.Workflows.Design.Core/EVENTS.md).
-- The mutation pipeline that publishes both events is `Elsa.Workflows.Design.Persistence.EFCore.Services.DraftMutationPipeline`; see its doc-header for the pipeline order.
+- The validation pair is published by whichever command owns the transition: `OnDraftValidating` (Sequential gate) then `OnDraftValidated` (Background outcome) fire from `CreateDraftCommand` (origination + clone, by delegation) and `UpdateDraftCommand` (mutation); see each command's doc-header for the in-lock order. There is no shared "pipeline" collaborator — each command owns its shell inline.
 - Constitutional basis: §2.6.1 (the single `IEvent` concept + contribution sub-pattern) + §2.6.6 (delivery strategies) + §2.22.1 (events catalog).

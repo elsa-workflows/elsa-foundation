@@ -1,13 +1,31 @@
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
-/// Lifecycle-origination command that creates a fresh <c>WorkflowDefinitionDraft</c> with
-/// the supplied (or empty) State and a corresponding empty <c>WorkflowDefinitionDraftLayout</c>.
-/// Publishes <c>OnDraftCreated</c>. Per Unit C FR-019 lifecycle bullet.
+/// Lifecycle-origination command that creates a <c>WorkflowDefinitionDraft</c> with the supplied
+/// (or empty) State and a corresponding <c>WorkflowDefinitionDraftLayout</c> (empty unless
+/// <paramref name="initialLayout"/> is supplied). It owns the full origination flow — per-Draft
+/// lock, in-lock validation gate, atomic flush — and publishes <c>OnDraftCreated</c> followed by
+/// <c>OnDraftValidated</c>.
 /// </summary>
+/// <remarks>
+/// This is the single origination path for Drafts. <c>ICloneDraftFromVersionCommand</c> delegates
+/// here, passing the version's copied State + layout and the source version id; the only thing
+/// that varies between a fresh create and a clone is <c>OnDraftCreated.SourceVersionId</c>
+/// (<c>null</c> for fresh, set for a clone).
+/// </remarks>
 public interface ICreateDraftCommand
 {
-    Task<string> Execute(string workflowDefinitionId, WorkflowDefinitionState? initialState = null, CancellationToken cancellationToken = default);
+    /// <param name="workflowDefinitionId">The owning definition's id.</param>
+    /// <param name="initialState">The Draft's initial State; an empty State when omitted.</param>
+    /// <param name="initialLayout">The Draft's initial layout records; empty when omitted.</param>
+    /// <param name="sourceVersionId">The version this Draft was cloned from, or <c>null</c> for a fresh Draft. Surfaced on <c>OnDraftCreated.SourceVersionId</c>.</param>
+    Task<string> Execute(
+        string workflowDefinitionId,
+        WorkflowDefinitionState? initialState = null,
+        IReadOnlyCollection<DesignMetadataRecord>? initialLayout = null,
+        string? sourceVersionId = null,
+        CancellationToken cancellationToken = default);
 }

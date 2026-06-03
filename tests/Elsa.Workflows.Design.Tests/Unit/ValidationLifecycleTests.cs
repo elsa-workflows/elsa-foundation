@@ -1,19 +1,18 @@
-using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// SC-013 + SC-022 + Unit C FR-023. End-to-end exercise of the delete-and-re-add validation
-/// lifecycle: introducing a forbidden condition results in the persisted sibling carrying
-/// the error; removing the condition causes the next mutation to clear it (the sibling is
-/// rewritten wholesale, not appended to).
+/// lifecycle, now driven through the single coarse <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/>:
+/// introducing a forbidden condition results in the persisted sibling carrying the error;
+/// removing the condition causes the next update to clear it (the sibling is rewritten
+/// wholesale, not appended to).
 /// </summary>
 /// <remarks>
 /// Uses the actual <see cref="OrphanActivityValidator"/> wired into the
@@ -39,42 +38,21 @@ public sealed class ValidationLifecycleTests
                     validating.Errors.Add(error);
         };
 
-        var draftId = await CreateDraft(host);
+        var draftId = await SeedEmptyDraft(host);
 
-        // 1. Add an orphan activity (no connections, not IsStart) → validator emits an error.
-        await AddActivity(host, draftId, Node("orphan"));
+        // 1. Desired state holds a single orphan activity (no connections, not IsStart) → the
+        // validator emits an error.
+        await Update(host, draftId, State(activities: [Node("orphan")]));
 
         await AssertSiblingErrors(host, draftId, expectedTypes: ["Graph/OrphanActivity"]);
 
-        // 2. Add a start activity AND wire the orphan to it → orphan condition is gone.
-        // (Each mutation triggers a fresh validation pass; the sibling is rewritten wholesale.)
-        await AddActivity(host, draftId, Node("start", isStart: true));
-        await AddConnection(host, draftId, "start", "orphan");
+        // 2. Add a start activity AND wire the orphan to it → orphan condition is gone. The next
+        // validation pass rewrites the sibling wholesale.
+        await Update(host, draftId, State(
+            activities: [Node("orphan"), Node("start", isStart: true)],
+            connections: [Connection("start", "orphan")]));
 
         await AssertSiblingErrors(host, draftId, expectedTypes: []);
-    }
-
-    private static async Task<string> CreateDraft(WorkflowsDesignTestHost host)
-    {
-        await host.EnsureDefinition("wf-1");
-        using var scope = host.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
-    }
-
-    private static async Task AddActivity(WorkflowsDesignTestHost host, string draftId, ActivityNode activity)
-    {
-        using var scope = host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IAddActivityToDraftCommand>().Execute(draftId, activity);
-    }
-
-    private static async Task AddConnection(WorkflowsDesignTestHost host, string draftId, string sourceNodeId, string targetNodeId)
-    {
-        var connection = new ActivityConnection(
-            new ActivityPortConnection(sourceNodeId, "out"),
-            new ActivityPortConnection(targetNodeId, "in"));
-
-        using var scope = host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IAddConnectionToDraftCommand>().Execute(draftId, connection);
     }
 
     private static async Task AssertSiblingErrors(WorkflowsDesignTestHost host, string draftId, string[] expectedTypes)
@@ -89,15 +67,4 @@ public sealed class ValidationLifecycleTests
         foreach (var expected in expectedTypes)
             Assert.Contains(expected, actualTypes);
     }
-
-    private static ActivityNode Node(string nodeId, bool isStart = false) => new(
-        NodeId: nodeId,
-        ActivityVersionId: "av-1",
-        Inputs: [],
-        Outputs: [],
-        IsContainer: false,
-        IsStart: isStart,
-        IsTerminal: false,
-        ChildActivities: []
-    );
 }

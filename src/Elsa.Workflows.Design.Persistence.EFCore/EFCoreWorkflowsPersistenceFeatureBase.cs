@@ -17,38 +17,14 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
             {
                 services
                     .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinitionCommand>()
-                    .AddScoped<DraftMutationPipeline>()
-                    // Lifecycle origination + cloning + discard
+                    // Lifecycle origination + cloning + discard (NOT mutations — kept distinct, FR-003)
                     .AddScoped<ICreateDraftCommand, CreateDraftCommand>()
                     .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
                     .AddScoped<IDiscardDraftCommand, DiscardDraftCommand>()
-                    // Activities (graph)
-                    .AddScoped<IAddActivityToDraftCommand, AddActivityToDraftCommand>()
-                    .AddScoped<IRemoveActivityFromDraftCommand, RemoveActivityFromDraftCommand>()
-                    .AddScoped<IMoveActivityInDraftCommand, MoveActivityInDraftCommand>()
-                    // Per-activity inputs
-                    .AddScoped<IAddActivityInputToDraftCommand, AddActivityInputToDraftCommand>()
-                    .AddScoped<IUpdateActivityInputInDraftCommand, UpdateActivityInputInDraftCommand>()
-                    .AddScoped<IRemoveActivityInputFromDraftCommand, RemoveActivityInputFromDraftCommand>()
-                    // Per-activity outputs
-                    .AddScoped<IAddActivityOutputToDraftCommand, AddActivityOutputToDraftCommand>()
-                    .AddScoped<IUpdateActivityOutputInDraftCommand, UpdateActivityOutputInDraftCommand>()
-                    .AddScoped<IRemoveActivityOutputFromDraftCommand, RemoveActivityOutputFromDraftCommand>()
-                    // Connections
-                    .AddScoped<IAddConnectionToDraftCommand, AddConnectionToDraftCommand>()
-                    .AddScoped<IRemoveConnectionFromDraftCommand, RemoveConnectionFromDraftCommand>()
-                    // Variables
-                    .AddScoped<IDeclareVariableInDraftCommand, DeclareVariableInDraftCommand>()
-                    .AddScoped<IUpdateVariableInDraftCommand, UpdateVariableInDraftCommand>()
-                    .AddScoped<IRemoveVariableFromDraftCommand, RemoveVariableFromDraftCommand>()
-                    // Workflow inputs
-                    .AddScoped<IAddWorkflowInputToDraftCommand, AddWorkflowInputToDraftCommand>()
-                    .AddScoped<IUpdateWorkflowInputInDraftCommand, UpdateWorkflowInputInDraftCommand>()
-                    .AddScoped<IRemoveWorkflowInputFromDraftCommand, RemoveWorkflowInputFromDraftCommand>()
-                    // Workflow outputs
-                    .AddScoped<IAddWorkflowOutputToDraftCommand, AddWorkflowOutputToDraftCommand>()
-                    .AddScoped<IUpdateWorkflowOutputInDraftCommand, UpdateWorkflowOutputInDraftCommand>()
-                    .AddScoped<IRemoveWorkflowOutputFromDraftCommand, RemoveWorkflowOutputFromDraftCommand>()
+                    // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
+                    // Supersedes the former 20 granular mutation commands.
+                    .AddScoped<DraftStateDiffer>()
+                    .AddScoped<IUpdateDraftCommand, UpdateDraftCommand>()
                     .AddEntitySavingHandlersFrom(GetType().Assembly)
                     .AddEntitySavingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
             }

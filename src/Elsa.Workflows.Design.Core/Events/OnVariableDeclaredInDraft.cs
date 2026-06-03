@@ -5,7 +5,8 @@ namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
 /// Mutation event for a workflow variable declared on the Draft. Published by
-/// <c>IDeclareVariableInDraftCommand</c>. Per Unit C FR-018 variables (definition-bag) bullet.
+/// <c>IUpdateDraftCommand</c> as a per-diff emission (Unit 2) when a desired variable
+/// <c>ReferenceKey</c> is absent from stored. Per Unit C FR-018 variables (definition-bag) bullet.
 /// </summary>
 public sealed class OnVariableDeclaredInDraft(string draftId, VariableDefinition variable) : IEvent
 {

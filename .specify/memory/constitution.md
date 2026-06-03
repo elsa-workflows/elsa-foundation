@@ -203,8 +203,10 @@ ratification):
   - Migrate `IPayloadSerializerConverterProvider` and friends to Registry +
     StartUp Task + Domain Event pattern (matches §E3.3's new prose).
   - Migrate EF Core entity handlers (`IGlobalEntitySavingHandler`,
-    `IEntityModelCreatingHandler`) to `OnEntitySaving` / `OnEntityModelCreating`
-    domain events.
+    `IEntityModelCreatingHandler`, `IEntityLoadingHandler`) to `OnEntitySaving` /
+    `OnEntityModelCreating` / `OnEntityLoading` domain events. The
+    `OnEntityLoading` read-side mirror (published Sequential by `EFCoreQueries`,
+    coexisting with the legacy `IEntityLoadingHandler`) landed Unit 2 (2026-06-03).
   - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).
   - Update entity-design summary doc per Sipke 2026-05-26 items 8 and 9.
 
@@ -501,7 +503,7 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 **Anticipated further decomposition.** As code reviews land, additional concerns are split out per framework §2.3:
 
 - `Elsa.Serialization` — already present.
-- `Elsa.Events.Core` / `Elsa.Events` — the single in-process event concept (`IEvent` / `IEventHandler<T>` / `IEventPublisher`), landed by Unit 1 (2026-06-02) over the shared `Elsa.Pipelines.Core` engine. Supersedes the previously-pending `Elsa.Notifications` charter — notifications are no longer a separate concept (framework §2.6.6).
+- `Elsa.Events.Core` / `Elsa.Events.Strategies` / `Elsa.Events` — the single in-process event concept (`IEvent` / `IEventHandler<T>` / `IEventPublisher`), landed by Unit 1 (2026-06-02) over the shared `Elsa.Pipelines.Core` engine. Supersedes the previously-pending `Elsa.Notifications` charter — notifications are no longer a separate concept (framework §2.6.6). `Elsa.Events.Strategies` is the **helper** library (framework §2.1 thin-impl layer): the three baseline `IEventPublishingStrategy` implementations (Sequential / Parallel / Background) plus the `EventPublishingStrategy` static accessor, referencing only `Elsa.Events.Core` — the same Core-contract-plus-helper shape as `Elsa.Tasks.Core` / `Elsa.Tasks.Schedules` (Unit 2 extraction, 2026-06-03).
 - `Elsa.Mediator.Core` / `Elsa.Mediator` — command + request dispatch only (an API concern), trimmed of event handling by Unit 1. Shares `Elsa.Pipelines.Core` with `Elsa.Events.Core`; the two do not reference each other.
 
 **`Elsa.Foundation.Core` is held back.** Elsa does not eagerly create a framework-foundation `.Core` package. If a coherent set of framework-foundation contracts emerges that does not fit in existing packages, the package can be introduced at that point. 
@@ -539,7 +541,7 @@ The 2026-05-10 first move renamed `Elsa.Common` → `Elsa.Primitives` (per frame
 
 ### §E2.5 `ElsaDbContextBase` — opt-in capability, not requirement
 
-**framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). These hooks are invoked before `SaveChangesAsync` reaches EF Core and are useful for shadow properties, custom deserializers, and similar cross-cutting concerns.
+**framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). The save hooks are invoked before `SaveChangesAsync` reaches EF Core; the load hooks fire on the read path through the query service (`EFCoreQueries`) as entities are materialised. Both are useful for shadow properties, custom deserializers, and similar cross-cutting concerns. Each legacy hook now coexists with a `§2.6.1` domain event mirror — `OnEntitySaving` (Sequential, from `ElsaDbContextBase`) and `OnEntityLoading` (Sequential, from `EFCoreQueries`) — that features may migrate onto; the legacy interfaces keep running until a feature migrates.
 
 **`ElsaDbContextBase` is shared EF-Core infrastructure, not a model/entity-design requirement.** The persistence invariants Elsa enforces (immutability of Version entities, audit timestamps, etc. — see framework §2.9's "Persistence invariants are defined independently of the persistence provider") are defined independently of EF Core. An EF-Core-backed application MAY enforce those invariants through `ElsaDbContextBase`; another persistence provider MAY enforce the same invariants through interceptors, mappings, store logic, or whatever its native mechanism is. Inheriting from `ElsaDbContextBase` is one integration path, not the only one.
 
@@ -700,6 +702,23 @@ Automated compile-/build-time enforcement (scope-policy static analyser) is **de
 **Provisional pending 2026-06-01 architecture-review ratification.** Joey's adopted position, recorded as a draft sub-section per Unit C FR-016c / FR-020 / FR-024a pattern (constitutional drafts adopted ahead of review per working-loop §5). The 2026-06-01 agenda Items 1, 2, 3, 4, 4b, 5, 6 cover the surrounding provisional sub-rules; if any are revised at the review, this section revises in tandem.
 
 **Cross-references:** §E2.2 (Design ↔ Runtime split — the triplet operates within Design and seams into Runtime via `WorkflowExecutable`); §E2.6 (artifact-only runtime — the seam terminates at `WorkflowExecutable`, not at State); §E2.8 (Model X reconciliation policy, applies symmetrically per §E2.9.5).
+
+#### §E2.9.7 Draft-mutation command surface *(Unit 2 2026-06-03; provisional, pending architecture-review ratification)*
+
+The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a **single coarse, diff-based command** — `IUpdateDraftCommand` — not a family of granular per-concept mutation commands.
+
+- **One mutation command.** `IUpdateDraftCommand.Execute(UpdateDraftRequest)` accepts the **complete desired** `WorkflowDefinitionState` (+ its layout sibling, carried beside State per §E2.9.2 — never inside it). Full-state-always: there is no patch API. Inside the per-Draft distributed lock (`workflow-draft:{DraftId}`) it loads the stored state, wholesale-assigns the desired state (last-writer-wins — no version check), **diffs** stored vs desired per concept (Variables/Inputs/Outputs by `ReferenceKey`, Activities and layout by `NodeId`, activity I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple), runs the in-lock validation gate, persists atomically, then publishes **one event per detected difference**.
+- **The event surface is preserved, not collapsed.** The diff emits the same 20 per-concept mutation events the former granular commands published (catalogued in `EVENTS.md`); their *types* and catalog headings are unchanged — only the publication site moved onto `IUpdateDraftCommand`. This keeps the event-sourcing seam open for a later event-sourcing unit (Unit H): subscribers observe the per-diff stream regardless of whether the mutation arrived via 20 commands or one.
+- **Lifecycle commands remain distinct.** `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, and `IPromoteDraftToVersionCommand` are **not** mutations of an existing Draft's content and stay as separate commands with their own lifecycle events (`OnDraftCreated`, `OnDraftDiscarded`). `IUpdateDraftCommand` emits none of these.
+- **One origination event, not two.** A cloned Draft and a fresh Draft share the single origination event `OnDraftCreated`; there is **no** separate `OnDraftClonedFromVersion`. `ICloneDraftFromVersionCommand` delegates to `ICreateDraftCommand` (the single origination path), and clone-vs-fresh is distinguished solely by the immutable optional `WorkflowDefinitionDraft.SourceVersionId` — a plain provenance column (no navigation property) surfaced on `OnDraftCreated.SourceVersionId` (`null` for a fresh Draft).
+- **Reads route through the query service.** Commands that only read (no change tracking) — e.g. `ICloneDraftFromVersionCommand` loading the source Version + layout — use `IQueries<T>` rather than a hand-rolled `DbContextFactory` + loading-handler loop. The query service runs the read-side hydration pipeline (legacy `IEntityLoadingHandler` + the `OnEntityLoading` Sequential event, the read-side mirror of `OnEntitySaving`) and disposes its own short-lived context. A command opens its own tracked context only when it queries, mutates, and saves the *same* entity.
+- **Validation pair unchanged.** The `OnDraftValidating` (Sequential, in-lock gate) / `OnDraftValidated` (Background, outcome) pair is published by the command exactly as before.
+
+This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. The generic CQS command-per-operation guidance elsewhere in this constitution (and the framework's `Elsa.Persistence` CQS row) is unaffected — this rule narrows only the **Draft-mutation** surface within the Design domain.
+
+**Provisional pending architecture-review ratification**, consistent with §E2.9.6 — recorded as a draft sub-section per the working-loop adopt-ahead-of-review pattern. Tracked in [`follow-up-items/2026-06-02_unit_single_update_command.md`](../../../../elsa-foundation-project-management/epic1-elsa-refactor-constitution/follow-up-items/2026-06-02_unit_single_update_command.md).
+
+**Cross-references:** §E2.9.1/§E2.9.2 (what State carries — the diff operates over exactly those in-scope fields, layout stays beside State); §E2.6.6 (Sequential vs Background delivery strategies the command uses for the gate vs the per-diff stream).
 
 ---
 

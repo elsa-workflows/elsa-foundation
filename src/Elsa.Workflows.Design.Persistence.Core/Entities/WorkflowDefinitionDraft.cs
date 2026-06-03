@@ -1,4 +1,5 @@
-﻿using Elsa.Primitives.Entities;
+﻿using Elsa.Primitives.Attributes;
+using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -18,6 +19,16 @@ public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionD
     /// Navigation property to the parent <see cref="WorkflowDefinition"/>.
     /// </summary>
     public WorkflowDefinition? WorkflowDefinition { get; set; }
+
+    /// <summary>
+    /// Optional foreign key to the <see cref="WorkflowDefinitionVersion"/> this Draft was cloned
+    /// from. <c>null</c> for a fresh Draft (the very first Draft of a Definition, with no version
+    /// to copy from). Immutable once set — a Draft's provenance never changes. There is
+    /// deliberately no navigation property: a Draft only needs to know which version it descended
+    /// from, not to traverse into it.
+    /// </summary>
+    [Immutable]
+    public string? SourceVersionId { get; set; }
 
     /// <summary>
     /// The deserialized <see cref="StateSource"/>

@@ -4,8 +4,8 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
-/// Mutation event for an activity placed on the canvas. Published by
-/// <c>IAddActivityToDraftCommand</c> after the snapshot mutation, before <c>OnDraftValidating</c>.
+/// Mutation event for an activity placed on the canvas. Published by <c>IUpdateDraftCommand</c>
+/// as a per-diff emission (Unit 2) when a desired activity is absent from the stored state.
 /// Per Unit C FR-018 activities-graph bullet.
 /// </summary>
 /// <remarks>

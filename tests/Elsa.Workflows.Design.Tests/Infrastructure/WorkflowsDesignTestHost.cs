@@ -1,6 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Contracts;
+using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Persistence.EFCore.Sqlite;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Services;
@@ -18,8 +19,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
-/// SQLite-in-memory test host for the Workflows.Design.Persistence.EFCore pipeline. Builds
-/// a real <see cref="WorkflowsDesignDbContext"/> + a real <see cref="DraftMutationPipeline"/>
+/// SQLite-in-memory test host for the Workflows.Design.Persistence.EFCore commands. Builds
+/// a real <see cref="WorkflowsDesignDbContext"/> + the real Draft commands
 /// composed against an <see cref="InMemoryDistributedLockProvider"/> and a single
 /// <see cref="CapturingEventPublisher"/> (for the synchronous <c>OnDraftValidating</c> gate
 /// AND the FR-018/FR-018a lifecycle events + <c>OnDraftValidated</c>) so command behaviour can
@@ -108,8 +109,11 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
             new TestDbContextFactory(sp.GetRequiredService<IServiceProvider>(), connection));
 
-        // Pipeline + all 22 command implementations.
-        services.AddScoped<DraftMutationPipeline>();
+        // IQueries<> per DbSet — the read path (AsNoTracking + loading-handler / OnEntityLoading
+        // hydration). CloneDraftFromVersionCommand reads the source Version + layout through these.
+        services.ConfigureQueries<WorkflowsDesignDbContext>();
+
+        // All command implementations.
         RegisterCommands(services);
 
         var provider = services.BuildServiceProvider();
@@ -125,29 +129,13 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     private static void RegisterCommands(IServiceCollection services)
     {
         services
+            // Lifecycle commands (NOT mutations — kept distinct, FR-003).
             .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraftCommand>()
             .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersionCommand>()
             .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddActivityToDraftCommand, AddActivityToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveActivityFromDraftCommand, RemoveActivityFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IMoveActivityInDraftCommand, MoveActivityInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddActivityInputToDraftCommand, AddActivityInputToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateActivityInputInDraftCommand, UpdateActivityInputInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveActivityInputFromDraftCommand, RemoveActivityInputFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddActivityOutputToDraftCommand, AddActivityOutputToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateActivityOutputInDraftCommand, UpdateActivityOutputInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveActivityOutputFromDraftCommand, RemoveActivityOutputFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddConnectionToDraftCommand, AddConnectionToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveConnectionFromDraftCommand, RemoveConnectionFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IDeclareVariableInDraftCommand, DeclareVariableInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateVariableInDraftCommand, UpdateVariableInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveVariableFromDraftCommand, RemoveVariableFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddWorkflowInputToDraftCommand, AddWorkflowInputToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateWorkflowInputInDraftCommand, UpdateWorkflowInputInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveWorkflowInputFromDraftCommand, RemoveWorkflowInputFromDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IAddWorkflowOutputToDraftCommand, AddWorkflowOutputToDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IUpdateWorkflowOutputInDraftCommand, UpdateWorkflowOutputInDraftCommand>()
-            .AddScoped<Persistence.Core.Contracts.IRemoveWorkflowOutputFromDraftCommand, RemoveWorkflowOutputFromDraftCommand>();
+            // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
+            .AddScoped<DraftStateDiffer>()
+            .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraftCommand>();
     }
 
     public void Dispose()
