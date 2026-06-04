@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text.Json;
 
@@ -23,6 +24,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .WithOne()
                 .HasForeignKey<WorkflowDefinitionVersionLayout>(x => x.WorkflowDefinitionVersionId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Property(x => x.WorkflowDefinitionVersionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.Records).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
             builder
                 .Property(x => x.Records)

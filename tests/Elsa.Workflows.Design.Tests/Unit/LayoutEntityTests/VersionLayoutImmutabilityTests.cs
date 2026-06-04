@@ -1,5 +1,3 @@
-using Elsa.Primitives.Attributes;
-using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using System.Reflection;
 using Xunit;
@@ -8,28 +6,12 @@ namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
 /// SC-021 + framework §2.9 + Unit C FR-006a: <c>WorkflowDefinitionVersionLayout</c> mirrors
-/// <c>WorkflowDefinitionVersion</c>'s immutability regime. The <c>[Immutable]</c> scanner
-/// (Elsa.Persistence.EFCore's <c>ApplyImmutability</c>) picks the marked properties up and
-/// drives <c>PropertySaveBehavior.Throw</c> at the provider layer.
+/// <c>WorkflowDefinitionVersion</c>'s immutability regime. Write-once properties are enforced
+/// via <c>PropertySaveBehavior.Throw</c> in <c>WorkflowDefinitionVersionLayoutConfiguration</c>
+/// (verified by the integration test <c>CrossContextLifecycleTests</c>).
 /// </summary>
 public sealed class VersionLayoutImmutabilityTests
 {
-    [Fact]
-    public void WorkflowDefinitionVersionId_is_marked_immutable()
-    {
-        var immutable = typeof(WorkflowDefinitionVersionLayout).GetImmutableProperties().ToList();
-
-        Assert.Contains(nameof(WorkflowDefinitionVersionLayout.WorkflowDefinitionVersionId), immutable);
-    }
-
-    [Fact]
-    public void Records_is_marked_immutable()
-    {
-        var immutable = typeof(WorkflowDefinitionVersionLayout).GetImmutableProperties().ToList();
-
-        Assert.Contains(nameof(WorkflowDefinitionVersionLayout.Records), immutable);
-    }
-
     [Fact]
     public void Records_property_uses_init_only_setter()
     {

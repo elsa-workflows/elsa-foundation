@@ -4,7 +4,6 @@ using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
-using Elsa.Primitives.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -74,7 +73,6 @@ namespace Elsa.Persistence.EFCore
         {
             var entries = ChangeTracker.Entries<Entity>();
 
-            PreventImmutableChanges(entries);
             ApplyTimestamps(entries);
 
             using var scope = ServiceProvider.CreateScope();
@@ -102,9 +100,9 @@ namespace Elsa.Persistence.EFCore
 
         /// <summary>
         /// Stamps <see cref="Entity.CreatedAt"/> and <see cref="Entity.LastModifiedAt"/> on tracked entities.
-        /// Runs after <see cref="PreventImmutableChanges"/> so that if anything ever bypasses the
-        /// immutability guard, a fresh <see cref="Entity.LastModifiedAt"/> on a row whose
-        /// <see cref="Entity.CreatedAt"/> is earlier becomes the forensic signal.
+        /// <see cref="Entity.LastModifiedAt"/> advancing past <see cref="Entity.CreatedAt"/> on a
+        /// write-once entity is a forensic signal that something bypassed the EF Core
+        /// <c>PropertySaveBehavior.Throw</c> guard.
         /// </summary>
         private void ApplyTimestamps(IEnumerable<EntityEntry<Entity>> entries)
         {
@@ -127,32 +125,6 @@ namespace Elsa.Persistence.EFCore
                 }
             }
         }
-
-        private static void PreventImmutableChanges(IEnumerable<EntityEntry<Entity>> entries)
-        {
-            foreach (var entry in entries)
-            {
-                if (entry.State != EntityState.Modified)
-                    continue;
-
-                var modifiedProperties = entry.Properties
-                    .Where(x => x.IsModified)
-                    .Select(x => x.Metadata.Name);
-
-                var immutableProperties = entry.Entity
-                    .GetType()
-                    .GetImmutableProperties();
-
-                var prohibitedImmutableProperties = modifiedProperties.Where(immutableProperties.Contains);
-                if (prohibitedImmutableProperties.Any())
-                {
-                    throw new InvalidOperationException(
-                        $"Properties '{string.Join(", ", prohibitedImmutableProperties)}' are immutable"
-                    );
-                }
-            }
-        }
-
 
         private async Task ApplyGlobalSavingHandlers(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
         {
@@ -186,38 +158,26 @@ namespace Elsa.Persistence.EFCore
             ApplyRowNumberIndex(builder);
             ApplyTenantIdIndex(builder);
             ApplyEntityModelCreatingHandlers(this, builder);
-            ApplyImmutability(builder);
+            ApplyBaseEntityImmutability(builder);
         }
 
-        private static void ApplyImmutability(ModelBuilder modelBuilder)
+        /// <summary>
+        /// Marks <see cref="Entity.RowNumber"/> and <see cref="Entity.CreatedAt"/> as
+        /// <c>PropertySaveBehavior.Throw</c> on every entity type that derives from
+        /// <see cref="Entity"/>. Domain-specific write-once properties are configured
+        /// explicitly in their respective <c>IEntityTypeConfiguration&lt;T&gt;</c>.
+        /// </summary>
+        private static void ApplyBaseEntityImmutability(ModelBuilder modelBuilder)
         {
             foreach (var entity in modelBuilder.Model.GetEntityTypes())
             {
-                var entityType = entity.ClrType;
-
-                if (entityType is null)
+                if (!typeof(Entity).IsAssignableFrom(entity.ClrType))
                     continue;
 
-                var immutableProperties = entityType.GetImmutableProperties();
-                foreach (var propertyName in immutableProperties)
-                {
-                    ApplyPropertyImmutability(entity, propertyName);
-                }
-            }
-        }
-
-        private static void ApplyPropertyImmutability(IMutableEntityType entity, string propertyName)
-        {
-            var property = entity.FindProperty(propertyName);
-            property?.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-
-            var navigation = entity.FindNavigation(propertyName);
-            if (navigation?.TargetEntityType.IsOwned() != true)
-                return;
-
-            foreach (var ownedProperty in navigation.TargetEntityType.GetProperties())
-            {
-                ownedProperty.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+                entity.FindProperty(nameof(Entity.RowNumber))
+                      ?.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+                entity.FindProperty(nameof(Entity.CreatedAt))
+                      ?.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             }
         }
 

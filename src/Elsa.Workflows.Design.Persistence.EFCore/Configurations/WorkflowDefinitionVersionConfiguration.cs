@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
@@ -12,6 +13,11 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
 
             builder
                 .HasKey(x => x.Id);
+
+            builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.StateSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.SourceCreatedAt).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
             builder
                 .HasOne(x => x.Definition)

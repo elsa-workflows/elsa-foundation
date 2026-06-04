@@ -17,9 +17,9 @@ namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
 /// T154 — Both DbContexts derive from <c>ElsaDbContextBase</c> and MUST share the same
-/// lifecycle hooks: <c>[Immutable]</c> enforcement, central <c>TenantId</c> index, EF model
-/// snapshot population. The cross-context smoke check guards against a future refactor
-/// silently dropping a hook on one context but not the other.
+/// lifecycle hooks: write-once property enforcement via <c>PropertySaveBehavior.Throw</c>,
+/// central <c>TenantId</c> index, EF model snapshot population. The cross-context smoke check
+/// guards against a future refactor silently dropping a hook on one context but not the other.
 /// </summary>
 public sealed class CrossContextLifecycleTests
 {
@@ -56,6 +56,34 @@ public sealed class CrossContextLifecycleTests
     }
 
     [Fact]
+    public void WorkflowsDesignDbContext_ImmutableEnforcement_AppliesToVersionLayout()
+    {
+        using var host = CreateWorkflowsDesignHost();
+        using var ctx = host.CreateContext();
+        var entityType = ctx.Model.FindEntityType(typeof(WorkflowDefinitionVersionLayout))!;
+
+        var versionId = entityType.FindProperty(nameof(WorkflowDefinitionVersionLayout.WorkflowDefinitionVersionId))!;
+        Assert.Equal(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw, versionId.GetAfterSaveBehavior());
+
+        var records = entityType.FindProperty(nameof(WorkflowDefinitionVersionLayout.Records))!;
+        Assert.Equal(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw, records.GetAfterSaveBehavior());
+    }
+
+    [Fact]
+    public void BothContexts_BaseEntityProperties_AreImmutable()
+    {
+        // ApplyBaseEntityImmutability in ElsaDbContextBase sets RowNumber + CreatedAt
+        // to PropertySaveBehavior.Throw on every Entity-derived type in both contexts.
+        using var activitiesHost = ActivitiesDesignTestHost.Create();
+        using var workflowsHost = CreateWorkflowsDesignHost();
+        using var activitiesCtx = activitiesHost.CreateContext();
+        using var workflowsCtx = workflowsHost.CreateContext();
+
+        AssertBaseEntityImmutability(activitiesCtx, typeof(ActivityDefinition));
+        AssertBaseEntityImmutability(workflowsCtx, typeof(WorkflowDefinitionVersion));
+    }
+
+    [Fact]
     public void WorkflowsDesignDbContext_RegistersTenantIdIndex_OnTenantEntityDescendants()
     {
         using var host = CreateWorkflowsDesignHost();
@@ -83,6 +111,20 @@ public sealed class CrossContextLifecycleTests
         // is the next-best signal that the central hook is wired in both contexts.
         Assert.Contains(activitiesCtx.Model.GetEntityTypes(), e => typeof(TenantEntity).IsAssignableFrom(e.ClrType));
         Assert.Contains(workflowsCtx.Model.GetEntityTypes(), e => typeof(TenantEntity).IsAssignableFrom(e.ClrType));
+    }
+
+    private static void AssertBaseEntityImmutability(DbContext ctx, Type clrType)
+    {
+        var entityType = ctx.Model.FindEntityType(clrType)!;
+        var rowNumber = entityType.FindProperty(nameof(Entity.RowNumber));
+        var createdAt = entityType.FindProperty(nameof(Entity.CreatedAt))!;
+
+        // RowNumber may be absent in SQLite (SqliteEntityModelCreatingHandler removes it);
+        // when present it must be Throw.
+        if (rowNumber is not null)
+            Assert.Equal(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw, rowNumber.GetAfterSaveBehavior());
+
+        Assert.Equal(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw, createdAt.GetAfterSaveBehavior());
     }
 
     private static void AssertTenantIndexRegistered(DbContext ctx, Type clrType)

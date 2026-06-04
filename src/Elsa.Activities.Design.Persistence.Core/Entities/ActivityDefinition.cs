@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Primitives.Attributes;
 using Elsa.Primitives.Entities;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities
@@ -16,9 +15,9 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
     public sealed class ActivityDefinition : TenantEntity, IActivityDefinition
     {
         /// <summary>
-        /// Stable logical identity. Immutable.
+        /// Stable logical identity. Write-once — immutability enforced via
+        /// <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
         /// </summary>
-        [Immutable]
         public string ActivityTypeKey { get; init; } = null!;
 
         /// <summary>

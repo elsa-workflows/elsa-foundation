@@ -1,6 +1,5 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Primitives.Attributes;
 using Elsa.Primitives.Entities;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -14,28 +13,24 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     /// </summary>
     public ActivityDefinition? Definition { get; set; }
 
-    [Immutable]
     public int Version { get; init; } = version;
 
-    [Immutable]
     public string DefinitionId { get; init; } = definitionId;
-    
+
     /// <summary>
     /// Registry lookup key matching <see cref="ImplementationDescriptor"/>.<c>Kind</c>.
-    /// Immutable.
+    /// Write-once — immutability enforced via <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
     /// </summary>
-    [Immutable]
     public string ImplementationKind { get; set; } = null!;
 
     /// <summary>
     /// Serialized JSON form of <see cref="ImplementationDescriptor"/>. A real string property
-    /// on the entity (NOT an EF Core shadow property) so the central <c>[Immutable]</c>
-    /// scanner picks it up and the value follows the same lifecycle attributes as every
-    /// other invariant-bearing field. The interface boundary <see cref="IActivityDefinitionVersion"/>
+    /// on the entity (NOT an EF Core shadow property); post-insert immutability enforced via
+    /// <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
+    /// The interface boundary <see cref="IActivityDefinitionVersion"/>
     /// does not expose it — the property is a "shadow" in our domain sense (invisible to
     /// other domains), distinct from EF Core's "shadow" (not on the CLR class).
     /// </summary>
-    [Immutable]
     public string? ImplementationDescriptorPayload { get; set; }
 
     /// <summary>
@@ -48,16 +43,12 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     [NotMapped]
     public IImplementationDescriptor ImplementationDescriptor { get; set; } = null!;
 
-    [Immutable]
     public string? InputsSource { get; set; } = inputsSource;
 
-    [Immutable]
     public string? OutputsSource { get; set; } = outputsSource;
 
-    [Immutable]
     public string? PortsSource { get; set; } = portsSource;
 
-    [Immutable]
     public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
     [NotMapped]
@@ -71,37 +62,32 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
 
     /// <summary>
     /// Provenance source identifier — free-form string owned by the source module
-    /// (e.g. "Json", "ClrDiscovery", "Workflow"). Immutable.
+    /// (e.g. "Json", "ClrDiscovery", "Workflow"). Write-once.
     /// </summary>
-    [Immutable]
     public string SourceKind { get; set; } = null!;
 
     /// <summary>
-    /// Source-side asset identity. Immutable.
+    /// Source-side asset identity. Write-once.
     /// </summary>
-    [Immutable]
     public string SourceId { get; set; } = null!;
 
     /// <summary>
-    /// First-provisioning timestamp. Immutable.
+    /// First-provisioning timestamp. Write-once.
     /// </summary>
-    [Immutable]
     public DateTimeOffset ReconciledAt { get; set; }
 
     /// <summary>
-    /// Identity that produced this row. Immutable.
+    /// Identity that produced this row. Write-once.
     /// </summary>
-    [Immutable]
     public string? ReconciledBy { get; set; }
 
     /// <summary>
-    /// Immutable content hash of this version's projection, computed by
+    /// Write-once content hash of this version's projection, computed by
     /// <c>IActivityDefinitionHasher</c> at reconciliation time. Under Model X this is the
     /// only artefact carried forward between reconciliation passes: subsequent passes that
     /// observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
     /// against this stored value to detect source-side breakage.
     /// </summary>
-    [Immutable]
     public string? ReconcilliationHash { get; set; }
 
     IEnumerable<ActivityPortDefinition> IActivityDefinitionVersion.Ports => Ports;

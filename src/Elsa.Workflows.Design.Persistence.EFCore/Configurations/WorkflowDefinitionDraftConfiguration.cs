@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
@@ -25,14 +26,15 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Configurations
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired();
 
-            // Optional, immutable FK to the source WorkflowDefinitionVersion a clone descended
+            // Optional, write-once FK to the source WorkflowDefinitionVersion a clone descended
             // from. No navigation property (a Draft never traverses into the version) and no
             // referential action wired through EF — deleting a version must not cascade into or
             // restrict its descendant Drafts, so the column is a plain nullable string carrying
             // the provenance id only.
             builder
                 .Property(x => x.SourceVersionId)
-                .IsRequired(false);
+                .IsRequired(false)
+                .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         }
     }
 }

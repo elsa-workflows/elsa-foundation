@@ -1,5 +1,4 @@
-﻿using Elsa.Primitives.Attributes;
-using Elsa.Primitives.Entities;
+﻿using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -12,13 +11,11 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     /// <summary>
     /// The version number of this workflow definition version
     /// </summary>
-    [Immutable]
     public int Version { get; init; } = version;
 
     /// <summary>
     /// The id of the workflow definition
     /// </summary>
-    [Immutable]
     public string DefinitionId { get; init; } = definitionId;
 
     /// <summary>
@@ -33,9 +30,9 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     public WorkflowDefinitionState State { get; set; } = default!;
 
     /// <summary>
-    /// Shadow property that contains the serialized immutable state of this version
+    /// Shadow property that contains the serialized state of this version. Write-once —
+    /// immutability enforced via <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
     /// </summary>
-    [Immutable]
     public string? StateSource { get; set; } = stateSource;
 
     /// <summary>
@@ -44,7 +41,6 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     /// Design API. <c>null</c> when this version was authored directly through the Design API.
     /// Separate from <see cref="Entity.CreatedAt"/>, which is strictly the DB-side timestamp.
     /// </summary>
-    [Immutable]
     public DateTimeOffset? SourceCreatedAt { get; init; } = sourceCreatedAt;
 
     IWorkflowDefinition IWorkflowDefinitionVersion.Definition => Definition ?? throw new ArgumentNullException(nameof(Definition));

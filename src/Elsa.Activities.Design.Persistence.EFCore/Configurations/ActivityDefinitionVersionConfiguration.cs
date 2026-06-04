@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
@@ -13,6 +14,20 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
             builder.Ignore(x => x.Ports);
 
             builder.HasKey(x => x.Id);
+
+            builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ImplementationKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ImplementationDescriptorPayload).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.InputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.OutputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.PortsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ExecutionType).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.SourceKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.SourceId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ReconciledAt).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ReconciledBy).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.ReconcilliationHash).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
             builder.Property(x => x.OutputsSource).HasMaxLength(-1);
             builder.Property(x => x.InputsSource).HasMaxLength(-1);

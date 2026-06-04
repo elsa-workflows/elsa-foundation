@@ -1,27 +1,24 @@
-using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using System.Reflection;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
 /// SC-021 + Unit C FR-006a: <c>WorkflowDefinitionDraftLayout</c> mirrors the Draft's
-/// mutability — no <c>[Immutable]</c> markers, standard mutable tracking. The R5 cascade
+/// mutability — no write-once restrictions; standard mutable tracking. The R5 cascade
 /// behaviour (OnDelete: Cascade) is configured in
 /// <c>WorkflowDefinitionDraftLayoutConfiguration</c>.
 /// </summary>
 public sealed class DraftLayoutMutabilityTests
 {
     [Fact]
-    public void Entity_specific_properties_are_not_immutable()
+    public void Entity_specific_properties_have_mutable_setters()
     {
-        // Base Entity ships RowNumber + CreatedAt as [Immutable] (framework-level invariant); those
-        // ride through. The Draft-specific properties (FK + Records) must NOT carry [Immutable]
+        // Draft-specific properties (FK + Records) must NOT be init-only
         // because the Draft layout mutates as the author edits the canvas.
-        var immutable = typeof(WorkflowDefinitionDraftLayout).GetImmutableProperties().ToList();
-
-        Assert.DoesNotContain(nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraftId), immutable);
-        Assert.DoesNotContain(nameof(WorkflowDefinitionDraftLayout.Records), immutable);
+        AssertMutableSetter(nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraftId));
+        AssertMutableSetter(nameof(WorkflowDefinitionDraftLayout.Records));
     }
 
     [Fact]
@@ -42,5 +39,13 @@ public sealed class DraftLayoutMutabilityTests
     public void Entity_is_sealed()
     {
         Assert.True(typeof(WorkflowDefinitionDraftLayout).IsSealed);
+    }
+
+    private static void AssertMutableSetter(string propertyName)
+    {
+        var setter = typeof(WorkflowDefinitionDraftLayout).GetProperty(propertyName)!.SetMethod!;
+        var hasInitModifier = setter.ReturnParameter.GetRequiredCustomModifiers()
+            .Any(t => t.FullName == "System.Runtime.CompilerServices.IsExternalInit");
+        Assert.False(hasInitModifier, $"{propertyName} must not be init-only");
     }
 }

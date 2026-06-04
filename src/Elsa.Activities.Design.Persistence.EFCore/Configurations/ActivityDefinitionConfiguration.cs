@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.Configurations;
@@ -9,6 +10,8 @@ public sealed class ActivityDefinitionConfiguration : IEntityTypeConfiguration<A
     public void Configure(EntityTypeBuilder<ActivityDefinition> builder)
     {
         builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.ActivityTypeKey).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
         builder.HasIndex(x => x.ActivityTypeKey)
             .HasDatabaseName($"UX_{nameof(ActivityDefinition)}_{nameof(ActivityDefinition.ActivityTypeKey)}")

@@ -22,8 +22,8 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
             entity.PortsSource = payloadSerializer.Serialize(entity.Ports);
 
             // Derive the kind column from the descriptor itself (single source of truth)
-            // and serialise the descriptor into the real payload property — the
-            // [Immutable] scanner enforces post-insert read-only at the central level.
+            // and serialise the descriptor into the real payload property — post-insert
+            // immutability is enforced via PropertySaveBehavior.Throw in the entity configuration.
             entity.ImplementationKind = entity.ImplementationDescriptor.Kind;
             entity.ImplementationDescriptorPayload = payloadSerializer.Serialize(entity.ImplementationDescriptor);
 

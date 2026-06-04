@@ -33,7 +33,8 @@ See [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/E
 
 ## Persistence invariants
 
-- All immutable fields enforced via `[Immutable]` + `PreventImmutableChanges` (the central scanner in `ElsaDbContextBase`).
+- `Entity.RowNumber` and `Entity.CreatedAt` are write-once on every entity; enforced centrally via `ApplyBaseEntityImmutability` in `ElsaDbContextBase`.
+- Domain-specific write-once properties (e.g. `ActivityTypeKey`, `ImplementationKind`) are declared via `PropertySaveBehavior.Throw` in each entity's `IEntityTypeConfiguration<T>`.
 - `TenantId` index registered centrally via `ApplyTenantIdIndex` on every `TenantEntity` descendant.
 
 ## Owned exception surface

@@ -1,4 +1,3 @@
-using Elsa.Primitives.Attributes;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Primitives.Entities
@@ -8,7 +7,6 @@ namespace Elsa.Primitives.Entities
     /// </summary>
     public abstract class Entity
     {
-        [Immutable]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public long RowNumber { get; set; }
 
@@ -19,10 +17,10 @@ namespace Elsa.Primitives.Entities
 
         /// <summary>
         /// Gets or sets the timestamp at which this row first appeared in the database.
-        /// Auto-stamped by <c>ElsaDbContextBase</c> on insert. Treated as immutable post-save.
+        /// Auto-stamped by <c>ElsaDbContextBase</c> on insert. Write-once — immutability
+        /// enforced via <c>PropertySaveBehavior.Throw</c> in each entity's EF Core configuration.
         /// External / source-side timestamps belong in their own field, not here.
         /// </summary>
-        [Immutable]
         public DateTimeOffset CreatedAt { get; set; }
 
         /// <summary>
