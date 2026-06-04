@@ -38,6 +38,7 @@
     <Project Path="src/Elsa.Activities.Design.Persistence.EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" Id="e6946c5a-db85-4ad3-af61-cce52d36b593" />
     <Project Path="src/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa.Activities.Design.Reconciliation.Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <Project Path="src/Elsa.Activities.Design.Reconciliation.Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
     <Project Path="src/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <Project Path="src/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />

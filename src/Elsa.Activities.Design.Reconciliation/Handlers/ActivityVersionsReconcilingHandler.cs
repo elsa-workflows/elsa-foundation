@@ -13,11 +13,13 @@ using System.Text.Json;
 namespace Elsa.Activities.Design.Reconciliation.Handlers;
 
 /// <summary>
-/// Handles <see cref="OnActivityVersionsReconciling"/> by reading the configured JSON file,
-/// validating each entry (kind known, descriptor structurally valid, kind/descriptor agree),
-/// and contributing one <c>IActivityDefinitionVersion</c> per entry. Validation throws
-/// <c>InvalidJsonCatalogEntryException</c> with entry context — the reconciler sees a
-/// domain-scoped failure, never a raw <c>JsonException</c>.
+/// Handles <see cref="OnActivityVersionsReconciling"/> by pulling every registered
+/// <see cref="IActivityReconciliationSource"/> from DI, validating each contributed entry (kind
+/// known, descriptor structurally valid, kind/descriptor agree), and contributing one
+/// <c>IActivityDefinitionVersion</c> per entry. The handler is source-agnostic — CLR assembly
+/// scanning, JSON files, or any other source funnel through here identically. Validation throws
+/// <c>InvalidActivityVersionReconciliationEntryException</c> with entry context — the reconciler
+/// sees a domain-scoped failure, never a raw <c>JsonException</c>.
 /// </summary>
 public sealed class ActivityVersionsReconcilingHandler(
     IQueries<ActivityDefinition> definitionQueries,
