@@ -61,7 +61,7 @@ public sealed class ActivityDefinitionIdentityTests
                 ActivityTypeKey = "Foo",
                 Category = "Test"
             });
-            ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion(1, defId)
+            ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion("1.0.0", defId)
             {
                 Id = v1Id,
                 ImplementationKind = "Clr",
@@ -77,7 +77,7 @@ public sealed class ActivityDefinitionIdentityTests
 
         await using (var ctx = host.CreateContext())
         {
-            ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion(2, defId)
+            ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion("2.0.0", defId)
             {
                 Id = v2Id,
                 ImplementationKind = "Clr",

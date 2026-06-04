@@ -127,7 +127,7 @@ public sealed class SavingEventDispatchTests
     private static ActivityDefinitionVersion NewVersion()
     {
         var defId = Guid.NewGuid().ToString("N");
-        return new ActivityDefinitionVersion(1, defId)
+        return new ActivityDefinitionVersion("1.0.0", defId)
         {
             Id = Guid.NewGuid().ToString("N"),
             ImplementationDescriptor = new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))

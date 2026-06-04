@@ -76,6 +76,19 @@ public sealed class ReadContractSurfaceTests
     }
 
     [Fact]
+    public void IActivityDefinitionVersion_Version_IsStringSemVer()
+    {
+        // FR-017: the read contract exposes the author-controlled semver as a string, never
+        // the legacy int. A regression that re-types it would break semver ordering and the
+        // assembly-attribute source.
+        var versionProperty = typeof(IActivityDefinitionVersion)
+            .GetProperty(nameof(IActivityDefinitionVersion.Version));
+
+        Assert.NotNull(versionProperty);
+        Assert.Equal(typeof(string), versionProperty!.PropertyType);
+    }
+
+    [Fact]
     public void IActivityDefinition_DoesNotExposeIsBrowsable()
     {
         // IsBrowsable was removed entirely (catalog presence is the picker rule, not a

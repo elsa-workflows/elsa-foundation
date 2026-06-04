@@ -19,14 +19,15 @@ public static class ActivityDefinitionVersionQueryExtensions
         return result ?? throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
     }
 
-    public static async Task<ActivityDefinitionVersion?> FindLastVersion(this IQueries<ActivityDefinitionVersion> queries, string activityDefinitionId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves the single version for <paramref name="definitionId"/> whose semantic version equals
+    /// <paramref name="version"/> (FR-013, build-metadata-insensitive), or <c>null</c> if none. The
+    /// match is exact on precedence — not nearest — so <c>1.0.0</c> and <c>1.0.0+build</c> resolve the
+    /// same logical version while <c>9.9.9</c> resolves nothing.
+    /// </summary>
+    public static Task<ActivityDefinitionVersion?> FindExactVersion(this IQueries<ActivityDefinitionVersion> queries, string definitionId, string version, CancellationToken cancellationToken = default)
     {
-        var filter = new ActivityDefinitionVersionFilter
-        {
-            DefinitionId = activityDefinitionId
-        };
-        var order = new OrderDefinition<ActivityDefinitionVersion, int>(e => e.Version, OrderDirection.Descending);
-        var result = await queries.Query(filter, order, cancellationToken);
-        return result.FirstOrDefault();
+        var filter = new ActivityDefinitionVersionFilter { DefinitionId = definitionId, Version = version };
+        return queries.Find(filter, cancellationToken);
     }
 }

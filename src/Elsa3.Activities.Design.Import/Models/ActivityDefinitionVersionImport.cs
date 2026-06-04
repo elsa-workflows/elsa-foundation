@@ -5,7 +5,7 @@ namespace Elsa3.Mapping.Models;
 
 public sealed record ActivityDefinitionVersionImport(
     string Id,
-    int Version,
+    string Version,
     string DefinitionId,
     string ActivityTypeKey,
     string ImplementationKind,

@@ -145,7 +145,7 @@ public sealed class RequiredInputOutputValidatorTests
     private sealed class StubVersion(string id, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs) : IActivityDefinitionVersion
     {
         public string Id { get; } = id;
-        public int Version => 1;
+        public string Version => "1.0.0";
         public string DefinitionId => "def-1";
         public string ActivityTypeKey => "TestActivity";
         public string ImplementationKind => "Test";

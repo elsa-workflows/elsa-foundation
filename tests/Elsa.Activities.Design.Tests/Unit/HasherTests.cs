@@ -82,7 +82,7 @@ public sealed class HasherTests
     private static IActivityDefinitionVersion NewVersion(IActivityDefinition def, string id = "ver-id") =>
         new FakeVersion(
             Id: id,
-            Version: 1,
+            Version: "1.0.0",
             DefinitionId: def.Id,
             ActivityTypeKey: def.ActivityTypeKey,
             ImplementationKind: "Clr",
@@ -100,7 +100,7 @@ public sealed class HasherTests
     ) : IActivityDefinition;
 
     private sealed record FakeVersion(
-        string Id, int Version, string DefinitionId, string ActivityTypeKey,
+        string Id, string Version, string DefinitionId, string ActivityTypeKey,
         string ImplementationKind, IImplementationDescriptor ImplementationDescriptor,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
         IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,

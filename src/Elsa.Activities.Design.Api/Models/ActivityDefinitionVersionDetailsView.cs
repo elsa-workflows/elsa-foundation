@@ -5,7 +5,7 @@ namespace Elsa.Activities.Design.Api.Models;
 
 public sealed record ActivityDefinitionVersionDetailsView(
     string Id,
-    int Version,
+    string Version,
     string ImplementationKind,
     IImplementationDescriptor ImplementationDescriptor,
     ActivityDefinitionView Definition,

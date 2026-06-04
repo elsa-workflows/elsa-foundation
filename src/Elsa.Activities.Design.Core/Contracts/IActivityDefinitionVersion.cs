@@ -6,7 +6,7 @@ public interface IActivityDefinitionVersion
 {
     string Id { get; }
 
-    int Version { get; }
+    string Version { get; }
 
     string DefinitionId { get; }
     

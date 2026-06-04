@@ -31,7 +31,7 @@ public sealed class ImplementationDescriptorRoundTripTests
         await using (var ctx = host.CreateContext())
         {
             ctx.ActivityDefinitions.Add(NewDef(defId, "Http.SendRequest"));
-            var version = new ActivityDefinitionVersion(1, defId)
+            var version = new ActivityDefinitionVersion("1.0.0", defId)
             {
                 Id = vId,
                 ImplementationDescriptor = new ClrImplementationDescriptor(originalTypeInfo),
@@ -81,7 +81,7 @@ public sealed class ImplementationDescriptorRoundTripTests
         await using (var ctx = host.CreateContext())
         {
             ctx.ActivityDefinitions.Add(NewDef(defId, "Wf.Approve"));
-            var version = new ActivityDefinitionVersion(1, defId)
+            var version = new ActivityDefinitionVersion("1.0.0", defId)
             {
                 Id = vId,
                 ImplementationDescriptor = new WorkflowImplementationDescriptor("wf-42", 7),

@@ -719,10 +719,25 @@ Feature inheritance is the only sanctioned form of structural coupling between f
 When Feature B must extend, decorate, or specialize Feature A:
 
 - B inherits from A's feature class.
-- B overrides `Configure` (or the equivalent registration entry point) to add or replace services.
+- B overrides `ConfigureServices` (the registration entry point) to add or replace services, typically by calling `base.ConfigureServices(services)` first and then adding or re-registering individual contracts.
 - B's package depends on A's package; A is unaware of B.
 
 Compile-time inheritance is the load-bearing mechanism; runtime references between feature classes are not part of this pattern.
+
+**For inheritance-based override to actually work, two registration disciplines are mandatory on every feature:**
+
+- **`ConfigureServices` MUST be `virtual`.** A feature's registration entry point is declared `virtual` (and the feature class is not sealed, per §2.24's "feature classes are public and NOT sealed") so an inheriting feature can call `base.ConfigureServices(services)` to reuse the base setup and then add, replace, or remove individual registrations. A feature that hides its registrations behind a non-overridable method amputates §2.5.
+- **A feature MUST register every collaborator it owns against a contract, and depend on the contract — never the concrete type.** Each feature-internal service is registered as `services.AddScoped<IThing, Thing>()` and every consumer (including other services within the same feature) injects `IThing`, not `Thing`. This is what makes single-collaborator override possible: an inheriting feature replaces one piece by re-registering just that contract after `base.ConfigureServices`, with no edit to — and no recompilation seam through — the consumers that depend on it. Injecting a concrete feature-internal class is a violation: it forecloses the override even when the rest of the pipeline is contract-based.
+
+#### §2.5.1 Service lifetimes — scoped by default
+
+The default lifetime for a registered service is **scoped**. **Singleton is reserved for application-wide static values** — options snapshots, registries, caches, immutable lookup collections, and similar state that is established once and read everywhere. A service that *executes logic* — resolves, scans, validates, reconciles, dispatches, maps — is scoped unless there is a specific, documented reason it must be a singleton.
+
+**Why.** Scoped is the safe default: it bounds a service's lifetime to the unit of work, avoids accidental shared mutable state, and keeps captive-dependency hazards (a singleton capturing a scoped/transient collaborator) from arising in the first place. Singleton is an explicit decision about *shared static state*, not a performance default — a stateless executor registered as a singleton communicates "this is shared application state" to every reader, which is a lie. Reserve the signal for things that genuinely are application-wide static values.
+
+**Rule of thumb.** Ask "is this an application-wide static value (options/registry/cache/immutable collection), or does it just execute?" Static value → singleton. Executes → scoped.
+
+*New sub-section, and the two registration disciplines added to §2.5 (Unit 3 amendment, 2026-06-04): surfaced while wiring the CLR activity-reconciliation feature — resolvers and scanners "just execute" and so are scoped, while their options remain singleton; collaborators are registered and injected through contracts so an inheriting feature can replace one in isolation.*
 
 ### §2.6 Cross-feature composition mechanisms
 
@@ -1526,4 +1541,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-03
+**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-04

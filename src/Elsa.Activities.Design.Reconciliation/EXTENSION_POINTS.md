@@ -21,6 +21,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 - **Consumed by:** `ActivityVersionsReconcilingHandler : IEventHandler<OnActivityVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles the returned activity versions against the catalog.
 
 **Known implementations (shipped):**
+- `ClrActivityReconciliationSource` (`Elsa.Activities.Design.Reconciliation.Clr`, `SourceKind = "CLR"`) — scans a configured assembly folder, reads each activity's author-controlled SemVer (the `[Version]` attribute, falling back to the declaring assembly version), and contributes one reconciliation model per discovered activity. Registered as a **standalone source feature** (`ClrActivityReconciliationFeature : IShellFeature`) that does *not* derive from the reconciliation feature — it only adds an `IActivityReconciliationSource` to DI, which the universal handler discovers. Add both features to a shell to scan a folder.
 - `Elsa3.Activities.Design.Import` — *(cross-domain — imports activity definitions from Elsa3 JSON; provides IActivityCollectionJsonSource-backed reconciliation)* — verify exact class name in that project.
 
 ---

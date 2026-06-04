@@ -7,6 +7,7 @@ namespace Elsa.Activities.Design.Api.Commands;
 
 public sealed record AddVersion(
     string DefinitionId,
+    string Version,
     IImplementationDescriptor ImplementationDescriptor,
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,

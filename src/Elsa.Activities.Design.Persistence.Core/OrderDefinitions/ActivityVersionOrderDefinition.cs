@@ -2,6 +2,6 @@
 using Elsa.Primitives.Persistence;
 namespace Elsa.Activities.Design.Persistence.Core.OrderDefinitions;
 
-public sealed class ActivityVersionOrderDefinition(OrderDirection versionOrderDirection = OrderDirection.Descending) : OrderDefinition<ActivityDefinitionVersion, int>((v) => v.Version, versionOrderDirection)
+public sealed class ActivityVersionOrderDefinition(OrderDirection versionOrderDirection = OrderDirection.Descending) : OrderDefinition<ActivityDefinitionVersion, string>((v) => v.SemVerSortKey, versionOrderDirection)
 {
 }

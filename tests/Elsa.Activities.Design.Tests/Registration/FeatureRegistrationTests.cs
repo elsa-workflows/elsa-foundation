@@ -3,6 +3,8 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Activities.Design.Reconciliation;
+using Elsa.Activities.Design.Reconciliation.Clr;
+using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -56,11 +58,26 @@ public sealed class FeatureRegistrationTests
     }
 
     [Fact]
-    public void ActivitiesDesignReconciliationFeature_RegistersReconcilerAndHasher()
+    public void ActivitiesDesignReconciliationFeature_RegistersReconcilerHasherStartupTaskAndHandler()
     {
         var services = MinimalServices();
         StubReconcilerDependencies(services);
-        new TestActivitiesDesignReconciliationFeature().ConfigureServices(services);
+
+        // The reshaped feature (FR-021) is non-abstract and owns no sources — the universal
+        // handler resolves IEnumerable<IActivityReconciliationSource> from DI, which is empty
+        // here because no source feature is composed alongside it.
+        new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+
+        // The single startup task that drives a reconciliation pass is wired (asserted on the
+        // descriptor — its IDistributedLockProvider dependency is supplied by the host, not stubbed).
+        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
+            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Services.ActivityVersionReconcilerStartupTask));
+
+        // The universal reconciling handler is wired (registered as the non-generic IEventHandler
+        // service; the event pipeline filters by the closed IEventHandler<TEvent> interface).
+        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
+            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Handlers.ActivityVersionsReconcilingHandler));
+
         using var provider = services.BuildServiceProvider();
 
         // Hasher is a singleton and must resolve directly.
@@ -70,7 +87,24 @@ public sealed class FeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<IActivityVersionReconciler>());
     }
 
-    private sealed class TestActivitiesDesignReconciliationFeature : ActivitiesDesignReconciliationFeature;
+    [Fact]
+    public void ClrActivityReconciliationFeature_RegistersClrReconciliationSource()
+    {
+        var services = MinimalServices();
+
+        new ClrActivityReconciliationFeature
+        {
+            Options = { FolderPath = Path.Combine(Path.GetTempPath(), "activities") }
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The standalone source feature (§2.6.1) contributes exactly the CLR source; the
+        // reconciliation feature's universal handler discovers it from this same DI surface.
+        var source = provider.GetService<IActivityReconciliationSource>();
+        Assert.IsType<ClrActivityReconciliationSource>(source);
+        Assert.Equal("CLR", source.SourceKind);
+    }
 
     [Fact]
     public void SqliteActivitiesDesignPersistenceShellFeature_RegistersLookupAndSavingHandler()

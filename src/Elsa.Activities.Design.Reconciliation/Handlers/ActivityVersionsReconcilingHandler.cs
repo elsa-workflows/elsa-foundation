@@ -1,10 +1,9 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
-using Elsa.Activities.Design.Reconciliation.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
-using Elsa.Activities.Design.Reconciliation.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
@@ -58,6 +57,7 @@ public sealed class ActivityVersionsReconcilingHandler(
 
                 var version = new ActivityDefinitionVersion(entry.Version, definition.Id, executionType: entry.ExecutionType)
                 {
+                    Definition = definition,
                     Id = identityGenerator.Generate(),
                     ImplementationDescriptor = descriptor,
                     ImplementationKind = descriptor.Kind,

@@ -1,6 +1,5 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Contracts;
 

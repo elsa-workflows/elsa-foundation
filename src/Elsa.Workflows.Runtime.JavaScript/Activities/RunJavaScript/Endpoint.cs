@@ -1,6 +1,6 @@
 ﻿using Elsa.FastEndpoints.Abstractions;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript

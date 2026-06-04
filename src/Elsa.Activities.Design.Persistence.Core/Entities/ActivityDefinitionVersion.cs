@@ -1,11 +1,12 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Versioning;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(int version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
+public sealed class ActivityDefinitionVersion(string version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
     : TenantEntity, IActivityDefinitionVersion
 {
     /// <summary>
@@ -13,7 +14,17 @@ public sealed class ActivityDefinitionVersion(int version, string definitionId, 
     /// </summary>
     public ActivityDefinition? Definition { get; set; }
 
-    public int Version { get; init; } = version;
+    /// <summary>Author-controlled SemVer 2.0.0 string. Write-once.</summary>
+    public string Version { get; init; } = version;
+
+    /// <summary>
+    /// Persistence-only normalised key whose ordinal ordering equals SemVer precedence
+    /// (computed once at construction via <see cref="SemVer.ToSortKey(string)"/>). Drives DB-side
+    /// ORDER BY for version listings and "latest version" resolution. A real CLR property, not an
+    /// EF shadow — it is a domain shadow (§2.9.1): invisible to other domains via the interface,
+    /// present on the entity for persistence. Write-once.
+    /// </summary>
+    public string SemVerSortKey { get; init; } = SemVer.ToSortKey(version);
 
     public string DefinitionId { get; init; } = definitionId;
 

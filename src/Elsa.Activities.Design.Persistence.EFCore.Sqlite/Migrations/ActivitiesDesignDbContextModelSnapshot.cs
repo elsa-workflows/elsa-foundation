@@ -112,6 +112,10 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<string>("ReconcilliationHash")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SemVerSortKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SourceId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -123,8 +127,9 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<string>("TenantId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Version")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

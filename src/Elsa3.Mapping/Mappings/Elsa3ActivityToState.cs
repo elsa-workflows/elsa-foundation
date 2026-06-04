@@ -85,8 +85,10 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
     {
         var activity = await activityLookup.GetDefinition(source.Type, cancellationToken);
         var versions = await activityLookup.ListVersions(activity.Id, cancellationToken);
-        var version = versions.FirstOrDefault(x => x.Version == source.Version)
-            ?? throw new ArgumentException($"Activity '{source.Type}' does not have version '{source.Version}'");
+        // Elsa-3 carries an int version; map it onto a semver string (FR-007: n → "n.0.0").
+        var sourceSemVer = $"{source.Version ?? 0}.0.0";
+        var version = versions.FirstOrDefault(x => x.Version == sourceSemVer)
+            ?? throw new ArgumentException($"Activity '{source.Type}' does not have version '{sourceSemVer}'");
 
         return await activityLookup.GetVersion(version.Id, cancellationToken);
     }

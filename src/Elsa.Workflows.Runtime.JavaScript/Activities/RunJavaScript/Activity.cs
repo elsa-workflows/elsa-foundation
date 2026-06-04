@@ -1,10 +1,10 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Workflows.Primitives.Constants;
-using Elsa.Workflows.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript
 {

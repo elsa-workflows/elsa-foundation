@@ -16,6 +16,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
             builder.HasKey(x => x.Id);
 
             builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.SemVerSortKey).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.ImplementationKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.ImplementationDescriptorPayload).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);

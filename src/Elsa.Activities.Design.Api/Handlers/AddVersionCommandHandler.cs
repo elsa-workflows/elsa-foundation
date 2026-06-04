@@ -22,9 +22,7 @@ public sealed class AddVersionCommandHandler(
     {
         var definition = await definitionQueries.Get(command.DefinitionId, cancellationToken);
 
-        var lastVersion = await queries.FindLastVersion(command.DefinitionId, cancellationToken);
-        var nextVersionNumber = (lastVersion?.Version ?? 0) + 1;
-        var version = CreateVersion(command, nextVersionNumber, definition);
+        var version = CreateVersion(command, definition);
 
         await addCommand.Add(version, cancellationToken);
         var addedVersion = await queries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
@@ -32,9 +30,9 @@ public sealed class AddVersionCommandHandler(
         return await objectMapper.Map<ActivityDefinitionVersionDetailsView>(addedVersion, cancellationToken);
     }
 
-    private ActivityDefinitionVersion CreateVersion(AddVersion command, int version, ActivityDefinition definition)
+    private ActivityDefinitionVersion CreateVersion(AddVersion command, ActivityDefinition definition)
     {
-        return new(version, command.DefinitionId, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
+        return new(command.Version, command.DefinitionId, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
             ImplementationKind = command.ImplementationDescriptor.Kind,

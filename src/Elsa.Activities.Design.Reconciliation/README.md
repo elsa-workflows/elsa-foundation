@@ -27,7 +27,7 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 
 ## Replaceable services (per §2.6.2)
 
-- `IActivityDefinitionHasher` — singleton; provider modules may override to swap the canonicalisation / hash algorithm.
+- `IActivityDefinitionHasher` — scoped (§2.5.1: it executes a hash, not application-wide static state); provider modules may override to swap the canonicalisation / hash algorithm.
 
 ## Naming history
 

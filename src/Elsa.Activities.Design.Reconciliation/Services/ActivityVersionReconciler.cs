@@ -7,6 +7,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
+using Elsa.Primitives.Versioning;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -79,9 +80,12 @@ public sealed class ActivityVersionReconciler(
             return;
         }
 
-        // Definition exists. Lookup the specific version by (DefinitionId, Version).
+        // Definition exists. Lookup the specific version by (DefinitionId, Version) — build-metadata-
+        // insensitive (FR-013) by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
+        // the same logical version.
+        var incomingSortKey = SemVer.ToSortKey(incomingVersion.Version);
         var existingVersion = await versionQueries.Find(
-            v => v.DefinitionId == definition.Id && v.Version == incomingVersion.Version,
+            v => v.DefinitionId == definition.Id && v.SemVerSortKey == incomingSortKey,
             cancellationToken
         );
 
@@ -110,7 +114,7 @@ public sealed class ActivityVersionReconciler(
         HandleHashMatchedDuplicate(definition, incomingVersion.Version);
     }
 
-    private void HandleHashMatchedDuplicate(ActivityDefinition definition, int version)
+    private void HandleHashMatchedDuplicate(ActivityDefinition definition, string version)
     {
         switch (options.Value.DuplicateHandling)
         {
@@ -127,7 +131,7 @@ public sealed class ActivityVersionReconciler(
         }
     }
 
-    private void LogSkipDuplicate(string definitionId, string activityTypeKey, int version)
+    private void LogSkipDuplicate(string definitionId, string activityTypeKey, string version)
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation(

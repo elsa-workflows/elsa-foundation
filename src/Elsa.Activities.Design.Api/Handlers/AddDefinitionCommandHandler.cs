@@ -20,7 +20,7 @@ public sealed class AddDefinitionCommandHandler(
 
     : ICommandHandler<AddDefinition, ActivityDefinitionVersionDetailsView>
 {
-    private const int initialVersion = 1;
+    private const string initialVersion = "1.0.0";
 
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {

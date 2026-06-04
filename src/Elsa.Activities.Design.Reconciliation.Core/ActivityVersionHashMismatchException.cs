@@ -18,7 +18,7 @@ public sealed class ActivityVersionHashMismatchException : Exception
     public ActivityVersionHashMismatchException(
         string definitionId,
         string activityTypeKey,
-        int version,
+        string version,
         string? persistedHash,
         string incomingHash)
         : base(
@@ -34,7 +34,7 @@ public sealed class ActivityVersionHashMismatchException : Exception
 
     public string DefinitionId { get; }
     public string ActivityTypeKey { get; }
-    public int Version { get; }
+    public string Version { get; }
     public string? PersistedHash { get; }
     public string IncomingHash { get; }
 }

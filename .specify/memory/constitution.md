@@ -126,6 +126,35 @@ Unit C Phase-7 cascade (2026-05-28, draft pending 2026-06-01 ratification):
     Status: provisional pending the 2026-06-01 architecture review meeting
     (agenda Item 6).
 
+Unit 3 — Activity semantic versioning (2026-06-04, draft pending ratification):
+  - §E2.8 REVISED — new "Activity versioning" sub-block. The activity version
+    is an author-controlled **string semantic version (SemVer 2.0.0)**, no
+    longer an engine-assigned `int`. The version is sourced from the declaring
+    assembly's version and may be overridden per-activity by a `[Version("…")]`
+    attribute (author owns it). A CLR assembly-scanning
+    `IActivityReconciliationSource` (`Elsa.Activities.Design.Reconciliation.Clr`)
+    reads the attribute / assembly version and supplies it as the version when
+    the reconciler calls the source — fitting the Unit B DI-source pattern
+    (framework §2.6.1). The CLR scanner reads no UI metadata; the only
+    author-intent attribute it honours beyond `[Version]` is `[Required]` on
+    inputs (→ `InputDefinition.IsRequired`).
+  - §E2.8 reconciliation-policy paragraph reworded: the `(DefinitionId, Version)`
+    lookup is **build-metadata-insensitive** — it matches on the normalised
+    SemVer sort key (`SemVer.ToSortKey`, a zero-padded comparable form that
+    excludes build metadata), so `1.0.0` and `1.0.0+build` are the same logical
+    version. "Latest version" ordering sorts by the same sort key descending
+    (release above prerelease). The integer-equality / integer-ordering wording
+    is retired.
+  - Term tidy: the immutable content hash is `ReconcilliationHash` (the entity's
+    actual member; the older `ProvisioningHash` name is retired throughout §E2.8).
+  - Module decomposition (framework §2.20 + §E3.10): the activity design domain
+    is `Elsa.Activities.Design.*` and the runtime domain is
+    `Elsa.Activities.Runtime.*`; the `[Version]` attribute and version-resolution
+    contract live in the zero-dep `Elsa.Activities.*.Core` so authors annotate
+    without taking a heavy dependency. Extends Unit B; prerequisite for Unit 4
+    (workflow-as-activity version pinning). Migration: existing `int`-versioned
+    rows are not preserved (SQLite regenerated fresh, per Unit B convention).
+
 Added Elsa sections (relative to v1.0.0):
   - §E2.5 — Reinforced opening: "`ElsaDbContextBase` is shared EF-Core
     infrastructure, not a model/entity-design requirement." Cross-references
@@ -641,13 +670,15 @@ The Elsa 3 baseline (see §E1) enumerates loaded `IActivity` implementations at 
 
 - `IsBrowsable` on `ActivityDefinition` is **not** the visibility mechanism. It does not exist. Visibility = catalog presence. The "should this row appear in the picker?" question has no per-row toggle; it is structurally derived from catalog membership.
 
-**Reconciliation policy — Model X *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*.** The activity catalog is reconciled from trusted sources at creation time only. There is **no operational sibling entity**, no `LastSeenAt` heartbeat, no `IsStale` drift flag, no `RemovedAt` source-disappearance tracking. The immutable content hash for a version lives directly on `IActivityDefinitionVersion.ProvisioningHash` and is the basis of the duplicate-detection path:
+**Activity versioning *(Unit 3 2026-06-04; draft pending ratification)*.** The activity version is an author-controlled **string semantic version (SemVer 2.0.0)**, not an engine-assigned integer. The author owns it: it is sourced from the declaring assembly's version and may be overridden per-activity by a `[Version("…")]` attribute. A CLR assembly-scanning `IActivityReconciliationSource` (in `Elsa.Activities.Design.Reconciliation.Clr`) reads the attribute (falling back to the assembly version) and supplies it as the version when the reconciler calls the source — the same DI-source pattern Unit B established (framework §2.6.1). The scanner reads no UI metadata (no display name, description, category from CLR); the only author-intent attribute it honours beyond `[Version]` is `[Required]` on an input (→ `InputDefinition.IsRequired`). The `[Version]` attribute and the version-resolution contract live in the zero-dep `Elsa.Activities.*.Core` so an author can annotate without a heavy dependency.
 
-- Lookup by `(DefinitionId, Version)`. If absent → create with immutable provenance.
+**Reconciliation policy — Model X *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*.** The activity catalog is reconciled from trusted sources at creation time only. There is **no operational sibling entity**, no `LastSeenAt` heartbeat, no `IsStale` drift flag, no `RemovedAt` source-disappearance tracking. The immutable content hash for a version lives directly on `IActivityDefinitionVersion.ReconcilliationHash` and is the basis of the duplicate-detection path:
+
+- Lookup by `(DefinitionId, Version)`, **build-metadata-insensitive**: the match is on the normalised SemVer sort key (`SemVer.ToSortKey` — a zero-padded comparable form that excludes build metadata), so `1.0.0` and `1.0.0+build` resolve as the same logical version. If absent → create with immutable provenance.
 - If present and hash differs → throw `ActivityVersionHashMismatchException` (the source is broken — same identity, different content).
 - If present and hash matches → skip or throw per the reconciliation source's duplicate-handling configuration.
 
-Source disappearance is intentionally not tracked at the entity layer; versions are never deleted. Context-aware visibility (tenant / role / feature-flag) is a separate policy layer that filters the catalog for a given context; it is not a reconciliation concern. This codification is **provisional** pending the 2026-06-01 review meeting (agenda Item 1 — Definition of Reconciliation; Item 2 — Model X mechanism); if the review revises, this section revises with it.
+"Latest version" / ordering queries sort by the same SemVer sort key descending (a release sorts above its prereleases); there is no integer ordering. Source disappearance is intentionally not tracked at the entity layer; versions are never deleted. Context-aware visibility (tenant / role / feature-flag) is a separate policy layer that filters the catalog for a given context; it is not a reconciliation concern. This codification is **provisional** pending the 2026-06-01 review meeting (agenda Item 1 — Definition of Reconciliation; Item 2 — Model X mechanism); if the review revises, this section revises with it.
 
 This section codifies the rule for the activity catalog. The same shape generalises to other catalogs as Elsa accrues them (workflow catalog, script catalog, expression-evaluator catalog); each will get its own catalog-as-source-of-truth section as that catalog matures.
 

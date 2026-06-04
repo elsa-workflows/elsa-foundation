@@ -1,4 +1,4 @@
-﻿using Elsa.Workflows.Runtime.Core.Contracts;
+﻿using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses
 {
