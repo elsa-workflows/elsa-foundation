@@ -20,7 +20,7 @@ $ARGUMENTS
 
 1. Read `AGENTS.md#personal-operating-preferences`.
 2. Read `docs/skills/catalog.md#initialize-agent-preferences`.
-3. Read `docs/reference/agent-preferences.md`.
+3. Read `docs/reference/agent-preferences.md#expected-preference-files` to discover known preference files and ask triggers.
 4. Read `docs/reference/git-operating-models.md` only when Git workflow setup is relevant.
 5. If `.agent-prefs/` already has preference files besides `.gitkeep`, summarize the existing preferences and do not overwrite them without explicit user approval.
 6. Ask brief setup questions only for preferences needed by the current task.

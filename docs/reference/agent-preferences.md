@@ -28,14 +28,20 @@ Prefer stable, descriptive filenames such as:
 - `.agent-prefs/git-operating-model.md`
 - `.agent-prefs/session-execution-model.md`
 
+## Expected Preference Files
+
+Use this table as the current setup registry. Add new rows here when a new local preference type becomes expected.
+
+| Preference | Local file | Ask when missing | Committed catalog/template |
+|---|---|---|---|
+| Git operating model | `.agent-prefs/git-operating-model.md` | Before pushing, opening pull requests, changing remotes, or choosing a branch strategy. | [git-operating-models.md](git-operating-models.md) |
+| Session execution model | `.agent-prefs/session-execution-model.md` | Before substantial planning, substantial implementation, or multi-session/fresh-agent workflows. | This file |
+
 ## Quick Setup
 
 If `.agent-prefs/` contains no preference files other than `.gitkeep`, run a short setup before substantial planning or multi-session work.
 
-Ask only for preferences needed by the current workflow:
-
-- Git workflow before pushing, opening pull requests, changing remotes, or choosing a branch strategy.
-- Session execution model before substantial planning or implementation that could happen in the current session or a fresh agent/thread.
+Use [Expected Preference Files](#expected-preference-files) to decide which preferences exist. Ask only for preferences needed by the current workflow.
 
 Write only the files the user selects. It is valid for a user to skip a preference and decide per session.
 

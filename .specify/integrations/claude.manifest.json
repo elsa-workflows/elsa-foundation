@@ -17,7 +17,7 @@
     ".claude/skills/elsa-feature-composition/SKILL.md": "45a19fed1e9e6fc8a19caea60326a10b955fb0382c21d951474c80e883bead2c",
     ".claude/skills/elsa-feature-dependency-map/SKILL.md": "66d79022c12244b5aa74f647238e631f7199cfb3c02643f48c40227d5f407559",
     ".claude/skills/elsa-glossary-lookup/SKILL.md": "2493c036925ddca78c49fd6df7598c5eb7b2ef6ab54b8dec2d6fe1e45773e22e",
-    ".claude/skills/elsa-initialize-agent-preferences/SKILL.md": "1d1d0aa628c9ced53524c0ef0979f9d96747764be65b91964bf475fb5b085844",
+    ".claude/skills/elsa-initialize-agent-preferences/SKILL.md": "7794f950afb6a127ae7e6ff87ad8434fcd0b5ba32c6a4fcc178166f3cc490879",
     ".claude/skills/elsa-refresh-generated-maps/SKILL.md": "e6d6d4dce9b8323da6f761478b2d873f68fb78e85b55d8ce8255bacfffc18f46",
     ".claude/skills/elsa-source-of-truth-audit/SKILL.md": "bd646083acf56b888e88283cb16202e563f59a00a7fc3a12128868baa4501d82",
     ".claude/skills/elsa-verify-codebase/SKILL.md": "c8a5bc8eca7a909df950077134d5f1fb928edfe8c239a8aae1f51249efe15fca",
