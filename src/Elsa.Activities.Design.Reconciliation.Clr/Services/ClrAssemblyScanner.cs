@@ -124,8 +124,8 @@ public sealed class ClrAssemblyScanner(
             DisplayName: null,
             Category: category,
             Description: null,
-            ImplementationKind: ClrImplementationDescriptor.KindValue,
-            ImplementationDescriptor: new ClrImplementationDescriptor(TypeInformation.FromType(type)),
+            DescriptorType: typeof(TypeInformation).FullName!,
+            Descriptor: TypeInformation.FromType(type),
             Inputs: inputs,
             Outputs: outputs,
             Ports: []);

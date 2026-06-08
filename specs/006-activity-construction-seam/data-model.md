@@ -8,9 +8,9 @@ Entities and contracts, with their fields, relationships, invariants, and the be
 - Fields: `TypeName`, `Namespace`, `AssemblyName`, `AssemblyVersion`. `FromType(Type)`, `LoadType()`.
 - Role in 006: **is** the descriptor for CLR-backed activities. `DescriptorType = "Elsa.Primitives.Models.TypeInformation"`; payload = the activity type's own `TypeInformation`.
 
-### `Elsa.Workflows.Primitives.WorkflowIdentity` — the Workflow descriptor *(NEW)*
+### `Elsa.Workflows.Primitives.Models.WorkflowIdentity` — the Workflow descriptor *(NEW)*
 - Fields: `DefinitionId` (string, stable definition identity), `VersionId` (string, durable `WorkflowDefinitionVersion` row id used to load), `Version` (string, SemVer 2.0.0 for the workflow definition version).
-- Invariants: immutable record; carries no runtime-live object. `DescriptorType = "Elsa.Workflows.Primitives.WorkflowIdentity"`.
+- Invariants: immutable record; carries no runtime-live object. `DescriptorType = "Elsa.Workflows.Primitives.Models.WorkflowIdentity"`.
 - Location: `Elsa.Workflows.Primitives` (zero-dep building-block lib) — sharable by producer + consumer with no feature→feature edge.
 - Replaces: 005's placeholder `WorkflowAsActivityDescriptor` and the deleted `Elsa.Activities.Design.Core.Models.WorkflowImplementationDescriptor`.
 
@@ -57,7 +57,7 @@ Entities and contracts, with their fields, relationships, invariants, and the be
 - `ActivitiesCompositionRuntimeFeature` (public, not sealed). Refs `Runtime.Core` + `Elsa.Workflows.Primitives` (+ `Elsa.Workflows.Runtime.Core` only if the construct-only type needs it). **No `Design.*` ref.**
 
 ### `Elsa.Activities.Composition.Design`
-- `WorkflowActivityReconciliationSource : IActivityReconciliationSource` (public sealed) — one model per usable-as-activity workflow version; `DescriptorType="Elsa.Workflows.Primitives.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O/ports mirrored (005 FR-005/006).
+- `WorkflowActivityReconciliationSource : IActivityReconciliationSource` (public sealed) — one model per usable-as-activity workflow version; `DescriptorType="Elsa.Workflows.Primitives.Models.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O/ports mirrored (005 FR-005/006).
 - `ActivitiesCompositionDesignFeature` (public, not sealed). Refs `Design.Reconciliation.Core` + `Design.Core` + `Elsa.Workflows.Primitives`.
 
 ## 6. Persistence reshape (`Elsa.Activities.Design.Persistence.*`)
@@ -89,7 +89,7 @@ Entities and contracts, with their fields, relationships, invariants, and the be
 
 ### `ActivityVersionReconciliationModel` *(RESHAPE)*
 - Rename `string ImplementationKind` → `string DescriptorType`. Keep `object ImplementationDescriptor` (the descriptor object or a `JsonElement` for the JSON source).
-- Each source supplies `DescriptorType` explicitly (D6): CLR scanner → `"Elsa.Primitives.Models.TypeInformation"` + `TypeInformation.FromType(type)`; JSON file → `DescriptorType` field; Workflow source → `"Elsa.Workflows.Primitives.WorkflowIdentity"` + `WorkflowIdentity(...)`.
+- Each source supplies `DescriptorType` explicitly (D6): CLR scanner → `"Elsa.Primitives.Models.TypeInformation"` + `TypeInformation.FromType(type)`; JSON file → `DescriptorType` field; Workflow source → `"Elsa.Workflows.Primitives.Models.WorkflowIdentity"` + `WorkflowIdentity(...)`.
 
 ### Reconciling handler / reconciler *(SIMPLIFY)*
 - Drop all descriptor-**type resolution** (no `Kind→Type`); persist `(DescriptorType, payload)` straight through. No per-kind branch (SC-004). Hasher unaffected.

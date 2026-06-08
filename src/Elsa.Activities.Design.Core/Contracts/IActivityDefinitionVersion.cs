@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 
 namespace Elsa.Activities.Design.Core.Contracts;
@@ -9,20 +10,22 @@ public interface IActivityDefinitionVersion
     string Version { get; }
 
     string DefinitionId { get; }
-    
 
     /// <summary>
-    /// Registry lookup key. Equals <see cref="ImplementationDescriptor"/>.<c>Kind</c> for this
-    /// row; stored separately so the loading handler can resolve the deserialization target
-    /// before deserializing the descriptor JSON payload.
+    /// The descriptor type's <c>FullName</c> (e.g. <c>Elsa.Primitives.Models.TypeInformation</c>,
+    /// <c>Elsa.Workflows.Primitives.Models.WorkflowIdentity</c>). The runtime construction registry's
+    /// lookup key. The design domain treats this purely as an opaque string — it never resolves it to
+    /// a CLR type.
     /// </summary>
-    string ImplementationKind { get; }
+    string DescriptorType { get; }
 
     /// <summary>
-    /// Polymorphic descriptor — the concrete shape varies by <see cref="ImplementationKind"/>.
-    /// Hydrated by the loading handler from the EF shadow column.
+    /// The descriptor payload as opaque JSON. The design domain serializes/round-trips this without
+    /// ever deserializing it into a concrete descriptor type; only the runtime feature that owns the
+    /// descriptor type materializes it. A <see cref="JsonElement"/> (a BCL type) keeps the descriptor
+    /// opaque and introduces no descriptor-type dependency (Elsa §E2.2).
     /// </summary>
-    IImplementationDescriptor ImplementationDescriptor { get; }
+    JsonElement DescriptorPayload { get; }
 
     IActivityDefinition Definition { get; }
 
@@ -36,12 +39,7 @@ public interface IActivityDefinitionVersion
 
     /// <summary>
     /// Immutable content hash of this version's projection, computed by
-    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Used by the Model X
-    /// duplicate-detection path: when a subsequent reconciliation pass observes the same
-    /// <c>(DefinitionId, Version)</c>, the incoming candidate's hash is compared to this
-    /// stored value. Mismatch signals "the source is broken — same identity, different
-    /// content" and the reconciler throws; match → skip or throw per duplicate-handling
-    /// configuration.
+    /// <c>IActivityDefinitionHasher</c> at reconciliation time (Model X duplicate-detection).
     /// </summary>
     string? ReconcilliationHash { get; }
 }

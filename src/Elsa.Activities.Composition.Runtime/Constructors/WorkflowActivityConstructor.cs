@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Composition.Runtime.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Primitives;
+using Elsa.Workflows.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Composition.Runtime.Constructors;

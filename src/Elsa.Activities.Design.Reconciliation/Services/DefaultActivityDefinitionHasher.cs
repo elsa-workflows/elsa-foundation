@@ -65,8 +65,8 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     private static object ProjectVersion(IActivityDefinitionVersion v) => new
     {
         v.Version,
-        v.ImplementationKind,
-        v.ImplementationDescriptor,
+        v.DescriptorType,
+        v.DescriptorPayload,
         v.ExecutionType,
         v.Inputs,
         v.Outputs,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 
@@ -8,8 +9,8 @@ public sealed record ActivityDefinitionVersionImport(
     string Version,
     string DefinitionId,
     string ActivityTypeKey,
-    string ImplementationKind,
-    IImplementationDescriptor ImplementationDescriptor,
+    string DescriptorType,
+    JsonElement DescriptorPayload,
     IActivityDefinition Definition,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,

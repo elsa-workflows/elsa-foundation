@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Core.Contracts;
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 
 namespace Elsa.Activities.Design.Api.Models;
@@ -6,8 +6,8 @@ namespace Elsa.Activities.Design.Api.Models;
 public sealed record ActivityDefinitionVersionDetailsView(
     string Id,
     string Version,
-    string ImplementationKind,
-    IImplementationDescriptor ImplementationDescriptor,
+    string DescriptorType,
+    JsonElement DescriptorPayload,
     ActivityDefinitionView Definition,
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,

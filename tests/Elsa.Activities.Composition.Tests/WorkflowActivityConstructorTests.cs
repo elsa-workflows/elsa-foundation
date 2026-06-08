@@ -4,7 +4,7 @@ using Elsa.Activities.Composition.Runtime.Constructors;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Expressions.Models;
-using Elsa.Workflows.Primitives;
+using Elsa.Workflows.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -58,6 +58,6 @@ public class WorkflowActivityConstructorTests
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
         var constructor = new WorkflowActivityConstructor(serviceProvider);
 
-        Assert.Equal("Elsa.Workflows.Primitives.WorkflowIdentity", constructor.DescriptorType);
+        Assert.Equal("Elsa.Workflows.Primitives.Models.WorkflowIdentity", constructor.DescriptorType);
     }
 }

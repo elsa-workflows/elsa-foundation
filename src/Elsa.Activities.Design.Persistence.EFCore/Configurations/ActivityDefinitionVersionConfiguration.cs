@@ -18,8 +18,8 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
             builder.Property(x => x.Version).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.SemVerSortKey).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-            builder.Property(x => x.ImplementationKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-            builder.Property(x => x.ImplementationDescriptorPayload).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.DescriptorType).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.DescriptorPayloadSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.InputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.OutputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.PortsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
@@ -33,7 +33,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
             builder.Property(x => x.OutputsSource).HasMaxLength(-1);
             builder.Property(x => x.InputsSource).HasMaxLength(-1);
             builder.Property(x => x.PortsSource).HasMaxLength(-1);
-            builder.Property(x => x.ImplementationDescriptorPayload).HasMaxLength(-1);
+            builder.Property(x => x.DescriptorPayloadSource).HasMaxLength(-1);
 
             builder
                 .HasOne(x => x.Definition)

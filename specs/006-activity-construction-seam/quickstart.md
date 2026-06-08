@@ -26,7 +26,7 @@ That's it. No universal component changes — verified by the no-branch structur
 - Source: `Elsa.Activities.Design.Reconciliation.Clr` scanner emits `TypeInformation.FromType(type)`.
 
 ## Worked: Workflow kind (in `Elsa.Activities.Composition`)
-- Descriptor: `Elsa.Workflows.Primitives.WorkflowIdentity(DefinitionId, VersionId, Version)`. `DescriptorType = "Elsa.Workflows.Primitives.WorkflowIdentity"`.
+- Descriptor: `Elsa.Workflows.Primitives.Models.WorkflowIdentity(DefinitionId, VersionId, Version)`. `DescriptorType = "Elsa.Workflows.Primitives.Models.WorkflowIdentity"`.
 - Constructor: `WorkflowActivityConstructor : IActivityConstructor<WorkflowIdentity>` → `typeof(WorkflowDefinitionActivity)` + apply identity + bag-fill (`IActivity.SyntheticProperties`). *(Construct-only this unit.)*
 - Source: `WorkflowActivityReconciliationSource` over usable-as-activity workflow versions.
 

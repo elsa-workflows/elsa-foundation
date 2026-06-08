@@ -1,17 +1,21 @@
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
 {
+    /// <summary>
+    /// Entity-loading handler for <see cref="ActivityDefinitionVersion"/>. Rehydrates the rich
+    /// input/output/port projections and parses the opaque descriptor payload string into a
+    /// <see cref="JsonElement"/>. It does NOT resolve a descriptor CLR type — the design domain never
+    /// materialises the descriptor; only the runtime feature that owns the descriptor type does.
+    /// </summary>
     public sealed class ActivityDefinitionVersionLoadingHandler(
         IPayloadSerializer payloadSerializer,
-        IImplementationDescriptorRegistry descriptorRegistry,
         ILogger<ActivityDefinitionVersionLoadingHandler> logger)
         : IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>
     {
@@ -34,26 +38,11 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
                 logger.LogError(exp, "Could not deserialize activity version inputs/outputs/ports: {VersionId}. Reverting to default state", entity.Id);
             }
 
-            if (!string.IsNullOrWhiteSpace(entity.ImplementationDescriptorPayload))
+            if (!string.IsNullOrWhiteSpace(entity.DescriptorPayloadSource))
             {
-                var descriptorType = descriptorRegistry.Resolve(entity.ImplementationKind)
-                    ?? throw new ActivityDescriptorDeserialisationException(
-                        entity.Id,
-                        entity.ImplementationKind,
-                        $"No implementation descriptor type registered for kind '{entity.ImplementationKind}' on version '{entity.Id}'. The owning module may not be installed.");
-
-                try
-                {
-                    entity.ImplementationDescriptor = (IImplementationDescriptor)payloadSerializer.Deserialize(entity.ImplementationDescriptorPayload, descriptorType);
-                }
-                catch (Exception inner)
-                {
-                    throw new ActivityDescriptorDeserialisationException(
-                        entity.Id,
-                        entity.ImplementationKind,
-                        $"Failed to deserialise implementation descriptor payload for version '{entity.Id}' (kind '{entity.ImplementationKind}', target type '{descriptorType.FullName}'). Persisted row may be corrupt or the descriptor type may have changed shape.",
-                        inner);
-                }
+                // Parse to an independent JsonElement (Clone so it outlives the JsonDocument).
+                using var document = JsonDocument.Parse(entity.DescriptorPayloadSource);
+                entity.DescriptorPayload = document.RootElement.Clone();
             }
 
             return ValueTask.CompletedTask;

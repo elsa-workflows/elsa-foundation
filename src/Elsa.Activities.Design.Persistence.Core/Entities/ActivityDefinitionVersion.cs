@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Versioning;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
@@ -29,30 +30,29 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     public string DefinitionId { get; init; } = definitionId;
 
     /// <summary>
-    /// Registry lookup key matching <see cref="ImplementationDescriptor"/>.<c>Kind</c>.
-    /// Write-once — immutability enforced via <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
-    /// </summary>
-    public string ImplementationKind { get; set; } = null!;
-
-    /// <summary>
-    /// Serialized JSON form of <see cref="ImplementationDescriptor"/>. A real string property
-    /// on the entity (NOT an EF Core shadow property); post-insert immutability enforced via
+    /// The descriptor type's <c>FullName</c> — the runtime construction registry's lookup key.
+    /// Set by the reconciler (or the design API) from the descriptor it produced. The design domain
+    /// never resolves it to a CLR type. Write-once — immutability enforced via
     /// <c>PropertySaveBehavior.Throw</c> in the EF Core entity configuration.
-    /// The interface boundary <see cref="IActivityDefinitionVersion"/>
-    /// does not expose it — the property is a "shadow" in our domain sense (invisible to
-    /// other domains), distinct from EF Core's "shadow" (not on the CLR class).
     /// </summary>
-    public string? ImplementationDescriptorPayload { get; set; }
+    public string DescriptorType { get; set; } = null!;
 
     /// <summary>
-    /// Polymorphic descriptor — the rich projection of
-    /// <see cref="ImplementationDescriptorPayload"/>. <see cref="NotMappedAttribute"/>:
-    /// EF Core does not persist this property directly. Hydrated by the loading handler
-    /// from the payload + the descriptor registry's kind→type lookup; written back to the
-    /// payload by the saving handler.
+    /// Serialized JSON form of <see cref="DescriptorPayload"/>. A real string property on the entity
+    /// (NOT an EF Core shadow property); post-insert immutability enforced via
+    /// <c>PropertySaveBehavior.Throw</c>. The interface boundary does not expose it directly — it is a
+    /// domain shadow; the round-trippable <see cref="DescriptorPayload"/> view is the exposed form.
+    /// </summary>
+    public string? DescriptorPayloadSource { get; set; }
+
+    /// <summary>
+    /// The descriptor payload as opaque JSON. <see cref="NotMappedAttribute"/>: EF Core does not
+    /// persist this directly. Hydrated by the loading handler by parsing
+    /// <see cref="DescriptorPayloadSource"/>; written back to that string by the saving handler. The
+    /// design domain never deserializes it into a concrete descriptor type.
     /// </summary>
     [NotMapped]
-    public IImplementationDescriptor ImplementationDescriptor { get; set; } = null!;
+    public JsonElement DescriptorPayload { get; set; }
 
     public string? InputsSource { get; set; } = inputsSource;
 

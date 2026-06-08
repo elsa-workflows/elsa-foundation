@@ -6,7 +6,7 @@ The design domain knows a descriptor as exactly two values and **never** deseria
 
 | Column | Type | Rule |
 |---|---|---|
-| `DescriptorType` | `string` (write-once) | The descriptor type's `FullName` (e.g. `Elsa.Primitives.Models.TypeInformation`, `Elsa.Workflows.Primitives.WorkflowIdentity`). Registry key at runtime. Replaces `ImplementationKind`. |
+| `DescriptorType` | `string` (write-once) | The descriptor type's `FullName` (e.g. `Elsa.Primitives.Models.TypeInformation`, `Elsa.Workflows.Primitives.Models.WorkflowIdentity`). Registry key at runtime. Replaces `ImplementationKind`. |
 | `DescriptorPayloadSource` | `string?` (write-once) | Serialized JSON of the descriptor. Opaque to design. Replaces `ImplementationDescriptorPayload`. |
 
 Entity also exposes `[NotMapped] JsonElement DescriptorPayload` — a round-trippable view of `DescriptorPayloadSource`. Replaces the old `[NotMapped] IImplementationDescriptor`.

@@ -35,8 +35,8 @@ public sealed class AddVersionCommandHandler(
         return new(command.Version, command.DefinitionId, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
-            ImplementationKind = command.ImplementationDescriptor.Kind,
-            ImplementationDescriptor = command.ImplementationDescriptor,
+            DescriptorType = command.DescriptorType,
+            DescriptorPayload = command.DescriptorPayload,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
             Ports = command.Ports ?? [],

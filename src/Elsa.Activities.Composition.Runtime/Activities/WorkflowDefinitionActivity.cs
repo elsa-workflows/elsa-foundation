@@ -1,6 +1,6 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Workflows.Primitives;
+using Elsa.Workflows.Primitives.Models;
 
 namespace Elsa.Activities.Composition.Runtime.Activities;
 

@@ -18,7 +18,7 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
     /// </summary>
     public string? Version { get; set; }
 
-    public string? ImplementationKind { get; set; }
+    public string? DescriptorType { get; set; }
 
     public ICollection<string>? Ids { get; set; }
 
@@ -48,8 +48,8 @@ public class ActivityDefinitionVersionFilter : IFilter<ActivityDefinitionVersion
                 queryable = queryable.Where(_ => false);
             }
         }
-        if (!string.IsNullOrWhiteSpace(ImplementationKind))
-            queryable = queryable.Where(x => x.ImplementationKind == ImplementationKind);
+        if (!string.IsNullOrWhiteSpace(DescriptorType))
+            queryable = queryable.Where(x => x.DescriptorType == DescriptorType);
         if (!string.IsNullOrWhiteSpace(SearchTerm))
             queryable = queryable.Where(x => x.Id.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.DefinitionId!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase));
 

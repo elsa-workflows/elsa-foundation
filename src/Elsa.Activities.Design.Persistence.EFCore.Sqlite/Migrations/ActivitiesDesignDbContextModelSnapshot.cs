@@ -78,11 +78,11 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     b.Property<int>("ExecutionType")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("ImplementationDescriptorPayload")
+                    b.Property<string>("DescriptorPayloadSource")
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ImplementationKind")
+                    b.Property<string>("DescriptorType")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

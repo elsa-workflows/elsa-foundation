@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Primitives;
+namespace Elsa.Workflows.Primitives.Models;
 
 /// <summary>
 /// A lightweight, dependency-free identity of a workflow definition version — usable anywhere.

@@ -192,8 +192,8 @@ public sealed class ActivityVersionReconciler(
         return new(version.Version, definitionId, executionType: version.ExecutionType)
         {
             Id = id,
-            ImplementationKind = version.ImplementationKind,
-            ImplementationDescriptor = version.ImplementationDescriptor,
+            DescriptorType = version.DescriptorType,
+            DescriptorPayload = version.DescriptorPayload,
             Outputs = version.Outputs,
             Inputs = version.Inputs,
             Ports = version.Ports,

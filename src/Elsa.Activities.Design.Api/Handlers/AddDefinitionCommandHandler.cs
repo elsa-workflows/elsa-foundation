@@ -58,8 +58,8 @@ public sealed class AddDefinitionCommandHandler(
         return new(initialVersion, definition.Id, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
         {
             Id = identityGenerator.Generate(),
-            ImplementationKind = command.ImplementationDescriptor.Kind,
-            ImplementationDescriptor = command.ImplementationDescriptor,
+            DescriptorType = command.DescriptorType,
+            DescriptorPayload = command.DescriptorPayload,
             Inputs = command.Inputs ?? [],
             Outputs = command.Outputs ?? [],
             Ports = command.Ports ?? [],

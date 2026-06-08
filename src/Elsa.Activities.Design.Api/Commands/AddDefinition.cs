@@ -1,5 +1,5 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Api.Models;
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 
@@ -9,7 +9,8 @@ public sealed record AddDefinition(
     string ActivityTypeKey,
     string SourceKind,
     string SourceId,
-    IImplementationDescriptor ImplementationDescriptor,
+    string DescriptorType,
+    JsonElement DescriptorPayload,
     string Category,
     string DisplayName,
     string? Description = null,

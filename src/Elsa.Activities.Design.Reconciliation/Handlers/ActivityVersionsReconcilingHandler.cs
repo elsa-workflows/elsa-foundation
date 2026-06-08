@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Reconciliation.Core;
@@ -14,12 +13,12 @@ namespace Elsa.Activities.Design.Reconciliation.Handlers;
 
 /// <summary>
 /// Handles <see cref="OnActivityVersionsReconciling"/> by pulling every registered
-/// <see cref="IActivityReconciliationSource"/> from DI, validating each contributed entry (kind
-/// known, descriptor structurally valid, kind/descriptor agree), and contributing one
-/// <c>IActivityDefinitionVersion</c> per entry. The handler is source-agnostic — CLR assembly
-/// scanning, JSON files, or any other source funnel through here identically. Validation throws
-/// <c>InvalidActivityVersionReconciliationEntryException</c> with entry context — the reconciler
-/// sees a domain-scoped failure, never a raw <c>JsonException</c>.
+/// <see cref="IActivityReconciliationSource"/> from DI and contributing one
+/// <c>IActivityDefinitionVersion</c> per entry. The handler is source-agnostic and
+/// descriptor-type-agnostic: it validates that each entry carries a <c>DescriptorType</c> and a
+/// descriptor payload, serialises the descriptor to opaque JSON, and stores
+/// <c>(DescriptorType, DescriptorPayload)</c> on the version. It never resolves the descriptor type to
+/// a CLR type (that happens only in the runtime feature that owns the type). No per-kind branch.
 /// </summary>
 public sealed class ActivityVersionsReconcilingHandler(
     IQueries<ActivityDefinition> definitionQueries,
@@ -27,10 +26,9 @@ public sealed class ActivityVersionsReconcilingHandler(
     IIdentityGenerator identityGenerator,
     IPayloadSerializer payloadSerializer,
     IEnumerable<IActivityReconciliationSource> sources,
-    IImplementationDescriptorRegistry descriptorRegistry,
     ISystemClock clock)
     : IEventHandler<OnActivityVersionsReconciling>
-{    
+{
     public async Task Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach (var source in sources)
@@ -43,7 +41,7 @@ public sealed class ActivityVersionsReconcilingHandler(
             for (var i = 0; i < entries.Length; i++)
             {
                 var entry = entries[i];
-                var descriptor = DeserializeImplementationDescriptor(entry, i);
+                var descriptorPayload = NormalizeDescriptor(entry, i);
 
                 var definition = await FindDefinition(entry.Id, cancellationToken);
                 definition ??= new ActivityDefinition
@@ -61,8 +59,8 @@ public sealed class ActivityVersionsReconcilingHandler(
                 {
                     Definition = definition,
                     Id = identityGenerator.Generate(),
-                    ImplementationDescriptor = descriptor,
-                    ImplementationKind = descriptor.Kind,
+                    DescriptorType = entry.DescriptorType,
+                    DescriptorPayload = descriptorPayload,
                     Inputs = entry.Inputs,
                     Outputs = entry.Outputs,
                     Ports = entry.Ports,
@@ -89,53 +87,23 @@ public sealed class ActivityVersionsReconcilingHandler(
         return await definitionQueries.Find(filter, cancellationToken);
     }
 
-    private IImplementationDescriptor DeserializeImplementationDescriptor(ActivityVersionReconciliationModel entry, int entryIndex)
+    /// <summary>
+    /// Validates the entry and returns its descriptor as an opaque <see cref="JsonElement"/>. The
+    /// descriptor may already be a <see cref="JsonElement"/> (JSON sources) or any object (CLR /
+    /// Workflow sources), which is serialised here. No concrete descriptor type is resolved.
+    /// </summary>
+    private JsonElement NormalizeDescriptor(ActivityVersionReconciliationModel entry, int entryIndex)
     {
-        if (string.IsNullOrWhiteSpace(entry.ImplementationKind))
-            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.ImplementationKind, $"'{nameof(entry.ImplementationKind)}' is required.");
+        if (string.IsNullOrWhiteSpace(entry.DescriptorType))
+            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.DescriptorType, $"'{nameof(entry.DescriptorType)}' is required.");
 
-        var descriptorElement = entry.ImplementationDescriptor is JsonElement jsonElement
+        var element = entry.Descriptor is JsonElement jsonElement
             ? jsonElement
-            : payloadSerializer.SerializeToElement(entry.ImplementationDescriptor);
+            : payloadSerializer.SerializeToElement(entry.Descriptor);
 
+        if (element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.DescriptorType, $"'{nameof(entry.Descriptor)}' is required.");
 
-        if (descriptorElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            throw new InvalidActivityVersionReconciliationEntryException(entryIndex, entry.ActivityTypeKey, entry.ImplementationKind, $"'{nameof(entry.ImplementationDescriptor)}' is required.");
-
-        var descriptorType = descriptorRegistry.Resolve(entry.ImplementationKind)
-            ?? throw new InvalidActivityVersionReconciliationEntryException(
-                entryIndex,
-                entry.ActivityTypeKey,
-                entry.ImplementationKind,
-                $"No implementation-descriptor type is registered for kind '{entry.ImplementationKind}'. The owning module may not be installed, or the kind value is misspelled."
-            );
-
-        IImplementationDescriptor descriptor;
-        try
-        {
-            descriptor = (IImplementationDescriptor)payloadSerializer.Deserialize(descriptorElement.GetRawText(), descriptorType);
-        }
-        catch (Exception inner)
-        {
-            throw new InvalidActivityVersionReconciliationEntryException(
-                entryIndex,
-                entry.ActivityTypeKey,
-                entry.ImplementationKind,
-                $"Failed to deserialise 'implementationDescriptor' into '{descriptorType.FullName}': {inner.Message}",
-                inner
-            );
-        }
-
-        if (!string.Equals(descriptor.Kind, entry.ImplementationKind, StringComparison.Ordinal))
-        {
-            throw new InvalidActivityVersionReconciliationEntryException(
-                entryIndex,
-                entry.ActivityTypeKey,
-                entry.ImplementationKind,
-                $"Kind mismatch: entry declares '{entry.ImplementationKind}' but the deserialised descriptor reports '{descriptor.Kind}'. The descriptor type's Kind property and the entry's '{nameof(entry.ImplementationKind)}' must agree."
-            );
-        }
-
-        return descriptor;
+        return element.Clone();
     }
 }
