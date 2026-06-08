@@ -28,6 +28,25 @@ Prefer stable, descriptive filenames such as:
 - `.agent-prefs/git-operating-model.md`
 - `.agent-prefs/session-execution-model.md`
 
+## Quick Setup
+
+If `.agent-prefs/` contains no preference files other than `.gitkeep`, run a short setup before substantial planning or multi-session work.
+
+Ask only for preferences needed by the current workflow:
+
+- Git workflow before pushing, opening pull requests, changing remotes, or choosing a branch strategy.
+- Session execution model before substantial planning or implementation that could happen in the current session or a fresh agent/thread.
+
+Write only the files the user selects. It is valid for a user to skip a preference and decide per session.
+
+## Session Execution Models
+
+Common local choices:
+
+- `current-session`: keep planning and execution in the active session unless the user asks otherwise.
+- `control-room-with-fresh-workers`: keep the active session as a lightweight control room; prepare reviewed handoff prompts and start fresh agent/thread workers for substantial planning or implementation.
+- `ask-each-time`: ask before substantial planning or implementation.
+
 ## Session Execution Model Template
 
 Create `.agent-prefs/session-execution-model.md` locally with content like:

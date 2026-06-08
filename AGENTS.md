@@ -78,6 +78,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - Keep committed preference catalogs/templates in `docs/reference/`.
 - Keep committed operating-model options in [docs/reference/git-operating-models.md](docs/reference/git-operating-models.md).
 - Keep per-user selections in `.agent-prefs/`; only `.agent-prefs/.gitkeep` is committed.
+- If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
 - If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.

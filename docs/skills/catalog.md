@@ -88,6 +88,14 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Output:** local `.agent-prefs/<preference-name>.md` content or a proposed preference file, plus any committed reference/catalog updates needed to make the preference reusable. Never commit personal preference files.
 
+### Initialize Agent Preferences
+
+**Use when:** `.agent-prefs/` has no preference files other than `.gitkeep`, or a user asks to set up local agent preferences for the repository.
+
+**Workflow:** read [../../AGENTS.md](../../AGENTS.md#personal-operating-preferences), [../reference/agent-preferences.md](../reference/agent-preferences.md), and [../reference/git-operating-models.md](../reference/git-operating-models.md) only if Git workflow setup is relevant. Ask a brief setup question for each preference needed by the current work, such as Git operating model before remote work or session execution model before substantial planning/multi-session work. Create only the selected ignored files under `.agent-prefs/`; leave skipped preferences unset. Use [Create Agent Preference](#create-agent-preference) for the actual file shape. Do not ask for preferences unrelated to the current task.
+
+**Output:** created local `.agent-prefs/*.md` files, or a short note that the user chose to decide per session. Never commit personal preference files.
+
 ## Speckit And Work-Unit Skills
 
 ### Speckit Flow Guide
