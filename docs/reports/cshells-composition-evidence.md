@@ -26,7 +26,7 @@ Source-of-truth boundary:
 Feature identity:
 
 - Concrete feature IDs are discoverable from `[ShellFeature(...)]`.
-- The map currently reports one duplicate explicit ID: `JavaScriptWorkflows` appears in both design and runtime JavaScript features. This may be intentional reuse or an ambiguity to resolve before generation.
+- Concrete feature IDs are unique after splitting workflow JavaScript design/runtime activation into `JavaScriptWorkflowsDesign` and `JavaScriptWorkflowsRuntime`.
 
 Feature activation:
 
@@ -60,7 +60,7 @@ External package compatibility:
 
 ## Missing Or Ambiguous
 
-- Whether duplicate feature ID `JavaScriptWorkflows` should be split, allowed, or resolved by assembly/context.
+- Whether future duplicate feature IDs should fail map generation or remain report-only findings.
 - Which project-reference edges are true feature activation requirements.
 - How to classify settings requiredness and sensitivity.
 - How to represent assembly scanning/loading prerequisites independently from selected features.
@@ -77,7 +77,7 @@ Scope:
 
 - Decide feature dependency kinds: required activation, optional companion, provider/default implementation, source/contributor, bridge, endpoint/API, compile-time-only reference.
 - Decide settings kinds: required, optional, defaulted, secret, connection string, filesystem path, type-name selector, collection, shell-wide, host-loading, feature-bound.
-- Resolve or explicitly allow duplicate feature IDs, starting with `JavaScriptWorkflows`.
+- Decide whether duplicate feature IDs should fail map generation or remain report-only findings.
 - Decide how assembly scanning/loading evidence participates in composition output.
 - Update the feature dependency map generator only after the classification language is approved.
 
@@ -86,4 +86,3 @@ Out of scope:
 - Do not implement the CShells Appsettings Generator.
 - Do not treat `src/Server` as a canonical shell composition.
 - Do not infer operationally required features solely from project references.
-

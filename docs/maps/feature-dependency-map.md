@@ -8,7 +8,7 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 - Feature classes: 38
 - Concrete features missing explicit ShellFeature ID: 0
-- Duplicate explicit feature IDs: 1
+- Duplicate explicit feature IDs: 0
 - Feature-bearing source projects: 35
 - IConfiguration feature-registration shape observed from: `src/Server/appsettings.json`
 
@@ -40,9 +40,7 @@ Observed default-shell feature keys:
 
 ## Duplicate Feature IDs
 
-| Feature ID | Feature classes | Projects |
-|---|---|---|
-| JavaScriptWorkflows | JavaScriptWorkflowsDesignFeature<br>JavaScriptWorkflowsRuntimeFeature | Elsa.Workflows.Design.JavaScript<br>Elsa.Workflows.Runtime.JavaScript |
+No duplicate explicit feature IDs were discovered.
 
 ## Feature Identity And Configuration Inputs
 
@@ -74,7 +72,7 @@ Observed default-shell feature keys:
 | Serialization | SerializationFeature | False | Elsa.Serialization | - | - | [SerializationFeature.cs](../../src/Elsa.Serialization/SerializationFeature.cs) |
 | Tasks | TasksFeature | False | Elsa.Tasks | - | - | [TasksFeature.cs](../../src/Elsa.Tasks/TasksFeature.cs) |
 | WorkflowsDesignApi | WorkflowsDesignApiFeature | False | Elsa.Workflows.Design.Api | - | - | [WorkflowsDesignApiFeature.cs](../../src/Elsa.Workflows.Design.Api/WorkflowsDesignApiFeature.cs) |
-| JavaScriptWorkflows | JavaScriptWorkflowsDesignFeature | False | Elsa.Workflows.Design.JavaScript | - | - | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa.Workflows.Design.JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
+| JavaScriptWorkflowsDesign | JavaScriptWorkflowsDesignFeature | False | Elsa.Workflows.Design.JavaScript | - | - | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa.Workflows.Design.JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
 | - | EFCoreWorkflowsPersistenceFeatureBase | True | Elsa.Workflows.Design.Persistence.EFCore | - | - | [EFCoreWorkflowsPersistenceFeatureBase.cs](../../src/Elsa.Workflows.Design.Persistence.EFCore/EFCoreWorkflowsPersistenceFeatureBase.cs) |
 | WorkflowsDesignPersistenceEFCoreSqlite | SqliteWorkflowsDesignPersistenceShellFeature | False | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | - | code default<br>sensitive or deployment-specific value signal | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa.Workflows.Design.Persistence.EFCore.Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
 | - | WorkflowsDesignReconciliationFeature | True | Elsa.Workflows.Design.Reconciliation | ReconcilerOptions: WorkflowVersionReconcilerOptions<br>Sources: virtual IEnumerable<IWorkflowReconciliationSource><br>StartupTaskOptions: WorkflowVersionReconcilerStartupTaskOptions | - | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa.Workflows.Design.Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
@@ -83,7 +81,7 @@ Observed default-shell feature keys:
 | WorkflowsRuntimeHttp | WorkflowsRuntimeHttpFeature | False | Elsa.Workflows.Runtime.Http | AuthorizationHandlerType: string<br>BasePath: string<br>FaultHandlerType: string<br>RouteResolverType: string | code default<br>type-name selection signal | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa.Workflows.Runtime.Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptEndpoints | JavaScriptActivitiesEndpointsFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa.Workflows.Runtime.JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivities | JavaScriptActivitiesFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesFeature.cs](../../src/Elsa.Workflows.Runtime.JavaScript/JavaScriptActivitiesFeature.cs) |
-| JavaScriptWorkflows | JavaScriptWorkflowsRuntimeFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/Elsa.Workflows.Runtime.JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
+| JavaScriptWorkflowsRuntime | JavaScriptWorkflowsRuntimeFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/Elsa.Workflows.Runtime.JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
 | Elsa3ImportJsonActivities | Elsa3ImportActivitiesFeature | False | Elsa3.Activities.Design.Import | WorkflowCollectionSourceTypes: IEnumerable<string> | type-name selection signal<br>validation/requiredness guard in code | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3.Activities.Design.Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3Mapping | Elsa3MappingFeature | False | Elsa3.Mapping | - | - | [Elsa3MappingFeature.cs](../../src/Elsa3.Mapping/Elsa3MappingFeature.cs) |
 
@@ -118,14 +116,14 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | Serialization | Elsa.Serialization | Elsa.Primitives (Primitives) | Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Newtonsoft.Json 13.0.4 |
 | Tasks | Elsa.Tasks | Elsa.Primitives (Primitives) | Elsa.Locking.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsDesignApi | Elsa.Workflows.Design.Api | - | Elsa.Events.Core<br>Elsa.FastEndpoints<br>Elsa.Workflows.Design.Persistence.Core | - |
-| JavaScriptWorkflows | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Options 10.0.8 |
+| JavaScriptWorkflowsDesign | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsDesignPersistenceEFCoreSqlite | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Workflows.Design.Persistence.EFCore (EFCoreWorkflowsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.FastEndpoints<br>Elsa.Mediator.Core | - |
 | WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | Elsa.Primitives (Primitives) | Elsa.Http.Core | CShells.Abstractions 0.0.24<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
 | JavaScriptEndpoints | Elsa.Workflows.Runtime.JavaScript | Elsa.Primitives (Primitives) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.FastEndpoints<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | JavaScriptActivities | Elsa.Workflows.Runtime.JavaScript | Elsa.Primitives (Primitives) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.FastEndpoints<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
-| JavaScriptWorkflows | Elsa.Workflows.Runtime.JavaScript | Elsa.Primitives (Primitives) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.FastEndpoints<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
+| JavaScriptWorkflowsRuntime | Elsa.Workflows.Runtime.JavaScript | Elsa.Primitives (Primitives) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.FastEndpoints<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | Elsa3ImportJsonActivities | Elsa3.Activities.Design.Import | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | Elsa3Mapping | Elsa3.Mapping | - | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models | CShells.Abstractions 0.0.24 |
 
