@@ -10,7 +10,8 @@ This is the short orientation path. It explains where things are and why they ex
 - `tests/` contains focused tests for foundation behavior.
 - `specs/` contains Speckit work units and feature plans.
 - `.specify/` contains Speckit templates, workflows, extensions, and the two-layer constitution.
-- `docs/` contains lookup knowledge: glossary, skills, maps, and reports.
+- `docs/` contains lookup knowledge: glossary, skills, maps, reports, reference docs, and program goals.
+- `docs/program-goals/` contains active mid-term goal buckets and roadmap notes.
 - `.claude/` contains Claude-specific Speckit adapters.
 
 ## The architecture in one pass
@@ -31,6 +32,8 @@ The main patterns to recognize:
 
 `Elsa.Workflows.Design.*` owns authoring and persisted workflow definitions. `Elsa.Workflows.Runtime.*` owns execution. Runtime must not depend directly on Design. Published/executable artifacts are the intended boundary between them.
 
+Generated maps track current design/runtime reference signals, and known deferred exceptions belong in reports rather than in this tour.
+
 For the detailed worked example, read [seams and bridges](seams.md).
 
 ## Extension points
@@ -41,5 +44,7 @@ The repo-wide extension-point index is [../EXTENSION_POINTS.md](../EXTENSION_POI
 
 - Need a definition? Use [glossary/root.md](glossary/root.md) or [glossary/elsa.md](glossary/elsa.md).
 - Need to perform a task? Use [skills/catalog.md](skills/catalog.md).
+- Need active priorities? Use [program-goals/README.md](program-goals/README.md).
+- Need generated facts? Use [maps/README.md](maps/README.md).
 - Need current gaps? Use [reports/unfinished-work.md](reports/unfinished-work.md).
 - Need enforceable gates? Use the two constitution files under `.specify/memory/`.
