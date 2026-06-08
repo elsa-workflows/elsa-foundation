@@ -26,6 +26,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 - Keep program-goal files concise and amendable.
 - Record active objectives and roadmap notes here instead of in `AGENTS.md`.
+- Treat short-term roadmap notes as temporary coordination aids. When the units they name are implemented or captured in their normal source-of-truth layers, check the result against the program goal and remove or replace the completed short-term objectives.
 - Link to reports, specs, maps, branches, and PRs instead of copying their content.
 - If a goal becomes a ratified gate, move the gate to the constitution and leave a link here.
 - If a goal becomes a repeatable workflow, move the workflow to `docs/skills/catalog.md` and leave a link here.

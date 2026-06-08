@@ -53,15 +53,14 @@ This goal does not mean every session must repeat the full program overview. Use
 
 ## Current Roadmap Note
 
-Temporary correction: avoid drifting too deeply into CShells composition work before the broader Elsa-brain program is balanced. Prioritize these next units unless the user explicitly redirects:
+The temporary alignment sequence has been completed and captured in the normal source-of-truth layers:
 
-1. Program Alignment Review: compare current repo surfaces against the original Elsa-brain intent; identify over-invested, under-invested, and appropriately provisional areas; recommend the next 3-5 work units.
-2. Architecture Tour Review: verify that `docs/architecture-tour.md` gives a concise orientation to the repo, core systems, and where to look next without duplicating glossary or constitution material.
-3. Glossary Coverage Audit: check whether key architecture terms are centralized in `docs/glossary/` and not re-explained across skills, reports, maps, or constitutions.
-4. What's Next / Unfinished Work Re-ranking: re-rank unfinished work by Elsa-brain milestone rather than recent-topic momentum.
-5. Return to CShells composition only after the broader alignment is checked: use the provisional classification report as input, but do not keep refining generator-specific taxonomy until the overall brain surfaces are balanced.
+- Program alignment is reflected in this goal file and [unfinished-work re-ranking](../reports/unfinished-work-reranking.md).
+- Architecture-tour routing is captured in [architecture tour review](../reports/architecture-tour-review.md).
+- Glossary coverage is captured in [glossary coverage audit](../reports/glossary-coverage-audit.md).
+- The active "what next" priority view now lives in [unfinished work](../reports/unfinished-work.md).
 
-Remove this roadmap note after the alignment steps are completed and captured in the normal source-of-truth layers.
+Use [unfinished work](../reports/unfinished-work.md) for current next-step ranking. Do not keep completed short-term objectives in this goal file once their outputs are captured elsewhere.
 
 ## Drift / Review Notes
 
