@@ -1,17 +1,25 @@
 ﻿using Elsa.Primitives.Entities;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
-public sealed class WorkflowDefinitionVersion(string definitionId, int version, string? stateSource = null, DateTimeOffset? sourceCreatedAt = null)
+public sealed class WorkflowDefinitionVersion(string definitionId, string version, string? stateSource = null, DateTimeOffset? sourceCreatedAt = null)
     : TenantEntity, IWorkflowDefinitionVersion
 {
     /// <summary>
-    /// The version number of this workflow definition version
+    /// Author-controlled SemVer 2.0.0 version string of this workflow definition version.
     /// </summary>
-    public int Version { get; init; } = version;
+    public string Version { get; init; } = version;
+
+    /// <summary>
+    /// Persistence-only normalised key whose ordinal ordering equals SemVer precedence (computed
+    /// once via <see cref="SemVer.ToSortKey(string)"/>). Drives DB-side ORDER BY and latest-version
+    /// resolution. A domain shadow (§2.9.1): present on the entity, not exposed via the interface.
+    /// </summary>
+    public string SemVerSortKey { get; init; } = SemVer.ToSortKey(version);
 
     /// <summary>
     /// The id of the workflow definition
@@ -44,4 +52,18 @@ public sealed class WorkflowDefinitionVersion(string definitionId, int version, 
     public DateTimeOffset? SourceCreatedAt { get; init; } = sourceCreatedAt;
 
     IWorkflowDefinition IWorkflowDefinitionVersion.Definition => Definition ?? throw new ArgumentNullException(nameof(Definition));
+
+    /// <summary>
+    /// Builds the persistence entity from any <see cref="IWorkflowDefinitionVersion"/> (e.g. a
+    /// factory read-model). The ctor recomputes <see cref="SemVerSortKey"/>; the saving handler
+    /// serialises <see cref="State"/> into <c>StateSource</c>. The <see cref="Definition"/>
+    /// navigation is left unset — the write command wires the relationship via <see cref="DefinitionId"/>.
+    /// Pass <paramref name="definitionId"/> to rebind the version to a different definition.
+    /// </summary>
+    public static WorkflowDefinitionVersion From(IWorkflowDefinitionVersion source, string? definitionId = null) =>
+        new(definitionId ?? source.DefinitionId, source.Version, sourceCreatedAt: source.SourceCreatedAt)
+        {
+            Id = source.Id,
+            State = source.State,
+        };
 }

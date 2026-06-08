@@ -25,7 +25,7 @@ public static class WorkflowDefinitionVersionQueryExtensions
         {
             DefinitionId = workflowDefinitionId
         };
-        var orderDefinition = new OrderDefinition<WorkflowDefinitionVersion, int>(e => e.Version, OrderDirection.Descending);
+        var orderDefinition = new OrderDefinition<WorkflowDefinitionVersion, string>(e => e.SemVerSortKey, OrderDirection.Descending);
         var result = await queries.Query(filter, orderDefinition, cancellationToken);
         return result.FirstOrDefault();
     }

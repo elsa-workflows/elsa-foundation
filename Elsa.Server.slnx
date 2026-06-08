@@ -14,7 +14,6 @@
     <Project Path="src/Elsa.Expressions.JavaScript.Rendering.Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa.Http.Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa.Locking.Core/Elsa.Locking.Core.csproj" />
-    <Project Path="src/Elsa.Mapping.Core/Elsa.Mapping.Core.csproj" />
     <Project Path="src/Elsa.Mediator.Core/Elsa.Mediator.Core.csproj" Id="a3621d18-ab71-455e-b8ec-84b9ac165608" />
     <Project Path="src/Elsa.Events.Core/Elsa.Events.Core.csproj" />
     <Project Path="src/Elsa.Events.Strategies/Elsa.Events.Strategies.csproj" />
@@ -54,7 +53,6 @@
     <Project Path="src/Elsa.Http.JavaScript/Elsa.Http.JavaScript.csproj" />
     <Project Path="src/Elsa.Http/Elsa.Http.csproj" />
     <Project Path="src/Elsa.Locking.FileSystem/Elsa.Locking.FileSystem.csproj" Id="d3c5ba84-c00b-4357-9095-3f3d74d995c3" />
-    <Project Path="src/Elsa.Mapping/Elsa.Mapping.csproj" Id="cc07cf93-05f8-4226-9060-1c8ccd8d0817" />
     <Project Path="src/Elsa.Mediator/Elsa.Mediator.csproj" Id="0f0d0ba0-8e28-4782-9af8-a45a5b94becb" />
     <Project Path="src/Elsa.Events/Elsa.Events.csproj" />
     <Project Path="src/Elsa.Persistence.EFCore.Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" Id="73c61d76-90cb-4e55-a714-ba549b8375c9" />
@@ -67,6 +65,7 @@
     <Project Path="src/Elsa.Workflows.Design.Persistence.EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" Id="92a70432-2e17-427a-89cf-ac35f850a352" />
     <Project Path="src/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
+    <Project Path="src/Elsa.Workflows.Publishing.Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <Project Path="src/Elsa.Workflows.Runtime.StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj" Id="730e3ea0-8d78-48fd-ae5d-dae6b4c7cc8b" />
@@ -79,5 +78,6 @@
     <Project Path="tests/Elsa.Activities.Runtime.Tests/Elsa.Activities.Runtime.Tests.csproj" />
     <Project Path="tests/Elsa.Activities.Design.Tests.ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
     <Project Path="tests/Elsa.Workflows.Design.Tests/Elsa.Workflows.Design.Tests.csproj" />
+    <Project Path="tests/Elsa.Workflows.Publishing.Api.Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
 </Solution>

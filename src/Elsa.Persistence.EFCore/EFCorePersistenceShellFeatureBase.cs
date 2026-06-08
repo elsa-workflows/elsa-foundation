@@ -54,6 +54,16 @@ namespace Elsa.Persistence.EFCore
         public bool UseQueries { get; set; } = true;
 
         /// <summary>
+        /// Assemblies scanned for the typed <see cref="Contracts.IEntitySavingHandler{TDbContext,TEntity}"/>
+        /// / <see cref="Contracts.IEntityLoadingHandler{TDbContext,TEntity}"/> contributors. Both handler
+        /// kinds are registered from the SAME list (saving under <see cref="UseCommands"/>, loading under
+        /// <see cref="UseQueries"/>), so a feature can never register one direction without the other.
+        /// Defaults to the concrete feature's own assembly; a domain base overrides this to add the
+        /// assembly that actually holds its handlers (typically the intermediate <c>.EFCore</c> assembly).
+        /// </summary>
+        protected virtual IEnumerable<Assembly> EntityHandlerAssemblies => [GetType().Assembly];
+
+        /// <summary>
         /// Gets or sets additional options to configure the database context.
         /// When not explicitly set, falls back to shared settings if available.
         /// </summary>
@@ -96,14 +106,23 @@ namespace Elsa.Persistence.EFCore
             })
             .AddScoped<IStartupTask, RunMigrationsStartupTask<TDbContext>>();
 
-            // COMMANDS & QUERIES
+            // COMMANDS & QUERIES. The typed entity handlers are registered here from the SAME
+            // assembly list for both directions — saving with the command side, loading with the
+            // query side — so a feature can never wire one direction without the other (the
+            // ApplyEntity{Saving,Loading}Handlers aggregators above dispatch whatever is registered).
+            var handlerAssemblies = EntityHandlerAssemblies.Distinct().ToArray();
+
             if (UseCommands)
             {
                 services.ConfigureCommands<TDbContext>();
+                foreach (var assembly in handlerAssemblies)
+                    services.AddEntitySavingHandlersFrom(assembly);
             }
             if (UseQueries)
             {
                 services.ConfigureQueries<TDbContext>();
+                foreach (var assembly in handlerAssemblies)
+                    services.AddEntityLoadingHandlersFrom(assembly);
             }
 
             OnAfterConfigured(services);

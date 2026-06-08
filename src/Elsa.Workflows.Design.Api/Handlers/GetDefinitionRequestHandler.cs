@@ -1,10 +1,9 @@
-﻿using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Extensions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
@@ -12,8 +11,7 @@ namespace Elsa.Workflows.Design.Api.Handlers;
 public sealed class GetDefinitionRequestHandler(
     IQueries<WorkflowDefinitionVersion> versionQueries,
     IQueries<WorkflowDefinition> defQueries,
-    IQueries<WorkflowDefinitionDraft> draftQueries,
-    IObjectMapper mapper)
+    IQueries<WorkflowDefinitionDraft> draftQueries)
     : IRequestHandler<GetDefinition, WorkflowDefinitionDetailsView>
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
@@ -28,13 +26,9 @@ public sealed class GetDefinitionRequestHandler(
         var versions = await versionsTask;
         var draft = await draftTask;
 
-        var mappedDraft = draft is not null
-            ? await mapper.Map<WorkflowDefinitionStateView>(draft, cancellationToken)
-            : null;
-
         return new WorkflowDefinitionDetailsView(
-            await mapper.Map<WorkflowDefinitionView>(definition, cancellationToken),
-            mappedDraft,
+            definition.ToView(),
+            draft?.State.ToStateView(),
             versions
         );
     }

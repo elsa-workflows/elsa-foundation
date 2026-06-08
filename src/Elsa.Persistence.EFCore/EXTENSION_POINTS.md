@@ -66,6 +66,30 @@ These contributor interfaces run through their own dispatch mechanism, not throu
 
 ---
 
+## Writing a persistence feature (`EFCorePersistenceShellFeatureBase<TDbContext>`)
+
+A domain's persistence feature derives from `EFCorePersistenceShellFeatureBase<TDbContext>`. The base
+registers the two aggregators (`ApplyEntitySavingHandlers` / `ApplyEntityLoadingHandlers`) once, then
+registers your typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>` from a single list — **both
+directions together**, so you can never wire one and forget the other.
+
+- **`protected virtual IEnumerable<Assembly> EntityHandlerAssemblies`** — override this to return the
+  assembly/assemblies that hold your handlers. It defaults to `[GetType().Assembly]` (the concrete
+  feature's own assembly), but handlers usually live in the intermediate `*.EFCore` domain assembly,
+  so a domain base typically returns `[GetType().Assembly, typeof(<ThisDomainBase>).Assembly]`. The
+  base scans this list for **both** saving and loading handlers (saving gated by `UseCommands`, loading
+  by `UseQueries`). You do **not** call `AddEntitySavingHandlersFrom` / `AddEntityLoadingHandlersFrom`
+  yourself.
+- **Entity construction** — domain entities are built through their `I<Entity>Factory` (in the domain
+  `.Design.Core`, returning the read interface) + the entity's static `From(IInterface)` at the persist
+  boundary, not via object-mappers. Register the factory implementations (which live in the domain
+  `.Design.Persistence.Core`) in the feature's `OnBeforeConfiguring` / `OnAfterConfigured`.
+
+See `EFCoreActivitiesPersistenceFeatureBase` / `EFCoreWorkflowsPersistenceFeatureBase` for worked
+examples (both override `EntityHandlerAssemblies` and register their factories).
+
+---
+
 ## Events
 
 Both events are `IEvent` (framework §2.6.1). They are the EF Core persistence-lifecycle seams: a row is about to be flushed (`OnEntitySaving`) or has just been materialised (`OnEntityLoading`). Both are **Sequential / contribution** events — the publisher needs the contributors to have run (columns serialised / projections hydrated) before it proceeds.

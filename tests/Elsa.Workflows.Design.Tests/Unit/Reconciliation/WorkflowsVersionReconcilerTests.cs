@@ -26,7 +26,7 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Fresh_definition_calls_both_add_definition_and_add_version()
     {
-        var incoming = BuildIncomingVersion(definitionId: "wf-new", version: 1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
         var sender = new CapturingSender { ToContribute = [incoming] };
         var defs = new StubQueries<WorkflowDefinition>();
         var versions = new StubQueries<WorkflowDefinitionVersion>();
@@ -40,13 +40,13 @@ public sealed class WorkflowsVersionReconcilerTests
         Assert.Equal("wf-new", addDef.Added[0].Id);
         Assert.Single(addVer.Added);
         Assert.Equal("wf-new", addVer.Added[0].DefinitionId);
-        Assert.Equal(1, addVer.Added[0].Version);
+        Assert.Equal("1.0.0", addVer.Added[0].Version);
     }
 
     [Fact]
     public async Task Existing_definition_new_version_calls_add_version_only()
     {
-        var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: 2);
+        var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: "2.0.0");
         var existingDef = new WorkflowDefinition { Id = "wf-existing", Name = "Existing" };
 
         var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
@@ -61,15 +61,15 @@ public sealed class WorkflowsVersionReconcilerTests
 
         Assert.Empty(addDef.Added);
         Assert.Single(addVer.Added);
-        Assert.Equal(2, addVer.Added[0].Version);
+        Assert.Equal("2.0.0", addVer.Added[0].Version);
     }
 
     [Fact]
     public async Task Duplicate_version_with_Skip_handling_does_not_add()
     {
-        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: 1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
         var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
-        var existingVersion = new WorkflowDefinitionVersion("wf-dup", 1);
+        var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
 
         var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
         var versions = new StubQueries<WorkflowDefinitionVersion>().With(existingVersion);
@@ -88,9 +88,9 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Duplicate_version_with_Throw_handling_throws()
     {
-        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: 1);
+        var incoming = BuildIncomingVersion(definitionId: "wf-dup", version: "1.0.0");
         var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
-        var existingVersion = new WorkflowDefinitionVersion("wf-dup", 1);
+        var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
 
         var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
         var versions = new StubQueries<WorkflowDefinitionVersion>().With(existingVersion);
@@ -117,17 +117,17 @@ public sealed class WorkflowsVersionReconcilerTests
             NullLogger<WorkflowsVersionReconciler>.Instance,
             sender,
             options,
-            new SequentialIdGenerator(),
             defs,
             versions,
             addDef,
             addVer);
     }
 
-    private static IWorkflowDefinitionVersion BuildIncomingVersion(string definitionId, int version) => new StubIncomingVersion
+    private static IWorkflowDefinitionVersion BuildIncomingVersion(string definitionId, string version) => new StubIncomingVersion
     {
         Id = string.Empty,
         Version = version,
+        DefinitionId = definitionId,
         DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = "Stub" },
         State = new WorkflowDefinitionState([], [], [], [], [], null, null),
     };
@@ -145,7 +145,8 @@ public sealed class WorkflowsVersionReconcilerTests
     private sealed class StubIncomingVersion : IWorkflowDefinitionVersion
     {
         public string Id { get; init; } = default!;
-        public int Version { get; init; }
+        public string Version { get; init; } = default!;
+        public string DefinitionId { get; init; } = default!;
         public StubIncomingDefinition DefinitionFacade { get; init; } = default!;
         public IWorkflowDefinition Definition => DefinitionFacade;
         public WorkflowDefinitionState State { get; init; } = default!;

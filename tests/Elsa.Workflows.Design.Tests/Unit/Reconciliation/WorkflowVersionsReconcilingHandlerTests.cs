@@ -1,5 +1,6 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Design.Reconciliation.Handlers;
@@ -18,7 +19,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     [Fact]
     public async Task Empty_sources_collection_contributes_nothing()
     {
-        var handler = new WorkflowVersionsReconcilingHandler(new SequentialIdGenerator(), sources: []);
+        var handler = NewHandler();
         var evt = new OnWorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
@@ -30,7 +31,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     public async Task Source_with_no_entries_contributes_nothing()
     {
         var source = new StubSource("Test", "test-1", entries: []);
-        var handler = new WorkflowVersionsReconcilingHandler(new SequentialIdGenerator(), sources: [source]);
+        var handler = NewHandler(source);
         var evt = new OnWorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
@@ -43,11 +44,11 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     {
         var entries = new[]
         {
-            Entry("wf-a", "Workflow A", version: 1),
-            Entry("wf-b", "Workflow B", version: 2),
+            Entry("wf-a", "Workflow A", version: "1.0.0"),
+            Entry("wf-b", "Workflow B", version: "2.0.0"),
         };
         var source = new StubSource("Json", "test-source", entries);
-        var handler = new WorkflowVersionsReconcilingHandler(new SequentialIdGenerator(), sources: [source]);
+        var handler = NewHandler(source);
         var evt = new OnWorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
@@ -56,16 +57,16 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         Assert.Equal(2, versions.Count);
         Assert.Equal("wf-a", versions[0].Definition.Id);
         Assert.Equal("Workflow A", versions[0].Definition.Name);
-        Assert.Equal(1, versions[0].Version);
+        Assert.Equal("1.0.0", versions[0].Version);
         Assert.Equal("wf-b", versions[1].Definition.Id);
-        Assert.Equal(2, versions[1].Version);
+        Assert.Equal("2.0.0", versions[1].Version);
     }
 
     [Fact]
     public async Task Entry_without_DefinitionId_gets_a_freshly_minted_id()
     {
-        var source = new StubSource("Json", "test", [Entry(null, "Anon", version: 1)]);
-        var handler = new WorkflowVersionsReconcilingHandler(new SequentialIdGenerator(), sources: [source]);
+        var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")]);
+        var handler = NewHandler(source);
         var evt = new OnWorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
@@ -78,9 +79,9 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     [Fact]
     public async Task Multiple_sources_aggregate_their_entries()
     {
-        var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: 1)]);
-        var sourceB = new StubSource("Workflow", "b", [Entry("wf-b", "Workflow B", version: 1)]);
-        var handler = new WorkflowVersionsReconcilingHandler(new SequentialIdGenerator(), sources: [sourceA, sourceB]);
+        var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")]);
+        var sourceB = new StubSource("Workflow", "b", [Entry("wf-b", "Workflow B", version: "1.0.0")]);
+        var handler = NewHandler(sourceA, sourceB);
         var evt = new OnWorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
@@ -90,7 +91,16 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         Assert.Contains(evt.Versions, v => v.Definition.Id == "wf-b");
     }
 
-    private static WorkflowVersionReconciliationModel Entry(string? definitionId, string name, int version) => new(
+    private static WorkflowVersionsReconcilingHandler NewHandler(params IWorkflowReconciliationSource[] sources)
+    {
+        var idGenerator = new SequentialIdGenerator();
+        return new WorkflowVersionsReconcilingHandler(
+            new WorkflowDefinitionFactory(idGenerator),
+            new WorkflowDefinitionVersionFactory(idGenerator),
+            sources);
+    }
+
+    private static WorkflowVersionReconciliationModel Entry(string? definitionId, string name, string version) => new(
         DefinitionId: definitionId,
         Name: name,
         Description: null,

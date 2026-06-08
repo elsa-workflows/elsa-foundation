@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Composition.Runtime.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,7 +16,11 @@ namespace Elsa.Activities.Composition.Runtime.Constructors;
 /// dependency. Does its own bag-filling — it does NOT use the CLR kind's binder (that would be a
 /// feature → feature reference).
 /// </summary>
-public sealed class WorkflowActivityConstructor(IServiceProvider serviceProvider)
+/// <remarks>
+/// The payload is materialised with <see cref="IPayloadSerializer"/> — the same contract that wrote it
+/// on the design side — so it round-trips faithfully regardless of casing/converter conventions.
+/// </remarks>
+public sealed class WorkflowActivityConstructor(IServiceProvider serviceProvider, IPayloadSerializer payloadSerializer)
     : IActivityConstructor<WorkflowIdentity>
 {
     public string DescriptorType => typeof(WorkflowIdentity).FullName!;
@@ -25,7 +30,7 @@ public sealed class WorkflowActivityConstructor(IServiceProvider serviceProvider
         IDictionary<string, InputArgument>? inputs,
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
-        => Construct(payload.Deserialize<WorkflowIdentity>()!, inputs, outputs, cancellationToken);
+        => Construct(payloadSerializer.Deserialize<WorkflowIdentity>(payload), inputs, outputs, cancellationToken);
 
     public ValueTask<IActivity> Construct(
         WorkflowIdentity descriptor,

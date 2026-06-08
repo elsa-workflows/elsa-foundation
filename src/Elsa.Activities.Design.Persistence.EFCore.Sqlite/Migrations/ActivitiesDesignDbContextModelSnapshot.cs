@@ -102,14 +102,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ReconciledAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ReconciledBy")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ReconcilliationHash")
+                    b.Property<string>("Hash")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SemVerSortKey")

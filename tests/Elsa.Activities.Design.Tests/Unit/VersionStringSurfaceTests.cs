@@ -1,12 +1,11 @@
 using System.Linq.Expressions;
 using Elsa.Activities.Design.Api.Handlers;
-using Elsa.Activities.Design.Api.Mapping;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Projections;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Mapping.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
@@ -47,12 +46,11 @@ public sealed class VersionStringSurfaceTests
     }
 
     [Fact]
-    public async Task DetailsView_ExposesAuthorSemverVerbatim()
+    public void DetailsView_ExposesAuthorSemverVerbatim()
     {
         var (version, _) = BuildPersistedVersion();
-        var mapper = new ActivityDefinitionVersionToDetailsView(new StubDefinitionMapping());
 
-        var view = await mapper.Map(version, CancellationToken.None);
+        var view = version.ToDetailsView();
 
         Assert.Equal(AuthorVersion, view.Version);
     }
@@ -73,12 +71,6 @@ public sealed class VersionStringSurfaceTests
         };
 
         return (version, definition);
-    }
-
-    private sealed class StubDefinitionMapping : IObjectMapping<ActivityDefinition, ActivityDefinitionView>
-    {
-        public ValueTask<ActivityDefinitionView> Map(ActivityDefinition source, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityDefinitionView(source.Id, source.ActivityTypeKey, source.Category, source.DisplayName, source.Description));
     }
 
     /// <summary>

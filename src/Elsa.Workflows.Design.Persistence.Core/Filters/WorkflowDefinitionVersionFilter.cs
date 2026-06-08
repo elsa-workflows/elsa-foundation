@@ -1,4 +1,5 @@
 ﻿using Elsa.Persistence.Core;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -12,7 +13,8 @@ public class WorkflowDefinitionVersionFilter : IFilter<WorkflowDefinitionVersion
     /// </summary>
     public string? Id { get; set; }
 
-    public int? Version { get; set; }
+    /// <summary>Exact semantic version to match (build-metadata-insensitive via the sort key).</summary>
+    public string? Version { get; set; }
 
     public string? DefinitionId { get; set; }
 
@@ -39,8 +41,18 @@ public class WorkflowDefinitionVersionFilter : IFilter<WorkflowDefinitionVersion
             queryable = queryable.Where(x => x.Id == Id);
         if (Ids != null)
             queryable = queryable.Where(x => Ids.Contains(x.Id));
-        if (Version.HasValue)
-            queryable = queryable.Where(x => x.Version == Version.Value);
+        if (!string.IsNullOrWhiteSpace(Version))
+        {
+            if (SemVer.TryParse(Version, out var semVer))
+            {
+                var sortKey = semVer.ToSortKey();
+                queryable = queryable.Where(x => x.SemVerSortKey == sortKey);
+            }
+            else
+            {
+                queryable = queryable.Where(_ => false);
+            }
+        }
         if (!string.IsNullOrWhiteSpace(DefinitionId))
             queryable = queryable.Where(x => x.DefinitionId == DefinitionId);
         if (!string.IsNullOrWhiteSpace(SearchTerm))

@@ -75,9 +75,8 @@ public sealed class FeatureRegistrationTests
 
         using var provider = services.BuildServiceProvider();
 
-        // Hasher is a singleton and must resolve directly.
-        Assert.NotNull(provider.GetService<IActivityDefinitionHasher>());
-
+        // The content hasher + entity factories are registered by the persistence feature now, not the
+        // reconciliation feature; this feature only wires the reconciler, its startup task, and handler.
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetService<IActivityVersionReconciler>());
     }

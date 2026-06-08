@@ -1,6 +1,5 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Primitives.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
 
@@ -8,13 +7,14 @@ namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 
 /// <summary>
 /// Universal handler for <see cref="OnWorkflowVersionsReconciling"/>. Reads every registered
-/// <see cref="IWorkflowReconciliationSource"/> in turn and contributes one
-/// <c>WorkflowDefinitionVersion</c> per entry by adding to <c>event.Versions</c>. Source modules
-/// extend the reconciliation feature by registering their own
-/// <see cref="IWorkflowReconciliationSource"/>; they do not write their own handlers.
+/// <see cref="IWorkflowReconciliationSource"/> in turn and contributes one definition version per
+/// entry (built via the factories) by adding to <c>event.Versions</c>. Source modules extend the
+/// reconciliation feature by registering their own <see cref="IWorkflowReconciliationSource"/>; they
+/// do not write their own handlers.
 /// </summary>
 public sealed class WorkflowVersionsReconcilingHandler(
-    IIdentityGenerator identityGenerator,
+    IWorkflowDefinitionFactory definitionFactory,
+    IWorkflowDefinitionVersionFactory versionFactory,
     IEnumerable<IWorkflowReconciliationSource> sources)
     : IEventHandler<OnWorkflowVersionsReconciling>
 {
@@ -26,22 +26,8 @@ public sealed class WorkflowVersionsReconcilingHandler(
 
             foreach (var entry in entries)
             {
-                var definition = new WorkflowDefinition
-                {
-                    Id = string.IsNullOrWhiteSpace(entry.DefinitionId)
-                        ? identityGenerator.Generate()
-                        : entry.DefinitionId,
-                    Name = entry.Name,
-                    Description = entry.Description,
-                };
-
-                var version = new WorkflowDefinitionVersion(definition.Id, entry.Version, sourceCreatedAt: entry.SourceCreatedAt)
-                {
-                    Id = identityGenerator.Generate(),
-                    Definition = definition,
-                    State = entry.State,
-                };
-
+                var definition = definitionFactory.Create(entry.Name, entry.Description, entry.DefinitionId);
+                var version = versionFactory.Create(definition, entry.Version, entry.State, entry.SourceCreatedAt);
                 domainEvent.Versions.Add(version);
             }
         }

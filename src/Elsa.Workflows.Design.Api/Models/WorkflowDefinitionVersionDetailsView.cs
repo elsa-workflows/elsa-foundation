@@ -2,7 +2,7 @@
 
 public sealed record WorkflowDefinitionVersionDetailsView(
     string Id,
-    int Version,
+    string Version,
     WorkflowDefinitionView Definition,
     WorkflowDefinitionStateView State
 );

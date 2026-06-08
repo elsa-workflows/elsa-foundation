@@ -6,7 +6,10 @@ public interface IWorkflowDefinitionVersion
 {
     string Id { get; }
 
-    int Version { get; }
+    /// <summary>Author-controlled SemVer 2.0.0 version string.</summary>
+    string Version { get; }
+
+    string DefinitionId { get; }
 
     IWorkflowDefinition Definition { get; }
 

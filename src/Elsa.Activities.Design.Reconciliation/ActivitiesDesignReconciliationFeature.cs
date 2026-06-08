@@ -17,6 +17,10 @@ namespace Elsa.Activities.Design.Reconciliation;
 /// <see cref="IActivityReconciliationSource"/> via their own feature (§2.6.1) — this feature
 /// owns none and is no longer extended by inheritance (FR-021, gate G13).
 /// </summary>
+[ShellFeature(
+    name: "ActivitiesDesignReconciliation",
+    Description = "Universal activity-design reconciliation pass; discovers IActivityReconciliationSource contributions from DI."
+)]
 public class ActivitiesDesignReconciliationFeature : IShellFeature
 {
     public ActivityVersionReconcilerOptions ReconcilerOptions { get; set; } = new();
@@ -28,11 +32,8 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
-        // Hasher is replaceable per §2.6.2: register a scoped default; provider modules
-        // may override by registering their own implementation first. Scoped per §2.5.1 —
-        // it executes (hashes) rather than holding application-wide static state.
-        services.AddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();
-
+        // The content hasher + entity factories are registered by the persistence feature (entity
+        // construction lives with persistence); the reconciler consumes the factories.
         services.AddScoped<IActivityVersionReconciler, ActivityVersionReconciler>();
 
         services.AddScoped<IStartupTask, ActivityVersionReconcilerStartupTask>();

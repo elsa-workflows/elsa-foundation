@@ -1,15 +1,15 @@
 ﻿using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Projections;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
-using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersion> versionQueries, IQueries<ActivityDefinition> defQueries, IObjectMapper mapper)
+public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersion> versionQueries, IQueries<ActivityDefinition> defQueries)
     : IRequestHandler<GetDefinition, ActivityDefinitionDetailsView>
 {
     public async Task<ActivityDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
@@ -21,9 +21,6 @@ public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersi
         var definition = await definitionTask;
         var versions = await versionsTask;
 
-        return new ActivityDefinitionDetailsView(
-            await mapper.Map<ActivityDefinitionView>(definition, cancellationToken),
-            versions
-        );
+        return new ActivityDefinitionDetailsView(definition.ToView(), versions);
     }
 }

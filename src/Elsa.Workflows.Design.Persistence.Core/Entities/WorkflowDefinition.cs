@@ -18,5 +18,14 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities
         /// Creates and returns a shallow copy of the workflow definition.
         /// </summary>
         public IWorkflowDefinition ShallowClone() => (WorkflowDefinition)MemberwiseClone();
+
+        /// <summary>Builds the persistence entity from any <see cref="IWorkflowDefinition"/> (e.g. a factory read-model).</summary>
+        public static WorkflowDefinition From(IWorkflowDefinition source) =>
+            new()
+            {
+                Id = source.Id,
+                Name = source.Name,
+                Description = source.Description,
+            };
     }
 }

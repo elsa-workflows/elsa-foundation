@@ -37,6 +37,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
                     WorkflowDefinitionId = table.Column<string>(type: "TEXT", nullable: false),
+                    SourceVersionId = table.Column<string>(type: "TEXT", nullable: true),
                     StateSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
@@ -60,7 +61,8 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                 columns: table => new
                 {
                     Id = table.Column<string>(type: "TEXT", nullable: false),
-                    Version = table.Column<int>(type: "INTEGER", nullable: false),
+                    Version = table.Column<string>(type: "TEXT", nullable: false),
+                    SemVerSortKey = table.Column<string>(type: "TEXT", nullable: false),
                     DefinitionId = table.Column<string>(type: "TEXT", nullable: false),
                     StateSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     SourceCreatedAt = table.Column<string>(type: "TEXT", nullable: true),

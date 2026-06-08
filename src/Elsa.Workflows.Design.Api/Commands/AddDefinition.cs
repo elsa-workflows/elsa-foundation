@@ -1,5 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Api.Models;
 
 namespace Elsa.Workflows.Design.Api.Commands;
 
@@ -8,4 +8,4 @@ public sealed record AddDefinition(
     string Description
 )
 
-: ICommand<WorkflowDefinitionVersionInfo>;
+: ICommand<WorkflowDefinitionDetailsView>;

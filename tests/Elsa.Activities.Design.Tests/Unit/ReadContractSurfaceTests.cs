@@ -72,7 +72,7 @@ public sealed class ReadContractSurfaceTests
             .Select(p => p.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Contains(nameof(IActivityDefinitionVersion.ReconcilliationHash), properties);
+        Assert.Contains(nameof(IActivityDefinitionVersion.Hash), properties);
     }
 
     [Fact]

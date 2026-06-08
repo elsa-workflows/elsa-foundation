@@ -39,4 +39,16 @@ public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionD
     /// Shadow property that contains the serialized state of this draft
     /// </summary>
     public string? StateSource { get; set; }
+
+    /// <summary>
+    /// Builds the persistence entity from any <see cref="IWorkflowDefinitionDraft"/> (e.g. a factory
+    /// read-model). The saving handler serialises <see cref="State"/> into <c>StateSource</c>.
+    /// </summary>
+    public static WorkflowDefinitionDraft From(IWorkflowDefinitionDraft source) =>
+        new()
+        {
+            Id = source.Id,
+            WorkflowDefinitionId = source.WorkflowDefinitionId,
+            State = source.State,
+        };
 }

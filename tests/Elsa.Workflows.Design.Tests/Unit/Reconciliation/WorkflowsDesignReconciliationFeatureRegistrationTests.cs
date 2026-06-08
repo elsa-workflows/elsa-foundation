@@ -2,7 +2,9 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
@@ -62,6 +64,10 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton<IQueries<WorkflowDefinitionVersion>, ThrowingQueries<WorkflowDefinitionVersion>>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
         services.AddSingleton<IAddCommand<WorkflowDefinitionVersion>, StubAddCommand<WorkflowDefinitionVersion>>();
+        // Entity factories are registered by the persistence feature in the host; the universal
+        // reconciling handler depends on them, so the smoke test supplies the real implementations.
+        services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
+        services.AddSingleton<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         return services;
     }
 

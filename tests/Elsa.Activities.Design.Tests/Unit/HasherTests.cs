@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Reconciliation.Services;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Primitives.Models;
 using Xunit;
 
@@ -26,16 +26,18 @@ public sealed class HasherTests
     }
 
     [Fact]
-    public void Hash_IsStable_AcrossReconciledAtDifferences()
+    public void Hash_IsStable_AcrossSourceProvenanceDifferences()
     {
-        // The hasher excludes ReconciledAt/ReconciledBy — two definitions that differ
-        // ONLY in those fields must hash to the same value, otherwise idempotency breaks
-        // (every reconciliation pass would generate a fresh hash and trigger a rewrite).
+        // The hasher excludes provenance (SourceKind/SourceId) — two versions that differ ONLY in
+        // where they came from must hash to the same value, otherwise idempotency breaks (re-sourcing
+        // the same activity would generate a fresh hash and trigger a rewrite).
         var hasher = new DefaultActivityDefinitionHasher();
-        var (def1, ver) = MakeFixture(provisionedAt: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var (def2, _) = MakeFixture(provisionedAt: new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero));
+        var (def, _) = MakeFixture();
 
-        Assert.Equal(hasher.Hash(def1, ver), hasher.Hash(def2, ver));
+        var verA = NewVersion(def, sourceKind: "CLR", sourceId: "folder-a");
+        var verB = NewVersion(def, sourceKind: "Json", sourceId: "catalog-b");
+
+        Assert.Equal(hasher.Hash(def, verA), hasher.Hash(def, verB));
     }
 
     [Fact]
@@ -63,16 +65,13 @@ public sealed class HasherTests
     }
 
     private static (IActivityDefinition def, IActivityDefinitionVersion ver) MakeFixture(
-        string displayName = "Display",
-        DateTimeOffset? provisionedAt = null)
+        string displayName = "Display")
     {
         var def = new FakeDefinition(
             Id: "def-id",
             ActivityTypeKey: "Acme.Foo",
             SourceKind: "Json",
             SourceId: "Acme.Pkg",
-            ReconciledAt: provisionedAt ?? new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
-            ReconciledBy: "test",
             Category: "Test",
             DisplayName: displayName,
             Description: null);
@@ -80,7 +79,11 @@ public sealed class HasherTests
         return (def, NewVersion(def));
     }
 
-    private static IActivityDefinitionVersion NewVersion(IActivityDefinition def, string id = "ver-id") =>
+    private static IActivityDefinitionVersion NewVersion(
+        IActivityDefinition def,
+        string id = "ver-id",
+        string sourceKind = "Json",
+        string sourceId = "Acme.Pkg") =>
         new FakeVersion(
             Id: id,
             Version: "1.0.0",
@@ -88,6 +91,8 @@ public sealed class HasherTests
             ActivityTypeKey: def.ActivityTypeKey,
             DescriptorType: typeof(TypeInformation).FullName!,
             DescriptorPayload: JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme.Pkg", "1.0.0.0")),
+            SourceKind: sourceKind,
+            SourceId: sourceId,
             ExecutionType: ActivityExecutionType.Action,
             Inputs: [],
             Outputs: [],
@@ -96,15 +101,14 @@ public sealed class HasherTests
 
     private sealed record FakeDefinition(
         string Id, string ActivityTypeKey, string SourceKind, string SourceId,
-        DateTimeOffset ReconciledAt, string? ReconciledBy,
         string Category, string? DisplayName, string? Description
     ) : IActivityDefinition;
 
     private sealed record FakeVersion(
         string Id, string Version, string DefinitionId, string ActivityTypeKey,
-        string DescriptorType, JsonElement DescriptorPayload,
+        string DescriptorType, JsonElement DescriptorPayload, string SourceKind, string SourceId,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
         IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,
-        string? ReconcilliationHash = null
+        string Hash = ""
     ) : IActivityDefinitionVersion;
 }

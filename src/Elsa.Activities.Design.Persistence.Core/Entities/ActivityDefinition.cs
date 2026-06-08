@@ -34,5 +34,16 @@ namespace Elsa.Activities.Design.Persistence.Core.Entities
         /// The description of the activity type.
         /// </summary>
         public string? Description { get; set; }
+
+        /// <summary>Builds the persistence entity from any <see cref="IActivityDefinition"/> (e.g. a factory read-model).</summary>
+        public static ActivityDefinition From(IActivityDefinition source) =>
+            new()
+            {
+                Id = source.Id,
+                ActivityTypeKey = source.ActivityTypeKey,
+                Category = source.Category,
+                DisplayName = source.DisplayName,
+                Description = source.Description,
+            };
     }
 }

@@ -27,6 +27,17 @@ public interface IActivityDefinitionVersion
     /// </summary>
     JsonElement DescriptorPayload { get; }
 
+    /// <summary>
+    /// Provenance: the kind of source that produced this version (e.g. <c>"CLR"</c>, <c>"Json"</c>,
+    /// <c>"Workflow"</c>). Carried on the contribution so the reconciler can persist it. Write-once.
+    /// </summary>
+    string SourceKind { get; }
+
+    /// <summary>
+    /// Provenance: the source-side asset identity that produced this version. Write-once.
+    /// </summary>
+    string SourceId { get; }
+
     IActivityDefinition Definition { get; }
 
     IEnumerable<InputDefinition> Inputs { get; }
@@ -38,8 +49,10 @@ public interface IActivityDefinitionVersion
     ActivityExecutionType ExecutionType { get; }
 
     /// <summary>
-    /// Immutable content hash of this version's projection, computed by
-    /// <c>IActivityDefinitionHasher</c> at reconciliation time (Model X duplicate-detection).
+    /// Content hash of this version's projection, generated at construction by the version factory
+    /// via <see cref="IActivityDefinitionHasher"/>. Reconciliation compares a candidate's hash to the
+    /// persisted value to detect source-side changes (Model X duplicate-detection). Always set by the
+    /// version factory; nullable only to accommodate directly-constructed entities in tests/fixtures.
     /// </summary>
-    string? ReconcilliationHash { get; }
+    string? Hash { get; }
 }

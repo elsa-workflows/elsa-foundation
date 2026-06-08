@@ -40,9 +40,9 @@ namespace Elsa.Activities.Design.Persistence.EFCore.EntityHandlers
 
             if (!string.IsNullOrWhiteSpace(entity.DescriptorPayloadSource))
             {
-                // Parse to an independent JsonElement (Clone so it outlives the JsonDocument).
-                using var document = JsonDocument.Parse(entity.DescriptorPayloadSource);
-                entity.DescriptorPayload = document.RootElement.Clone();
+                // Rehydrate through the canonical payload serializer (the rule: all domain-payload JSON
+                // goes through IPayloadSerializer). Clone so the element is self-contained.
+                entity.DescriptorPayload = payloadSerializer.Deserialize<JsonElement>(entity.DescriptorPayloadSource).Clone();
             }
 
             return ValueTask.CompletedTask;

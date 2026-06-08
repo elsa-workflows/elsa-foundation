@@ -96,7 +96,7 @@ public sealed class DiscardDraftTests
         if (!await ctx.WorkflowDefinitions.AnyAsync(d => d.Id == definitionId))
             ctx.WorkflowDefinitions.Add(new WorkflowDefinition { Id = definitionId, Name = "wf" });
 
-        ctx.WorkflowDefinitionVersions.Add(new WorkflowDefinitionVersion(definitionId, 1)
+        ctx.WorkflowDefinitionVersions.Add(new WorkflowDefinitionVersion(definitionId, "1.0.0")
         {
             Id = versionId,
             State = new WorkflowDefinitionState([], [], [], [], [], null, null),

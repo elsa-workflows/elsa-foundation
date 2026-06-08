@@ -83,25 +83,36 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     public string SourceId { get; set; } = null!;
 
     /// <summary>
-    /// First-provisioning timestamp. Write-once.
-    /// </summary>
-    public DateTimeOffset ReconciledAt { get; set; }
-
-    /// <summary>
-    /// Identity that produced this row. Write-once.
-    /// </summary>
-    public string? ReconciledBy { get; set; }
-
-    /// <summary>
-    /// Write-once content hash of this version's projection, computed by
-    /// <c>IActivityDefinitionHasher</c> at reconciliation time. Under Model X this is the
-    /// only artefact carried forward between reconciliation passes: subsequent passes that
-    /// observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
+    /// Write-once content hash of this version's projection, generated at construction by the
+    /// version factory (<c>IActivityDefinitionHasher</c>). Under Model X, subsequent reconciliation
+    /// passes that observe the same <c>(DefinitionId, Version)</c> compare their candidate's hash
     /// against this stored value to detect source-side breakage.
     /// </summary>
-    public string? ReconcilliationHash { get; set; }
+    public string? Hash { get; set; }
 
     IEnumerable<ActivityPortDefinition> IActivityDefinitionVersion.Ports => Ports;
 
     IActivityDefinition IActivityDefinitionVersion.Definition => Definition ?? throw new ArgumentNullException(nameof(Definition));
+
+    /// <summary>
+    /// Builds the persistence entity from any <see cref="IActivityDefinitionVersion"/> (typically a
+    /// factory-produced read-model). The ctor recomputes <see cref="SemVerSortKey"/>. The
+    /// <see cref="Definition"/> navigation is left unset — the write command wires the relationship
+    /// via <see cref="DefinitionId"/>. Pass <paramref name="definitionId"/> to rebind the version to
+    /// a different (e.g. already-persisted) definition while preserving the source's content
+    /// <see cref="Hash"/> unchanged.
+    /// </summary>
+    public static ActivityDefinitionVersion From(IActivityDefinitionVersion source, string? definitionId = null) =>
+        new(source.Version, definitionId ?? source.DefinitionId, executionType: source.ExecutionType)
+        {
+            Id = source.Id,
+            DescriptorType = source.DescriptorType,
+            DescriptorPayload = source.DescriptorPayload,
+            Inputs = source.Inputs,
+            Outputs = source.Outputs,
+            Ports = source.Ports,
+            SourceKind = source.SourceKind,
+            SourceId = source.SourceId,
+            Hash = source.Hash,
+        };
 }

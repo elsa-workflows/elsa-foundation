@@ -1,19 +1,19 @@
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Projections;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Extensions;
-using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
-using Elsa.Primitives.Contracts;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
 public sealed class AddDefinitionCommandHandler(
-    IIdentityGenerator identityGenerator,
-    ISystemClock clock,
-    IObjectMapper mapper,
+    IActivityDefinitionFactory definitionFactory,
+    IActivityDefinitionVersionFactory versionFactory,
     IQueries<ActivityDefinitionVersion> versionQueries,
     IAddActivityDefinitionCommand addCommand,
     IQueries<ActivityDefinition> definitionQueries)
@@ -32,41 +32,22 @@ public sealed class AddDefinitionCommandHandler(
             throw new ArgumentException($"Activity definition with ActivityTypeKey='{command.ActivityTypeKey}' already exists");
         }
 
-        var definition = CreateDefinition(command);
-        var version = CreateVersion(command, definition);
-        await addCommand.Execute(definition, version, cancellationToken);
+        var definition = definitionFactory.Create(command.ActivityTypeKey, command.Category, command.DisplayName, command.Description);
+        var version = versionFactory.Create(
+            definition,
+            initialVersion,
+            command.DescriptorType,
+            command.DescriptorPayload,
+            command.SourceKind,
+            command.SourceId,
+            command.Inputs ?? [],
+            command.Outputs ?? [],
+            command.Ports ?? [],
+            command.ExecutionType ?? ActivityExecutionType.Action);
+
+        await addCommand.Execute(ActivityDefinition.From(definition), ActivityDefinitionVersion.From(version), cancellationToken);
 
         var addedVersion = await versionQueries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
-
-        return await mapper.Map<ActivityDefinitionVersionDetailsView>(addedVersion, cancellationToken);
-    }
-
-    private ActivityDefinition CreateDefinition(AddDefinition def)
-    {
-        return new()
-        {
-            Id = identityGenerator.Generate(),
-            ActivityTypeKey = def.ActivityTypeKey,
-            Category = def.Category,
-            Description = def.Description,
-            DisplayName = def.DisplayName
-        };
-    }
-
-    private ActivityDefinitionVersion CreateVersion(AddDefinition command, ActivityDefinition definition)
-    {
-        return new(initialVersion, definition.Id, executionType: command.ExecutionType ?? Core.Models.ActivityExecutionType.Action)
-        {
-            Id = identityGenerator.Generate(),
-            DescriptorType = command.DescriptorType,
-            DescriptorPayload = command.DescriptorPayload,
-            Inputs = command.Inputs ?? [],
-            Outputs = command.Outputs ?? [],
-            Ports = command.Ports ?? [],
-            SourceKind = command.SourceKind,
-            SourceId = command.SourceId,
-            ReconciledAt = clock.UtcNow,
-            ReconciledBy = Environment.MachineName,
-        };
+        return addedVersion.ToDetailsView();
     }
 }

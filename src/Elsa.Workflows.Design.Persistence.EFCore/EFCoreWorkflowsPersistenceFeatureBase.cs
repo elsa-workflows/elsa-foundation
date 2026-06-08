@@ -1,7 +1,8 @@
+using System.Reflection;
 using Elsa.Persistence.EFCore;
-using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
 using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
@@ -12,8 +13,18 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
 {
     public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceShellFeatureBase<WorkflowsDesignDbContext>
     {
+        // The saving/loading handlers (WorkflowDefinition{Version,Draft}{Saving,Loading}Handler) live in
+        // THIS assembly. The base registers both directions from this list, so neither can be forgotten.
+        protected override IEnumerable<Assembly> EntityHandlerAssemblies =>
+            [GetType().Assembly, typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly];
+
         protected override void OnAfterConfigured(IServiceCollection services)
         {
+            // Entity construction: factories that build read-models for new definitions/versions/drafts.
+            services.AddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
+            services.AddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
+            services.AddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+
             if (UseCommands)
             {
                 services
@@ -25,17 +36,12 @@ namespace Elsa.Workflows.Design.Persistence.EFCore
                     // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
                     // Supersedes the former 20 granular mutation commands.
                     .AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>()
-                    .AddScoped<IUpdateDraftCommand, UpdateDraft>()
-                    .AddEntitySavingHandlersFrom(GetType().Assembly)
-                    .AddEntitySavingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
+                    .AddScoped<IUpdateDraftCommand, UpdateDraft>();
             }
 
             if (UseQueries)
             {
-                services
-                    .AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>()
-                    .AddEntityLoadingHandlersFrom(GetType().Assembly)
-                    .AddEntityLoadingHandlersFrom(typeof(EFCoreWorkflowsPersistenceFeatureBase).Assembly);
+                services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
             }
         }
     }

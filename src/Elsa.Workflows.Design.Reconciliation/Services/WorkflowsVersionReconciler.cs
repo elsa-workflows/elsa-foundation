@@ -1,7 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
-using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Extensions;
@@ -24,7 +24,6 @@ public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
     IEventPublisher sender,
     IOptions<WorkflowVersionReconcilerOptions> options,
-    IIdentityGenerator identityGenerator,
     IQueries<WorkflowDefinition> definitionQueries,
     IQueries<WorkflowDefinitionVersion> versionQueries,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
@@ -47,41 +46,42 @@ public sealed class WorkflowsVersionReconciler(
 
     private async Task ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {
-        var mappedVersion = Map(version);
-        var mappedDefinition = Map(version.Definition);
+        var definitionId = version.DefinitionId;
 
-        var definition = await FindDefinition(mappedDefinition.Id, cancellationToken);
+        var definition = await FindDefinition(definitionId, cancellationToken);
         if (definition is null)
         {
-            await addDefinitionCommand.Add(mappedDefinition, cancellationToken);
+            await addDefinitionCommand.Add(WorkflowDefinition.From(version.Definition), cancellationToken);
         }
 
-        var latestVersion = await versionQueries.FindLastVersion(mappedDefinition.Id, cancellationToken);
-        if (mappedVersion.Version < latestVersion?.Version)
+        var candidateSortKey = SemVer.ToSortKey(version.Version);
+
+        var latestVersion = await versionQueries.FindLastVersion(definitionId, cancellationToken);
+        if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
         {
-            LogSkipOutdated(mappedDefinition.Id, mappedVersion.Version);
+            LogSkipOutdated(definitionId, version.Version);
             return;
         }
 
-        var versionExists = await VersionExists(mappedDefinition.Id, version.Version, cancellationToken);
+        var versionExists = await VersionExists(definitionId, candidateSortKey, cancellationToken);
         if (!versionExists)
         {
-            await addVersionCommand.Add(mappedVersion, cancellationToken);
+            await addVersionCommand.Add(WorkflowDefinitionVersion.From(version), cancellationToken);
             return;
         }
 
-        HandleDuplicate(mappedDefinition, mappedVersion);
+        HandleDuplicate(definitionId, version.Version);
     }
 
-    private void HandleDuplicate(WorkflowDefinition def, WorkflowDefinitionVersion version)
+    private void HandleDuplicate(string definitionId, string version)
     {
         switch (options.Value.DuplicateHandling)
         {
             case DuplicateHandling.Throw:
-                throw new InvalidOperationException($"Workflow definition version '{version.DefinitionId}' v{version.Version} already exists");
+                throw new InvalidOperationException($"Workflow definition version '{definitionId}' v{version} already exists");
 
             case DuplicateHandling.Skip:
-                LogSkipDuplicate(def.Id, version.Version);
+                LogSkipDuplicate(definitionId, version);
                 break;
 
             default:
@@ -89,22 +89,22 @@ public sealed class WorkflowsVersionReconciler(
         }
     }
 
-    private void LogSkipDuplicate(string definitionId, int version)
+    private void LogSkipDuplicate(string definitionId, string version)
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping duplicate workflow definition '{def}' v{v}", definitionId, version);
     }
 
-    private void LogSkipOutdated(string definitionId, int version)
+    private void LogSkipOutdated(string definitionId, string version)
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
     }
 
-    private async Task<bool> VersionExists(string definitionId, int version, CancellationToken cancellationToken)
+    private async Task<bool> VersionExists(string definitionId, string sortKey, CancellationToken cancellationToken)
     {
         return await versionQueries.Any(
-            x => x.Version == version && x.DefinitionId == definitionId,
+            x => x.SemVerSortKey == sortKey && x.DefinitionId == definitionId,
             cancellationToken
         );
     }
@@ -115,32 +115,5 @@ public sealed class WorkflowsVersionReconciler(
             x => x.Id == definitionId,
             cancellationToken
         );
-    }
-
-    private WorkflowDefinition Map(IWorkflowDefinition definition)
-    {
-        var id = !string.IsNullOrWhiteSpace(definition.Id)
-            ? definition.Id
-            : identityGenerator.Generate();
-
-        return new()
-        {
-            Id = id,
-            Description = definition.Description,
-            Name = definition.Name
-        };
-    }
-
-    private WorkflowDefinitionVersion Map(IWorkflowDefinitionVersion version)
-    {
-        var id = !string.IsNullOrWhiteSpace(version.Id)
-            ? version.Id
-            : identityGenerator.Generate();
-
-        return new(version.Definition.Id, version.Version, sourceCreatedAt: version.SourceCreatedAt)
-        {
-            Id = id,
-            State = version.State
-        };
     }
 }

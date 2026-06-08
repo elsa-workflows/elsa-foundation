@@ -26,9 +26,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Configurations
             builder.Property(x => x.ExecutionType).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.SourceKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
             builder.Property(x => x.SourceId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-            builder.Property(x => x.ReconciledAt).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-            builder.Property(x => x.ReconciledBy).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-            builder.Property(x => x.ReconcilliationHash).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+            builder.Property(x => x.Hash).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
             builder.Property(x => x.OutputsSource).HasMaxLength(-1);
             builder.Property(x => x.InputsSource).HasMaxLength(-1);

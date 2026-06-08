@@ -9,7 +9,7 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// <summary>
 /// US1 — Logical activity identity survives normal refactors. After the
 /// Definition-is-a-visual-shell refactor (2026-05-29), provenance fields
-/// (SourceKind / SourceId / ReconciledAt / ReconciledBy) live on the version only;
+/// (SourceKind / SourceId) live on the version only;
 /// the Definition's immutability surface is reduced to <c>ActivityTypeKey</c>.
 /// </summary>
 public sealed class ActivityDefinitionIdentityTests
@@ -68,9 +68,7 @@ public sealed class ActivityDefinitionIdentityTests
                 DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
                     new Elsa.Primitives.Models.TypeInformation("Foo", "Acme.X", "Acme.X", "1.0.0.0")),
                 SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = DateTimeOffset.UtcNow,
-                ReconciledBy = "test"
+                SourceId = "Elsa.Test"
             });
             await ctx.SaveChangesAsync();
         }
@@ -84,9 +82,7 @@ public sealed class ActivityDefinitionIdentityTests
                 DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
                     new Elsa.Primitives.Models.TypeInformation("FooRenamed", "Acme.Y", "Acme.Y", "2.0.0.0")),
                 SourceKind = "Json",
-                SourceId = "Elsa.Test",
-                ReconciledAt = DateTimeOffset.UtcNow,
-                ReconciledBy = "test"
+                SourceId = "Elsa.Test"
             });
             await ctx.SaveChangesAsync();
         }

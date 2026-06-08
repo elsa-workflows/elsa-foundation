@@ -49,9 +49,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     ExecutionType = table.Column<int>(type: "INTEGER", nullable: false),
                     SourceKind = table.Column<string>(type: "TEXT", nullable: false),
                     SourceId = table.Column<string>(type: "TEXT", nullable: false),
-                    ReconciledAt = table.Column<string>(type: "TEXT", nullable: false),
-                    ReconciledBy = table.Column<string>(type: "TEXT", nullable: true),
-                    ReconcilliationHash = table.Column<string>(type: "TEXT", nullable: true),
+                    Hash = table.Column<string>(type: "TEXT", nullable: true),
                     CreatedAt = table.Column<string>(type: "TEXT", nullable: false),
                     LastModifiedAt = table.Column<string>(type: "TEXT", nullable: false),
                     TenantId = table.Column<string>(type: "TEXT", nullable: true)

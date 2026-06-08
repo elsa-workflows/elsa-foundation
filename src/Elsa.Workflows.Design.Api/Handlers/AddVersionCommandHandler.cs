@@ -1,48 +1,39 @@
-﻿using Elsa.Mapping.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
-using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Extensions;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class AddVersionCommandHandler(
-    IIdentityGenerator identityGenerator,
+    IWorkflowDefinitionVersionFactory versionFactory,
     IAddCommand<WorkflowDefinitionVersion> addCommand,
     IQueries<WorkflowDefinitionVersion> queries,
-    IQueries<WorkflowDefinition> definitionQueries,
-    IObjectMapper objectMapper)
+    IQueries<WorkflowDefinition> definitionQueries)
 
     : ICommandHandler<AddVersion, WorkflowDefinitionVersionDetailsView>
 {
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
-        var definitionTask = definitionQueries.Get(command.DefinitionId, cancellationToken);
-        var lastVersionTask = queries.FindLastVersion(command.DefinitionId, cancellationToken);
+        var definition = await definitionQueries.Get(command.DefinitionId, cancellationToken);
+        var lastVersion = await queries.FindLastVersion(command.DefinitionId, cancellationToken);
 
-        var definition = await definitionTask;
-        var lastVersion = await lastVersionTask;
+        var version = versionFactory.Create(definition, NextVersion(lastVersion?.Version), command.State.ToState());
 
-        var nextVersionNumber = (lastVersion?.Version ?? 0) + 1;
-        var state = await objectMapper.Map<WorkflowDefinitionState>(command.State, cancellationToken);
-        var version = CreateVersion(nextVersionNumber, definition, state);
+        await addCommand.Add(WorkflowDefinitionVersion.From(version), cancellationToken);
 
-        await addCommand.Add(version, cancellationToken);
         var addedVersion = await queries.GetVersionIncludingDefinition(version.Id, cancellationToken);
-
-        return await objectMapper.Map<WorkflowDefinitionVersionDetailsView>(addedVersion, cancellationToken);
+        return addedVersion.ToDetailsView();
     }
 
-    private WorkflowDefinitionVersion CreateVersion(int version, WorkflowDefinition definition, WorkflowDefinitionState workflowDefinitionState)
-    {
-        return new(definition.Id, version, stateSource: null)
-        {
-            Id = identityGenerator.Generate(),
-            Definition = definition
-        };
-    }
+    // Each published workflow version is a new major (1.0.0 → 2.0.0 → …).
+    private static string NextVersion(string? lastVersion) =>
+        lastVersion is not null && SemVer.TryParse(lastVersion, out var semVer)
+            ? $"{semVer.Major + 1}.0.0"
+            : "1.0.0";
 }

@@ -4,6 +4,8 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
@@ -36,21 +38,21 @@ internal static class InMemoryReconcilerHarness
         IActivityReconciliationSource source,
         DuplicateHandling duplicateHandling = DuplicateHandling.Skip)
     {
-        var clock = new SystemClock();
         var identityGenerator = new GuidIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var definitionFactory = new ActivityDefinitionFactory(identityGenerator);
+        var versionFactory = new ActivityDefinitionVersionFactory(identityGenerator, hasher);
 
         var definitionQueries = new InMemoryQueries<ActivityDefinition>(store.Definitions);
         var versionQueries = new InMemoryQueries<ActivityDefinitionVersion>(store.Versions);
 
         var handler = new CollectActivityVersions(
             definitionQueries,
-            hasher,
-            identityGenerator,
+            definitionFactory,
+            versionFactory,
             serializer,
-            [source],
-            clock);
+            [source]);
 
         var publisher = new DirectEventPublisher(handler);
 
@@ -58,8 +60,6 @@ internal static class InMemoryReconcilerHarness
             NullLogger<ActivityVersionReconciler>.Instance,
             publisher,
             Options.Create(new ActivityVersionReconcilerOptions { DuplicateHandling = duplicateHandling }),
-            identityGenerator,
-            hasher,
             definitionQueries,
             versionQueries,
             new InMemoryAddActivityDefinitionCommand(store),

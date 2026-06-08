@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\Elsa.Activities.Runtime.Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Workflows.Primitives\Elsa.Workflows.Primitives.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Serialization\Elsa.Serialization.csproj" />
   </ItemGroup>
 
 </Project>

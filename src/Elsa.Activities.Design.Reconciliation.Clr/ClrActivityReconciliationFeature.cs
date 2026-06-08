@@ -20,6 +20,10 @@ namespace Elsa.Activities.Design.Reconciliation.Clr;
 /// instance is the only singleton — it is an application-wide static value; everything else "just
 /// executes" and is therefore scoped.
 /// </remarks>
+[ShellFeature(
+    name: "ClrActivityReconciliation",
+    Description = "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind)."
+)]
 public class ClrActivityReconciliationFeature : IShellFeature
 {
     public ClrReconciliationOptions Options { get; set; } = new();

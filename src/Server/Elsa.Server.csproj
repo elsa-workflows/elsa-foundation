@@ -21,6 +21,12 @@
 		<ProjectReference Include="..\Elsa.Activities.Design.Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Activities.Design.Persistence.Core\Elsa.Activities.Design.Persistence.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Activities.Design.Persistence.EFCore.Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Design.Reconciliation.Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
+		<ProjectReference Include="..\Elsa.Activities.Composition.Runtime\Elsa.Activities.Composition.Runtime.csproj" />
+		<ProjectReference Include="..\Elsa.Workflows.Publishing.Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\Elsa.Caching.Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Caching.Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\Elsa.Expressions.Core\Elsa.Expressions.Core.csproj" />

@@ -11,7 +11,7 @@ public sealed record WorkflowVersionReconciliationModel(
     string? DefinitionId,
     string Name,
     string? Description,
-    int Version,
+    string Version,
     WorkflowDefinitionState State,
     DateTimeOffset? SourceCreatedAt = null
 );

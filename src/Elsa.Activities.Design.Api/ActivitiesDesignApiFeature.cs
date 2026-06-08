@@ -1,6 +1,5 @@
 ﻿using CShells.Features;
 using Elsa.FastEndpoints;
-using Elsa.Mapping.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,8 +17,6 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         base.ConfigureServices(services);
 
         var assembly = GetType().Assembly;
-
-        services.AddMappingsFrom(assembly);
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

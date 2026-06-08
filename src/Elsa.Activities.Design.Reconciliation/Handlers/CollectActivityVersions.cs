@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Reconciliation.Core;
@@ -5,7 +6,6 @@ using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
-using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using System.Text.Json;
 
@@ -22,11 +22,10 @@ namespace Elsa.Activities.Design.Reconciliation.Handlers;
 /// </summary>
 public sealed class CollectActivityVersions(
     IQueries<ActivityDefinition> definitionQueries,
-    IActivityDefinitionHasher activityDefinitionHasher,
-    IIdentityGenerator identityGenerator,
+    IActivityDefinitionFactory definitionFactory,
+    IActivityDefinitionVersionFactory versionFactory,
     IPayloadSerializer payloadSerializer,
-    IEnumerable<IActivityReconciliationSource> sources,
-    ISystemClock clock)
+    IEnumerable<IActivityReconciliationSource> sources)
     : IEventHandler<OnActivityVersionsReconciling>
 {
     public async Task Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
@@ -35,43 +34,26 @@ public sealed class CollectActivityVersions(
         {
             var entries = (await source.Read(cancellationToken)).ToArray();
 
-            var now = clock.UtcNow;
-            var provisionedBy = Environment.MachineName;
-
             for (var i = 0; i < entries.Length; i++)
             {
                 var entry = entries[i];
                 var descriptorPayload = NormalizeDescriptor(entry, i);
 
-                var definition = await FindDefinition(entry.Id, cancellationToken);
-                definition ??= new ActivityDefinition
-                {
-                    Id = string.IsNullOrWhiteSpace(entry.Id)
-                        ? identityGenerator.Generate()
-                        : entry.Id,
-                    ActivityTypeKey = entry.ActivityTypeKey,
-                    Category = entry.Category ?? string.Empty,
-                    Description = entry.Description,
-                    DisplayName = entry.DisplayName,
-                };
+                IActivityDefinition definition = await FindDefinition(entry.Id, cancellationToken)
+                    ?? definitionFactory.Create(entry.ActivityTypeKey, entry.Category ?? string.Empty, entry.DisplayName, entry.Description, entry.Id);
 
-                var version = new ActivityDefinitionVersion(entry.Version, definition.Id, executionType: entry.ExecutionType)
-                {
-                    Definition = definition,
-                    Id = identityGenerator.Generate(),
-                    DescriptorType = entry.DescriptorType,
-                    DescriptorPayload = descriptorPayload,
-                    Inputs = entry.Inputs,
-                    Outputs = entry.Outputs,
-                    Ports = entry.Ports,
-                    ReconciledAt = now,
-                    ReconciledBy = provisionedBy,
-                    SourceId = source.SourceId,
-                    SourceKind = source.SourceKind
-                };
-
-                var hash = activityDefinitionHasher.Hash(definition, version);
-                version.ReconcilliationHash = hash;
+                // The factory generates the version Id and the content Hash.
+                var version = versionFactory.Create(
+                    definition,
+                    entry.Version,
+                    entry.DescriptorType,
+                    descriptorPayload,
+                    source.SourceKind,
+                    source.SourceId,
+                    entry.Inputs,
+                    entry.Outputs,
+                    entry.Ports,
+                    entry.ExecutionType);
 
                 domainEvent.Versions.Add(version);
             }

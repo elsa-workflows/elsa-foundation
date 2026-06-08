@@ -150,11 +150,13 @@ public sealed class RequiredInputOutputValidatorTests
         public string ActivityTypeKey => "TestActivity";
         public string DescriptorType => "Test";
         public System.Text.Json.JsonElement DescriptorPayload => default;
+        public string SourceKind => "Test";
+        public string SourceId => "Test";
         public IActivityDefinition Definition => null!;
         public IEnumerable<InputDefinition> Inputs { get; } = inputs;
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;
         public IEnumerable<ActivityPortDefinition> Ports => [];
         public ActivityExecutionType ExecutionType => default;
-        public string? ReconcilliationHash => null;
+        public string Hash => "";
     }
 }

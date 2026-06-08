@@ -143,7 +143,7 @@ public sealed class CloneDraftFromVersionTests
 
         // Set State on the entity; the saving handler serialises it into StateSource on save.
         // Passing pre-serialised content to the ctor is overwritten by the handler when State is null.
-        var version = new WorkflowDefinitionVersion(definitionId, 1)
+        var version = new WorkflowDefinitionVersion(definitionId, "1.0.0")
         {
             Id = versionId,
             State = state,

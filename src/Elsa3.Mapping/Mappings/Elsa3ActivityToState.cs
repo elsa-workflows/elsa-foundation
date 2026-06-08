@@ -1,7 +1,5 @@
 ﻿using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
-using Elsa.Mapping.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Models;
 using System.Text.Json;
@@ -10,8 +8,8 @@ using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 
 namespace Elsa3.Mapping.Mappings;
 
+/// <summary>Converts an Elsa-3 activity to an Elsa-4 <see cref="ActivityNode"/>.</summary>
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
-    : IObjectMapping<Elsa3Activity, ActivityNode>
 {
     public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
     {
