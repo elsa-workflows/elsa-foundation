@@ -7,6 +7,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Knowledge inventory](knowledge-inventory.md)
 - [Unfinished work](unfinished-work.md)
 - [Architecture tour review](architecture-tour-review.md)
+- [Glossary coverage audit](glossary-coverage-audit.md)
 - [Maps v1 findings](maps-v1-findings.md)
 - [Maps v2 findings](maps-v2-findings.md)
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)

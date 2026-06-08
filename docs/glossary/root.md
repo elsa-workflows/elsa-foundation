@@ -7,6 +7,7 @@ These are framework-level terms. Elsa-specific bindings live in [elsa.md](elsa.m
 | Host | The application process that composes and runs selected modules/features. |
 | Module | A package/project boundary that ships code. A module may contain one feature or several closely related features. |
 | Feature | A coherent capability with a named activation/configuration surface. Feature identity is used for navigation, composition, and dependency reasoning. |
+| Feature identity | The stable logical identity of a feature, used by hosts, configuration, diagnostics, telemetry, maps, and tooling. It is not display text and not proof of activation dependency. |
 | Domain | A cohesive area of responsibility with its own language and ownership boundary. A domain should be describable in one verb-led sentence. |
 | Application | A concrete host built from the framework by composing selected domains, features, packages, and configuration. |
 | Foundation repo | The repository that carries the application baseline: host setup, primitives, main-domain `.Core` libraries, default foundation implementations, and architecture knowledge. |
@@ -26,6 +27,7 @@ These are framework-level terms. Elsa-specific bindings live in [elsa.md](elsa.m
 | Event strategy | The delivery behavior for an event, such as Sequential, Parallel, or Background. |
 | Event dispatcher failure policy | The publisher-owned policy for handler failures across the dispatch loop, such as throw immediately, run all then throw aggregate, or log and continue. |
 | Event subscriber failure classification | The subscriber-owned classification of what its own handler failure means, such as business-critical, optional, telemetry-only, retryable, dead-letter-worthy, or operationally escalated. |
+| Extension point | A published surface where another feature or module may replace, contribute, subscribe, inherit, or otherwise extend behavior through an approved contract or cataloged mechanism. |
 | Dependency | A declared or actual requirement from one module/feature/project/package to another. Reason about dependencies at the smallest stable boundary. |
 | Compatibility | Whether a set of packages/features can coexist, based on public contracts and external/transitive package requirements. |
 | Shell | A composed host/application setup that activates selected features. |
