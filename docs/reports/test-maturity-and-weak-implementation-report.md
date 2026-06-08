@@ -69,7 +69,7 @@ The runtime contract is central to Elsa `§E2.6`, but the current implementation
 
 Next action:
 
-Create a Runtime execution-seam verification work unit before implementing runtime behavior. The work unit should define the minimal executable artifact contract, required unit tests, and allowed design/runtime crossing points.
+Use the [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) before implementing runtime behavior. The architect-owned Speckit work unit should define the minimal executable artifact contract, required unit tests, allowed design/runtime crossing points, execution-context lifetime model, graph/node naming, and activity/workflow I/O model boundaries.
 
 ### F2 - Runtime JavaScript has a known deferred Workflows.Design reference
 
@@ -88,7 +88,7 @@ This remains a constitution-boundary exception candidate because the constitutio
 
 Next action:
 
-Keep this as a named deferred boundary item until Elsa brain / workspace ownership is stable. Future resolution should split design-time JavaScript declarations from runtime JavaScript bindings, likely by moving designer-facing declarations into a design/workspace-side package and keeping runtime pre/post processors in `Elsa.Workflows.Runtime.JavaScript`. Share only neutral shape records from a stable `.Core` or primitives package if the split needs common data.
+Keep this as a named deferred boundary item until Elsa brain / workspace ownership is stable. The [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) preserves this classification so future runtime planning does not treat the generated-map signal as accidental drift. Future resolution should split design-time JavaScript declarations from runtime JavaScript bindings, likely by moving designer-facing declarations into a design/workspace-side package and keeping runtime pre/post processors in `Elsa.Workflows.Runtime.JavaScript`. Share only neutral shape records from a stable `.Core` or primitives package if the split needs common data.
 
 ### F3 - Workflow-as-activity is construct-only and intentionally non-executable
 
@@ -106,7 +106,7 @@ This is not accidental. The risk is that the catalog and construction path can l
 
 Next action:
 
-Keep this as a named follow-up under the consumer/pinning/runtime execution unit. Add executable behavior tests only when the runtime artifact and pinning rules are defined.
+Keep this as a named follow-up under the consumer/pinning/runtime execution unit. Use the [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) to decide artifact, pinning, nested execution, and cycle-guard questions before adding executable behavior tests.
 
 ### F4 - Test maturity is uneven across domains
 
@@ -183,7 +183,7 @@ Plan `Elsa.Events.Tests` and possibly `Elsa.Mediator.Tests` as shared-infrastruc
 
 ## Suggested Priority Order
 
-1. Runtime execution-seam verification for `Elsa.Workflows.Runtime.Core`.
+1. Runtime execution pre-spec handoff for `Elsa.Workflows.Runtime.Core`, then architect-owned Speckit planning for the execution seam.
 2. Registration-test coverage pass for untested feature classes.
 3. Shared event/mediator pipeline test unit.
 4. `NotImplementedException` classification pass.
