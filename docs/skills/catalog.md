@@ -80,6 +80,14 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Output:** findings and a proposed relocation/update plan. Do not change constitutional meaning while moving explanatory material.
 
+### Create Agent Preference
+
+**Use when:** a user states a stable personal workflow preference, asks to remember how they want agents to work, or wants a preference like the Git operating model without turning it into shared repo doctrine.
+
+**Workflow:** read [../../AGENTS.md](../../AGENTS.md#personal-operating-preferences) and [../reference/agent-preferences.md](../reference/agent-preferences.md); classify the request as a personal selection, reusable preference catalog/template, or shared repo rule. If it is personal, create or update a short ignored file under `.agent-prefs/` and do not commit it. If the preference needs reusable options or examples, update the committed reference catalog/template first, then ask before recording the user's local selection when the value is ambiguous. Refuse to store secrets, credentials, environment variables, or project facts as agent preferences.
+
+**Output:** local `.agent-prefs/<preference-name>.md` content or a proposed preference file, plus any committed reference/catalog updates needed to make the preference reusable. Never commit personal preference files.
+
 ## Speckit And Work-Unit Skills
 
 ### Speckit Flow Guide

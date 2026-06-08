@@ -99,6 +99,7 @@ These workflows are already clear enough to remain in the catalog and can later 
 | What's Next / Unfinished Work | `AGENTS.md`; `unfinished-work.md` | Claude wrapper: `.claude/skills/elsa-whats-next/` | Should remain the default selection skill before new work units. |
 | Work Unit Planner | `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-work-unit-planner/` | Good bridge from findings to architecture/Speckit work. |
 | Source-of-Truth Audit | `AGENTS.md`; `knowledge-inventory.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-source-of-truth-audit/` | Needed for constitution thinning and layer drift prevention. |
+| Create Agent Preference | `AGENTS.md`; `docs/reference/agent-preferences.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-create-agent-preference/` | Keeps personal workflow choices in ignored `.agent-prefs/` files instead of shared doctrine. |
 | Speckit Flow Guide | `.specify/workflows`; `.claude/skills/speckit-*` | Claude wrappers exist | Existing provider wrappers are Speckit command-level, not Elsa-brain-level. |
 | Feature/Dependency Map Builder | `tools/maps/*`; `docs/maps/*` | Claude wrapper: `.claude/skills/elsa-feature-dependency-map/` | Map scripts already exist; workflow should point to the split map refresh commands. |
 
@@ -163,6 +164,7 @@ First wrapper candidates after catalog review:
 - Work Unit Planner: created for Claude at `.claude/skills/elsa-work-unit-planner/`.
 - Critical Constitution Review: created for Claude at `.claude/skills/elsa-critical-constitution-review/`.
 - Verify Codebase Against Constitution: created for Claude at `.claude/skills/elsa-verify-codebase/`.
+- Create Agent Preference: created for Claude at `.claude/skills/elsa-create-agent-preference/`.
 - Create Feature or Module: created for Claude at `.claude/skills/elsa-create-feature/`.
 - Add Event Contribution: created for Claude at `.claude/skills/elsa-add-event-contribution/`.
 - Add Bridge or Adapter: created for Claude at `.claude/skills/elsa-add-bridge-adapter/`.

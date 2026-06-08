@@ -9,4 +9,5 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Elsa worked examples](elsa-worked-examples.md) - Elsa-specific examples formerly held in `constitution.md` sections `§E1` and `§E3`.
 - [Framework examples](framework-examples.md) - synthetic and application-instance examples formerly embedded in `constitution-framework.md`.
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.
+- [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - committed catalog of supported Git workflow shapes; personal selections belong in `.agent-prefs/`.
