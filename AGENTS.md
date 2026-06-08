@@ -71,6 +71,16 @@ Generated maps are committed snapshots. Before relying on Maps v1 for navigation
 check `docs/maps/manifest.json`; regenerate relevant maps when inputs changed or freshness is
 uncertain. Maps v2 scripts are split so agents can refresh only the layer they need.
 
+## Personal operating preferences
+
+Personal workflow choices are local implementation details, not shared repo facts.
+
+- Keep committed operating-model options in [docs/reference/git-operating-models.md](docs/reference/git-operating-models.md).
+- Keep per-user selections in `.agent-prefs/`; only `.agent-prefs/.gitkeep` is committed.
+- If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
+- If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
+- Do not commit personal preference files from `.agent-prefs/`.
+
 ## Task paths
 
 ### Feature development

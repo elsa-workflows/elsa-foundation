@@ -430,3 +430,7 @@ FodyWeavers.xsd
 
 # Claude worktrees
 .claude/worktrees/
+
+# Local agent preferences
+.agent-prefs/*
+!.agent-prefs/.gitkeep
