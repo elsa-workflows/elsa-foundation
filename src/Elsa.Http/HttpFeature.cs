@@ -9,6 +9,11 @@ using System.Reflection;
 
 namespace Elsa.Http
 {
+    [ShellFeature(
+        name: "Http",
+        DisplayName = "HTTP",
+        Description = "Provides HTTP content parsing, routing, downloading, and cache services."
+    )]
     public class HttpFeature : IShellFeature
     {
         public string ContentTypeProviderType { get; set; } = typeof(FileExtensionContentTypeProvider).FullName!;

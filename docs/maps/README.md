@@ -9,6 +9,7 @@ Maps are navigation and generated-fact surfaces. They should be cheap to refresh
 - [Project reference map](project-reference-map.md) - direct project references.
 - [Package map](package-map.md) - direct external package references and version clusters.
 - [Feature map](feature-map.md) - discovered CShells feature classes.
+- [Feature dependency map](feature-dependency-map.md) - CShells feature IDs, public feature properties, and dependency evidence from project/package references.
 - [Test map](test-map.md) - test projects and direct production references.
 - [Spec status map](spec-status-map.md) - current Speckit work-unit status clues.
 - [Domain map](domain-map.md) - project grouping, roles, and direct cross-domain references.
@@ -43,6 +44,7 @@ Windows / PowerShell:
 tools/maps/generate-domain-map.ps1
 tools/maps/generate-extension-point-map.ps1
 tools/maps/generate-architecture-reference-map.ps1
+tools/maps/generate-feature-dependency-map.ps1
 ```
 
 macOS / Linux / Bash:
@@ -52,6 +54,8 @@ bash tools/maps/generate-domain-map.sh
 bash tools/maps/generate-extension-point-map.sh
 bash tools/maps/generate-architecture-reference-map.sh
 ```
+
+The feature dependency map currently has a PowerShell generator only.
 
 ## Freshness
 
@@ -66,7 +70,7 @@ Generated maps are committed point-in-time snapshots. Use [manifest.json](manife
 
 - **Domain map:** domains, sub-domains, `.Core` contracts, implementations, providers, and bridges.
 - **Testing maturity map:** richer coverage classification beyond direct references.
-- **CShells composition map:** shell/appsettings feature identifiers and dependency requirements.
+- **CShells composition map:** approved shell/appsettings generation rules built from the feature dependency map plus configuration/settings classification.
 
 ## Map rule
 
