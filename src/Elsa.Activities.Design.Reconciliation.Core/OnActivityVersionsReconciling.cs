@@ -5,7 +5,7 @@ namespace Elsa.Activities.Design.Reconciliation.Core;
 
 /// <summary>
 /// Contribution event published by <see cref="IActivityVersionReconciler"/> on each pass. The
-/// single <c>ActivityVersionsReconcilingHandler</c> resolves every
+/// single <c>CollectActivityVersions</c> resolves every
 /// <see cref="IActivityReconciliationSource"/> and adds the activity versions they observe to
 /// <see cref="Versions"/>; the reconciler reads the accumulated set after dispatch.
 /// </summary>

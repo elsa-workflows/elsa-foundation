@@ -9,10 +9,11 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Contracts;
 /// reconciliation source that consumes it.
 /// </summary>
 /// <remarks>
-/// The reader deserializes each model's polymorphic <c>ImplementationDescriptor</c> as a raw
+/// The reader deserializes each model's <c>Descriptor</c> as a raw
 /// <see cref="System.Text.Json.JsonElement"/> — it does NOT bind it to a concrete descriptor type.
-/// The reconciliation feature's universal handler resolves the descriptor against the implementation
-/// descriptor registry by its <c>ImplementationKind</c> discriminator downstream.
+/// The descriptor stays opaque to the design domain: the reconciling handler persists it together with
+/// the entry's <c>DescriptorType</c>, and only the runtime constructor that owns that type ever
+/// materializes it.
 /// </remarks>
 public interface IJsonActivityCatalogReader
 {

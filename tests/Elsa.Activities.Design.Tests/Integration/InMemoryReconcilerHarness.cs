@@ -23,7 +23,7 @@ namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
 /// Shared in-memory composition of the real reconciliation pipeline — the real
-/// <see cref="ActivityVersionsReconcilingHandler"/>, <see cref="ActivityVersionReconciler"/>,
+/// <see cref="CollectActivityVersions"/>, <see cref="ActivityVersionReconciler"/>,
 /// hasher, identity generator and descriptor registry — wired over an in-memory catalog so a
 /// test can drive a contributed <see cref="IActivityReconciliationSource"/> end-to-end without
 /// the EF/event/lock stack. Only the predicate-based <c>Find</c> the reconciler actually uses
@@ -41,19 +41,15 @@ internal static class InMemoryReconcilerHarness
         var hasher = new DefaultActivityDefinitionHasher();
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
-        var registry = new ImplementationDescriptorRegistry();
-        registry.Register(new ImplementationDescriptorRegistration(ClrImplementationDescriptor.KindValue, typeof(ClrImplementationDescriptor)));
-
         var definitionQueries = new InMemoryQueries<ActivityDefinition>(store.Definitions);
         var versionQueries = new InMemoryQueries<ActivityDefinitionVersion>(store.Versions);
 
-        var handler = new ActivityVersionsReconcilingHandler(
+        var handler = new CollectActivityVersions(
             definitionQueries,
             hasher,
             identityGenerator,
             serializer,
             [source],
-            registry,
             clock);
 
         var publisher = new DirectEventPublisher(handler);

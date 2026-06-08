@@ -31,8 +31,7 @@ public sealed class SavingEventDispatchTests
     {
         // Invokes the typed handler directly and asserts the descriptor JSON lands in the shadow
         // column + the kind is derived. This is the same work the aggregator drives in production.
-        using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
-            (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
+        using var host = ActivitiesDesignTestHost.Create();
 
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         var handler = new ActivityDefinitionVersionSavingHandler(serializer);
@@ -42,9 +41,9 @@ public sealed class SavingEventDispatchTests
 
         await handler.Handle(ctx, version, CancellationToken.None);
 
-        Assert.Equal("Clr", version.ImplementationKind);
-        Assert.False(string.IsNullOrWhiteSpace(version.ImplementationDescriptorPayload));
-        Assert.Contains("Acme", version.ImplementationDescriptorPayload);
+        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.False(string.IsNullOrWhiteSpace(version.DescriptorPayloadSource));
+        Assert.Contains("Acme", version.DescriptorPayloadSource);
     }
 
     [Fact]
@@ -64,8 +63,7 @@ public sealed class SavingEventDispatchTests
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        using var host = ActivitiesDesignTestHost.CreateWithDescriptorRegistry(
-            (kind: "Clr", type: typeof(ClrImplementationDescriptor)));
+        using var host = ActivitiesDesignTestHost.Create();
         await using var ctx = host.CreateContext();
         var version = NewVersion();
         var entry = ctx.ActivityDefinitionVersions.Add(version);
@@ -76,8 +74,8 @@ public sealed class SavingEventDispatchTests
         // Probe ran (fan-out reached every typed contributor)…
         Assert.True(probe.WasInvoked);
         // …and the real handler ran (shadow column populated).
-        Assert.Equal("Clr", version.ImplementationKind);
-        Assert.Contains("Acme", version.ImplementationDescriptorPayload);
+        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.Contains("Acme", version.DescriptorPayloadSource);
     }
 
     [Fact]
@@ -130,7 +128,8 @@ public sealed class SavingEventDispatchTests
         return new ActivityDefinitionVersion("1.0.0", defId)
         {
             Id = Guid.NewGuid().ToString("N"),
-            ImplementationDescriptor = new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
+            DescriptorType = typeof(TypeInformation).FullName!,
+            DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
         };
     }
 

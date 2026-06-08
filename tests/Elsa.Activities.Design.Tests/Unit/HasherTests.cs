@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Services;
@@ -85,8 +86,8 @@ public sealed class HasherTests
             Version: "1.0.0",
             DefinitionId: def.Id,
             ActivityTypeKey: def.ActivityTypeKey,
-            ImplementationKind: "Clr",
-            ImplementationDescriptor: new ClrImplementationDescriptor(new TypeInformation("Foo", "Acme", "Acme.Pkg", "1.0.0.0")),
+            DescriptorType: typeof(TypeInformation).FullName!,
+            DescriptorPayload: JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme.Pkg", "1.0.0.0")),
             ExecutionType: ActivityExecutionType.Action,
             Inputs: [],
             Outputs: [],
@@ -101,7 +102,7 @@ public sealed class HasherTests
 
     private sealed record FakeVersion(
         string Id, string Version, string DefinitionId, string ActivityTypeKey,
-        string ImplementationKind, IImplementationDescriptor ImplementationDescriptor,
+        string DescriptorType, JsonElement DescriptorPayload,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
         IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,
         string? ReconcilliationHash = null

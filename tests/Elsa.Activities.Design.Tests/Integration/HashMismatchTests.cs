@@ -69,8 +69,8 @@ public sealed class HashMismatchTests
             DisplayName: null,
             Category: "Acme",
             Description: description,
-            ImplementationKind: ClrImplementationDescriptor.KindValue,
-            ImplementationDescriptor: new ClrImplementationDescriptor(TypeInformation.Object),
+            DescriptorType: typeof(TypeInformation).FullName!,
+            Descriptor: TypeInformation.Object,
             Inputs: [],
             Outputs: [],
             Ports: []);

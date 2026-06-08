@@ -62,7 +62,7 @@ public sealed class ExactVersionResolutionTests
             ctx.Add(new ActivityDefinitionVersion(version, definitionId)
             {
                 Id = Guid.NewGuid().ToString("N"),
-                ImplementationKind = "Clr",
+                DescriptorType = "Clr",
                 SourceKind = "CLR",
                 SourceId = definitionId,
             });

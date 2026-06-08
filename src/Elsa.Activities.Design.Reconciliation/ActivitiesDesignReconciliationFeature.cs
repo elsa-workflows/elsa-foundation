@@ -11,7 +11,7 @@ namespace Elsa.Activities.Design.Reconciliation;
 
 /// <summary>
 /// Activity-design reconciliation feature. Registers the reconciler, its options, the single
-/// startup task that drives a pass, and the universal <see cref="ActivityVersionsReconcilingHandler"/>
+/// startup task that drives a pass, and the universal <see cref="CollectActivityVersions"/>
 /// that resolves every registered <see cref="IActivityReconciliationSource"/> from DI. Source
 /// modules (CLR scanner, JSON catalog, …) contribute by registering their own
 /// <see cref="IActivityReconciliationSource"/> via their own feature (§2.6.1) — this feature
@@ -37,6 +37,6 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
 
         services.AddScoped<IStartupTask, ActivityVersionReconcilerStartupTask>();
 
-        services.AddEventHandler<OnActivityVersionsReconciling, ActivityVersionsReconcilingHandler>();
+        services.AddEventHandler<OnActivityVersionsReconciling, CollectActivityVersions>();
     }
 }

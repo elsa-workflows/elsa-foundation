@@ -123,8 +123,8 @@ public sealed class JsonReconciliationTests : IDisposable
           "displayName": "Send Email",
           "category": "Communication",
           "description": "Sends an email to a recipient.",
-          "implementationKind": "Clr",
-          "implementationDescriptor": {
+          "descriptorType": "Clr",
+          "descriptor": {
             "typeInfo": {
               "typeName": "SendEmail",
               "namespace": "Acme.Activities",
@@ -145,8 +145,8 @@ public sealed class JsonReconciliationTests : IDisposable
           "activityTypeKey": "Acme.Activities.WriteLine",
           "displayName": "Write Line",
           "category": "Primitives",
-          "implementationKind": "Clr",
-          "implementationDescriptor": {
+          "descriptorType": "Clr",
+          "descriptor": {
             "typeInfo": {
               "typeName": "WriteLine",
               "namespace": "Acme.Activities",

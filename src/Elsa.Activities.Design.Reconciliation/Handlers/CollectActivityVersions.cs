@@ -20,7 +20,7 @@ namespace Elsa.Activities.Design.Reconciliation.Handlers;
 /// <c>(DescriptorType, DescriptorPayload)</c> on the version. It never resolves the descriptor type to
 /// a CLR type (that happens only in the runtime feature that owns the type). No per-kind branch.
 /// </summary>
-public sealed class ActivityVersionsReconcilingHandler(
+public sealed class CollectActivityVersions(
     IQueries<ActivityDefinition> definitionQueries,
     IActivityDefinitionHasher activityDefinitionHasher,
     IIdentityGenerator identityGenerator,

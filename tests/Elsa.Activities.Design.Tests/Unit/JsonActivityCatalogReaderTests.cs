@@ -34,8 +34,8 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
                 "displayName": "Send Email",
                 "category": "Communication",
                 "description": "Sends an email to a recipient.",
-                "implementationKind": "Clr",
-                "implementationDescriptor": {
+                "descriptorType": "Clr",
+                "descriptor": {
                   "typeInfo": {
                     "typeName": "SendEmail",
                     "namespace": "Acme.Activities",
@@ -58,10 +58,11 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
         Assert.Equal("Send Email", model.DisplayName);
         Assert.Equal("Communication", model.Category);
         Assert.Equal("Sends an email to a recipient.", model.Description);
-        Assert.Equal("Clr", model.ImplementationKind);
+        Assert.Equal("Clr", model.DescriptorType);
 
-        // The descriptor is left as a raw JsonElement — the reconciliation handler resolves it by kind.
-        var descriptor = Assert.IsType<JsonElement>(model.ImplementationDescriptor);
+        // The descriptor is left as a raw JsonElement — the runtime constructor that owns the type
+        // materializes it; the design domain never deserializes it.
+        var descriptor = Assert.IsType<JsonElement>(model.Descriptor);
         Assert.Equal(JsonValueKind.Object, descriptor.ValueKind);
         Assert.True(descriptor.TryGetProperty("typeInfo", out var typeInfo));
         Assert.Equal("SendEmail", typeInfo.GetProperty("typeName").GetString());

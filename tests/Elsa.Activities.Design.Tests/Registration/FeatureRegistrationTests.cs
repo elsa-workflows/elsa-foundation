@@ -8,7 +8,6 @@ using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Resolvers;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.EFCore.Events;
@@ -39,22 +38,18 @@ public sealed class FeatureRegistrationTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetService<IImplementationDescriptorRegistry>());
-        Assert.NotNull(provider.GetService<IActivityImplementationResolverRegistry>());
-        Assert.NotNull(provider.GetService<ClrActivityImplementationResolver>());
+        Assert.NotNull(provider.GetService<IActivityConstructorRegistry>());
 
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetService<IActivityFactory>());
 
-        // Two startup tasks (resolver registry + descriptor registry).
-        var startupTasks = scope.ServiceProvider.GetServices<IStartupTask>().ToList();
-        Assert.True(startupTasks.Count >= 2);
-
-        // Handlers register as non-generic IEventHandler (the event pipeline
-        // filters by interface). Two contributors expected: CLR resolver + CLR descriptor type.
-        var allHandlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
-        Assert.Contains(allHandlers, h => h is IEventHandler<Elsa.Activities.Runtime.Core.Events.OnActivityImplementationResolversInitializing>);
-        Assert.Contains(allHandlers, h => h is IEventHandler<Elsa.Activities.Design.Core.Events.OnImplementationDescriptorsInitializing>);
+        // The constructor registry is populated via the Registry + StartUp Task + Domain Event
+        // pattern (framework §2.6.1): the startup task publishes the init event; the single
+        // aggregating handler adds every contributed IActivityConstructor.
+        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
+            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.ActivityConstructorsStartupTask));
+        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
+            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Handlers.RegisterActivityConstructors));
     }
 
     [Fact]
@@ -76,7 +71,7 @@ public sealed class FeatureRegistrationTests
         // The universal reconciling handler is wired (registered as the non-generic IEventHandler
         // service; the event pipeline filters by the closed IEventHandler<TEvent> interface).
         Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
-            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Handlers.ActivityVersionsReconcilingHandler));
+            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Handlers.CollectActivityVersions));
 
         using var provider = services.BuildServiceProvider();
 

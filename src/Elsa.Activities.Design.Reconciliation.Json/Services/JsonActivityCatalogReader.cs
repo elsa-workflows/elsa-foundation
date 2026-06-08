@@ -13,11 +13,11 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// <see cref="IPayloadSerializer"/> (so naming/casing conventions match the rest of the system).
 /// </summary>
 /// <remarks>
-/// Each model's <c>ImplementationDescriptor</c> is typed <c>object</c>, so the serializer binds it to a
-/// <see cref="JsonElement"/> rather than a concrete descriptor — exactly what the reconciliation
-/// feature's universal handler expects: it reads <c>ImplementationKind</c>, resolves the descriptor
-/// type from the registry, and deserializes the element. The JSON file may therefore carry arbitrary
-/// author UI metadata; only the kind/descriptor pair is structurally meaningful here.
+/// Each model's <c>Descriptor</c> is typed <c>object</c>, so the serializer binds it to a
+/// <see cref="JsonElement"/> rather than a concrete descriptor. The reconciling handler persists that
+/// opaque payload together with the entry's <c>DescriptorType</c>; the design domain never deserializes
+/// it. The JSON file may therefore carry arbitrary author UI metadata; only the
+/// <c>descriptorType</c>/<c>descriptor</c> pair is structurally meaningful here.
 /// </remarks>
 public sealed class JsonActivityCatalogReader(
     IPayloadSerializer payloadSerializer,

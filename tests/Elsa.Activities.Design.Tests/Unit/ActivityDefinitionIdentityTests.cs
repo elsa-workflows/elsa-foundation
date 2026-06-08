@@ -64,8 +64,8 @@ public sealed class ActivityDefinitionIdentityTests
             ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion("1.0.0", defId)
             {
                 Id = v1Id,
-                ImplementationKind = "Clr",
-                ImplementationDescriptor = new Elsa.Activities.Design.Core.Models.ClrImplementationDescriptor(
+                DescriptorType = "Clr",
+                DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
                     new Elsa.Primitives.Models.TypeInformation("Foo", "Acme.X", "Acme.X", "1.0.0.0")),
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
@@ -80,8 +80,8 @@ public sealed class ActivityDefinitionIdentityTests
             ctx.ActivityDefinitionVersions.Add(new ActivityDefinitionVersion("2.0.0", defId)
             {
                 Id = v2Id,
-                ImplementationKind = "Clr",
-                ImplementationDescriptor = new Elsa.Activities.Design.Core.Models.ClrImplementationDescriptor(
+                DescriptorType = "Clr",
+                DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
                     new Elsa.Primitives.Models.TypeInformation("FooRenamed", "Acme.Y", "Acme.Y", "2.0.0.0")),
                 SourceKind = "Json",
                 SourceId = "Elsa.Test",
@@ -101,8 +101,8 @@ public sealed class ActivityDefinitionIdentityTests
                 .OrderBy(v => v.Version)
                 .ToListAsync();
             Assert.Equal(2, versions.Count);
-            Assert.Equal("Clr", versions[0].ImplementationKind);
-            Assert.Equal("Clr", versions[1].ImplementationKind);
+            Assert.Equal("Clr", versions[0].DescriptorType);
+            Assert.Equal("Clr", versions[1].DescriptorType);
         }
     }
 

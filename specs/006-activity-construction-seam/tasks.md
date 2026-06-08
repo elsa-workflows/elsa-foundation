@@ -118,7 +118,7 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 - [ ] T046 [US3] Update `src/Elsa.Activities.Design.Reconciliation.Json/` — catalog field `implementationKind`→`descriptorType`; adjust `JsonActivityCatalogReader` doc + any sample catalog JSON
 - [x] T047 [US3] Update `src/Elsa.Activities.Design.Api/` — `Commands/AddDefinition.cs`, `Commands/AddVersion.cs`, `Handlers/AddDefinitionCommandHandler.cs`, `Handlers/AddVersionCommandHandler.cs`, `Mapping/ActivityDefinitionVersionToDetailsView.cs`, `Models/ActivityDefinitionVersionDetailsView.cs` → `(DescriptorType, payload)` shape
 - [x] T048 [US3] Update `src/Elsa3.Activities.Design.Import/Models/ActivityDefinitionVersionImport.cs` → `(DescriptorType, payload)` shape (one-way adapter; no new direction)
-- [ ] T049 [US3] Migrate existing reconciliation/persistence tests to the new shape, preserving subject/objective (G20); record any test deletion approval (Joey, this session) in the test file/PR
+- [x] T049 [US3] Migrate existing reconciliation/persistence tests to the new shape, preserving subject/objective (G20); record any test deletion approval (Joey, this session) in the test file/PR
 
 **Checkpoint**: Build green again; design domain is descriptor-opaque.
 

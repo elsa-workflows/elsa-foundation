@@ -1,5 +1,3 @@
-using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Sqlite;
@@ -17,25 +15,22 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// model-creating handler) and a SQLite in-memory connection. The connection is kept open
 /// for the host's lifetime so the in-memory database survives across DbContext instances.
 /// </summary>
+/// <remarks>
+/// The design domain no longer resolves descriptor types: the loading handler parses the opaque
+/// descriptor payload into a <c>JsonElement</c> without any kind→type registry.
+/// </remarks>
 internal sealed class ActivitiesDesignTestHost : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ServiceProvider _services;
 
-    private ActivitiesDesignTestHost(SqliteConnection connection, ServiceProvider services, IImplementationDescriptorRegistry descriptorRegistry)
+    private ActivitiesDesignTestHost(SqliteConnection connection, ServiceProvider services)
     {
         _connection = connection;
         _services = services;
-        DescriptorRegistry = descriptorRegistry;
     }
 
     public IServiceProvider Services => _services;
-
-    /// <summary>
-    /// Exposed for tests that exercise the loading handler — the loading handler
-    /// uses the registry to look up the descriptor type before deserializing.
-    /// </summary>
-    public IImplementationDescriptorRegistry DescriptorRegistry { get; }
 
     public ActivitiesDesignDbContext CreateContext()
     {
@@ -45,28 +40,17 @@ internal sealed class ActivitiesDesignTestHost : IDisposable
         return new ActivitiesDesignDbContext(options, _services);
     }
 
-    public static ActivitiesDesignTestHost Create() => CreateWithDescriptorRegistry();
-
-    /// <summary>
-    /// Construct a host pre-populated with the given (kind, descriptor-type) registrations
-    /// so the loading handler can resolve descriptor JSON back into a concrete type.
-    /// </summary>
-    public static ActivitiesDesignTestHost CreateWithDescriptorRegistry(params (string kind, Type type)[] registrations)
+    public static ActivitiesDesignTestHost Create()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         connection.Open();
 
-        var registry = new ImplementationDescriptorRegistry();
-        foreach (var (kind, type) in registrations)
-            registry.Register(new ImplementationDescriptorRegistration(kind, type));
-
         var services = new ServiceCollection();
         services.AddSingleton<ISystemClock, SystemClock>();
         services.AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
-        services.AddSingleton<IImplementationDescriptorRegistry>(registry);
 
         var provider = services.BuildServiceProvider();
-        var host = new ActivitiesDesignTestHost(connection, provider, registry);
+        var host = new ActivitiesDesignTestHost(connection, provider);
 
         using var ctx = host.CreateContext();
         ctx.Database.EnsureCreated();

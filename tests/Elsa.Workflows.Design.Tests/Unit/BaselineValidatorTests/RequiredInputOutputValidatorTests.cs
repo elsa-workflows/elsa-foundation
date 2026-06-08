@@ -148,8 +148,8 @@ public sealed class RequiredInputOutputValidatorTests
         public string Version => "1.0.0";
         public string DefinitionId => "def-1";
         public string ActivityTypeKey => "TestActivity";
-        public string ImplementationKind => "Test";
-        public IImplementationDescriptor ImplementationDescriptor => null!;
+        public string DescriptorType => "Test";
+        public System.Text.Json.JsonElement DescriptorPayload => default;
         public IActivityDefinition Definition => null!;
         public IEnumerable<InputDefinition> Inputs { get; } = inputs;
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;

@@ -17,7 +17,7 @@ namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
 /// US1 independent test (FR-020, SC-003). Drives the real <see cref="ClrActivityReconciliationSource"/>
-/// (with the real scanner + version resolver), the real <see cref="ActivityVersionsReconcilingHandler"/>,
+/// (with the real scanner + version resolver), the real <see cref="CollectActivityVersions"/>,
 /// and the real <see cref="ActivityVersionReconciler"/> against an in-memory catalog. The fixture
 /// assembly is versioned <c>2.1.0</c> and contains one un-annotated activity (→ assembly version) and
 /// one <c>[Version("3.0.0")]</c> activity (override wins).
@@ -87,8 +87,8 @@ public sealed class ClrReconciliationTests
                 DisplayName: null,
                 Category: null,
                 Description: null,
-                ImplementationKind: ClrImplementationDescriptor.KindValue,
-                ImplementationDescriptor: new ClrImplementationDescriptor(TypeInformation.FromType(typeof(VersionedFixtureActivity))),
+                DescriptorType: typeof(TypeInformation).FullName!,
+                Descriptor: TypeInformation.FromType(typeof(VersionedFixtureActivity)),
                 Inputs: [],
                 Outputs: [],
                 Ports: []));

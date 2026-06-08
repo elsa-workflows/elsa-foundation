@@ -73,7 +73,7 @@ public sealed class VersionOrderingTests
             ctx.Add(new ActivityDefinitionVersion(version, definitionId)
             {
                 Id = Guid.NewGuid().ToString("N"),
-                ImplementationKind = "Clr",
+                DescriptorType = "Clr",
                 SourceKind = "CLR",
                 SourceId = definitionId,
             });
