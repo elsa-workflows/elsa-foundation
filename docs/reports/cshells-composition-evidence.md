@@ -73,6 +73,8 @@ Name: Configuration and Feature Dependency Classification.
 
 Goal: define the classification rules that a future Feature Composition Explorer and CShells Appsettings Generator must consume.
 
+Status of the classification language: provisional architecture knowledge. The first accepted version should be useful enough for the next composition work unit, but it must remain amendable. Architects may add, merge, split, or rename kinds as new providers, deployment models, security requirements, and shell-loading behavior are reviewed. Until ratified elsewhere, these labels belong in reports/maps-facing planning material, not in the constitution as frozen gates.
+
 Scope:
 
 - Decide feature dependency kinds: required activation, optional companion, provider/default implementation, source/contributor, bridge, endpoint/API, compile-time-only reference.
@@ -80,6 +82,52 @@ Scope:
 - Decide whether duplicate feature IDs should fail map generation or remain report-only findings.
 - Decide how assembly scanning/loading evidence participates in composition output.
 - Update the feature dependency map generator only after the classification language is approved.
+
+Proposed dependency kinds:
+
+- `required activation`: selecting one feature requires another feature to be activated in the same shell.
+- `optional companion`: another feature enhances or extends behavior, but the selected feature can still start and operate meaningfully without it.
+- `provider/default implementation`: a concrete implementation of a contract where a shell may need one selected provider/default.
+- `source/contributor`: contributes declarations, sources, handlers, catalog entries, or other fan-in inputs to another feature.
+- `bridge`: connects two domains, contracts, or host surfaces without making either side own the other.
+- `endpoint/API`: exposes HTTP/API/endpoints for an underlying capability and may require host routing/API infrastructure separately.
+- `compile-time-only reference`: reference evidence required to build or type-check, but not evidence that another feature ID must be activated.
+
+Proposed settings kinds:
+
+- `required`: absent value prevents valid startup or intended operation.
+- `optional`: absent value is valid.
+- `defaulted`: code supplies a usable default.
+- `secret`: sensitive value that generated output must not inline as a real value.
+- `connection string`: database or service connection material, often also secret or deployment-specific.
+- `filesystem path`: file or directory location controlled by the host/deployment.
+- `type-name selector`: string/type value used to load, select, or instantiate an implementation.
+- `collection`: array, list, set, or dictionary value.
+- `shell-wide`: belongs to shell-level `Configuration` or host configuration instead of one feature key.
+- `host-loading`: controls package, assembly, or scanning behavior separately from feature activation.
+- `feature-bound`: belongs under `CShells:Shells:{shellName}:Features:{featureId}`.
+
+Classification rule:
+
+- A dependency edge or setting may carry multiple labels.
+- Direct project/package references are evidence, not activation policy.
+- Required activation should need direct registration evidence, tests, docs/catalog confirmation, or explicit architecture classification.
+- Unknown or disputed cases should stay marked pending review rather than guessed by the generator.
+
+Duplicate feature ID recommendation:
+
+- Current evidence shows no duplicate explicit feature IDs after splitting workflow JavaScript design/runtime activation into `JavaScriptWorkflowsDesign` and `JavaScriptWorkflowsRuntime`.
+- Future duplicate concrete `ShellFeature` IDs should be modeled as ambiguous pending review and should block appsettings generation.
+- Do not allow duplicates "by context" unless the CShells configuration model gains an approved namespace/context mechanism; the observed IConfiguration shape keys selected features by `{featureId}` under a shell.
+- Renaming is the preferred resolution when two concrete features are independently selectable.
+
+Assembly scanning/loading recommendation:
+
+- Treat assembly scanning/loading as host-loading output, separate from selected feature IDs.
+- Selected features answer which CShells features activate.
+- Host-loading output answers which packages, assemblies, shared assemblies, or folders the host must make available or scan.
+- Feature-bound settings may still point to scanning inputs, such as folder paths or type-name selectors.
+- Nuplane loading/shared assembly settings remain host-loading evidence until architecture approves the exact generated output shape.
 
 Out of scope:
 
