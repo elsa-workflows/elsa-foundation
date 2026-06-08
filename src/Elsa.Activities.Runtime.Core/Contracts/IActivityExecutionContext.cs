@@ -17,7 +17,7 @@ namespace Elsa.Activities.Runtime.Core.Contracts
 
         T? Get<T>(InputArgument<T>? input);
 
-        void Set<T>(ActivityOutput<T>? output, T? value, [CallerArgumentExpression(nameof(output))] string? outputName = null);
+        void Set<T>(OutputArgument<T>? output, T? value, [CallerArgumentExpression(nameof(output))] string? outputName = null);
 
         IAsyncEnumerable<ActivityOutputs> GetActivityOutputs();
 

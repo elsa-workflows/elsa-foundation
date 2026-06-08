@@ -82,12 +82,12 @@ namespace Elsa.Activities.Runtime.Core.Abstractions
         {
             if (output is not null)
             {
-                Result = new ActivityOutput<T>(output);
+                Result = new OutputArgument<T>(output);
             }
         }
 
         /// <inheritdoc />
-        protected CodeActivity(ActivityOutput<T>? output /*string? source = default, int? line = default*/)
+        protected CodeActivity(OutputArgument<T>? output /*string? source = default, int? line = default*/)
             : base()
         {
             Result = output;
@@ -96,12 +96,12 @@ namespace Elsa.Activities.Runtime.Core.Abstractions
         /// <summary>
         /// The result of the activity.
         /// </summary>
-        public ActivityOutput<T>? Result { get; set; }
+        public OutputArgument<T>? Result { get; set; }
 
         OutputArgument? IActivityWithResult.Result
         {
             get => Result;
-            set => Result = (ActivityOutput<T>?)value;
+            set => Result = (OutputArgument<T>?)value;
         }
     }
 }

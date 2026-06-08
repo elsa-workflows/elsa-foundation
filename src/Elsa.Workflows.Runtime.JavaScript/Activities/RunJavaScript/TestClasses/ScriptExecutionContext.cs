@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses
     internal sealed class ScriptExecutionContext(IServiceProvider serviceProvider)
         : IActivityExecutionContext
     {
-        private ActivityOutput<object?>? activityOutput;
+        private OutputArgument<object?>? activityOutput;
         private string[] outcomes = [];
 
         public IExpressionExecutionContext ExpressionExecutionContext { get; } = new ScriptExpressionContext(serviceProvider);
@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses
             return (T)input!.MemoryBlockReference().Declare().Value!;
         }
 
-        public T? Get<T>(ActivityOutput<T>? _)
+        public T? Get<T>(OutputArgument<T>? _)
         {
             return (T)activityOutput?.MemoryBlockReference().Declare().Value!;
         }
@@ -43,9 +43,9 @@ namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses
             return serviceProvider.GetRequiredService<TService>();
         }
 
-        public void Set<T>(ActivityOutput<T>? output, T? value, [CallerArgumentExpression("output")] string? outputName = null)
+        public void Set<T>(OutputArgument<T>? output, T? value, [CallerArgumentExpression("output")] string? outputName = null)
         {
-            activityOutput = new ActivityOutput<object?>(
+            activityOutput = new OutputArgument<object?>(
                 new BlockReference(value)
             );
         }

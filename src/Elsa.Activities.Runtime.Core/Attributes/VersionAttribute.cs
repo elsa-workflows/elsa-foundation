@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Runtime.Core;
+namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
 /// Optionally annotates a CLR activity with an author-controlled SemVer 2.0.0 version.

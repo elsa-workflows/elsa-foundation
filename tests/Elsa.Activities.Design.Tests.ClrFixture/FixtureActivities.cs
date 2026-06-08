@@ -14,7 +14,7 @@ public sealed class UnannotatedFixtureActivity : ActivityBase
     [Required]
     public InputArgument<string> Message { get; set; } = null!;
 
-    public ActivityOutput<string> Result { get; set; } = null!;
+    public OutputArgument<string> Result { get; set; } = null!;
 }
 
 /// <summary>

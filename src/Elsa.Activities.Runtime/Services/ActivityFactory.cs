@@ -1,40 +1,24 @@
-using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Core.Models;
+using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
-using Microsoft.Extensions.DependencyInjection;
+using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Kind-agnostic factory. Looks up the resolver via
-/// <see cref="IActivityImplementationResolverRegistry"/>, resolves the CLR type, activates
-/// via <see cref="ActivatorUtilities"/>. Application of input/output state to the
-/// constructed activity is deferred to a follow-up — Unit B's contract specifies the
-/// factory returns an <see cref="IActivity"/> for a CLR descriptor; the
-/// <c>Input&lt;T&gt;</c>/<c>Output&lt;T&gt;</c> property wiring is not yet implemented.
+/// Pure dispatch / lifecycle orchestrator. Resolves the constructor registered for the descriptor
+/// type and delegates construction to it. No type resolution or argument binding lives here — those
+/// are kind-specific and owned by each <see cref="IActivityConstructor"/>.
 /// </summary>
-public sealed class ActivityFactory(
-    IServiceProvider services,
-    IActivityImplementationResolverRegistry resolvers)
-    : IActivityFactory
+public sealed class ActivityFactory(IActivityConstructorRegistry registry) : IActivityFactory
 {
     public ValueTask<IActivity> Create(
-        IImplementationDescriptor descriptor,
-        IEnumerable<InputState> inputs,
-        IEnumerable<OutputState> outputs,
-        CancellationToken cancellationToken)
+        string descriptorType,
+        JsonElement payload,
+        IDictionary<string, InputArgument>? inputs,
+        IDictionary<string, OutputArgument>? outputs,
+        CancellationToken cancellationToken = default)
     {
-        // Resolve throws ActivityResolutionException if the kind has no registered resolver.
-        var clrType = resolvers.Resolve(descriptor);
-        var activity = (IActivity)ActivatorUtilities.CreateInstance(services, clrType);
-
-        // Input/Output state wiring is out of scope for Unit B's contract acceptance.
-        // The factory returns the constructed IActivity; binding of InputState/OutputState
-        // to Input<T>/Output<T> properties lands when the runtime input/output pipeline
-        // is wired (deferred — see plan §R6).
-        _ = inputs;
-        _ = outputs;
-
-        return new(activity);
+        var constructor = registry.Resolve(descriptorType);
+        return constructor.Construct(payload, inputs, outputs, cancellationToken);
     }
 }

@@ -11,7 +11,7 @@ namespace Elsa.Activities.Runtime.Core.Contracts
         /// <summary>
         /// The result of the activity.
         /// </summary>
-        new ActivityOutput<T>? Result { get; set; }
+        new OutputArgument<T>? Result { get; set; }
     }
 
     /// <summary>

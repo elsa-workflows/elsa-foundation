@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Clr.Exceptions;
-using Elsa.Activities.Runtime.Core;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Primitives.Versioning;
 using System.Reflection;
 

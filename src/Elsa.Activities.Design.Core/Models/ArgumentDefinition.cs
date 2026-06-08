@@ -11,6 +11,7 @@ public sealed record ArgumentDefinition(
     string ReferenceKey,
     string Name,
     TypeInformation Type,
+    // Mark storage driver type for deletion from this model: it is not a design time concern, only runtime!
     TypeInformation? StorageDriverType,
     string DisplayName,
     string? Category,

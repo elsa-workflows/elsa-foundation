@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Elsa.Activities.Design.Reconciliation.Clr.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
-using Elsa.Activities.Runtime.Core;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;

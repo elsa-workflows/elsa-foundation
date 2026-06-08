@@ -14,13 +14,13 @@ namespace Elsa.Activities.Runtime.Core.Models
         }
     }
 
-    public class ActivityOutput<T> : OutputArgument
+    public class OutputArgument<T> : OutputArgument
     {
-        public ActivityOutput(IMemoryBlockReference memoryBlockReference) : base(memoryBlockReference)
+        public OutputArgument(IMemoryBlockReference memoryBlockReference) : base(memoryBlockReference)
         {
         }
 
-        public ActivityOutput(Func<IMemoryBlockReference> memoryBlockReference) : base(memoryBlockReference)
+        public OutputArgument(Func<IMemoryBlockReference> memoryBlockReference) : base(memoryBlockReference)
         {
         }
     }

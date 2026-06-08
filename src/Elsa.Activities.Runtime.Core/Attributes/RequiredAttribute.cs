@@ -1,4 +1,4 @@
-namespace Elsa.Activities.Runtime.Core;
+namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
 /// Marks an activity input or output property as required. The assembly reconciliation source
