@@ -44,7 +44,7 @@ Configuration keys:
 
 - Public settable properties on feature classes are the best current evidence for JSON-bindable feature settings.
 - Some required/default semantics are visible in code through defaults and validation guards.
-- The repo does not yet classify settings as required, optional, defaulted, secret, filesystem path, type-name selector, collection, shell-wide, host-loading, or feature-bound.
+- This report now carries a provisional settings-kind vocabulary below, but the repo does not yet apply those labels as approved generator policy.
 
 Optional vs required:
 
@@ -62,26 +62,33 @@ External package compatibility:
 
 - Whether future duplicate feature IDs should fail map generation or remain report-only findings.
 - Which project-reference edges are true feature activation requirements.
-- How to classify settings requiredness and sensitivity.
+- Which provisional settings labels should be accepted, renamed, split, or merged before generator work.
 - How to represent assembly scanning/loading prerequisites independently from selected features.
 - Whether feature dependencies should be declared manually, inferred from code, generated from registration tests, or a mix.
 - How Nuplane loading/shared assembly settings should be modeled for generated appsettings.
 
 ## Recommended Next Work Unit
 
-Name: Configuration and Feature Dependency Classification.
+Name: Configuration and Feature Dependency Classification Review.
 
-Goal: define the classification rules that a future Feature Composition Explorer and CShells Appsettings Generator must consume.
+Goal: review and refine the provisional classification rules that a future Feature Composition Explorer and CShells Appsettings Generator must consume.
 
-Status of the classification language: provisional architecture knowledge. The first accepted version should be useful enough for the next composition work unit, but it must remain amendable. Architects may add, merge, split, or rename kinds as new providers, deployment models, security requirements, and shell-loading behavior are reviewed. Until ratified elsewhere, these labels belong in reports/maps-facing planning material, not in the constitution as frozen gates.
+Status of the classification language: provisional architecture knowledge. The labels below are a planning vocabulary, not ratified gates and not generator behavior. The first accepted version should be useful enough for the next composition work unit, but it must remain amendable. Architects may add, merge, split, or rename kinds as new providers, deployment models, security requirements, and shell-loading behavior are reviewed. Until ratified elsewhere, these labels belong in reports/maps-facing planning material, not in the constitution as frozen gates.
 
 Scope:
 
-- Decide feature dependency kinds: required activation, optional companion, provider/default implementation, source/contributor, bridge, endpoint/API, compile-time-only reference.
-- Decide settings kinds: required, optional, defaulted, secret, connection string, filesystem path, type-name selector, collection, shell-wide, host-loading, feature-bound.
-- Decide whether duplicate feature IDs should fail map generation or remain report-only findings.
-- Decide how assembly scanning/loading evidence participates in composition output.
-- Update the feature dependency map generator only after the classification language is approved.
+- Review feature dependency kinds: required activation, optional companion, provider/default implementation, source/contributor, bridge, endpoint/API, compile-time-only reference.
+- Review settings kinds: required, optional, defaulted, secret, connection string, filesystem path, type-name selector, collection, shell-wide, host-loading, feature-bound.
+- Review whether duplicate feature IDs should fail map generation or remain report-only findings.
+- Review how assembly scanning/loading evidence participates in composition output.
+- Produce docs/report guidance only. Update the feature dependency map generator only in a later implementation unit after the classification language is approved.
+
+Current no-code boundary:
+
+- Do not implement the CShells Appsettings Generator.
+- Do not change source feature registration, options, or activation code.
+- Do not update map generator behavior while map-generator work is assigned elsewhere.
+- Do not promote the classification language into the constitution until the Configuration & Infrastructure follow-up closes.
 
 Proposed dependency kinds:
 
