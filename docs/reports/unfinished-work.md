@@ -14,6 +14,7 @@ Status: refreshed during Constitution Thinning v1 from current docs, constitutio
 | Entity design follow-up overlaps workflow execution | Extracted constitution draft history references entity-design and workflow execution follow-ups | Scope with Runtime/workflow executable work |
 | Branching/package strategy is still open | Extracted Elsa draft history references branching strategy and packaging | Use Speckit Flow Guide now; plan package/version meeting separately |
 | Integration testing policy is open | Framework unit-test section marks integration testing out of scope | Define TestContainers-based integration testing work unit |
+| Event handling strategy roles need finalization | Framework `§2.6.1`, delivery-strategy guidance, and architect research distinguish publisher/subscriber responsibility for choosing delivery strategy, but the final role rule is not yet solidified | Create architecture work unit to finalize event-handling strategy roles, especially when the publisher vs subscriber decides Sequential/Parallel/Background behavior |
 | Pattern catalog has pending/candidate entries | Framework sanctioned-patterns catalog contains pending/candidate language | Review before ratification |
 
 ## Code/domain implementation gaps
@@ -36,10 +37,11 @@ Status: refreshed during Constitution Thinning v1 from current docs, constitutio
 |---|---|---|
 | Future sessions can drift into local cleanup loops | The Elsa-brain program spans operating model, knowledge surfaces, executable workflows, codebase verification, feature composition, and workspace split readiness | Use `AGENTS.md` program goal and zoom-out rule before selecting each next work unit |
 | Constitution still contains some non-gate material | Constitution Thinning v1, Examples Thinning v2, and Constitution Thinning v3 moved draft history, glossary tables, the Elsa case study, large worked examples, and selected rationale/provenance out of the gate files | Continue thinning only where remaining examples/explanations can move without changing gate meaning |
-| Provider-neutral skills are cataloged but not executable wrappers | `docs/skills/catalog.md` | Add provider-specific wrappers only after workflow descriptions are accepted |
+| Provider-neutral skill wrappers need mirroring and drift validation | `docs/skills/catalog.md` and [skills stabilization audit](skills-stabilization-audit.md) identify ready, hidden, and planned skills; the Claude wrapper batch under `.claude/skills/elsa-*` has been validated against the catalog and manifest | Mirror accepted wrappers into other provider adapter surfaces when those surfaces exist, and add lightweight validation so wrappers stay thin against the provider-neutral catalog |
+| Event/contribution implementation skills depend on strategy-role decision | [skills stabilization audit](skills-stabilization-audit.md) promotes event contribution and independent subscriber workflows, while the event strategy-role rule is still unfinished | Finalize event-handling strategy roles before making event contribution/subscriber wrappers executable |
 | Constitution draft history is curated but still provisional | `docs/reports/constitution-draft-history.md` now indexes raw framework/Elsa history and `docs/reports/constitution-amendment-index.md` summarizes major amendments | Keep future extracted history in the split report family; do not promote provenance into gates |
 | Maps v1/v2 direct facts are generated, but richer maps are still planned | `docs/maps/README.md` planned maps list | Plan test maturity map or CShells composition map as separate work units |
-| Feature composition JSON generation is not implemented | Skill catalog describes workflow only | Build CShells generator after feature identifiers are discoverable |
+| Feature composition JSON generation is not implemented | Skill catalog describes workflow only; [skills stabilization audit](skills-stabilization-audit.md) flags feature identifiers and appsettings schema as blockers | Build CShells generator after feature identifiers and configuration/appsettings conventions are discoverable |
 
 ## Refresh procedure
 
