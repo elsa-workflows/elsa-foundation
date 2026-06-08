@@ -79,6 +79,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - Keep per-user selections in `.agent-prefs/`; only `.agent-prefs/.gitkeep` is committed.
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
+- After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.
 - Do not commit personal preference files from `.agent-prefs/`.
 
 ## Task paths
