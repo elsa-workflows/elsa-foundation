@@ -5,7 +5,7 @@ This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer th
 ## Start points
 
 - [Architecture tour](architecture-tour.md) - concise tour of the architecture and core workflows.
-- [Skill catalog](skills/catalog.md) - provider-neutral workflow descriptions.
+- [Skill catalog](skills/catalog.md) - AI-provider-neutral workflow descriptions.
 - [Root/framework glossary](glossary/root.md) - modular-framework terms.
 - [Elsa glossary](glossary/elsa.md) - Elsa-specific architecture terms.
 - [Reference docs](reference/README.md) - worked examples, case studies, and explanatory walkthroughs extracted from gate documents.

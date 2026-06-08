@@ -8,13 +8,13 @@ Steward(s): Joey plus active architects/agents.
 
 ## Purpose
 
-Turn `elsa-foundation` into the transitional Elsa brain: a provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
+Turn `elsa-foundation` into the transitional Elsa brain: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
 
 This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) only when a trigger is present.
 
 ## In Scope
 
-- Provider-neutral entrypoint and source-of-truth layering.
+- AI-provider-neutral entrypoint and source-of-truth layering.
 - Glossary and reference surfaces for reusable architecture knowledge.
 - Executable skills that agents and engineers can follow.
 - Generated maps and extension-point catalogs for repo navigation.
@@ -32,7 +32,7 @@ This goal does not mean every session must repeat the full program overview. Use
 
 ## Active Objectives
 
-1. Keep `AGENTS.md` as the provider-neutral front door and stable routing layer.
+1. Keep `AGENTS.md` as the AI-provider-neutral front door and stable routing layer.
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
 4. Make unfinished work and next-step selection visible without forcing every session through a large zoom-out ritual.

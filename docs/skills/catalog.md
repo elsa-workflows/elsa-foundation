@@ -1,6 +1,6 @@
-# Provider-Neutral Skill Catalog
+# AI-Provider-Neutral Skill Catalog
 
-This catalog defines the workflows agents and engineers should follow. Provider-specific skill folders may wrap these workflows, but this file is the canonical catalog.
+This catalog defines the workflows agents and engineers should follow. AI-provider-specific skill folders may wrap these workflows, but this file is the canonical catalog.
 
 ## Skill Layer Rules
 

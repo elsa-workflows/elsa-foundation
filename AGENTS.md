@@ -1,6 +1,6 @@
 # Elsa Foundation Agent Entrypoint
 
-This file is the provider-neutral front door for AI agents and engineers working in `elsa-foundation`.
+This file is the AI-provider-neutral front door for AI agents and engineers working in `elsa-foundation`.
 
 ## Repository intent
 
@@ -21,7 +21,7 @@ Use the narrowest source that answers the task.
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` |
-| Provider-specific AI adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
+| AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 

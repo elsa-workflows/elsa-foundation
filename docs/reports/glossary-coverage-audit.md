@@ -24,7 +24,7 @@ Check whether key Elsa Brain Operating Model terms are centralized in [root glos
 | `feature identity` | Stable architecture vocabulary used by constitutions, skills, maps, and composition evidence | Add a root glossary entry. |
 | `extension point` | Stable architecture vocabulary used by catalogs, maps, and implementation skills | Add a root glossary entry. |
 | `program goal`, `drift guard`, `source-of-truth layer` | Operating-model vocabulary already owned by `AGENTS.md` and `docs/program-goals/` | Do not add glossary entries unless these terms start appearing outside operating-model docs. |
-| `provider-neutral` | Ambiguous beside the existing runtime/backing-technology `Provider` term | Do not add a generic glossary entry. Prefer clearer local wording such as `AI-provider-neutral` when needed. |
+| `provider-neutral` | Ambiguous beside the existing runtime/backing-technology `Provider` term | Replace AI-agent/workflow uses with `AI-provider-neutral`; keep runtime-provider uses such as umbrella module wording unchanged. Do not add a generic glossary entry. |
 | CShells dependency/settings labels such as `required activation`, `optional companion`, `host-loading`, `feature-bound`, and `compile-time-only reference` | Provisional classification language | Keep in [CShells composition evidence](cshells-composition-evidence.md) until the classification work unit approves stable terminology. |
 
 ## Outcome

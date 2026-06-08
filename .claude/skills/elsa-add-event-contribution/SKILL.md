@@ -1,6 +1,6 @@
 ---
 name: "elsa-add-event-contribution"
-description: "Plan or implement Elsa event contributions and independent event subscribers using the provider-neutral event/contribution workflow. Use when adding fan-in contributors, Source/Contributor/PreProcessor/PostProcessor implementations, action-named contributors, aggregating handlers, or non-fan-in event subscribers."
+description: "Plan or implement Elsa event contributions and independent event subscribers using the AI-provider-neutral event/contribution workflow. Use when adding fan-in contributors, Source/Contributor/PreProcessor/PostProcessor implementations, action-named contributors, aggregating handlers, or non-fan-in event subscribers."
 argument-hint: "Event contribution or subscriber description"
 compatibility: "Requires elsa-foundation event gates and extension-point catalogs"
 metadata:

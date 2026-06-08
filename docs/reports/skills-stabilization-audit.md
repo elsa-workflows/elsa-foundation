@@ -6,20 +6,20 @@ Status: point-in-time audit for making the Elsa brain skill layer stable before 
 
 This report identifies which repeatable workflows already exist, which ones are hidden inside architecture guidance, and which concepts should stay in glossary/reference docs instead of becoming skills.
 
-The goal is to keep the Elsa brain provider-neutral: `docs/skills/catalog.md` is the canonical skill catalog, while provider-specific folders such as `.claude/skills/` are executable wrappers or adapters.
+The goal is to keep the Elsa brain AI-provider-neutral: `docs/skills/catalog.md` is the canonical skill catalog, while AI-provider-specific folders such as `.claude/skills/` are executable wrappers or adapters.
 
 ## Zoom-Out Check
 
 Program milestone advanced:
 
-- Operating model: clarifies the provider-neutral skill surface and wrapper boundary.
+- Operating model: clarifies the AI-provider-neutral skill surface and wrapper boundary.
 - Executable workflows: identifies skills agents and engineers can actually follow.
 - Knowledge surfaces: separates glossary/reference explanations from task workflows.
 - Workspace split readiness: keeps feature-development workflows explicit so they can later move to `elsa-workspace` with less coupling.
 
 This is higher-value than starting another domain implementation unit because the original Elsa-brain intent requires any future agent to enter through efficient maps, glossary, reports, and skills rather than re-learning the repo from broad constitution prose.
 
-Result type: report finding. Accepted workflow descriptions belong in `docs/skills/catalog.md`. Provider-specific wrappers belong under provider adapter folders after the neutral workflow is stable.
+Result type: report finding. Accepted workflow descriptions belong in `docs/skills/catalog.md`. AI-provider-specific wrappers belong under AI-provider adapter folders after the neutral workflow is stable.
 
 ## Inputs Reviewed
 
@@ -41,23 +41,23 @@ Result type: report finding. Accepted workflow descriptions belong in `docs/skil
 
 | Surface | Current role | Finding |
 |---|---|---|
-| `docs/skills/catalog.md` | Provider-neutral workflow catalog | Canonical but short; mixes stable skills with planned workflows that do not yet have executable wrappers. |
+| `docs/skills/catalog.md` | AI-provider-neutral workflow catalog | Canonical but short; mixes stable skills with planned workflows that do not yet have executable wrappers. |
 | `.claude/skills/*` | Claude-specific command wrappers | Executable wrappers now include Speckit commands and Elsa-brain skills. They should not become canonical architecture docs. |
 | `.specify/integrations/claude.manifest.json` | Claude integration manifest | Tracks Speckit and Elsa-brain Claude wrapper files by hash. |
 | `.specify/workflows/*` | Speckit workflow definitions | Tool workflow layer for specify -> plan -> tasks -> implement with review gates. |
 | `.specify/extensions/git/*` | Speckit git extension and scripts | Supports official branch/commit flow; should be surfaced through Speckit guidance, not duplicated in architecture docs. |
-| `AGENTS.md` task paths | Provider-neutral entrypoint | Correctly points to skills, maps, glossary, reports, and Speckit flow. |
+| `AGENTS.md` task paths | AI-provider-neutral entrypoint | Correctly points to skills, maps, glossary, reports, and Speckit flow. |
 | Constitution sections | Quality gates and sanctioned patterns | Contain several repeatable implementation workflows that should be referenced by skills rather than copied into them. |
 
 ## Claude Wrapper Validation
 
-Status: validated 2026-06-08 against the expanded provider-neutral catalog and the Claude integration manifest. Lightweight drift validation now exists at `tools/skills/validate-claude-wrapper-drift.ps1`.
+Status: validated 2026-06-08 against the expanded AI-provider-neutral catalog and the Claude integration manifest. Lightweight drift validation now exists at `tools/skills/validate-claude-wrapper-drift.ps1`.
 
 Validation scope:
 
 - Reviewed all `.claude/skills/elsa-*/SKILL.md` wrappers.
 - Compared wrapper trigger/outline intent against `docs/skills/catalog.md`.
-- Checked that wrappers remain thin provider adapters rather than canonical architecture documents.
+- Checked that wrappers remain thin AI-provider adapters rather than canonical architecture documents.
 - Checked blocked/planned skills for guardrails against guessing event dispatcher failure-policy / subscriber failure-classification implementation details, feature-identity, or appsettings decisions.
 - Verified `.specify/integrations/claude.manifest.json` hashes for the Elsa wrapper files against the current files.
 - Added an executable check for the current Claude Elsa wrapper batch.
@@ -66,7 +66,7 @@ Findings:
 
 - The 18 Elsa Claude wrappers are accepted as the current Claude adapter batch.
 - All reviewed wrappers point back to catalog entries through `metadata.source`.
-- The wrappers preserve the provider-neutral catalog as canonical and do not duplicate long architecture explanations.
+- The wrappers preserve the AI-provider-neutral catalog as canonical and do not duplicate long architecture explanations.
 - The plan/act rule is reflected where it changes behavior: architecture-affecting implementation skills stop for a plan, while tests, catalog updates, generated-map refreshes, and small docs follow-through are treated as obligations after approval.
 - Planned or blocked workflows keep the needed guardrails: event contribution/subscriber work follows the documented publisher-delivery / publisher-dispatcher-failure / subscriber-failure-classification split while deferring code-level mechanics for the latter two, feature composition does not guess feature IDs, and CShells appsettings generation does not guess feature IDs, appsettings keys, or configuration semantics.
 - `tools/skills/validate-claude-wrapper-drift.ps1` passes for all 18 Elsa wrapper files and manifest entries.
@@ -88,7 +88,7 @@ Skills may link to glossary, reference docs, maps, reports, specs, and constitut
 
 ## Ready Skills
 
-These workflows are already clear enough to remain in the catalog and can later receive provider wrappers.
+These workflows are already clear enough to remain in the catalog and can later receive AI-provider wrappers.
 
 | Skill | Canonical source | Wrapper status | Notes |
 |---|---|---|---|
@@ -101,7 +101,7 @@ These workflows are already clear enough to remain in the catalog and can later 
 | Source-of-Truth Audit | `AGENTS.md`; `knowledge-inventory.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-source-of-truth-audit/` | Needed for constitution thinning and layer drift prevention. |
 | Create Agent Preference | `AGENTS.md`; `docs/reference/agent-preferences.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-create-agent-preference/` | Keeps personal workflow choices in ignored `.agent-prefs/` files instead of shared doctrine. |
 | Initialize Agent Preferences | `AGENTS.md`; `docs/reference/agent-preferences.md`; `docs/reference/git-operating-models.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-initialize-agent-preferences/` | Bootstraps local preferences only when none exist, without making one user's workflow the repo default. |
-| Speckit Flow Guide | `.specify/workflows`; `.claude/skills/speckit-*` | Claude wrappers exist | Existing provider wrappers are Speckit command-level, not Elsa-brain-level. |
+| Speckit Flow Guide | `.specify/workflows`; `.claude/skills/speckit-*` | Claude wrappers exist | Existing AI-provider wrappers are Speckit command-level, not Elsa-brain-level. |
 | Feature/Dependency Map Builder | `tools/maps/*`; `docs/maps/*` | Claude wrapper: `.claude/skills/elsa-feature-dependency-map/` | Map scripts already exist; workflow should point to the split map refresh commands. |
 
 ## Planned Skills That Need More Input
@@ -115,7 +115,7 @@ These are in the catalog but cannot be fully executable until underlying identif
 
 ## Hidden Skills To Promote
 
-These workflows are currently buried in constitution sections, reference examples, reports, or source conventions. They should become first-class provider-neutral skills after review.
+These workflows are currently buried in constitution sections, reference examples, reports, or source conventions. They should become first-class AI-provider-neutral skills after review.
 
 | Candidate skill | Trigger | Canonical references | Expected output | Priority |
 |---|---|---|---|---|
@@ -145,12 +145,12 @@ These topics should stay out of the skill catalog except as linked references:
 
 ## Wrapper Strategy
 
-Provider-neutral skill definitions should be accepted before wrappers are created.
+AI-provider-neutral skill definitions should be accepted before wrappers are created.
 
 Recommended order:
 
 1. Stabilize `docs/skills/catalog.md` headings and workflow boundaries.
-2. Add provider wrappers only for high-frequency workflows.
+2. Add AI-provider wrappers only for high-frequency workflows.
 3. Keep wrappers thin: they should load the catalog entry, required gates, maps, and glossary links, then execute the workflow.
 4. Do not duplicate architecture explanations inside wrappers.
 
@@ -187,7 +187,7 @@ Second wrapper batch:
 
 ## Follow-Up Work Units
 
-1. Mirror the accepted Claude wrapper batch into other provider adapter surfaces when those surfaces exist.
+1. Mirror the accepted Claude wrapper batch into other AI-provider adapter surfaces when those surfaces exist.
 2. Run `tools/skills/validate-claude-wrapper-drift.ps1` after catalog, Claude wrapper, or Claude manifest changes.
 3. Implement event dispatcher failure-policy and subscriber failure-classification support before treating those mechanics as executable code.
 4. Define feature identity/appsettings evidence before implementing the CShells Appsettings Generator.
@@ -195,4 +195,4 @@ Second wrapper batch:
 
 ## Recommendation
 
-Adopt the expanded `docs/skills/catalog.md` as the next stable provider-neutral skill surface. Keep this report as the audit trail and use it to drive wrapper creation in a later unit.
+Adopt the expanded `docs/skills/catalog.md` as the next stable AI-provider-neutral skill surface. Keep this report as the audit trail and use it to drive wrapper creation in a later unit.

@@ -4,7 +4,7 @@
   "installed_at": "2026-05-11T07:04:12.378173+00:00",
   "files": {
     ".claude/skills/elsa-add-bridge-adapter/SKILL.md": "f760ef4530f21f3387bcd364a2fc40916597296b28c450b904a362f76f40d55e",
-    ".claude/skills/elsa-add-event-contribution/SKILL.md": "b2bbb686f1a7101b95a6336ed589fcefe5dfeed68a3bade0b6a3e4209975f6a6",
+    ".claude/skills/elsa-add-event-contribution/SKILL.md": "c0dba9273817b2dd57839a5bfb3f89430d9bb86579fbbb92d8ff5c86effd9be0",
     ".claude/skills/elsa-add-replacement-contract/SKILL.md": "79844446fead23cd462da96347d6c30d5004b920fbccf5a87d55ee17345cc9da",
     ".claude/skills/elsa-add-unit-tests/SKILL.md": "1a2dbefa458abc5f5f7a9061f254ecd0e3df2b7fd6deb5a0ce5abfae076151dd",
     ".claude/skills/elsa-architecture-tour/SKILL.md": "b6aed3d8eb28336a4ce780c207cc8fced2a151fe260d64dbb210242097aadf40",

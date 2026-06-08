@@ -4,7 +4,7 @@ Status: point-in-time verification report created from the current constitution 
 
 ## Scope
 
-This report is the first concrete run of the provider-neutral [Verify Codebase Against Constitution](../skills/catalog.md#verify-codebase-against-constitution) workflow for test maturity and weak/stub implementation risk.
+This report is the first concrete run of the AI-provider-neutral [Verify Codebase Against Constitution](../skills/catalog.md#verify-codebase-against-constitution) workflow for test maturity and weak/stub implementation risk.
 
 Inputs:
 
