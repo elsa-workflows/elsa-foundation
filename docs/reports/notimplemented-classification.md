@@ -33,8 +33,8 @@ Classify the concrete `NotImplementedException` and nearby placeholder signals i
 ## Suggested Priority
 
 1. Do not promote Workflows Design JavaScript/context into the current Elsa Brain Operating Model bucket. Keep the classification as the safeguard and revisit it when full design-suite implementation starts.
-2. Decide whether `MultiDownloadableContentHandler` should be implemented, registered, or removed.
-3. Quarantine or rename the JavaScript activity endpoint fake context so it does not read as production runtime infrastructure.
+2. Keep `MultiDownloadableContentHandler` as recorded codebase evidence until a code-change or HTTP implementation bucket is explicitly selected.
+3. Keep the JavaScript activity demo endpoint/context finding as recorded codebase evidence until a code-change or runtime/demo cleanup bucket is explicitly selected.
 4. Leave `WorkflowExecutionContext` and `WorkflowDefinitionActivity.Execute` attached to runtime execution planning.
 
 ## What This Report Does Not Do
