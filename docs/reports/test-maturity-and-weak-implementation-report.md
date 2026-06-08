@@ -143,7 +143,7 @@ Some of these may be placeholder types outside a shipped path. Others sit in fea
 
 Next action:
 
-Classify each `NotImplementedException` site as intentional deferred contract, test-only stub, unreachable placeholder, or code drift. Remove or quarantine placeholders that are not part of an accepted deferred unit.
+Classification follow-up exists in [NotImplemented classification](notimplemented-classification.md). Use that report to choose the focused implementation or planning unit; remove or quarantine placeholders that are not part of an accepted deferred unit.
 
 ### F6 - Required input/output validation has a deliberate workflow-level gap
 
