@@ -24,7 +24,7 @@ Use the narrowest source that answers the task.
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 
-## Program goal and zoom-out rule
+## Program goals and drift guard
 
 The long-running goal is to turn this repository into the transitional Elsa brain:
 
@@ -35,14 +35,25 @@ The long-running goal is to turn this repository into the transitional Elsa brai
 5. **Feature composition:** feature/dependency exploration and CShells appsettings generation.
 6. **Workspace split readiness:** keep future extraction of feature-development assets into `elsa-workspace` simple.
 
-Before proposing or implementing a next work unit, do a brief zoom-out check:
+Treat this list as the current shared program-goal bucket, not as a ritual that every session must repeat. A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains, provided those buckets are recorded in the appropriate report/spec/work-unit surface and do not blur the source-of-truth layers above.
+
+Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
+
+- The user asks "what next", asks whether the work is drifting, or asks to revisit priorities.
+- The same session or handoff chain is moving into a third consecutive plan/work unit under the same topic.
+- Recent work is repeatedly deepening one local area while other program milestones are waiting.
+- A proposed task would change the program goal, create a new goal bucket, or move work between buckets.
+- A fresh session resumes from context that already says drift, priority, or roadmap alignment is in question.
+
+When triggered, keep the check concise:
 
 - Which program milestone does this work advance?
-- Is this still the highest-value next step, or are we polishing a local area because it is nearby?
+- Is this still the right bucket, or should the program goal be updated or split?
+- Is this still the highest-value next step, or are we staying in a local area because it is nearby?
 - Does the work preserve the source-of-truth layers above?
 - Should the result be a gate, glossary term, reference explanation, report finding, generated map, skill workflow, spec, or code change?
 
-If the user asks "what next" or a session is resuming from prior context, include this zoom-out check before recommending the next unit. This prevents local cleanup loops from replacing progress toward the full Elsa-brain operating model.
+For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the program goal.
 
 ### Temporary roadmap correction
 
