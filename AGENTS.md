@@ -80,7 +80,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
 - After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.
-- After completing an executed plan, ask whether the user wants a fresh-session prompt for the next work unit.
+- After completing an executed plan, ask whether the user wants to continue in the current session or prepare a reviewed handoff prompt and start a fresh agent/thread for the next work unit.
 - Do not commit personal preference files from `.agent-prefs/`.
 
 ## Task paths
