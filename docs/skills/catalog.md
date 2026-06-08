@@ -12,6 +12,16 @@ This catalog defines the workflows agents and engineers should follow. Provider-
 
 The current skill audit lives in [skills-stabilization-audit.md](../reports/skills-stabilization-audit.md).
 
+## Provider Wrapper Validation
+
+Claude Elsa wrappers can be checked for drift with:
+
+```powershell
+tools/skills/validate-claude-wrapper-drift.ps1
+```
+
+The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog and `.specify/integrations/claude.manifest.json`, including manifest hashes and thin-wrapper metadata.
+
 ## Orientation And Review Skills
 
 ### Architecture Tour

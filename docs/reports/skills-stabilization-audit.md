@@ -51,7 +51,7 @@ Result type: report finding. Accepted workflow descriptions belong in `docs/skil
 
 ## Claude Wrapper Validation
 
-Status: validated 2026-06-08 against the expanded provider-neutral catalog and the Claude integration manifest.
+Status: validated 2026-06-08 against the expanded provider-neutral catalog and the Claude integration manifest. Lightweight drift validation now exists at `tools/skills/validate-claude-wrapper-drift.ps1`.
 
 Validation scope:
 
@@ -60,6 +60,7 @@ Validation scope:
 - Checked that wrappers remain thin provider adapters rather than canonical architecture documents.
 - Checked blocked/planned skills for guardrails against guessing unresolved event-strategy, feature-identity, or appsettings decisions.
 - Verified `.specify/integrations/claude.manifest.json` hashes for the Elsa wrapper files against the current files.
+- Added an executable check for the current Claude Elsa wrapper batch.
 
 Findings:
 
@@ -68,7 +69,7 @@ Findings:
 - The wrappers preserve the provider-neutral catalog as canonical and do not duplicate long architecture explanations.
 - The plan/act rule is reflected where it changes behavior: architecture-affecting implementation skills stop for a plan, while tests, catalog updates, generated-map refreshes, and small docs follow-through are treated as obligations after approval.
 - Planned or blocked workflows keep the needed guardrails: event contribution/subscriber work defers strategy-role choices, feature composition does not guess feature IDs, and CShells appsettings generation does not guess feature IDs, appsettings keys, or configuration semantics.
-- Manifest hashes match all 18 Elsa wrapper files.
+- `tools/skills/validate-claude-wrapper-drift.ps1` passes for all 18 Elsa wrapper files and manifest entries.
 
 No wrapper edits were required during this validation pass.
 
@@ -183,7 +184,7 @@ Second wrapper batch:
 ## Follow-Up Work Units
 
 1. Mirror the accepted Claude wrapper batch into other provider adapter surfaces when those surfaces exist.
-2. Add lightweight wrapper drift validation so provider adapters can be checked against `docs/skills/catalog.md` and integration manifests.
+2. Run `tools/skills/validate-claude-wrapper-drift.ps1` after catalog, Claude wrapper, or Claude manifest changes.
 3. Finalize event handling strategy roles before making event contribution/subscriber skills executable.
 4. Define feature identity/appsettings evidence before implementing the CShells Appsettings Generator.
 5. Expand generated maps only where a skill needs stable navigation facts.
