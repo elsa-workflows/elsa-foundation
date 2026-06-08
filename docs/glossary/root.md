@@ -24,6 +24,7 @@ These are framework-level terms. Elsa-specific bindings live in [elsa.md](elsa.m
 | Startup task | A startup-time task used for composition, registry population, or other deterministic bootstrapping. |
 | Event | The in-process message concept represented by `IEvent`. Behavior depends on the publishing strategy. |
 | Event strategy | The delivery behavior for an event, such as Sequential, Parallel, or Background. |
+| Event exception strategy | The failure-handling behavior for an event handler/subscriber, such as propagate, collect, log-and-continue, retry, dead-letter, or escalate. It operates inside the publisher-owned event strategy. |
 | Dependency | A declared or actual requirement from one module/feature/project/package to another. Reason about dependencies at the smallest stable boundary. |
 | Compatibility | Whether a set of packages/features can coexist, based on public contracts and external/transitive package requirements. |
 | Shell | A composed host/application setup that activates selected features. |

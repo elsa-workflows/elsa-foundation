@@ -122,7 +122,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a feature contributes to a fan-in event or lifecycle contribution surface.
 
-**Workflow:** check event/contribution gates and the owning domain's `EXTENSION_POINTS.md`; choose the correct contributor-interface kind (`Source`, `Contributor`, `PreProcessor`, `PostProcessor`, or action-named equivalent); ensure the owning feature has one aggregating event handler for that contribution purpose; plan registration, extension-point catalog updates, and tests. If delivery-strategy ownership is unclear, defer to the event-handling strategy-role work item. After the user approves the contribution plan, complete required tests, catalog updates, and map refreshes as follow-through.
+**Workflow:** check event/contribution gates and the owning domain's `EXTENSION_POINTS.md`; choose the correct contributor-interface kind (`Source`, `Contributor`, `PreProcessor`, `PostProcessor`, or action-named equivalent); ensure the owning feature has one aggregating event handler for that contribution purpose; verify the publisher-owned delivery strategy is Sequential when contributions are read back; plan the contributor's exception/failure behavior within that delivery boundary, noting current code gaps where handler-level exception strategies are not yet implemented. After the user approves the contribution plan, complete required tests, catalog updates, and map refreshes as follow-through.
 
 **Output:** contribution plan or implementation checklist with contributor contract, handler, registration, docs, and tests.
 
@@ -130,7 +130,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a feature observes an event for auditing, cache invalidation, telemetry, notifications, or other non-fan-in behavior.
 
-**Workflow:** confirm the behavior is not a fan-in contribution; inspect the event contract and delivery-strategy expectations; plan the handler registration, failure behavior, and tests. If publisher/subscriber strategy ownership is unclear, record it against the event-handling strategy-role work item rather than guessing. After the user approves the subscriber plan, complete required tests and catalog updates as follow-through.
+**Workflow:** confirm the behavior is not a fan-in contribution; inspect the event contract, publisher-owned delivery strategy, cataloged failure boundary, and subscriber-owned exception/failure behavior; plan the handler registration and tests. If the subscriber needs stronger delivery semantics than the event provides, raise an architecture question and model a separate event phase rather than attaching the subscriber as-is. Note current code gaps where handler-level exception strategies are not yet implemented. After the user approves the subscriber plan, complete required tests and catalog updates as follow-through.
 
 **Output:** subscriber plan or implementation checklist with event contract, handler behavior, registration, and tests.
 

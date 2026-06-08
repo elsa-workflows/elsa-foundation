@@ -58,7 +58,7 @@ Validation scope:
 - Reviewed all `.claude/skills/elsa-*/SKILL.md` wrappers.
 - Compared wrapper trigger/outline intent against `docs/skills/catalog.md`.
 - Checked that wrappers remain thin provider adapters rather than canonical architecture documents.
-- Checked blocked/planned skills for guardrails against guessing unresolved event-strategy, feature-identity, or appsettings decisions.
+- Checked blocked/planned skills for guardrails against guessing event exception-strategy implementation details, feature-identity, or appsettings decisions.
 - Verified `.specify/integrations/claude.manifest.json` hashes for the Elsa wrapper files against the current files.
 - Added an executable check for the current Claude Elsa wrapper batch.
 
@@ -68,7 +68,7 @@ Findings:
 - All reviewed wrappers point back to catalog entries through `metadata.source`.
 - The wrappers preserve the provider-neutral catalog as canonical and do not duplicate long architecture explanations.
 - The plan/act rule is reflected where it changes behavior: architecture-affecting implementation skills stop for a plan, while tests, catalog updates, generated-map refreshes, and small docs follow-through are treated as obligations after approval.
-- Planned or blocked workflows keep the needed guardrails: event contribution/subscriber work defers strategy-role choices, feature composition does not guess feature IDs, and CShells appsettings generation does not guess feature IDs, appsettings keys, or configuration semantics.
+- Planned or blocked workflows keep the needed guardrails: event contribution/subscriber work follows the documented publisher-delivery/subscriber-exception role split while deferring code-level exception-strategy mechanics, feature composition does not guess feature IDs, and CShells appsettings generation does not guess feature IDs, appsettings keys, or configuration semantics.
 - `tools/skills/validate-claude-wrapper-drift.ps1` passes for all 18 Elsa wrapper files and manifest entries.
 
 No wrapper edits were required during this validation pass.
@@ -119,8 +119,8 @@ These workflows are currently buried in constitution sections, reference example
 |---|---|---|---|---|
 | Create Feature or Module | A new feature/module needs to be added or ported. | Framework `§2.1`, `§2.2`, `§2.19`, `§2.20`, `§2.23`; Speckit flow. | Feature/module shape, project placement, dependency envelope, tests, docs, extension-point updates. | High; Claude wrapper exists at `.claude/skills/elsa-create-feature/` |
 | Extend Feature by Inheritance | A feature must extend, decorate, or specialize another feature. | Framework `§2.5`; worked examples. | Inheriting feature shape with registration override and tests. | High; Claude wrapper exists at `.claude/skills/elsa-extend-feature-inheritance/` |
-| Add Event Contribution | A feature contributes to a fan-in event. | Framework `§2.6.1`; extension-point catalogs; event strategy unfinished item. | Contributor interface implementation plus single owning handler update where applicable. | High; Claude wrapper exists at `.claude/skills/elsa-add-event-contribution/` |
-| Add Independent Event Subscriber | A feature observes an event for audit, cache, telemetry, or side effects unrelated to fan-in aggregation. | Framework `§2.6.1`; pending event strategy role work. | Event handler registration with chosen delivery-strategy rationale. | High; covered by `.claude/skills/elsa-add-event-contribution/` for now |
+| Add Event Contribution | A feature contributes to a fan-in event. | Framework `§2.6.1` / `§2.6.6`; extension-point catalogs; event exception-strategy implementation gap. | Contributor interface implementation plus single owning handler update where applicable; record subscriber-owned exception policy needs until code support exists. | High; Claude wrapper exists at `.claude/skills/elsa-add-event-contribution/` |
+| Add Independent Event Subscriber | A feature observes an event for audit, cache, telemetry, or side effects unrelated to fan-in aggregation. | Framework `§2.6.1` / `§2.6.6`; event exception-strategy implementation gap. | Event handler registration with publisher-owned delivery-strategy check and subscriber-owned exception-policy rationale. | High; covered by `.claude/skills/elsa-add-event-contribution/` for now |
 | Add Replacement Contract Implementation | A single implementation is selected per app/runtime context. | Framework `§2.6.2`; extension-point catalogs. | Replacement implementation and conflict-detection evidence. | Medium; Claude wrapper exists at `.claude/skills/elsa-add-replacement-contract/` |
 | Add Bridge or Adapter | A workflow crosses seams or wraps an external/heavy dependency. | Framework `§2.7`; `docs/seams.md`; runtime pre-spec handoff. | Bridge/adapter contract placement, dependency direction, and tests. | High; Claude wrapper exists at `.claude/skills/elsa-add-bridge-adapter/` |
 | Add Extension-Point Catalog Entry | A feature exposes or implements extension points. | Framework `§2.22`; `EXTENSION_POINTS.md`; `docs/maps/extension-point-map.md`. | Updated project catalog and generated map refresh if needed. | High; Claude wrapper exists at `.claude/skills/elsa-extension-point-catalog/` |
@@ -185,7 +185,7 @@ Second wrapper batch:
 
 1. Mirror the accepted Claude wrapper batch into other provider adapter surfaces when those surfaces exist.
 2. Run `tools/skills/validate-claude-wrapper-drift.ps1` after catalog, Claude wrapper, or Claude manifest changes.
-3. Finalize event handling strategy roles before making event contribution/subscriber skills executable.
+3. Implement event exception-strategy support before treating handler-level exception policies as executable code mechanics.
 4. Define feature identity/appsettings evidence before implementing the CShells Appsettings Generator.
 5. Expand generated maps only where a skill needs stable navigation facts.
 
