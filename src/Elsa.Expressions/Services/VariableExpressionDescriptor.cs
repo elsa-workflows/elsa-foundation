@@ -1,8 +1,6 @@
 ﻿using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.Services;
 
@@ -12,7 +10,7 @@ public sealed class VariableExpressionDescriptor : IExpressionDescriptor
 
     public string DisplayName => WellKnownExpressionDescriptorTypes.Variable;
 
-    public Func<IServiceProvider, IExpressionHandler> HandlerFactory => throw new NotImplementedException();
+    public Func<IServiceProvider, IExpressionHandler> HandlerFactory => ActivatorUtilities.GetServiceOrCreateInstance<VariableExpressionHandler>;
 
-    public IDictionary<string, object> Properties => throw new NotImplementedException();
+    public IDictionary<string, object> Properties { get; } = new Dictionary<string, object>();
 }
