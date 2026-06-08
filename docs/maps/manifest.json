@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "generator": "tools/maps/generate-maps",
+  "freshness_rule": "Maps are fresh when input_fingerprint matches the current inputs. git_head is advisory because generated maps may be committed with their inputs.",
+  "git_head": "02f167c669f6fb5e90361751042c2a110c071beb",
+  "relevant_inputs_dirty": true,
+  "input_fingerprint": "2fb21336502c3289b702b8f581e275aff5b109fc5ab6fefdb7c3fd241ad81387",
+  "input_file_count": 890,
+  "counts": {
+    "source_projects": 67,
+    "test_projects": 6,
+    "direct_project_references": 257,
+    "direct_package_references": 127,
+    "feature_classes": 38,
+    "specs": 6
+  },
+  "generated_files": [
+    "docs/maps/project-reference-map.md",
+    "docs/maps/package-map.md",
+    "docs/maps/feature-map.md",
+    "docs/maps/test-map.md",
+    "docs/maps/spec-status-map.md",
+    "docs/maps/domain-map.md",
+    "docs/maps/extension-point-map.md",
+    "docs/maps/architecture-reference-map.md",
+    "docs/reports/maps-v2-findings.md",
+    "docs/reports/maps-v1-findings.md"
+  ]
+}

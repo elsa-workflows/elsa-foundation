@@ -1,0 +1,24 @@
+# Elsa Glossary
+
+These are Elsa-specific terms and bindings. Framework-level terms live in [root.md](root.md).
+
+| Term | Canonical meaning |
+|---|---|
+| Elsa brain | The repository role where foundation libraries, architecture gates, maps, skills, and glossary knowledge make Elsa navigable and verifiable. |
+| Elsa host | The `Elsa.Server` ASP.NET Core application instance that composes selected Elsa features. |
+| Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
+| Elsa foundation repo | `elsa-foundation`, this repository: the transitional baseline for Elsa foundation libraries, architecture knowledge, maps, specs, and default implementation work. |
+| Elsa.Primitives | The primitives domain replacing the historical `Elsa.Common`; it carries truly cross-cutting primitive abstractions without becoming a dumping ground. |
+| Workflow design | The authoring side of workflows: definitions, drafts, versions, design-time validation, design-time persistence, and read models. |
+| Workflow runtime | The execution side of workflows: executable artifacts, instances, runtime state, bookmarks, logs, and execution integrations. |
+| Activity catalog | The persisted source of truth for activities visible to design-time consumers. Picker visibility comes from catalog rows, not live scanning. |
+| Workflow executable | The runtime-owned artifact shape produced from design-time source and consumed by runtime execution. Its exact shape is still part of open architecture work. |
+| Workflow definition state | The authored workflow document stored with drafts and versions in the design domain. It owns authored content, not runtime state. |
+| Artifact-only runtime | The rule that runtime execution must be able to load and run from the published artifact without requiring design documents. |
+| Reconciliation | A process that updates persisted design/catalog state from authoritative sources such as CLR activities, JSON import, or workflow definitions. |
+| Activity construction | The runtime-side process that turns a descriptor type, descriptor payload, and argument bags into a live `IActivity`. |
+| Publishing/compile bridge | The domain that reads design-side state and produces runtime artifacts without making Runtime depend on Design. |
+| Elsa 3 import | Compatibility strategy for Elsa 3 assets. The boundary is import into Elsa 4-native models, not running Elsa 3 behavior in place. |
+| Feature composition | Selecting and activating a set of Elsa features and their dependencies into a shell/API host. |
+| Seam | In Elsa docs, a published contract boundary between sub-domains, normally represented by `.Core` contracts. See [seams and bridges](../seams.md). |
+| Bridge | Code that connects two contract boundaries from above, depending on both contracts without making either side depend on the other. See [seams and bridges](../seams.md). |

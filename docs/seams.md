@@ -3,6 +3,8 @@
 > **Audience:** engineers and architects working in `elsa-foundation`.
 > **Purpose:** make the load-bearing boundaries of the activities/workflows domain *visible* — so we
 > can point at them, build against them, and watch them grow.
+> **Knowledge role:** worked reference. Canonical short definitions live in
+> [`docs/glossary/elsa.md`](glossary/elsa.md).
 
 Most Elsa features are self-contained: a feature owns its contracts, its implementation, and its
 persistence, and never reaches into a neighbour. The **activities/workflows** domain is the exception.

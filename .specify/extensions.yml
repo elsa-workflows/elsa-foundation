@@ -1,4 +1,5 @@
-installed: []
+installed:
+- git
 settings:
   auto_execute_hooks: true
 hooks:

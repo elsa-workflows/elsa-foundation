@@ -39,6 +39,11 @@ The action-named suffixes (`…Validator`, `…Handler`) are semantically sancti
 - **per-domain `EXTENSION_POINTS.md`** — the authoritative catalog for THAT domain: its overridable contracts, its implementable contributor interfaces, and (as an **Events** section) the events it publishes.
 - **this file** — the repo-wide index that points into each per-domain catalog.
 
+**Root-indexing policy:** this root index includes every discovered `src/**/EXTENSION_POINTS.md`
+catalog. Source/contribution-module catalogs are indexed here even when they point back to an
+authoritative owner lifecycle catalog. Generated maps report index/catalog drift as review signals,
+not automatic constitution violations.
+
 ---
 
 ## Per-domain catalogs
@@ -52,7 +57,6 @@ The action-named suffixes (`…Validator`, `…Handler`) are semantically sancti
 | Pipelines (middleware — Core-only, no feature project) | [`src/Elsa.Pipelines.Core/EXTENSION_POINTS.md`](src/Elsa.Pipelines.Core/EXTENSION_POINTS.md) |
 | Tasks (startup / recurring / background tasks) | [`src/Elsa.Tasks/EXTENSION_POINTS.md`](src/Elsa.Tasks/EXTENSION_POINTS.md) |
 | Caching (cache manager + change-token signaling) | [`src/Elsa.Caching.Memory/EXTENSION_POINTS.md`](src/Elsa.Caching.Memory/EXTENSION_POINTS.md) |
-| Mapping (object mapper + per-type mappings) | [`src/Elsa.Mapping/EXTENSION_POINTS.md`](src/Elsa.Mapping/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`src/Elsa.Serialization/EXTENSION_POINTS.md`](src/Elsa.Serialization/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md`](src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md) |
 
@@ -83,6 +87,8 @@ The action-named suffixes (`…Validator`, `…Handler`) are semantically sancti
 |---|---|
 | Activities runtime (resolver sources + implementation descriptor sources) | [`src/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](src/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
 | Activities design — reconciliation sources | [`src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md) |
+| Activities design — CLR reconciliation source contribution | [`src/Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md) |
+| Activities design — JSON reconciliation source contribution | [`src/Elsa.Activities.Design.Reconciliation.Json/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation.Json/EXTENSION_POINTS.md) |
 | Activities design — persistence commands + lookup | [`src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md) |
 
 ### Workflows
