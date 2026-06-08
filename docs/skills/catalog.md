@@ -60,23 +60,23 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user asks what is unfinished, unratified, weakly implemented, or ready for the next work unit.
 
-**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), then read [../reports/unfinished-work.md](../reports/unfinished-work.md); refresh with searches for `TODO`, `DEFERRED`, `pending`, `stub`, `placeholder`, and specs marked superseded or retained-for-intent. Rank candidates by which Elsa-brain milestone they advance, not only by which local file looks unfinished.
+**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), inspect the active goal registry in [../program-goals/](../program-goals/), then read [../reports/unfinished-work.md](../reports/unfinished-work.md); refresh with searches for `TODO`, `DEFERRED`, `pending`, `stub`, `placeholder`, and specs marked superseded or retained-for-intent. Rank candidates by which active program-goal bucket they advance, not only by which local file looks unfinished.
 
-**Output:** prioritized list of next candidates, with whether each is architecture, docs, tests, or code, and the Elsa-brain milestone each candidate advances.
+**Output:** prioritized list of next candidates, with whether each is architecture, docs, tests, or code, and the active program-goal bucket each candidate advances.
 
 ### Program Goal Drift Review
 
 **Use when:** the user asks whether work is drifting, a thread is moving into a third consecutive plan/work unit under the same topic, recent work is repeatedly deepening one local area, or a proposed task would change/split a program-goal bucket.
 
-**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard); identify the active goal bucket, recent short-term objectives, and the next proposed objective; decide whether the work is aligned, knowingly specialized, over-invested, under-invested elsewhere, or evidence that the program goal should be updated. If multiple architects or domains are involved, treat each valid mid-term bucket separately instead of forcing all work into one global priority list.
+**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), then inspect the active goal registry in [../program-goals/](../program-goals/). Identify the active goal bucket, recent short-term objectives, and the next proposed objective; decide whether the work is aligned, knowingly specialized, over-invested, under-invested elsewhere, or evidence that the program goal should be updated. If multiple architects or domains are involved, treat each valid mid-term bucket separately instead of forcing all work into one global priority list.
 
-**Output:** a concise alignment note with one of three recommendations: continue in the current bucket, redirect to a higher-value bucket, or update/split the program goal and record that change in the appropriate report/spec/work-unit surface. Do not perform this review as a ritual at every fresh session start.
+**Output:** a concise alignment note with one of three recommendations: continue in the current bucket, redirect to a higher-value bucket, or update/split the program goal and record that change in `docs/program-goals/` plus any linked report/spec/work-unit surface. Do not perform this review as a ritual at every fresh session start.
 
 ### Work Unit Planner
 
 **Use when:** findings need to become Speckit-ready architecture or feature work.
 
-**Workflow:** apply the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) when a trigger is present; define goal, success criteria, in/out of scope, affected gates/docs/maps, tests, and review points; choose whether it is feature development or architecture development.
+**Workflow:** apply the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) when a trigger is present, using [../program-goals/](../program-goals/) as the goal registry; define goal, success criteria, in/out of scope, affected gates/docs/maps, tests, and review points; choose whether it is feature development or architecture development.
 
 **Output:** a concise work-unit plan ready for `speckit-specify` or architecture review, including the program milestone the work advances and the reason it is not merely local polish.
 

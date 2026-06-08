@@ -17,6 +17,7 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
+| Program-goal buckets, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` |
@@ -26,16 +27,9 @@ Do not duplicate concept explanations in new docs. Link to the canonical glossar
 
 ## Program goals and drift guard
 
-The long-running goal is to turn this repository into the transitional Elsa brain:
+Program goals are persisted in `docs/program-goals/`, not in this file. Do not use `AGENTS.md` as a mutable goal registry. This file only defines the entrypoint rule for finding and using program goals.
 
-1. **Operating model:** provider-neutral entrypoint, clear source-of-truth layers, official Speckit flow.
-2. **Knowledge surfaces:** glossary for meanings, reference docs for examples/rationale, reports for findings/history/open work.
-3. **Executable workflows:** skills that agents and engineers can actually follow.
-4. **Codebase reality:** reports that verify constitution compliance, test maturity, weak/stub implementations, maps, and extension points.
-5. **Feature composition:** feature/dependency exploration and CShells appsettings generation.
-6. **Workspace split readiness:** keep future extraction of feature-development assets into `elsa-workspace` simple.
-
-Treat this list as the current shared program-goal bucket, not as a ritual that every session must repeat. A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains, provided those buckets are recorded in the appropriate report/spec/work-unit surface and do not blur the source-of-truth layers above.
+A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains. Each bucket should have its own file under `docs/program-goals/` so people across agents, branches, and network boundaries can see what exists, who is stewarding it, what is active, and which reports/specs/branches are connected.
 
 Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
 
@@ -47,25 +41,13 @@ Use a lightweight drift guard instead of a mandatory zoom-out at every session s
 
 When triggered, keep the check concise:
 
-- Which program milestone does this work advance?
+- Which active program-goal bucket does this work advance?
 - Is this still the right bucket, or should the program goal be updated or split?
 - Is this still the highest-value next step, or are we staying in a local area because it is nearby?
 - Does the work preserve the source-of-truth layers above?
 - Should the result be a gate, glossary term, reference explanation, report finding, generated map, skill workflow, spec, or code change?
 
 For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the program goal.
-
-### Temporary roadmap correction
-
-Remove this subsection after the next alignment steps are completed and captured in the normal source-of-truth layers.
-
-The current roadmap is a correction against drifting too deeply into CShells composition work before the broader Elsa-brain program is balanced. Prioritize these next units in order unless the user explicitly redirects:
-
-1. **Program Alignment Review:** compare current repo surfaces against the original Elsa-brain intent; identify over-invested, under-invested, and appropriately provisional areas; recommend the next 3-5 work units.
-2. **Architecture Tour Review:** verify that `docs/architecture-tour.md` gives a concise orientation to the repo, core systems, and where to look next without duplicating glossary or constitution material.
-3. **Glossary Coverage Audit:** check whether key architecture terms are centralized in `docs/glossary/` and not re-explained across skills, reports, maps, or constitutions.
-4. **What's Next / Unfinished Work Re-ranking:** re-rank unfinished work by Elsa-brain milestone rather than recent-topic momentum.
-5. **Return to CShells composition only after the broader alignment is checked:** use the provisional classification report as input, but do not keep refining generator-specific taxonomy until the overall brain surfaces are balanced.
 
 ## Refresh generated maps
 
