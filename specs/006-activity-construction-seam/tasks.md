@@ -23,7 +23,7 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 
 - [x] T001 Create project `src/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj` (net10.0; runtime feature, **NO `Design.*` ref**; refs: `Elsa.Activities.Runtime.Core`, `Elsa.Primitives`, `CShells.Abstractions`, `Microsoft.Extensions.DependencyInjection.Abstractions`)
 - [ ] T002 [P] Create TWO projects (Workflow kind split per §E2.2): `src/Elsa.Activities.Composition.Runtime` (net10.0, Design-free; refs `Elsa.Activities.Runtime.Core`, `Elsa.Workflows.Primitives`, `Elsa.Workflows.Runtime.Core`, `CShells.Abstractions` — **NO `Design.*`**) and `src/Elsa.Activities.Composition.Design` (net10.0; refs `Elsa.Activities.Design.Reconciliation.Core`, `Elsa.Activities.Design.Core`, `Elsa.Workflows.Primitives`, `CShells.Abstractions`)
-- [ ] T003 [P] Add `WorkflowIdentity` record `(string DefinitionId, string VersionId, string Version)` in `src/Elsa.Workflows.Primitives/Models/WorkflowIdentity.cs`
+- [x] T003 [P] Add `WorkflowIdentity` record `(string DefinitionId, string VersionId, string Version)` in `src/Elsa.Workflows.Primitives/Models/WorkflowIdentity.cs`
 - [ ] T004 [P] Create test projects `tests/Elsa.Activities.Runtime.Tests`, `tests/Elsa.Activities.Primitives.Tests`, `tests/Elsa.Activities.Composition.Tests` (xunit only, NO FluentAssertions); confirm `tests/Elsa.Activities.Design.Tests` exists for reshape tests
 - [ ] T005 Register the new src + test projects in `Elsa.Server.slnx` and add the two features to the host composition where appropriate
 
@@ -79,13 +79,13 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 
 **Independent Test**: Route `("Elsa.Workflows.Primitives.WorkflowIdentity", <identity payload>)` + args; assert a `WorkflowDefinitionActivity` with the identity applied and author args in the bag; two identities → two instances differing only by identity.
 
-- [ ] T026 [US2] Implement `WorkflowDefinitionActivity` (public sealed, runtime-side, **no Design ref**) in `src/Elsa.Activities.Composition.Runtime/Activities/WorkflowDefinitionActivity.cs` — an ordinary CLR `IActivity` (so it is also catalogued under a `TypeInformation` descriptor); construct-only; typed `WorkflowIdentity`/version state + dynamic bag (`IActivity.SyntheticProperties`)
-- [ ] T027 [US2] Implement `WorkflowActivityConstructor : IActivityConstructor<WorkflowIdentity>` (public sealed) in `src/Elsa.Activities.Composition.Runtime/Constructors/WorkflowActivityConstructor.cs` — produces a `WorkflowDefinitionActivity` configured from the identity (typed state) + author args pre-set in the bag; does its **own** bag-filling (no ref to `Primitives`' binder); one-line bridge
+- [x] T026 [US2] Implement `WorkflowDefinitionActivity` (public sealed, runtime-side, **no Design ref**) in `src/Elsa.Activities.Composition.Runtime/Activities/WorkflowDefinitionActivity.cs` — an ordinary CLR `IActivity` (so it is also catalogued under a `TypeInformation` descriptor); construct-only; typed `WorkflowIdentity`/version state + dynamic bag (`IActivity.SyntheticProperties`)
+- [x] T027 [US2] Implement `WorkflowActivityConstructor : IActivityConstructor<WorkflowIdentity>` (public sealed) in `src/Elsa.Activities.Composition.Runtime/Constructors/WorkflowActivityConstructor.cs` — produces a `WorkflowDefinitionActivity` configured from the identity (typed state) + author args pre-set in the bag; does its **own** bag-filling (no ref to `Primitives`' binder); one-line bridge
 - [ ] T028 [US2] Implement `WorkflowActivityReconciliationSource : IActivityReconciliationSource` in `src/Elsa.Activities.Composition.Design/Reconciliation/WorkflowActivityReconciliationSource.cs` — usable-as-activity workflow versions → models with `DescriptorType="Elsa.Workflows.Primitives.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O/ports mirrored (005 FR-005/006)
 - [ ] T029 [US2] Wire `src/Elsa.Activities.Composition.Runtime/ActivitiesCompositionRuntimeFeature.cs` (constructor + activity) and `src/Elsa.Activities.Composition.Design/ActivitiesCompositionDesignFeature.cs` (reconciliation source)
-- [ ] T030 [P] [US2] Unit test: `WorkflowActivityConstructor` → `WorkflowDefinitionActivity` with identity applied + bag filled; two identities → distinct instances
+- [x] T030 [P] [US2] Unit test: `WorkflowActivityConstructor` → `WorkflowDefinitionActivity` with identity applied + bag filled; two identities → distinct instances
 - [ ] T031 [P] Registration test: both Composition features resolve (G27)
-- [ ] T032 [P] [US2] §E2.2 reference test: `Elsa.Activities.Composition.Runtime` references **no** `Elsa.*.Design.*` project (now a true project-reference test, enabled by the split)
+- [x] T032 [P] [US2] §E2.2 reference test: `Elsa.Activities.Composition.Runtime` references **no** `Elsa.*.Design.*` project (now a true project-reference test, enabled by the split)
 
 **Checkpoint**: Both kinds construct through one factory; no `Kind` string anywhere.
 

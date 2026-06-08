@@ -39,6 +39,8 @@
     <Project Path="src/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa.Activities.Design.Reconciliation.Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <Project Path="src/Elsa.Activities.Design.Reconciliation.Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
+    <Project Path="src/Elsa.Activities.Composition.Runtime/Elsa.Activities.Composition.Runtime.csproj" />
+    <Project Path="src/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="src/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
     <Project Path="src/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="src/Elsa.Caching.Memory/Elsa.Caching.Memory.csproj" Id="bef6c61f-890f-47d9-881c-9ad0b636a327" />
@@ -72,7 +74,9 @@
     <Project Path="src/Test.Activities.Import/Test.Activities.Import.csproj" Id="3a4dee71-96bf-427b-9d47-5a33b375e386" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Elsa.Activities.Composition.Tests/Elsa.Activities.Composition.Tests.csproj" />
     <Project Path="tests/Elsa.Activities.Design.Tests/Elsa.Activities.Design.Tests.csproj" />
+    <Project Path="tests/Elsa.Activities.Runtime.Tests/Elsa.Activities.Runtime.Tests.csproj" />
     <Project Path="tests/Elsa.Activities.Design.Tests.ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
     <Project Path="tests/Elsa.Workflows.Design.Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
