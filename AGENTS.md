@@ -44,6 +44,18 @@ Before proposing or implementing a next work unit, do a brief zoom-out check:
 
 If the user asks "what next" or a session is resuming from prior context, include this zoom-out check before recommending the next unit. This prevents local cleanup loops from replacing progress toward the full Elsa-brain operating model.
 
+### Temporary roadmap correction
+
+Remove this subsection after the next alignment steps are completed and captured in the normal source-of-truth layers.
+
+The current roadmap is a correction against drifting too deeply into CShells composition work before the broader Elsa-brain program is balanced. Prioritize these next units in order unless the user explicitly redirects:
+
+1. **Program Alignment Review:** compare current repo surfaces against the original Elsa-brain intent; identify over-invested, under-invested, and appropriately provisional areas; recommend the next 3-5 work units.
+2. **Architecture Tour Review:** verify that `docs/architecture-tour.md` gives a concise orientation to the repo, core systems, and where to look next without duplicating glossary or constitution material.
+3. **Glossary Coverage Audit:** check whether key architecture terms are centralized in `docs/glossary/` and not re-explained across skills, reports, maps, or constitutions.
+4. **What's Next / Unfinished Work Re-ranking:** re-rank unfinished work by Elsa-brain milestone rather than recent-topic momentum.
+5. **Return to CShells composition only after the broader alignment is checked:** use the provisional classification report as input, but do not keep refining generator-specific taxonomy until the overall brain surfaces are balanced.
+
 ## Refresh generated maps
 
 Windows / PowerShell:
