@@ -31,6 +31,8 @@ Program goals are persisted in `docs/program-goals/`, not in this file. Do not u
 
 A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains. Each bucket should have its own file under `docs/program-goals/` so people across agents, branches, and network boundaries can see what exists, who is stewarding it, what is active, and which reports/specs/branches are connected.
 
+Program goal state may also explicitly be `none/free-flow`; do not invent a bucket just because one is missing. Use [docs/program-goals/README.md](docs/program-goals/README.md#program-goal-state) for the shared model and [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#program-goal-selection-models) for when to ask.
+
 Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
 
 - The user asks "what next", asks whether the work is drifting, or asks to revisit priorities.

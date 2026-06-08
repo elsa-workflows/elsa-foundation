@@ -7,12 +7,12 @@ This catalog defines the workflows agents and engineers should follow. AI-provid
 - Skills describe repeatable workflows: trigger, inputs, steps, and output.
 - Skills link to constitutions for gates, glossary for meanings, maps for generated facts, reports for findings, and reference docs for rationale.
 - Skills should not duplicate long concept explanations. If a workflow needs a term, use [Glossary Lookup](#glossary-lookup).
-- Provider wrappers should stay thin and point back to this catalog.
+- AI-provider wrappers should stay thin and point back to this catalog.
 - Plan first for decisions. Act as follow-through for obligations: before starting a new architecture-affecting unit, produce a plan/checklist and wait for approval; after an approved unit is underway, complete required tests, extension-point catalog updates, generated-map refreshes, and small docs follow-through without a second approval unless the follow-through changes architecture meaning.
 
 The current skill audit lives in [skills-stabilization-audit.md](../reports/skills-stabilization-audit.md).
 
-## Provider Wrapper Validation
+## AI-Provider Wrapper Validation
 
 Claude Elsa wrappers can be checked for drift with:
 
@@ -60,23 +60,23 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user asks what is unfinished, unratified, weakly implemented, or ready for the next work unit.
 
-**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), inspect the active goal registry in [../program-goals/](../program-goals/), then read [../reports/unfinished-work.md](../reports/unfinished-work.md); refresh with searches for `TODO`, `DEFERRED`, `pending`, `stub`, `placeholder`, and specs marked superseded or retained-for-intent. Rank candidates by which active program-goal bucket they advance, not only by which local file looks unfinished.
+**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), inspect the program goal state model in [../program-goals/](../program-goals/), then read [../reports/unfinished-work.md](../reports/unfinished-work.md). If the current program goal state is unclear and the user's request requires ranking, identify whether a named bucket or `none/free-flow` applies; do not invent a bucket just because one is missing. Refresh with searches for `TODO`, `DEFERRED`, `pending`, `stub`, `placeholder`, and specs marked superseded or retained-for-intent. Rank candidates by the current program goal state, user intent, local severity, and unblock value.
 
-**Output:** prioritized list of next candidates, with whether each is architecture, docs, tests, or code, and the active program-goal bucket each candidate advances.
+**Output:** prioritized list of next candidates, with whether each is architecture, docs, tests, or code, and the program goal state used for ranking.
 
 ### Program Goal Drift Review
 
 **Use when:** the user asks whether work is drifting, a thread is moving into a third consecutive plan/work unit under the same topic, recent work is repeatedly deepening one local area, or a proposed task would change/split a program-goal bucket.
 
-**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), then inspect the active goal registry in [../program-goals/](../program-goals/). Identify the active goal bucket, recent short-term objectives, and the next proposed objective; decide whether the work is aligned, knowingly specialized, over-invested, under-invested elsewhere, or evidence that the program goal should be updated. If multiple architects or domains are involved, treat each valid mid-term bucket separately instead of forcing all work into one global priority list.
+**Workflow:** read the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard), then inspect the program goal state model in [../program-goals/](../program-goals/). Identify the current program goal state, recent short-term objectives, and the next proposed objective; decide whether the work is aligned, knowingly specialized, over-invested, under-invested elsewhere, free-flow by intent, or evidence that the program goal should be updated. If multiple architects or domains are involved, treat each valid mid-term bucket separately instead of forcing all work into one global priority list.
 
-**Output:** a concise alignment note with one of three recommendations: continue in the current bucket, redirect to a higher-value bucket, or update/split the program goal and record that change in `docs/program-goals/` plus any linked report/spec/work-unit surface. Do not perform this review as a ritual at every fresh session start.
+**Output:** a concise alignment note with one of four recommendations: continue in the current bucket, continue as `none/free-flow`, redirect to a more relevant bucket, or update/split/create a program goal and record that change in `docs/program-goals/` plus any linked report/spec/work-unit surface. Do not perform this review as a ritual at every fresh session start.
 
 ### Work Unit Planner
 
 **Use when:** findings need to become Speckit-ready architecture or feature work.
 
-**Workflow:** apply the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) when a trigger is present, using [../program-goals/](../program-goals/) as the goal registry; define goal, success criteria, in/out of scope, affected gates/docs/maps, tests, and review points; choose whether it is feature development or architecture development.
+**Workflow:** apply the program goals and drift guard in [../../AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) when a trigger is present, using [../program-goals/](../program-goals/) as the goal registry and program goal state model; define goal, success criteria, in/out of scope, affected gates/docs/maps, tests, and review points; choose whether it is feature development or architecture development.
 
 **Output:** a concise work-unit plan ready for `speckit-specify` or architecture review, including the program milestone the work advances and the reason it is not merely local polish.
 

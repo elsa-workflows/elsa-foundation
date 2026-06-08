@@ -4,6 +4,18 @@ Program goals are mid-term buckets of related short-term objectives. They are co
 
 Use this directory to see which larger efforts are active, who is stewarding them, what work is currently in scope, and where the supporting reports/specs/branches live. Keep one file per goal bucket to reduce merge conflicts.
 
+## Program Goal State
+
+Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff, identify the current program goal state when it is unclear.
+
+Valid states:
+
+- A named program-goal bucket from this directory.
+- `none/free-flow`: no active program goal; the user is exploring, developing, researching, or planning without a mid-term coordination bucket.
+- `unknown/not-assessed`: temporary state before the agent has enough context to decide whether a named bucket or `none/free-flow` applies.
+
+Do not invent a named program-goal bucket just because one is missing. Propose creating or selecting a bucket only when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.
+
 ## Registry
 
 | Goal | Status | Area | Steward(s) | Current focus |

@@ -2,6 +2,24 @@
 
 Status: refreshed during Constitution Thinning v1 from current docs, constitution drafts, extracted draft history, specs, maps, and source comments.
 
+## Program Goal State
+
+Current re-ranking state: [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md).
+
+This state is explicit for this review; it does not make the Elsa Brain Operating Model the default lens for all future work. Future "what next" reviews should first identify whether the current program goal state is a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+
+## Priority View
+
+This view ranks unfinished work by the current program goal state. The detailed inventory below remains grouped by constitution, code/domain, and knowledge/workspace categories.
+
+| Priority | Candidate | Milestone or state lens | Why now | Next action |
+|---:|---|---|---|---|
+| 1 | Codebase reality / test maturity follow-up | Elsa Brain Operating Model: codebase reality checks | Docs, maps, skills, glossary, and program-goal routing are now balanced enough that the next high-value unit should reconnect the brain to implementation reality. | Promote one focused verification unit from [test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md), preferably registration-test coverage or `NotImplementedException` classification. |
+| 2 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | This report is the primary "what next" surface, so it should preserve program-goal-state-aware ranking instead of local-topic momentum. | Keep this priority view current during future drift or "what next" reviews. |
+| 3 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, but richer test maturity navigation is still planned and map freshness should be checked before maps drive work. | Check map freshness before relying on maps; plan a testing maturity map only if the selected verification unit needs it. |
+| 4 | Configuration and feature dependency classification | Elsa Brain Operating Model: feature composition readiness | CShells evidence is useful but intentionally provisional; classification is needed before generator work, but should follow the broader code-reality check unless the user redirects. | Run after the broader code-reality follow-up, unless the current program goal state explicitly shifts to feature composition. |
+| 5 | Constitution ratification / provisional gate review | Elsa Brain Operating Model: constitution governance | Several draft/provisional gates remain open, but broad ratification is premature before code reality and runtime seams are clearer. | Use Critical Constitution Review only for a targeted gate needed by an approved work unit. |
+
 ## Constitution and architecture decisions
 
 | Item | Evidence | Next action |
@@ -52,3 +70,11 @@ rg -n "TODO|DEFERRED|deferred|pending|ratification|stub|placeholder|not implemen
 ```
 
 Classify new findings as constitution, code/domain, tests, docs, maps, or tool/skill work.
+
+## Re-Ranking Rule
+
+When this report is used for "what next" planning, first identify the current program goal state. The state may be a named program-goal bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+
+If a named bucket is active, rank candidates by how directly they advance that bucket, then by local severity and unblock value. If `none/free-flow` is active, rank by the user's stated intent, nearby evidence, local severity, and unblock value.
+
+Do not invent a program-goal bucket just because one is missing. Only propose creating or selecting a bucket when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.

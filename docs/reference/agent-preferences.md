@@ -36,6 +36,7 @@ Use this table as the current setup registry. Add new rows here when a new local
 |---|---|---|---|
 | Git operating model | `.agent-prefs/git-operating-model.md` | Before pushing, opening pull requests, changing remotes, or choosing a branch strategy. | [git-operating-models.md](git-operating-models.md) |
 | Session execution model | `.agent-prefs/session-execution-model.md` | Before substantial planning, substantial implementation, or multi-session/fresh-agent workflows. | This file |
+| Program goal selection model | `.agent-prefs/program-goal-selection.md` | Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff when the current program goal state is unclear. | This file |
 
 ## Quick Setup
 
@@ -70,6 +71,36 @@ Default behavior:
 
 Exceptions:
 - Handle small answers, inspections, and explicitly local edits in the current session.
+```
+
+Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
+
+## Program Goal Selection Models
+
+Program goal selection controls when agents ask for or make explicit the current program goal state. The program goal state itself may be a named program-goal bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+
+Common local choices:
+
+- `ask-when-needed`: default/recommended. Ask only before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff when the current program goal state is unclear.
+- `always-explicit`: keep the session program goal state explicit, including when the state is `none/free-flow`.
+- `infer-from-user-intent`: infer the state quietly from the user's stated intent and nearby context unless the state is ambiguous or would affect planning.
+
+## Program Goal Selection Template
+
+Create `.agent-prefs/program-goal-selection.md` locally with content like:
+
+```md
+# Program Goal Selection Preference
+
+Preferred model: ask-when-needed
+
+Default behavior:
+- Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff, identify the current program goal state if it is unclear.
+- Treat `none/free-flow` as a valid explicit program goal state.
+- Do not invent a named program-goal bucket just because one is missing.
+
+Exceptions:
+- For small answers, inspections, and explicitly local edits, proceed from the user's stated intent unless a drift trigger is present.
 ```
 
 Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
