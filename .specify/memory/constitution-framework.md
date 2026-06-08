@@ -256,7 +256,7 @@ The in-process composition mechanism is the **event**. A domain that wants to be
 
 Features extend a domain by **registering a handler (`IEventHandler<T>`) for one of its published events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
 
-**One concept, one publisher, two strategy axes.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axis is *delivery strategy* + *exception strategy*, not a separate marker.
+**One concept, one publisher, three failure/dispatch concerns.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axes are publisher-owned delivery, publisher-owned dispatcher failure policy, and subscriber-owned failure classification.
 
 **The framework provides the dispatch mechanism.** The application supplies the publisher and a pipeline with shared middleware (logging, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
 
@@ -272,7 +272,8 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 - **Intent.** Internal technical communication between features within the application.
 - **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
 - **Delivery coupling follows the publisher-owned strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). The publisher owns the delivery strategy because only the publisher knows whether its caller needs handlers to have completed, whether it will read contributions back, and whether the transition has already been persisted. A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
-- **Exception meaning follows the subscriber-owned exception strategy.** A handler/subscriber owns the meaning of its own failure: business-critical, optional telemetry, retryable, ignorable, report-only, dead-letter-worthy, or escalated. That policy operates **inside the publisher-owned delivery boundary**. A subscriber MAY choose how its own failure is handled where the event substrate supports handler-level exception strategies, but it MUST NOT silently strengthen the publisher's delivery contract. If a subscriber must be able to fail the publisher, the domain needs a Sequential gate/contribution event or a separate phase; it is a modeling error to attach such a subscriber only to a Background notification.
+- **Handler-loop failure policy is publisher-owned.** The publisher owns the failure policy for the dispatch loop because only the publisher knows whether one failing handler should stop dispatch immediately, whether every handler should still get a chance to run before an aggregate failure is thrown, or whether failures should be logged/handled without breaking the publisher. The built-in baseline policies are **Throw immediately**, **Run all then throw aggregate**, and **Log/handle gracefully and continue**.
+- **Failure meaning is subscriber-owned classification.** A handler/subscriber owns the meaning of its own failure: business-critical, optional telemetry, retryable, ignorable, report-only, dead-letter-worthy, or escalated. That classification operates **inside the publisher-owned delivery and dispatcher-failure boundary**. A subscriber MAY declare its failure classification where the event substrate supports handler-level metadata, but it MUST NOT silently strengthen the publisher's delivery contract. If a subscriber must be able to fail the publisher, the domain needs a Sequential gate/contribution event or a separate phase; it is a modeling error to attach such a subscriber only to a Background notification.
 - **Completeness under Sequential.** Every registered handler is dispatched in order; the publisher does not skip handlers or return early. Because the default does not shield, the first throwing handler halts the chain — that is the intended fail-fast behaviour, not a completeness violation. Background completeness is FIFO across the channel and isolated per subscriber.
 - **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. A handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
 - **Diagnostics.** Logging, tracing, and diagnostics attach uniformly via the same middleware surface. A failing handler under Background is observable in operational logs with full identifying context; the application's observability stack treats those entries as first-class signals.
@@ -402,24 +403,31 @@ The application-specific worked example lives in [docs/reference/elsa-worked-exa
 
 The canonical §2.6.5 worked example lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#sync-contributor-pattern-ientitymodelcreatinghandler); framework-level rationale lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#framework-composition-rationale).
 
-#### §2.6.6 Delivery and exception strategies — one event concept, two responsibility axes
+#### §2.6.6 Delivery and failure strategies — one event concept, three responsibility axes
 
 *Rewritten (Unit 1, 2026-06-02): the prior two-concept model (`IDomainEvent` + `INotification`/`ILifecycleEvent`) was collapsed into a single `IEvent`. The distinction it tried to capture — "participate" vs "react" — is now expressed as a **delivery strategy** chosen per publish, not as a separate marker type.*
 
-There is **one** event concept (`IEvent`, §2.6.1). Event behaviour has two distinct strategy axes:
+There is **one** event concept (`IEvent`, §2.6.1). Event behaviour has three distinct responsibility axes:
 
 - **Delivery strategy** is publisher-owned. It controls when and how handlers run relative to the publisher's caller: Sequential, Parallel, or Background.
-- **Exception strategy** is subscriber-owned, with an event-level default. It controls what happens when a specific handler fails: propagate, collect, log-and-continue, retry, dead-letter, escalate, or another application-defined policy. It cannot override the publisher-owned delivery boundary.
+- **Dispatcher failure policy** is publisher-owned. It controls what the event substrate does across the handler loop when handlers fail: throw immediately, run all then throw aggregate, or log/handle gracefully and continue.
+- **Subscriber failure classification** is subscriber-owned. It records what a specific handler failure means: business-critical, optional, telemetry-only, retryable, dead-letter-worthy, operationally escalated, or another application-defined classification. It informs the dispatcher policy and observability, but it cannot override the publisher-owned delivery or dispatcher-failure boundary.
 
 The delivery strategy passed to `IEventPublisher.Publish` is:
 
-| Strategy | Dispatch | Default failure boundary | Publisher reads back? | Use for |
-|---|---|---|---|---|
-| **Sequential** *(default)* | Handlers run in DI-resolution order; publisher awaits the whole chain end-to-end. | Publisher can be failed by a propagating handler. Default is fail-fast propagation. | **Yes** — for contribution events whose payload exposes directly-accessible collections or contexts, the publisher reads the accumulated result after the chain. | A participation gate / contribution ("I'm about to do X — who wants to participate?"); any case where the publisher's own correctness depends on handlers having run. |
-| **Parallel** | Handlers dispatched concurrently; publisher awaits all. | Publisher can be failed by propagating handlers. Default is aggregate propagation. | No — ordering is unspecified, so reading back is meaningless. | Independent reactions where latency matters and the publisher still needs awaited completion. |
-| **Background** | Queued to an in-process channel; publisher returns immediately; a hosted worker (`BackgroundEventPublisher`) drains it. | Publisher cannot be failed by a handler; handler failures are handled by subscriber/event exception policy after publish returns. | **No** — publisher has already returned. | "X happened — react if you want": audit, event-sourcing stream, telemetry, UI-push. Especially state-transition signals fired *after* the transition is persisted. |
+| Strategy | Dispatch | Publisher reads back? | Use for |
+|---|---|---|---|
+| **Sequential** *(default)* | Handlers run in DI-resolution order; publisher awaits the whole chain end-to-end. | **Yes** — for contribution events whose payload exposes directly-accessible collections or contexts, the publisher reads the accumulated result after the chain. | A participation gate / contribution ("I'm about to do X — who wants to participate?"); any case where the publisher's own correctness depends on handlers having run. |
+| **Parallel** | Handlers dispatched concurrently; publisher awaits all. | No — ordering is unspecified, so reading back is meaningless. | Independent reactions where latency matters and the publisher still needs awaited completion. |
+| **Background** | Queued to an in-process channel; publisher returns immediately; a hosted worker (`BackgroundEventPublisher`) drains it. | **No** — publisher has already returned. | "X happened — react if you want": audit, event-sourcing stream, telemetry, UI-push. Especially state-transition signals fired *after* the transition is persisted. |
 
-**Delivery resilience is publisher-owned; handler failure meaning is subscriber-owned.** Unit 1 removed the exception-shielding-by-default position. The default Sequential path ships **no shielding** — fail-fast is the safe default for any publisher whose handlers must have run. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly. There is no separate `ILifecycleEventSender` and no typed lifecycle marker; a "lifecycle event" is simply an `IEvent` published Background after the transition is persisted. Within that boundary, each handler/subscriber may declare its own exception strategy where the substrate supports it. A handler-level exception strategy cannot make a Background publish rollback-capable or make an already-returned publisher observe a failure; needing that is evidence for a separate Sequential gate event.
+**Delivery and dispatcher failure policy are publisher-owned; handler failure meaning is subscriber-owned.** Unit 1 removed the exception-shielding-by-default position. The default Sequential path ships **no shielding** — fail-fast is the safe default for any publisher whose handlers must have run. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly and normally pairs it with a graceful/logging dispatcher policy. There is no separate `ILifecycleEventSender` and no typed lifecycle marker; a "lifecycle event" is simply an `IEvent` published Background after the transition is persisted. Within that boundary, each handler/subscriber may declare its own failure classification where the substrate supports it. A handler classification cannot make a Background publish rollback-capable or make an already-returned publisher observe a failure; needing that is evidence for a separate Sequential gate event.
+
+**Built-in dispatcher failure policies.**
+
+- **Throw immediately** — stop the handler loop on the first failure and surface that failure to the publisher. This is the default for Sequential gate/contribution events where later handlers should not run after the gate has already failed.
+- **Run all then throw aggregate** — continue dispatching remaining handlers, collect failures, then fail the publisher with an aggregate exception after every handler had a chance to run. Use when the publisher must fail, but one broken handler must not starve other business-critical handlers.
+- **Log/handle gracefully and continue** — handle failures through logging/observability/retry/dead-letter policy and do not fail the publisher. This is the normal Background notification policy.
 
 **Choosing a strategy — the diagnostic question.** *Does my own correctness depend on these handlers having run?*
 
@@ -427,11 +435,17 @@ The delivery strategy passed to `IEventPublisher.Publish` is:
 - **No, and a subscriber failure must not break me** → Background.
 - **No, but I must wait for them and they're independent** → Parallel (rare).
 
-**Choosing an exception strategy — the subscriber diagnostic question.** *What should happen if my handler fails inside the event's delivery boundary?*
+**Choosing a dispatcher failure policy — the publisher diagnostic question.** *If one handler fails, should the dispatch loop stop, continue then fail, or continue without failing me?*
 
-- Business-critical participation under Sequential → propagate or collect according to the event's gate semantics.
-- Optional telemetry, audit, UI-push, or cache invalidation → log-and-continue, retry, dead-letter, or escalate operationally without breaking the publisher when published Background.
-- If the desired exception strategy requires stronger delivery semantics than the event provides, do not subscribe as-is; raise an architecture question and model a separate event phase.
+- First failure invalidates the whole operation → Throw immediately.
+- Every handler should still run, but the publisher must fail if any failed → Run all then throw aggregate.
+- Handler failures should become operational signals/retries/dead letters, not publisher failures → Log/handle gracefully and continue.
+
+**Choosing a failure classification — the subscriber diagnostic question.** *What does my handler's failure mean inside the event's publisher-owned boundary?*
+
+- Business-critical participation under Sequential → classify as critical so the publisher's dispatcher policy can propagate immediately or aggregate.
+- Optional telemetry, audit, UI-push, or cache invalidation → classify as optional/retryable/dead-letter-worthy/operationally escalated under a graceful Background policy.
+- If the desired classification requires stronger delivery or dispatcher-failure semantics than the event provides, do not subscribe as-is; raise an architecture question and model a separate event phase.
 
 **Hybrid pattern — `OnXxxing` (Sequential gate) + `OnXxxed` (Background outcome).** When a domain has both a participation gate and an outcome signal for the same transition, the present-participle form is published **Sequential** (validators / contributors run, publisher reads back) and the past-tense form is published **Background** (notifies that the transition happened, outcome carried in the payload, fired after persistence). Worked example: `OnDraftValidating` (Sequential — validators contribute errors) followed by `OnDraftValidated` (Background — fires after the errors are persisted; audit / UI-push react). Both are `IEvent`; only the strategy differs.
 
@@ -719,7 +733,7 @@ Feature documentation per §2.22 covers what an individual feature contributes. 
 
 The catalog has three sections: **Overridable contracts**, **Implementable contributor interfaces**, and **Events** (the former standalone catalog, now a section — since events are the dispatch mechanism behind the contributor interfaces and the observation surface for subscribers).
 
-**Events are one concept; the catalog records delivery and exception expectations.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery and exception strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses, whether it reads contributions back, and what default failure boundary subscribers operate within. The catalog SHOULD make the delivery strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
+**Events are one concept; the catalog records delivery and failure expectations.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery and failure strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses, whether it reads contributions back, which dispatcher failure policy applies, and what subscriber failure classifications are expected. The catalog SHOULD make the delivery strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
 
 - **Sequential / contribution** — publisher awaits the chain and reads handler contributions back (e.g. `OnDraftValidating` exposes a directly-accessible `ICollection<ValidationError> Errors` that the single `ExecuteValidations` handler fills from every `IDraftValidator`). Used when the publisher needs the result; a handler throw breaks the publish.
 - **Background / notification** — publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). A subscriber failure is isolated (logged, never breaks the publish); typically fired after the transition is persisted.
@@ -730,7 +744,8 @@ A domain may publish events of either strategy, or have a present-participle gat
 
 - **Event class name** (e.g. `OnDraftCreated`).
 - **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
-- **Default exception/failure boundary** — whether handler failures propagate to the publisher, are collected by the gate, or are isolated/logged/retried/dead-lettered after publish returns. If handler-level exception strategies are supported, note whether subscribers may override the default within the delivery boundary.
+- **Dispatcher failure policy** — whether handler failures throw immediately, are collected and thrown as an aggregate after all handlers run, or are logged/handled gracefully while dispatch continues.
+- **Subscriber failure classifications** — which classifications are expected or permitted for handlers of this event, especially whether business-critical subscribers are allowed or should instead use a separate Sequential gate event.
 - **One-line semantic description** — what just happened in the domain (notification) or what gate has opened (contribution).
 - **Payload signature** — the directly-accessible `ICollection<T>` (or rich context) the contribution sink exposes (per the §2.6.1 contribution sub-rule) and payload types handlers receive.
 - **Contributor interface** *(fan-in / contribution events only)* — the `I<X>Source` / `I<X>Contributor` (or `IDraftValidator`-style) interface features implement, its method signature, whether it **returns** (Source) or **receives a context and acts** (Contributor), and the note "implement + register via DI; the single `<Action>Handler` aggregates."
