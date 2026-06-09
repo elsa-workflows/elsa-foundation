@@ -6,6 +6,7 @@ description: "Task list template for feature implementation"
 # Tasks: [FEATURE NAME]
 
 **Input**: Design documents from `/specs/[###-feature-name]/`
+
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
 **Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
@@ -25,21 +26,21 @@ description: "Task list template for feature implementation"
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
 - Paths shown below assume single project - adjust based on plan.md structure
 
-<!-- 
+<!--
   ============================================================================
   IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
-  
-  The /speckit.tasks command MUST replace these with actual tasks based on:
+
+  The /speckit-tasks command MUST replace these with actual tasks based on:
   - User stories from spec.md (with their priorities P1, P2, P3...)
   - Feature requirements from plan.md
   - Entities from data-model.md
   - Endpoints from contracts/
-  
+
   Tasks MUST be organized by user story so each story can be:
   - Implemented independently
   - Tested independently
   - Delivered as an MVP increment
-  
+
   DO NOT keep these sample tasks in the generated tasks.md file.
   ============================================================================
 -->
@@ -249,14 +250,3 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
-
-## Constitutional Compliance
-
-Tasks inherit the *Constitution Check* gates (G1–G20) decided in `plan.md`. Task generation MUST NOT introduce structural choices that violate those gates — most commonly:
-
-- A task that *creates a package* must place it at the namespace/path dictated by framework §2.1/§2.2 (domain-language naming, no `Features.*`/`Modules.*` segments).
-- A task that *moves a type between libraries* must respect the impl-to-impl rule (framework §2.1) and the cross-`.Core` reference rule.
-- A task that *introduces a NuGet package* must not place a heavy dependency in a `.Core` library (framework §2.1, §2.3), and must prefer a specific provider sub-package over a meta-package (framework §2.20).
-- A task on the `Elsa.Workflows.*` boundary must not introduce a Runtime → Design reference (Elsa §E2.2).
-
-When a task seems to require a constitutional exception, flag it in the task description rather than implementing the violation — escalation to architecture review is the Definition of Done.

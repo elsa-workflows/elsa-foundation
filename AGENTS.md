@@ -157,3 +157,8 @@ New work should move toward this rule:
 - Skills: executable workflows.
 - Maps/catalogs: navigation and generated facts.
 - Reports: current findings and unfinished work.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
