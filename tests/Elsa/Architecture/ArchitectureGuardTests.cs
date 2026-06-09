@@ -41,6 +41,28 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Solution_folders_collapse_leaf_project_segments()
+    {
+        var projectDirectories = ProjectFiles()
+            .Select(project => Path.GetDirectoryName(project.RelativePath)!)
+            .ToHashSet(StringComparer.Ordinal);
+        var expectedFolders = ProjectFiles()
+            .ToDictionary(project => project.RelativePath, project => ExpectedSolutionFolder(project, projectDirectories), StringComparer.Ordinal);
+        var actualFolders = SolutionProjects()
+            .ToDictionary(project => project.Path, project => project.Folder, StringComparer.Ordinal);
+        var mismatches = expectedFolders
+            .Where(expected => !actualFolders.TryGetValue(expected.Key, out var actual) || actual != expected.Value)
+            .Select(expected =>
+            {
+                actualFolders.TryGetValue(expected.Key, out var actual);
+                return $"{expected.Key}: expected {expected.Value}, actual {actual ?? "<missing>"}";
+            })
+            .ToList();
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    [Fact]
     public void Core_projects_do_not_reference_implementation_projects()
     {
         var violations = ProjectFiles()
@@ -106,6 +128,24 @@ public sealed class ArchitectureGuardTests
             yield return ProjectInfo.From(RepoRoot, file);
     }
 
+    private static IEnumerable<SolutionProjectInfo> SolutionProjects()
+    {
+        var solution = XDocument.Load(Path.Combine(RepoRoot, "Elsa.Server.slnx"));
+        foreach (var folder in solution.Descendants("Folder"))
+        {
+            var folderName = folder.Attribute("Name")?.Value;
+            if (folderName is null)
+                continue;
+
+            foreach (var project in folder.Elements("Project"))
+            {
+                var path = project.Attribute("Path")?.Value;
+                if (path is not null)
+                    yield return new SolutionProjectInfo(folderName, path.Replace('\\', '/'));
+            }
+        }
+    }
+
     private static IEnumerable<ProjectInfo> ProjectReferences(ProjectInfo project)
     {
         var document = XDocument.Load(project.FullPath);
@@ -145,6 +185,21 @@ public sealed class ArchitectureGuardTests
         return project.RelativePath;
     }
 
+    private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
+    {
+        var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
+        var lastProjectSegment = project.Name.Split('.')[^1];
+        var lastDirectorySegment = directory.Split('/')[^1];
+        var hasChildProject = projectDirectories.Any(other =>
+            other.Length > directory.Length &&
+            other.StartsWith(directory + "/", StringComparison.Ordinal));
+
+        if (lastDirectorySegment == lastProjectSegment && !hasChildProject)
+            directory = Path.GetDirectoryName(directory)!.Replace('\\', '/');
+
+        return $"/{directory}/";
+    }
+
     private static string RepoRoot
     {
         get
@@ -173,4 +228,6 @@ public sealed class ArchitectureGuardTests
                 Path.GetRelativePath(repoRoot, normalizedFullPath).Replace(Path.DirectorySeparatorChar, '/'));
         }
     }
+
+    private sealed record SolutionProjectInfo(string Folder, string Path);
 }
