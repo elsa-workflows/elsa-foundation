@@ -66,6 +66,7 @@ Use this goal file for planned work in the Elsa Brain Operating Model bucket. Us
 
 - Active: keep `AGENTS.md`, preference catalogs, program-goal buckets, and report inventories aligned so agents know where to add, move, complete, or drop planned work under the selected work tracking model.
 - Completed: work tracking model cleanup made program-goal buckets the default active tracker, added the local preference template, and reframed `unfinished-work.md` as inventory.
+- Completed: targeted constitution thinning removed safe examples, rationale pointers, provenance notes, and stale boundary wording from the gate files; further thinning should wait for targeted ratification/runtime-design work.
 - Parked: plan a test maturity map or approved CShells composition-generation map as separate work units when the user selects that work.
 - Parked: revisit broad constitution ratification only when a targeted gate review or approved work unit needs it.
 
