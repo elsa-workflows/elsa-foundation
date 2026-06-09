@@ -61,6 +61,51 @@ if (-not (Test-Path -LiteralPath $skillsRoot)) {
 }
 
 $catalog = Get-Content -LiteralPath $catalogPath -Raw
+$agentsPath = Join-Path $repoRoot "AGENTS.md"
+$frameworkConstitutionPath = Join-Path $repoRoot ".specify\memory\constitution-framework.md"
+$elsaConstitutionPath = Join-Path $repoRoot ".specify\memory\constitution.md"
+
+if (-not (Test-Path -LiteralPath $agentsPath)) {
+    throw "Missing AGENTS.md"
+}
+if (-not (Test-Path -LiteralPath $frameworkConstitutionPath)) {
+    throw "Missing framework constitution"
+}
+if (-not (Test-Path -LiteralPath $elsaConstitutionPath)) {
+    throw "Missing Elsa constitution"
+}
+
+$agents = Get-Content -LiteralPath $agentsPath -Raw
+$frameworkConstitution = Get-Content -LiteralPath $frameworkConstitutionPath -Raw
+$elsaConstitution = Get-Content -LiteralPath $elsaConstitutionPath -Raw
+
+if ($agents -notmatch [regex]::Escape(".agent-prefs/program-goal-selection.md")) {
+    Add-Failure "AGENTS.md: missing .agent-prefs/program-goal-selection.md routing"
+}
+
+foreach ($obsoletePhrase in @(
+    "unfinished-work tracking",
+    "current repo-local tracking lives in",
+    "tracked in [unfinished work]",
+    "items are tracked in [unfinished work]"
+)) {
+    if ($frameworkConstitution.Contains($obsoletePhrase) -or $elsaConstitution.Contains($obsoletePhrase)) {
+        Add-Failure "Constitutions: obsolete tracking phrase remains: '$obsoletePhrase'"
+    }
+}
+
+foreach ($catalogExpectation in @(
+    @{ Heading = "What's Next / Unfinished Work"; Pattern = ".agent-prefs/program-goal-selection.md" },
+    @{ Heading = "Program Goal Drift Review"; Pattern = ".agent-prefs/program-goal-selection.md" },
+    @{ Heading = "Work Unit Planner"; Pattern = ".agent-prefs/program-goal-selection.md" }
+)) {
+    $heading = [regex]::Escape($catalogExpectation.Heading)
+    $pattern = [regex]::Escape($catalogExpectation.Pattern)
+    if ($catalog -notmatch "(?s)###\s+$heading.*?$pattern") {
+        Add-Failure "docs/skills/catalog.md: '$($catalogExpectation.Heading)' must mention $($catalogExpectation.Pattern)"
+    }
+}
+
 $catalogAnchors = [System.Collections.Generic.HashSet[string]]::new()
 foreach ($match in [regex]::Matches($catalog, '(?m)^#{2,3}\s+(?<heading>.+?)\s*$')) {
     [void]$catalogAnchors.Add((Get-GitHubHeadingAnchor $match.Groups["heading"].Value))
@@ -118,6 +163,10 @@ foreach ($wrapperPath in $wrapperFiles) {
     $sectionHeadings = @([regex]::Matches($parsed.Body, '(?m)^##\s+') | ForEach-Object { $_.Value })
     if ($sectionHeadings.Count -gt 2 -or $parsed.Body -notmatch '(?m)^## User Input\s*$' -or $parsed.Body -notmatch '(?m)^## Outline\s*$') {
         Add-Failure "${repoPath}: wrapper should stay thin with only User Input and Outline sections"
+    }
+
+    if ($expectedName -in @("elsa-whats-next", "elsa-work-unit-planner", "elsa-program-goal-drift-review") -and $parsed.Content -notmatch [regex]::Escape(".agent-prefs/program-goal-selection.md")) {
+        Add-Failure "${repoPath}: must mention .agent-prefs/program-goal-selection.md"
     }
 }
 

@@ -91,6 +91,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
+- If `.agent-prefs/program-goal-selection.md` exists, follow it before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff when the current program goal state is unclear.
 - If `.agent-prefs/work-tracking-model.md` exists, follow it for organizing, moving, completing, or dropping planned work.
 - If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.
 - If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
