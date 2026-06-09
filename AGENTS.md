@@ -17,7 +17,7 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
-| Program-goal buckets, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
+| Work tracking surfaces, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` |
@@ -25,31 +25,31 @@ Use the narrowest source that answers the task.
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 
-## Program goals and drift guard
+## Work tracking and drift guard
 
-Program goals are persisted in `docs/program-goals/`, not in this file. Do not use `AGENTS.md` as a mutable goal registry. This file only defines the entrypoint rule for finding and using program goals.
+Work organization is controlled by the selected work tracking model, not by `AGENTS.md`. Do not use this file as a mutable goal registry, queue, or roadmap.
 
-A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains. Each bucket should have its own file under `docs/program-goals/` so people across agents, branches, and network boundaries can see what exists, who is stewarding it, what is active, and which reports/specs/branches are connected.
+If `.agent-prefs/work-tracking-model.md` exists, follow it for organizing, moving, completing, or dropping planned work. If no work tracking preference exists and the task requires durable planning/tracking, read [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#work-tracking-models) before choosing where work state lives.
 
-Program goal state may also explicitly be `none/free-flow`; do not invent a bucket just because one is missing. Use [docs/program-goals/README.md](docs/program-goals/README.md#program-goal-state) for the shared model, [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#program-goal-selection-models) for when to ask, and the selected work tracking model for how planned work is organized.
+Reports such as `docs/reports/unfinished-work.md` are inventories of findings and concerns unless the selected work tracking model says otherwise. When a report finding becomes planned work, route it through the selected work tracking model before implementation.
 
-Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
+Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a work-tracking check when one of these is true:
 
 - The user asks "what next", asks whether the work is drifting, or asks to revisit priorities.
 - The same session or handoff chain is moving into a third consecutive plan/work unit under the same topic.
-- Recent work is repeatedly deepening one local area while other program milestones are waiting.
-- A proposed task would change the program goal, create a new goal bucket, or move work between buckets.
+- Recent work is repeatedly deepening one local area while other tracked work is waiting.
+- A proposed task would change the selected work tracker, create a new durable tracking item, or move work between tracking surfaces.
 - A fresh session resumes from context that already says drift, priority, or roadmap alignment is in question.
 
 When triggered, keep the check concise:
 
-- Which active program-goal bucket does this work advance?
-- Is this still the right bucket, or should the program goal be updated or split?
+- Which selected work tracking model applies?
+- Where does this planned work belong under that model?
 - Is this still the highest-value next step, or are we staying in a local area because it is nearby?
 - Does the work preserve the source-of-truth layers above?
 - Should the result be a gate, glossary term, reference explanation, report finding, generated map, skill workflow, spec, or code change?
 
-For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the program goal.
+For ordinary fresh sessions with a clear task, do not announce a zoom-out check. Apply the guard quietly unless a trigger is present. If the check suggests drift, surface it briefly so the user can continue knowingly, redirect, or update the selected work tracker.
 
 ## Refresh generated maps
 
@@ -90,7 +90,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
-- If `.agent-prefs/work-tracking-model.md` exists, follow it for organizing, moving, completing, or dropping planned work. If no work tracking preference exists and the task requires durable planning/tracking, read [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#work-tracking-models) before choosing where work state lives.
+- If `.agent-prefs/work-tracking-model.md` exists, follow it for organizing, moving, completing, or dropping planned work.
 - If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.
 - If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
 - After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.
