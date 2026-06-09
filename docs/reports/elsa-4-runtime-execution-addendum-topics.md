@@ -340,6 +340,151 @@ Detached behavior:
 
 By default, a generator does not outlive its owning workflow/scope. Detached recurring behavior belongs to trigger/scheduler infrastructure, not an in-workflow generator.
 
+### 4. Pause, Unpause, Suspension, And Resume
+
+Elsa 4 models pause/unpause as runtime control-plane policy with explicit scopes. Pause is not the same as durable suspension.
+
+Pause scopes:
+
+```text
+Ingress pause
+  Stop accepting new external starts/resumes for a definition/source.
+
+Workflow execution pause
+  Stop advancing a specific workflow execution after a safe boundary.
+
+Activity/generator pause
+  Stop or suppress activity-local emissions/work without completing it.
+
+Worker/dispatcher pause
+  Stop fetching or dispatching runtime work.
+
+Host drain
+  Operational shutdown mode; finish/checkpoint active work and stop taking new work.
+```
+
+Workflow execution pause is cooperative:
+
+```text
+Pause requested
+  -> runtime records control-plane pause state
+  -> current activity may finish, reach volatile wait, reach durable suspension, or checkpoint
+  -> scheduler stops before starting unrelated/new activity executions
+  -> unpause allows scheduler advancement again
+```
+
+Rules:
+
+- Pause does not normally abort currently executing activity code.
+- Pause prevents scheduler advancement after a safe boundary.
+- Pause is distinct from cancel, terminate, drain, and durable suspension.
+- Pause state belongs primarily to `ControlPlaneState`, not ordinary workflow execution state.
+- Workflow execution state may reference or reflect effective pause, such as `Status = Running` with `ControlState = Paused`.
+
+Safe pause boundaries:
+
+```text
+Before starting a new ActivityExecution
+After ActivityCompleted propagation drains
+After Checkpoint commit
+When entering DurableSuspension
+When registering VolatileWait
+Before processing a Generator emission
+Before dispatching post-commit work
+```
+
+Unsafe pause boundaries:
+
+```text
+mid-activity method execution
+mid-state mutation
+mid-checkpoint commit
+mid-output capture
+mid-parent completion evaluation
+mid-transaction/outbox commit
+```
+
+Volatile wait policy:
+
+- If pause is requested while a volatile wait is registered, the wait may remain registered.
+- When the volatile wait completes, it enqueues scheduler work.
+- The scheduler checks pause state before resuming the branch.
+- User workflow pause defaults to strict pause: do not resume volatile continuations while paused.
+- Host drain defaults to drain-in-flight: allow already-registered continuations to finish, but start no new activity executions.
+
+Ingress pause defaults:
+
+```text
+HTTP Endpoint
+  Do not queue requests by default.
+  Return configured response.
+  Default: 503 Service Unavailable.
+  Optional: 423 Locked for administrative pause semantics.
+
+Timer
+  Do not enqueue every missed tick by default.
+  Default: skip while paused.
+  Optional: coalesce one missed tick, catch up all missed ticks, fire immediately on unpause.
+
+Message / Queue
+  Prefer broker-native backpressure.
+  Default: stop fetching/locking messages when paused.
+  Already-delivered message behavior is adapter policy: abandon, defer, nack, requeue, or dead-letter.
+
+External Event / Webhook
+  Request/response webhook: return configured unavailable response.
+  Durable event stream: stop checkpointing/advancing consumer offset, or pause subscription where supported.
+
+Manual/API Start
+  Reject with clear paused-state error by default.
+```
+
+Principle:
+
+```text
+If the ingress source has durable buffering, use the source's native buffering.
+If it is synchronous request/response, return a clear paused response.
+```
+
+Terminology:
+
+```text
+Pause
+  Administrative hold.
+
+Unpause
+  Remove administrative hold.
+
+Suspend
+  Persisted execution wait/unload boundary.
+
+Resume
+  Continue from durable suspension/bookmark.
+
+Wait
+  Activity/execution is waiting.
+
+Continue
+  Proceed after a volatile wait or internal scheduler event.
+```
+
+API and command naming should qualify behavior:
+
+```http
+POST /workflow-executions/{id}/pause
+POST /workflow-executions/{id}/unpause
+POST /bookmarks/{id}/resume
+```
+
+```csharp
+PauseWorkflowExecution
+UnpauseWorkflowExecution
+ResumeBookmark
+ContinueVolatileWait
+```
+
+Resume is reserved for runtime continuation from durable suspension/bookmarks. Unpause is used for reversing administrative pause. Continue is used for volatile wait and internal scheduler continuations.
+
 ## Plan Impact
 
 The current action plan should be amended after this addendum is reviewed:
