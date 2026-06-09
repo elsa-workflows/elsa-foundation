@@ -748,12 +748,103 @@ Rationale:
 - The capture boundary keeps one source of truth for durable state, type/schema validation, Studio display, migration, and resume behavior.
 - This pairs with the input evaluation rule: activity input evaluation and activity outputs both stay ephemeral unless the workflow author deliberately promotes data into a declared durable value.
 
+### 13. Direct Activity Output-To-Input Links
+
+Studio may show output-to-input links as first-class data-flow edges, but the authored/runtime model should compile them to input bindings. Control-flow outcomes and data-flow output ports should remain distinct concepts.
+
+Conceptual Studio-authored data link:
+
+```json
+{
+  "links": [
+    {
+      "kind": "data",
+      "from": {
+        "activityId": "fetch-customer",
+        "output": "customer"
+      },
+      "to": {
+        "activityId": "send-email",
+        "input": "customer"
+      }
+    }
+  ]
+}
+```
+
+Conceptual compiled activity input binding:
+
+```json
+{
+  "id": "send-email",
+  "inputs": {
+    "customer": {
+      "source": "activityOutput",
+      "activityId": "fetch-customer",
+      "output": "customer"
+    }
+  }
+}
+```
+
+Cross-suspension binding must use a declared durable value:
+
+```json
+{
+  "source": "value",
+  "valueId": "customer"
+}
+```
+
+With producer capture:
+
+```json
+{
+  "id": "fetch-customer",
+  "outputs": {
+    "customer": {
+      "capture": {
+        "valueId": "customer"
+      }
+    }
+  }
+}
+```
+
+Rules:
+
+- Data links are authoring conveniences and visual graph facts.
+- Runtime consumes data links as activity input bindings.
+- Outcome/control-flow edges determine scheduling.
+- Data-flow links determine data dependencies and binding sources.
+- A data-flow link does not automatically schedule the target activity.
+- Output ports and outcome ports must be visually and semantically separate.
+- Links may target non-immediate downstream activities only if the producer output is still in the active execution scope.
+- If an output must cross suspension, branch boundaries, or uncertain execution scopes, it must first be captured into a declared durable value.
+- After resumption, a downstream activity should reference the durable value, not the raw producer activity output.
+- In loops and parallelism, output references must resolve against execution identity or be rejected as ambiguous.
+- If the producer has not executed, produced no value, or has multiple candidate executions, resolution should fail with a clear binding diagnostic unless the link declares a selection policy.
+
+Core rule:
+
+**Data links are a UX and authoring model. Runtime data access is still binding-based, scoped, and explicit.**
+
+Suspension boundary rule:
+
+**Raw activity output links are active-scope only. Suspension/resume is a persistence boundary. After resume, only declared durable values, bookmarks, scheduler state, and other explicit runtime state should exist.**
+
+Rationale:
+
+- Letting data links reach across suspension would quietly make activity outputs durable, indirectly recreating a second state model.
+- Requiring a `valueId` after resume makes the durable boundary visible in Studio and validateable in the authored document.
+- Studio can make this ergonomic by prompting or suggesting capture when a user draws a link that crosses a possible suspension boundary.
+
 ## Next Decision To Work
 
-Define direct activity output-to-input links:
+Define workflow definition JSON, import/export, and workflow-as-activity resolution:
 
-- Whether data-flow links are first-class graph edges or compiled input bindings.
-- How Studio distinguishes output data ports from control-flow outcome ports.
-- Whether output-to-input links can target non-immediate downstream activities.
-- How links interact with loops, parallel branches, retries, and activity execution identity.
-- How linked outputs behave when the producer has not executed or has multiple execution attempts.
+- How authored workflow documents are saved, imported, exported, and wrapped by APIs.
+- How missing activity types are preserved and diagnosed.
+- How workflow-as-activity references resolve without requiring fragile import order.
+- Whether import/publish should be one-pass with deferred resolution or explicit multi-phase validation.
+- How canonical document shape remains stable across Studio, REST, storage, and export.
