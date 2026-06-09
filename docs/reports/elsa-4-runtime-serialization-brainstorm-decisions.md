@@ -276,15 +276,125 @@ Rationale:
 - JSON-first schemas give Studio, APIs, validation, and migration tooling a durable contract that does not require loading application assemblies.
 - Separating expression evaluation from persistence makes it clear that expressions produce values, declarations decide persistence, and activity input descriptors decide materialization.
 
+### 7. Defaults, Initializers, Invocation Inputs, And Completion Outputs
+
+Elsa 4 should separate authored fallback data, instance initialization, invocation input binding, and workflow output mapping.
+
+Conceptual input plus variable:
+
+```json
+{
+  "id": "customer",
+  "name": "Customer",
+  "roles": ["input", "variable"],
+  "type": {
+    "kind": "reference",
+    "id": "crm.customer"
+  },
+  "input": {
+    "required": true
+  },
+  "default": null,
+  "initial": {
+    "source": "input"
+  },
+  "durability": {
+    "mode": "workflowInstance"
+  }
+}
+```
+
+Conceptual internal variable:
+
+```json
+{
+  "id": "retryCount",
+  "name": "Retry Count",
+  "roles": ["variable"],
+  "type": {
+    "kind": "integer"
+  },
+  "default": 0,
+  "initial": {
+    "source": "default"
+  },
+  "durability": {
+    "mode": "workflowInstance"
+  }
+}
+```
+
+Conceptual output from a variable:
+
+```json
+{
+  "id": "result",
+  "name": "Result",
+  "roles": ["variable", "output"],
+  "type": {
+    "kind": "object"
+  },
+  "output": {
+    "source": "value",
+    "valueId": "result"
+  },
+  "durability": {
+    "mode": "workflowInstance"
+  }
+}
+```
+
+Conceptual output computed at completion:
+
+```json
+{
+  "id": "summary",
+  "name": "Summary",
+  "roles": ["output"],
+  "type": {
+    "kind": "string"
+  },
+  "output": {
+    "source": "expression",
+    "language": "javascript",
+    "expression": "`Processed ${values.orderCount} orders`"
+  }
+}
+```
+
+Rules:
+
+- `default` is static JSON-compatible data, validated against the value type. It is not an expression.
+- `initial` runs when a workflow instance starts or when a value is first created for that instance.
+- Dynamic start values use `initial.source = "expression"`, not `default`.
+- Invocation input can bind only to values with the `input` role.
+- `input` only means boundary data. It is available during invocation or start evaluation but is not durable workflow state unless captured into a `variable`.
+- `input + variable` means invocation input initializes workflow state.
+- `variable` owns mutable workflow state.
+- `output` does not automatically expose every variable. Outputs need an `output` facet or a clear role-driven default.
+- `variable + output` can default to exposing the current variable value at completion.
+- `output` only requires an explicit completion mapping from a value, expression, literal, or activity result.
+- Missing required inputs fail validation before the workflow starts.
+- Type conversion failures at invocation, initialization, persistence, and completion boundaries are hard failures, not silent defaults.
+
+Role-driven defaults should be allowed to reduce boilerplate, but should be specified explicitly in the later spec. For example, `input + variable` can imply `initial.source = "input"`, and `variable + output` can imply `output.source = "value"` for the same value.
+
+Rationale:
+
+- Defaults are authored fallback data.
+- Initializers create instance state.
+- Inputs define the external invocation contract.
+- Outputs define the external result contract.
+- Persistence happens only for declared durable values.
+
 ## Next Decision To Work
 
-Define default value, initial value, invocation binding, and completion mapping semantics:
+Define durability policy vocabulary and defaults:
 
-- Default value, initial value, invocation binding, and completion mapping semantics.
-- How initial workflow values are created from declared defaults, invocation inputs, and expressions.
-- How input-only values differ from input+variable values.
-- How outputs are produced from values, expressions, or activity results.
-- Whether completion mapping is explicit, implicit, or role-driven.
 - Durability policy vocabulary and defaults.
+- Which modes exist, such as ephemeral, workflow instance, external reference, audit/history, or custom storage.
+- Which roles imply no durability by default.
+- Which role combinations imply workflow instance durability by default, if any.
+- How durability policy interacts with reference values and custom serializers.
 - Validation rules for incompatible role combinations.
 - Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
