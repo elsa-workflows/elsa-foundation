@@ -1,8 +1,18 @@
+![Elsa Foundation: a thin protocol spine with opt-in modules attached](docs/assets/elsa-foundation-header.png)
+
 # elsa-foundation
 
-`elsa-foundation` is the transitional Elsa brain and foundation-library workspace.
+`elsa-foundation` is the transitional Elsa 4 brain and foundation-library workspace.
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+
+## Philosophy
+
+Elsa Foundation should be a thin protocol, not a fat one.
+
+Its job is to define the narrow shared surface that lets modules cooperate: domain language, core contracts, extension points, invariants, and the quality gates needed to keep the system understandable. It should not become a platform-shaped dependency that every feature inherits by default.
+
+Modules should stay opt-in. A shell composes only the capabilities it needs, and features such as persistence, HTTP, JavaScript, scheduling, and host-specific integrations should enter through explicit dependencies and composition. Keeping the foundation thin makes coupling visible, protects extension authors from choices they did not select, and keeps feature-workspace assets movable as Elsa continues the modular refactor.
 
 ## Start here
 
