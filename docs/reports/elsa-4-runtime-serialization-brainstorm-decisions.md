@@ -70,12 +70,47 @@ Boundary rule:
 
 **The authored document is Design-owned durable state. The executable is Runtime-owned derived state.**
 
+### 4. Unified Value Declaration Model
+
+Elsa 4 should use one canonical value declaration collection in the authored workflow document. Variables, inputs, and outputs are roles or facets of a declared value, not three unrelated root-level models.
+
+Conceptually, each declared value owns:
+
+- Stable identity.
+- Type and schema information.
+- Default, initial, or binding rules.
+- Durability policy.
+- One or more semantic roles.
+
+Roles preserve the distinct meaning of each value:
+
+- `input`: an externally supplied workflow invocation contract value.
+- `output`: an externally observable workflow result contract value.
+- `variable`: an internally addressable workflow state value.
+- durability policy: whether and how the value is persisted.
+- type/schema: the allowed value shape and serializer contract.
+
+Combined roles are allowed when the author means them:
+
+- `input + variable`: an external input becomes internally addressable workflow state.
+- `variable + output`: internal workflow state is exposed as a workflow output.
+- `input` only: an invocation boundary value that is not automatically durable or internally mutable.
+- `output` only: a workflow result computed or mapped at completion.
+
+Implications:
+
+- The document should not require separate `variables`, `inputs`, and `outputs` collections that can drift from each other.
+- Public workflow contract metadata and internal state metadata should live on role-specific facets, not in separate duplicate models.
+- Runtime persistence decisions should be driven by explicit durability policy on the declared value.
+- Field names such as `values` and role names are conceptual for the brainstorm and should be finalized in the later spec.
+
 ## Next Decision To Work
 
-Define the authored document's value declaration model:
+Define the detailed semantics of declared values:
 
-- How variables, inputs, and outputs are represented.
-- Whether declarations use one shared model with roles.
-- Where durability policy lives.
-- How public workflow contract metadata differs from internal state metadata.
-- How default values and type/schema information are represented without repeating Elsa 3's string/default-value ambiguity.
+- Exact authored document JSON shape and naming.
+- Type/schema representation and serializer contracts.
+- Default value, initial value, invocation binding, and completion mapping semantics.
+- Durability policy vocabulary and defaults.
+- Validation rules for incompatible role combinations.
+- Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
