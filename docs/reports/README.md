@@ -7,6 +7,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Knowledge inventory](knowledge-inventory.md)
 - [Unfinished work](unfinished-work.md) - inventory of findings and loose concerns, not the active work queue.
 - [Architecture tour review](architecture-tour-review.md)
+- [Workspace launch readiness review](workspace-launch-readiness-review.md)
 - [Glossary coverage audit](glossary-coverage-audit.md)
 - [Unfinished work re-ranking](unfinished-work-reranking.md) - superseded point-in-time review.
 - [NotImplemented classification](notimplemented-classification.md)

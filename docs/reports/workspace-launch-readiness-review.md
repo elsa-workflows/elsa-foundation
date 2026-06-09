@@ -1,0 +1,76 @@
+# Workspace Launch Readiness Review
+
+Status: point-in-time review for deciding whether `elsa-foundation` is ready to receive its first new architects and engineers.
+
+## Purpose
+
+Assess whether the workspace is ready for first-user handoff after the Elsa brain operating model was split into focused program-goal buckets.
+
+This report does not create architecture rules and does not choose the next implementation unit. It records launch-readiness findings so handoff work can continue through [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) and hard architecture/code work can start in focused buckets.
+
+## Inputs Reviewed
+
+- [AGENTS.md](../../AGENTS.md)
+- [README](../../README.md)
+- [Docs index](../README.md)
+- [Architecture tour](../architecture-tour.md)
+- [Skills catalog](../skills/catalog.md)
+- [Program goals index](../program-goals/README.md)
+- [Agent maturity audit](agent-maturity-audit.md)
+- [Architecture tour review](architecture-tour-review.md)
+- [Unfinished work](unfinished-work.md)
+- [Maps manifest](../maps/manifest.json)
+
+## Verdict
+
+The workspace is ready to receive its first new users for constrained architecture work, especially if the first handoff names:
+
+- the active program-goal bucket,
+- the primary skill,
+- the primary report or spec,
+- the constitution gates to treat as quality gates,
+- the map freshness stance,
+- and the expected stop point.
+
+It is not ready for an unconstrained prompt such as "understand the whole repo and start fixing things." That would still invite over-reading, local cleanup loops, and accidental treatment of draft material as ratified doctrine.
+
+## Findings
+
+| Finding | Classification | Launch impact | Route |
+|---|---|---|---|
+| The entry path is coherent: `README.md` -> `AGENTS.md` / docs index -> architecture tour -> skills / program goals / reports. | Strength | New users have a navigable start path. | Keep under [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md). |
+| Program-goal buckets now separate launch readiness, runtime execution, constitution readiness, code/test reality, feature composition, and workspace split readiness. | Strength | New users can pick a focused bucket instead of continuing broad Elsa Brain polishing. | [Program goals index](../program-goals/README.md). |
+| The Architecture Tour is short and correctly routes readers to deeper surfaces. | Strength | It can be the first orientation skill without becoming a second constitution. | [Architecture tour](../architecture-tour.md). |
+| Reports are good evidence surfaces, especially runtime handoff, test maturity, CShells evidence, unfinished work, and agent maturity. | Strength | First workers can start from evidence rather than chat memory. | Reports index plus the relevant bucket. |
+| Maps are not currently safe as fresh verification facts because the manifest says `relevant_inputs_dirty: true`. | Launch caution | New users can use maps for navigation, but must refresh or verify from source before making dependency/test claims. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
+| Constitutions remain draft/provisional in places. | Launch caution | New users must treat them as quality gates with draft status, not as fully ratified doctrine. | [Constitution Readiness](../program-goals/constitution-readiness.md). |
+| The repo is ready for a hard next unit, not more broad operating-model grooming. | Drift risk | Launch prep should now route toward specific buckets such as Runtime Execution Seam or Code Reality And Test Maturity. | [Program goals index](../program-goals/README.md). |
+
+## First-User Start Path
+
+Recommended path for a new architect:
+
+1. Read [README](../../README.md), then [AGENTS.md](../../AGENTS.md).
+2. Read [Architecture tour](../architecture-tour.md).
+3. Open [Program goals index](../program-goals/README.md) and select the relevant bucket.
+4. Use [Skills catalog](../skills/catalog.md) to choose the workflow.
+5. Read the one primary report/spec linked by the selected bucket.
+6. Check [maps manifest](../maps/manifest.json) before relying on generated maps.
+7. Stop at the requested artifact: report, work-unit plan, Speckit spec, or implementation.
+
+## Launch Blockers
+
+No hard blocker prevents a first architect from starting constrained work.
+
+Soft blockers to name in handoffs:
+
+- map freshness is uncertain until relevant maps are regenerated or source facts are rechecked;
+- constitution text is still draft and should be reviewed only for targeted gates;
+- large work needs a reviewed handoff prompt, not a vague repo-wide instruction.
+
+## Recommended Next Launch Actions
+
+1. Use [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) for first-user handoff checks.
+2. Use [Runtime Execution Seam](../program-goals/runtime-execution-seam.md) for tomorrow's incoming runtime architect.
+3. Use [Constitution Readiness](../program-goals/constitution-readiness.md), [Code Reality And Test Maturity](../program-goals/code-reality-and-test-maturity.md), [Feature Composition Readiness](../program-goals/feature-composition-readiness.md), and [Workspace Split Readiness](../program-goals/workspace-split-readiness.md) for the remaining launch work.
+4. Do not add more broad objectives to [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) unless the routing layer itself breaks.

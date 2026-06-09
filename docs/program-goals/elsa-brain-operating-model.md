@@ -64,11 +64,15 @@ Use this goal file for planned work in the Elsa Brain Operating Model bucket. Us
 
 ## Bucket Items
 
-- Active: restore and refine program-goal buckets as the shared backlog/planner, keep `AGENTS.md` and skill wrappers aligned, remove stale preference references, and verify every program-goal reference is resolvable.
+- Active: keep the shared routing layer stable and prevent broad operating-model polishing from becoming the default next-work bucket.
 - Completed: earlier cleanup reframed `unfinished-work.md` as inventory rather than an active queue.
 - Completed: targeted constitution thinning removed safe examples, rationale pointers, provenance notes, and stale boundary wording from the gate files; further thinning should wait for targeted ratification/runtime-design work.
-- Parked: plan a test maturity map or approved CShells composition-generation map as separate work units when the user selects that work.
-- Parked: revisit broad constitution ratification only when a targeted gate review or approved work unit needs it.
+- Moved out: first-user handoff and launch-readiness work lives in [Workspace Launch Readiness](workspace-launch-readiness.md).
+- Moved out: runtime execution planning lives in [Runtime Execution Seam](runtime-execution-seam.md).
+- Moved out: targeted constitution review lives in [Constitution Readiness](constitution-readiness.md).
+- Moved out: code/test reality work lives in [Code Reality And Test Maturity](code-reality-and-test-maturity.md).
+- Moved out: feature composition and CShells readiness lives in [Feature Composition Readiness](feature-composition-readiness.md).
+- Moved out: future `elsa-workspace` extraction readiness lives in [Workspace Split Readiness](workspace-split-readiness.md).
 
 ## Drift / Review Notes
 
@@ -76,3 +80,4 @@ Use this goal file for planned work in the Elsa Brain Operating Model bucket. Us
 - Additional architects or domain experts may create separate goal files for their active areas.
 - If a thread reaches a third consecutive plan/work unit in one topic, use the Program Goal Drift Review skill before continuing.
 - If work no longer fits this bucket, update or split the program goal instead of silently stretching it.
+- Treat this bucket as the stable routing substrate. New hard work should normally select one of the focused buckets above.

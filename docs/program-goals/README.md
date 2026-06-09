@@ -26,8 +26,13 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
-| [Elsa Brain Operating Model](elsa-brain-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Rebalance the broader Elsa-brain surfaces before returning to CShells generator-specific work |
+| [Workspace Launch Readiness](workspace-launch-readiness.md) | Active | First-user handoff / repository launch preparation | Joey plus active architects/agents | Verify the repo can receive first users through tour, skills, reports, and buckets |
+| [Elsa Brain Operating Model](elsa-brain-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Keep the shared routing layer stable; do not use this as the default next-work bucket |
 | [Runtime Execution Seam](runtime-execution-seam.md) | Active | Workflows Runtime architecture / executable artifact seam | Joey plus the incoming runtime architect | Prepare the Runtime execution seam for architect-owned Speckit planning |
+| [Constitution Readiness](constitution-readiness.md) | Active | Targeted constitution review / ratification readiness | Joey plus active architects/agents | Review only launch-blocking or work-unit-specific gates |
+| [Code Reality And Test Maturity](code-reality-and-test-maturity.md) | Active | Codebase verification / tests / weak implementations | Joey plus active engineers/agents | Route hard code/test verification findings into focused units |
+| [Feature Composition Readiness](feature-composition-readiness.md) | Active | Feature composition / CShells and Nuplane shell readiness | Joey plus active architects/agents | Classify bounded feature/settings slices before generator work |
+| [Workspace Split Readiness](workspace-split-readiness.md) | Active | Future `elsa-workspace` extraction / portable feature-development flow | Joey plus active architects/agents | Keep feature-development flows portable without blocking launch |
 
 ## Goal File Rules
 
