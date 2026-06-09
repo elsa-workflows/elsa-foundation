@@ -22,6 +22,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md)
 - [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md)
 - [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md)
+- [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md)
 - [Constitution draft history](constitution-draft-history.md)
 - [Constitution amendment index](constitution-amendment-index.md)
 - [Framework constitution draft history](constitution-history-framework.md)

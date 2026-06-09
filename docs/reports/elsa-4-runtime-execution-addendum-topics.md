@@ -1,0 +1,212 @@
+# Elsa 4 Runtime Execution Addendum Topics
+
+Status: addendum brainstorm queue for Runtime Execution Seam topics raised after the initial execution-layer decision report. This is not yet a locked decision report, Speckit spec, implementation plan, glossary entry, or constitution gate.
+
+Program goal state: [Runtime Execution Seam](../program-goals/runtime-execution-seam.md).
+
+Related decisions: [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md).
+
+Related plan: [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md).
+
+Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
+
+## Purpose
+
+Capture additional runtime execution topics before the first Speckit unit is written. These topics affect execution semantics, runtime control, activity lifecycle, event-driven execution, and vocabulary. Some belong in the current execution plan; others should become a closely linked control-plane or glossary work unit.
+
+## Placement Guidance
+
+Add to the current execution plan:
+
+- Await-style volatile wait versus durable suspension.
+- Activity completion propagation.
+- Event-driven execution and generator activities.
+
+Track as closely linked companion work:
+
+- Pause/resume and runtime control plane.
+- Runtime terminology/glossary.
+
+The first Speckit unit can still focus on executable artifact and execution state contracts, but it should not choose state or checkpoint shapes that make these addendum topics impossible.
+
+## Brainstorm Queue
+
+### 1. Await-Style Volatile Wait Versus Durable Suspension
+
+Problem:
+
+Elsa 3 treats waits such as `Delay` as durable suspension: commit workflow state, unload the workflow instance, and resume later from persisted state. That is correct for long-running workflows, but it does not support request-scoped workflows that want `await`-style behavior while preserving the current in-memory context, such as an HTTP request waiting a few seconds before producing a response.
+
+Initial framing:
+
+Elsa 4 should distinguish at least two wait modes:
+
+```text
+Durable suspension
+  Commit workflow state, unload from memory, resume later by bookmark/event.
+
+Volatile wait
+  Keep execution in memory, await a task/timer/event, then continue in the same host context.
+```
+
+Possible activity result vocabulary:
+
+```text
+Complete
+SuspendDurably(bookmark)
+WaitVolatile(awaitable)
+Fault
+Cancel
+```
+
+Questions:
+
+- Is volatile wait a first-class activity result, scheduler work item, or host capability?
+- What maximum duration, memory-pressure, cancellation, and shutdown policies apply?
+- Can volatile waits fall back to durable suspension, or must the author choose explicitly?
+- Can HTTP context, DI scope, ambient user/tenant context, and cancellation tokens safely survive volatile waits?
+- How does volatile wait interact with checkpoints and execution leases?
+
+### 2. Activity Completion Propagation
+
+Problem:
+
+Elsa 3 activity completion notifications bubble immediately up the hierarchy of activity execution contexts. This is simple and deterministic, but it can create cascades and tightly couple completion to parent notification behavior.
+
+Initial framing:
+
+Elsa 4 should investigate whether completion propagation can be represented as deterministic scheduler work instead of immediate recursive bubbling.
+
+Possible scheduler events:
+
+```text
+ActivityCompleted
+ParentCompletionEvaluation
+ContinuationScheduling
+Checkpoint
+```
+
+Questions:
+
+- Is immediate bubbling actually a performance or complexity problem in real workflows?
+- Can queued completion work preserve strict parent/child ordering?
+- What state must parent activities observe when child completion is processed?
+- Should completion propagation be synchronous within one scheduler tick but still represented as queued work?
+- How do incidents, cancellation, compensation, and parallel branches affect completion ordering?
+
+### 3. Event-Driven Execution And Generators
+
+Problem:
+
+Some workflow engines allow an activity inside a running workflow to generate events over time. For example, a timer inside a live workflow could repeatedly schedule downstream execution while the workflow instance remains alive. Elsa currently has triggers and bookmarks, but not a clearly named in-workflow event generator concept.
+
+Initial framing:
+
+Differentiate triggers from generators:
+
+```text
+Trigger
+  Starts or resumes a workflow from outside.
+
+Generator
+  An activity inside a live workflow execution that emits one or more execution events over time.
+```
+
+Questions:
+
+- Is `Generator` the right term, or should this be called an event source, emitter, producer, or recurring activity?
+- Does each generated event create a new `ActivityExecution`, a scheduler work item, or both?
+- Are generator emissions durable, volatile, or policy-controlled?
+- Can a generator emit while its parent scope is paused, suspended, faulted, or cancelling?
+- How does a generator stop: parent completion, explicit cancellation, scope exit, condition, count, timeout, or workflow completion?
+- How do generator emissions interact with checkpoints and volatile wait?
+
+### 4. Pause, Resume, And Runtime Control Plane
+
+Problem:
+
+"Pause workflow" can mean several different things. Camunda-style worker pausing does not map one-to-one to Elsa, especially for HTTP endpoints and in-process execution.
+
+Initial framing:
+
+Pause should be modeled as a runtime control-plane policy, not one universal workflow status flag.
+
+Possible pause scopes:
+
+```text
+Definition ingress pause
+Workflow execution pause
+Activity execution pause
+Trigger/source pause
+Dispatcher/worker pause
+Host drain/quiescence
+```
+
+Ingress behavior likely depends on source type:
+
+```text
+HTTP endpoint paused -> return 503, 423, or configured response
+Timer paused -> suppress, skip, or coalesce missed firings by policy
+Message paused -> reject, dead-letter, defer, or leave in broker
+Event paused -> ignore, persist externally, route to retry/dead-letter, or refuse subscription delivery
+Queue worker paused -> stop fetching or locking new work
+```
+
+Questions:
+
+- Which pause scopes are required for Elsa 4's first runtime execution release?
+- Is workflow execution pause different from ingress pause?
+- Should paused executions finish current activity, stop before scheduling the next activity, or checkpoint immediately?
+- Should pause be durable runtime state, operational state, ingress source state, or policy metadata?
+- What is the default behavior per ingress type?
+- How does pause interact with volatile waits, leases, recovery, and host drain?
+
+### 5. Runtime Terminology And Glossary
+
+Problem:
+
+Elsa 3 vocabulary sometimes uses terms that overlap, such as fault and incident. Elsa 4 should formalize terminology while the execution model is being designed.
+
+Initial framing:
+
+Use a report for brainstormed terminology decisions, then move stable terms into `docs/glossary/`.
+
+Initial suggested distinction:
+
+```text
+Failure
+  General domain-neutral word for something going wrong.
+
+Faulted
+  Lifecycle status: workflow/activity cannot continue normally.
+
+Incident
+  Operator-visible problem record that may require attention.
+```
+
+Questions:
+
+- Should `Fault` exist as a noun at all, or only `Faulted` as a status?
+- Should `Incident` be the only persisted problem record?
+- What are the canonical names for workflow execution, activity execution, executable artifact, executable node, authored activity, trigger, generator, bookmark, checkpoint, suspension, pause, and recovery?
+- Should "resume" mean only durable bookmark resume, or can it also apply to volatile waits?
+- Should glossary entries be added incrementally after each locked decision, or in one terminology pass before Speckit?
+
+## Suggested Brainstorm Order
+
+1. Await-style volatile wait versus durable suspension.
+2. Activity completion propagation.
+3. Event-driven execution and generators.
+4. Pause, resume, and runtime control plane.
+5. Runtime terminology and glossary.
+
+## Plan Impact
+
+The current action plan should be amended after this addendum is reviewed:
+
+- Slice 3, checkpoint contract, must account for volatile waits and durable suspension.
+- Slice 4, pipeline slots, must account for completion propagation strategy.
+- Slice 5, bookmark resume contract, must distinguish durable resume from volatile continuation.
+- Slice 6, input bindings and durable value capture, must account for generator emissions and in-memory waits.
+- Slice 8, operational recovery and outbox, should include pause/resume control-plane boundaries or explicitly defer them to a companion plan.
+- A glossary/terminology report should be created before final Speckit wording freezes public concepts.

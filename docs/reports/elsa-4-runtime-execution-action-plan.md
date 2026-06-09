@@ -10,6 +10,8 @@ Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-
 
 Related context: [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md).
 
+Addendum queue: [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md).
+
 ## Purpose
 
 Turn the locked execution-layer brainstorm decisions into an actionable planning sequence for Elsa 4. The plan is intentionally staged so implementation starts with boundaries and contracts before importing or rewriting Elsa 3 behavior.

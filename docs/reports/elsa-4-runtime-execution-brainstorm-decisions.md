@@ -8,6 +8,8 @@ Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-
 
 Related decisions: [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md).
 
+Addendum queue: [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md).
+
 Parent queue: [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md).
 
 ## Purpose
