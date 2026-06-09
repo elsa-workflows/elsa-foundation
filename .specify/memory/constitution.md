@@ -10,10 +10,9 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v3.0.0**.
 
-**Knowledge boundary note:** this draft still contains examples and gate-relevant
-follow-up state. New work should treat this document as the Elsa-specific quality-gate layer.
-Canonical term lookup lives in `../../docs/glossary/`; current inventory and unfinished-work tracking
-live in `../../docs/reports/`.
+**Knowledge boundary note:** treat this document as the Elsa-specific
+quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
+current inventory and unfinished-work tracking live in `../../docs/reports/`.
 
 ---
 
@@ -21,7 +20,7 @@ live in `../../docs/reports/`.
 
 - [Derivation](#derivation)
 - [Glossary — Elsa specializations](#glossary--elsa-specializations)
-- [§E1 Case-study reference — the elsa-core baseline](#e1-case-study-reference--the-elsa-core-baseline)
+- [§E1 Refactor baseline](#e1-refactor-baseline)
 - [§E2 Elsa domain decomposition](#e2-elsa-domain-decomposition)
   - [§E2.1 The Elsa domain tree](#e21-the-elsa-domain-tree)
   - [§E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split](#e22-workflowsdesign--workflowsruntime-bounded-context-split)
@@ -65,11 +64,12 @@ This constitution uses those terms as gate vocabulary. Elsa-specific bindings th
 
 ---
 
-## §E1 Case-study reference — the elsa-core baseline
+## §E1 Refactor baseline
 
-The `elsa-core` baseline is the historical case study that motivated the framework anti-patterns in framework §1. The full case study now lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#elsa-core-baseline-case-study).
-
-The Elsa refactor replaces those failure modes with the rules in framework §2 and the Elsa-specific decomposition in §E2.
+The historical `elsa-core` case study lives in
+[docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#elsa-core-baseline-case-study).
+The Elsa refactor replaces those failure modes with the rules in framework §2
+and the Elsa-specific decomposition in §E2.
 
 **Refactor work in this constitution's scope is governed by framework §2.21.1** — the golden rule of refactoring. Existing tests on the implementations being refactored MUST continue to succeed across the reorganization; the *subject under test* and *objective* are preserved even when test setup, dependencies, or location change. Removing a test requires explicit recorded approval from at least one architect (unanimity reserved for constitutional amendments).
 

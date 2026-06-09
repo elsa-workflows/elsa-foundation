@@ -9,10 +9,9 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
-**Knowledge boundary note:** this draft still contains examples and gate-relevant
-follow-up state. New work should treat this document as the generic quality-gate layer. Canonical
-term lookup lives in `../../docs/glossary/`; current inventory and unfinished-work tracking live in
-`../../docs/reports/`.
+**Knowledge boundary note:** treat this document as the generic quality-gate
+layer. Canonical term lookup lives in `../../docs/glossary/`; current inventory
+and unfinished-work tracking live in `../../docs/reports/`.
 
 ---
 
@@ -83,9 +82,7 @@ The multiple-features-per-module rule remains constitutional: a module may expos
 
 ## §1 Anti-patterns the framework prevents
 
-The framework was distilled from a structural analysis of an existing modular application that exhibited the failure modes below. The application that produced these observations is documented in derived constitutions as a worked case study; the patterns themselves generalise to any modular application.
-
-The framework is designed to prevent:
+The framework is designed to prevent these modular-architecture failure modes:
 
 1. **God packages.** A single package that accumulates contracts and implementations from many domains, forcing every consumer to take on dependencies they do not need.
 2. **Framework leakage into domain code.** Domain types coupled to web frameworks, expression engines, or infrastructure libraries that should be invisible to the domain.
