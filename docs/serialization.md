@@ -3,6 +3,9 @@
 > All **domain-payload** JSON serialization and deserialization goes through `IPayloadSerializer`
 > (`Elsa.Serialization.Core`). Do not hand-roll `System.Text.Json.JsonSerializer` / `JsonDocument`
 > for data that another component reads.
+>
+> **Knowledge role:** focused reference. Link here from gates, specs, and skills instead of
+> restating the rule.
 
 ## Why
 

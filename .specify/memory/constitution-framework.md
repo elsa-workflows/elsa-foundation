@@ -1,504 +1,18 @@
 <!--
-Sync Impact Report — Modular Software Design Framework Constitution
-=====================================================================
-
-Version change: 2.0.0 (draft, never ratified) → 3.0.0 (draft)
-  SemVer: MAJOR.
-  Rationale: Unit 1 (2026-06-02) collapsed the three in-process pub/sub
-  concepts (`IDomainEvent` + `INotification` + `ILifecycleEvent`) into ONE
-  `IEvent` concept (§2.6.1), removed the exception-shielding-by-default
-  position (default Sequential publish CAN break the caller; resilience is the
-  Background strategy's job), and moved event handling into its own library
-  family (`Elsa.Events.Core` / `Elsa.Events` over shared `Elsa.Pipelines.Core`,
-  separate from command/request `Elsa.Mediator.*`). §2.6.3 un-parked
-  `IEventPublisher` as THE in-process mechanism; §2.6.6 restated the
-  two-concept table as a single concept + delivery-strategy taxonomy. Any
-  plan, spec, or citation referencing `IDomainEvent` / `INotification` /
-  `ILifecycleEvent` / their senders must rewrite to `IEvent` / `IEventHandler`
-  / `IEventPublisher` + a delivery strategy.
-
-  [Prior bump] 1.0.0 → 2.0.0: §2.6 family restructured. §2.6.1 redefined from
-  "Replacement vs Contribution contracts" to "Domain events — the contribution
-  mechanism"; old §2.6.1 content moved to new §2.6.2 (Replacement contracts
-  only). v1.0.0 was never ratified; impact confined to draft-state amendments,
-  but the SemVer classification stands per §4.2.
-
-v2.0.0 provenance — consolidated fold of:
-  1. The v1.1.0 amendment plan drafted 2026-05-19 (never folded as v1.1.0).
-  2. Sipke's 2026-05-26 architectural-clarification items 4, 5, 12 (from
-     `2026-05-26_ENTITY_DESIGN_RESPONSE_SIPKE.md`). Items 1, 2, 3, 6, 7, 8, 9,
-     10, 11, 13 are entity-design substance, deferred to Units B–G.
-  3. Matured candidate rules from the entity-design follow-up (Rule A, Rule B
-     → Elsa §E2.6) and the Elsa 3 compatibility follow-up (CR-COMPAT reframed
-     → Elsa §E2.7).
-
-Unit 1 amendment (2026-06-02 — "Unified event sending"):
-  - §2.6 family REWRITTEN around a single event concept. The three prior
-    in-process pub/sub markers (`IDomainEvent`, `INotification`,
-    `ILifecycleEvent`) and their senders (`IDomainEventSender`,
-    `INotificationSender`, `ILifecycleEventSender`) are DELETED, replaced by
-    `IEvent` + `IEventHandler<T>` (`Task Handle`) + `IEventPublisher.Publish`
-    with a pluggable `IEventPublishingStrategy`.
-  - §2.6.1 retitled "Events — the in-process pub/sub + contribution mechanism."
-    Default dispatch is Sequential, synchronous, awaited, and **CAN break the
-    caller** — the exception-shielding-by-default position (old Unit C Phase-6)
-    is REVERSED. The default path ships NO shielding middleware; resilience
-    lives ONLY in the Background strategy + `BackgroundEventPublisher`. The
-    contribution sub-pattern (intent-revealing `Add` methods, read-back) is
-    retained, now framed as "an event published Sequential."
-  - §2.6.3 retitled "Named events, not anonymous generic dispatch." `IEventPublisher`
-    is un-parked and is THE in-process mechanism; what's forbidden is anonymous
-    indirection where the expected handler/event is not a named type in a
-    domain's `.Core`. Read-back requires Sequential + a contribution payload.
-  - §2.6.6 retitled "Delivery strategies — one event concept, three dispatch
-    behaviours." The two-concept table + "don't conflate" rule + `ILifecycleEvent`
-    are replaced by a strategy taxonomy: Sequential (default, propagates) /
-    Parallel / Background (isolated). The `OnXxxing`/`OnXxxed` hybrid is
-    restated as Sequential gate + Background outcome (both `IEvent`).
-  - §2.22.1 + §2.24.2 (rows 3/3a–c/4/9) reworded to the single-concept model;
-    Strategy worked example is now `IEventPublishingStrategy`.
-  - Library home: events live in `Elsa.Events.Core` (contracts) / `Elsa.Events`
-    (impl) over shared `Elsa.Pipelines.Core`, separate from command/request
-    dispatch (`Elsa.Mediator.Core` / `Elsa.Mediator`). Rationale: event handling
-    is a core-domain concern, command/request dispatch is an API concern.
-  - Elsa §E3.x worked examples realigned to the unified naming.
-
-Unit 1 addendum (2026-06-02 — "Contributor interfaces + intent-method revert";
-folded into the 3.0.0 draft):
-  - §2.6.1 sub-pattern REPLACED. The Phase-3 "intent-revealing `AddX()` methods +
-    private list + `IReadOnlyList<T>` read accessor" sub-rule is WITHDRAWN (too
-    much ceremony; it grew every contribution event and folded contribution logic
-    into the payload). Contribution events now expose a **directly-accessible
-    `ICollection<T>`** (or a rich mutable context) written solely by ONE
-    aggregating handler. Joey's call 2026-06-02: "just use ICollection that is
-    directly accessible by event handlers."
-  - §2.6.1 NEW sub-pattern "Contributor interface + single aggregating handler."
-    Each fan-in event gets ONE action-named `IEventHandler<On<Phase>>` (e.g.
-    `ExecuteValidations`, `RegisterJsonConverters`) injecting
-    `IEnumerable<TContributor>`; features implement + DI-register a contributor
-    interface instead of shipping their own handler. Sipke proposed 2026-06-01;
-    Joey confirmed 2026-06-02. Centralises contribution logic in the pipeline,
-    drops per-feature handler sprawl.
-  - Naming: contributor interfaces split by method shape into THREE kinds —
-    **`I<X>Source`** (the impl RETURNS its items; flat-collection sink) vs
-    **`I<X>Contributor`** (the impl RECEIVES a context and ACTS on it via
-    `Contribute`; rich-context sink) vs **`I<X>PreProcessor`/`I<X>PostProcessor`**
-    (the impl ACTS on a lifecycle context at the *before*/*after* event of an
-    OnXxxing/OnXxxed pair). "Source" is preferred over "Provider." Joey
-    2026-06-02: "Sources always return something, they dont act on an object.
-    Make a distinction between these two concepts." Joey 2026-06-02 on the pre/post
-    kind: "especially when there are OnBefore and OnAfter events, the pre/post
-    processor interface naming is much more suitable" — the JS script-evaluation
-    cluster (`OnEvaluatingScript`/`OnScriptEvaluated`) is the canonical example.
-  - §2.24.2 row 3b REWRITTEN: was "Intent-revealing methods on events" → now
-    "Contributor interface + single aggregating handler" (architect-ratified
-    addition per the §2.24.3 gate: Sipke 2026-06-01, Joey 2026-06-02).
-  - §2.22 + §2.22.1 EXTENDED: per-feature docs MUST list the contributor
-    interfaces a feature implements; the events catalog MUST document each
-    fan-in event's contributor interface (Source vs Contributor, signature, DI
-    registration note).
-  - Elsa §E3.3 / §E3.7 / §E3.10 worked examples realigned to the new pattern.
-  - Code cascade: the five fan-in clusters (validation, JSON converters, JS
-    declarations, JS runtime functions, activity resolvers/descriptors) plus
-    the two reconciliation events refactored to the new shape; the four
-    contribution events flattened to directly-accessible `ICollection<T>`.
-  - Code cascade follow-up (Joey 2026-06-02): the JS script-evaluation cluster
-    moved from the Contributor kind to the PreProcessor/PostProcessor kind —
-    `IScriptEvaluationContributor` split into `IScriptPreProcessor` (at
-    `OnEvaluatingScript`, handler `PreProcessScript`) + `IScriptPostProcessor`
-    (at `OnScriptEvaluated`, handler `PostProcessScript`); the variable copy-back
-    became the canonical post-processor; the Jint adapter now publishes
-    `OnScriptEvaluated` after evaluation (it previously published only the before
-    event). The JS declarations context `IJavaScriptRenderingContext` was renamed
-    `IJavaScriptDeclarationsContributionContext` so the name states its purpose.
-
-Unit 1 extension follow-up (2026-06-03 — "Startup-task cross-domain contributions + fan-in rule scope clarification"):
-  - §2.6.1 sub-pattern CLARIFIED — the contributor-interface + single-aggregating-handler
-    rule is scoped to the *contribution axis* (fan-in flows). Features are explicitly
-    permitted to register `IEventHandler<T>` for independent purposes (auditing, cache
-    invalidation, cross-cutting reactions). The rule prevents scattered handlers all doing
-    the same fan-in contribution; it does not restrict general event observation.
-  - §2.22.1 / README pattern EXTENDED — `IStartupTask`, `IRecurringTask`, `IBackgroundTask`
-    implementations are cross-domain contributions on equal standing with
-    `IEntitySavingHandler`, `IScriptPreProcessor`, etc. Features implementing task
-    interfaces from `Elsa.Tasks.Core` MUST list them in their README's
-    "Cross-domain contributions" section. Documentation cascade: READMEs created/updated
-    for Elsa.Serialization, Elsa.Persistence.EFCore, Elsa.Workflows.Design.Reconciliation,
-    Elsa.Events, Elsa.Activities.Design.Reconciliation, Elsa.Activities.Runtime.
-  - Root EXTENSION_POINTS.md "universal rule" wording corrected to scope the restriction
-    to fan-in contribution flows; independent subscriptions stated as unrestricted.
-
-Unit 1 extension (2026-06-03 — "Per-domain EXTENSION_POINTS.md rollout + intra/cross-domain pattern"):
-  - §2.6.1 EXTENDED — "Intra-domain vs. cross-domain contributions" named as a
-    formal pattern: intra-domain default = same domain's feature implements its
-    own Core's contract; cross-domain contribution = different domain implements
-    another domain's Core contract (the inter-domain dependency map). Owning
-    feature's EXTENSION_POINTS.md MUST list all Known implementations tagged
-    accordingly; contributing feature MUST add a "Cross-domain contributions"
-    section to its README with a link back.
-  - §2.22.1 EXTENDED — Catalog placement clarified: catalog lives at the
-    composition-root feature project (NOT .Core, which is contracts-only);
-    exception for domains with no separate feature project. Format spec extended:
-    every entry gains a layer badge (*(Core — Proj)*  vs *(Feature contract)*);
-    contributor-interface entries gain a Known implementations list with
-    intra/cross-domain tags.
-  - §2.22.1 MANDATORY maintenance obligation NEW — five trigger conditions:
-    (a) new interface, (b) new implementation (intra or cross), (c) rename/remove,
-    (d) new aggregator, (e) new feature/.Core project. CatalogParityTests covers
-    events; code review covers contributor-interface drift.
-  - §2.22.1 worked example UPDATED — 24 per-domain catalogs at composition-root
-    feature projects; catalog set declared complete for current domain set.
-  - §2.22.2 UPDATED — "inlined until migrated" clause removed; index is pure
-    links (no inline entries); "one per .Core root" → "one per composition-root
-    feature project."
-  - Documentation cascade: 24 new/updated EXTENSION_POINTS.md catalogs across
-    all domains; root EXTENSION_POINTS.md converted to pure-links index with
-    24-row domain table; CatalogParityTests extended with 7 new assembly→catalog
-    pairs + multi-assembly catalog support (union check on reverse direction);
-    2 catalogs relocated from .Core to composition-root feature projects
-    (Workflows.Design.Core → .Api; Validations.Core → .Validations); cross-domain
-    README sections added to 8 feature projects.
-
-Unit 1 consistency fix (2026-06-03 — "EF Core save/load on the contributor +
-single-aggregating-handler shape"):
-  - §2.6.1 extended — action-named contributor suffixes (`…Validator`,
-    `…Handler`) are now explicitly sanctioned alongside Source / Contributor /
-    PreProcessor / PostProcessor. They are context-receiving (Contributor-kind)
-    but keep an action-specific, intent-revealing name; the single aggregating
-    `IEventHandler<OnXxx>` still owns the event subscription.
-  - §2.22.1 broadened — the per-domain `EVENTS.md` becomes a per-domain
-    `EXTENSION_POINTS.md` with three sections (Overridable contracts /
-    Implementable contributor interfaces / Events), distinguishing the two
-    extension axes: **override** (replace a `.Core` contract's default impl) vs
-    **extend** (add a contributor the single aggregating handler runs). Events
-    are absorbed as the third section. The three existing `EVENTS.md` files
-    (Workflows.Design.Core, Workflows.Design.Validations.Core, Persistence.EFCore)
-    were converted; the `CatalogParityTests` filename was retargeted.
-  - §2.22.2 NEW — the repo-wide `EXTENSION_POINTS.md` is recognised as an
-    **index** alongside per-feature READMEs and the per-domain catalogs: it maps
-    every extension point and links to the owning domain's `EXTENSION_POINTS.md`
-    for detail (inlining only the not-yet-migrated domains). Index and per-domain
-    catalogs share the filename, distinguished by location (repo root vs `.Core`
-    project root).
-  - Code cascade: the EF Core entity save/load extension points finished their
-    migration off the "coexist" half-state onto the canonical contributor +
-    single-aggregating-handler shape (mirror of `IDraftValidator` +
-    `ExecuteValidations`). `Elsa.Persistence.EFCore` now ships two single
-    aggregators — `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>`
-    and `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (registered
-    once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`) — that
-    reflect the typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>`
-    contributors over the runtime DbContext + entity types. The legacy
-    direct-dispatch loops in `ElsaDbContextBase` / `EFCoreQueries` were removed;
-    `ActivityDefinitionVersionSavingHandler` was re-homed onto the typed
-    `IEntitySavingHandler<,>`; mutate-then-save commands (`UpdateDraft`) now
-    publish `OnEntityLoading` Sequential against their own tracked context rather
-    than hand-rolling a handler loop. `Elsa.Persistence.EFCore` gains an
-    `EXTENSION_POINTS.md`; the repo root gains the `EXTENSION_POINTS.md` index.
-    The out-of-band
-    `IGlobalEntitySavingHandler` + `IEntityModelCreatingHandler` remain on their
-    own dispatch mechanisms (unchanged).
-
-Unit C Phase-8 amendment (2026-05-29, draft pending 2026-06-01 ratification):
-  - §2.24 NEW — "Sanctioned patterns — the closed catalog." Articulates Joey's
-    2026-05-29 rule: the framework recognises a closed catalog of architectural
-    patterns; code MUST resolve problems using a pattern from the catalog;
-    new patterns require architect evaluation + documented use case + criteria
-    + worked example + ratification before adoption. Random ad-hoc patterns
-    are not permitted. §2.24.1 carries the rationale (predictability,
-    AI-session continuity, review surface). §2.24.2 carries the catalog as a
-    table cross-referencing the existing § identifiers, plus two new
-    catalogue rows — **Strategy** (already in implicit use at §2.6.6's
-    publishing strategies; codified for general use) and **Factory**
-    (candidate; promotion pending Monday's discussion). §2.24.3 carries the
-    gate for adding a new pattern. Cross-references the agenda Item 7.
-
-Unit C Phase-5 amendment (2026-05-28, draft pending 2026-06-01 ratification;
-filename + scope refined 2026-05-29):
-  - §2.22.1 NEW sub-rule — "Domain-level events catalog." Every domain whose
-    `.Core` publishes events (domain events under §2.6.1 AND/OR lifecycle
-    events under §2.6.2) MUST ship an events catalog at the `.Core` project
-    level documenting every event with category, semantic, payload,
-    publication site, expected handlers, ordering guarantees, and
-    cross-references. The catalog distinguishes the two categories under
-    separate headings — domain events (contribution; publisher reads back)
-    vs lifecycle events (notification; fire-and-forget by default).
-    Complements §2.22's per-feature documentation requirement — the catalog
-    is the domain-level index for "what events does this domain publish?".
-    Form is application-defined; recommended `EVENTS.md` at the `.Core`
-    project root (renamed from the original `DOMAIN_EVENTS.md` on 2026-05-29
-    once the two-category split landed; the prior name was misleading
-    because lifecycle events are not domain events). Worked examples: Unit C
-    creates `src/Elsa.Workflows.Design.Core/EVENTS.md` (all lifecycle) and
-    `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (mixed —
-    `OnDraftValidating` domain, `OnDraftValidated` lifecycle).
-
-Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):
-  - §2.6.1 EXTENDED — "Visibility" bullet REWRITTEN as
-    "Visibility — subscriber MUST NEVER break publisher." Articulates Joey's
-    2026-05-28 rule (clarify Q1, fold session 2): cross-domain *failure
-    coupling* is forbidden; a handler exception MUST NOT propagate to the
-    publisher's caller and MUST NOT prevent the remaining handlers from
-    running. Adds the **default + escape hatch** framing: framework ships an
-    exception-shielding middleware as the default; an engineer composing a
-    custom pipeline MAY swap or remove it for aggregate-throw / fail-fast /
-    retry / dead-letter semantics. Adds explicit "Handler independence" and
-    "Diagnostics" bullets articulating the corollary rules.
-  - Code cascade (this branch, Elsa.Mediator domain-event pipeline):
-      - NEW: `DomainEventHandlerIteratorMiddleware` — resolves handlers,
-        iterates them, sets `IDomainEventContext.CurrentHandler` per
-        invocation, calls `next(context)` per handler. Enforces §2.6.1
-        completeness rule (every registered handler dispatched).
-      - NEW: `DomainEventExceptionShieldingMiddleware` — wraps each
-        per-handler invocation in `try/catch`, logs with handler+event
-        context, swallows. Default mechanism for the new rule.
-      - REFACTORED: `DomainEventHandlerInvokerMiddleware` — no longer
-        iterates; invokes only `context.CurrentHandler`. Iteration lifted
-        upstream so the shielding middleware can sit between iterator and
-        invoker per-handler-invocation-wise.
-      - EXTENDED: `IDomainEventContext` gains `CurrentHandler` (mutable
-        per-handler state, analogous to `HttpContext.User` in
-        ASP.NET Core). `DomainEventContext` record updated.
-      - REPLACED: `DomainEventPipeline.CreateDefaultPipeline()` now
-        composes `Iterator → ExceptionShielding → Invoker`.
-  - Cross-mediator note: the same architectural shape (Iterator + per-call
-    Shielding + Invoker) generalises to any multi-handler dispatch — i.e.
-    request handlers, command handlers, notification handlers, etc. Other
-    mediator variants in this codebase (commands, requests) currently have
-    single-handler invokers; if a multi-handler variant lands, it inherits
-    this rule and the same default mechanism. Code application to those
-    variants is out of Unit C's scope; constitutional codification covers
-    all of them via this §2.6.1 sub-rule.
-  - Test obligation per §2.23.2 (per-implementation branch coverage):
-    the three new middleware classes (Iterator, Shielding, Invoker)
-    require branch-covered unit tests. Tracked as a follow-on item in the
-    Unit C follow-up; not blocking ratification.
-
-Unit C Phase-3 amendment (2026-05-28, draft pending 2026-06-01 ratification):
-  [SUPERSEDED by the Unit 1 addendum 2026-06-02 — the intent-revealing-methods
-  sub-pattern was withdrawn; contribution events now expose a directly-accessible
-  `ICollection<T>` with a single aggregating handler. Retained here for history.]
-  - §2.6.1 EXTENDED — NEW sub-pattern "Domain events expose intent-revealing
-    methods, not raw collections." Codifies Joey's 2026-05-28 articulation:
-    domain events that gather handler contributions expose method-based
-    contribution APIs (e.g. `AddVersion(...)`, `AddValidationError(...)`)
-    rather than public mutable collections. Backing collection is private;
-    read access is via a public `IReadOnlyList<T>` property — non-mutating by
-    type, so public visibility is safe and `InternalsVisibleTo` is NOT
-    required (avoided as default). Events MUST be `sealed class` (not
-    `record`) to enforce encapsulation. Smell heuristic: too wide a variety
-    of methods on one event indicates two distinct events that should be
-    split.
-  - Code cascade (this branch): `OnActivityVersionsReconciling` (Unit B's
-    reconciliation event) refactored from record-with-ICollection to
-    sealed-class-with-`AddVersion(...)`; the reconciler and JSON handler
-    updated accordingly. Same retroactive cascade reasoning as Phase-1's
-    Model X rewrite: don't leave two patterns in the codebase.
-  - Worked examples queued for §E3.3 rewrite (in Elsa constitution) and Unit
-    C's `OnDraftValidating` (with `AddValidationError(ValidationError)` method).
-
-Added sections (framework layer, relative to v1.0.0):
-  - §2.2 — "Secondary-domain naming sub-rule" (new subsection within §2.2):
-    when a feature only contributes implementations of another domain's
-    contributor/provider interfaces, the model-owning domain wins the prefix
-    (`<App>.<ModelDomain>.<ConsumerDomain>`). Cross-references Elsa §E3.8.
-  - §2.6 — Restructured umbrella: "Cross-feature composition mechanisms".
-    §2.6 head gained the "no tight logic coupling between implementations" rule.
-      - §2.6.1 — NEW (was: Replacement vs Contribution contracts). Now:
-        "Domain events — the contribution mechanism". Includes the Registry +
-        StartUp Task sub-pattern for sync access. Includes the dispatch
-        semantics ("sync = awaited end-to-end", not single-threaded sync).
-        Includes the inheritance-chain scope note (events apply within
-        specialization chains, not only cross-domain). Includes the
-        feature-documentation cross-reference to §2.22.
-      - §2.6.2 — NEW. Replacement contracts only (the prior §2.6.1's
-        "Replacement contracts" content, narrowed; the "Contribution contracts"
-        content is gone — contribution flows through §2.6.1).
-      - §2.6.3 — NEW. "Generic dispatch is not a coupling mechanism."
-        `IMediator` / `IEventBus` / `INotificationSender` for fire-and-forget
-        pub/sub only; specific-handler expectations go through §2.6.1.
-      - §2.6.4 — NEW. "Design-time vs runtime contract split." When a contract
-        has two phase-bound consumers, split into two contracts; orthogonal to
-        the §2.6.1/§2.6.2 mechanism choice. Worked example: Elsa §E3.7.
-      - §2.6.5 — NEW. "Sync contributor pattern — rare exception." Codifies
-        the narrow case where a provider interface resolved via DI as
-        `IEnumerable<TContributor>` is permitted because the contribution flow
-        is structurally incompatible with both §2.6.1 (domain events, async)
-        and its Registry + StartUp Task sub-pattern. Three criteria must all
-        hold: intrinsically sync dispatch site, contributor contributes
-        behaviour (not data), Registry + StartUp Task doesn't apply. Canonical
-        worked example: EF Core's `OnModelCreating` hook + `IEntityModelCreatingHandler`
-        (also recorded in Elsa §E3.9). Reviewers MUST challenge §2.6.5
-        invocations; the exception is rare.
-  - §2.9 — Persistence invariants paragraph (appended): invariants defined
-    independently of the persistence provider; `*.Persistence.Core` is the
-    provider-agnostic surface; provider-specific mechanism lives in
-    `*.Persistence.<Provider>`.
-  - §2.9.1 — NEW (Unit B fold, 2026-05-28). "Domain-level shadow properties
-    — real properties on entities, hidden at the interface boundary."
-    Persistence-only fields (serialised forms, denormalised lookups, backing
-    strings for `[NotMapped]` projections) MUST be real CLR properties on the
-    entity, not provider-side shadow properties. The interface controls
-    cross-domain visibility; provider shadow features bypass cross-cutting
-    attribute scanners (e.g. `[Immutable]`) and scatter the entity's surface
-    area into provider configuration. Provider shadow properties remain valid
-    only for fields that genuinely don't belong on the CLR class.
-  - §2.23.5 — NEW (Unit B fold, 2026-05-28). "Exception boundaries —
-    infrastructure exceptions are wrapped." `JsonException`, `DbUpdateException`,
-    third-party-library exceptions etc. MUST NOT escape a feature boundary
-    unwrapped. Translate at the infrastructure call site into a domain-scoped
-    exception with diagnostic context (row id, entry index, asset name).
-    Reviewers MUST challenge raw infrastructure exceptions crossing feature
-    boundaries.
-  - §2.23.5 (former) → §2.23.6 — renumbered (Integration testing — out of scope).
-  - §2.20 — Rule 3 (appended): feature modules MUST NOT depend on concrete
-    provider implementations unless the feature is itself provider-specific.
-  - §2.22 — NEW: "Feature documentation." Placeholder section. Minimum required
-    content: domain event handlers registered, tasks registered (startup,
-    recurring, scheduled). Expansion (settings, services registered, inheritance
-    relationships) deferred to future amendments.
-  - §2.23 — NEW: "Unit tests." Registration test (§2.23.1) + per-implementation
-    branch-covered tests (§2.23.2) + visibility rule (§2.23.3) + refactoring
-    obligations inherited from §2.21.1 (§2.23.4) + integration testing
-    out-of-scope (§2.23.5). The §2.23.4 "tight logic coupling" diagnostic
-    cross-references the §2.6 head rule.
-
-Renamed sections:
-  - §2.6 head: "Provider Interface Pattern" → "Cross-feature composition mechanisms".
-  - §2.6.1: "Replacement vs Contribution contracts" → "Domain events — the
-    contribution mechanism" (semantic redefinition; old content moved).
-
-Cross-reference updates:
-  - §2.7.1 — "(see §2.6.1)" → "(see §2.6.2)" for contract-kind declaration.
-  - §2.11 — "see §2.6.1 and §3" → "see §2.6.2 and §3" for DI graph validation.
-
-Removed sections: none.
-
-Plan-template gates:
-  - G1–G20 retained from v1.0.0; G5 wording sharpens but its semantic citation
-    (now §2.6.2) is preserved.
-  - G21–G30 ADDED for new v2.0.0 rules. Process-line range updated G1–G20 → G1–G30.
-
-Follow-up TODOs:
-  - TODO(RATIFICATION_DATE) — v2.0.0 is the target ratification version
-    (was v1.0.0; superseded). Awaiting Joey + Sipke + Frans formal ratification.
-  - §2.12 Configuration & Settings Classification — carry-over deferral.
-  - §2.22 Feature documentation expansion — placeholder; future amendments
-    will codify settings, services-registered inventory, inheritance
-    relationships.
-  - Integration-testing rule — deliberately not in §2.23; scoped in
-    `follow-up-items/2026-05-19_testing_infrastructure.md`.
-  - Compile-domain rules from `follow-up-items/2026-05-11_workflow_execution_seam.md`
-    (CR-1, CR-3, CR-3a, CR-4, CR-5) — deferred to Units B–G; their final
-    framing depends on entity-design substrate.
-
-Code-side commitments (tracked in Unit A follow-up
-`follow-up-items/2026-05-27_unitA_constitution_catchup.md`; required before
-ratification):
-  - Migrate `IExpressionDescriptorProvider`, `IPayloadSerializerConverterProvider`,
-    EF Core entity handlers to Registry + StartUp Task + Domain Event pattern.
-  - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).
-  - Update plan-template gate G24 entry (renumber if needed when v1.1.0-era
-    plans surface).
-  - Update entity-design summary doc `2026-05-24_ENTITY_DESIGN_SUMMARY_JOEY.md`
-    per Sipke 2026-05-26 items 8 and 9 ("read-only interfaces" wording;
-    Tier-2-churn argument narrowing).
-
-Structural deviation from speckit template: unchanged from v1.0.0. The numbered
-legal-document structure is preserved.
-
----  (v1.0.0 SIR retained below for history)
-
-Version change: (initial) → 1.0.0
-  Initial v1 population from the empty speckit template. Substance migrated from
-  ../elsa-foundation-project-management/epic1-elsa-refactor-constitution/ARCHITECTURE_v2.md
-  (now drafting archive) per decision D26 (2026-05-08 triage row 1).
-
-Added sections (relative to the empty speckit template):
-  - Preamble — purpose, two-layer split, derivation contract.
-  - Glossary — Host, Module, Feature, Domain, Application, Foundation repo, .Core,
-    Thin implementation, Heavy dependency, Bundle (retired), Capability/Envelope (retired),
-    Multiple-features-per-module rule.
-  - §1 Anti-patterns the framework prevents.
-  - §2 The Architecture (twenty rules §2.1–§2.20):
-      §2.1  Three-Layer Separation per feature
-      §2.2  Naming Convention
-      §2.3  Framework Primitives Library
-      §2.4  Helper Libraries (domain-owned)
-      §2.5  Feature Inheritance
-      §2.6  Provider Interface Pattern (incl. §2.6.1 Replacement vs Contribution)
-      §2.7  Adapter / Bridge (incl. §2.7.1 Decision rule)
-      §2.8  Extension methods decision framework
-      §2.9  Persistence Base Context — application-level
-      §2.10 CQS at Persistence Boundary
-      §2.11 No DependsOn — fail fast
-      §2.12 Configuration & Settings Classification [DEFERRED]
-      §2.13 Packaging and Versioning — application-level
-      §2.14 Integration vs Consumption-Shape
-      §2.15 Repository organisation (foundation repo + multi-repo preference)
-      §2.16 Refactor-cost test
-      §2.17 Duplication beats dependency
-      §2.18 Methodology for refactoring a modular monolith
-            §2.18.0 Shape of the methodology (framing + falsifiability sidebar)
-            §2.18.1 Step 1 — Identify the domains (verb-led-sentence test)
-            §2.18.2 Step 2 — Extract the implementations (cross-domain consumption test)
-            §2.18.3 Step 3 — Resolve cross-domain reuse (inductive feedback)
-            §2.18.4 Refactor-cost discipline (cross-refs to §2.16 + §2.21.1)
-      §2.19 Feature identity
-      §2.20 Provider module decomposition (NEW — promoted from feedback memory 2026-05-10)
-      §2.21 Test discipline (NEW — refactor golden rule + greenfield deferral)
-  - §3 Runtime composition (Nuplane Strategy A vs B + restart criteria).
-  - §4 Versioning (§4.1 Per-Package Versioning, §4.2 SemVer for .Core Libraries).
-  - Governance — amendment process, SemVer of the constitution, compliance review,
-    public-release notes.
-
-Removed sections: N/A (initial population).
-Renamed sections: N/A.
-
-Templates updated:
-  ✅ .specify/templates/plan-template.md — Constitution Check rewritten with 20 gates
-     G1–G20 citing specific framework/Elsa § identifiers (G17–G19 cover §2.8/§2.10/§2.14;
-     G20 covers §2.21.1 refactor test-survival).
-  ✅ .specify/templates/spec-template.md — Constitutional Compliance pointer added.
-  ✅ .specify/templates/tasks-template.md — Constitutional Compliance pointer added.
-  N/A .specify/templates/commands/*.md — directory does not exist in this speckit install.
-  ✅ /CLAUDE.md (elsa-foundation) — constitution pointers updated.
-  ✅ ../elsa-foundation-project-management/CLAUDE.md — constitution pointers updated.
-
-Navigation:
-  Top-of-file Table of Contents added; uses GFM auto-anchors. If a renderer ever strips
-  the § symbol or em-dashes differently, fall back to explicit <a id="…"></a> markers
-  before each heading.
-
-Structural deviation from speckit template (justified, intentional):
-  The speckit constitution-template.md uses a "5 Core Principles + 2 sections + Governance"
-  shape. This constitution is a numbered legal-document with 20+ rules organised by §
-  identifier. The deviation is intentional and load-bearing:
-    (a) v2's content density does not compress into 5 short principles;
-    (b) plan-template.md's Constitution Check cites specific § identifiers (G1–G20), which
-        requires this numbered structure;
-    (c) the speckit-constitution skill explicitly permits varying the principle count
-        ("the user might require less or more principles than the ones used in the
-        template").
-  Future speckit-constitution runs MUST preserve this structure; do NOT revert to the
-  5-principle pattern.
-
-Memory promotion executed:
-  - feedback_provider_module_decomposition (validated 2026-05-10) → §2.20.
-  - (paired): project_workflows_bounded_context → Elsa §E2.2 in constitution.md.
-
-Follow-up TODOs:
-  - TODO(RATIFICATION_DATE) — awaiting Joey + Sipke + Frans formal ratification per
-    Definition of Done point 1.
-  - §2.12 Configuration & Settings Classification — awaiting the Configuration &
-    Infrastructure follow-up meeting (Elsa §E4 mirrors).
+Draft history moved to ../../docs/reports/constitution-draft-history.md.
+This constitution file is the generic quality-gate layer: gates, allowed exceptions,
+ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 -->
-
 # Modular Software Design Framework Constitution
 
 **Version:** 3.0.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
+
+**Knowledge boundary note:** treat this document as the generic quality-gate
+layer. Canonical term lookup lives in `../../docs/glossary/`; current findings
+and inventory live in `../../docs/reports/`. Planned work routes through the
+shared program-goals planner.
 
 ---
 
@@ -518,7 +32,7 @@ Follow-up TODOs:
   - [§2.8 Extension Methods — Decision Framework](#28-extension-methods--decision-framework)
   - [§2.9 Persistence Base Context — application-level](#29-persistence-base-context--application-level)
   - [§2.10 CQS at the Persistence Boundary](#210-cqs-at-the-persistence-boundary)
-  - [§2.11 No DependsOn — Fail Fast](#211-no-dependson--fail-fast)
+  - [§2.11 DependsOn — Fail-Fast and Auto-Resolve modes](#211-dependson--fail-fast-and-auto-resolve-modes)
   - [§2.12 Configuration & Settings Classification — \[DEFERRED\]](#212-configuration--settings-classification--deferred)
   - [§2.13 Packaging and Versioning — application-level](#213-packaging-and-versioning--application-level)
   - [§2.14 Integration vs. Consumption-Shape — separate modules](#214-integration-vs-consumption-shape--separate-modules)
@@ -530,8 +44,8 @@ Follow-up TODOs:
   - [§2.20 Provider module decomposition](#220-provider-module-decomposition)
   - [§2.21 Test discipline](#221-test-discipline) · [§2.21.1 Golden rule of refactoring](#2211-the-golden-rule-of-refactoring) · [§2.21.2 Greenfield deferral](#2212-greenfield-test-discipline)
   - [§2.22 Feature documentation](#222-feature-documentation)
-  - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Integration testing — out of scope](#2235-integration-testing--out-of-scope)
-  - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Why this rule](#2241-why-this-rule) · [§2.24.2 The catalog](#2242-the-catalog-snapshot-2026-05-29-pending-2026-06-01-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
+  - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Exception boundaries](#2235-exception-boundaries--infrastructure-exceptions-are-wrapped) · [§2.23.6 Integration testing — out of scope](#2236-integration-testing--out-of-scope)
+  - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Rationale reference](#2241-rationale-reference) · [§2.24.2 The catalog](#2242-the-catalog-draft-pending-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
 - [§4 Versioning](#4-versioning)
   - [§4.1 Per-Package Versioning](#41-per-package-versioning)
@@ -551,7 +65,7 @@ This document is the **generic** layer of a two-layer constitution. An applicati
 - Cites a specific version of this document.
 - Pins its **root domain name** (the `<App>` token used throughout this constitution).
 - Adds **specializations** where the generic rule needs application-specific refinement.
-- Carries the application's **worked examples** — instantiations of the generic rules using the application's concrete names.
+- Links to the application's worked examples when a generic rule needs concrete names.
 
 Where the application's constitution is silent, this document applies. Where it overrides, the application's constitution declares the override explicitly with the convention `framework §X — <App> specialization: …`.
 
@@ -559,32 +73,17 @@ Where the application's constitution is silent, this document applies. Where it 
 
 ## Glossary (working definitions)
 
-These terms have a single agreed meaning across the constitution. *Capability* and *envelope* are retired vocabulary; use *feature* and *module* respectively.
+Canonical framework term definitions live in [docs/glossary/root.md](../../docs/glossary/root.md).
 
-| Term | Definition | Concrete form |
-|---|---|---|
-| **Host** | The application. The thing that runs and that hosts modules. | An ASP.NET Core application (or any other .NET host). |
-| **Module** | A logical unit deployed as a single class library / NuGet package. Provides one or more features. **Module identity is its NuGet/package identity** — the unit of deployment, versioning, compatibility, and dependency-graph validation. Source/project references are permitted only as a local development workflow via the workspace/submodule pattern; they must never appear on a release branch or in a published package graph. | A class library; `.dll` and `.nupkg` are the deployment artefacts. |
-| **Feature** | A class that implements `IFeature`. Installs services into the host's DI container. | A class named e.g. `<Domain>RuntimeFeature` or `<Domain>PersistenceFeature`. |
-| **Domain** | A specialised concept with: a clear intent or goal and a human-understandable scope. A domain is a *mental model* of an area of the application. **A domain can be a single feature, a composition of features, or a composition of domains** (sub-domains are themselves domains). Domains compose by referencing each other's `.Core` libraries (see §2.1). A domain is a mental model first; its boundaries are revisited as parts of it prove reusable elsewhere. | Within an application: a `Scheduling` domain implementable by multiple providers (CRON, queue-based, in-memory); a `Serialization` domain implementable by Newtonsoft, System.Text, etc. |
-| **Application** | An instance of the framework — a host that composes a chosen set of domains, features, and configurations into a deployable system. | Each application built on this framework is a separate Application. |
-| **Foundation repo** | The umbrella repository that an application maintains as its development-and-deployment baseline: host setup, primitives, the application's main-domain `.Core` libraries, and a set of default features that are implemented whose absence would make local development impractical. Renamed from "core repo" to disambiguate from the per-feature `.Core` library suffix. What specifically lives in it vs. as standalone features is decided by the application's architects and documented in the application's derived constitution. | An application's foundation repo houses host setup, primitives, the main domain `.Core` libraries, and at least one default implementation per domain that requires durable state. |
-| **`.Core` (library suffix)** | A `.Core` library contains the contracts (interfaces, abstract classes), models, thin utility implementations, and helper extensions for one feature or one domain. It is the consumable surface other features/domains may reference. Carries no heavy dependencies. **A `.Core` library is nothing more than the `.Core` of a feature** — there is no separate framework-level "Core" concept beyond this. The architects of an application decide which `.Core` libraries are packaged together in the application's foundation repo and which are published as standalone features; those packaging decisions are revisable. | `<App>.<Domain>.Core`, `<App>.<Domain>.<SubDomain>.Core`. |
-| **Thin implementation** | A small, dependency-light implementation whose behavior is mechanical rather than domain-decisive: delegation, wrapping, simple default behavior, argument/null guards, option binding, or trivial value transformation. A thin implementation **must not** contain business policy, persistence strategy, infrastructure-specific logic, or branching that encodes meaningful domain decisions. | A `Result<T>` factory helper; a guard like `Guard.AgainstNull(...)`; a wrapper that forwards `IPayloadSerializer` calls to a configured underlying serializer. |
-| **Heavy dependency** | A NuGet package that pulls in transitive packages, native binaries, or implies an out-of-process system (Redis, MongoDB, Azure SDK, EF Core database providers other than SQLite, MassTransit, script engines like Jint or Fluid). Heavy dependencies are forbidden in any `.Core` library (§2.1) and gated by the splitting rule for modules (§2.1, multiple-features-per-module rule). |
-| **Bundle** | *Not a constitutional concept.* A bundle is a packaging convenience that references other modules with no new functionality — purely a distribution shape. The framework neither prescribes nor forbids bundles; an application chooses whether to publish them. |
-| **Capability** | *Retired.* Use *feature*. |
-| **Envelope** | *Retired.* Use *module*. |
+This constitution uses those terms as gate vocabulary. Short retired-vocabulary rule: **Capability** and **envelope** are retired; use **feature** and **module**.
 
-**Multiple features per module rule.** A module exposes one or more features. More than one feature in a single module is permitted only when those features share their **dependency envelope**. The trigger to split a module is the introduction of a heavy dependency needed by only some of its features. Multiple features in one module typically represent variations of DI registration that some users will want and others will not.
+The multiple-features-per-module rule remains constitutional: a module may expose more than one feature only when those features share their dependency envelope. The trigger to split a module is the introduction of a heavy dependency needed by only some of its features.
 
 ---
 
 ## §1 Anti-patterns the framework prevents
 
-The framework was distilled from a structural analysis of an existing modular application that exhibited the failure modes below. The application that produced these observations is documented in derived constitutions as a worked case study; the patterns themselves generalise to any modular application.
-
-The framework is designed to prevent:
+The framework is designed to prevent these modular-architecture failure modes:
 
 1. **God packages.** A single package that accumulates contracts and implementations from many domains, forcing every consumer to take on dependencies they do not need.
 2. **Framework leakage into domain code.** Domain types coupled to web frameworks, expression engines, or infrastructure libraries that should be invisible to the domain.
@@ -678,8 +177,6 @@ The test is: *where do the models come from?* The domain whose `.Core` defines t
 
 The reverse form (`<App>.<ConsumerDomain>.<ModelDomain>`) is an anti-pattern. It forces the consumer domain to grow one sub-branch per upstream consumer — `<ConsumerDomain>.<ModelDomainA>`, `<ConsumerDomain>.<ModelDomainB>`, … — until the namespace is a junk drawer of unrelated model branches glued together by their shared contributor surface. A domain that grows one branch per consumer is not a domain.
 
-The Elsa-specific worked example lives in §E3.8 of the application constitution.
-
 **Type-level `Feature` suffix is permitted.** The word `Feature` describes an activation unit, so a class implementing `IFeature` may be named e.g. `<Domain>RuntimeFeature`. The package, however, is `<App>.<Domain>.Runtime` — never `<App>.Features.<Domain>.Runtime`.
 
 **Avoid global layer-marker buckets** in package or namespace names: `Features.*`, `Modules.*`, `Implementations.*`, `Providers.*`, `Adapters.*`. They communicate nothing the domain hierarchy doesn't already say.
@@ -733,11 +230,7 @@ Compile-time inheritance is the load-bearing mechanism; runtime references betwe
 
 The default lifetime for a registered service is **scoped**. **Singleton is reserved for application-wide static values** — options snapshots, registries, caches, immutable lookup collections, and similar state that is established once and read everywhere. A service that *executes logic* — resolves, scans, validates, reconciles, dispatches, maps — is scoped unless there is a specific, documented reason it must be a singleton.
 
-**Why.** Scoped is the safe default: it bounds a service's lifetime to the unit of work, avoids accidental shared mutable state, and keeps captive-dependency hazards (a singleton capturing a scoped/transient collaborator) from arising in the first place. Singleton is an explicit decision about *shared static state*, not a performance default — a stateless executor registered as a singleton communicates "this is shared application state" to every reader, which is a lie. Reserve the signal for things that genuinely are application-wide static values.
-
 **Rule of thumb.** Ask "is this an application-wide static value (options/registry/cache/immutable collection), or does it just execute?" Static value → singleton. Executes → scoped.
-
-*New sub-section, and the two registration disciplines added to §2.5 (Unit 3 amendment, 2026-06-04): surfaced while wiring the CLR activity-reconciliation feature — resolvers and scanners "just execute" and so are scoped, while their options remain singleton; collaborators are registered and injected through contracts so an inheriting feature can replace one in isolation.*
 
 ### §2.6 Cross-feature composition mechanisms
 
@@ -745,7 +238,7 @@ The default lifetime for a registered service is **scoped**. **Singleton is rese
 
 When inheritance is the wrong tool for cross-feature composition (§2.5), three mechanisms govern how features compose:
 
-1. **Events (§2.6.1) — the in-process pub/sub + contribution mechanism.** Domains publish named events (`IEvent`); features register handlers (`IEventHandler<T>`). A single `IEventPublisher.Publish` dispatches through a framework-managed pipeline; the **delivery strategy** is pluggable, defaulting to **Sequential** (synchronous, awaited end-to-end, CAN break the caller). Contribution — "I'm about to do X, who wants to participate?" — is the Sequential strategy applied to an event whose payload exposes intent-revealing `Add` methods; the publisher reads the accumulated contributions back. Pure notification — "X happened, react if you want" — is the same mechanism, often the Background strategy. For sync access to contributions, the Registry + StartUp Task sub-pattern applies. Events live in their own contracts library (`Elsa.Events.Core`), separate from command/request dispatch (`Elsa.Mediator.Core`), over a shared pipeline engine (`Elsa.Pipelines.Core`).
+1. **Events (§2.6.1) — the in-process pub/sub + contribution mechanism.** Domains publish named events (`IEvent`); features register handlers (`IEventHandler<T>`). A single `IEventPublisher.Publish` dispatches through a framework-managed pipeline; the **delivery strategy** is pluggable, defaulting to **Sequential** (synchronous, awaited end-to-end, CAN break the caller). Contribution is Sequential dispatch over an event payload with a directly-accessible collection or rich context that the publisher reads back. Pure notification is the same mechanism, often the Background strategy. For sync access to contributions, the Registry + StartUp Task sub-pattern applies. Events live in their own contracts library, separate from command/request dispatch, over a shared pipeline engine.
 2. **Replacement contracts (§2.6.2) — single-implementation services.** When exactly one implementation is meaningful per application, the contract is a replacement contract. Multiple registrations are a conflict, not a contribution.
 3. **Events are the in-process mechanism; `IMediator` / `IEventBus` indirection is not (§2.6.3).** If a publisher expects a specific handler to run, it publishes a named `IEvent` (§2.6.1) — making the dependency discoverable — rather than hiding it behind anonymous generic dispatch.
 
@@ -759,7 +252,7 @@ The in-process composition mechanism is the **event**. A domain that wants to be
 
 Features extend a domain by **registering a handler (`IEventHandler<T>`) for one of its published events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
 
-**One concept, one publisher, pluggable strategy.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axis is *delivery strategy* + *break behaviour*, selected per publish, not baked into the marker.
+**One concept, one publisher, three failure/dispatch concerns.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axes are publisher-owned delivery, publisher-owned dispatcher failure policy, and subscriber-owned failure classification.
 
 **The framework provides the dispatch mechanism.** The application supplies the publisher and a pipeline with shared middleware (logging, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
 
@@ -774,7 +267,9 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 
 - **Intent.** Internal technical communication between features within the application.
 - **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `OnEntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
-- **Failure coupling follows the strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). Whether a handler failure breaks the publisher is governed by the chosen strategy: **Sequential / Parallel propagate** (the caller is responsible for the handlers having run); **Background isolates** (a flaky subscriber becomes a log entry, not a failed publish). A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
+- **Delivery coupling follows the publisher-owned strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). The publisher owns the delivery strategy because only the publisher knows whether its caller needs handlers to have completed, whether it will read contributions back, and whether the transition has already been persisted. A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
+- **Handler-loop failure policy is publisher-owned.** The publisher owns the failure policy for the dispatch loop because only the publisher knows whether one failing handler should stop dispatch immediately, whether every handler should still get a chance to run before an aggregate failure is thrown, or whether failures should be logged/handled without breaking the publisher. The built-in baseline policies are **Throw immediately**, **Run all then throw aggregate**, and **Log/handle gracefully and continue**.
+- **Failure meaning is subscriber-owned classification.** A handler/subscriber owns the meaning of its own failure: business-critical, optional telemetry, retryable, ignorable, report-only, dead-letter-worthy, or escalated. That classification operates **inside the publisher-owned delivery and dispatcher-failure boundary**. A subscriber MAY declare its failure classification where the event substrate supports handler-level metadata, but it MUST NOT silently strengthen the publisher's delivery contract. If a subscriber must be able to fail the publisher, the domain needs a Sequential gate/contribution event or a separate phase; it is a modeling error to attach such a subscriber only to a Background notification.
 - **Completeness under Sequential.** Every registered handler is dispatched in order; the publisher does not skip handlers or return early. Because the default does not shield, the first throwing handler halts the chain — that is the intended fail-fast behaviour, not a completeness violation. Background completeness is FIFO across the channel and isolated per subscriber.
 - **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. A handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
 - **Diagnostics.** Logging, tracing, and diagnostics attach uniformly via the same middleware surface. A failing handler under Background is observable in operational logs with full identifying context; the application's observability stack treats those entries as first-class signals.
@@ -818,51 +313,7 @@ Never name a return-style interface `Contributor`, nor a context-acting interfac
 
 **Intra-domain vs. cross-domain contributions.** When a contributor-interface implementation ships in the **same domain** as the `.Core` contract it satisfies, it is an *intra-domain default* — the feature delivers on its own Core's promises. When it ships from an **unrelated domain**, it is a *cross-domain contribution* — the primary mechanism by which domains extend each other's pipelines without direct coupling. The owning feature's `EXTENSION_POINTS.md` catalog (§2.22.1) MUST list all known implementations of each contributor interface, tagged accordingly (`*(intra-domain — default)*` / `*(cross-domain)*`). The contributing feature MUST note in its own `README.md` (under a **Cross-domain contributions** section) which contracts from other domains it satisfies and link back to the owning domain's catalog. This makes the inter-domain dependency map visible from both ends.
 
-**Why.**
-
-- **Centralised contribution logic.** One handler runs inside the event pipeline and owns iteration + aggregation + any ordering/error policy — instead of N scattered handlers each with ad-hoc try/catch. Contribution still runs *inside the event pipeline* (the reason events were chosen for contribution at all); only the per-feature handler sprawl is gone.
-- **The interface describes the intent.** `IDraftValidator.Validate(...)` says exactly what a feature contributes; a bare `IEventHandler<OnDraftValidating>` says nothing. Features implement the intent, not the dispatch plumbing.
-- **Smell heuristic.** **Too wide a variety of operations on a single context sink indicates two distinct events that should be split.** If one event's context conflates unrelated contribution kinds, split into separate events bound to separate semantic phases.
-
-**Mechanical rule.**
-
-```
-// domain .Core
-public sealed class On<Phase>(TContext context) : IEvent
-{
-    public TContext Context { get; } = context;
-    public ICollection<TItem> Items { get; } = [];   // directly accessible; written only by the single handler
-}
-
-public interface I<X>Source              // returns — flat-collection sink
-{
-    IEnumerable<TItem> Get<Items>();
-}
-// or, for a rich-context sink:
-public interface I<X>Contributor          // receives + acts — context sink
-{
-    ValueTask Contribute(TContext context, CancellationToken ct);
-}
-
-// owning feature — the ONE handler
-public sealed class <Action>(IEnumerable<I<X>Source> sources) : IEventHandler<On<Phase>>
-{
-    public Task Handle(On<Phase> e, CancellationToken ct)
-    {
-        foreach (var source in sources)
-            foreach (var item in source.Get<Items>())
-                e.Items.Add(item);
-        return Task.CompletedTask;
-    }
-}
-
-// contributing features — register the interface impl, NOT an event handler
-services.AddScoped<I<X>Source, ThisFeaturesSource>();
-```
-
 **Superseded shape.** The earlier "intent-revealing `AddX()` methods + private list + `IReadOnlyList<T>` read accessor" sub-rule is **withdrawn** — it added ceremony to every contribution event and folded contribution logic into the payload. Contribution events now expose a directly-accessible `ICollection<T>` written solely by the single aggregating handler. Records remain discouraged for events carrying a mutable contribution sink — use `sealed class` with a get-only collection auto-property initialised to `[]`.
-
-The Elsa-specific worked examples land in §E3.3 (`OnJsonPayloadConvertersInitializing` + `IJsonConverterSource` — the Source kind), §E3.7 (the JS declarations cluster as the Contributor kind, and the JS script-evaluation cluster as the PreProcessor/PostProcessor kind over the `OnEvaluatingScript`/`OnScriptEvaluated` pair), and §E3.10 (`OnDraftValidating` + `IDraftValidator`).
 
 **Domain-design consequence.** Enumerating a domain's events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, events nobody can find handlers for) fails this rule.
 
@@ -873,15 +324,9 @@ The Elsa-specific worked examples land in §E3.3 (`OnJsonPayloadConvertersInitia
 
 The full shape of the feature-documentation contract is governed by §2.22 (Feature documentation).
 
-The Elsa-specific worked example of the Registry + StartUp Task sub-pattern lives in §E3.3 of the application constitution.
-
 #### §2.6.2 Replacement contracts — single-implementation services
 
 Some contracts in a `.Core` library are **replacement contracts**: one implementation is selected per application/runtime context. They are *not* contribution contracts (§2.6.1) — they govern services where exactly one implementation is meaningful at a time.
-
-> *Example (synthetic).* An `IServiceBus` contract — the host uses one specific service bus implementation, not multiple. A second registration is a conflict the framework must detect.
-
-> *Example (synthetic).* A distributed-lock contract — the application chooses one lock implementation (file-system, Redis, …). Multiple registrations would be ambiguous; selection is part of the application's configuration.
 
 **Constitutional requirements** for replacement contracts:
 
@@ -909,8 +354,6 @@ The moment a publisher **expects a specific handler to run** — because that ha
 
 When a contract surface has both a **design-time consumer** (intellisense, schema validation, declaration generation, picker enumeration) and a **runtime consumer** (binding, execution, evaluation, dispatch), the contract MUST split into **two contracts**, each bound to its consumer.
 
-**Why.** A unified contract forces every contributor to satisfy both consumers even when it has business with only one — design-time tooling pays runtime cost, or runtime code drags design-time concerns into its dependency surface. Worse, a unified contract opens a sneaky channel for design-time code to reach runtime payloads (and vice versa) — bypassing any lifecycle/phase boundary the application maintains at higher levels.
-
 **Shape.**
 
 - The two contracts MAY share a `.Core` data record describing the *shape* of what is being contributed (function signature, schema, port definition, etc.).
@@ -919,8 +362,6 @@ When a contract surface has both a **design-time consumer** (intellisense, schem
 - A single feature MAY register handlers for both events; it MAY register for only one. Neither is presumed.
 
 **Generalisation.** Many applications maintain a boundary between authoring/design-time concerns and execution/runtime concerns at the sub-domain level. This rule applies the same boundary at the contract level: a contract bound to a design-time consumer MUST NOT carry concerns of a runtime consumer, and vice versa. The application's derived constitution names that boundary concretely; the framework rule applies it at the contract level wherever such a boundary exists.
-
-The application-specific worked example lives in §E3.7 of the application constitution.
 
 #### §2.6.5 Sync contributor pattern — rare exception
 
@@ -948,36 +389,47 @@ The application-specific worked example lives in §E3.7 of the application const
 
 **A use case that uses §2.6.5 without satisfying all three criteria is a §2.6.1 violation disguised.** Reviewers MUST challenge §2.6.5 invocations.
 
-**Worked example (constitutional record).** The first identified case is EF Core's `OnModelCreating` lifecycle hook in `Elsa.Persistence.EFCore`:
+#### §2.6.6 Delivery and failure strategies — one event concept, three responsibility axes
 
-- `IEntityModelCreatingHandler` is registered via DI; `ElsaDbContextBase.ApplyEntityModelCreatingHandlers` resolves `IEnumerable<IEntityModelCreatingHandler>` and invokes each sync during `OnModelCreating`.
-- Criterion 1: `OnModelCreating` is intrinsically sync — EF Core's own contract. ✓
-- Criterion 2: contributors customise the shared `ModelBuilder`; no payload list. ✓
-- Criterion 3: the contribution's data (per-entity-type model configuration) is per-lifecycle-moment, not pre-populatable at startup. The model builder doesn't exist yet at app startup. ✓
+There is **one** event concept (`IEvent`, §2.6.1). Event behaviour has three distinct responsibility axes:
 
-This case is the canonical §2.6.5 worked example. Future §2.6.5 invocations should compare their structural shape to this case.
+- **Delivery strategy** is publisher-owned. It controls when and how handlers run relative to the publisher's caller: Sequential, Parallel, or Background.
+- **Dispatcher failure policy** is publisher-owned. It controls what the event substrate does across the handler loop when handlers fail: throw immediately, run all then throw aggregate, or log/handle gracefully and continue.
+- **Subscriber failure classification** is subscriber-owned. It records what a specific handler failure means: business-critical, optional, telemetry-only, retryable, dead-letter-worthy, operationally escalated, or another application-defined classification. It informs the dispatcher policy and observability, but it cannot override the publisher-owned delivery or dispatcher-failure boundary.
 
-The application-specific worked example also lives in §E3.9 of the application constitution.
+The delivery strategy passed to `IEventPublisher.Publish` is:
 
-#### §2.6.6 Delivery strategies — one event concept, three dispatch behaviours
+| Strategy | Dispatch | Publisher reads back? | Use for |
+|---|---|---|---|
+| **Sequential** *(default)* | Handlers run in DI-resolution order; publisher awaits the whole chain end-to-end. | **Yes** — for contribution events whose payload exposes directly-accessible collections or contexts, the publisher reads the accumulated result after the chain. | A participation gate / contribution ("I'm about to do X — who wants to participate?"); any case where the publisher's own correctness depends on handlers having run. |
+| **Parallel** | Handlers dispatched concurrently; publisher awaits all. | No — ordering is unspecified, so reading back is meaningless. | Independent reactions where latency matters and the publisher still needs awaited completion. |
+| **Background** | Queued to an in-process channel; publisher returns immediately; a hosted worker (`BackgroundEventPublisher`) drains it. | **No** — publisher has already returned. | "X happened — react if you want": audit, event-sourcing stream, telemetry, UI-push. Especially state-transition signals fired *after* the transition is persisted. |
 
-*Rewritten (Unit 1, 2026-06-02): the prior two-concept model (`IDomainEvent` + `INotification`/`ILifecycleEvent`) was collapsed into a single `IEvent`. The distinction it tried to capture — "participate" vs "react" — is now expressed as a **delivery strategy** chosen per publish, not as a separate marker type.*
+**Delivery and dispatcher failure policy are publisher-owned; handler failure meaning is subscriber-owned.** Unit 1 removed the exception-shielding-by-default position. The default Sequential path ships **no shielding** — fail-fast is the safe default for any publisher whose handlers must have run. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly and normally pairs it with a graceful/logging dispatcher policy. There is no separate `ILifecycleEventSender` and no typed lifecycle marker; a "lifecycle event" is simply an `IEvent` published Background after the transition is persisted. Within that boundary, each handler/subscriber may declare its own failure classification where the substrate supports it. A handler classification cannot make a Background publish rollback-capable or make an already-returned publisher observe a failure; needing that is evidence for a separate Sequential gate event.
 
-There is **one** event concept (`IEvent`, §2.6.1). The behavioural axis that used to motivate separate markers is the **delivery strategy** passed to `IEventPublisher.Publish`:
+**Built-in dispatcher failure policies.**
 
-| Strategy | Dispatch | Failure behaviour | Publisher reads back? | Use for |
-|---|---|---|---|---|
-| **Sequential** *(default)* | Handlers run in DI-resolution order; publisher awaits the whole chain end-to-end. | **Propagates.** First handler throw fails the publish and surfaces to the caller. No shielding. | **Yes** — for contribution events whose payload exposes intent-revealing `Add` methods, the publisher reads the accumulated result after the chain. | A participation gate / contribution ("I'm about to do X — who wants to participate?"); any case where the publisher's own correctness depends on handlers having run. |
-| **Parallel** | Handlers dispatched concurrently; publisher awaits all. | **Propagates** (aggregated). | No — ordering is unspecified, so reading back is meaningless. | Independent reactions where latency matters and no handler can break the publisher's contract. |
-| **Background** | Queued to an in-process channel; publisher returns immediately; a hosted worker (`BackgroundEventPublisher`) drains it. | **Isolated.** The Background strategy + worker own the `try`/`catch` + silent logging. A flaky subscriber becomes a log entry, never a failed publish. | **No** — publisher has already returned. | "X happened — react if you want": audit, event-sourcing stream, telemetry, UI-push. Especially state-transition signals fired *after* the transition is persisted. |
-
-**Resilience lives in the Background strategy, not in a default middleware.** Unit 1 removed the exception-shielding-by-default position. The default Sequential path ships **no shielding** — fail-fast is the safe default for any publisher whose handlers must have run. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly. There is no separate `ILifecycleEventSender` and no typed lifecycle marker; a "lifecycle event" is simply an `IEvent` published Background after the transition is persisted.
+- **Throw immediately** — stop the handler loop on the first failure and surface that failure to the publisher. This is the default for Sequential gate/contribution events where later handlers should not run after the gate has already failed.
+- **Run all then throw aggregate** — continue dispatching remaining handlers, collect failures, then fail the publisher with an aggregate exception after every handler had a chance to run. Use when the publisher must fail, but one broken handler must not starve other business-critical handlers.
+- **Log/handle gracefully and continue** — handle failures through logging/observability/retry/dead-letter policy and do not fail the publisher. This is the normal Background notification policy.
 
 **Choosing a strategy — the diagnostic question.** *Does my own correctness depend on these handlers having run?*
 
 - **Yes** → Sequential (the default). If you also need their output, give the event a contribution payload and read it back.
 - **No, and a subscriber failure must not break me** → Background.
 - **No, but I must wait for them and they're independent** → Parallel (rare).
+
+**Choosing a dispatcher failure policy — the publisher diagnostic question.** *If one handler fails, should the dispatch loop stop, continue then fail, or continue without failing me?*
+
+- First failure invalidates the whole operation → Throw immediately.
+- Every handler should still run, but the publisher must fail if any failed → Run all then throw aggregate.
+- Handler failures should become operational signals/retries/dead letters, not publisher failures → Log/handle gracefully and continue.
+
+**Choosing a failure classification — the subscriber diagnostic question.** *What does my handler's failure mean inside the event's publisher-owned boundary?*
+
+- Business-critical participation under Sequential → classify as critical so the publisher's dispatcher policy can propagate immediately or aggregate.
+- Optional telemetry, audit, UI-push, or cache invalidation → classify as optional/retryable/dead-letter-worthy/operationally escalated under a graceful Background policy.
+- If the desired classification requires stronger delivery or dispatcher-failure semantics than the event provides, do not subscribe as-is; raise an architecture question and model a separate event phase.
 
 **Hybrid pattern — `OnXxxing` (Sequential gate) + `OnXxxed` (Background outcome).** When a domain has both a participation gate and an outcome signal for the same transition, the present-participle form is published **Sequential** (validators / contributors run, publisher reads back) and the past-tense form is published **Background** (notifies that the transition happened, outcome carried in the payload, fired after persistence). Worked example: `OnDraftValidating` (Sequential — validators contribute errors) followed by `OnDraftValidated` (Background — fires after the errors are persisted; audit / UI-push react). Both are `IEvent`; only the strategy differs.
 
@@ -1034,14 +486,7 @@ Correspondingly, `*.Persistence.Core` (the provider-agnostic persistence sub-dom
 
 When an entity needs a persistence-only field (e.g. the serialised form of a rich object that the entity also exposes in deserialised form, a denormalised lookup column, a backing string for a `[NotMapped]` projection), declare it as a **real property on the entity class** and **omit it from the read interface**. Do NOT use the provider's "shadow property" feature (e.g. EF Core's `Property<T>("...")` on the builder) for this purpose.
 
-**The distinction.** Provider-side terms like EF Core's "shadow property" mean *"a property the provider tracks but is not on the CLR class"*. Our usage is different: the property IS on the CLR class — it is just **not on the read interface** that other domains depend on. From a *domain* point of view it is a shadow (invisible to other domains); from a *provider* point of view it is a perfectly ordinary mapped property.
-
-**Why.**
-
-1. The central invariant scanner (e.g. an `[Immutable]` attribute scanner that walks the model and applies `PropertySaveBehavior.Throw`) only sees real CLR properties. Provider shadow properties bypass it.
-2. Cross-cutting attributes (immutability, audit, tenant scoping) must compose at one place — the entity class. Provider shadow properties scatter that surface area into the provider configuration.
-3. Test code and tooling read the entity directly; provider shadow accessors are awkward (string-keyed `Entry().Property("Name").CurrentValue`).
-4. Other providers (a document store, a different ORM) don't have a "shadow property" concept; the entity-as-CLR-class model is provider-portable.
+Provider-side terms like EF Core's "shadow property" mean a property the provider tracks but is not on the CLR class. This rule is different: the property IS on the CLR class and is hidden from other domains by omitting it from the read interface.
 
 **Mechanism.**
 
@@ -1096,17 +541,9 @@ Those decisions are **revisable**: a `.Core` and its implementations can graduat
 
 When a module integrates an application with an external system, the *integration itself* and any *consumption-shape modules* that adapt the integration to a specific consumer (a workflow activity, a UI binding, a messaging endpoint, etc.) ship as separate modules. The integration depends on the external system; each consumption-shape depends on the integration plus the consumer's abstractions. A consumer who wants the integration without one particular consumption-shape references only the integration.
 
-> *Example (synthetic).* For a message-broker integration:
-> - `<App>.Messaging.<Broker>` — the integration; depends on the broker's SDK and on `<App>.Messaging.Core`.
-> - `<App>.Messaging.<Broker>.<Consumer>` — the consumption-shape: broker exposed as the consumer's primitives; depends on the integration plus the consumer's `.Core`.
->
-> A consumer who wants broker messaging without exposing it as the consumer's specific primitive references only `<App>.Messaging.<Broker>`.
-
 **Activities (or any consumption-shape unit) that integrate with two external systems.** Such a unit is first treated as a **boundary smell** and re-examined: it usually represents a third integration or orchestration concept, not something that naturally belongs to either external-system module.
 
 If the unit genuinely requires both systems, it lives in **its own domain or integration module** whose dependency envelope explicitly includes both integrations. Hiding the second dependency inside one of the existing modules is forbidden. The package name must make the combined dependency obvious.
-
-> *Example (synthetic).* A `SyncContactToCrmActivity` does not live in either `<App>.Integrations.<SystemA>` or `<App>.Integrations.<SystemB>`. It ships as a dedicated synchronisation/orchestration module that depends on both, e.g. `<App>.Integrations.<SystemA>To<SystemB>Sync` (or under a fresh orchestration domain).
 
 ### §2.15 Repository organisation — foundation repo + multi-repo preference
 
@@ -1267,8 +704,6 @@ The form of the documentation (README, manifest, generated reference, sidecar JS
 
 #### §2.22.1 Domain-level extension-points catalog
 
-*New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy. Broadened Unit 1 (2026-06-03): the standalone `EVENTS.md` becomes a per-domain `EXTENSION_POINTS.md` whose Events section absorbs the former events catalog — because events are only one of the seams a domain exposes; overridable contracts and implementable contributor interfaces are the rest, and a consumer needs all three in one place.*
-
 Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library exposes extension points (overridable contracts, implementable contributor interfaces, AND/OR published events) MUST ship an **extension-points catalog** as a documentation deliverable at the domain's **composition root** — the feature project that wires the defaults and registers the aggregating handlers (typically the `<Domain>` or `<Domain>.<Provider>` project, NOT the `.Core` which is contracts-only). Exception: domains with no separate feature project keep the catalog in their `.Core`. The catalog answers, in one discoverable place: *what can I override, what can I implement, and what events does this domain publish?* — without re-reading every feature implementation.
 
 **Two axes of extension the catalog distinguishes.**
@@ -1278,7 +713,7 @@ Feature documentation per §2.22 covers what an individual feature contributes. 
 
 The catalog has three sections: **Overridable contracts**, **Implementable contributor interfaces**, and **Events** (the former standalone catalog, now a section — since events are the dispatch mechanism behind the contributor interfaces and the observation surface for subscribers).
 
-**Events are one concept; the catalog records each event's delivery strategy.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses and whether it reads contributions back. The catalog SHOULD make the strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
+**Events are one concept; the catalog records delivery and failure expectations.** Per §2.6.1 (the single `IEvent` concept) and §2.6.6 (delivery and failure strategies), every published event is an `IEvent`; what varies is the strategy the publisher uses, whether it reads contributions back, which dispatcher failure policy applies, and what subscriber failure classifications are expected. The catalog SHOULD make the delivery strategy explicit per event (a column or grouping) so a reader can tell at a glance how the event behaves:
 
 - **Sequential / contribution** — publisher awaits the chain and reads handler contributions back (e.g. `OnDraftValidating` exposes a directly-accessible `ICollection<ValidationError> Errors` that the single `ExecuteValidations` handler fills from every `IDraftValidator`). Used when the publisher needs the result; a handler throw breaks the publish.
 - **Background / notification** — publisher fires and returns; subscribers observe but don't feed back (e.g. `OnDraftCreated`, `OnDraftValidated`). A subscriber failure is isolated (logged, never breaks the publish); typically fired after the transition is persisted.
@@ -1289,6 +724,8 @@ A domain may publish events of either strategy, or have a present-participle gat
 
 - **Event class name** (e.g. `OnDraftCreated`).
 - **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
+- **Dispatcher failure policy** — whether handler failures throw immediately, are collected and thrown as an aggregate after all handlers run, or are logged/handled gracefully while dispatch continues.
+- **Subscriber failure classifications** — which classifications are expected or permitted for handlers of this event, especially whether business-critical subscribers are allowed or should instead use a separate Sequential gate event.
 - **One-line semantic description** — what just happened in the domain (notification) or what gate has opened (contribution).
 - **Payload signature** — the directly-accessible `ICollection<T>` (or rich context) the contribution sink exposes (per the §2.6.1 contribution sub-rule) and payload types handlers receive.
 - **Contributor interface** *(fan-in / contribution events only)* — the `I<X>Source` / `I<X>Contributor` (or `IDraftValidator`-style) interface features implement, its method signature, whether it **returns** (Source) or **receives a context and acts** (Contributor), and the note "implement + register via DI; the single `<Action>Handler` aggregates."
@@ -1307,7 +744,7 @@ For the **Overridable contracts** section, each entry records: a **layer badge**
 
 **Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the **composition-root feature project** of the domain (e.g. `src/<App>.<Domain>/EXTENSION_POINTS.md`), co-located with the feature's `README.md`. The `.Core` project is contracts-only (§2.1) and cannot describe defaults or wiring; the composition root can. Exception: domains with no separate feature project place the catalog in their `.Core`. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** Unit 1 (2026-06-03) created a complete set of 24 per-domain catalogs at composition-root feature projects, covering all domains with extension points: `src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md` (Draft mutation events — all Background — plus lookup/command/diff-engine override seams; composition root is `WorkflowsDesignApiFeature`), `src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md` (`OnDraftValidating` Sequential + `OnDraftValidated` Background — the canonical mixed-strategy example — plus the `IDraftValidator` contributor with intra-domain defaults tagged; composition root is `WorkflowDesignValidationsFeature`), and `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md` (the `OnEntitySaving` + `OnEntityLoading` seams, the `IEntitySavingHandler<,>`/`IEntityLoadingHandler<,>` contributors with cross-domain implementations tagged, and the `IQueries<>`/`IUpsertCommandGenerator` override contracts — the canonical "swap one implementation, keep the rest" example). The repo-root `EXTENSION_POINTS.md` links all 24 catalogs grouped by domain family (infrastructure, expressions, HTTP, persistence, activities, workflows, legacy). The catalog set is considered **complete** for the current set of domains; the repo-root index is pure links (no inline entries).
+Generated maps are the current review surface for extension-point catalog/index drift.
 
 **Maintenance obligation (MANDATORY).** The extension-points catalog is a **living document**. Updating it is MANDATORY in the same unit-of-work (commit / PR / unit) as any change that touches an extension point. The following events always trigger a catalog update:
 
@@ -1325,13 +762,11 @@ The `CatalogParityTests` reflection guard (§2.23-adjacent) catches event-headin
 
 #### §2.22.2 Repo-wide extension-points index
 
-*New sub-rule (Unit 1, 2026-06-03).*
-
 Beyond the per-feature documentation (§2.22 — *what does THIS feature register?*) and the per-domain extension-points catalogs (§2.22.1 — *what can I override/implement/subscribe to in THIS domain?*), the repo SHIPS one **repo-wide index of every extension point** — the sanctioned answer to *"how do I extend the system?"* gathered into a single discoverable map rather than scattered across domains.
 
 **Relationship to the per-domain catalogs.** The repo-wide index is a *map*, not a second copy: the authoritative detail for a domain lives in that domain's §2.22.1 catalog, and the index links to it. The index contains **no inline entries** — every domain that exposes extension points ships its own §2.22.1 catalog (§2.22.1 maintenance obligation), so the index is pure links. Both the index and the per-domain catalogs are named `EXTENSION_POINTS.md`, distinguished by location: one at the repo root, one at each domain's composition-root feature project.
 
-**Form.** Application-defined; recommended a single `EXTENSION_POINTS.md` at the repo root containing a per-domain table grouped by domain family, with one row per catalog (domain name, catalog link, brief description). The §2.22.1 worked example (Unit 1) creates the Elsa instance: 24 per-domain catalogs linked from the root index, grouped as infrastructure, expressions, HTTP, persistence, activities, workflows, and legacy.
+**Form.** Application-defined; recommended a single `EXTENSION_POINTS.md` at the repo root containing a per-domain table grouped by domain family, with one row per catalog (domain name, catalog link, brief description). The Elsa instance is preserved as a reference example in [docs/reference/framework-examples.md](../../docs/reference/framework-examples.md#extension-points-catalog-example).
 
 ### §2.23 Unit tests
 
@@ -1411,20 +846,17 @@ The unit-test discipline above does NOT depend on integration testing existing. 
 
 ### §2.24 Sanctioned patterns — the closed catalog
 
-*New section (Unit C Phase-8 amendment, 2026-05-29; draft pending 2026-06-01 ratification.)*
+**Status:** Draft pending ratification.
 
 The framework recognises a **closed catalog** of architectural patterns for resolving the recurring problems of modular design. **Code MUST resolve problems using a pattern from this catalog.** If a recurring problem genuinely does not fit any catalogued pattern, that gap is brought to the architects, evaluated, documented (with use case + criteria + worked example), ratified, and added to the catalog *before* the new pattern is adopted across the codebase. **Ad-hoc patterns invented at the call site are not permitted.**
 
 This rule is a **discipline rule**, not a behaviour rule. It does not change what the existing sections (§2.1–§2.23) prescribe; it asserts that the union of those sections IS the sanctioned vocabulary, and that the catalog grows only through the gate in §2.24.3.
 
-#### §2.24.1 Why this rule
+#### §2.24.1 Rationale reference
 
-- **Predictability.** A code reader (human or AI) opens a feature and finds patterns they have seen elsewhere in the same form. Inventing a new pattern fragments the surface area readers must learn.
-- **AI-session continuity.** Future AI sessions plan against the constitution. If the constitution names the patterns the codebase uses, the AI's planning surface matches the codebase's structural surface. Random patterns force the AI to either re-derive the structure (expensive, error-prone) or document the deviation (debt).
-- **Review surface.** Reviewers ask "which pattern applies?" rather than "is this pattern OK?". A bounded vocabulary makes the question answerable mechanically.
-- **Recurring problems have recurring shapes.** The patterns in this catalog were discovered by hitting the same problem repeatedly. New problems may need new patterns — but the right answer is to *codify* the new pattern, not to reinvent it ad hoc each time.
+The rationale for keeping a closed pattern catalog lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#pattern-catalog-rationale).
 
-#### §2.24.2 The catalog (snapshot 2026-05-29; pending 2026-06-01 ratification)
+#### §2.24.2 The catalog (draft pending ratification)
 
 | # | Pattern | Canonical § | One-line use case | Trigger / criteria |
 |---|---|---|---|---|
@@ -1432,15 +864,15 @@ This rule is a **discipline rule**, not a behaviour rule. It does not change wha
 | 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
 | 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IEventPublisher.Publish` with a pluggable delivery strategy. Sequential (default) for contribution; Background for notification. | Cross-feature composition through named events in a domain's `.Core`. |
 | 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
-| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. *(Architect-ratified addition: Sipke 2026-06-01, Joey 2026-06-02; supersedes the withdrawn intent-revealing-methods sub-rule. Pre/post kind added Joey 2026-06-02.)* |
+| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. |
 | 3c | *sub-rule:* Default Sequential CAN break the caller | §2.6.1 | No exception-shielding on the default path; a handler throw fails the publish (fail-fast). | Default for every Sequential publish. Resilience is opt-in via the Background strategy, NOT a default middleware. |
 | 4 | **Delivery strategies** | §2.6.6 | Select dispatch behaviour per publish: Sequential (default, awaited, propagates), Parallel, Background (isolated fire-and-forget). | Background for "X happened, react if you want" (audit, telemetry, UI-push). No separate marker type — strategy is the axis. |
 | 5 | **Replacement contracts** | §2.6.2 | One implementation per application (e.g. one `IDistributedLockProvider`). | Multiple registrations = conflict, not contribution. Detect at startup. |
 | 6 | **Design-time vs runtime contract split** | §2.6.4 | Split a contract when it has both a design-time consumer (intellisense, picker) and a runtime consumer (binding, execution). | Two consumers, two contracts. Each may share a shape record. |
 | 7 | **Sync contributor pattern — rare exception** | §2.6.5 | A sync-dispatched, behaviour-shaped contribution that cannot fit §2.6.1 or Registry + StartUp Task. | All three criteria hold (sync site, behaviour-not-data, registry-inapplicable). Reviewers MUST challenge every invocation. |
 | 8 | **Adapter / Bridge** | §2.7 | Isolate a heavy or external dependency behind a stable domain contract. | Wrap third-party libraries so consumers of `.Core` never see them. |
-| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `IEventPublishingStrategy` (Sequential / Parallel / Background) per §2.6.6. Proposed worked example: `IReconciliationStrategy` per agenda Item 2 addendum. |
-| 10 | **Factory** *(candidate, pending Monday)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. Promoted to first-class pattern at 2026-06-01 ratification if Monday confirms. |
+| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `IEventPublishingStrategy` (Sequential / Parallel / Background) per §2.6.6. |
+| 10 | **Factory** *(candidate pending ratification)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. |
 | 11 | **Provider module decomposition** | §2.20 | One domain, multiple provider-specific implementations packaged as siblings. | When a domain accrues a second provider with real shared logic. Rule 1 forbids premature umbrellas. |
 | 12 | **Domain-level shadow properties** | §2.9.1 | Persistence-only field that exists on the CLR entity but is hidden from the read interface. | Use real CLR property + omit from `I<Entity>` — never the provider's shadow mechanism. |
 | 13 | **CQS at persistence boundary** | §2.10 | Split persistence contracts into commands (mutate) and queries (read). | Every persistence-facing interface. Combined-mutate-and-query methods are a smell. |
@@ -1463,18 +895,13 @@ A candidate pattern that does not yet appear in §2.24.2 follows this gate befor
 
 A pattern adopted *before* going through this gate is technical debt — surface it retroactively for ratification, and either ratify or refactor.
 
-**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (delivery strategies + worked-strategy example); §2.7 (adapter); §2.20 (provider module decomposition). Application-specific worked examples land in the application's derived constitution.
+**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (delivery strategies); §2.7 (adapter); §2.20 (provider module decomposition).
 
 ---
 
 ## §3 Runtime composition — Nuplane Strategy
 
 Nuplane is selected as the framework's runtime hot-reload mechanism. It loads, activates, and replaces modules at runtime where the underlying runtime allows it. Application architects are free to choose any other software that meets this same intent.
-
-**Two strategies were considered:**
-
-- **Strategy A:** Nuplane manages everything, including `.Core` libraries. The entire runtime is replaced atomically; consumers are insulated by the abstraction layer Nuplane provides.
-- **Strategy B (default and recommended):** the host pins `.Core` libraries; Nuplane focuses on dynamically loading whatever needs to be dynamically loaded — Layer-3 implementations, helper libraries, optional features. The host's contract surface is stable and inspectable, which makes observability and version compatibility easier to reason about.
 
 **The framework's default is Strategy B.** Strategy A is not hard-excluded — it remains a valid distribution strategy where the entire runtime is replaced atomically and prevalidated. Switching to A in a specific deployment context is a deliberate choice, not the default.
 

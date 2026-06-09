@@ -6,8 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Design.JavaScript
 {
     [ShellFeature(
-        name: "JavaScriptWorkflows",
-        DisplayName = "JavaScript Workflows"
+        name: "JavaScriptWorkflowsDesign",
+        DisplayName = "JavaScript Workflows Design"
     )]
     public class JavaScriptWorkflowsDesignFeature : IShellFeature
     {

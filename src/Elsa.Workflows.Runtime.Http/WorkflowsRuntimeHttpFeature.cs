@@ -7,6 +7,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http
 {
+    [ShellFeature(
+        name: "WorkflowsRuntimeHttp",
+        DisplayName = "Workflows Runtime HTTP",
+        Description = "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints."
+    )]
     public class WorkflowsRuntimeHttpFeature : IShellFeature
     {
         public string BasePath { get; set; } = string.Empty;

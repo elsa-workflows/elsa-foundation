@@ -6,6 +6,13 @@ using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Contracts
 {
+    /// <summary>
+    /// Ambient design-time workflow scope intended to be injectable through DI, analogous to
+    /// <c>IWorkflowExecutionContext</c> on the runtime side, so declaration contributors and other
+    /// design services do not need draft/activity values passed through every method contract.
+    /// The concrete creation/scoping model is still unwired pending the full design endpoint/UI
+    /// suite.
+    /// </summary>
     public interface IWorkflowDesignContext
     {
         WorkflowDefinitionState Draft { get; }

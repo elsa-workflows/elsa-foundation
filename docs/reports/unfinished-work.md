@@ -1,0 +1,82 @@
+# Unfinished Work
+
+Status: inventory refreshed during Constitution Thinning v1 from current docs, constitution drafts, extracted draft history, specs, maps, and source comments.
+
+This report is an inventory of findings, concerns, and loose unresolved items that have not found a more specific home. It is not the default active work queue. When a finding becomes planned durable work, add or move it to the relevant program-goal bucket before implementation, or explicitly keep it `none/free-flow`.
+
+## Routing Note
+
+The previous re-ranking pass used [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) as its lens. That ranking is historical evidence, not queue state. Future durable planning should first identify the program-goal state. Move or add the chosen item to the relevant program-goal bucket before planning or execution, or explicitly keep it `none/free-flow`.
+
+## Candidate Signals
+
+The table below preserves candidate signals from the last review. It is not an active priority queue.
+
+| Former priority | Candidate | Lens used in last review | Why it mattered | Routing |
+|---:|---|---|---|---|
+| 1 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | The report needed to stop creating local-topic momentum. | Completed by reframing this report as inventory and routing active work through program-goal buckets. |
+| 2 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, the feature-dependency map now has PowerShell/Bash generator coverage, and richer test maturity navigation is still planned. | If selected, route a test maturity map or map-verification item through the relevant program-goal bucket first, or mark it `none/free-flow`. |
+| 3 | Feature composition classification passes | Elsa Brain Operating Model: feature composition readiness | The classification vocabulary review is complete enough for agents to stop guessing; the remaining work is applying it to bounded feature/settings slices. | If selected, route a bounded pass through the relevant program-goal bucket and use [CShells composition evidence](cshells-composition-evidence.md#next-work-units-enabled). |
+| - | Codebase reality / test maturity follow-up | Recorded finding outside current no-code bucket | Code placeholders, weak implementations, and test gaps remain documented. | Keep [NotImplemented classification](notimplemented-classification.md) as evidence; create or select an implementation bucket before planning code fixes. |
+| 5 | Constitution ratification / provisional gate review | Elsa Brain Operating Model: constitution governance | Several draft/provisional gates remain open, but broad ratification is premature before code reality and runtime seams are clearer. | Use Critical Constitution Review only for a targeted gate needed by an approved work unit, then track that unit in the relevant bucket. |
+
+## Constitution and architecture decisions
+
+| Item | Evidence | Next action |
+|---|---|---|
+| Framework and Elsa constitutions are draft | Both constitutions state version `3.0.0 (draft)` and ratification TODOs | Run Critical Constitution Review before ratification |
+| Configuration/settings classification is deferred | Framework `§2.12`; Elsa `§E4`; [CShells composition evidence](cshells-composition-evidence.md#reviewed-classification-v1) | Classification vocabulary v1 is captured as provisional report-level guidance. Next classify bounded feature dependency edges and settings; then create architecture work unit for configuration and infrastructure covering appsettings schema conventions for feature-bound options, secrets resolution from Key Vault / managed identity / per-tenant, per-feature vs application-wide implementations of the same contract, assembly scanning/loading conventions, and Helm chart conventions for `Elsa.Server` |
+| Workflow execution seam is deferred | Elsa `§E2.2`, `§E2.2.2`, `§E2.6`, `§E2.9` references; [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) | Use the pre-spec handoff as input, then create the architect-owned Speckit work unit when Runtime refactor starts |
+| Activity reconciliation Model X remains provisional | Elsa `§E2.8` and extracted draft history mark pending architecture review | Run Critical Constitution Review before ratification |
+| WorkflowDefinitionState scope policy remains provisional | Elsa `§E2.9` and `§E2.9.7` mark pending architecture-review ratification | Review with lifecycle command topology and static analyser scope |
+| Entity design follow-up overlaps workflow execution | Extracted constitution draft history references entity-design and workflow execution follow-ups | Scope with Runtime/workflow executable work |
+| Branching/package strategy is still open | Extracted Elsa draft history references branching strategy and packaging | Use Speckit Flow Guide now; plan package/version meeting separately |
+| Integration testing policy is open | Framework unit-test section marks integration testing out of scope | Define TestContainers-based integration testing work unit |
+| Event dispatcher failure policy and subscriber failure classification are not implemented | Framework `§2.6.1` / `§2.6.6` now distinguish publisher-owned delivery strategy, publisher-owned dispatcher failure policy, and subscriber-owned failure classification; the current codebase models delivery strategy only | Create implementation work unit for event publish options, event-level defaults, dispatcher failure policies (`Throw immediately`, `Run all then throw aggregate`, `Log/handle gracefully and continue`), and handler/subscriber failure classification metadata/registration; update event pipeline tests and catalogs |
+| Pattern catalog has pending/candidate entries | Framework sanctioned-patterns catalog contains pending/candidate language | Review before ratification |
+
+## Code/domain implementation gaps
+
+| Item | Evidence | Next action |
+|---|---|---|
+| Workflow runtime is minimal/stub-like | Elsa constitution labels `Elsa.Workflows.Runtime.Core` and storage drivers as stubs | Verify current code, then plan runtime domain work |
+| Runtime JavaScript design-reference shortcut is deferred | `Elsa.Workflows.Runtime.JavaScript` directly references `Elsa.Workflows.Design.Core` so JavaScript function declarations can be contributed across designer and runtime surfaces while ownership is unstable | Do not refactor until Elsa brain / workspace ownership is stable; then split design-time JavaScript declarations from runtime bindings and keep only neutral shared shape records in stable `.Core` or primitives packages |
+| Runtime execution pre-spec risks are open | [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) records shared activity/workflow I/O model risk, `ActivityNode` vs executable graph naming risk, execution-context DI scope risk, incomplete variables/expressions substrate, and Runtime JavaScript shortcut risk | Next architect should use the handoff to author the Runtime execution seam Speckit spec before implementation |
+| Test maturity and weak implementation risks need work-unit triage | `docs/reports/test-maturity-and-weak-implementation-report.md` finds uneven direct test references, runtime placeholders, the documented Runtime JavaScript design-reference shortcut, and deferred shared event/mediator pipeline coverage | Review the report, then select a focused runtime or test-maturity work unit |
+| NotImplemented/code placeholder classification is complete | [NotImplemented classification](notimplemented-classification.md) separates intentional runtime deferrals, resolved expression descriptor drift, incomplete design context, unregistered HTTP placeholder, JavaScript endpoint fake context, and test-only stubs | Keep as recorded codebase evidence only. Do not rank the HTTP placeholder, JavaScript demo endpoint/context, or Workflows Design JavaScript/context as current Elsa Brain Operating Model work while the current intent is no code changes |
+| WorkflowDefinitionActivity execution is deferred | Source comment in `WorkflowDefinitionActivity.cs`; spec 006 construct-only scope | Plan consumer/pinning/runtime execution unit |
+| Required input/output validation has a known skip | `RequiredInputOutputValidator` comment flags missing data shape | Plan validation-data-shape unit |
+| Code analyser enforcement is deferred | Elsa `§E2.9` and model comments | Plan code analyser epic after rules stabilize |
+| Lifecycle command topology remains partially open | Spec 003 research/quickstart mention lingering creation path and promote unit | Create lifecycle command shell work unit |
+| Workflow-as-activity spec is superseded by 006 | Spec 005 states producer goals retained and re-expressed in 006 | Keep as intent archive; do not implement directly from 005 |
+
+## Knowledge/workspace gaps
+
+| Item | Evidence | Next action |
+|---|---|---|
+| Future sessions can drift into local cleanup loops | The Elsa-brain program spans operating model, knowledge surfaces, executable workflows, codebase verification, feature composition, and workspace split readiness; active buckets live in [docs/program-goals](../program-goals/) | Use the `AGENTS.md` program-goal drift guard when a drift trigger is present, and update the relevant program-goal file instead of `AGENTS.md` |
+| Agent maturity needs constrained handoff discipline | [Agent maturity audit](agent-maturity-audit.md) finds the Elsa brain mature enough for large architecture work only when the handoff names the primary skill, report/spec, constitution gates, map freshness stance, stop point, and decision-recording surface | Use the audit checklist before starting a large architecture worker; do targeted constitution thinning or prepare a reviewed architecture-worker handoff instead of continuing broad operating-model grooming |
+| Constitution thinning reached a stopping point | Constitution Thinning v1, Examples Thinning v2, Constitution Thinning v3, and the 2026-06 targeted thinning passes moved draft history, glossary tables, the Elsa case study, large worked examples, selected rationale/provenance, and stale boundary wording out of the gate files | Do not continue broad thinning as standalone cleanup. Revisit only during targeted ratification, runtime/design architecture review, or a gate-specific Critical Constitution Review |
+| AI-provider-neutral skill wrappers need future mirroring | `docs/skills/catalog.md` and [skills stabilization audit](skills-stabilization-audit.md) identify ready, hidden, and planned skills; the Claude wrapper batch under `.claude/skills/elsa-*` is covered by `tools/skills/validate-claude-wrapper-drift.ps1` | Mirror accepted wrappers into other AI-provider adapter surfaces when those surfaces exist; keep running the Claude drift validator after catalog, wrapper, or manifest changes |
+| Event/contribution implementation skills have a code-support gap | [skills stabilization audit](skills-stabilization-audit.md) promotes event contribution and independent subscriber workflows; constitution now separates publisher-owned delivery strategy, publisher-owned dispatcher failure policy, and subscriber-owned failure classification, but code support for the latter two is still missing | Use the skills with the documented rule, and record dispatcher failure policy / subscriber failure classification needs against the event failure-strategy implementation work unit until code support lands |
+| Constitution draft history is curated but still provisional | `docs/reports/constitution-draft-history.md` now indexes raw framework/Elsa history and `docs/reports/constitution-amendment-index.md` summarizes major amendments | Keep future extracted history in the split report family; do not promote provenance into gates |
+| Maps v1/v2 direct facts are generated, but richer maps are still planned | `docs/maps/README.md` planned maps list; [feature dependency map](../maps/feature-dependency-map.md) now covers CShells feature/dependency evidence and has PowerShell/Bash generator coverage | Plan test maturity map or approved CShells composition-generation map as separate work units |
+| Feature composition JSON generation is not implemented | Skill catalog describes workflow only; [skills stabilization audit](skills-stabilization-audit.md) flags feature identifiers and appsettings schema as blockers; [CShells composition evidence](cshells-composition-evidence.md#reviewed-classification-v1) records the current evidence and reviewed provisional classification language | Build CShells generator only after a selected feature slice has classified required activations, required settings, and host-loading output shape; use the Generator Readiness Pass before implementation |
+
+## Refresh procedure
+
+Search these markers before each "What's Next" review:
+
+```powershell
+rg -n "TODO|DEFERRED|deferred|pending|ratification|stub|placeholder|not implemented|future|follow-up" .specify/memory docs specs src -g "*.md" -g "*.cs" -g "*.csproj"
+```
+
+Classify new findings as constitution, code/domain, tests, docs, maps, or tool/skill work.
+
+## Planning Rule
+
+When this report is used for "what next" planning, first identify the relevant program-goal bucket or the `none/free-flow` state before planning.
+
+If a report item is selected for substantial planning or implementation, add or move the item into the relevant bucket and mark completion there, or explicitly keep the work `none/free-flow`. Update this report only when the underlying finding, evidence, or inventory classification changed.
+
+Do not invent a program-goal bucket just because one is missing. Only propose creating or selecting a bucket when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.
