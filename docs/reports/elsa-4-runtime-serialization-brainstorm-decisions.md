@@ -839,12 +839,57 @@ Rationale:
 - Requiring a `valueId` after resume makes the durable boundary visible in Studio and validateable in the authored document.
 - Studio can make this ergonomic by prompting or suggesting capture when a user draws a link that crosses a possible suspension boundary.
 
+### 14. Workflow Definition JSON, Import/Export, And Workflow-As-Activity Resolution
+
+The authored workflow document should be the persisted, imported, and exported JSON. Import/save must preserve unresolved activity types and workflow-as-activity references as document data with diagnostics. Publish/compile resolves them into an executable artifact.
+
+Conceptual workflow-as-activity reference:
+
+```json
+{
+  "id": "approve-order",
+  "type": {
+    "kind": "workflow",
+    "definitionId": "order-approval",
+    "version": "published"
+  },
+  "inputs": {
+    "order": {
+      "source": "value",
+      "valueId": "order"
+    }
+  }
+}
+```
+
+Rules:
+
+- Save/import is document persistence, not runtime construction.
+- Export returns the same canonical authored document shape.
+- REST and Studio may wrap the document in API metadata, but should not transform it into a different workflow body.
+- Missing activity types are preserved as unresolved activity nodes.
+- Workflow-as-activity references are symbolic references in the authored document.
+- Publish/compile is the first strict resolution boundary.
+- Import order should not matter for workflow-as-activity as long as all referenced workflows exist by publish/compile time.
+- If a referenced workflow such as `order-approval` has not been imported yet, save/import still succeeds with a diagnostic.
+- Publish/compile blocks until workflow-as-activity references, activity descriptors, input/output contracts, and required type aliases resolve.
+
+Core rule:
+
+**Authored documents are durable design state. Executables are derived runtime state. Import preserves design state; publish resolves runtime state.**
+
+Rationale:
+
+- This avoids Elsa 3's import/export shape drift and fragile descriptor resolution during deserialization.
+- Missing extension packages or workflow definitions should not corrupt or discard authored workflow data.
+- The resolution boundary becomes explicit and testable: document operations are permissive with diagnostics, runtime artifact creation is strict.
+
 ## Next Decision To Work
 
-Define workflow definition JSON, import/export, and workflow-as-activity resolution:
+Define execution pipeline shape:
 
-- How authored workflow documents are saved, imported, exported, and wrapped by APIs.
-- How missing activity types are preserved and diagnosed.
-- How workflow-as-activity references resolve without requiring fragile import order.
-- Whether import/publish should be one-pass with deferred resolution or explicit multi-phase validation.
-- How canonical document shape remains stable across Studio, REST, storage, and export.
+- Whether workflow and activity execution need distinct middleware pipelines.
+- Which context types and state transitions belong in each pipeline.
+- How diagnostics, incidents, retries, bookmarks, and output capture are surfaced.
+- Whether pipeline materialization should optimize hot paths without hiding step order.
+- How compiled executables preserve traceability back to authored document nodes.
