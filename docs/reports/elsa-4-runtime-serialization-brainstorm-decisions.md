@@ -150,16 +150,141 @@ Implications:
 - The authored document should avoid raw CLR type names. If a .NET type is needed, it should be represented through a schema or type-alias contract, not assembly-qualified durable data.
 - Separate root collections such as `inputs`, `variables`, and `outputs` should not be used for the same declared values because that recreates the Elsa 3 drift problem.
 
+### 6. Logical Type Contracts, Reference Values, And Activity Input Materialization
+
+Elsa 4 value declarations should use JSON-first logical type descriptors. The authored document may reference built-in kinds, JSON Schema-compatible schemas, or stable type aliases. Runtime CLR types, custom serializers, validators, UI editors, and reference resolvers are resolved through registries outside the durable document.
+
+Conceptual custom domain type:
+
+```json
+{
+  "id": "customer",
+  "name": "Customer",
+  "roles": ["input", "variable"],
+  "type": {
+    "kind": "alias",
+    "id": "crm.customer",
+    "schema": {
+      "type": "object",
+      "required": ["id", "email"],
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    }
+  },
+  "durability": {
+    "mode": "workflowInstance"
+  }
+}
+```
+
+Conceptual reference value:
+
+```json
+{
+  "id": "customer",
+  "name": "Customer",
+  "roles": ["input", "variable"],
+  "type": {
+    "kind": "reference",
+    "id": "crm.customer",
+    "schema": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" }
+      }
+    }
+  },
+  "durability": {
+    "mode": "workflowInstance"
+  }
+}
+```
+
+Conceptual persisted reference value:
+
+```json
+{
+  "valueId": "customer",
+  "type": "crm.customer",
+  "kind": "reference",
+  "value": {
+    "id": "cust_123"
+  }
+}
+```
+
+Conceptual activity input binding from a declared value:
+
+```json
+{
+  "activities": [
+    {
+      "id": "send-email",
+      "type": "SendCustomerEmail",
+      "inputs": {
+        "customer": {
+          "source": "value",
+          "valueId": "customer"
+        }
+      }
+    }
+  ]
+}
+```
+
+Conceptual expression binding with explicit result type:
+
+```json
+{
+  "inputs": {
+    "customer": {
+      "source": "expression",
+      "language": "javascript",
+      "expression": "input.customerId",
+      "resultType": {
+        "kind": "reference",
+        "id": "crm.customer"
+      }
+    }
+  }
+}
+```
+
+Implications:
+
+- Authored documents store Elsa logical type contracts, not CLR type names or assembly-qualified durable data.
+- Built-in kinds should cover primitives and common JSON-compatible values such as `string`, `number`, `integer`, `boolean`, `dateTime`, `duration`, `guid`, `object`, `array`, `json`, `binary`, `reference`, and `alias`.
+- JSON Schema-compatible `schema` data is used where validation, public API contract, or Studio form generation matters.
+- `alias` lets integrations map stable logical names to runtime CLR types, serializers, validators, UI editors, and version handling.
+- `reference` stores a stable pointer to domain-owned data rather than a workflow-owned snapshot of the whole object.
+- A `Customer` domain object can be passed to strongly typed activity inputs after runtime materialization, while workflow state persists only the declared JSON payload or reference.
+- Activity input bindings remain expressions, literals, declared-value references, activity-output references, or other binding sources.
+- Expression evaluation produces an intermediate runtime value. The activity input descriptor and optional binding `resultType` determine validation, coercion, reference resolution, and CLR materialization.
+- Durable workflow state is updated only when explicitly mapped into a declared durable value. Evaluated activity inputs are ephemeral by default and are not persisted merely because an activity ran.
+- Conversion should be strict at persistence and API boundaries. Declared durable values should not silently fall back to default values when conversion fails.
+- Arbitrary objects are allowed only through explicit serializer contracts or external references, not broad polymorphic object serialization.
+
+Rationale:
+
+- This preserves Elsa 3's useful expression-based activity input model while removing the accidental persistence of evaluated arbitrary runtime objects.
+- Stable aliases keep authored workflow documents portable across assembly renames, namespace changes, hosting models, and Studio/API import/export flows.
+- Reference mode keeps domain aggregates owned by the host application while allowing workflows to persist the identity of the aggregate they are about.
+- JSON-first schemas give Studio, APIs, validation, and migration tooling a durable contract that does not require loading application assemblies.
+- Separating expression evaluation from persistence makes it clear that expressions produce values, declarations decide persistence, and activity input descriptors decide materialization.
+
 ## Next Decision To Work
 
-Define the value type/schema and serializer contract model:
+Define default value, initial value, invocation binding, and completion mapping semantics:
 
-- Type/schema representation and serializer contracts.
-- Built-in scalar, object, array, and binary/reference value kinds.
-- Whether Elsa-owned aliases are enough or JSON Schema is required.
-- How .NET type information can participate without becoming durable assembly-qualified data.
-- How strict conversion, validation, and runtime materialization should behave.
 - Default value, initial value, invocation binding, and completion mapping semantics.
+- How initial workflow values are created from declared defaults, invocation inputs, and expressions.
+- How input-only values differ from input+variable values.
+- How outputs are produced from values, expressions, or activity results.
+- Whether completion mapping is explicit, implicit, or role-driven.
 - Durability policy vocabulary and defaults.
 - Validation rules for incompatible role combinations.
 - Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
