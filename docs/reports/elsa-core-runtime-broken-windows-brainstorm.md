@@ -75,6 +75,8 @@ Working understanding: Elsa 3 has separate workflow execution and activity execu
 
 Brainstorm direction: investigate a shared middleware abstraction that can serve workflow execution and activity execution without hiding execution state. Decide whether linked-list materialization is actually buying enough performance to justify the debugging cost.
 
+Source-backed topic note: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
+
 Questions to validate:
 
 - What middleware stages exist for workflow execution versus activity execution in Elsa 3?
