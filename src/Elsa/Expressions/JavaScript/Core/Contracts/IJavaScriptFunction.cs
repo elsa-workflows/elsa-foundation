@@ -1,9 +1,8 @@
-﻿namespace Elsa.Expressions.JavaScript.Core.Contracts
-{
-    public interface IJavaScriptFunction
-    {
-        string Name { get; }
+﻿namespace Elsa.Expressions.JavaScript.Core.Contracts;
 
-        Delegate Delegate { get; }
-    }
+public interface IJavaScriptFunction
+{
+    string Name { get; }
+
+    Delegate Delegate { get; }
 }

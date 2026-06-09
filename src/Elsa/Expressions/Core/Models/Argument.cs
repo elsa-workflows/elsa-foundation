@@ -1,35 +1,34 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Expressions.Core.Models
+namespace Elsa.Expressions.Core.Models;
+
+public abstract class Argument
 {
-    public abstract class Argument
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Argument"/> class.
+    /// </summary>
+    protected Argument()
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Argument"/> class.
-        /// </summary>
-        protected Argument()
-        {
-        }
-
-        /// <inheritdoc />
-        protected Argument(IMemoryBlockReference memoryBlockReference) : this(() => memoryBlockReference)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Argument"/> class.
-        /// </summary>
-        /// <param name="memoryBlockReference"></param>
-        protected Argument(Func<IMemoryBlockReference> memoryBlockReference)
-        {
-            MemoryBlockReference = memoryBlockReference;
-        }
-
-        /// <summary>
-        /// Gets or sets the memory block reference.
-        /// </summary>
-        [JsonIgnore]
-        public Func<IMemoryBlockReference> MemoryBlockReference { get; set; } = null!;
     }
+
+    /// <inheritdoc />
+    protected Argument(IMemoryBlockReference memoryBlockReference) : this(() => memoryBlockReference)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Argument"/> class.
+    /// </summary>
+    /// <param name="memoryBlockReference"></param>
+    protected Argument(Func<IMemoryBlockReference> memoryBlockReference)
+    {
+        MemoryBlockReference = memoryBlockReference;
+    }
+
+    /// <summary>
+    /// Gets or sets the memory block reference.
+    /// </summary>
+    [JsonIgnore]
+    public Func<IMemoryBlockReference> MemoryBlockReference { get; set; } = null!;
 }

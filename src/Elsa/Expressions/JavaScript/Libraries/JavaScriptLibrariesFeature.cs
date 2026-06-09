@@ -5,47 +5,46 @@ using Elsa.Expressions.JavaScript.Libraries.PreProcessors;
 using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Expressions.JavaScript.Libraries
+namespace Elsa.Expressions.JavaScript.Libraries;
+
+[ShellFeature(
+    name: "JavaScriptLibraries",
+    DisplayName = "JavaScript libraries such as 'lodash', 'lodashFp', or 'moment'"
+)]
+public class JavaScriptLibrariesFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "JavaScriptLibraries",
-        DisplayName = "JavaScript libraries such as 'lodash', 'lodashFp', or 'moment'"
-    )]
-    public class JavaScriptLibrariesFeature : IShellFeature
+    private const string ElsaClientLibResourceNameFormat = "Elsa.Expressions.JavaScript.Libraries.ClientLib.dist.{0}.js";
+
+    public string? FullModuleResourceName { get; set; }
+
+    public string? ModuleName { get; set; }
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        private const string ElsaClientLibResourceNameFormat = "Elsa.Expressions.JavaScript.Libraries.ClientLib.dist.{0}.js";
+        ValidateFeatureOptions();
 
-        public string? FullModuleResourceName { get; set; }
+        services
+            .AddScoped<IScriptPreProcessor, LibraryResourcePreProcessor>()
+            .Configure<JavaScriptLibrariesFeatureOptions>(o => o.FullModuleResourceName = GetFullModuleResourceName())
+            ;
+    }
 
-        public string? ModuleName { get; set; }
+    private void ValidateFeatureOptions()
+    {
+        var bothEmpty = string.IsNullOrWhiteSpace(FullModuleResourceName) && string.IsNullOrWhiteSpace(ModuleName);
+        var bothSpecified = !string.IsNullOrWhiteSpace(FullModuleResourceName) && !string.IsNullOrWhiteSpace(ModuleName);
 
-        public void ConfigureServices(IServiceCollection services)
+        if (bothEmpty || bothSpecified)
         {
-            ValidateFeatureOptions();
-
-            services
-                .AddScoped<IScriptPreProcessor, LibraryResourcePreProcessor>()
-                .Configure<JavaScriptLibrariesFeatureOptions>(o => o.FullModuleResourceName = GetFullModuleResourceName())
-                ;
+            throw new FeatureConfigurationException($"You must specify one of the following optionws: '{nameof(FullModuleResourceName)}' or '{nameof(ModuleName)}'");
         }
+    }
 
-        private void ValidateFeatureOptions()
-        {
-            var bothEmpty = string.IsNullOrWhiteSpace(FullModuleResourceName) && string.IsNullOrWhiteSpace(ModuleName);
-            var bothSpecified = !string.IsNullOrWhiteSpace(FullModuleResourceName) && !string.IsNullOrWhiteSpace(ModuleName);
+    private string GetFullModuleResourceName()
+    {
+        if (!string.IsNullOrWhiteSpace(FullModuleResourceName))
+            return FullModuleResourceName;
 
-            if (bothEmpty || bothSpecified)
-            {
-                throw new FeatureConfigurationException($"You must specify one of the following optionws: '{nameof(FullModuleResourceName)}' or '{nameof(ModuleName)}'");
-            }
-        }
-
-        private string GetFullModuleResourceName()
-        {
-            if (!string.IsNullOrWhiteSpace(FullModuleResourceName))
-                return FullModuleResourceName;
-
-            return string.Format(ElsaClientLibResourceNameFormat, ModuleName);
-        }
+        return string.Format(ElsaClientLibResourceNameFormat, ModuleName);
     }
 }

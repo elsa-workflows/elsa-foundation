@@ -7,85 +7,84 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
-namespace Elsa.Http
+namespace Elsa.Http;
+
+[ShellFeature(
+    name: "Http",
+    DisplayName = "HTTP",
+    Description = "Provides HTTP content parsing, routing, downloading, and cache services."
+)]
+public class HttpFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "Http",
-        DisplayName = "HTTP",
-        Description = "Provides HTTP content parsing, routing, downloading, and cache services."
-    )]
-    public class HttpFeature : IShellFeature
+    public string ContentTypeProviderType { get; set; } = typeof(FileExtensionContentTypeProvider).FullName!;
+
+    public string ZipFileCacheProviderType { get; set; } = typeof(FileSystemZipFileCacheStorageProvider).FullName!;
+
+    public string ZipArchiveManagerType { get; set; } = typeof(ZipArchiveManager).FullName!;
+
+    public string FileDownloaderType { get; set; } = typeof(HttpClientFileDownloader).FullName!;
+
+    public TimeSpan CacheTtl { get; set; } = TimeSpan.FromDays(7);
+
+    public string LocalCacheDirectory { get; set; } = Path.GetTempPath();
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        public string ContentTypeProviderType { get; set; } = typeof(FileExtensionContentTypeProvider).FullName!;
+        RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
+        RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
+        RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);
 
-        public string ZipFileCacheProviderType { get; set; } = typeof(FileSystemZipFileCacheStorageProvider).FullName!;
+        RegisterFileDownloader(services);
 
-        public string ZipArchiveManagerType { get; set; } = typeof(ZipArchiveManager).FullName!;
-
-        public string FileDownloaderType { get; set; } = typeof(HttpClientFileDownloader).FullName!;
-
-        public TimeSpan CacheTtl { get; set; } = TimeSpan.FromDays(7);
-
-        public string LocalCacheDirectory { get; set; } = Path.GetTempPath();
-
-        public void ConfigureServices(IServiceCollection services)
+        services.Configure<HttpZipFileCacheOptions>(o =>
         {
-            RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
-            RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
-            RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);
+            o.TimeToLive = CacheTtl;
+            o.LocalCacheDirectory = LocalCacheDirectory;
+        });
 
-            RegisterFileDownloader(services);
+        services
+            .AddHttpContextAccessor()
+            .AddScoped<IRouteTable, RouteTable>()
 
-            services.Configure<HttpZipFileCacheOptions>(o =>
-            {
-                o.TimeToLive = CacheTtl;
-                o.LocalCacheDirectory = LocalCacheDirectory;
-            });
+            .AddSingleton<IHttpContentParser, JsonHttpContentParser>()
+            .AddSingleton<IHttpContentParser, XmlHttpContentParser>()
+            .AddSingleton<IHttpContentParser, PlainTextHttpContentParser>()
+            .AddSingleton<IHttpContentParser, TextHtmlHttpContentParser>()
+            .AddSingleton<IHttpContentParser, FileHttpContentParser>()
 
-            services
-                .AddHttpContextAccessor()
-                .AddScoped<IRouteTable, RouteTable>()
+            .AddScoped<IHttpContentFactory, TextContentFactory>()
+            .AddScoped<IHttpContentFactory, JsonContentFactory>()
+            .AddScoped<IHttpContentFactory, XmlContentFactory>()
+            .AddScoped<IHttpContentFactory, FormUrlEncodedHttpContentFactory>()
 
-                .AddSingleton<IHttpContentParser, JsonHttpContentParser>()
-                .AddSingleton<IHttpContentParser, XmlHttpContentParser>()
-                .AddSingleton<IHttpContentParser, PlainTextHttpContentParser>()
-                .AddSingleton<IHttpContentParser, TextHtmlHttpContentParser>()
-                .AddSingleton<IHttpContentParser, FileHttpContentParser>()
+            .AddScoped<IDownloadableContentHandler, BinaryDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, StreamDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, FormFileDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, DownloadableDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, UrlDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, StringDownloadableContentHandler>()
+            .AddScoped<IDownloadableContentHandler, HttpFileDownloadableContentHandler>()
+            ;
 
-                .AddScoped<IHttpContentFactory, TextContentFactory>()
-                .AddScoped<IHttpContentFactory, JsonContentFactory>()
-                .AddScoped<IHttpContentFactory, XmlContentFactory>()
-                .AddScoped<IHttpContentFactory, FormUrlEncodedHttpContentFactory>()
+    }
 
-                .AddScoped<IDownloadableContentHandler, BinaryDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, StreamDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, FormFileDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, DownloadableDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, UrlDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, StringDownloadableContentHandler>()
-                .AddScoped<IDownloadableContentHandler, HttpFileDownloadableContentHandler>()
-                ;
+    private void RegisterFileDownloader(IServiceCollection services)
+    {
+        RegisterType<IFileDownloader>(services, FileDownloaderType);
 
-        }
+        // Add HttpClient specifically to the FileDownloader implementation
+        var type = FileDownloaderType.GetLoadedType();
+        var methodName = nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient);
+        var method = typeof(HttpClientFactoryServiceCollectionExtensions).GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)
+                     ?? throw new InvalidOperationException($"Could not find method '{nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient)}'");
 
-        private void RegisterFileDownloader(IServiceCollection services)
-        {
-            RegisterType<IFileDownloader>(services, FileDownloaderType);
+        var genericMethod = method.MakeGenericMethod(typeof(IFileDownloader), type);
+        genericMethod.Invoke(null, [services]);
+    }
 
-            // Add HttpClient specifically to the FileDownloader implementation
-            var type = FileDownloaderType.GetLoadedType();
-            var methodName = nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient);
-            var method = typeof(HttpClientFactoryServiceCollectionExtensions).GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)
-                ?? throw new InvalidOperationException($"Could not find method '{nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient)}'");
-
-            var genericMethod = method.MakeGenericMethod(typeof(IFileDownloader), type);
-            genericMethod.Invoke(null, [services]);
-        }
-
-        private static void RegisterType<TService>(IServiceCollection services, string typeName)
-        {
-            var type = typeName.GetLoadedType();
-            services.AddScoped(typeof(TService), type);
-        }
+    private static void RegisterType<TService>(IServiceCollection services, string typeName)
+    {
+        var type = typeName.GetLoadedType();
+        services.AddScoped(typeof(TService), type);
     }
 }

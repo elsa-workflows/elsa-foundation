@@ -1,32 +1,31 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Serialization.SystemText.Extensions
+namespace Elsa.Serialization.SystemText.Extensions;
+
+/// <summary>
+/// Adds extension methods to <see cref="JsonSerializerOptions"/>.
+/// </summary>
+public static class JsonSerializerOptionsExtensions
 {
     /// <summary>
-    /// Adds extension methods to <see cref="JsonSerializerOptions"/>.
+    /// Adds the specified converters to the options.
     /// </summary>
-    public static class JsonSerializerOptionsExtensions
+    public static JsonSerializerOptions WithConverters(this JsonSerializerOptions options, params JsonConverter[] converters)
     {
-        /// <summary>
-        /// Adds the specified converters to the options.
-        /// </summary>
-        public static JsonSerializerOptions WithConverters(this JsonSerializerOptions options, params JsonConverter[] converters)
+        foreach (var converter in converters)
         {
-            foreach (var converter in converters)
-            {
-                options.Converters.Add(converter);
-            }
-
-            return options;
+            options.Converters.Add(converter);
         }
 
-        /// <summary>
-        /// Clones the options.
-        /// </summary>
-        public static JsonSerializerOptions Clone(this JsonSerializerOptions options)
-        {
-            return new(options);
-        }
+        return options;
+    }
+
+    /// <summary>
+    /// Clones the options.
+    /// </summary>
+    public static JsonSerializerOptions Clone(this JsonSerializerOptions options)
+    {
+        return new(options);
     }
 }

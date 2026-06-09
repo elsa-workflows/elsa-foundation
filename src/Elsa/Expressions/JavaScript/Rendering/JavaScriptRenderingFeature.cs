@@ -9,30 +9,29 @@ using Elsa.Expressions.JavaScript.Rendering.Contributors;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Expressions.JavaScript.Rendering
+namespace Elsa.Expressions.JavaScript.Rendering;
+
+[ShellFeature(
+    name: "JavaScriptRendering",
+    DisplayName = "JavaScript rendering"
+)]
+public class JavaScriptRenderingFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "JavaScriptRendering",
-        DisplayName = "JavaScript rendering"
-    )]
-    public class JavaScriptRenderingFeature : IShellFeature
+    public IEnumerable<JavaScriptFunctionDeclaration> FunctionDeclarations { get; set; } = DefaultFunctionDeclarations.Get();
+
+    public IEnumerable<JavaScriptTypeDeclaration> TypeDeclarations { get; set; } = [];
+
+    public IEnumerable<JavaScriptVariableDeclaration> VariableDeclarations { get; set; } = [];
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        public IEnumerable<JavaScriptFunctionDeclaration> FunctionDeclarations { get; set; } = DefaultFunctionDeclarations.Get();
+        services
+            .AddEventHandler<OnDeclarationsDocumentGenerating, BuildDeclarationsDocument>()
+            .AddScoped<IJavaScriptDeclarationContributor, CommonDeclarationContributor>()
 
-        public IEnumerable<JavaScriptTypeDeclaration> TypeDeclarations { get; set; } = [];
-
-        public IEnumerable<JavaScriptVariableDeclaration> VariableDeclarations { get; set; } = [];
-
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services
-                .AddEventHandler<OnDeclarationsDocumentGenerating, BuildDeclarationsDocument>()
-                .AddScoped<IJavaScriptDeclarationContributor, CommonDeclarationContributor>()
-
-                .AddScoped<IJavaScriptDeclarationsDocumentFactory, JavaScriptDeclarationsDocumentFactory>()
-                .AddScoped<IJavaScriptDeclarationsDocumentRenderer, JavaScriptTypeDefinitionDocumentRenderer>()
-                .AddScoped<IJavaScriptTypeDeclarationFactory, JavaScriptTypeDeclarationFactory>()
-                ;
-        }
+            .AddScoped<IJavaScriptDeclarationsDocumentFactory, JavaScriptDeclarationsDocumentFactory>()
+            .AddScoped<IJavaScriptDeclarationsDocumentRenderer, JavaScriptTypeDefinitionDocumentRenderer>()
+            .AddScoped<IJavaScriptTypeDeclarationFactory, JavaScriptTypeDeclarationFactory>()
+            ;
     }
 }

@@ -1,36 +1,35 @@
 using Elsa.Expressions.Core.Contracts;
 
-namespace Elsa.Expressions.Models
+namespace Elsa.Expressions.Models;
+
+/// <summary>
+/// Represents a piece of memory within a memory register
+/// </summary>
+public sealed class MemoryBlock : IMemoryBlock
 {
     /// <summary>
-    /// Represents a piece of memory within a memory register
+    /// Constructor.
     /// </summary>
-    public sealed class MemoryBlock : IMemoryBlock
+    public MemoryBlock()
     {
-        /// <summary>
-        /// Constructor.
-        /// </summary>
-        public MemoryBlock()
-        {
-        }
-
-        /// <summary>
-        /// Constructor.
-        /// </summary>
-        public MemoryBlock(object? value, object? metadata = null)
-        {
-            Value = value;
-            Metadata = metadata;
-        }
-
-        /// <summary>
-        /// The value stored in this block.
-        /// </summary>
-        public object? Value { get; set; }
-
-        /// <summary>
-        /// Optional metadata about this block.
-        /// </summary>
-        public object? Metadata { get; set; }
     }
+
+    /// <summary>
+    /// Constructor.
+    /// </summary>
+    public MemoryBlock(object? value, object? metadata = null)
+    {
+        Value = value;
+        Metadata = metadata;
+    }
+
+    /// <summary>
+    /// The value stored in this block.
+    /// </summary>
+    public object? Value { get; set; }
+
+    /// <summary>
+    /// Optional metadata about this block.
+    /// </summary>
+    public object? Metadata { get; set; }
 }

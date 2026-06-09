@@ -1,13 +1,12 @@
 ﻿using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 
-namespace Elsa.Expressions.JavaScript.Rendering.Core.Contracts
+namespace Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+
+public interface IJavaScriptDeclarationsContributionContext
 {
-    public interface IJavaScriptDeclarationsContributionContext
-    {
-        void AddVariable(JavaScriptVariableDeclaration declaration);
+    void AddVariable(JavaScriptVariableDeclaration declaration);
 
-        void AddType(JavaScriptTypeDeclaration declaration);
+    void AddType(JavaScriptTypeDeclaration declaration);
 
-        void AddFunction(JavaScriptFunctionDeclaration declaration);
-    }
+    void AddFunction(JavaScriptFunctionDeclaration declaration);
 }

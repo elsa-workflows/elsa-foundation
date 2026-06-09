@@ -1,18 +1,17 @@
-namespace Elsa.Primitives.Persistence
+namespace Elsa.Primitives.Persistence;
+
+/// <summary>
+/// The order direction.
+/// </summary>
+public enum OrderDirection
 {
     /// <summary>
-    /// The order direction.
+    /// Ascending order.
     /// </summary>
-    public enum OrderDirection
-    {
-        /// <summary>
-        /// Ascending order.
-        /// </summary>
-        Ascending,
+    Ascending,
 
-        /// <summary>
-        /// 
-        /// </summary>
-        Descending
-    }
+    /// <summary>
+    /// 
+    /// </summary>
+    Descending
 }

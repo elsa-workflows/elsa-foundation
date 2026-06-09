@@ -7,35 +7,34 @@ using Elsa.Expressions.Sources;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Expressions
+namespace Elsa.Expressions;
+
+[ShellFeature(
+    name: "Expressions",
+    DisplayName = "Expressions",
+    Description = "Installs and configures the required services for using expressions."
+)]
+public class ExpressionsFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "Expressions",
-        DisplayName = "Expressions",
-        Description = "Installs and configures the required services for using expressions."
-    )]
-    public class ExpressionsFeature : IShellFeature
+    public ExpressionEvaluatorOptions EvaluatorOptions { get; set; } = new();
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        public ExpressionEvaluatorOptions EvaluatorOptions { get; set; } = new();
+        services
+            .AddSingleton<IExpressionDescriptorRegistry, ExpressionDescriptorRegistry>()
+            .AddSingleton<IExpressionDescriptorProvider, DefaultExpressionDescriptorProvider>()
+            .Configure<ExpressionEvaluatorOptions>(o =>
+            {
+                o.Arguments = EvaluatorOptions.Arguments;
+            })
+            .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
+            .AddSingleton<IVariableMapper, VariableMapper>()
+            .AddScoped<IExpressionEvaluator, ExpressionEvaluator>()
+            .AddScoped<IVariableFactory, VariableFactory>();
 
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services
-                .AddSingleton<IExpressionDescriptorRegistry, ExpressionDescriptorRegistry>()
-                .AddSingleton<IExpressionDescriptorProvider, DefaultExpressionDescriptorProvider>()
-                .Configure<ExpressionEvaluatorOptions>(o =>
-                {
-                    o.Arguments = EvaluatorOptions.Arguments;
-                })
-                .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
-                .AddSingleton<IVariableMapper, VariableMapper>()
-                .AddScoped<IExpressionEvaluator, ExpressionEvaluator>()
-                .AddScoped<IVariableFactory, VariableFactory>();
-
-            // Contributes Variable<T> and FuncExpressionValue converters to the JSON payload
-            // serializer by registering an IJsonConverterSource; the Serialization feature's single
-            // RegisterJsonConverters handler aggregates all sources (Elsa §E3.3).
-            services.AddScoped<IJsonConverterSource, ExpressionsJsonConverterSource>();
-        }
+        // Contributes Variable<T> and FuncExpressionValue converters to the JSON payload
+        // serializer by registering an IJsonConverterSource; the Serialization feature's single
+        // RegisterJsonConverters handler aggregates all sources (Elsa §E3.3).
+        services.AddScoped<IJsonConverterSource, ExpressionsJsonConverterSource>();
     }
 }

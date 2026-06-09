@@ -2,32 +2,31 @@
 using Elsa.Http.Core.Models;
 using System.Xml.Serialization;
 
-namespace Elsa.Http.Services
+namespace Elsa.Http.Services;
+
+/// <summary>
+/// Reads application/xml and text/xml content type streams.
+/// </summary>
+internal sealed class XmlHttpContentParser : IHttpContentParser
 {
-    /// <summary>
-    /// Reads application/xml and text/xml content type streams.
-    /// </summary>
-    internal sealed class XmlHttpContentParser : IHttpContentParser
+    /// <inheritdoc />
+    public int Priority => 0;
+
+    /// <inheritdoc />
+    public bool GetSupportsContentType(HttpResponseParserContext context) => context.ContentType.Contains("xml", StringComparison.InvariantCultureIgnoreCase);
+
+    /// <inheritdoc />
+    public async Task<object> ReadAsync(HttpResponseParserContext context)
     {
-        /// <inheritdoc />
-        public int Priority => 0;
+        var content = context.Content;
+        using var reader = new StreamReader(content, leaveOpen: true);
+        var xml = await reader.ReadToEndAsync();
+        var returnType = context.ReturnType;
 
-        /// <inheritdoc />
-        public bool GetSupportsContentType(HttpResponseParserContext context) => context.ContentType.Contains("xml", StringComparison.InvariantCultureIgnoreCase);
+        if (returnType == null || returnType == typeof(string))
+            return xml;
 
-        /// <inheritdoc />
-        public async Task<object> ReadAsync(HttpResponseParserContext context)
-        {
-            var content = context.Content;
-            using var reader = new StreamReader(content, leaveOpen: true);
-            var xml = await reader.ReadToEndAsync();
-            var returnType = context.ReturnType;
-
-            if (returnType == null || returnType == typeof(string))
-                return xml;
-
-            var serializer = new XmlSerializer(returnType);
-            return serializer.Deserialize(reader)!;
-        }
+        var serializer = new XmlSerializer(returnType);
+        return serializer.Deserialize(reader)!;
     }
 }

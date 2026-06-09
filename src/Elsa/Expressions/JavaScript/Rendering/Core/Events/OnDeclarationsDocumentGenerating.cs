@@ -1,7 +1,6 @@
 ﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Events.Core.Contracts;
 
-namespace Elsa.Expressions.JavaScript.Rendering.Core.Events
-{
-    public sealed record OnDeclarationsDocumentGenerating(IJavaScriptDeclarationsContributionContext Context) : IEvent;
-}
+namespace Elsa.Expressions.JavaScript.Rendering.Core.Events;
+
+public sealed record OnDeclarationsDocumentGenerating(IJavaScriptDeclarationsContributionContext Context) : IEvent;

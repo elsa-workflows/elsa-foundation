@@ -1,13 +1,12 @@
-namespace Elsa.Http.Core.Contracts
+namespace Elsa.Http.Core.Contracts;
+
+/// <summary>
+/// Creates a file cache storage instance.
+/// </summary>
+public interface IZipFileCacheStorageProviders
 {
     /// <summary>
-    /// Creates a file cache storage instance.
+    /// Gets (or creates and caches) the storage.
     /// </summary>
-    public interface IZipFileCacheStorageProviders
-    {
-        /// <summary>
-        /// Gets (or creates and caches) the storage.
-        /// </summary>
-        IZipFileCacheStorage GetStorage();
-    }
+    IZipFileCacheStorage GetStorage();
 }

@@ -1,7 +1,6 @@
-﻿namespace Elsa.Workflows.Primitives.Constants
+﻿namespace Elsa.Workflows.Primitives.Constants;
+
+public static class VariableNames
 {
-    public static class VariableNames
-    {
-        public const string VariableContainer = "variables";
-    }
+    public const string VariableContainer = "variables";
 }

@@ -4,33 +4,32 @@ using System.Net.Mime;
 using System.Text;
 using System.Xml.Serialization;
 
-namespace Elsa.Http.Services
+namespace Elsa.Http.Services;
+
+/// <summary>
+/// Creates a <see cref="HttpContent"/> object for XML types.
+/// </summary>
+internal sealed class XmlContentFactory : IHttpContentFactory
 {
-    /// <summary>
-    /// Creates a <see cref="HttpContent"/> object for XML types.
-    /// </summary>
-    internal sealed class XmlContentFactory : IHttpContentFactory
+    /// <inheritdoc />
+    public IEnumerable<string> SupportedContentTypes =>
+    [
+        MediaTypeNames.Application.Xml,
+        MediaTypeNames.Text.Xml,
+        MediaTypeNames.Application.Soap,
+    ];
+
+    /// <inheritdoc />
+    public HttpContent CreateHttpContent(object content, string contentType)
     {
-        /// <inheritdoc />
-        public IEnumerable<string> SupportedContentTypes =>
-        [
-            MediaTypeNames.Application.Xml,
-            MediaTypeNames.Text.Xml,
-            MediaTypeNames.Application.Soap,
-        ];
+        var text = content as string ?? Serialize(content);
+        return new RawStringContent(text, Encoding.UTF8, contentType);
+    }
 
-        /// <inheritdoc />
-        public HttpContent CreateHttpContent(object content, string contentType)
-        {
-            var text = content as string ?? Serialize(content);
-            return new RawStringContent(text, Encoding.UTF8, contentType);
-        }
-
-        private static string Serialize(object value)
-        {
-            using var writer = new StringWriter();
-            new XmlSerializer(value.GetType()).Serialize(writer, value);
-            return writer.ToString();
-        }
+    private static string Serialize(object value)
+    {
+        using var writer = new StringWriter();
+        new XmlSerializer(value.GetType()).Serialize(writer, value);
+        return writer.ToString();
     }
 }

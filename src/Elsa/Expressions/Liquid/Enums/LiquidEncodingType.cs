@@ -1,8 +1,7 @@
-namespace Elsa.Expressions.Liquid.Enums
+namespace Elsa.Expressions.Liquid.Enums;
+
+public enum LiquidEncodingType
 {
-    public enum LiquidEncodingType
-    {
-        Null,
-        Html
-    }
+    Null,
+    Html
 }

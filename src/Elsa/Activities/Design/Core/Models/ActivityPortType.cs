@@ -1,18 +1,17 @@
-﻿namespace Elsa.Activities.Design.Core.Models
+﻿namespace Elsa.Activities.Design.Core.Models;
+
+/// <summary>
+/// The type of a port.
+/// </summary>
+public enum ActivityPortType
 {
     /// <summary>
-    /// The type of a port.
+    /// A port that is embedded in the activity.
     /// </summary>
-    public enum ActivityPortType
-    {
-        /// <summary>
-        /// A port that is embedded in the activity.
-        /// </summary>
-        Embedded,
+    Embedded,
 
-        /// <summary>
-        /// A flow port.
-        /// </summary>
-        Flow
-    }
+    /// <summary>
+    /// A flow port.
+    /// </summary>
+    Flow
 }

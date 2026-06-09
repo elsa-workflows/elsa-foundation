@@ -10,32 +10,31 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
 
-namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite
+namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
+
+/// <summary>
+/// Configures the Sqlite persistence for workflow definitions.
+/// </summary>
+[ShellFeature(
+    name: "WorkflowsDesignPersistenceEFCoreSqlite",
+    DisplayName = "Sqlite Workflows Design Persistence",
+    Description = "Provides Sqlite persistence for the workflows design domain")]
+[UsedImplicitly]
+public class SqliteWorkflowsDesignPersistenceShellFeature : EFCoreWorkflowsPersistenceFeatureBase
 {
-    /// <summary>
-    /// Configures the Sqlite persistence for workflow definitions.
-    /// </summary>
-    [ShellFeature(
-        name: "WorkflowsDesignPersistenceEFCoreSqlite",
-        DisplayName = "Sqlite Workflows Design Persistence",
-        Description = "Provides Sqlite persistence for the workflows design domain")]
-    [UsedImplicitly]
-    public class SqliteWorkflowsDesignPersistenceShellFeature : EFCoreWorkflowsPersistenceFeatureBase
+    /// <inheritdoc />
+    protected override void OnBeforeConfiguring(IServiceCollection services)
     {
-        /// <inheritdoc />
-        protected override void OnBeforeConfiguring(IServiceCollection services)
+        if (string.IsNullOrWhiteSpace(ConnectionString))
         {
-            if (string.IsNullOrWhiteSpace(ConnectionString))
-            {
-                ConnectionString = SqliteConstants.DefaultConnectionString;
-            }
-
-            services.TryAddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
+            ConnectionString = SqliteConstants.DefaultConnectionString;
         }
 
-        protected override void ConfigureProvider(DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString, ElsaDbContextOptions? options)
-        {
-            builder.UseElsaSqlite(migrationsAssembly, connectionString, options);
-        }
+        services.TryAddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
+    }
+
+    protected override void ConfigureProvider(DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString, ElsaDbContextOptions? options)
+    {
+        builder.UseElsaSqlite(migrationsAssembly, connectionString, options);
     }
 }

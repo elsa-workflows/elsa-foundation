@@ -1,40 +1,39 @@
-namespace Elsa.Expressions.Core.Contracts
+namespace Elsa.Expressions.Core.Contracts;
+
+/// <summary>
+/// A registry for expression syntaxes.
+/// </summary>
+public interface IExpressionDescriptorRegistry
 {
     /// <summary>
-    /// A registry for expression syntaxes.
+    /// Adds a descriptor to the registry.
     /// </summary>
-    public interface IExpressionDescriptorRegistry
-    {
-        /// <summary>
-        /// Adds a descriptor to the registry.
-        /// </summary>
-        /// <param name="descriptor">The descriptor to add.</param>
-        void Add(IExpressionDescriptor descriptor);
+    /// <param name="descriptor">The descriptor to add.</param>
+    void Add(IExpressionDescriptor descriptor);
 
-        /// <summary>
-        /// Adds many descriptors to the registry.
-        /// </summary>
-        /// <param name="descriptors">The descriptors to add.</param>
-        void AddRange(IEnumerable<IExpressionDescriptor> descriptors);
+    /// <summary>
+    /// Adds many descriptors to the registry.
+    /// </summary>
+    /// <param name="descriptors">The descriptors to add.</param>
+    void AddRange(IEnumerable<IExpressionDescriptor> descriptors);
 
-        /// <summary>
-        /// Lists all descriptors in the registry.
-        /// </summary>
-        /// <returns>A list of descriptors.</returns>
-        IEnumerable<IExpressionDescriptor> ListAll();
+    /// <summary>
+    /// Lists all descriptors in the registry.
+    /// </summary>
+    /// <returns>A list of descriptors.</returns>
+    IEnumerable<IExpressionDescriptor> ListAll();
 
-        /// <summary>
-        /// Finds a descriptor matching the specified predicate.
-        /// </summary>
-        /// <param name="predicate">The predicate.</param>
-        /// <returns>A descriptor or null if none was found.</returns>
-        IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate);
+    /// <summary>
+    /// Finds a descriptor matching the specified predicate.
+    /// </summary>
+    /// <param name="predicate">The predicate.</param>
+    /// <returns>A descriptor or null if none was found.</returns>
+    IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate);
 
-        /// <summary>
-        /// Finds a descriptor matching the specified syntax.
-        /// </summary>
-        /// <param name="type">The syntax.</param>
-        /// <returns>A descriptor or null if none was found.</returns>
-        IExpressionDescriptor? Find(string type);
-    }
+    /// <summary>
+    /// Finds a descriptor matching the specified syntax.
+    /// </summary>
+    /// <param name="type">The syntax.</param>
+    /// <returns>A descriptor or null if none was found.</returns>
+    IExpressionDescriptor? Find(string type);
 }
