@@ -338,7 +338,7 @@ The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a 
 
 This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. The generic CQS command-per-operation guidance elsewhere in this constitution (and the framework's `Elsa.Persistence` CQS row) is unaffected — this rule narrows only the **Draft-mutation** surface within the Design domain.
 
-**Provisional pending architecture-review ratification**, consistent with §E2.9.6 — recorded as a draft sub-section per the working-loop adopt-ahead-of-review pattern. Current repo-local tracking lives in [unfinished work](../../docs/reports/unfinished-work.md).
+**Status:** Provisional pending architecture-review ratification. Current repo-local tracking lives in [unfinished work](../../docs/reports/unfinished-work.md).
 
 **Cross-references:** §E2.9.1/§E2.9.2 (what State carries — the diff operates over exactly those in-scope fields, layout stays beside State); §E2.6.6 (Sequential vs Background delivery strategies the command uses for the gate vs the per-diff stream).
 
@@ -346,20 +346,11 @@ This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. Th
 
 ## §E3 Elsa-specific worked example references
 
-The framework constitution uses synthetic examples. Elsa-specific worked examples instantiate those rules using concrete `Elsa.*` names and now live in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md).
-
-Current reference examples:
-
-- [Cross-Core composition](../../docs/reference/elsa-worked-examples.md#cross-core-composition) — framework §2.1.
-- [Adapter pattern: Elsa.Locking](../../docs/reference/elsa-worked-examples.md#adapter-pattern-elsalocking) — framework §2.7 and §2.20.
-- [Event contribution with sync access: JsonConverter registry](../../docs/reference/elsa-worked-examples.md#event-contribution-with-sync-access-jsonconverter-registry) — framework §2.6.1.
-- [Feature inheritance](../../docs/reference/elsa-worked-examples.md#feature-inheritance) — framework §2.5.
-- [Dual-integration smell: Elsa.Http and Elsa.Expressions.JavaScript](../../docs/reference/elsa-worked-examples.md#dual-integration-smell-elsahttp-and-elsaexpressionsjavascript) — framework §2.14.
-- [Adapter pattern: IJavaScriptExecutionContext over Jint](../../docs/reference/elsa-worked-examples.md#adapter-pattern-ijavascriptexecutioncontext-over-jint) — framework §2.7.
-- [Design-time vs runtime contract split: JavaScript declarations and functions](../../docs/reference/elsa-worked-examples.md#design-time-vs-runtime-contract-split-javascript-declarations-and-functions) — framework §2.6.4.
-- [Elsa.Http.JavaScript naming walkthrough](../../docs/reference/elsa-worked-examples.md#elsahttpjavascript-naming-walkthrough) — framework §2.2.
-- [Sync contributor pattern: IEntityModelCreatingHandler](../../docs/reference/elsa-worked-examples.md#sync-contributor-pattern-ientitymodelcreatinghandler) — framework §2.6.5.
-- [Three-segment secondary-domain naming with phase split](../../docs/reference/elsa-worked-examples.md#three-segment-secondary-domain-naming-with-phase-split) — framework §2.2 and Elsa §E2.2; still provisional pending architecture-review ratification.
+Elsa-specific worked examples instantiate framework rules using concrete
+`Elsa.*` names and live in
+[docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md).
+They are reference material, not additional gates. Framework sections link
+to the reference material only when a gate needs a concrete example.
 
 ---
 

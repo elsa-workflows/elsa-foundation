@@ -45,7 +45,7 @@ term lookup lives in `../../docs/glossary/`; current inventory and unfinished-wo
   - [§2.21 Test discipline](#221-test-discipline) · [§2.21.1 Golden rule of refactoring](#2211-the-golden-rule-of-refactoring) · [§2.21.2 Greenfield deferral](#2212-greenfield-test-discipline)
   - [§2.22 Feature documentation](#222-feature-documentation)
   - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Exception boundaries](#2235-exception-boundaries--infrastructure-exceptions-are-wrapped) · [§2.23.6 Integration testing — out of scope](#2236-integration-testing--out-of-scope)
-  - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Rationale reference](#2241-rationale-reference) · [§2.24.2 The catalog](#2242-the-catalog-snapshot-2026-05-29-pending-2026-06-01-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
+  - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Rationale reference](#2241-rationale-reference) · [§2.24.2 The catalog](#2242-the-catalog-draft-pending-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
 - [§4 Versioning](#4-versioning)
   - [§4.1 Per-Package Versioning](#41-per-package-versioning)
@@ -65,7 +65,7 @@ This document is the **generic** layer of a two-layer constitution. An applicati
 - Cites a specific version of this document.
 - Pins its **root domain name** (the `<App>` token used throughout this constitution).
 - Adds **specializations** where the generic rule needs application-specific refinement.
-- Carries the application's **worked examples** — instantiations of the generic rules using the application's concrete names.
+- Links to the application's worked examples when a generic rule needs concrete names.
 
 Where the application's constitution is silent, this document applies. Where it overrides, the application's constitution declares the override explicitly with the convention `framework §X — <App> specialization: …`.
 
@@ -178,8 +178,6 @@ The `<Variation>` segment is optional. It is added only when a domain
 The test is: *where do the models come from?* The domain whose `.Core` defines the models being contributed **is** the primary domain; the contributing feature is named under it.
 
 The reverse form (`<App>.<ConsumerDomain>.<ModelDomain>`) is an anti-pattern. It forces the consumer domain to grow one sub-branch per upstream consumer — `<ConsumerDomain>.<ModelDomainA>`, `<ConsumerDomain>.<ModelDomainB>`, … — until the namespace is a junk drawer of unrelated model branches glued together by their shared contributor surface. A domain that grows one branch per consumer is not a domain.
-
-The Elsa-specific worked example lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#elsahttpjavascript-naming-walkthrough).
 
 **Type-level `Feature` suffix is permitted.** The word `Feature` describes an activation unit, so a class implementing `IFeature` may be named e.g. `<Domain>RuntimeFeature`. The package, however, is `<App>.<Domain>.Runtime` — never `<App>.Features.<Domain>.Runtime`.
 
@@ -317,11 +315,7 @@ Never name a return-style interface `Contributor`, nor a context-acting interfac
 
 **Intra-domain vs. cross-domain contributions.** When a contributor-interface implementation ships in the **same domain** as the `.Core` contract it satisfies, it is an *intra-domain default* — the feature delivers on its own Core's promises. When it ships from an **unrelated domain**, it is a *cross-domain contribution* — the primary mechanism by which domains extend each other's pipelines without direct coupling. The owning feature's `EXTENSION_POINTS.md` catalog (§2.22.1) MUST list all known implementations of each contributor interface, tagged accordingly (`*(intra-domain — default)*` / `*(cross-domain)*`). The contributing feature MUST note in its own `README.md` (under a **Cross-domain contributions** section) which contracts from other domains it satisfies and link back to the owning domain's catalog. This makes the inter-domain dependency map visible from both ends.
 
-The rationale and mechanical sketch for this sub-pattern live in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#framework-composition-rationale).
-
 **Superseded shape.** The earlier "intent-revealing `AddX()` methods + private list + `IReadOnlyList<T>` read accessor" sub-rule is **withdrawn** — it added ceremony to every contribution event and folded contribution logic into the payload. Contribution events now expose a directly-accessible `ICollection<T>` written solely by the single aggregating handler. Records remain discouraged for events carrying a mutable contribution sink — use `sealed class` with a get-only collection auto-property initialised to `[]`.
-
-Elsa-specific worked examples live in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md), including the JsonConverter Source shape, JavaScript contributor/pre/post processor split, and three-segment activity naming case.
 
 **Domain-design consequence.** Enumerating a domain's events is part of *defining the domain*. The §2.18 domain-identification methodology gains a corollary: once a domain's purpose and contracts are established, the architect MUST also identify *where other features can bring something or do something* — and surface those points as named events in the domain's `.Core`. A domain whose extension points are implicit (registered providers nobody can enumerate, events nobody can find handlers for) fails this rule.
 
@@ -332,11 +326,9 @@ Elsa-specific worked examples live in [docs/reference/elsa-worked-examples.md](.
 
 The full shape of the feature-documentation contract is governed by §2.22 (Feature documentation).
 
-The Elsa-specific worked example of the Registry + StartUp Task sub-pattern lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#event-contribution-with-sync-access-jsonconverter-registry).
-
 #### §2.6.2 Replacement contracts — single-implementation services
 
-Some contracts in a `.Core` library are **replacement contracts**: one implementation is selected per application/runtime context. They are *not* contribution contracts (§2.6.1) — they govern services where exactly one implementation is meaningful at a time. Synthetic examples live in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#framework-composition-rationale).
+Some contracts in a `.Core` library are **replacement contracts**: one implementation is selected per application/runtime context. They are *not* contribution contracts (§2.6.1) — they govern services where exactly one implementation is meaningful at a time.
 
 **Constitutional requirements** for replacement contracts:
 
@@ -373,8 +365,6 @@ When a contract surface has both a **design-time consumer** (intellisense, schem
 
 **Generalisation.** Many applications maintain a boundary between authoring/design-time concerns and execution/runtime concerns at the sub-domain level. This rule applies the same boundary at the contract level: a contract bound to a design-time consumer MUST NOT carry concerns of a runtime consumer, and vice versa. The application's derived constitution names that boundary concretely; the framework rule applies it at the contract level wherever such a boundary exists.
 
-The application-specific worked example lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#design-time-vs-runtime-contract-split-javascript-declarations-and-functions).
-
 #### §2.6.5 Sync contributor pattern — rare exception
 
 §2.6.1's event mechanism (and its Registry + StartUp Task sub-pattern for sync access) is the **default** for cross-feature contribution. A small class of contribution flows fits neither mechanism cleanly. For these — and **only** these — a **sync contributor interface** (a provider interface resolved via DI as `IEnumerable<TContributor>` at the call site) is permitted.
@@ -400,8 +390,6 @@ The application-specific worked example lives in [docs/reference/elsa-worked-exa
 - Is the contribution genuinely sync, behaviour-shaped, and runtime-context-dependent? Only then does §2.6.5 apply.
 
 **A use case that uses §2.6.5 without satisfying all three criteria is a §2.6.1 violation disguised.** Reviewers MUST challenge §2.6.5 invocations.
-
-The canonical §2.6.5 worked example lives in [docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#sync-contributor-pattern-ientitymodelcreatinghandler); framework-level rationale lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#framework-composition-rationale).
 
 #### §2.6.6 Delivery and failure strategies — one event concept, three responsibility axes
 
@@ -556,8 +544,6 @@ Those decisions are **revisable**: a `.Core` and its implementations can graduat
 ### §2.14 Integration vs. Consumption-Shape — separate modules
 
 When a module integrates an application with an external system, the *integration itself* and any *consumption-shape modules* that adapt the integration to a specific consumer (a workflow activity, a UI binding, a messaging endpoint, etc.) ship as separate modules. The integration depends on the external system; each consumption-shape depends on the integration plus the consumer's abstractions. A consumer who wants the integration without one particular consumption-shape references only the integration.
-
-Synthetic examples live in [docs/reference/framework-examples.md](../../docs/reference/framework-examples.md#integration-vs-consumption-shape-examples).
 
 **Activities (or any consumption-shape unit) that integrate with two external systems.** Such a unit is first treated as a **boundary smell** and re-examined: it usually represents a third integration or orchestration concept, not something that naturally belongs to either external-system module.
 
@@ -764,7 +750,7 @@ For the **Overridable contracts** section, each entry records: a **layer badge**
 
 **Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the **composition-root feature project** of the domain (e.g. `src/<App>.<Domain>/EXTENSION_POINTS.md`), co-located with the feature's `README.md`. The `.Core` project is contracts-only (§2.1) and cannot describe defaults or wiring; the composition root can. Exception: domains with no separate feature project place the catalog in their `.Core`. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-**Worked example.** The Elsa extension-points catalog instance lives in [docs/reference/framework-examples.md](../../docs/reference/framework-examples.md#extension-points-catalog-example). Generated maps are the current review surface for catalog/index drift.
+Generated maps are the current review surface for extension-point catalog/index drift.
 
 **Maintenance obligation (MANDATORY).** The extension-points catalog is a **living document**. Updating it is MANDATORY in the same unit-of-work (commit / PR / unit) as any change that touches an extension point. The following events always trigger a catalog update:
 
@@ -868,7 +854,7 @@ The unit-test discipline above does NOT depend on integration testing existing. 
 
 ### §2.24 Sanctioned patterns — the closed catalog
 
-*New section (Unit C Phase-8 amendment, 2026-05-29; draft pending 2026-06-01 ratification.)*
+**Status:** Draft pending ratification.
 
 The framework recognises a **closed catalog** of architectural patterns for resolving the recurring problems of modular design. **Code MUST resolve problems using a pattern from this catalog.** If a recurring problem genuinely does not fit any catalogued pattern, that gap is brought to the architects, evaluated, documented (with use case + criteria + worked example), ratified, and added to the catalog *before* the new pattern is adopted across the codebase. **Ad-hoc patterns invented at the call site are not permitted.**
 
@@ -878,7 +864,7 @@ This rule is a **discipline rule**, not a behaviour rule. It does not change wha
 
 The rationale for keeping a closed pattern catalog lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#pattern-catalog-rationale).
 
-#### §2.24.2 The catalog (snapshot 2026-05-29; pending 2026-06-01 ratification)
+#### §2.24.2 The catalog (draft pending ratification)
 
 | # | Pattern | Canonical § | One-line use case | Trigger / criteria |
 |---|---|---|---|---|
@@ -893,8 +879,8 @@ The rationale for keeping a closed pattern catalog lives in [docs/reference/arch
 | 6 | **Design-time vs runtime contract split** | §2.6.4 | Split a contract when it has both a design-time consumer (intellisense, picker) and a runtime consumer (binding, execution). | Two consumers, two contracts. Each may share a shape record. |
 | 7 | **Sync contributor pattern — rare exception** | §2.6.5 | A sync-dispatched, behaviour-shaped contribution that cannot fit §2.6.1 or Registry + StartUp Task. | All three criteria hold (sync site, behaviour-not-data, registry-inapplicable). Reviewers MUST challenge every invocation. |
 | 8 | **Adapter / Bridge** | §2.7 | Isolate a heavy or external dependency behind a stable domain contract. | Wrap third-party libraries so consumers of `.Core` never see them. |
-| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `IEventPublishingStrategy` (Sequential / Parallel / Background) per §2.6.6. Proposed worked example: `IReconciliationStrategy` per agenda Item 2 addendum. |
-| 10 | **Factory** *(candidate, pending Monday)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. Promoted to first-class pattern at 2026-06-01 ratification if Monday confirms. |
+| 9 | **Strategy** | §2.24 (this section) | Same problem, multiple algorithmic variants selected per-context. | A behaviour has 2+ legitimate implementations that consumers select between. Worked example: `IEventPublishingStrategy` (Sequential / Parallel / Background) per §2.6.6. |
+| 10 | **Factory** *(candidate pending ratification)* | §2.24 (this section) | Encapsulate complex object construction behind a contract; prevent consumers from referencing concrete construction logic. | Object construction requires materialised dependencies, configuration, or branching logic. |
 | 11 | **Provider module decomposition** | §2.20 | One domain, multiple provider-specific implementations packaged as siblings. | When a domain accrues a second provider with real shared logic. Rule 1 forbids premature umbrellas. |
 | 12 | **Domain-level shadow properties** | §2.9.1 | Persistence-only field that exists on the CLR entity but is hidden from the read interface. | Use real CLR property + omit from `I<Entity>` — never the provider's shadow mechanism. |
 | 13 | **CQS at persistence boundary** | §2.10 | Split persistence contracts into commands (mutate) and queries (read). | Every persistence-facing interface. Combined-mutate-and-query methods are a smell. |
@@ -917,7 +903,7 @@ A candidate pattern that does not yet appear in §2.24.2 follows this gate befor
 
 A pattern adopted *before* going through this gate is technical debt — surface it retroactively for ratification, and either ratify or refactor.
 
-**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (delivery strategies + worked-strategy example); §2.7 (adapter); §2.20 (provider module decomposition). Application-specific worked examples land in the application's derived constitution.
+**Cross-references.** §2.6.1 (the contribution mechanism); §2.6.6 (delivery strategies); §2.7 (adapter); §2.20 (provider module decomposition).
 
 ---
 
@@ -928,8 +914,6 @@ Nuplane is selected as the framework's runtime hot-reload mechanism. It loads, a
 **The framework's default is Strategy B.** Strategy A is not hard-excluded — it remains a valid distribution strategy where the entire runtime is replaced atomically and prevalidated. Switching to A in a specific deployment context is a deliberate choice, not the default.
 
 **Restart criteria.** Replacing a host-pinned `.Core` package requires a host restart. Implementation-package upgrades may be hot-reloadable when their contract surface and loaded type identity remain stable. The boundary between "hot-reloadable" and "requires restart" depends on the type loader and dependency context — applications document the specific boundary in their derived constitution.
-
-The strategy comparison lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#runtime-composition-strategy).
 
 ---
 
