@@ -24,7 +24,7 @@ This bucket keeps Feature Composition Explorer work separate from generator impl
 ## Out Of Scope
 
 - Implementing the CShells Appsettings Generator before required activations, settings, secrets, and host-loading are classified.
-- Treating `src/Server` as canonical shell composition policy.
+- Treating `src/Apps/Elsa.Server` as canonical shell composition policy.
 - Broad runtime execution design.
 - Broad constitution ratification unrelated to composition/configuration.
 

@@ -9,7 +9,7 @@
 
 ## Why
 
-`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/Elsa.Serialization/Services/JsonPayloadSerializer.cs))
+`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/Elsa/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
 is the single, configured contract for domain payloads: it applies the agreed naming policy
 (camelCase, case-insensitive on read) and the registry of converters contributed at startup. When one
 component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
@@ -42,6 +42,6 @@ boundary or the use needs options the payload serializer can't provide:
   scope.
 - **Custom `JsonConverter`s** — they participate in the `System.Text.Json` pipeline by definition.
 - **The reconciliation content hasher**
-  ([`DefaultActivityDefinitionHasher`](../src/Elsa.Activities.Design.Persistence.Core/Services/DefaultActivityDefinitionHasher.cs))
+  ([`DefaultActivityDefinitionHasher`](../src/Elsa/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
   — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
   the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).

@@ -60,7 +60,7 @@ Classification: weak/stub implementation.
 Evidence:
 
 - `Elsa.Workflows.Runtime.Core` is listed as a stub in Elsa `§E2.1` and `§E2.2.2`.
-- [WorkflowExecutionContext](../../src/Elsa.Workflows.Runtime.Core/WorkflowExecutionContext.cs) implements `IWorkflowExecutionContext`, but every public property or method throws `NotImplementedException`.
+- [WorkflowExecutionContext](../../src/Elsa/Workflows/Runtime/Core/WorkflowExecutionContext.cs) implements `IWorkflowExecutionContext`, but every public property or method throws `NotImplementedException`.
 - [Elsa.Workflows.Runtime.Core](../maps/test-map.md#source-projects-without-direct-test-reference) has no direct test-project reference.
 
 Risk:
@@ -78,7 +78,7 @@ Classification: known deferred architecture debt.
 Evidence:
 
 - [Architecture reference map](../maps/architecture-reference-map.md#direct-designruntime-signals) reports one `runtime-to-design` signal.
-- [Elsa.Workflows.Runtime.JavaScript.csproj](../../src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) directly references `Elsa.Workflows.Design.Core`.
+- [Elsa.Workflows.Runtime.JavaScript.csproj](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) directly references `Elsa.Workflows.Design.Core`.
 - Elsa `§E2.2` says there must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.
 - Follow-up review found no active `Elsa.Workflows.Design.*` source usage in `Elsa.Workflows.Runtime.JavaScript`; the reference exists because JavaScript function declarations are currently contributed across both designer and runtime surfaces instead of being split into stable phase-owned packages.
 
@@ -96,7 +96,7 @@ Classification: weak/deferred implementation.
 
 Evidence:
 
-- [WorkflowDefinitionActivity](../../src/Elsa.Activities.Composition.Runtime/Activities/WorkflowDefinitionActivity.cs) documents Unit 006 as construct-only.
+- [WorkflowDefinitionActivity](../../src/Elsa/Activities/Composition/Runtime/Activities/WorkflowDefinitionActivity.cs) documents Unit 006 as construct-only.
 - Its `Execute` override throws `NotSupportedException` and states execution is deferred to the consumer/pinning unit.
 - The composition tests cover constructor/identity behavior, not load-and-run execution.
 
@@ -132,10 +132,10 @@ Classification: weak/stub implementation.
 
 Evidence:
 
-- [WorkflowDesignContext](../../src/Elsa.Workflows.Design.Core/WorkflowDesignContext.cs) throws `NotImplementedException` for both exposed members.
-- [VariableExpressionDescriptor](../../src/Elsa.Expressions/Services/VariableExpressionDescriptor.cs) throws `NotImplementedException` for `HandlerFactory` and `Properties`.
-- [MultiDownloadableContentHandler](../../src/Elsa.Http/Services/MultiDownloadableContentHandler.cs) throws `NotImplementedException` for `Priority`.
-- [ScriptExecutionContext](../../src/Elsa.Workflows.Runtime.JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs) throws `NotImplementedException` in runtime-facing test-class code.
+- [WorkflowDesignContext](../../src/Elsa/Workflows/Design/Core/WorkflowDesignContext.cs) throws `NotImplementedException` for both exposed members.
+- [VariableExpressionDescriptor](../../src/Elsa/Expressions/Services/VariableExpressionDescriptor.cs) throws `NotImplementedException` for `HandlerFactory` and `Properties`.
+- [MultiDownloadableContentHandler](../../src/Elsa/Http/Services/MultiDownloadableContentHandler.cs) throws `NotImplementedException` for `Priority`.
+- [ScriptExecutionContext](../../src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs) throws `NotImplementedException` in runtime-facing test-class code.
 
 Risk:
 
@@ -151,7 +151,7 @@ Classification: missing test/known domain gap.
 
 Evidence:
 
-- [RequiredInputOutputValidator](../../src/Elsa.Workflows.Design.Validations/Validators/RequiredInputOutputValidator.cs) documents that workflow-level `State.Inputs` and `State.Outputs` are deliberately skipped until a workflow-level binding surface exists.
+- [RequiredInputOutputValidator](../../src/Elsa/Workflows/Design/Validations/Validators/RequiredInputOutputValidator.cs) documents that workflow-level `State.Inputs` and `State.Outputs` are deliberately skipped until a workflow-level binding surface exists.
 - Tests cover the activity-level validation branches and note the workflow-level branch is deferred.
 - [Unfinished work](unfinished-work.md) records the required input/output data-shape follow-up as inventory.
 

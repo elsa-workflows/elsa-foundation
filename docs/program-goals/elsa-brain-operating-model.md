@@ -28,7 +28,7 @@ This goal does not mean every session must repeat the full program overview. Use
 - Using `AGENTS.md` as a mutable roadmap or goal registry.
 - Treating provisional reports as ratified constitution gates.
 - Implementing the CShells Appsettings Generator before feature/dependency/settings conventions are approved.
-- Treating `src/Server` as canonical shell composition policy.
+- Treating `src/Apps/Elsa.Server` as canonical shell composition policy.
 
 ## Active Objectives
 

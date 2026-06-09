@@ -236,8 +236,8 @@ filename + scope refined 2026-05-29):
     project root (renamed from the original `DOMAIN_EVENTS.md` on 2026-05-29
     once the two-category split landed; the prior name was misleading
     because lifecycle events are not domain events). Worked examples: Unit C
-    creates `src/Elsa.Workflows.Design.Core/EVENTS.md` (all lifecycle) and
-    `src/Elsa.Workflows.Design.Validations.Core/EVENTS.md` (mixed —
+    creates `src/Elsa/Workflows/Design/Core/EVENTS.md` (all lifecycle) and
+    `src/Elsa/Workflows/Design/Validations/Core/EVENTS.md` (mixed —
     `OnDraftValidating` domain, `OnDraftValidated` lifecycle).
 
 Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):

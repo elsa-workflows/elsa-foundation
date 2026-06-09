@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\Events\Elsa.Events.csproj" />
+	  <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+	  <ProjectReference Include="..\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+	  <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\Persistence\EFCore\Elsa.Persistence.EFCore.csproj" />
+	</ItemGroup>
+
+
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Sqlite/**/*" />
+    <EmbeddedResource Remove="Sqlite/**/*" />
+    <None Remove="Sqlite/**/*" />
+  </ItemGroup>
+
+</Project>

@@ -83,7 +83,7 @@ A row's `DescriptorType` is the registry key that decides *which* constructor bu
 
 ## 3. Bridge 1 — Activity construction *(the worked example)*
 
-This is the bridge you can run today: [`Elsa.Workflows.Publishing.Api`](../src/Elsa.Workflows.Publishing.Api).
+This is the bridge you can run today: [`Elsa.Workflows.Publishing.Api`](../src/Elsa/Workflows/Publishing/Api).
 Its `construct/{activityId}` endpoint reads a persisted catalog row and produces a live `IActivity`.
 
 ```mermaid
@@ -195,4 +195,4 @@ into a domain; the checkpoints stay where they are. That is what makes them wort
   `WorkflowExecutable`, at three separate scopes.
 - **Construction seam spec** — [`specs/006-activity-construction-seam/`](../specs/006-activity-construction-seam)
   (`spec.md`, `plan.md`, `quickstart.md`).
-- **The worked bridge** — [`src/Elsa.Workflows.Publishing.Api/`](../src/Elsa.Workflows.Publishing.Api).
+- **The worked bridge** — [`src/Elsa/Workflows/Publishing/Api/`](../src/Elsa/Workflows/Publishing/Api).

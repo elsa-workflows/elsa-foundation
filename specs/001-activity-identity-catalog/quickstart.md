@@ -49,7 +49,7 @@ Drop the existing repo-root `elsa-core-activities.json` next to the executable (
 ## Run the host
 
 ```
-dotnet run --project src/Server/Elsa.Server.csproj
+dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
 ```
 
 At startup:

@@ -32,10 +32,10 @@ Result type: report finding and pre-spec input. New gates belong in the constitu
 - [Seams reference](../seams.md).
 - [Activity construction seam spec](../../specs/006-activity-construction-seam/spec.md).
 - Runtime and design source surfaces:
-  - `src/Elsa.Workflows.Runtime.Core/`
-  - `src/Elsa.Workflows.Design.Core/`
-  - `src/Elsa.Activities.Runtime.Core/`
-  - `src/Elsa.Activities.Composition.Runtime/`
+  - `src/Elsa/Workflows/Runtime/Core/`
+  - `src/Elsa/Workflows/Design/Core/`
+  - `src/Elsa/Activities/Runtime/Core/`
+  - `src/Elsa/Activities/Composition/Runtime/`
 
 ## Constitution Gates
 
@@ -185,7 +185,7 @@ The architect should not treat JavaScript integration as proof that the full run
 
 ### Extension-point catalog wording
 
-`src/Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md` currently describes activity runtime extension points while anchored in the workflow runtime project. This may be inherited wording from nearby activity runtime concepts.
+`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md` currently describes activity runtime extension points while anchored in the workflow runtime project. This may be inherited wording from nearby activity runtime concepts.
 
 Classification: documentation drift candidate.
 

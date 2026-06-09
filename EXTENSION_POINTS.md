@@ -52,61 +52,61 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`src/Elsa.Events/EXTENSION_POINTS.md`](src/Elsa.Events/EXTENSION_POINTS.md) |
-| Mediator (command / request pipelines) | [`src/Elsa.Mediator/EXTENSION_POINTS.md`](src/Elsa.Mediator/EXTENSION_POINTS.md) |
-| Pipelines (middleware — Core-only, no feature project) | [`src/Elsa.Pipelines.Core/EXTENSION_POINTS.md`](src/Elsa.Pipelines.Core/EXTENSION_POINTS.md) |
-| Tasks (startup / recurring / background tasks) | [`src/Elsa.Tasks/EXTENSION_POINTS.md`](src/Elsa.Tasks/EXTENSION_POINTS.md) |
-| Caching (cache manager + change-token signaling) | [`src/Elsa.Caching.Memory/EXTENSION_POINTS.md`](src/Elsa.Caching.Memory/EXTENSION_POINTS.md) |
-| Serialization (JSON converter sources) | [`src/Elsa.Serialization/EXTENSION_POINTS.md`](src/Elsa.Serialization/EXTENSION_POINTS.md) |
-| Locking (distributed lock provider) | [`src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md`](src/Elsa.Locking.FileSystem/EXTENSION_POINTS.md) |
+| Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`src/Elsa/Events/EXTENSION_POINTS.md`](src/Elsa/Events/EXTENSION_POINTS.md) |
+| Mediator (command / request pipelines) | [`src/Elsa/Mediator/EXTENSION_POINTS.md`](src/Elsa/Mediator/EXTENSION_POINTS.md) |
+| Pipelines (middleware — Core-only, no feature project) | [`src/Elsa/Pipelines/Core/EXTENSION_POINTS.md`](src/Elsa/Pipelines/Core/EXTENSION_POINTS.md) |
+| Tasks (startup / recurring / background tasks) | [`src/Elsa/Tasks/EXTENSION_POINTS.md`](src/Elsa/Tasks/EXTENSION_POINTS.md) |
+| Caching (cache manager + change-token signaling) | [`src/Elsa/Caching/Memory/EXTENSION_POINTS.md`](src/Elsa/Caching/Memory/EXTENSION_POINTS.md) |
+| Serialization (JSON converter sources) | [`src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md`](src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md) |
+| Locking (distributed lock provider) | [`src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md`](src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md) |
 
 ### Expressions
 
 | Domain | Catalog |
 |---|---|
-| Expressions (evaluator + descriptor providers) | [`src/Elsa.Expressions/EXTENSION_POINTS.md`](src/Elsa.Expressions/EXTENSION_POINTS.md) |
-| JavaScript expressions (pre/post-processors) | [`src/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](src/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
-| JavaScript rendering (declaration contributors) | [`src/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](src/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md) |
-| Liquid expressions (rendering lifecycle) | [`src/Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](src/Elsa.Expressions.Liquid/EXTENSION_POINTS.md) |
+| Expressions (evaluator + descriptor providers) | [`src/Elsa/Expressions/EXTENSION_POINTS.md`](src/Elsa/Expressions/EXTENSION_POINTS.md) |
+| JavaScript expressions (pre/post-processors) | [`src/Elsa/Expressions/JavaScript/EXTENSION_POINTS.md`](src/Elsa/Expressions/JavaScript/EXTENSION_POINTS.md) |
+| JavaScript rendering (declaration contributors) | [`src/Elsa/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md`](src/Elsa/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md) |
+| Liquid expressions (rendering lifecycle) | [`src/Elsa/Expressions/Liquid/EXTENSION_POINTS.md`](src/Elsa/Expressions/Liquid/EXTENSION_POINTS.md) |
 
 ### HTTP
 
 | Domain | Catalog |
 |---|---|
-| HTTP (downloadable content handlers) | [`src/Elsa.Http/EXTENSION_POINTS.md`](src/Elsa.Http/EXTENSION_POINTS.md) |
+| HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
 ### Persistence
 
 | Domain | Catalog |
 |---|---|
-| EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md) |
+| EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
 
 ### Activities
 
 | Domain | Catalog |
 |---|---|
-| Activities runtime (resolver sources + implementation descriptor sources) | [`src/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](src/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
-| Activities design — reconciliation sources | [`src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md) |
-| Activities design — CLR reconciliation source contribution | [`src/Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md) |
-| Activities design — JSON reconciliation source contribution | [`src/Elsa.Activities.Design.Reconciliation.Json/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Reconciliation.Json/EXTENSION_POINTS.md) |
-| Activities design — persistence commands + lookup | [`src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Activities.Design.Persistence.EFCore/EXTENSION_POINTS.md) |
+| Activities runtime (resolver sources + implementation descriptor sources) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
+| Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
+| Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
+| Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
+| Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 
 ### Workflows
 
 | Domain | Catalog |
 |---|---|
-| Workflows design — model, mutation events, commands, diff engine | [`src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md) |
-| Workflows design — draft validators | [`src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
-| Workflows design — reconciliation sources | [`src/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
-| Workflows design — persistence commands + diff engine | [`src/Elsa.Workflows.Design.Persistence.EFCore/EXTENSION_POINTS.md`](src/Elsa.Workflows.Design.Persistence.EFCore/EXTENSION_POINTS.md) |
-| Workflows runtime (signal handler, completion handler — Core-only) | [`src/Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md`](src/Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md) |
-| Workflows runtime — HTTP endpoint behaviour | [`src/Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](src/Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md) |
+| Workflows design — model, mutation events, commands, diff engine | [`src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) |
+| Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
+| Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
+| Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
+| Workflows runtime (signal handler, completion handler — Core-only) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
+| Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 
 ### Legacy
 
 | Domain | Catalog |
 |---|---|
-| Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](src/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
+| Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md`](src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md) |
 
 ---
 
