@@ -1,6 +1,6 @@
 ![Elsa Foundation: a thin protocol spine with opt-in modules attached](docs/assets/elsa-foundation-header.png)
 
-# elsa-foundation
+# Elsa Foundation
 
 `elsa-foundation` is the transitional Elsa 4 brain and foundation-library workspace.
 
