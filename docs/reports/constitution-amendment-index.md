@@ -37,7 +37,7 @@ This index summarizes the preserved provenance blocks. It is a finding/navigatio
 
 ## Deferred Or Retained Work Signals
 
-These signals are intentionally summarized here, while loose finding inventory remains in [unfinished work](unfinished-work.md). Planned action should route through the selected work tracking model.
+These signals are intentionally summarized here, while loose finding inventory remains in [unfinished work](unfinished-work.md). Planned durable action should route through the shared program-goals planner.
 
 | Signal | Current tracking home |
 |---|---|

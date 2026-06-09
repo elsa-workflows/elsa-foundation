@@ -12,7 +12,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 **Knowledge boundary note:** treat this document as the generic quality-gate
 layer. Canonical term lookup lives in `../../docs/glossary/`; current findings
 and inventory live in `../../docs/reports/`. Planned work routes through the
-selected work tracking model.
+shared program-goals planner.
 
 ---
 

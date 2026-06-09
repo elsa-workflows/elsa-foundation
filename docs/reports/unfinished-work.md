@@ -2,11 +2,11 @@
 
 Status: inventory refreshed during Constitution Thinning v1 from current docs, constitution drafts, extracted draft history, specs, maps, and source comments.
 
-This report is an inventory of findings, concerns, and loose unresolved items that have not found a more specific home. It is not the default active work queue. When a finding becomes planned work, route it through the selected work tracking model, such as a program-goal bucket, before implementation.
+This report is an inventory of findings, concerns, and loose unresolved items that have not found a more specific home. It is not the default active work queue. When a finding becomes planned durable work, add or move it to the relevant program-goal bucket before implementation, or explicitly keep it `none/free-flow`.
 
 ## Routing Note
 
-The previous re-ranking pass used [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) as its lens. That ranking is historical evidence, not queue state. Future planning should first follow the selected work tracking model. Under the default `program-goal-buckets` model, move or add the chosen item to the relevant program-goal bucket before planning or execution.
+The previous re-ranking pass used [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) as its lens. That ranking is historical evidence, not queue state. Future durable planning should first identify the program-goal state. Move or add the chosen item to the relevant program-goal bucket before planning or execution, or explicitly keep it `none/free-flow`.
 
 ## Candidate Signals
 
@@ -14,9 +14,9 @@ The table below preserves candidate signals from the last review. It is not an a
 
 | Former priority | Candidate | Lens used in last review | Why it mattered | Routing |
 |---:|---|---|---|---|
-| 1 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | The report needed to stop creating local-topic momentum. | Completed by reframing this report as inventory and routing active work through the work tracking model. |
-| 2 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, the feature-dependency map now has PowerShell/Bash generator coverage, and richer test maturity navigation is still planned. | If selected, route a test maturity map or map-verification item through the selected work tracking model first. |
-| 3 | Feature composition classification passes | Elsa Brain Operating Model: feature composition readiness | The classification vocabulary review is complete enough for agents to stop guessing; the remaining work is applying it to bounded feature/settings slices. | If selected, route a bounded pass through the selected work tracking model and use [CShells composition evidence](cshells-composition-evidence.md#next-work-units-enabled). |
+| 1 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | The report needed to stop creating local-topic momentum. | Completed by reframing this report as inventory and routing active work through program-goal buckets. |
+| 2 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, the feature-dependency map now has PowerShell/Bash generator coverage, and richer test maturity navigation is still planned. | If selected, route a test maturity map or map-verification item through the relevant program-goal bucket first, or mark it `none/free-flow`. |
+| 3 | Feature composition classification passes | Elsa Brain Operating Model: feature composition readiness | The classification vocabulary review is complete enough for agents to stop guessing; the remaining work is applying it to bounded feature/settings slices. | If selected, route a bounded pass through the relevant program-goal bucket and use [CShells composition evidence](cshells-composition-evidence.md#next-work-units-enabled). |
 | - | Codebase reality / test maturity follow-up | Recorded finding outside current no-code bucket | Code placeholders, weak implementations, and test gaps remain documented. | Keep [NotImplemented classification](notimplemented-classification.md) as evidence; create or select an implementation bucket before planning code fixes. |
 | 5 | Constitution ratification / provisional gate review | Elsa Brain Operating Model: constitution governance | Several draft/provisional gates remain open, but broad ratification is premature before code reality and runtime seams are clearer. | Use Critical Constitution Review only for a targeted gate needed by an approved work unit, then track that unit in the relevant bucket. |
 
@@ -54,7 +54,7 @@ The table below preserves candidate signals from the last review. It is not an a
 
 | Item | Evidence | Next action |
 |---|---|---|
-| Future sessions can drift into local cleanup loops | The Elsa-brain program spans operating model, knowledge surfaces, executable workflows, codebase verification, feature composition, and workspace split readiness; active buckets now live in [docs/program-goals](../program-goals/) | Use the `AGENTS.md` work tracking and drift guard when a drift trigger is present, and update the relevant program-goal file instead of `AGENTS.md` when the selected tracking model uses program-goal buckets |
+| Future sessions can drift into local cleanup loops | The Elsa-brain program spans operating model, knowledge surfaces, executable workflows, codebase verification, feature composition, and workspace split readiness; active buckets live in [docs/program-goals](../program-goals/) | Use the `AGENTS.md` program-goal drift guard when a drift trigger is present, and update the relevant program-goal file instead of `AGENTS.md` |
 | Agent maturity needs constrained handoff discipline | [Agent maturity audit](agent-maturity-audit.md) finds the Elsa brain mature enough for large architecture work only when the handoff names the primary skill, report/spec, constitution gates, map freshness stance, stop point, and decision-recording surface | Use the audit checklist before starting a large architecture worker; do targeted constitution thinning or prepare a reviewed architecture-worker handoff instead of continuing broad operating-model grooming |
 | Constitution thinning reached a stopping point | Constitution Thinning v1, Examples Thinning v2, Constitution Thinning v3, and the 2026-06 targeted thinning passes moved draft history, glossary tables, the Elsa case study, large worked examples, selected rationale/provenance, and stale boundary wording out of the gate files | Do not continue broad thinning as standalone cleanup. Revisit only during targeted ratification, runtime/design architecture review, or a gate-specific Critical Constitution Review |
 | AI-provider-neutral skill wrappers need future mirroring | `docs/skills/catalog.md` and [skills stabilization audit](skills-stabilization-audit.md) identify ready, hidden, and planned skills; the Claude wrapper batch under `.claude/skills/elsa-*` is covered by `tools/skills/validate-claude-wrapper-drift.ps1` | Mirror accepted wrappers into other AI-provider adapter surfaces when those surfaces exist; keep running the Claude drift validator after catalog, wrapper, or manifest changes |
@@ -75,8 +75,8 @@ Classify new findings as constitution, code/domain, tests, docs, maps, or tool/s
 
 ## Planning Rule
 
-When this report is used for "what next" planning, first follow the selected work tracking model. If the default `program-goal-buckets` model applies, identify the relevant bucket or `none/free-flow` state before planning.
+When this report is used for "what next" planning, first identify the relevant program-goal bucket or the `none/free-flow` state before planning.
 
-If a report item is selected for substantial planning or implementation, route it through the selected work tracking model before execution. Under `program-goal-buckets`, add or move the item into the relevant bucket and mark completion there. Update this report only when the underlying finding, evidence, or inventory classification changed.
+If a report item is selected for substantial planning or implementation, add or move the item into the relevant bucket and mark completion there, or explicitly keep the work `none/free-flow`. Update this report only when the underlying finding, evidence, or inventory classification changed.
 
 Do not invent a program-goal bucket just because one is missing. Only propose creating or selecting a bucket when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.

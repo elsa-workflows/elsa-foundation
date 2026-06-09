@@ -4,13 +4,11 @@ Program goals are mid-term buckets of related short-term objectives. They are co
 
 Use this directory to see which larger efforts are active, who is stewarding them, what work is currently in scope, and where the supporting reports/specs/branches live. Keep one file per goal bucket to reduce merge conflicts.
 
-## Work Tracking Role
+## Planner Role
 
-When the selected work tracking model uses program-goal buckets, this directory is the active work tracker. Reports may surface findings, concerns, and candidates, but planned work should be added to, moved between, completed in, or dropped from the relevant program-goal bucket.
+This directory is the shared backlog and planner for durable work in `elsa-foundation`. Reports may surface findings, concerns, and candidates, but planned durable work should be added to, moved between, completed in, or dropped from the relevant program-goal bucket.
 
-The work tracking model preference itself lives in `.agent-prefs/work-tracking-model.md`; reusable model options and templates live in [agent-preferences.md](../reference/agent-preferences.md#work-tracking-models).
-
-Use reports as evidence and inventory. When a report finding becomes planned work, route it through the selected work tracking model before implementation. If the model is `program-goal-buckets`, that means selecting or creating the right bucket, adding the item there, and updating the bucket when the work is done.
+Use reports as evidence and inventory. When a report finding becomes planned work, select or create the right bucket, add the item there, and update the bucket when the work is done. If the work should not become part of a named mid-term goal, mark the program-goal state as `none/free-flow` instead of inventing a bucket.
 
 ## Program Goal State
 
@@ -22,7 +20,7 @@ Valid states:
 - `none/free-flow`: no active program goal; the user is exploring, developing, researching, or planning without a mid-term coordination bucket.
 - `unknown/not-assessed`: temporary state before the agent has enough context to decide whether a named bucket or `none/free-flow` applies.
 
-Do not invent a named program-goal bucket just because one is missing. Propose creating or selecting a bucket only when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.
+Do not invent a named program-goal bucket just because one is missing. Propose creating or selecting a bucket only when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers. Otherwise keep the state `none/free-flow` and let the normal source-of-truth layer carry the result.
 
 ## Registry
 

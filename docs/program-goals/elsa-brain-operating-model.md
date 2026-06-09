@@ -10,7 +10,7 @@ Steward(s): Joey plus active architects/agents.
 
 Turn `elsa-foundation` into the transitional Elsa brain: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
 
-This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#work-tracking-and-drift-guard) only when a trigger is present.
+This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) only when a trigger is present.
 
 ## In Scope
 
@@ -35,7 +35,7 @@ This goal does not mean every session must repeat the full program overview. Use
 1. Keep `AGENTS.md` as the AI-provider-neutral front door and stable routing layer.
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
-4. Keep this bucket's active work tracking aligned with the selected work tracking model while using reports as evidence and inventory.
+4. Keep this bucket's active planned work aligned with the shared program-goals planner while using reports as evidence and inventory.
 5. Keep feature composition work useful but subordinate to the broader Elsa-brain operating model until alignment is reviewed.
 
 ## Linked Surfaces
@@ -60,12 +60,12 @@ The temporary alignment sequence has been completed and captured in the normal s
 - Glossary coverage is captured in [glossary coverage audit](../reports/glossary-coverage-audit.md).
 - Current loose findings and concerns live in [unfinished work](../reports/unfinished-work.md) as inventory, not as the active queue.
 
-Use this goal file for planned work in the Elsa Brain Operating Model bucket. Use [unfinished work](../reports/unfinished-work.md) as an inventory of findings and concerns; when an inventory item becomes planned work, route it through the selected work tracking model before implementation.
+Use this goal file for planned work in the Elsa Brain Operating Model bucket. Use [unfinished work](../reports/unfinished-work.md) as an inventory of findings and concerns; when an inventory item becomes planned durable work for this operating-model effort, add or move it here before implementation.
 
 ## Bucket Items
 
-- Active: keep `AGENTS.md`, preference catalogs, program-goal buckets, and report inventories aligned so agents know where to add, move, complete, or drop planned work under the selected work tracking model.
-- Completed: work tracking model cleanup made program-goal buckets the default active tracker, added the local preference template, and reframed `unfinished-work.md` as inventory.
+- Active: restore and refine program-goal buckets as the shared backlog/planner, keep `AGENTS.md` and skill wrappers aligned, remove stale preference references, and verify every program-goal reference is resolvable.
+- Completed: earlier cleanup reframed `unfinished-work.md` as inventory rather than an active queue.
 - Completed: targeted constitution thinning removed safe examples, rationale pointers, provenance notes, and stale boundary wording from the gate files; further thinning should wait for targeted ratification/runtime-design work.
 - Parked: plan a test maturity map or approved CShells composition-generation map as separate work units when the user selects that work.
 - Parked: revisit broad constitution ratification only when a targeted gate review or approved work unit needs it.

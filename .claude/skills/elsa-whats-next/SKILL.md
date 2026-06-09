@@ -18,14 +18,13 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md`, especially source-of-truth layers and the work tracking / drift guard.
+1. Read `AGENTS.md`, especially source-of-truth layers and the program goals / drift guard.
 2. Read `docs/skills/catalog.md#whats-next--unfinished-work`.
-3. Read `.agent-prefs/work-tracking-model.md` when it exists; use `docs/reference/agent-preferences.md#work-tracking-models` when durable planning needs a missing model choice.
-4. Read `.agent-prefs/program-goal-selection.md` when ranking depends on program-goal state; use `docs/reference/agent-preferences.md#program-goal-selection-models` when that model is missing and the current state is unclear.
-5. Read `.agent-prefs/session-execution-model.md` if it exists.
-6. Read `docs/reports/unfinished-work.md` as inventory/evidence, not an active queue.
-7. Refresh context with the marker search from `unfinished-work.md` when the user asks for current state or when freshness is uncertain.
-8. Rank candidates by selected work tracking model, current program goal state when applicable, user intent, severity, and unblock value.
-9. Return a concise drift check, top candidates, recommendation, source-of-truth layer, work tracking route, program goal state when used, and execution route. If the recommended unit requires substantial planning or implementation and the local session preference favors fresh workers or ask-each-time, ask whether to plan/execute here or prepare a reviewed handoff prompt for a fresh agent/thread.
+3. Inspect `docs/program-goals/` to identify the current program-goal state when it affects ranking or is unclear: a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+4. Read `.agent-prefs/session-execution-model.md` if it exists.
+5. Read `docs/reports/unfinished-work.md` as inventory/evidence, not an active queue.
+6. Refresh context with the marker search from `unfinished-work.md` when the user asks for current state or when freshness is uncertain.
+7. Rank candidates by current program-goal state when applicable, user intent, severity, and unblock value.
+8. Return a concise drift check, top candidates, recommendation, source-of-truth layer, program-goal route, program-goal state when used, and execution route. If the recommended unit requires substantial planning or implementation and the local session preference favors fresh workers or ask-each-time, ask whether to plan/execute here or prepare a reviewed handoff prompt for a fresh agent/thread.
 
 Do not implement from this skill. If the user approves a unit, hand off to `elsa-work-unit-planner` or the relevant implementation skill.

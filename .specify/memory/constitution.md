@@ -13,7 +13,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
 current findings and inventory live in `../../docs/reports/`. Planned work
-routes through the selected work tracking model.
+routes through the shared program-goals planner.
 
 ---
 
@@ -105,7 +105,7 @@ Sub-domain decomposition follows framework §2.1's naming convention. Variation 
 
 **Hard rule.** There **must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.** The two sub-domains are co-equal — neither owns the other; the dependency direction is enforced (or at least audited) in CI via project references.
 
-**The seam between Design and Runtime is deferred.** The mechanism by which a workflow flows from Design into Runtime for execution — the carrier type, the activity-contract surfacing, the role of publication, the implications for an `ActivityRegistry` — is **not pinned by this constitution**. It is scheduled for the workflow execution seam follow-up and resurfaces when the Runtime refactor begins; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned work routes through the selected work tracking model.
+**The seam between Design and Runtime is deferred.** The mechanism by which a workflow flows from Design into Runtime for execution — the carrier type, the activity-contract surfacing, the role of publication, the implications for an `ActivityRegistry` — is **not pinned by this constitution**. It is scheduled for the workflow execution seam follow-up and resurfaces when the Runtime refactor begins; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
 
 #### §E2.2.1 Design sub-domain — the designed contract
 
@@ -309,7 +309,7 @@ The in-State / out-of-State boundary is enforced by:
 1. **The XML documentation header** on the `WorkflowDefinitionState` record (Unit C FR-003), quoting the scope and pointing at this section.
 2. **PR review discipline** against this constitutional rule — reviewers reject creep.
 
-Automated compile-/build-time enforcement (scope-policy static analyser) is **deferred to a future *Code Analysers* epic** that approaches the platform's static analysis as a unified bundle, rather than shipping ad-hoc per-rule micro-validators. The list of categories in §E2.9.2 will inform the eventual analyser when that epic opens; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned work routes through the selected work tracking model.
+Automated compile-/build-time enforcement (scope-policy static analyser) is **deferred to a future *Code Analysers* epic** that approaches the platform's static analysis as a unified bundle, rather than shipping ad-hoc per-rule micro-validators. The list of categories in §E2.9.2 will inform the eventual analyser when that epic opens; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
 
 #### §E2.9.5 Reconciliation policy applies here too
 
@@ -334,7 +334,7 @@ The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a 
 
 This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. The generic CQS command-per-operation guidance elsewhere in this constitution (and the framework's `Elsa.Persistence` CQS row) is unaffected — this rule narrows only the **Draft-mutation** surface within the Design domain.
 
-**Status:** Provisional pending architecture-review ratification. Current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned work routes through the selected work tracking model.
+**Status:** Provisional pending architecture-review ratification. Current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
 
 **Cross-references:** §E2.9.1/§E2.9.2 (what State carries — the diff operates over exactly those in-scope fields, layout stays beside State); §E2.6.6 (Sequential vs Background delivery strategies the command uses for the gate vs the per-diff stream).
 
@@ -352,7 +352,7 @@ to the reference material only when a gate needs a concrete example.
 
 ## §E4 Elsa configuration — [DEFERRED]
 
-The Configuration & Settings classification (framework §2.12) is deferred to the **Configuration & Infrastructure follow-up meeting**. Pending Elsa-specific findings are recorded in [unfinished work](../../docs/reports/unfinished-work.md). Planned work routes through the selected work tracking model. This section will be revised when that follow-up closes.
+The Configuration & Settings classification (framework §2.12) is deferred to the **Configuration & Infrastructure follow-up meeting**. Pending Elsa-specific findings are recorded in [unfinished work](../../docs/reports/unfinished-work.md). Planned durable work routes through the shared program-goals planner. This section will be revised when that follow-up closes.
 
 ---
 

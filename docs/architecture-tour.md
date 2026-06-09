@@ -11,7 +11,7 @@ This is the short orientation path. It explains where things are and why they ex
 - `specs/` contains Speckit work units and feature plans.
 - `.specify/` contains Speckit templates, workflows, extensions, and the two-layer constitution.
 - `docs/` contains lookup knowledge: glossary, skills, maps, reports, reference docs, and program-goal buckets.
-- `docs/program-goals/` contains the mid-term goal bucket registry and roadmap notes when the selected work tracking model uses buckets.
+- `docs/program-goals/` contains the shared backlog, mid-term goal bucket registry, and roadmap notes.
 - `.claude/` contains Claude-specific Speckit adapters.
 
 ## The architecture in one pass
@@ -44,7 +44,7 @@ The repo-wide extension-point index is [../EXTENSION_POINTS.md](../EXTENSION_POI
 
 - Need a definition? Use [glossary/root.md](glossary/root.md) or [glossary/elsa.md](glossary/elsa.md).
 - Need to perform a task? Use [skills/catalog.md](skills/catalog.md).
-- Need active priorities? Start with the selected [work tracking model](reference/agent-preferences.md#work-tracking-models); use [program-goals/README.md](program-goals/README.md) when the bucket model applies.
+- Need active priorities? Start with [program-goals/README.md](program-goals/README.md), including the named buckets and the `none/free-flow` state.
 - Need generated facts? Use [maps/README.md](maps/README.md).
 - Need current gaps? Use [reports/unfinished-work.md](reports/unfinished-work.md).
 - Need enforceable gates? Use the two constitution files under `.specify/memory/`.

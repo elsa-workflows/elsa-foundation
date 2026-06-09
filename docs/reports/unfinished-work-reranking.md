@@ -1,10 +1,10 @@
 # Unfinished Work Re-Ranking
 
-Status: superseded point-in-time review. Planned work now routes through the selected work tracking model; `unfinished-work.md` remains an inventory, not a queue.
+Status: superseded point-in-time review. Planned durable work now routes through the shared program-goals planner; `unfinished-work.md` remains an inventory, not a queue.
 
 ## Purpose
 
-Record the earlier re-ranking of [unfinished work](unfinished-work.md) for the active Elsa Brain Operating Model review. Do not use this report as live work-tracking guidance.
+Record the earlier re-ranking of [unfinished work](unfinished-work.md) for the active Elsa Brain Operating Model review. Do not use this report as live program-goal guidance.
 
 ## Inputs Reviewed
 
@@ -36,10 +36,10 @@ This state is explicit for this review only. Program goals are coordination lens
 
 ## Decision
 
-Superseded. Do not add a live priority queue to `unfinished-work.md`. Keep that report useful as inventory and route planned work through the selected work tracking model.
+Superseded. Do not add a live priority queue to `unfinished-work.md`. Keep that report useful as inventory and route planned durable work through the shared program-goals planner.
 
 ## Follow-Up
 
-- Before future "what next" reviews, identify the current program goal state and selected work tracking model.
+- Before future "what next" reviews, identify the current program-goal state.
 - Use `unfinished-work.md` only as inventory/evidence.
 - Do not treat Elsa Brain Operating Model as the default for ordinary domain or consumer work.

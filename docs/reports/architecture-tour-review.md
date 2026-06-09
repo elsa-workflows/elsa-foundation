@@ -24,7 +24,7 @@ Check whether [architecture-tour.md](../architecture-tour.md) gives a concise or
 
 | Finding | Classification | Resolution |
 |---|---|---|
-| The tour named the Elsa brain role but did not route readers to work tracking and active program-goal buckets. | Under-routed source-of-truth layer | Route "active priorities" through the selected work tracking model; use `docs/program-goals/` when the bucket model applies. |
+| The tour named the Elsa brain role but did not route readers to active program-goal buckets. | Under-routed source-of-truth layer | Route "active priorities" through `docs/program-goals/`, including named buckets and `none/free-flow`. |
 | The tour compressed glossary, skills, maps, reports, reference docs, and goals into a broad docs bucket. | Minor source-of-truth ambiguity | Clarify the `docs/` bullet without explaining those layers in detail. |
 | The Workflows Design/Runtime paragraph stated the ideal rule but did not point to current review signals or deferred exceptions. | Rediscovery risk | Add a short note that maps track signals and reports hold deferred exceptions. |
 | The tour did not route readers to generated facts. | Navigation gap | Add a maps route in "How to go deeper." |

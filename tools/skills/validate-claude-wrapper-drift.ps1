@@ -79,12 +79,15 @@ $agents = Get-Content -LiteralPath $agentsPath -Raw
 $frameworkConstitution = Get-Content -LiteralPath $frameworkConstitutionPath -Raw
 $elsaConstitution = Get-Content -LiteralPath $elsaConstitutionPath -Raw
 
-if ($agents -notmatch [regex]::Escape(".agent-prefs/program-goal-selection.md")) {
-    Add-Failure "AGENTS.md: missing .agent-prefs/program-goal-selection.md routing"
+if ($agents -notmatch [regex]::Escape("docs/program-goals/")) {
+    Add-Failure "AGENTS.md: missing docs/program-goals/ routing"
+}
+if ($agents -notmatch [regex]::Escape("none/free-flow")) {
+    Add-Failure "AGENTS.md: missing none/free-flow program-goal state"
 }
 
 foreach ($obsoletePhrase in @(
-    "unfinished-work tracking",
+    "unfinished-work queue",
     "current repo-local tracking lives in",
     "tracked in [unfinished work]",
     "items are tracked in [unfinished work]"
@@ -95,9 +98,9 @@ foreach ($obsoletePhrase in @(
 }
 
 foreach ($catalogExpectation in @(
-    @{ Heading = "What's Next / Unfinished Work"; Pattern = ".agent-prefs/program-goal-selection.md" },
-    @{ Heading = "Program Goal Drift Review"; Pattern = ".agent-prefs/program-goal-selection.md" },
-    @{ Heading = "Work Unit Planner"; Pattern = ".agent-prefs/program-goal-selection.md" }
+    @{ Heading = "What's Next / Unfinished Work"; Pattern = "../program-goals/" },
+    @{ Heading = "Program Goal Drift Review"; Pattern = "../program-goals/" },
+    @{ Heading = "Work Unit Planner"; Pattern = "../program-goals/" }
 )) {
     $heading = [regex]::Escape($catalogExpectation.Heading)
     $pattern = [regex]::Escape($catalogExpectation.Pattern)
@@ -165,8 +168,8 @@ foreach ($wrapperPath in $wrapperFiles) {
         Add-Failure "${repoPath}: wrapper should stay thin with only User Input and Outline sections"
     }
 
-    if ($expectedName -in @("elsa-whats-next", "elsa-work-unit-planner", "elsa-program-goal-drift-review") -and $parsed.Content -notmatch [regex]::Escape(".agent-prefs/program-goal-selection.md")) {
-        Add-Failure "${repoPath}: must mention .agent-prefs/program-goal-selection.md"
+    if ($expectedName -in @("elsa-whats-next", "elsa-work-unit-planner", "elsa-program-goal-drift-review") -and $parsed.Content -notmatch [regex]::Escape("docs/program-goals/")) {
+        Add-Failure "${repoPath}: must mention docs/program-goals/"
     }
 }
 

@@ -22,7 +22,7 @@ Result type: report finding and pre-spec input. New gates belong in the constitu
 
 ## Inputs
 
-- [AGENTS.md](../../AGENTS.md), especially source-of-truth layers, work tracking and drift guard, task paths, and constitution boundary.
+- [AGENTS.md](../../AGENTS.md), especially source-of-truth layers, program goals and drift guard, task paths, and constitution boundary.
 - [Elsa constitution](../../.specify/memory/constitution.md), especially `§E2.2`, `§E2.6`, and `§E2.9`.
 - [Framework constitution](../../.specify/memory/constitution-framework.md), especially `§2.6`, `§2.7`, `§2.21`, and `§2.23`.
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md).

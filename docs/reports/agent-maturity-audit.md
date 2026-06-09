@@ -114,7 +114,7 @@ Residual risk:
 
 Classification: strength.
 
-`AGENTS.md` is now a real AI-provider-neutral front door. It explains repo intent, source-of-truth layers, work tracking and drift guard, task paths, map refresh rules, preference handling, and constitution boundaries without duplicating the whole architecture.
+`AGENTS.md` is now a real AI-provider-neutral front door. It explains repo intent, source-of-truth layers, program goals and drift guard, task paths, map refresh rules, preference handling, and constitution boundaries without duplicating the whole architecture.
 
 Impact:
 
@@ -122,13 +122,13 @@ An agent can start narrow, route to the right layer, and avoid treating `AGENTS.
 
 Recommendation:
 
-Keep `AGENTS.md` stable. Do not add new program objectives there; route planned work through the selected work tracking model and keep reports as evidence/inventory.
+Keep `AGENTS.md` stable. Do not add new program objectives there; route planned durable work through program-goal buckets and keep reports as evidence/inventory.
 
 ### F2 - The skill layer is usable, but some workflows remain report-bound
 
 Classification: strength with guardrail.
 
-Core workflows exist and are clear enough for architecture planning, codebase verification, source-of-truth audit, feature composition, and unfinished-work inventory review. The skill catalog also records when to plan first, how to route planned work through the selected work tracking model, and when tests/docs/maps are follow-through obligations.
+Core workflows exist and are clear enough for architecture planning, codebase verification, source-of-truth audit, feature composition, and unfinished-work inventory review. The skill catalog also records when to plan first, how to route planned durable work through the shared program-goals planner, and when tests/docs/maps are follow-through obligations.
 
 Impact:
 
@@ -196,7 +196,7 @@ The workspace can keep polishing the Elsa brain instead of using it for architec
 
 Recommendation:
 
-Before a third consecutive docs/meta unit, force the work-tracking drift check from `AGENTS.md`; when program-goal buckets are involved, use the Program Goal Drift Review skill. For this session, that means the next step after this audit should be either targeted constitution thinning from audit findings or a prepared architecture-worker handoff, not more broad operating-model grooming.
+Before a third consecutive docs/meta unit, force the program-goal drift check from `AGENTS.md`; use the Program Goal Drift Review skill. For this session, that means the next step after this audit should be either targeted constitution thinning from audit findings or a prepared architecture-worker handoff, not more broad operating-model grooming.
 
 ### F7 - AI-provider neutrality is good, with Claude as a thin adapter
 
