@@ -21,6 +21,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - Workflow execution context lifetime, DI scope, and concurrency model.
 - Runtime-owned executable graph/node terminology if needed.
 - Activity/workflow input-output boundary decisions where they affect runtime execution.
+- Elsa 3 runtime import analysis, including known broken-window candidates that affect the Elsa 4 execution model.
 - Workflow-as-activity consumer/pinning questions, nested execution, and cycle guards when they become part of the runtime seam.
 - Test obligations that belong to the runtime seam, including structural dependency tests and focused unit tests.
 
@@ -43,6 +44,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 ## Linked Surfaces
 
 - [Runtime execution pre-spec handoff](../reports/runtime-execution-pre-spec-handoff.md)
+- [Elsa Core runtime broken windows brainstorm](../reports/elsa-core-runtime-broken-windows-brainstorm.md)
 - [Unfinished work](../reports/unfinished-work.md)
 - [Test maturity and weak implementation report](../reports/test-maturity-and-weak-implementation-report.md)
 - [Activity construction seam spec](../../specs/006-activity-construction-seam/spec.md)
@@ -53,6 +55,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 ## Current Roadmap Notes
 
 - Start with Work Unit Planner and Speckit Flow Guide from the skill catalog.
+- Use the Elsa Core runtime broken-windows brainstorm report to preserve maintainer concerns and source-derived analysis before selecting Speckit work units.
 - Do not implement `WorkflowExecutionContext`, `WorkflowDefinitionActivity.Execute`, or runtime graph behavior as a drive-by change.
 - Before relying on generated maps for verification, check [maps manifest](../maps/manifest.json); regenerate the relevant map if freshness matters.
 - Treat the Runtime JavaScript Design reference as known deferred architecture debt, not as the first runtime-execution fix.
