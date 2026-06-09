@@ -665,12 +665,95 @@ Rationale:
 - It simplifies the runtime by avoiding a separate durable input register abstraction.
 - It aligns input evaluation with the value model: declarations decide persistence, and activity input descriptors decide materialization.
 
+### 12. Activity Output Lifecycle
+
+Elsa 4 activity outputs should be execution-local by default. They remain addressable only within the active execution scope unless captured into a declared workflow value, consumed by a downstream binding, or recorded through audit/history policy.
+
+Activity outputs should not become independently durable workflow state. Elsa 4 should allow durable output capture, but not durable output storage as a parallel state system next to `values`.
+
+Conceptual output capture:
+
+```json
+{
+  "id": "fetch-customer",
+  "type": "FetchCustomer",
+  "outputs": {
+    "customer": {
+      "capture": {
+        "valueId": "customer"
+      }
+    }
+  }
+}
+```
+
+Conceptual downstream input binding:
+
+```json
+{
+  "id": "send-email",
+  "type": "SendCustomerEmail",
+  "inputs": {
+    "customer": {
+      "source": "activityOutput",
+      "activityId": "fetch-customer",
+      "output": "customer"
+    }
+  }
+}
+```
+
+Conceptual audit-only recording:
+
+```json
+{
+  "outputs": {
+    "customer": {
+      "audit": {
+        "enabled": true,
+        "policy": "safe"
+      }
+    }
+  }
+}
+```
+
+Rules:
+
+- Activity outputs are not workflow state by default.
+- An output can feed later activity inputs during the same execution scope.
+- If an output must survive suspension or resume, it must be captured into a declared durable value.
+- Capture validates against the target value's type, schema, and durability policy.
+- Audit/history recording is separate from capture and never becomes resume state.
+- Non-persistable outputs can still be used ephemerally, but capture fails unless a serializer, reference mapper, or external storage policy exists.
+- For retries, a failed or retried activity should replace its execution-local outputs for that activity attempt.
+- Durable capture should happen only on successful activity completion unless explicitly configured otherwise.
+- For loops and parallelism, output references need execution identity, not just activity ID, when ambiguity exists.
+- Returning an external reference and capturing that reference is supported; the workflow persists the reference, while the external system owns the payload or aggregate.
+
+Boundary:
+
+- No: "make this activity output durable" as an independent feature.
+- Yes: "capture this activity output into a declared durable value."
+- Yes: "record this activity output as audit/history."
+- Yes: "return an external reference and capture that reference."
+
+Core rule:
+
+**Activity outputs are dataflow facts, not durable state. Durable state begins only at an explicit capture boundary.**
+
+Rationale:
+
+- A separate durable activity-output store would create a second runtime value model next to `values`.
+- The capture boundary keeps one source of truth for durable state, type/schema validation, Studio display, migration, and resume behavior.
+- This pairs with the input evaluation rule: activity input evaluation and activity outputs both stay ephemeral unless the workflow author deliberately promotes data into a declared durable value.
+
 ## Next Decision To Work
 
-Define the Elsa 4 activity output lifecycle:
+Define direct activity output-to-input links:
 
-- Whether activity outputs are addressable after execution, and for how long.
-- How activity outputs can be captured into declared durable workflow values.
-- Whether output persistence is opt-in per output, per activity, per workflow, or per policy.
-- How audit/history output recording differs from resume state.
-- What happens when an output value is not persistable.
+- Whether data-flow links are first-class graph edges or compiled input bindings.
+- How Studio distinguishes output data ports from control-flow outcome ports.
+- Whether output-to-input links can target non-immediate downstream activities.
+- How links interact with loops, parallel branches, retries, and activity execution identity.
+- How linked outputs behave when the producer has not executed or has multiple execution attempts.
