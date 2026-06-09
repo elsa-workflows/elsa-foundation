@@ -204,6 +204,142 @@ Questions:
 4. Pause, resume, and runtime control plane.
 5. Runtime terminology and glossary.
 
+## Locked Addendum Decisions
+
+### 1. Volatile Wait Versus Durable Suspension
+
+Elsa 4 separates waiting from suspending.
+
+```text
+Durable suspension
+  Commit state, unload from memory, resume later by bookmark/event.
+
+Volatile wait
+  Keep execution in memory, await a task/timer/event, then continue in the same host context.
+```
+
+Volatile wait semantics:
+
+- Volatile wait is scoped to an `ActivityExecution` and branch, not the whole workflow.
+- Multiple concurrent volatile waits may exist in one workflow execution.
+- A volatile wait does not mean the workflow is durably suspended.
+- The workflow remains in memory while it has runnable work or active volatile waits.
+- When a volatile wait completes, it enqueues deterministic scheduler work for the owning activity execution/branch.
+- Workflow state mutation remains single-threaded through the scheduler.
+- True parallel activity execution is explicitly deferred as a separate future exploration.
+
+Guardrails to carry forward:
+
+- Maximum duration.
+- Host shutdown behavior.
+- Request cancellation behavior.
+- Memory pressure policy.
+- Execution lease behavior.
+- Durable fallback policy.
+
+### 2. Activity Completion Propagation
+
+Elsa 4 models activity completion propagation as deterministic scheduler work, not immediate recursive bubbling.
+
+Conceptual flow:
+
+```text
+ActivityCompleted
+  -> ParentCompletionEvaluation
+  -> ContinuationScheduling
+  -> Checkpoint
+```
+
+Rules:
+
+- Completion work is queued internally.
+- The scheduler drains completion-related work deterministically before advancing to unrelated work.
+- Parent activities observe completed child state before continuations run.
+- Joins evaluate only after required branch completions are recorded.
+- Incidents and cancellation can interrupt completion drain in a controlled way.
+- This is not fire-and-forget async events; it is ordered internal scheduler work.
+
+Rationale:
+
+This keeps completion inspectable and queue-shaped while preserving deterministic execution ordering.
+
+### 3. Event-Driven Execution And Generators
+
+Elsa 4 distinguishes triggers from generators.
+
+```text
+Trigger
+  External source that starts or resumes a workflow.
+
+Generator
+  In-workflow activity that emits one or more execution events over time.
+```
+
+Runtime model:
+
+- A generator owns a long-lived `ActivityExecution`.
+- Each generator emission creates scheduler work.
+- Downstream activities get their own `ActivityExecution`s as usual.
+- The emission itself is tracked as scheduler/history data and does not have to become a full activity execution.
+- Emissions can be volatile, durable, or policy-controlled.
+- Generator lifetime is tied to its owning execution scope.
+- Each emission should have identity for diagnostics and ordering.
+
+Possible emission model:
+
+```csharp
+GeneratedEvent
+{
+    WorkflowExecutionId
+    GeneratorActivityExecutionId
+    EmissionId
+    EmissionName
+    Payload?
+    OccurredAt
+}
+```
+
+Generator lifetime is defined by owning scope lifetime, generator stop policy, and runtime control policy.
+
+Default scope-end rule:
+
+```text
+A generator ends when its owning execution scope ends.
+```
+
+Examples:
+
+- Workflow completes.
+- Parent composite completes.
+- Branch is cancelled.
+- Activity execution is cancelled.
+- Scope faults and does not continue.
+
+Generator stop policies can include:
+
+- Repeat count.
+- Time window or expiration.
+- Expression condition.
+- External signal.
+- No subscribers/downstream paths remain.
+
+Runtime control can affect a generator:
+
+- `Paused`: do not emit now; may resume later.
+- `Completed`: generator is done.
+- `Cancelled`: generator was terminated by control/failure.
+- `Suspended`: durable state recorded; generator may be rehydrated later if durable.
+- `Faulted`: generator cannot continue because of failure.
+
+Backpressure/failure policy:
+
+- Runtime may stop, throttle, pause, or fault a generator when emissions cannot be safely processed.
+- Downstream activity failure does not automatically stop the generator unless generator policy says so.
+
+Detached behavior:
+
+By default, a generator does not outlive its owning workflow/scope. Detached recurring behavior belongs to trigger/scheduler infrastructure, not an in-workflow generator.
+
 ## Plan Impact
 
 The current action plan should be amended after this addendum is reviewed:
