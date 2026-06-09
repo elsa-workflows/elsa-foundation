@@ -5,48 +5,47 @@ using Jint.Runtime.Interop;
 using System.Collections;
 using JintOptions = Jint.Options;
 
-namespace Elsa.Expressions.JavaScript.Jint.Configurators
+namespace Elsa.Expressions.JavaScript.Jint.Configurators;
+
+internal sealed class ObjectWrapperEngineConfigurator : IJintEngineOptionsConfigurator
 {
-    internal sealed class ObjectWrapperEngineConfigurator : IJintEngineOptionsConfigurator
+    public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
     {
-        public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
+        options.SetWrapObjectHandler((engine, target, type) =>
         {
-            options.SetWrapObjectHandler((engine, target, type) =>
-            {
-                var instance = ObjectWrapper.Create(engine, target);
+            var instance = ObjectWrapper.Create(engine, target);
 
-                if (IsObjectArrayLikeClrCollection(target.GetType()))
-                    instance.Prototype = engine.Intrinsics.Array.PrototypeObject;
+            if (IsObjectArrayLikeClrCollection(target.GetType()))
+                instance.Prototype = engine.Intrinsics.Array.PrototypeObject;
 
-                return instance;
-            });
-        }
+            return instance;
+        });
+    }
 
-        private static bool IsObjectArrayLikeClrCollection(Type type)
+    private static bool IsObjectArrayLikeClrCollection(Type type)
+    {
+        var isDictionary = typeof(IDictionary).IsAssignableFrom(type);
+
+        if (isDictionary)
+            return false;
+
+        if (typeof(ICollection).IsAssignableFrom(type))
+            return true;
+
+        foreach (var interfaceType in type.GetInterfaces())
         {
-            var isDictionary = typeof(IDictionary).IsAssignableFrom(type);
-
-            if (isDictionary)
-                return false;
-
-            if (typeof(ICollection).IsAssignableFrom(type))
-                return true;
-
-            foreach (var interfaceType in type.GetInterfaces())
+            if (!interfaceType.IsGenericType)
             {
-                if (!interfaceType.IsGenericType)
-                {
-                    continue;
-                }
-
-                if (interfaceType.GetGenericTypeDefinition() == typeof(IReadOnlyCollection<>)
-                    || interfaceType.GetGenericTypeDefinition() == typeof(ICollection<>))
-                {
-                    return true;
-                }
+                continue;
             }
 
-            return false;
+            if (interfaceType.GetGenericTypeDefinition() == typeof(IReadOnlyCollection<>)
+                || interfaceType.GetGenericTypeDefinition() == typeof(ICollection<>))
+            {
+                return true;
+            }
         }
+
+        return false;
     }
 }

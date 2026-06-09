@@ -5,16 +5,15 @@ using Jint;
 using Microsoft.Extensions.Options;
 using JintOptions = Jint.Options;
 
-namespace Elsa.Expressions.JavaScript.Jint.Configurators
+namespace Elsa.Expressions.JavaScript.Jint.Configurators;
+
+internal sealed class ClrAccessEngineConfigurator(IOptions<FeatureOptions> featureOptions) : IJintEngineOptionsConfigurator
 {
-    internal sealed class ClrAccessEngineConfigurator(IOptions<FeatureOptions> featureOptions) : IJintEngineOptionsConfigurator
+    public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
     {
-        public void Configure(JintOptions options, IExpressionEvaluatorOptions? evaluatorOptions)
+        if (featureOptions.Value.AllowClrAccess)
         {
-            if (featureOptions.Value.AllowClrAccess)
-            {
-                options.AllowClr();
-            }
+            options.AllowClr();
         }
     }
 }

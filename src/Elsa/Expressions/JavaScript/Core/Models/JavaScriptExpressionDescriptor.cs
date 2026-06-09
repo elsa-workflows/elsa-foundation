@@ -1,18 +1,17 @@
 ﻿using Elsa.Expressions.Core.Models;
 
-namespace Elsa.Expressions.JavaScript.Core.Models
-{
-    public sealed class JavaScriptExpressionDescriptor : ExpressionDescriptor
-    {
-        public const string JavaScriptExpressionTypeName = "JavaScript";
-        public const string MonacoLanguagePropertyKey = "MonacoLanguage";
+namespace Elsa.Expressions.JavaScript.Core.Models;
 
-        public JavaScriptExpressionDescriptor() : base(JavaScriptExpressionTypeName)
+public sealed class JavaScriptExpressionDescriptor : ExpressionDescriptor
+{
+    public const string JavaScriptExpressionTypeName = "JavaScript";
+    public const string MonacoLanguagePropertyKey = "MonacoLanguage";
+
+    public JavaScriptExpressionDescriptor() : base(JavaScriptExpressionTypeName)
+    {
+        Properties = new Dictionary<string, object>
         {
-            Properties = new Dictionary<string, object>
-            {
-                [MonacoLanguagePropertyKey] = JavaScriptExpressionTypeName.ToLower()
-            };
-        }
+            [MonacoLanguagePropertyKey] = JavaScriptExpressionTypeName.ToLower()
+        };
     }
 }

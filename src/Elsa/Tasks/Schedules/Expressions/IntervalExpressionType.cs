@@ -1,8 +1,7 @@
-namespace Elsa.Tasks.Schedules.Expressions
+namespace Elsa.Tasks.Schedules.Expressions;
+
+public enum IntervalExpressionType
 {
-    public enum IntervalExpressionType
-    {
-        Cron,
-        Interval
-    }
+    Cron,
+    Interval
 }

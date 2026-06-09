@@ -2,59 +2,58 @@ using Elsa.Serialization.Core;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Serialization.SystemText.JsonConverters
+namespace Elsa.Serialization.SystemText.JsonConverters;
+
+/// <summary>
+/// A converter that can convert a dictionary of string keys and object values while preserving the object type.
+/// </summary>
+public sealed class PolymorphicDictionaryConverter : JsonConverter<IDictionary<string, object>>
 {
-    /// <summary>
-    /// A converter that can convert a dictionary of string keys and object values while preserving the object type.
-    /// </summary>
-    public sealed class PolymorphicDictionaryConverter : JsonConverter<IDictionary<string, object>>
+    private readonly JsonConverter<object> _objectConverter;
+
+    /// <inheritdoc />
+    public PolymorphicDictionaryConverter(
+        JsonSerializerOptions options,
+        IWellKnownTypeRegistry wellKnownTypeRegistry,
+        IEnumerable<IJsonIslandTypeHandler>? jsonIslandTypeHandlers = null)
     {
-        private readonly JsonConverter<object> _objectConverter;
+        var factory = (JsonConverterFactory)(options.Converters.FirstOrDefault(x => x is PolymorphicObjectConverterFactory) ?? new PolymorphicObjectConverterFactory(wellKnownTypeRegistry, jsonIslandTypeHandlers));
+        _objectConverter = (JsonConverter<object>)factory.CreateConverter(typeof(object), options)!;
+    }
 
-        /// <inheritdoc />
-        public PolymorphicDictionaryConverter(
-            JsonSerializerOptions options,
-            IWellKnownTypeRegistry wellKnownTypeRegistry,
-            IEnumerable<IJsonIslandTypeHandler>? jsonIslandTypeHandlers = null)
+    /// <inheritdoc />
+    public override IDictionary<string, object> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartObject)
+            throw new JsonException("Expected start of object.");
+
+        var dictionary = new Dictionary<string, object>();
+
+        while (reader.Read())
         {
-            var factory = (JsonConverterFactory)(options.Converters.FirstOrDefault(x => x is PolymorphicObjectConverterFactory) ?? new PolymorphicObjectConverterFactory(wellKnownTypeRegistry, jsonIslandTypeHandlers));
-            _objectConverter = (JsonConverter<object>)factory.CreateConverter(typeof(object), options)!;
+            if (reader.TokenType == JsonTokenType.EndObject)
+                return dictionary;
+
+            var key = reader.GetString()!;
+            reader.Read();
+            var value = _objectConverter.Read(ref reader, typeof(object), options)!;
+            dictionary.Add(key, value);
         }
 
-        /// <inheritdoc />
-        public override IDictionary<string, object> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        throw new JsonException("Expected end of object.");
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, IDictionary<string, object> value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+
+        foreach (var kvp in value)
         {
-            if (reader.TokenType != JsonTokenType.StartObject)
-                throw new JsonException("Expected start of object.");
-
-            var dictionary = new Dictionary<string, object>();
-
-            while (reader.Read())
-            {
-                if (reader.TokenType == JsonTokenType.EndObject)
-                    return dictionary;
-
-                var key = reader.GetString()!;
-                reader.Read();
-                var value = _objectConverter.Read(ref reader, typeof(object), options)!;
-                dictionary.Add(key, value);
-            }
-
-            throw new JsonException("Expected end of object.");
+            writer.WritePropertyName(kvp.Key);
+            _objectConverter.Write(writer, kvp.Value, options);
         }
 
-        /// <inheritdoc />
-        public override void Write(Utf8JsonWriter writer, IDictionary<string, object> value, JsonSerializerOptions options)
-        {
-            writer.WriteStartObject();
-
-            foreach (var kvp in value)
-            {
-                writer.WritePropertyName(kvp.Key);
-                _objectConverter.Write(writer, kvp.Value, options);
-            }
-
-            writer.WriteEndObject();
-        }
+        writer.WriteEndObject();
     }
 }

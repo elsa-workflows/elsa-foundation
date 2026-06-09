@@ -1,51 +1,50 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Elsa.Persistence.EFCore.Options
+namespace Elsa.Persistence.EFCore.Options;
+
+/// <summary>
+/// Provides options for configuring Elsa's Entity Framework Core integration.
+/// </summary>
+public class ElsaDbContextOptions
 {
     /// <summary>
-    /// Provides options for configuring Elsa's Entity Framework Core integration.
+    /// The schema used by Elsa.
     /// </summary>
-    public class ElsaDbContextOptions
+    public string? SchemaName { get; set; }
+
+    /// <summary>
+    /// The table used to store the migrations history.
+    /// </summary>
+    public string? MigrationsHistoryTableName { get; set; }
+
+    /// <summary>
+    /// The assembly name containing the migrations.
+    /// </summary>
+    public string? MigrationsAssemblyName { get; set; }
+
+    public IDictionary<Type, Action<ModelBuilder>> ProviderSpecificConfigurations { get; set; } = new Dictionary<Type, Action<ModelBuilder>>();
+
+    public void ConfigureModel<TDbContext>(Action<ModelBuilder> configure) where TDbContext : DbContext
     {
-        /// <summary>
-        /// The schema used by Elsa.
-        /// </summary>
-        public string? SchemaName { get; set; }
+        ConfigureModel(typeof(TDbContext), configure);
+    }
 
-        /// <summary>
-        /// The table used to store the migrations history.
-        /// </summary>
-        public string? MigrationsHistoryTableName { get; set; }
+    public void ConfigureModel(Type dbContextType, Action<ModelBuilder> configure)
+    {
+        if (!ProviderSpecificConfigurations.TryGetValue(dbContextType, out var configurations))
+            ProviderSpecificConfigurations[dbContextType] = configurations = _ => { };
 
-        /// <summary>
-        /// The assembly name containing the migrations.
-        /// </summary>
-        public string? MigrationsAssemblyName { get; set; }
+        configurations += configure;
+        ProviderSpecificConfigurations[dbContextType] = configurations;
+    }
 
-        public IDictionary<Type, Action<ModelBuilder>> ProviderSpecificConfigurations { get; set; } = new Dictionary<Type, Action<ModelBuilder>>();
+    public Action<ModelBuilder> GetModelConfigurations(DbContext dbContext)
+    {
+        return GetModelConfigurations(dbContext.GetType());
+    }
 
-        public void ConfigureModel<TDbContext>(Action<ModelBuilder> configure) where TDbContext : DbContext
-        {
-            ConfigureModel(typeof(TDbContext), configure);
-        }
-
-        public void ConfigureModel(Type dbContextType, Action<ModelBuilder> configure)
-        {
-            if (!ProviderSpecificConfigurations.TryGetValue(dbContextType, out var configurations))
-                ProviderSpecificConfigurations[dbContextType] = configurations = _ => { };
-
-            configurations += configure;
-            ProviderSpecificConfigurations[dbContextType] = configurations;
-        }
-
-        public Action<ModelBuilder> GetModelConfigurations(DbContext dbContext)
-        {
-            return GetModelConfigurations(dbContext.GetType());
-        }
-
-        public Action<ModelBuilder> GetModelConfigurations(Type dbContextType)
-        {
-            return ProviderSpecificConfigurations.TryGetValue(dbContextType, out var providerConfigurations) ? providerConfigurations : _ => { };
-        }
+    public Action<ModelBuilder> GetModelConfigurations(Type dbContextType)
+    {
+        return ProviderSpecificConfigurations.TryGetValue(dbContextType, out var providerConfigurations) ? providerConfigurations : _ => { };
     }
 }

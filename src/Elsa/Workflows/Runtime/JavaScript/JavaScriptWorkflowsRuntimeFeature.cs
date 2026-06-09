@@ -4,23 +4,22 @@ using Elsa.Workflows.Runtime.JavaScript.PostProcessors;
 using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workflows.Runtime.JavaScript
+namespace Elsa.Workflows.Runtime.JavaScript;
+
+[ShellFeature(
+    name: "JavaScriptWorkflowsRuntime",
+    DisplayName = "JavaScript Workflows Runtime"
+)]
+public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "JavaScriptWorkflowsRuntime",
-        DisplayName = "JavaScript Workflows Runtime"
-    )]
-    public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
+    public void ConfigureServices(IServiceCollection services)
     {
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services
-                .AddScoped<IScriptPostProcessor, CopyVariablesToWorkflowContext>()
-                .AddScoped<IScriptPreProcessor, WorkflowVariablesContextPreProcessor>()
-                .AddScoped<IScriptPreProcessor, WorkflowInputFunctionsPreProcessor>()
-                .AddScoped<IScriptPreProcessor, WorkflowFunctionsPreProcessor>()
-                .AddScoped<IScriptPreProcessor, VariableFunctionsPreProcessor>()
-                .AddScoped<IScriptPreProcessor, ActivityOutputFunctionsPreProcessor>();
-        }
+        services
+            .AddScoped<IScriptPostProcessor, CopyVariablesToWorkflowContext>()
+            .AddScoped<IScriptPreProcessor, WorkflowVariablesContextPreProcessor>()
+            .AddScoped<IScriptPreProcessor, WorkflowInputFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, WorkflowFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, VariableFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, ActivityOutputFunctionsPreProcessor>();
     }
 }

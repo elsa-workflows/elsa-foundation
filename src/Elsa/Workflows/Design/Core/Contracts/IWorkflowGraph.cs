@@ -1,7 +1,6 @@
-﻿namespace Elsa.Workflows.Design.Core.Contracts
-{
-    public interface IWorkflowGraph
-    {
+﻿namespace Elsa.Workflows.Design.Core.Contracts;
 
-    }
+public interface IWorkflowGraph
+{
+
 }

@@ -8,92 +8,91 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace Elsa.Expressions.JavaScript.Rendering.Services
+namespace Elsa.Expressions.JavaScript.Rendering.Services;
+
+/// <inheritdoc />
+public sealed class JavaScriptTypeDeclarationFactory(IOptions<JavaScriptDeclarationOptions> options)
+    : IJavaScriptTypeDeclarationFactory
 {
     /// <inheritdoc />
-    public sealed class JavaScriptTypeDeclarationFactory(IOptions<JavaScriptDeclarationOptions> options)
-        : IJavaScriptTypeDeclarationFactory
+    public JavaScriptTypeDeclaration Create(Type type)
     {
-        /// <inheritdoc />
-        public JavaScriptTypeDeclaration Create(Type type)
+        var typeDefinition = new JavaScriptTypeDeclaration
         {
-            var typeDefinition = new JavaScriptTypeDeclaration
+            DeclarationKeyword = DeclarationKeywords.GetDeclarationKeyword(type),
+            Name = type.Name,
+            Properties = GetPropertyDefinitions(type).DistinctBy(x => x.Name).ToList(),
+            Methods = [.. GetMethodDefinitions(type).DistinctBy(x => x.Name)]
+        };
+
+        return typeDefinition;
+    }
+
+    private IEnumerable<JavaScriptFunctionDeclaration> GetMethodDefinitions(Type type)
+    {
+        if (type.IsEnum)
+            yield break;
+
+        var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .Where(x => !x.IsSpecialName)
+            .Where(x => x.GetCustomAttribute<CompilerGeneratedAttribute>() == null)
+            .ToList();
+
+        foreach (var method in methods)
+        {
+            yield return new JavaScriptFunctionDeclaration
             {
-                DeclarationKeyword = DeclarationKeywords.GetDeclarationKeyword(type),
-                Name = type.Name,
-                Properties = GetPropertyDefinitions(type).DistinctBy(x => x.Name).ToList(),
-                Methods = [.. GetMethodDefinitions(type).DistinctBy(x => x.Name)]
+                Name = method.Name,
+                Parameters = [.. GetMethodParameters(method)],
+                ReturnType = GetAliasOrDefault(method.ReturnType)
             };
-
-            return typeDefinition;
         }
+    }
 
-        private IEnumerable<JavaScriptFunctionDeclaration> GetMethodDefinitions(Type type)
+    private IEnumerable<JavaScriptParameterDeclaration> GetMethodParameters(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+
+        foreach (var parameter in parameters)
         {
-            if (type.IsEnum)
-                yield break;
-
-            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                .Where(x => !x.IsSpecialName)
-                .Where(x => x.GetCustomAttribute<CompilerGeneratedAttribute>() == null)
-                .ToList();
-
-            foreach (var method in methods)
+            yield return new JavaScriptParameterDeclaration
             {
-                yield return new JavaScriptFunctionDeclaration
-                {
-                    Name = method.Name,
-                    Parameters = [.. GetMethodParameters(method)],
-                    ReturnType = GetAliasOrDefault(method.ReturnType)
-                };
-            }
+                Name = parameter.Name!,
+                Type = GetAliasOrDefault(parameter.ParameterType),
+                IsOptional = parameter.IsOptional
+            };
         }
+    }
 
-        private IEnumerable<JavaScriptParameterDeclaration> GetMethodParameters(MethodInfo method)
+    private IEnumerable<JavaScriptPropertyDeclaration> GetPropertyDefinitions([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
+    {
+        // If the type is an enum, enumerate its members.
+        if (type.IsEnum)
         {
-            var parameters = method.GetParameters();
-
-            foreach (var parameter in parameters)
+            foreach (var name in Enum.GetNames(type))
             {
-                yield return new JavaScriptParameterDeclaration
-                {
-                    Name = parameter.Name!,
-                    Type = GetAliasOrDefault(parameter.ParameterType),
-                    IsOptional = parameter.IsOptional
-                };
-            }
-        }
-
-        private IEnumerable<JavaScriptPropertyDeclaration> GetPropertyDefinitions([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type type)
-        {
-            // If the type is an enum, enumerate its members.
-            if (type.IsEnum)
-            {
-                foreach (var name in Enum.GetNames(type))
-                {
-                    yield return JavaScriptPropertyDeclaration.TextProperty(name);
-                }
-
-                yield break;
+                yield return JavaScriptPropertyDeclaration.TextProperty(name);
             }
 
-            var properties = type.GetProperties();
-
-            foreach (var property in properties)
-            {
-                yield return new JavaScriptPropertyDeclaration
-                {
-                    Name = property.Name,
-                    Type = GetAliasOrDefault(property.PropertyType),
-                    IsOptional = property.PropertyType.IsNullableType()
-                };
-            }
+            yield break;
         }
 
-        private string GetAliasOrDefault(Type type)
+        var properties = type.GetProperties();
+
+        foreach (var property in properties)
         {
-            var result = options.Value.TypeDeclarations.FirstOrDefault(x => x.Name == type.Name);
-            return result?.Alias ?? $"{type.Name}";
+            yield return new JavaScriptPropertyDeclaration
+            {
+                Name = property.Name,
+                Type = GetAliasOrDefault(property.PropertyType),
+                IsOptional = property.PropertyType.IsNullableType()
+            };
         }
+    }
+
+    private string GetAliasOrDefault(Type type)
+    {
+        var result = options.Value.TypeDeclarations.FirstOrDefault(x => x.Name == type.Name);
+        return result?.Alias ?? $"{type.Name}";
     }
 }

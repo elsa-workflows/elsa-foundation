@@ -1,29 +1,28 @@
 using Elsa.Serialization.SystemText.ReferenceResolvers;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Serialization.SystemText.ReferenceHandlers
+namespace Elsa.Serialization.SystemText.ReferenceHandlers;
+
+/// <summary>
+/// A reference handler that can be used to resolve references across scopes.
+/// </summary>
+public sealed class CrossScopedReferenceHandler : ReferenceHandler
 {
+    /// <inheritdoc />
+    public CrossScopedReferenceHandler() => Reset();
+    private ReferenceResolver? _rootedResolver;
+
+    /// <inheritdoc />
+    public override ReferenceResolver CreateResolver() => _rootedResolver!;
+
     /// <summary>
-    /// A reference handler that can be used to resolve references across scopes.
+    /// Resets the reference resolver.
     /// </summary>
-    public sealed class CrossScopedReferenceHandler : ReferenceHandler
-    {
-        /// <inheritdoc />
-        public CrossScopedReferenceHandler() => Reset();
-        private ReferenceResolver? _rootedResolver;
+    public void Reset() => _rootedResolver = new CustomPreserveReferenceResolver();
 
-        /// <inheritdoc />
-        public override ReferenceResolver CreateResolver() => _rootedResolver!;
-
-        /// <summary>
-        /// Resets the reference resolver.
-        /// </summary>
-        public void Reset() => _rootedResolver = new CustomPreserveReferenceResolver();
-
-        /// <summary>
-        /// Gets the reference resolver.
-        /// </summary>
-        /// <returns>The reference resolver.</returns>
-        public ReferenceResolver GetResolver() => _rootedResolver!;
-    }
+    /// <summary>
+    /// Gets the reference resolver.
+    /// </summary>
+    /// <returns>The reference resolver.</returns>
+    public ReferenceResolver GetResolver() => _rootedResolver!;
 }

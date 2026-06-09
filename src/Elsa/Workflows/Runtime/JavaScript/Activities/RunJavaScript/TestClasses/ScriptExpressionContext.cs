@@ -1,103 +1,102 @@
 ﻿using Elsa.Expressions.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses
+namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
+
+internal sealed class ScriptExpressionContext(IServiceProvider serviceProvider)
+    : IExpressionExecutionContext
 {
-    internal sealed class ScriptExpressionContext(IServiceProvider serviceProvider)
-        : IExpressionExecutionContext
+    public IMemoryRegister Memory => null!;
+
+    public IExpressionExecutionContext? ParentContext { get => null; set { } }
+
+    public CancellationToken CancellationToken => CancellationToken.None;
+
+    public IEnumerable<IVariable> EnumerateVariablesInScope()
     {
-        public IMemoryRegister Memory => null!;
+        yield break;
+    }
 
-        public IExpressionExecutionContext? ParentContext { get => null; set { } }
+    public T? Get<T>(IMemoryBlockReference blockReference)
+    {
+        return (T)blockReference.Declare().Value!;
+    }
 
-        public CancellationToken CancellationToken => CancellationToken.None;
+    public IMemoryBlock GetBlock(IMemoryBlockReference blockReference)
+    {
+        return new Block(blockReference.Declare().Value);
+    }
 
-        public IEnumerable<IVariable> EnumerateVariablesInScope()
-        {
-            yield break;
-        }
+    public string GetCorrelationId()
+    {
+        return string.Empty;
+    }
 
-        public T? Get<T>(IMemoryBlockReference blockReference)
-        {
-            return (T)blockReference.Declare().Value!;
-        }
+    public object? GetRequiredService(Type type)
+    {
+        return serviceProvider.GetRequiredService(type);
+    }
 
-        public IMemoryBlock GetBlock(IMemoryBlockReference blockReference)
-        {
-            return new Block(blockReference.Declare().Value);
-        }
+    public IVariable? GetVariable(string name, bool localScopeOnly = false)
+    {
+        return null;
+    }
 
-        public string GetCorrelationId()
-        {
-            return string.Empty;
-        }
+    public object? GetVariableValueOrDefault(string variableName)
+    {
+        return null;
+    }
 
-        public object? GetRequiredService(Type type)
-        {
-            return serviceProvider.GetRequiredService(type);
-        }
+    public string GetWorkfowDefinitionId()
+    {
+        return string.Empty;
+    }
 
-        public IVariable? GetVariable(string name, bool localScopeOnly = false)
-        {
-            return null;
-        }
+    public int GetWorkfowDefinitionVersion()
+    {
+        return 0;
+    }
 
-        public object? GetVariableValueOrDefault(string variableName)
-        {
-            return null;
-        }
+    public string GetWorkfowDefinitionVersionId()
+    {
+        return string.Empty;
+    }
 
-        public string GetWorkfowDefinitionId()
-        {
-            return string.Empty;
-        }
+    public string GetWorkfowInstanceId()
+    {
+        return string.Empty;
+    }
 
-        public int GetWorkfowDefinitionVersion()
-        {
-            return 0;
-        }
+    public bool IsContainedWithinCompositeActivity()
+    {
+        return false;
+    }
 
-        public string GetWorkfowDefinitionVersionId()
-        {
-            return string.Empty;
-        }
+    public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null)
+    {
+        blockReference.Set(this, value);
+    }
 
-        public string GetWorkfowInstanceId()
-        {
-            return string.Empty;
-        }
+    public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null)
+    {
+        return null!;
+    }
 
-        public bool IsContainedWithinCompositeActivity()
-        {
-            return false;
-        }
+    public bool TryGetActivityInput(string key, out object? value)
+    {
+        value = null;
+        return false;
+    }
 
-        public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null)
-        {
-            blockReference.Set(this, value);
-        }
+    public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block)
+    {
+        block = null!;
+        return false;
+    }
 
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null)
-        {
-            return null!;
-        }
-
-        public bool TryGetActivityInput(string key, out object? value)
-        {
-            value = null;
-            return false;
-        }
-
-        public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block)
-        {
-            block = null!;
-            return false;
-        }
-
-        public bool TryGetWorkflowInput(string key, out object? value)
-        {
-            value = null;
-            return false;
-        }
+    public bool TryGetWorkflowInput(string key, out object? value)
+    {
+        value = null;
+        return false;
     }
 }

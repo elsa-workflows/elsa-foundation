@@ -1,13 +1,12 @@
-namespace Elsa.Primitives.Contracts
+namespace Elsa.Primitives.Contracts;
+
+/// <summary>
+/// Represents a system clock.
+/// </summary>
+public interface ISystemClock
 {
     /// <summary>
-    /// Represents a system clock.
+    /// Gets the current date and time in UTC.
     /// </summary>
-    public interface ISystemClock
-    {
-        /// <summary>
-        /// Gets the current date and time in UTC.
-        /// </summary>
-        DateTimeOffset UtcNow { get; }
-    }
+    DateTimeOffset UtcNow { get; }
 }

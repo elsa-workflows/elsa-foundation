@@ -1,9 +1,8 @@
-﻿namespace Elsa.Serialization.Core
-{
-    public interface ITypeConverter
-    {
-        Type TargetType { get; set; }
+﻿namespace Elsa.Serialization.Core;
 
-        object? Convert(object? value);
-    }
+public interface ITypeConverter
+{
+    Type TargetType { get; set; }
+
+    object? Convert(object? value);
 }

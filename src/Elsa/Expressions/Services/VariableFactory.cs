@@ -1,22 +1,21 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Models;
 
-namespace Elsa.Expressions.Services
+namespace Elsa.Expressions.Services;
+
+/// <inheritdoc />
+public sealed class VariableFactory : IVariableFactory
 {
     /// <inheritdoc />
-    public sealed class VariableFactory : IVariableFactory
+    public IVariable Create(string name, object? value = null, string? id = null)
     {
-        /// <inheritdoc />
-        public IVariable Create(string name, object? value = null, string? id = null)
-        {
-            return new Variable(name, value, id);
-        }
+        return new Variable(name, value, id);
+    }
 
-        /// <inheritdoc />
-        public IVariable<T> Create<T>(string name, T value, string? id = null)
-            where T : notnull
-        {
-            return new Variable<T>(name, value, id);
-        }
+    /// <inheritdoc />
+    public IVariable<T> Create<T>(string name, T value, string? id = null)
+        where T : notnull
+    {
+        return new Variable<T>(name, value, id);
     }
 }

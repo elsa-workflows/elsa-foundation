@@ -1,9 +1,8 @@
 using Elsa.Expressions.Core.Models;
 
-namespace Elsa.Expressions.Contracts
+namespace Elsa.Expressions.Contracts;
+
+public interface IVariableDefaultValueFormatter
 {
-    public interface IVariableDefaultValueFormatter
-    {
-        ArgumentValue? Format(object? value);
-    }
+    ArgumentValue? Format(object? value);
 }

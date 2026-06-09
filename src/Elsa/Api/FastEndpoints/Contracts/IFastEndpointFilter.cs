@@ -1,9 +1,8 @@
 using FastEndpoints;
 
-namespace Elsa.Api.FastEndpoints.Contracts
+namespace Elsa.Api.FastEndpoints.Contracts;
+
+public interface IFastEndpointFilter
 {
-    public interface IFastEndpointFilter
-    {
-        bool Exclude(EndpointDefinition endpointDefinition);
-    }
+    bool Exclude(EndpointDefinition endpointDefinition);
 }

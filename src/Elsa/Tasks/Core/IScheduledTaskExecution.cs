@@ -1,6 +1,5 @@
-namespace Elsa.Tasks.Core
+namespace Elsa.Tasks.Core;
+
+public interface IScheduledTaskExecution : IDisposable, IAsyncDisposable
 {
-    public interface IScheduledTaskExecution : IDisposable, IAsyncDisposable
-    {
-    }
 }

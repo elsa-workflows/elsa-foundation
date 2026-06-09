@@ -1,26 +1,25 @@
 ﻿using Elsa.Http.Core.Models;
 
-namespace Elsa.Http.Core.Contracts
+namespace Elsa.Http.Core.Contracts;
+
+/// <summary>
+/// Provides downloadables from the specified content, if supported.
+/// </summary>
+public interface IDownloadableContentHandler
 {
     /// <summary>
-    /// Provides downloadables from the specified content, if supported.
+    /// The priority of this provider. Providers with lower priority are tried first.
     /// </summary>
-    public interface IDownloadableContentHandler
-    {
-        /// <summary>
-        /// The priority of this provider. Providers with lower priority are tried first.
-        /// </summary>
-        float Priority { get; }
+    float Priority { get; }
 
-        /// <summary>
-        /// Returns true if this provider supports the specified content.
-        /// </summary>
-        /// <param name="content">The content to check.</param>
-        bool SupportsContent(object content);
+    /// <summary>
+    /// Returns true if this provider supports the specified content.
+    /// </summary>
+    /// <param name="content">The content to check.</param>
+    bool SupportsContent(object content);
 
-        /// <summary>
-        /// Returns a list of downloadables from the specified content.
-        /// </summary>
-        IEnumerable<Func<ValueTask<Downloadable>>> GetDownloadablesAsync(object content, CancellationToken cancellationToken);
-    }
+    /// <summary>
+    /// Returns a list of downloadables from the specified content.
+    /// </summary>
+    IEnumerable<Func<ValueTask<Downloadable>>> GetDownloadablesAsync(object content, CancellationToken cancellationToken);
 }

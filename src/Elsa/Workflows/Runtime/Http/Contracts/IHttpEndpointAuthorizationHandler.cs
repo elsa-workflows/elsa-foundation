@@ -1,17 +1,16 @@
 ﻿using Elsa.Workflows.Runtime.Http.Models;
 
-namespace Elsa.Workflows.Runtime.Http.Contracts
+namespace Elsa.Workflows.Runtime.Http.Contracts;
+
+/// <summary>
+/// A handler that is invoked when authorizing an inbound HTTP request.
+/// </summary>
+public interface IHttpEndpointAuthorizationHandler
 {
     /// <summary>
-    /// A handler that is invoked when authorizing an inbound HTTP request.
+    /// Authorizes an inbound HTTP request.
     /// </summary>
-    public interface IHttpEndpointAuthorizationHandler
-    {
-        /// <summary>
-        /// Authorizes an inbound HTTP request.
-        /// </summary>
-        /// <param name="context">The context.</param>
-        /// <returns>True if the request is authorized, otherwise false.</returns>
-        ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context);
-    }
+    /// <param name="context">The context.</param>
+    /// <returns>True if the request is authorized, otherwise false.</returns>
+    ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context);
 }

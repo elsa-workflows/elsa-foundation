@@ -1,13 +1,12 @@
-﻿namespace Elsa.Activities.Runtime.Core.Contracts
+﻿namespace Elsa.Activities.Runtime.Core.Contracts;
+
+public interface IActivityCompletionHandler
 {
-    public interface IActivityCompletionHandler
-    {
-        ValueTask CompleteActivityAsync(IActivityExecutionContext context);
+    ValueTask CompleteActivityAsync(IActivityExecutionContext context);
 
-        ValueTask CompleteActivityAsync(IActivityExecutionContext context, object result);
+    ValueTask CompleteActivityAsync(IActivityExecutionContext context, object result);
 
-        ValueTask CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes);
+    ValueTask CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes);
 
-        ValueTask CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes, object result);
-    }
+    ValueTask CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes, object result);
 }

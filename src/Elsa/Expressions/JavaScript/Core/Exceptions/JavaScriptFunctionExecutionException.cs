@@ -1,13 +1,12 @@
-﻿namespace Elsa.Expressions.JavaScript.Core.Exceptions
-{
-    public sealed class JavaScriptFunctionExecutionException : Exception
-    {
-        public JavaScriptFunctionExecutionException()
-        {
-        }
+﻿namespace Elsa.Expressions.JavaScript.Core.Exceptions;
 
-        public JavaScriptFunctionExecutionException(string? message) : base(message)
-        {
-        }
+public sealed class JavaScriptFunctionExecutionException : Exception
+{
+    public JavaScriptFunctionExecutionException()
+    {
+    }
+
+    public JavaScriptFunctionExecutionException(string? message) : base(message)
+    {
     }
 }

@@ -2,29 +2,28 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using System.Runtime.CompilerServices;
 
-namespace Elsa.Activities.Runtime.Core.Contracts
+namespace Elsa.Activities.Runtime.Core.Contracts;
+
+public interface IActivityExecutionContext
 {
-    public interface IActivityExecutionContext
-    {
-        TService GetRequiredService<TService>()
-            where TService : notnull;
+    TService GetRequiredService<TService>()
+        where TService : notnull;
 
-        IExpressionExecutionContext ExpressionExecutionContext { get; }
+    IExpressionExecutionContext ExpressionExecutionContext { get; }
 
-        IActivity Activity { get; }
+    IActivity Activity { get; }
 
-        IActivityExecutionContext ParentActivityExecutionContext { get; }
+    IActivityExecutionContext ParentActivityExecutionContext { get; }
 
-        T? Get<T>(InputArgument<T>? input);
+    T? Get<T>(InputArgument<T>? input);
 
-        void Set<T>(OutputArgument<T>? output, T? value, [CallerArgumentExpression(nameof(output))] string? outputName = null);
+    void Set<T>(OutputArgument<T>? output, T? value, [CallerArgumentExpression(nameof(output))] string? outputName = null);
 
-        IAsyncEnumerable<ActivityOutputs> GetActivityOutputs();
+    IAsyncEnumerable<ActivityOutputs> GetActivityOutputs();
 
-        CancellationToken CancellationToken { get; }
+    CancellationToken CancellationToken { get; }
 
-        void SetOutcomes(string[] outcomes);
+    void SetOutcomes(string[] outcomes);
 
-        IEnumerable<string> GetOutcomes();
-    }
+    IEnumerable<string> GetOutcomes();
 }

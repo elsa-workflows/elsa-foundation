@@ -12,42 +12,41 @@ using Elsa.Expressions.JavaScript.Services;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Expressions.JavaScript
+namespace Elsa.Expressions.JavaScript;
+
+[ShellFeature(
+    name: "JavaScriptExpressions",
+    DisplayName = "JavaScript Expressions",
+    Description = "Provides functions to register and configure JavaScript Expressions"
+)]
+public class JavaScriptFeature : IShellFeature
 {
-    [ShellFeature(
-        name: "JavaScriptExpressions",
-        DisplayName = "JavaScript Expressions",
-        Description = "Provides functions to register and configure JavaScript Expressions"
-    )]
-    public class JavaScriptFeature : IShellFeature
+    public IEnumerable<JavaScriptTypeDescriptor> TypeDescriptors { get; set; } = DefaultTypeDescriptors.Get();
+
+    public ConfigurationAccessFunctionProviderOptions? GetConfigurationFunction { get; set; }
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        public IEnumerable<JavaScriptTypeDescriptor> TypeDescriptors { get; set; } = DefaultTypeDescriptors.Get();
+        services
+            .Configure<ConfigurationAccessFunctionProviderOptions>(o =>
+            {
+                o.AllowConfigurationAccess = GetConfigurationFunction?.AllowConfigurationAccess ?? false;
+                o.DisallowedSections = GetConfigurationFunction?.DisallowedSections ?? [];
+            })
+            .Configure<JavaScriptOptions>(o =>
+            {
+                TypeDescriptors.ToList().ForEach(o.TypeDescriptors.Add);
+            })
 
-        public ConfigurationAccessFunctionProviderOptions? GetConfigurationFunction { get; set; }
+            .AddEventHandler<OnEvaluatingScript, PreProcessScript>()
+            .AddEventHandler<OnScriptEvaluated, PostProcessScript>()
+            .AddScoped<IScriptPreProcessor, ArgsObjectPreProcessor>()
+            .AddScoped<IScriptPreProcessor, CommonFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, ArgumentFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, ConfigurationAccessFunctionPreProcessor>()
+            .AddScoped<IScriptPreProcessor, TypeRegistrationPreProcessor>()
 
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services
-                .Configure<ConfigurationAccessFunctionProviderOptions>(o =>
-                {
-                    o.AllowConfigurationAccess = GetConfigurationFunction?.AllowConfigurationAccess ?? false;
-                    o.DisallowedSections = GetConfigurationFunction?.DisallowedSections ?? [];
-                })
-                .Configure<JavaScriptOptions>(o =>
-                {
-                    TypeDescriptors.ToList().ForEach(o.TypeDescriptors.Add);
-                })
-
-                .AddEventHandler<OnEvaluatingScript, PreProcessScript>()
-                .AddEventHandler<OnScriptEvaluated, PostProcessScript>()
-                .AddScoped<IScriptPreProcessor, ArgsObjectPreProcessor>()
-                .AddScoped<IScriptPreProcessor, CommonFunctionsPreProcessor>()
-                .AddScoped<IScriptPreProcessor, ArgumentFunctionsPreProcessor>()
-                .AddScoped<IScriptPreProcessor, ConfigurationAccessFunctionPreProcessor>()
-                .AddScoped<IScriptPreProcessor, TypeRegistrationPreProcessor>()
-
-                .AddScoped<IExpressionHandler, JavaScriptExpressionHandler>()
-                .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();
-        }
+            .AddScoped<IExpressionHandler, JavaScriptExpressionHandler>()
+            .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>();
     }
 }
