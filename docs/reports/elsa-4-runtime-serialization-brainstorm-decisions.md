@@ -523,13 +523,61 @@ Rationale:
 - The policy makes activity inputs and outputs ephemeral by default while preserving explicit paths for durable capture, audit, or external storage.
 - The two-axis model avoids repeating Elsa 3's ambiguity where storage drivers, variables, inputs, outputs, logs, and runtime values all carry slightly different meanings of persistence.
 
+### 9. Validation Layers And Runtime Strictness
+
+Elsa 4 should validate authored value declarations in layers. Import and save should preserve authored documents with diagnostics when design-time references are missing, but publish, compile, and run should be strict about runtime requirements.
+
+Document-shape validation:
+
+- Value IDs must be unique within the authored workflow document.
+- Required fields must be present.
+- Role names must be known.
+- JSON shape must be valid.
+
+Role and facet validation:
+
+- If `roles` includes `input`, the `input` facet is allowed and validated.
+- If `roles` includes `output`, the `output` facet is allowed and validated.
+- If `roles` includes `variable`, the `variable` facet is allowed and validated.
+- Facets for absent roles should be errors unless the later spec defines them as inert annotations.
+
+Type and schema validation:
+
+- Built-in type kinds must be known.
+- Alias and reference IDs may be unresolved at import/save time, but unresolved types become diagnostics that block publish or compile unless explicitly allowed.
+- Defaults must validate against the declared type and schema.
+
+Lifecycle and storage validation:
+
+- `lifecycle = none` cannot specify `storage`.
+- `storage = external` requires a `storageProfile` or resolvable default.
+- `custom` lifecycle or storage requires a provider ID.
+- `binary` cannot default to inline unless explicitly allowed by policy.
+- `audit` values cannot be used for resume.
+
+Binding validation:
+
+- Invocation inputs can target only `input` values.
+- Initializers using `source = input` require the `input` role.
+- Output mappings require the `output` role.
+- Activity input bindings can reference values, expressions, literals, activity outputs, and other supported binding sources, but persistence still requires explicit declared durable values.
+
+Validation timing:
+
+- Import/save: preserve documents even if aliases, activities, storage providers, or reference resolvers are missing; attach diagnostics.
+- Validate/publish/compile: require all type aliases, reference resolvers, serializers, activities, and storage providers needed for execution.
+- Run: fail fast on missing required inputs or conversion/materialization errors.
+
+Core rule:
+
+**Unknown or unresolved design-time references should not destroy authored documents. Unknown or unresolved runtime requirements must block publish or execution.**
+
 ## Next Decision To Work
 
-Define validation rules for role and policy combinations:
+Define Elsa 3 compatibility mapping for variables, inputs, outputs, and activity output captures:
 
-- Validation rules for incompatible role combinations.
-- Required facets for each role and role combination.
-- Invalid lifecycle/storage/type combinations.
-- Required provider IDs for `custom` lifecycle or storage.
-- Validation timing for imported documents with missing type aliases or activity types.
 - Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
+- How Elsa 3 `VariableDefinition` maps to Elsa 4 `values`.
+- How Elsa 3 `ArgumentDefinition` inputs and outputs map to roles and facets.
+- How Elsa 3 storage-driver settings map to lifecycle/storage policy.
+- How Elsa 3 runtime values, logs, and activity outputs are handled when definitions migrate.
