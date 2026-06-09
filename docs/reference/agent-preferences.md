@@ -130,7 +130,7 @@ Default behavior:
 - Use `docs/program-goals/` as the active work tracker.
 - Add, move, complete, or drop planned work in the relevant program-goal bucket.
 - Treat reports such as `docs/reports/unfinished-work.md` as finding/evidence inventories, not active queues.
-- When a report finding becomes planned work, route it through the relevant program-goal bucket before implementation.
+- Under this model, when a report finding becomes planned work, route it through the relevant program-goal bucket before implementation.
 - When work is completed, update the relevant bucket item; update reports only if the evidence or finding changed.
 ```
 

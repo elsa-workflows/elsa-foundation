@@ -18,12 +18,13 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md`, especially the program goal, source-of-truth layers, and zoom-out rule.
+1. Read `AGENTS.md`, especially source-of-truth layers and the work tracking / drift guard.
 2. Read `docs/skills/catalog.md#whats-next--unfinished-work`.
-3. Read `.agent-prefs/session-execution-model.md` if it exists.
-4. Read `docs/reports/unfinished-work.md`.
-5. Refresh context with the marker search from `unfinished-work.md` when the user asks for current state or when freshness is uncertain.
-6. Rank candidates by Elsa-brain milestone advanced, not by nearby local cleanup.
-7. Return a concise zoom-out check, top candidates, recommendation, source-of-truth layer, and execution route. If the recommended unit requires substantial planning or implementation and the local session preference favors fresh workers or ask-each-time, ask whether to plan/execute here or prepare a reviewed handoff prompt for a fresh agent/thread.
+3. Read `.agent-prefs/work-tracking-model.md` when it exists; use `docs/reference/agent-preferences.md#work-tracking-models` when durable planning needs a missing model choice.
+4. Read `.agent-prefs/session-execution-model.md` if it exists.
+5. Read `docs/reports/unfinished-work.md`.
+6. Refresh context with the marker search from `unfinished-work.md` when the user asks for current state or when freshness is uncertain.
+7. Rank candidates by selected work tracking model, current program goal state when applicable, user intent, severity, and unblock value.
+8. Return a concise drift check, top candidates, recommendation, source-of-truth layer, work tracking route, and execution route. If the recommended unit requires substantial planning or implementation and the local session preference favors fresh workers or ask-each-time, ask whether to plan/execute here or prepare a reviewed handoff prompt for a fresh agent/thread.
 
 Do not implement from this skill. If the user approves a unit, hand off to `elsa-work-unit-planner` or the relevant implementation skill.

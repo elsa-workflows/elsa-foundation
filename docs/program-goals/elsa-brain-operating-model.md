@@ -35,7 +35,7 @@ This goal does not mean every session must repeat the full program overview. Use
 1. Keep `AGENTS.md` as the AI-provider-neutral front door and stable routing layer.
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
-4. Keep active work tracking in program-goal buckets while using reports as evidence and inventory.
+4. Keep this bucket's active work tracking aligned with the selected work tracking model while using reports as evidence and inventory.
 5. Keep feature composition work useful but subordinate to the broader Elsa-brain operating model until alignment is reviewed.
 
 ## Linked Surfaces
@@ -64,7 +64,7 @@ Use this goal file for planned work in the Elsa Brain Operating Model bucket. Us
 
 ## Bucket Items
 
-- Active: keep `AGENTS.md`, preference catalogs, program-goal buckets, and report inventories aligned so agents have one operational place to add, move, complete, or drop planned work.
+- Active: keep `AGENTS.md`, preference catalogs, program-goal buckets, and report inventories aligned so agents know where to add, move, complete, or drop planned work under the selected work tracking model.
 - Completed: work tracking model cleanup made program-goal buckets the default active tracker, added the local preference template, and reframed `unfinished-work.md` as inventory.
 - Parked: plan a test maturity map or approved CShells composition-generation map as separate work units when the user selects that work.
 - Parked: revisit broad constitution ratification only when a targeted gate review or approved work unit needs it.

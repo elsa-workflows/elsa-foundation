@@ -25,4 +25,4 @@ $ARGUMENTS
 5. Present findings first: ambiguity, contradiction, missing exception, non-gate material, stale draft history, or ratification blocker.
 6. Propose a revision path or work unit. Do not silently rewrite constitutional meaning.
 
-If the review produces deferred work, update or propose an update to `docs/reports/unfinished-work.md`.
+If the review produces deferred findings, update or propose an update to `docs/reports/unfinished-work.md`. If a finding becomes planned work, route it through the selected work tracking model before implementation.

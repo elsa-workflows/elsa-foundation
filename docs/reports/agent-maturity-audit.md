@@ -114,7 +114,7 @@ Residual risk:
 
 Classification: strength.
 
-`AGENTS.md` is now a real AI-provider-neutral front door. It explains repo intent, source-of-truth layers, program-goal drift guard, task paths, map refresh rules, preference handling, and constitution boundaries without duplicating the whole architecture.
+`AGENTS.md` is now a real AI-provider-neutral front door. It explains repo intent, source-of-truth layers, work tracking and drift guard, task paths, map refresh rules, preference handling, and constitution boundaries without duplicating the whole architecture.
 
 Impact:
 
@@ -122,7 +122,7 @@ An agent can start narrow, route to the right layer, and avoid treating `AGENTS.
 
 Recommendation:
 
-Keep `AGENTS.md` stable. Do not add new program objectives there; keep using `docs/program-goals/` and `docs/reports/`.
+Keep `AGENTS.md` stable. Do not add new program objectives there; route planned work through the selected work tracking model and keep reports as evidence/inventory.
 
 ### F2 - The skill layer is usable, but some workflows remain report-bound
 
@@ -188,7 +188,7 @@ Every large handoff that relies on maps should include one of these instructions
 
 Classification: manageable risk.
 
-The drift guard is lightweight and the program-goal file is clear. The risk is not missing process; the risk is agents continuing local cleanup work because it is nearby.
+The drift guard is lightweight and the default program-goal bucket is clear. The risk is not missing process; the risk is agents continuing local cleanup work because it is nearby.
 
 Impact:
 
@@ -196,7 +196,7 @@ The workspace can keep polishing the Elsa brain instead of using it for architec
 
 Recommendation:
 
-Before a third consecutive docs/meta unit, force a Program Goal Drift Review. For this session, that means the next step after this audit should be either targeted constitution thinning from audit findings or a prepared architecture-worker handoff, not more broad operating-model grooming.
+Before a third consecutive docs/meta unit, force the work-tracking drift check from `AGENTS.md`; when program-goal buckets are involved, use the Program Goal Drift Review skill. For this session, that means the next step after this audit should be either targeted constitution thinning from audit findings or a prepared architecture-worker handoff, not more broad operating-model grooming.
 
 ### F7 - AI-provider neutrality is good, with Claude as a thin adapter
 
