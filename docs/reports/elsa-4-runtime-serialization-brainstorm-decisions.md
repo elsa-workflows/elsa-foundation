@@ -620,12 +620,57 @@ Core compatibility rule:
 
 **Migrate authored intent where it is explicit. Preserve uncertain Elsa 3 data as diagnostics or migration metadata. Do not silently turn Elsa 3 runtime artifacts into Elsa 4 durable workflow state.**
 
+### 11. Activity Input Evaluation Model
+
+Elsa 4 should not have a durable evaluated activity input register. Activity inputs should be binding declarations in the authored document, evaluated into ephemeral invocation values at the activity execution boundary, then materialized to the activity's expected input contract.
+
+Conceptual activity input bindings:
+
+```json
+{
+  "id": "send-email",
+  "type": "SendCustomerEmail",
+  "inputs": {
+    "customer": {
+      "source": "value",
+      "valueId": "customer"
+    },
+    "subject": {
+      "source": "expression",
+      "language": "javascript",
+      "expression": "`Hello ${values.customerName}`"
+    }
+  }
+}
+```
+
+Runtime rules:
+
+- Activity input bindings are authored durable state.
+- Evaluated input values are ephemeral by default.
+- Inputs are evaluated immediately before activity execution, not persisted as workflow state.
+- If retry re-executes the activity, inputs are re-evaluated unless the activity or workflow explicitly captures a durable snapshot.
+- If an activity creates a bookmark, bookmark payload must explicitly declare what data is needed to resume.
+- If an evaluated input should survive suspension or resume, it must be mapped into a declared durable workflow value.
+- Diagnostics may record evaluated inputs through audit/history policy, but audit data is not resume state.
+- Sensitive or non-serializable inputs should never be recorded unless a policy explicitly allows a safe representation.
+
+Core rule:
+
+**Bindings are durable. Evaluated input values are execution-local. Persistence requires explicit declared durable state.**
+
+Rationale:
+
+- This keeps Elsa 3's useful expression model while removing ambiguity about whether evaluated input values are memory, workflow state, logs, or replay data.
+- It simplifies the runtime by avoiding a separate durable input register abstraction.
+- It aligns input evaluation with the value model: declarations decide persistence, and activity input descriptors decide materialization.
+
 ## Next Decision To Work
 
-Define the Elsa 4 input evaluation model:
+Define the Elsa 4 activity output lifecycle:
 
-- Whether Elsa 4 needs an evaluated activity input register.
-- Whether activity inputs are evaluated lazily, eagerly before execution, or through compiled bindings.
-- How expression evaluation interacts with retries, incidents, bookmarks, resumed execution, and observability.
-- Whether evaluated inputs are ever persisted outside explicit declared durable values.
-- How activity input binding diagnostics should surface to Studio and logs.
+- Whether activity outputs are addressable after execution, and for how long.
+- How activity outputs can be captured into declared durable workflow values.
+- Whether output persistence is opt-in per output, per activity, per workflow, or per policy.
+- How audit/history output recording differs from resume state.
+- What happens when an output value is not persistable.
