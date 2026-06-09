@@ -1,10 +1,9 @@
 {
-  "ai": "claude",
+  "ai": "codex",
   "ai_skills": true,
-  "branch_numbering": "sequential",
-  "context_file": "CLAUDE.md",
+  "feature_numbering": "sequential",
   "here": true,
-  "integration": "claude",
-  "script": "ps",
-  "speckit_version": "0.8.0"
+  "integration": "codex",
+  "script": "sh",
+  "speckit_version": "0.10.1"
 }

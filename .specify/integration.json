@@ -1,4 +1,15 @@
 {
-  "integration": "claude",
-  "version": "0.8.0"
+  "version": "0.10.1",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "codex"
+  ],
+  "integration_settings": {
+    "codex": {
+      "script": "sh",
+      "invoke_separator": "-"
+    }
+  },
+  "integration": "codex",
+  "default_integration": "codex"
 }
