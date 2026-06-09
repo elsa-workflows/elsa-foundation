@@ -18,6 +18,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [CShells composition evidence](cshells-composition-evidence.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
 - [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md)
+- [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md)
 - [Constitution draft history](constitution-draft-history.md)
 - [Constitution amendment index](constitution-amendment-index.md)
 - [Framework constitution draft history](constitution-history-framework.md)

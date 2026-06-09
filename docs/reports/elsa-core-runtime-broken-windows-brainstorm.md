@@ -35,6 +35,8 @@ Brainstorm direction: Elsa 4 should aim for a unified serialization story with e
 
 Source-backed topic note: [Elsa Core runtime serialization and value persistence analysis](elsa-core-runtime-serialization-value-persistence-analysis.md).
 
+Elsa 4 brainstorm decisions: [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md).
+
 Questions to validate:
 
 - Which Elsa 3 serialized shapes must Elsa 4 read for migration, and which can be intentionally incompatible?
