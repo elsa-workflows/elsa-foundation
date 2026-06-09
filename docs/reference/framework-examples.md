@@ -23,9 +23,9 @@ Unit 1 (2026-06-03) created a set of per-domain catalogs at composition-root fea
 
 Representative examples:
 
-- `src/Elsa.Workflows.Design.Api/EXTENSION_POINTS.md` - draft mutation events, lookup/command/diff-engine override seams, and the `WorkflowsDesignApiFeature` composition root.
-- `src/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md` - `OnDraftValidating`, `OnDraftValidated`, and the `IDraftValidator` contributor with intra-domain defaults.
-- `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md` - `OnEntitySaving`, `OnEntityLoading`, contributor interfaces, and override contracts.
+- `src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md` - draft mutation events, lookup/command/diff-engine override seams, and the `WorkflowsDesignApiFeature` composition root.
+- `src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md` - `OnDraftValidating`, `OnDraftValidated`, and the `IDraftValidator` contributor with intra-domain defaults.
+- `src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md` - `OnEntitySaving`, `OnEntityLoading`, contributor interfaces, and override contracts.
 
 The repo-root `EXTENSION_POINTS.md` links every source catalog grouped by domain family. The root index is pure links; authoritative extension-point detail remains in each local catalog.
 

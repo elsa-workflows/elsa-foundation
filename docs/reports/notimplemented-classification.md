@@ -11,11 +11,11 @@ Classify the concrete `NotImplementedException` and nearby placeholder signals i
 - Source search for `NotImplementedException`, `TODO`, `DEFERRED`, `deferred`, `placeholder`, `stub`, `not implemented`, `future`, and `follow-up`.
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)
 - [Test map](../maps/test-map.md)
-- `src/Elsa.Workflows.Runtime.Core/WorkflowExecutionContext.cs`
-- `src/Elsa.Workflows.Design.Core/WorkflowDesignContext.cs`
-- `src/Elsa.Expressions/Services/VariableExpressionDescriptor.cs`
-- `src/Elsa.Http/Services/MultiDownloadableContentHandler.cs`
-- `src/Elsa.Workflows.Runtime.JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs`
+- `src/Elsa/Workflows/Runtime/Core/WorkflowExecutionContext.cs`
+- `src/Elsa/Workflows/Design/Core/WorkflowDesignContext.cs`
+- `src/Elsa/Expressions/Services/VariableExpressionDescriptor.cs`
+- `src/Elsa/Http/Services/MultiDownloadableContentHandler.cs`
+- `src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs`
 - Related feature registration and consumer code.
 
 ## Findings

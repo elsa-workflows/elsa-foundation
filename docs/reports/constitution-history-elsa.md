@@ -248,7 +248,7 @@ ratification):
     shape (action-named `…Handler` suffix). The legacy reflection/`GetServices`
     direct-dispatch loops on `ElsaDbContextBase` / `EFCoreQueries` are removed; the
     publication sites now only publish. Catalogued in
-    `src/Elsa.Persistence.EFCore/EXTENSION_POINTS.md`. The `IGlobalEntitySavingHandler` (runs
+    `src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`. The `IGlobalEntitySavingHandler` (runs
     for every entity, no per-type fan-in) and `IEntityModelCreatingHandler` (runs
     during `OnModelCreating`) remain on their own dispatch paths by design.
   - Delete `Elsa.Expressions.JavaScript.Jint3` (test scaffolding).

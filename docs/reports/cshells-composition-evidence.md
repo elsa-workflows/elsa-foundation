@@ -10,8 +10,8 @@ This is still a high-value next step because CShells appsettings generation woul
 
 Source-of-truth boundary:
 
-- `src/Server` is a test shell, not composition policy.
-- `src/Server/appsettings.json` is usable only as evidence for the IConfiguration registration shape.
+- `src/Apps/Elsa.Server` is a test shell, not composition policy.
+- `src/Apps/Elsa.Server/appsettings.json` is usable only as evidence for the IConfiguration registration shape.
 - Feature identity comes from concrete feature classes and their `ShellFeature` metadata.
 - Dependency evidence comes from direct project/package references and extension-point catalogs, then needs architecture classification before generation.
 
@@ -204,5 +204,5 @@ Current no-code boundary:
 Out of scope:
 
 - Do not implement the CShells Appsettings Generator.
-- Do not treat `src/Server` as a canonical shell composition.
+- Do not treat `src/Apps/Elsa.Server` as a canonical shell composition.
 - Do not infer operationally required features solely from project references.

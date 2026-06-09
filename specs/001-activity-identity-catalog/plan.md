@@ -14,7 +14,7 @@ Reshape the activity catalog around a stable logical identity (`ActivityTypeKey`
 **Primary Dependencies**:
 - Entity Framework Core (Microsoft.EntityFrameworkCore.*) — persistence; SQLite provider for the in-repo default.
 - `Elsa.Mediator` / `Elsa.Mediator.Core` — `IDomainEventSender` for §2.6.1 dispatch and the Registry + StartUp Task sub-pattern.
-- `Elsa.FastEndpoints` — internal FastEndpoints wrapping for the activity-catalog REST API.
+- `Elsa.Api.FastEndpoints` — internal FastEndpoints wrapping for the activity-catalog REST API.
 - `System.Text.Json` — shadow-JSON columns for `*Source` projections; polymorphic descriptor (de)serialisation driven by the `ImplementationKind` discriminator.
 
 **Storage**: SQLite via EF Core in the foundation repo; fresh initial migrations regenerated for both `ActivitiesDesignDbContext` and `WorkflowsDesignDbContext` (no production data to preserve).

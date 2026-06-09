@@ -3,6 +3,12 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Local workstation files
+.DS_Store
+**/.DS_Store
+.idea/
+.agents/
+
 # User-specific files
 *.rsuser
 *.suo

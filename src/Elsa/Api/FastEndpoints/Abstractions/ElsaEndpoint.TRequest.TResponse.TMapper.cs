@@ -1,0 +1,19 @@
+using Elsa.Api.FastEndpoints.Constants;
+using FastEndpoints;
+
+namespace Elsa.Api.FastEndpoints.Abstractions
+{
+    public class ElsaEndpoint<TRequest, TResponse, TMapper> : Endpoint<TRequest, TResponse, TMapper>
+        where TRequest : notnull, new()
+        where TResponse : notnull
+        where TMapper : class, IMapper, new()
+    {
+        protected void ConfigurePermissions(params string[] permissions)
+        {
+            if (!EndpointSecurityOptions.SecurityIsEnabled)
+                AllowAnonymous();
+            else
+                Permissions([PermissionNames.All, .. permissions]);
+        }
+    }
+}

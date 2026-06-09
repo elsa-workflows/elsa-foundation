@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />		
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+		<PackageReference Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
+		<PackageReference Include="System.CommandLine" Version="2.0.8" />
+		<PackageReference Include="Ulid" Version="1.4.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
+	  <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+	  <ProjectReference Include="..\Core\Elsa.Persistence.Core.csproj" />
+	  <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+	</ItemGroup>
+	
+	
+
+
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Sqlite/**/*" />
+    <EmbeddedResource Remove="Sqlite/**/*" />
+    <None Remove="Sqlite/**/*" />
+  </ItemGroup>
+
+</Project>

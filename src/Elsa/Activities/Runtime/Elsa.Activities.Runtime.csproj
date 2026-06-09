@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Core/**/*" />
+    <EmbeddedResource Remove="Core/**/*" />
+    <None Remove="Core/**/*" />
+  </ItemGroup>
+
+</Project>

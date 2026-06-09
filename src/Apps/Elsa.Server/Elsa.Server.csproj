@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.FastEndpoints" Version="0.0.24" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+		<PackageReference Include="Nuplane" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Admin" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Loading" Version="0.0.8" />
+		<PackageReference Include="Nuplane.Sources.Directory" Version="0.0.8" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" Version="10.0.8" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\EFCore\Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\Elsa.Expressions.csproj" />
+		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
+		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
+		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
+		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
+		<ProjectReference Include="..\..\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tasks\Core\Elsa.Tasks.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
+		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\EFCore\Sqlite\Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
+	</ItemGroup>
+
+</Project>

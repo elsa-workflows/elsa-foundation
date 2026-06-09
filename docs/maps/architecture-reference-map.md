@@ -14,14 +14,14 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 
 | Signal | From | To | Review note |
 |---|---|---|---|
-| design-to-runtime | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa.Activities.Design.Reconciliation.Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | [Elsa.Activities.Runtime.Core](../../src/Elsa.Activities.Runtime.Core/Elsa.Activities.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
-| runtime-to-design | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | [Elsa.Workflows.Design.Core](../../src/Elsa.Workflows.Design.Core/Elsa.Workflows.Design.Core.csproj) | review signal |
+| design-to-runtime | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | expected in some design/read/publish paths; review context |
+| runtime-to-design | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | review signal |
 
 ## Bridge-Like Direct Reference Shape
 
 | Project | Design references | Runtime references |
 |---|---|---|
-| [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa.Activities.Design.Reconciliation.Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | Elsa.Activities.Design.Reconciliation.Core | Elsa.Activities.Runtime.Core |
-| [Elsa.Server](../../src/Server/Elsa.Server.csproj) | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Runtime |
-| [Elsa.Workflows.Publishing.Api](../../src/Elsa.Workflows.Publishing.Api/Elsa.Workflows.Publishing.Api.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core | Elsa.Activities.Runtime.Core |
-| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa.Workflows.Runtime.JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows.Design.Core | Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | Elsa.Activities.Design.Reconciliation.Core | Elsa.Activities.Runtime.Core |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Runtime |
+| [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core | Elsa.Activities.Runtime.Core |
+| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows.Design.Core | Elsa.Workflows.Runtime.Core |

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+	</ItemGroup>
+	
+  <ItemGroup>
+    <ProjectReference Include="Core\Elsa.Mediator.Core.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Core/**/*" />
+    <EmbeddedResource Remove="Core/**/*" />
+    <None Remove="Core/**/*" />
+  </ItemGroup>
+
+</Project>
