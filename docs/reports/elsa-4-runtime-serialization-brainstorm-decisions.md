@@ -994,12 +994,59 @@ Rationale:
 - Slot-based middleware lets module developers say "run after inputs exist but before the activity executes" instead of depending on internal middleware class names.
 - Stable phases keep modules resilient when Elsa refactors internal middleware.
 
+### 16. Diagnostics, Incidents, And Checkpoints
+
+Elsa 4 should keep diagnostics, audit/history, incidents, and checkpoints as separate concepts. They often happen near each other, but they serve different purposes.
+
+Diagnostics:
+
+- Developer/operator-facing observations.
+- Can include validation messages, binding failures, pipeline phase timings, materialization errors, and unresolved references.
+- May be transient or persisted depending on diagnostic policy.
+
+Audit/history:
+
+- Durable observation trail.
+- Records what happened, not what is needed to resume.
+- Can include safe representations of inputs, outputs, activity attempts, outcomes, incidents, and retries.
+
+Incident:
+
+- Runtime failure state requiring a policy decision.
+- Tied to workflow instance plus activity attempt when applicable.
+- Can suspend workflow, trigger retry, compensate, fault, or wait for intervention.
+
+Checkpoint:
+
+- Explicit durable persistence boundary.
+- Persists declared durable values, scheduler state, bookmarks, incident state, and result state.
+- Does not persist ephemeral evaluated inputs or raw activity outputs unless captured.
+
+Rules:
+
+- Audit/history is not resume state.
+- Diagnostics are not necessarily durable.
+- Incidents are runtime control state.
+- Checkpoints are the only normal place where durable execution state is written.
+- Failed materialization or input binding can produce diagnostics and incidents, but should not create partial durable value writes.
+- Retry attempts get distinct `activityExecutionId`s and share a logical activity node identity.
+- Checkpoint records should include enough trace IDs to explain which document node, executable node, and activity attempt caused the write.
+
+Core rule:
+
+**Elsa 4 should make persistence boundaries explicit. Runtime state is checkpointed; observations are recorded separately; failures become incidents with traceable execution identity.**
+
+Rationale:
+
+- This prevents audit/history and diagnostics from being mistaken for resume state.
+- It keeps failure handling explicit without letting partial evaluated values leak into durable state.
+- It gives operators enough traceability to understand checkpoints, retries, incidents, and output capture.
+
 ## Next Decision To Work
 
-Define workflow and activity diagnostics, incidents, and checkpoint behavior:
+Define remaining runtime seam follow-up topics:
 
-- What gets recorded as diagnostics versus audit/history.
-- How incidents relate to failed activity attempts and workflow suspension.
-- Where checkpoints occur and what state they persist.
-- How retry attempts are represented in diagnostics and execution identity.
-- How debug views expose pipeline order, value materialization, and output capture without persisting unsafe data.
+- Decide whether this brainstorm report is complete enough to become a Speckit spec.
+- Split decisions into canonical source-of-truth layers: spec behavior, glossary terms, architecture maps, and implementation tasks.
+- Identify source-backed gaps that still need Elsa 3 code tracing before Elsa 4 design is finalized.
+- Decide whether to continue with execution scheduling/bookmark semantics or move to another program-goal topic.
