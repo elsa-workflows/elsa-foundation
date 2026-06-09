@@ -12,7 +12,7 @@
 	</ItemGroup>
 	
   <ItemGroup>
-    <ProjectReference Include="..\..\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 

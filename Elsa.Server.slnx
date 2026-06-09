@@ -80,9 +80,11 @@
   <Folder Name="/src/Elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Primitives/">
-    <Project Path="src/Elsa/Primitives/Elsa.Primitives.csproj" />
+  <Folder Name="/src/Elsa/Primitives/Hosting/">
     <Project Path="src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Primitives/Primitives/">
+    <Project Path="src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Serialization/">
     <Project Path="src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />

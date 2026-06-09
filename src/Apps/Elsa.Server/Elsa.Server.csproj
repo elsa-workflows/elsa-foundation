@@ -35,7 +35,7 @@
 		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />

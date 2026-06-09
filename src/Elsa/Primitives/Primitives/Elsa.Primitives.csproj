@@ -6,9 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
-  </ItemGroup>
-
 </Project>

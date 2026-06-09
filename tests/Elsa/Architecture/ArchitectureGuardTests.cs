@@ -173,6 +173,9 @@ public sealed class ArchitectureGuardTests
         if (project.Name == "Elsa.Architecture.Tests")
             return "tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj";
 
+        if (project.Name == "Elsa.Primitives")
+            return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
+
         if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
             return $"src/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
@@ -193,8 +196,9 @@ public sealed class ArchitectureGuardTests
         var hasChildProject = projectDirectories.Any(other =>
             other.Length > directory.Length &&
             other.StartsWith(directory + "/", StringComparison.Ordinal));
+        var keepLeafFolder = project.Name is "Elsa.Primitives" or "Elsa.Primitives.Hosting";
 
-        if (lastDirectorySegment == lastProjectSegment && !hasChildProject)
+        if (!keepLeafFolder && lastDirectorySegment == lastProjectSegment && !hasChildProject)
             directory = Path.GetDirectoryName(directory)!.Replace('\\', '/');
 
         return $"/{directory}/";

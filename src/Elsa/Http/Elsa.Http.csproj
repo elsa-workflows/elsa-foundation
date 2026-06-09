@@ -21,7 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\Caching\Core\Elsa.Caching.Core.csproj" />
-    <ProjectReference Include="..\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 

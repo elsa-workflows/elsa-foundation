@@ -22,7 +22,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

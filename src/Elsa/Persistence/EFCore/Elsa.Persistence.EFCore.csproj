@@ -18,7 +18,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
-	  <ProjectReference Include="..\..\Primitives\Elsa.Primitives.csproj" />
+	  <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
 	  <ProjectReference Include="..\Core\Elsa.Persistence.Core.csproj" />
 	  <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
 	</ItemGroup>

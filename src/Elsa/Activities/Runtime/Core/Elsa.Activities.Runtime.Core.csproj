@@ -9,7 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="..\..\..\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

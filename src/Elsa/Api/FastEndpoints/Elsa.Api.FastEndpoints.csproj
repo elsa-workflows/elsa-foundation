@@ -13,7 +13,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
-		<ProjectReference Include="..\..\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
 	</ItemGroup>
 
 </Project>

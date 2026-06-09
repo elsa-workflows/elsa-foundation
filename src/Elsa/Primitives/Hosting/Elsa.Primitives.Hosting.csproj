@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
 </Project>
