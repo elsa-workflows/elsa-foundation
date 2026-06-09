@@ -572,12 +572,60 @@ Core rule:
 
 **Unknown or unresolved design-time references should not destroy authored documents. Unknown or unresolved runtime requirements must block publish or execution.**
 
+### 10. Elsa 3 Definition Compatibility Mapping
+
+Elsa 4 should treat Elsa 3 migration as a definition migration by default, not a runtime-instance migration. Authored intent should be migrated where it is explicit. Uncertain Elsa 3 data should be preserved as diagnostics or migration metadata, not silently turned into Elsa 4 durable workflow state.
+
+Elsa 3 `VariableDefinition` mapping:
+
+- `VariableDefinition` maps to an Elsa 4 value with `roles: ["variable"]`.
+- `Id` maps to `id`.
+- `Name` maps to `name`.
+- `TypeName` and `IsArray` map best-effort to a logical `type`.
+- `Value` string maps to `default` only when it is parseable and type-compatible.
+- Unparseable or ambiguous `Value` data should be preserved as diagnostic or raw migration metadata.
+- `StorageDriverTypeName` maps to durability policy.
+
+Elsa 3 workflow input mapping:
+
+- Elsa 3 input `ArgumentDefinition` maps to an Elsa 4 value with `roles: ["input"]`.
+- `Name` maps to stable `id` plus human-facing `name`, with normalization when needed.
+- `TypeName` maps best-effort to a logical `type`.
+- `UIHint` maps to the `input` facet or Studio metadata.
+- `StorageDriverType` maps to `input + variable` only when it clearly means durable capture.
+- Ambiguous storage-driver usage should keep the value as `input` only and emit a migration diagnostic.
+
+Elsa 3 workflow output mapping:
+
+- Elsa 3 output `ArgumentDefinition` maps to an Elsa 4 value with `roles: ["output"]`.
+- `Name` maps to stable `id` plus human-facing `name`, with normalization when needed.
+- `TypeName` maps best-effort to a logical `type`.
+- Existing workflow-output semantics map to `lifecycle = result`.
+
+Elsa 3 activity output captures:
+
+- Activity output captures should not migrate as durable workflow values by default.
+- If the Elsa 3 workflow explicitly copied an activity output into a variable or workflow output, migrate the target variable or output.
+- Persisted execution-log outputs remain audit/history data only.
+- If a migration tool can identify deliberate output capture patterns, it can suggest declared values and mappings, but should not invent durable state silently.
+
+Storage-driver mapping:
+
+- Elsa 3 workflow instance storage driver maps to `lifecycle = instance`, `storage = inline`.
+- Elsa 3 custom variable storage driver maps to `lifecycle = instance`, `storage = custom`, with provider diagnostic or manual mapping required.
+- No storage driver uses Elsa 4 role defaults.
+- Unknown storage driver preserves metadata and blocks publish until mapped.
+
+Core compatibility rule:
+
+**Migrate authored intent where it is explicit. Preserve uncertain Elsa 3 data as diagnostics or migration metadata. Do not silently turn Elsa 3 runtime artifacts into Elsa 4 durable workflow state.**
+
 ## Next Decision To Work
 
-Define Elsa 3 compatibility mapping for variables, inputs, outputs, and activity output captures:
+Define the Elsa 4 input evaluation model:
 
-- Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
-- How Elsa 3 `VariableDefinition` maps to Elsa 4 `values`.
-- How Elsa 3 `ArgumentDefinition` inputs and outputs map to roles and facets.
-- How Elsa 3 storage-driver settings map to lifecycle/storage policy.
-- How Elsa 3 runtime values, logs, and activity outputs are handled when definitions migrate.
+- Whether Elsa 4 needs an evaluated activity input register.
+- Whether activity inputs are evaluated lazily, eagerly before execution, or through compiled bindings.
+- How expression evaluation interacts with retries, incidents, bookmarks, resumed execution, and observability.
+- Whether evaluated inputs are ever persisted outside explicit declared durable values.
+- How activity input binding diagnostics should surface to Studio and logs.
