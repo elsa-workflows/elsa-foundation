@@ -17,7 +17,8 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
-| Work tracking surfaces, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
+| Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
+| Program-goal bucket registry, stewardship, active objectives, roadmap notes when that tracking model applies | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` |

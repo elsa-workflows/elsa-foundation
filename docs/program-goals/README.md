@@ -8,6 +8,8 @@ Use this directory to see which larger efforts are active, who is stewarding the
 
 When the selected work tracking model uses program-goal buckets, this directory is the active work tracker. Reports may surface findings, concerns, and candidates, but planned work should be added to, moved between, completed in, or dropped from the relevant program-goal bucket.
 
+The work tracking model preference itself lives in `.agent-prefs/work-tracking-model.md`; reusable model options and templates live in [agent-preferences.md](../reference/agent-preferences.md#work-tracking-models).
+
 Use reports as evidence and inventory. When a report finding becomes planned work, route it through the selected work tracking model before implementation. If the model is `program-goal-buckets`, that means selecting or creating the right bucket, adding the item there, and updating the bucket when the work is done.
 
 ## Program Goal State
