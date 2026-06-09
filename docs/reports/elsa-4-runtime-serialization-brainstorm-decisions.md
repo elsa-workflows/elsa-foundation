@@ -128,7 +128,8 @@ Conceptual shape:
         "scope": "workflow"
       },
       "durability": {
-        "mode": "workflowInstance"
+        "lifecycle": "instance",
+        "storage": "inline"
       },
       "initial": {
         "source": "input"
@@ -175,7 +176,8 @@ Conceptual custom domain type:
     }
   },
   "durability": {
-    "mode": "workflowInstance"
+    "lifecycle": "instance",
+    "storage": "inline"
   }
 }
 ```
@@ -199,7 +201,8 @@ Conceptual reference value:
     }
   },
   "durability": {
-    "mode": "workflowInstance"
+    "lifecycle": "instance",
+    "storage": "inline"
   }
 }
 ```
@@ -299,7 +302,8 @@ Conceptual input plus variable:
     "source": "input"
   },
   "durability": {
-    "mode": "workflowInstance"
+    "lifecycle": "instance",
+    "storage": "inline"
   }
 }
 ```
@@ -319,7 +323,8 @@ Conceptual internal variable:
     "source": "default"
   },
   "durability": {
-    "mode": "workflowInstance"
+    "lifecycle": "instance",
+    "storage": "inline"
   }
 }
 ```
@@ -339,7 +344,8 @@ Conceptual output from a variable:
     "valueId": "result"
   },
   "durability": {
-    "mode": "workflowInstance"
+    "lifecycle": "instance",
+    "storage": "inline"
   }
 }
 ```
@@ -387,14 +393,143 @@ Rationale:
 - Outputs define the external result contract.
 - Persistence happens only for declared durable values.
 
+### 8. Durability Policy Vocabulary And Defaults
+
+Elsa 4 durability policy should split value lifecycle from storage strategy. Lifecycle says why the value is retained. Storage strategy says where and how the retained representation is stored.
+
+Conceptual workflow instance value:
+
+```json
+{
+  "id": "customer",
+  "roles": ["input", "variable"],
+  "type": {
+    "kind": "reference",
+    "id": "crm.customer"
+  },
+  "durability": {
+    "lifecycle": "instance",
+    "storage": "inline"
+  }
+}
+```
+
+Conceptual large payload:
+
+```json
+{
+  "id": "document",
+  "roles": ["variable"],
+  "type": {
+    "kind": "binary",
+    "mediaType": "application/pdf"
+  },
+  "durability": {
+    "lifecycle": "instance",
+    "storage": "external",
+    "storageProfile": "documents"
+  }
+}
+```
+
+Conceptual transient computed value:
+
+```json
+{
+  "id": "temporaryScore",
+  "roles": ["variable"],
+  "type": {
+    "kind": "number"
+  },
+  "durability": {
+    "lifecycle": "none"
+  }
+}
+```
+
+Conceptual workflow result:
+
+```json
+{
+  "id": "summary",
+  "roles": ["output"],
+  "type": {
+    "kind": "string"
+  },
+  "output": {
+    "source": "expression",
+    "language": "javascript",
+    "expression": "values.summary"
+  },
+  "durability": {
+    "lifecycle": "result",
+    "storage": "inline"
+  }
+}
+```
+
+Lifecycle vocabulary:
+
+- `none`: not persisted; available only in the current execution or evaluation scope.
+- `instance`: persisted as workflow instance state for suspension and resume.
+- `result`: persisted as workflow completion or result data.
+- `audit`: persisted only as observation/history and never used for resume.
+- `custom`: delegated to a named durability provider.
+
+Storage vocabulary:
+
+- `inline`: store a JSON-compatible value inline with the owning record.
+- `external`: store payload outside the workflow record and persist a locator.
+- `custom`: delegate storage to a named storage provider.
+
+Default rules:
+
+- `input` only defaults to `lifecycle = none`.
+- `variable` defaults to `lifecycle = instance`.
+- `input + variable` defaults to `lifecycle = instance`.
+- `output` only defaults to `lifecycle = result`.
+- `variable + output` defaults to `lifecycle = instance`, plus output mapping writes result data at completion.
+- Activity input evaluation is always `none` unless explicitly mapped into a declared durable value.
+- Activity output is always `none` unless explicitly mapped into a declared durable value or audit/history policy.
+
+Storage defaults:
+
+- JSON-compatible scalar, object, array, and reference values default to `inline`.
+- `binary` defaults to `external`.
+- Large payload aliases are integration-defined and usually `external`.
+- Custom serializers must declare whether they produce inline JSON, external locators, or custom storage records.
+
+Important distinction:
+
+```json
+{
+  "type": {
+    "kind": "reference",
+    "id": "crm.customer"
+  },
+  "durability": {
+    "lifecycle": "instance",
+    "storage": "inline"
+  }
+}
+```
+
+This means "persist the customer reference inline as workflow instance state." It does not mean "persist the full customer externally." A reference value is already a pointer. External storage is for payloads the workflow owns but should not inline, such as files, large JSON, generated reports, or serialized snapshots.
+
+Rationale:
+
+- Keeping lifecycle and storage separate avoids overloading "durable" with resume state, result state, references, audit records, and storage drivers.
+- Reference values remain lightweight domain pointers without implying ownership of the target aggregate.
+- The policy makes activity inputs and outputs ephemeral by default while preserving explicit paths for durable capture, audit, or external storage.
+- The two-axis model avoids repeating Elsa 3's ambiguity where storage drivers, variables, inputs, outputs, logs, and runtime values all carry slightly different meanings of persistence.
+
 ## Next Decision To Work
 
-Define durability policy vocabulary and defaults:
+Define validation rules for role and policy combinations:
 
-- Durability policy vocabulary and defaults.
-- Which modes exist, such as ephemeral, workflow instance, external reference, audit/history, or custom storage.
-- Which roles imply no durability by default.
-- Which role combinations imply workflow instance durability by default, if any.
-- How durability policy interacts with reference values and custom serializers.
 - Validation rules for incompatible role combinations.
+- Required facets for each role and role combination.
+- Invalid lifecycle/storage/type combinations.
+- Required provider IDs for `custom` lifecycle or storage.
+- Validation timing for imported documents with missing type aliases or activity types.
 - Compatibility mapping from Elsa 3 variables, inputs, outputs, and activity output captures.
