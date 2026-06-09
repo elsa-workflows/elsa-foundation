@@ -104,12 +104,61 @@ Implications:
 - Runtime persistence decisions should be driven by explicit durability policy on the declared value.
 - Field names such as `values` and role names are conceptual for the brainstorm and should be finalized in the later spec.
 
+### 5. Authored Value JSON Shape And Naming
+
+Authored workflow documents should contain a `values` declaration collection. Each value has stable identity, display metadata, type/schema, durability, initialization rules, and role-specific facets. References use the stable value ID, not the display name.
+
+Conceptual shape:
+
+```json
+{
+  "values": [
+    {
+      "id": "customer",
+      "name": "Customer",
+      "roles": ["input", "variable"],
+      "type": {
+        "kind": "json",
+        "schema": { "type": "object" }
+      },
+      "input": {
+        "required": true
+      },
+      "variable": {
+        "scope": "workflow"
+      },
+      "durability": {
+        "mode": "workflowInstance"
+      },
+      "initial": {
+        "source": "input"
+      }
+    }
+  ]
+}
+```
+
+Implications:
+
+- The collection name should be `values`, not `variables`, `arguments`, or `state`.
+- `values` should be an array rather than an object/map so Studio ordering, diffing, metadata, and future annotations remain straightforward.
+- Every value should have a stable `id` used by references.
+- `name` is human-facing and renameable.
+- `roles` is the compact semantic declaration.
+- Role-specific blocks such as `input`, `output`, and `variable` hold only metadata for that role.
+- `type`, `durability`, and initialization/default behavior live on the value because they apply across roles.
+- The authored document should avoid raw CLR type names. If a .NET type is needed, it should be represented through a schema or type-alias contract, not assembly-qualified durable data.
+- Separate root collections such as `inputs`, `variables`, and `outputs` should not be used for the same declared values because that recreates the Elsa 3 drift problem.
+
 ## Next Decision To Work
 
-Define the detailed semantics of declared values:
+Define the value type/schema and serializer contract model:
 
-- Exact authored document JSON shape and naming.
 - Type/schema representation and serializer contracts.
+- Built-in scalar, object, array, and binary/reference value kinds.
+- Whether Elsa-owned aliases are enough or JSON Schema is required.
+- How .NET type information can participate without becoming durable assembly-qualified data.
+- How strict conversion, validation, and runtime materialization should behave.
 - Default value, initial value, invocation binding, and completion mapping semantics.
 - Durability policy vocabulary and defaults.
 - Validation rules for incompatible role combinations.
