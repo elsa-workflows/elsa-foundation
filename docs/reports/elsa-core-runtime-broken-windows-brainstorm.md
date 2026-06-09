@@ -77,6 +77,10 @@ Brainstorm direction: investigate a shared middleware abstraction that can serve
 
 Source-backed topic note: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
 
+Elsa 4 brainstorm decisions: [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md).
+
+Action plan: [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md).
+
 Questions to validate:
 
 - What middleware stages exist for workflow execution versus activity execution in Elsa 3?
