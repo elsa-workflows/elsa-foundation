@@ -128,7 +128,7 @@ Keep `AGENTS.md` stable. Do not add new program objectives there; keep using `do
 
 Classification: strength with guardrail.
 
-Core workflows exist and are clear enough for architecture planning, codebase verification, source-of-truth audit, feature composition, and unfinished-work ranking. The skill catalog also records when to plan first and when tests/docs/maps are follow-through obligations.
+Core workflows exist and are clear enough for architecture planning, codebase verification, source-of-truth audit, feature composition, and unfinished-work inventory review. The skill catalog also records when to plan first, how to route planned work through the selected work tracking model, and when tests/docs/maps are follow-through obligations.
 
 Impact:
 
@@ -244,4 +244,3 @@ Use this checklist before letting a worker handle a large architecture unit:
 1. Do targeted constitution thinning from this audit, starting with safe explanatory/provisional material that already has a reference/report home.
 2. Prepare a reviewed handoff prompt template for large architecture workers.
 3. After runtime work lands, run this audit again against the runtime handoff path to see whether the Elsa brain still routes correctly.
-

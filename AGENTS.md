@@ -31,7 +31,7 @@ Program goals are persisted in `docs/program-goals/`, not in this file. Do not u
 
 A program goal is a mid-term bucket of related short-term objectives. Different architects or experts may maintain different active buckets for different domains. Each bucket should have its own file under `docs/program-goals/` so people across agents, branches, and network boundaries can see what exists, who is stewarding it, what is active, and which reports/specs/branches are connected.
 
-Program goal state may also explicitly be `none/free-flow`; do not invent a bucket just because one is missing. Use [docs/program-goals/README.md](docs/program-goals/README.md#program-goal-state) for the shared model and [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#program-goal-selection-models) for when to ask.
+Program goal state may also explicitly be `none/free-flow`; do not invent a bucket just because one is missing. Use [docs/program-goals/README.md](docs/program-goals/README.md#program-goal-state) for the shared model, [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#program-goal-selection-models) for when to ask, and the selected work tracking model for how planned work is organized.
 
 Use a lightweight drift guard instead of a mandatory zoom-out at every session start. Trigger a program-goal check when one of these is true:
 
@@ -90,6 +90,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 - If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
 - If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
 - If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
+- If `.agent-prefs/work-tracking-model.md` exists, follow it for organizing, moving, completing, or dropping planned work. If no work tracking preference exists and the task requires durable planning/tracking, read [docs/reference/agent-preferences.md](docs/reference/agent-preferences.md#work-tracking-models) before choosing where work state lives.
 - If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.
 - If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
 - After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.

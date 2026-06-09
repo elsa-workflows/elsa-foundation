@@ -1,24 +1,24 @@
 # Unfinished Work
 
-Status: refreshed during Constitution Thinning v1 from current docs, constitution drafts, extracted draft history, specs, maps, and source comments.
+Status: inventory refreshed during Constitution Thinning v1 from current docs, constitution drafts, extracted draft history, specs, maps, and source comments.
 
-## Program Goal State
+This report is an inventory of findings, concerns, and loose unresolved items that have not found a more specific home. It is not the default active work queue. When a finding becomes planned work, route it through the selected work tracking model, such as a program-goal bucket, before implementation.
 
-Current re-ranking state: [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md).
+## Routing Note
 
-This state is explicit for this review; it does not make the Elsa Brain Operating Model the default lens for all future work. Future "what next" reviews should first identify whether the current program goal state is a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+The previous re-ranking pass used [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) as its lens. That ranking is historical evidence, not queue state. Future planning should first follow the selected work tracking model. Under the default `program-goal-buckets` model, move or add the chosen item to the relevant program-goal bucket before planning or execution.
 
-## Priority View
+## Candidate Signals
 
-This view ranks unfinished work by the current program goal state. The detailed inventory below remains grouped by constitution, code/domain, and knowledge/workspace categories.
+The table below preserves candidate signals from the last review. It is not an active priority queue.
 
-| Priority | Candidate | Milestone or state lens | Why now | Next action |
+| Former priority | Candidate | Lens used in last review | Why it mattered | Routing |
 |---:|---|---|---|---|
-| 1 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | This report is the primary "what next" surface, so it should preserve program-goal-state-aware ranking instead of local-topic momentum. | Keep this priority view current during future drift or "what next" reviews; do not rank code-change candidates in this bucket while the current intent is no code changes. |
-| 2 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, the feature-dependency map now has PowerShell/Bash generator coverage, and richer test maturity navigation is still planned. | Resume only for map/report planning or verification, especially the test maturity map; do not reopen the completed feature-dependency Bash fallback unless parity drifts. |
-| 3 | Feature composition classification passes | Elsa Brain Operating Model: feature composition readiness | The classification vocabulary review is complete enough for agents to stop guessing; the remaining work is applying it to bounded feature/settings slices. | Use [CShells composition evidence](cshells-composition-evidence.md#next-work-units-enabled) for a Feature Classification Pass, Settings Classification Pass, or Generator Readiness Pass; do not implement generator, map-generator, or source-code changes from this bucket. |
-| - | Codebase reality / test maturity follow-up | Recorded finding outside current no-code bucket | Code placeholders, weak implementations, and test gaps remain documented, but the current Elsa Brain Operating Model bucket is not selecting code-change work units. | Keep [NotImplemented classification](notimplemented-classification.md) as the safeguard. Re-rank code fixes only when the user explicitly chooses a code-change or implementation bucket. |
-| 5 | Constitution ratification / provisional gate review | Elsa Brain Operating Model: constitution governance | Several draft/provisional gates remain open, but broad ratification is premature before code reality and runtime seams are clearer. | Use Critical Constitution Review only for a targeted gate needed by an approved work unit. |
+| 1 | Unfinished work triage maintenance | Elsa Brain Operating Model: reports / next-step selection | The report needed to stop creating local-topic momentum. | Completed by reframing this report as inventory and routing active work through the work tracking model. |
+| 2 | Map freshness / testing maturity map | Elsa Brain Operating Model: generated maps and codebase navigation | Existing maps are useful, the feature-dependency map now has PowerShell/Bash generator coverage, and richer test maturity navigation is still planned. | If selected, add a test maturity map or map-verification item to the relevant program-goal bucket first. |
+| 3 | Feature composition classification passes | Elsa Brain Operating Model: feature composition readiness | The classification vocabulary review is complete enough for agents to stop guessing; the remaining work is applying it to bounded feature/settings slices. | If selected, route a bounded pass through the relevant program-goal bucket and use [CShells composition evidence](cshells-composition-evidence.md#next-work-units-enabled). |
+| - | Codebase reality / test maturity follow-up | Recorded finding outside current no-code bucket | Code placeholders, weak implementations, and test gaps remain documented. | Keep [NotImplemented classification](notimplemented-classification.md) as evidence; create or select an implementation bucket before planning code fixes. |
+| 5 | Constitution ratification / provisional gate review | Elsa Brain Operating Model: constitution governance | Several draft/provisional gates remain open, but broad ratification is premature before code reality and runtime seams are clearer. | Use Critical Constitution Review only for a targeted gate needed by an approved work unit, then track that unit in the relevant bucket. |
 
 ## Constitution and architecture decisions
 
@@ -73,10 +73,10 @@ rg -n "TODO|DEFERRED|deferred|pending|ratification|stub|placeholder|not implemen
 
 Classify new findings as constitution, code/domain, tests, docs, maps, or tool/skill work.
 
-## Re-Ranking Rule
+## Planning Rule
 
-When this report is used for "what next" planning, first identify the current program goal state. The state may be a named program-goal bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
+When this report is used for "what next" planning, first follow the selected work tracking model. If the default `program-goal-buckets` model applies, identify the relevant bucket or `none/free-flow` state before planning.
 
-If a named bucket is active, rank candidates by how directly they advance that bucket, then by local severity and unblock value. If `none/free-flow` is active, rank by the user's stated intent, nearby evidence, local severity, and unblock value.
+If a report item is selected for substantial planning or implementation, add or move the item into the relevant program-goal bucket before execution. Mark completion in the bucket. Update this report only when the underlying finding, evidence, or inventory classification changed.
 
 Do not invent a program-goal bucket just because one is missing. Only propose creating or selecting a bucket when the work is forming a mid-term coordination surface that would help future agents, architects, or engineers.

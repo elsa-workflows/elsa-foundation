@@ -35,7 +35,7 @@ This goal does not mean every session must repeat the full program overview. Use
 1. Keep `AGENTS.md` as the AI-provider-neutral front door and stable routing layer.
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
-4. Make unfinished work and next-step selection visible without forcing every session through a large zoom-out ritual.
+4. Keep active work tracking in program-goal buckets while using reports as evidence and inventory.
 5. Keep feature composition work useful but subordinate to the broader Elsa-brain operating model until alignment is reviewed.
 
 ## Linked Surfaces
@@ -58,9 +58,16 @@ The temporary alignment sequence has been completed and captured in the normal s
 - Program alignment is reflected in this goal file and [unfinished-work re-ranking](../reports/unfinished-work-reranking.md).
 - Architecture-tour routing is captured in [architecture tour review](../reports/architecture-tour-review.md).
 - Glossary coverage is captured in [glossary coverage audit](../reports/glossary-coverage-audit.md).
-- The active "what next" priority view now lives in [unfinished work](../reports/unfinished-work.md).
+- Current loose findings and concerns live in [unfinished work](../reports/unfinished-work.md) as inventory, not as the active queue.
 
-Use [unfinished work](../reports/unfinished-work.md) for current next-step ranking. Do not keep completed short-term objectives in this goal file once their outputs are captured elsewhere.
+Use this goal file for planned work in the Elsa Brain Operating Model bucket. Use [unfinished work](../reports/unfinished-work.md) as an inventory of findings and concerns; when an inventory item becomes planned work, route it through the selected work tracking model before implementation.
+
+## Bucket Items
+
+- Active: keep `AGENTS.md`, preference catalogs, program-goal buckets, and report inventories aligned so agents have one operational place to add, move, complete, or drop planned work.
+- Completed: work tracking model cleanup made program-goal buckets the default active tracker, added the local preference template, and reframed `unfinished-work.md` as inventory.
+- Parked: plan a test maturity map or approved CShells composition-generation map as separate work units when the user selects that work.
+- Parked: revisit broad constitution ratification only when a targeted gate review or approved work unit needs it.
 
 ## Drift / Review Notes
 

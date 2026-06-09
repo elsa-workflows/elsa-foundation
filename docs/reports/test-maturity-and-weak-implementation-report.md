@@ -153,7 +153,7 @@ Evidence:
 
 - [RequiredInputOutputValidator](../../src/Elsa.Workflows.Design.Validations/Validators/RequiredInputOutputValidator.cs) documents that workflow-level `State.Inputs` and `State.Outputs` are deliberately skipped until a workflow-level binding surface exists.
 - Tests cover the activity-level validation branches and note the workflow-level branch is deferred.
-- [Unfinished work](unfinished-work.md) already tracks required input/output data-shape follow-up.
+- [Unfinished work](unfinished-work.md) records the required input/output data-shape follow-up as inventory.
 
 Risk:
 

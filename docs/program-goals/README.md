@@ -4,6 +4,12 @@ Program goals are mid-term buckets of related short-term objectives. They are co
 
 Use this directory to see which larger efforts are active, who is stewarding them, what work is currently in scope, and where the supporting reports/specs/branches live. Keep one file per goal bucket to reduce merge conflicts.
 
+## Work Tracking Role
+
+When the selected work tracking model uses program-goal buckets, this directory is the active work tracker. Reports may surface findings, concerns, and candidates, but planned work should be added to, moved between, completed in, or dropped from the relevant program-goal bucket.
+
+Use reports as evidence and inventory. When a report finding becomes planned work, route it through the selected work tracking model before implementation. If the model is `program-goal-buckets`, that means selecting or creating the right bucket, adding the item there, and updating the bucket when the work is done.
+
 ## Program Goal State
 
 Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff, identify the current program goal state when it is unclear.
@@ -26,7 +32,8 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 - Keep program-goal files concise and amendable.
 - Record active objectives and roadmap notes here instead of in `AGENTS.md`.
-- Treat short-term roadmap notes as temporary coordination aids. When the units they name are implemented or captured in their normal source-of-truth layers, check the result against the program goal and remove or replace the completed short-term objectives.
+- Treat short-term roadmap notes as temporary coordination aids. When the units they name are implemented or captured in their normal source-of-truth layers, check the result against the program goal and remove, replace, or mark completed short-term objectives.
+- Move items between buckets when a better owner emerges. Drop items when carrying them no longer helps; if the concern becomes important later, it can be rediscovered from reports, source evidence, or user intent.
 - Link to reports, specs, maps, branches, and PRs instead of copying their content.
 - If a goal becomes a ratified gate, move the gate to the constitution and leave a link here.
 - If a goal becomes a repeatable workflow, move the workflow to `docs/skills/catalog.md` and leave a link here.

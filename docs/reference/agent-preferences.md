@@ -37,6 +37,7 @@ Use this table as the current setup registry. Add new rows here when a new local
 | Git operating model | `.agent-prefs/git-operating-model.md` | Before pushing, opening pull requests, changing remotes, or choosing a branch strategy. | [git-operating-models.md](git-operating-models.md) |
 | Session execution model | `.agent-prefs/session-execution-model.md` | Before substantial planning, substantial implementation, or multi-session/fresh-agent workflows. | This file |
 | Program goal selection model | `.agent-prefs/program-goal-selection.md` | Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff when the current program goal state is unclear. | This file |
+| Work tracking model | `.agent-prefs/work-tracking-model.md` | Before creating, moving, completing, dropping, or durably planning work items. | This file |
 | Map script shell model | `.agent-prefs/map-script-shell.md` | Before refreshing generated maps when both PowerShell and Bash scripts are available. | This file |
 
 ## Quick Setup
@@ -100,6 +101,37 @@ Default behavior:
 - When both PowerShell and Bash map generators exist, choose the script family according to the preferred model.
 - If the preferred shell is unavailable, use the equivalent fallback script and note the fallback.
 - When verifying parity, run both script families regardless of the preferred default.
+```
+
+Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
+
+## Work Tracking Models
+
+Work tracking controls where active/planned work state lives. It does not change where evidence, findings, or generated facts belong.
+
+Common local choices:
+
+- `program-goal-buckets`: default/recommended. Use `docs/program-goals/` as the active work tracker; reports surface findings and candidate concerns but do not own planned-work state.
+- `ask-before-tracking`: ask before creating or updating durable tracking items, then route the work through the selected or newly chosen program-goal bucket.
+- `free-flow-untracked`: do not create durable tracking items unless the user explicitly asks for tracking.
+
+Under `program-goal-buckets`, when a report finding becomes planned work, first route it through the active work tracking model: identify/select/create the relevant program-goal bucket, add or move the item there, execute the work, and mark completion in the bucket. Update the report only when the underlying finding, evidence, or inventory classification changed.
+
+## Work Tracking Model Template
+
+Create `.agent-prefs/work-tracking-model.md` locally with content like:
+
+```md
+# Work Tracking Model Preference
+
+Preferred model: program-goal-buckets
+
+Default behavior:
+- Use `docs/program-goals/` as the active work tracker.
+- Add, move, complete, or drop planned work in the relevant program-goal bucket.
+- Treat reports such as `docs/reports/unfinished-work.md` as finding/evidence inventories, not active queues.
+- When a report finding becomes planned work, route it through the selected program-goal bucket before implementation.
+- When work is completed, update the relevant bucket item; update reports only if the evidence or finding changed.
 ```
 
 Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
