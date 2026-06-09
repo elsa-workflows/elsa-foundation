@@ -884,12 +884,122 @@ Rationale:
 - Missing extension packages or workflow definitions should not corrupt or discard authored workflow data.
 - The resolution boundary becomes explicit and testable: document operations are permissive with diagnostics, runtime artifact creation is strict.
 
+### 15. Execution Pipeline Shape And Middleware Extensibility
+
+Elsa 4 should keep workflow execution and activity execution as distinct pipeline concepts, but make their responsibilities explicit and small. Workflow pipeline owns orchestration state. Activity pipeline owns one activity attempt.
+
+Workflow pipeline responsibilities:
+
+- Create or resume workflow execution.
+- Load durable values, bookmarks, and scheduler state.
+- Drive scheduling and dispatch.
+- Handle workflow-level completion, cancellation, incidents, and result mapping.
+- Persist declared durable state at explicit checkpoints.
+
+Activity pipeline responsibilities:
+
+- Resolve the activity node from the executable.
+- Evaluate input bindings.
+- Materialize activity inputs.
+- Execute the activity attempt.
+- Capture outputs into declared values when configured.
+- Emit audit, history, and diagnostics.
+- Produce scheduling outcomes, bookmarks, incidents, and output facts.
+
+Core pipeline rule:
+
+**Workflow middleware moves the workflow forward. Activity middleware executes one activity attempt.**
+
+Elsa 4 should avoid one giant shared pipeline because the context and invariants are different. It should also avoid an overly abstract nested pipeline system where execution order becomes hard to inspect.
+
+Middleware extensibility should be slot-based, not primarily order-based. Public middleware extensibility targets stable semantic phases, not concrete internal middleware class names.
+
+Conceptual phase registration:
+
+```csharp
+pipeline.UseActivityPhase(ActivityPipelinePhase.Resolve);
+pipeline.UseActivityPhase(ActivityPipelinePhase.EvaluateInputs);
+pipeline.UseActivityPhase(ActivityPipelinePhase.MaterializeInputs);
+pipeline.UseActivityPhase(ActivityPipelinePhase.Execute);
+pipeline.UseActivityPhase(ActivityPipelinePhase.CaptureOutputs);
+pipeline.UseActivityPhase(ActivityPipelinePhase.RecordDiagnostics);
+```
+
+Conceptual module registration:
+
+```csharp
+services.AddElsa(elsa =>
+{
+    elsa.ActivityPipeline.AddMiddleware<MyValidationMiddleware>(
+        phase: ActivityPipelinePhase.BeforeExecute);
+});
+```
+
+Conceptual intent helpers:
+
+```csharp
+elsa.ActivityPipeline.OnBeforeExecute<MyValidationMiddleware>();
+elsa.ActivityPipeline.OnAfterInputMaterialization<MyPolicyMiddleware>();
+elsa.ActivityPipeline.OnOutputCapture<MyOutputPolicyMiddleware>();
+elsa.WorkflowPipeline.OnBeforeCheckpoint<MyCheckpointPolicyMiddleware>();
+```
+
+Middleware extensibility layers:
+
+- Stable phases: public extension points such as `BeforeInputEvaluation`, `AfterInputMaterialization`, `BeforeExecute`, `AfterExecute`, `BeforeOutputCapture`, and `BeforeCheckpoint`.
+- Capability-based ordering: middleware declares what it does and what it requires, rather than which internal middleware class it knows about.
+- Pipeline validation: Elsa validates that requirements can be satisfied and emits diagnostics when a module asks for an impossible slot.
+
+Conceptual descriptor:
+
+```csharp
+public sealed class MyMiddleware : IActivityMiddleware
+{
+    public static MiddlewareDescriptor Descriptor => new()
+    {
+        Phase = ActivityPipelinePhase.BeforeExecute,
+        Capabilities = ["validation"],
+        Requires = ["inputs.materialized"]
+    };
+}
+```
+
+Advanced users may still use explicit ordering as an escape hatch:
+
+```csharp
+elsa.ActivityPipeline.AddMiddleware<MyMiddleware>(options =>
+{
+    options.Phase = ActivityPipelinePhase.BeforeExecute;
+    options.Order = 100;
+});
+```
+
+Traceability rules:
+
+- Every compiled executable node keeps `documentNodeId`.
+- Every activity attempt gets `activityExecutionId`.
+- Output references in loops and parallelism use execution identity when needed.
+- Diagnostics include document node, executable node, workflow instance, and activity attempt IDs.
+
+Optimization rules:
+
+- Compile or materialize the middleware chain once per executable or runtime profile.
+- Keep a debug view of the resolved pipeline order.
+- Do not let optimization erase observable diagnostics or step boundaries.
+
+Rationale:
+
+- Two explicit pipelines keep workflow orchestration and activity attempts from sharing a misleading context model.
+- Shared behavior should be factored as services or policies, not hidden by merging the pipelines.
+- Slot-based middleware lets module developers say "run after inputs exist but before the activity executes" instead of depending on internal middleware class names.
+- Stable phases keep modules resilient when Elsa refactors internal middleware.
+
 ## Next Decision To Work
 
-Define execution pipeline shape:
+Define workflow and activity diagnostics, incidents, and checkpoint behavior:
 
-- Whether workflow and activity execution need distinct middleware pipelines.
-- Which context types and state transitions belong in each pipeline.
-- How diagnostics, incidents, retries, bookmarks, and output capture are surfaced.
-- Whether pipeline materialization should optimize hot paths without hiding step order.
-- How compiled executables preserve traceability back to authored document nodes.
+- What gets recorded as diagnostics versus audit/history.
+- How incidents relate to failed activity attempts and workflow suspension.
+- Where checkpoints occur and what state they persist.
+- How retry attempts are represented in diagnostics and execution identity.
+- How debug views expose pipeline order, value materialization, and output capture without persisting unsafe data.
