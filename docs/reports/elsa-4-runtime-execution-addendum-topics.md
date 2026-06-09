@@ -67,6 +67,10 @@ Questions:
 - Can HTTP context, DI scope, ambient user/tenant context, and cancellation tokens safely survive volatile waits?
 - How does volatile wait interact with checkpoints and execution leases?
 
+Parallelism note:
+
+Volatile wait should not be conflated with true parallel activity execution. Multiple branches may be able to register concurrent in-memory waits, but workflow state mutation can still remain single-threaded through the scheduler. True parallel activity execution, where multiple activity bodies run at the same time and may observe or mutate workflow state concurrently, is a separate future exploration because it affects variable consistency, output capture, checkpoint ordering, branch cancellation/faulting, joins, and activity author thread-safety expectations.
+
 ### 2. Activity Completion Propagation
 
 Problem:
