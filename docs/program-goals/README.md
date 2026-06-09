@@ -29,6 +29,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
 | [Elsa Brain Operating Model](elsa-brain-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Rebalance the broader Elsa-brain surfaces before returning to CShells generator-specific work |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Active | Workflows Runtime architecture / executable artifact seam | Joey plus the incoming runtime architect | Prepare the Runtime execution seam for architect-owned Speckit planning |
 
 ## Goal File Rules
 
