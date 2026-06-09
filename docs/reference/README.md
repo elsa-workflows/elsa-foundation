@@ -11,3 +11,4 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - committed catalog of supported Git workflow shapes; personal selections belong in `.agent-prefs/`.
+- [First-user prompt options](first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.

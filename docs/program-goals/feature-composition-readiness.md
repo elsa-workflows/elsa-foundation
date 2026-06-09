@@ -48,7 +48,7 @@ This bucket keeps Feature Composition Explorer work separate from generator impl
 
 - The Feature Composition Explorer is closer than generator implementation.
 - Start with one bounded shell goal or domain cluster.
-- Before using generated maps as strong evidence, check map freshness in [maps manifest](../maps/manifest.json).
+- Before using generated maps as strong evidence, check map freshness in [maps manifest](../maps/manifest.json). If relevant inputs are dirty or freshness is uncertain, refresh the relevant map first and review generated findings before continuing.
 
 ## Drift / Review Notes
 

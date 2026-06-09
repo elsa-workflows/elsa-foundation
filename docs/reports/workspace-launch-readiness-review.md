@@ -42,8 +42,8 @@ It is not ready for an unconstrained prompt such as "understand the whole repo a
 | Program-goal buckets now separate launch readiness, runtime execution, constitution readiness, code/test reality, feature composition, and workspace split readiness. | Strength | New users can pick a focused bucket instead of continuing broad Elsa Brain polishing. | [Program goals index](../program-goals/README.md). |
 | The Architecture Tour is short and correctly routes readers to deeper surfaces. | Strength | It can be the first orientation skill without becoming a second constitution. | [Architecture tour](../architecture-tour.md). |
 | Reports are good evidence surfaces, especially runtime handoff, test maturity, CShells evidence, unfinished work, and agent maturity. | Strength | First workers can start from evidence rather than chat memory. | Reports index plus the relevant bucket. |
-| Maps are not currently safe as fresh verification facts because the manifest says `relevant_inputs_dirty: true`. | Launch caution | New users can use maps for navigation, but must refresh or verify from source before making dependency/test claims. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
-| Constitutions remain draft/provisional in places. | Launch caution | New users must treat them as quality gates with draft status, not as fully ratified doctrine. | [Constitution Readiness](../program-goals/constitution-readiness.md). |
+| Maps are not safe as fresh verification facts when the manifest says `relevant_inputs_dirty: true` or freshness is uncertain. | Launch caution | When a thread invokes a map, refresh the relevant map layer first and review generated findings before continuing. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
+| Constitutions remain draft/provisional in places. | Launch caution | Warn users when draft status matters. If they want to focus on unratified items, start a targeted ratification work unit with the available skills and guardrails. | [Constitution Readiness](../program-goals/constitution-readiness.md). |
 | The repo is ready for a hard next unit, not more broad operating-model grooming. | Drift risk | Launch prep should now route toward specific buckets such as Runtime Execution Seam or Code Reality And Test Maturity. | [Program goals index](../program-goals/README.md). |
 
 ## First-User Start Path
@@ -64,8 +64,8 @@ No hard blocker prevents a first architect from starting constrained work.
 
 Soft blockers to name in handoffs:
 
-- map freshness is uncertain until relevant maps are regenerated or source facts are rechecked;
-- constitution text is still draft and should be reviewed only for targeted gates;
+- map freshness must be checked whenever maps are invoked; dirty or uncertain inputs mean refreshing the relevant map and reviewing generated findings before continuing;
+- constitution text is still draft and users should be warned when that matters; ratification work should be targeted and skill-guided;
 - large work needs a reviewed handoff prompt, not a vague repo-wide instruction.
 
 ## Recommended Next Launch Actions
@@ -74,3 +74,4 @@ Soft blockers to name in handoffs:
 2. Use [Runtime Execution Seam](../program-goals/runtime-execution-seam.md) for tomorrow's incoming runtime architect.
 3. Use [Constitution Readiness](../program-goals/constitution-readiness.md), [Code Reality And Test Maturity](../program-goals/code-reality-and-test-maturity.md), [Feature Composition Readiness](../program-goals/feature-composition-readiness.md), and [Workspace Split Readiness](../program-goals/workspace-split-readiness.md) for the remaining launch work.
 4. Do not add more broad objectives to [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) unless the routing layer itself breaks.
+5. Offer new users simple prompt options from [First-user prompt options](../reference/first-user-prompts.md) so they can choose orientation, workspace mechanics, or a hard next unit without guessing.

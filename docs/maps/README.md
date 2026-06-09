@@ -63,7 +63,9 @@ Generated maps are committed point-in-time snapshots. Use [manifest.json](manife
 - `input_fingerprint` is the authoritative freshness signal for the tracked map inputs.
 - `git_head` is advisory because maps are often generated before the commit that records them.
 - `relevant_inputs_dirty` tells you whether `src/`, `tests/`, `specs/`, or `tools/maps/` had uncommitted changes when the maps were generated.
-- If relevant inputs changed or freshness is uncertain, regenerate maps with either script.
+- If a workflow invokes a map and relevant inputs are dirty, changed, or freshness is uncertain, refresh the narrowest relevant map layer before using it as evidence.
+- After refreshing, review generated findings reports such as `docs/reports/maps-v1-findings.md` or `docs/reports/maps-v2-findings.md` before continuing.
+- If the refreshed report exposes drift that makes the current work unsafe, stop and tell the user rather than continuing from stale assumptions.
 
 ## Planned maps
 

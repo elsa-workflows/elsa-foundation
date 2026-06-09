@@ -17,7 +17,7 @@ This bucket exists to turn the Elsa brain from "still being polished" into a lau
 - First-user onboarding and handoff readiness.
 - Architecture Tour skill readiness and the short orientation path.
 - Clear next-step routing from reports into program-goal buckets.
-- Launch-readiness checks for broken links, stale roadmap notes, unresolved setup assumptions, and map freshness warnings.
+- Launch-readiness checks for broken links, stale roadmap notes, unresolved setup assumptions, and map-refresh behavior.
 - Handoff prompts/templates for large architecture workers when useful.
 - A concise "where to start" path for architects who should not reread the whole constitution first.
 
@@ -43,6 +43,7 @@ This bucket exists to turn the Elsa brain from "still being polished" into a lau
 - [Skills catalog](../skills/catalog.md)
 - [Agent maturity audit](../reports/agent-maturity-audit.md)
 - [Workspace launch readiness review](../reports/workspace-launch-readiness-review.md)
+- [First-user prompt options](../reference/first-user-prompts.md)
 - [Unfinished work](../reports/unfinished-work.md)
 - [Program goals index](README.md)
 - [AGENTS.md](../../AGENTS.md)
@@ -52,6 +53,9 @@ This bucket exists to turn the Elsa brain from "still being polished" into a lau
 - Treat this as the launch/handoff bucket for first users.
 - The next hard architecture unit should live in its own bucket, not here.
 - If an onboarding gap is discovered while preparing a worker handoff, fix the onboarding surface only when it prevents the handoff from being reliable.
+- When a handoff invokes maps and the manifest is dirty or freshness is uncertain, refresh the relevant map first and review generated findings before continuing.
+- Warn users that constitutions are draft/provisional when that affects their task; route ratification-focused work through [Constitution Readiness](constitution-readiness.md).
+- Do not continue broad Elsa Brain polishing. If the workspace can route the user, redirect to the focused hard-work bucket.
 
 ## Drift / Review Notes
 

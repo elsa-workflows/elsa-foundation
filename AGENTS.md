@@ -77,9 +77,12 @@ bash tools/maps/generate-feature-dependency-map.sh
 If the local shell is unavailable, try the other script if that shell is installed. If neither
 PowerShell nor Bash is available, ask the user to install one of them before refreshing maps.
 
-Generated maps are committed snapshots. Before relying on Maps v1 for navigation or verification,
-check `docs/maps/manifest.json`; regenerate relevant maps when inputs changed or freshness is
-uncertain. Maps v2 scripts are split so agents can refresh only the layer they need.
+Generated maps are committed snapshots. Before relying on any map for navigation or verification,
+check `docs/maps/manifest.json`. If the map is invoked and relevant inputs are dirty, changed, or
+freshness is uncertain, refresh the narrowest relevant map layer first, then review any generated
+findings report before continuing. If the refreshed report exposes drift that makes the current work
+unsafe, stop and tell the user before proceeding. Maps v2 scripts are split so agents can refresh
+only the layer they need.
 
 ## Personal operating preferences
 
@@ -138,7 +141,14 @@ Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orient
 
 ## Constitution boundary
 
-The constitutions are draft quality-gate documents. Draft history belongs in [docs/reports/constitution-draft-history.md](docs/reports/constitution-draft-history.md); current gaps belong in [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
+The constitutions are draft quality-gate documents. Warn users when constitution draft/provisional
+status matters to their task. If they want to focus on unratified material, route that through
+[Constitution Readiness](docs/program-goals/constitution-readiness.md) and use
+[Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or
+[Work Unit Planner](docs/skills/catalog.md#work-unit-planner). Draft history belongs in
+[docs/reports/constitution-draft-history.md](docs/reports/constitution-draft-history.md); current
+gaps belong in [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and
+[docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
 New work should move toward this rule:
 

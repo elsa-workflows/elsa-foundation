@@ -46,6 +46,8 @@ The constitutions remain the quality-gate layer. This bucket exists to keep rema
 ## Current Roadmap Notes
 
 - Do not start with broad ratification.
+- Warn users when draft/provisional constitution status matters to the task.
+- If a user wants to focus on unratified items, start a targeted work unit using Critical Constitution Review and Work Unit Planner.
 - Runtime/design gates should be reviewed in connection with the Runtime Execution Seam bucket.
 - Configuration/appsettings gates should wait for feature composition evidence to stabilize.
 

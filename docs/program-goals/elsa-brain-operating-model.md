@@ -36,7 +36,7 @@ This goal does not mean every session must repeat the full program overview. Use
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
 4. Keep this bucket's active planned work aligned with the shared program-goals planner while using reports as evidence and inventory.
-5. Keep feature composition work useful but subordinate to the broader Elsa-brain operating model until alignment is reviewed.
+5. Redirect new hard work to focused program-goal buckets instead of continuing broad Elsa Brain polishing.
 
 ## Linked Surfaces
 
