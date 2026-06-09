@@ -134,9 +134,6 @@ The Design ↔ Runtime split exists so Elsa can support Design-only, Runtime-onl
 and combined execution deployments. Any change to the split MUST preserve those
 deployment shapes or explicitly amend this section.
 
-The rationale and naming history live in
-[docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#workflowsdesign-and-workflowsruntime-split).
-
 ### §E2.3 `Elsa.Primitives` charter
 
 **framework §2.3 — Elsa specialization.** `Elsa.Primitives` is the narrow
@@ -161,7 +158,7 @@ surface identified by §E1.
 
 **framework §2.15 — Elsa specialization.** Elsa's foundation repo is this repository (`elsa-foundation`). It contains the host, the baseline domain cores, and default implementations needed for local development. Heavy provider-specific or optional integrations remain candidates for standalone feature packages.
 
-The current composition remains revisable as evidence accrues. The 2026-05-11 snapshot rationale lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#elsa-foundation-repo-composition).
+The current composition remains revisable as evidence accrues.
 
 ### §E2.5 `ElsaDbContextBase` — opt-in capability, not requirement
 
@@ -246,8 +243,6 @@ The compatibility surface is **"one-way, one-time"** by design. Mapping details 
 **Out of scope (deferred to a separate policy layer):**
 
 - **Context-aware visibility filtering** — tenant scoping, role-based access, feature flags, licensing gates, instance-level overrides. These are visibility refinements over the catalog; they reduce the catalog's output for a given context. They do NOT generate picker entries themselves.
-
-The rationale for this rule lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#activity-picker-catalog-rationale).
 
 **Removed surface:**
 

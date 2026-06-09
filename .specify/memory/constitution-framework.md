@@ -393,8 +393,6 @@ When a contract surface has both a **design-time consumer** (intellisense, schem
 
 #### §2.6.6 Delivery and failure strategies — one event concept, three responsibility axes
 
-*Rewritten (Unit 1, 2026-06-02): the prior two-concept model (`IDomainEvent` + `INotification`/`ILifecycleEvent`) was collapsed into a single `IEvent`. The distinction it tried to capture — "participate" vs "react" — is now expressed as a **delivery strategy** chosen per publish, not as a separate marker type.*
-
 There is **one** event concept (`IEvent`, §2.6.1). Event behaviour has three distinct responsibility axes:
 
 - **Delivery strategy** is publisher-owned. It controls when and how handlers run relative to the publisher's caller: Sequential, Parallel, or Background.
@@ -490,7 +488,7 @@ Correspondingly, `*.Persistence.Core` (the provider-agnostic persistence sub-dom
 
 When an entity needs a persistence-only field (e.g. the serialised form of a rich object that the entity also exposes in deserialised form, a denormalised lookup column, a backing string for a `[NotMapped]` projection), declare it as a **real property on the entity class** and **omit it from the read interface**. Do NOT use the provider's "shadow property" feature (e.g. EF Core's `Property<T>("...")` on the builder) for this purpose.
 
-Provider-side terms like EF Core's "shadow property" mean a property the provider tracks but is not on the CLR class. This rule is different: the property IS on the CLR class and is hidden from other domains by omitting it from the read interface. The rationale lives in [docs/reference/architecture-rationale.md](../../docs/reference/architecture-rationale.md#domain-level-shadow-properties).
+Provider-side terms like EF Core's "shadow property" mean a property the provider tracks but is not on the CLR class. This rule is different: the property IS on the CLR class and is hidden from other domains by omitting it from the read interface.
 
 **Mechanism.**
 
@@ -708,8 +706,6 @@ The form of the documentation (README, manifest, generated reference, sidecar JS
 
 #### §2.22.1 Domain-level extension-points catalog
 
-*New sub-rule (Unit C Phase-5 amendment, 2026-05-28). Renamed 2026-05-29: `DOMAIN_EVENTS.md` → `EVENTS.md`. Updated Unit 1 (2026-06-02): the two-marker categorisation collapsed to one `IEvent` concept distinguished by delivery strategy. Broadened Unit 1 (2026-06-03): the standalone `EVENTS.md` becomes a per-domain `EXTENSION_POINTS.md` whose Events section absorbs the former events catalog — because events are only one of the seams a domain exposes; overridable contracts and implementable contributor interfaces are the rest, and a consumer needs all three in one place.*
-
 Feature documentation per §2.22 covers what an individual feature contributes. A separate, complementary obligation lands at the **domain** level: every domain whose `.Core` library exposes extension points (overridable contracts, implementable contributor interfaces, AND/OR published events) MUST ship an **extension-points catalog** as a documentation deliverable at the domain's **composition root** — the feature project that wires the defaults and registers the aggregating handlers (typically the `<Domain>` or `<Domain>.<Provider>` project, NOT the `.Core` which is contracts-only). Exception: domains with no separate feature project keep the catalog in their `.Core`. The catalog answers, in one discoverable place: *what can I override, what can I implement, and what events does this domain publish?* — without re-reading every feature implementation.
 
 **Two axes of extension the catalog distinguishes.**
@@ -767,8 +763,6 @@ Generated maps are the current review surface for extension-point catalog/index 
 The `CatalogParityTests` reflection guard (§2.23-adjacent) catches event-heading drift automatically; contributor-interface and known-implementations drift is caught at code review. Both layers are required.
 
 #### §2.22.2 Repo-wide extension-points index
-
-*New sub-rule (Unit 1, 2026-06-03).*
 
 Beyond the per-feature documentation (§2.22 — *what does THIS feature register?*) and the per-domain extension-points catalogs (§2.22.1 — *what can I override/implement/subscribe to in THIS domain?*), the repo SHIPS one **repo-wide index of every extension point** — the sanctioned answer to *"how do I extend the system?"* gathered into a single discoverable map rather than scattered across domains.
 
@@ -872,7 +866,7 @@ The rationale for keeping a closed pattern catalog lives in [docs/reference/arch
 | 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
 | 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IEventPublisher.Publish` with a pluggable delivery strategy. Sequential (default) for contribution; Background for notification. | Cross-feature composition through named events in a domain's `.Core`. |
 | 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
-| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. *(Architect-ratified addition: Sipke 2026-06-01, Joey 2026-06-02; supersedes the withdrawn intent-revealing-methods sub-rule. Pre/post kind added Joey 2026-06-02.)* |
+| 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an OnXxxing/OnXxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<On<Phase>>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. |
 | 3c | *sub-rule:* Default Sequential CAN break the caller | §2.6.1 | No exception-shielding on the default path; a handler throw fails the publish (fail-fast). | Default for every Sequential publish. Resilience is opt-in via the Background strategy, NOT a default middleware. |
 | 4 | **Delivery strategies** | §2.6.6 | Select dispatch behaviour per publish: Sequential (default, awaited, propagates), Parallel, Background (isolated fire-and-forget). | Background for "X happened, react if you want" (audit, telemetry, UI-push). No separate marker type — strategy is the axis. |
 | 5 | **Replacement contracts** | §2.6.2 | One implementation per application (e.g. one `IDistributedLockProvider`). | Multiple registrations = conflict, not contribution. Detect at startup. |
