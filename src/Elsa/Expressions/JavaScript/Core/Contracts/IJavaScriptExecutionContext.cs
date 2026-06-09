@@ -1,21 +1,20 @@
-﻿namespace Elsa.Expressions.JavaScript.Core.Contracts
+﻿namespace Elsa.Expressions.JavaScript.Core.Contracts;
+
+public interface IJavaScriptExecutionContext
 {
-    public interface IJavaScriptExecutionContext
-    {
-        object? GetValue(string name);
+    object? GetValue(string name);
 
-        TValue? GetValue<TValue>(string name) => (TValue?)GetValue(name);
+    TValue? GetValue<TValue>(string name) => (TValue?)GetValue(name);
 
-        void SetValue(string name, object? value);
+    void SetValue(string name, object? value);
 
-        void RegisterFunction(IJavaScriptFunction function);
+    void RegisterFunction(IJavaScriptFunction function);
 
-        void RegisterType(Type type);
+    void RegisterType(Type type);
 
-        object? NormalizeValue(object? value);
+    object? NormalizeValue(object? value);
 
-        object? Evaluate(string script);
+    object? Evaluate(string script);
 
-        void Execute(string script);
-    }
+    void Execute(string script);
 }

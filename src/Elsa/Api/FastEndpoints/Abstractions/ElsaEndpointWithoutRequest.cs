@@ -1,16 +1,15 @@
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 
-namespace Elsa.Api.FastEndpoints.Abstractions
+namespace Elsa.Api.FastEndpoints.Abstractions;
+
+public abstract class ElsaEndpointWithoutRequest : EndpointWithoutRequest
 {
-    public abstract class ElsaEndpointWithoutRequest : EndpointWithoutRequest
+    protected void ConfigurePermissions(params string[] permissions)
     {
-        protected void ConfigurePermissions(params string[] permissions)
-        {
-            if (!EndpointSecurityOptions.SecurityIsEnabled)
-                AllowAnonymous();
-            else
-                Permissions([PermissionNames.All, .. permissions]);
-        }
+        if (!EndpointSecurityOptions.SecurityIsEnabled)
+            AllowAnonymous();
+        else
+            Permissions([PermissionNames.All, .. permissions]);
     }
 }

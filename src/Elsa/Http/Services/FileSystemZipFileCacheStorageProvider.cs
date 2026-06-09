@@ -3,16 +3,15 @@ using Elsa.Http.Options;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Http.Services
-{
-    internal sealed class FileSystemZipFileCacheStorageProvider(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorageProviders
-    {
-        private FileSystemZipFileCacheStorage? storage;
+namespace Elsa.Http.Services;
 
-        public IZipFileCacheStorage GetStorage()
-        {
-            storage ??= new FileSystemZipFileCacheStorage(options, payloadSerializer);
-            return storage;
-        }
+internal sealed class FileSystemZipFileCacheStorageProvider(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorageProviders
+{
+    private FileSystemZipFileCacheStorage? storage;
+
+    public IZipFileCacheStorage GetStorage()
+    {
+        storage ??= new FileSystemZipFileCacheStorage(options, payloadSerializer);
+        return storage;
     }
 }

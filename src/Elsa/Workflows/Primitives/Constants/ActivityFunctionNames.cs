@@ -1,8 +1,7 @@
-﻿namespace Elsa.Workflows.Primitives.Constants
+﻿namespace Elsa.Workflows.Primitives.Constants;
+
+public static class ActivityFunctionNames
 {
-    public static class ActivityFunctionNames
-    {
-        public const string SetOutcome = "setOutcome";
-        public const string SetOutcomes = "setOutcomes";
-    }
+    public const string SetOutcome = "setOutcome";
+    public const string SetOutcomes = "setOutcomes";
 }

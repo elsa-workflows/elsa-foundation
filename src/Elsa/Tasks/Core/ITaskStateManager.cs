@@ -1,17 +1,16 @@
-namespace Elsa.Tasks.Core
+namespace Elsa.Tasks.Core;
+
+public interface ITaskStateManager
 {
-    public interface ITaskStateManager
-    {
-        SemaphoreSlim Gate { get; }
+    SemaphoreSlim Gate { get; }
 
-        IEnumerable<IRecurringTask> RecurringTasks { get; }
+    IEnumerable<IRecurringTask> RecurringTasks { get; }
 
-        IEnumerable<IScheduledTaskExecution> ScheduledTaskExecutions { get; }
+    IEnumerable<IScheduledTaskExecution> ScheduledTaskExecutions { get; }
 
-        IEnumerable<Task> RunningBackgroundTasks { get; }
+    IEnumerable<Task> RunningBackgroundTasks { get; }
 
-        CancellationTokenSource? CancellationTokenSource { get; }
+    CancellationTokenSource? CancellationTokenSource { get; }
 
-        ValueTask Stop();
-    }
+    ValueTask Stop();
 }

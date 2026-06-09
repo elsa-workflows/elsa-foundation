@@ -13,106 +13,105 @@ using Fluid.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Encodings.Web;
 
-namespace Elsa.Expressions.Liquid
+namespace Elsa.Expressions.Liquid;
+
+/// <summary>
+/// Configures Liquid functionality.
+/// </summary>
+[ShellFeature(
+    name: "Liquid",
+    DisplayName = "Liquid Expressions",
+    Description = "Provides Liquid template expression evaluation capabilities for workflows")]
+public class LiquidExpressionsFeature : IShellFeature
 {
     /// <summary>
-    /// Configures Liquid functionality.
+    /// A dictionary of filter registrations.
     /// </summary>
-    [ShellFeature(
-        name: "Liquid",
-        DisplayName = "Liquid Expressions",
-        Description = "Provides Liquid template expression evaluation capabilities for workflows")]
-    public class LiquidExpressionsFeature : IShellFeature
+    private readonly Dictionary<string, Type> filterRegistrations = [];
+
+    /// <summary>
+    /// Gets or sets the default encoder to use when rendering a template.
+    /// </summary>
+    private TextEncoder Encoder => EncodingType == LiquidEncodingType.Null
+        ? NullEncoder.Default
+        : HtmlEncoder.Default;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to allow access to the configuration object.
+    /// </summary>
+    public bool AllowConfigurationAccess { get; set; }
+
+    public bool AddArrayFilters { get; set; } = true;
+
+    public bool AddStringFilters { get; set; } = true;
+
+    public bool AddNumberFilters { get; set; } = true;
+
+    public bool AddMiscFilters { get; set; } = true;
+
+    public LiquidEncodingType EncodingType { get; set; }
+
+    public IEnumerable<string> VariableDescriptorTypes { get; set; } = [];
+
+    public void ConfigureServices(IServiceCollection services)
     {
-        /// <summary>
-        /// A dictionary of filter registrations.
-        /// </summary>
-        private readonly Dictionary<string, Type> filterRegistrations = [];
+        AddLiquidFilter<Base64Filter>(services, "base64");
+        AddLiquidFilter<DictionaryKeysFilter>(services, "keys");
 
-        /// <summary>
-        /// Gets or sets the default encoder to use when rendering a template.
-        /// </summary>
-        private TextEncoder Encoder => EncodingType == LiquidEncodingType.Null
-            ? NullEncoder.Default
-            : HtmlEncoder.Default;
+        var variableDescriptorTypes = GetVariableDescriptorTypes().ToArray();
+        var engineOptions = new ConfigureLiquidEngineOptions(variableDescriptorTypes, AllowConfigurationAccess);
+        services
+            .AddSingleton(engineOptions)
+            .AddScoped<IEventHandler<RenderingLiquidTemplate>, ConfigureLiquidEngine>();
 
-        /// <summary>
-        /// Gets or sets a value indicating whether to allow access to the configuration object.
-        /// </summary>
-        public bool AllowConfigurationAccess { get; set; }
+        var templateManagerOptions = new LiquidTemplateManagerOptions(Encoder, filterRegistrations, ConfigureFilters);
+        services
+            .AddSingleton(templateManagerOptions)
+            .AddScoped<ILiquidTemplateManager, LiquidTemplateManager>()
+            .AddScoped<FluidParser>()
+            .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
+    }
 
-        public bool AddArrayFilters { get; set; } = true;
+    private void AddLiquidFilter<T>(IServiceCollection services, string name) where T : class, ILiquidFilter
+    {
+        filterRegistrations[name] = typeof(T);
+        services.AddScoped<T>();
+    }
 
-        public bool AddStringFilters { get; set; } = true;
-
-        public bool AddNumberFilters { get; set; } = true;
-
-        public bool AddMiscFilters { get; set; } = true;
-
-        public LiquidEncodingType EncodingType { get; set; }
-
-        public IEnumerable<string> VariableDescriptorTypes { get; set; } = [];
-
-        public void ConfigureServices(IServiceCollection services)
+    private IEnumerable<Type> GetVariableDescriptorTypes()
+    {
+        foreach (var typeName in VariableDescriptorTypes)
         {
-            AddLiquidFilter<Base64Filter>(services, "base64");
-            AddLiquidFilter<DictionaryKeysFilter>(services, "keys");
+            var type = Type.GetType(typeName)
+                       ?? throw new TypeUnloadedException($"Type '{typeName}' is not loaded"); ;
 
-            var variableDescriptorTypes = GetVariableDescriptorTypes().ToArray();
-            var engineOptions = new ConfigureLiquidEngineOptions(variableDescriptorTypes, AllowConfigurationAccess);
-            services
-                .AddSingleton(engineOptions)
-                .AddScoped<IEventHandler<RenderingLiquidTemplate>, ConfigureLiquidEngine>();
+            if (!type.IsClass)
+                throw new InvalidOperationException("Variable descriptors must be a class");
 
-            var templateManagerOptions = new LiquidTemplateManagerOptions(Encoder, filterRegistrations, ConfigureFilters);
-            services
-                .AddSingleton(templateManagerOptions)
-                .AddScoped<ILiquidTemplateManager, LiquidTemplateManager>()
-                .AddScoped<FluidParser>()
-                .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>();
+            if (type.ContainsGenericParameters)
+                throw new InvalidOperationException("Variable descriptor class cannot contain generic parameters");
+
+            yield return type;
         }
+    }
 
-        private void AddLiquidFilter<T>(IServiceCollection services, string name) where T : class, ILiquidFilter
+    private void ConfigureFilters(TemplateContext context)
+    {
+        if (AddNumberFilters)
         {
-            filterRegistrations[name] = typeof(T);
-            services.AddScoped<T>();
+            context.Options.Filters.WithNumberFilters();
         }
-
-        private IEnumerable<Type> GetVariableDescriptorTypes()
+        if (AddStringFilters)
         {
-            foreach (var typeName in VariableDescriptorTypes)
-            {
-                var type = Type.GetType(typeName)
-                    ?? throw new TypeUnloadedException($"Type '{typeName}' is not loaded"); ;
-
-                if (!type.IsClass)
-                    throw new InvalidOperationException("Variable descriptors must be a class");
-
-                if (type.ContainsGenericParameters)
-                    throw new InvalidOperationException("Variable descriptor class cannot contain generic parameters");
-
-                yield return type;
-            }
+            context.Options.Filters.WithStringFilters();
         }
-
-        private void ConfigureFilters(TemplateContext context)
+        if (AddMiscFilters)
         {
-            if (AddNumberFilters)
-            {
-                context.Options.Filters.WithNumberFilters();
-            }
-            if (AddStringFilters)
-            {
-                context.Options.Filters.WithStringFilters();
-            }
-            if (AddMiscFilters)
-            {
-                context.Options.Filters.WithMiscFilters();
-            }
-            if (AddArrayFilters)
-            {
-                context.Options.Filters.WithArrayFilters();
-            }
+            context.Options.Filters.WithMiscFilters();
+        }
+        if (AddArrayFilters)
+        {
+            context.Options.Filters.WithArrayFilters();
         }
     }
 }

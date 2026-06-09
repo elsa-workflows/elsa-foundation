@@ -1,16 +1,15 @@
 using Elsa.Expressions.Core.Contracts;
 
-namespace Elsa.Workflows.Runtime.Core.Contracts
+namespace Elsa.Workflows.Runtime.Core.Contracts;
+
+/// <summary>
+/// Provides context for storage drivers.
+/// </summary>
+public interface IStorageDriverContext
 {
-    /// <summary>
-    /// Provides context for storage drivers.
-    /// </summary>
-    public interface IStorageDriverContext
-    {
-        IDictionary<string, object> ExecutionContextProperties { get; }
+    IDictionary<string, object> ExecutionContextProperties { get; }
 
-        IVariable Variable { get; }
+    IVariable Variable { get; }
 
-        CancellationToken CancellationToken { get; }
-    }
+    CancellationToken CancellationToken { get; }
 }

@@ -1,7 +1,6 @@
-﻿namespace Elsa.Workflows.Runtime.Http.Options
+﻿namespace Elsa.Workflows.Runtime.Http.Options;
+
+public sealed class WorkflowsRuntimeHttpFeatureOptions
 {
-    public sealed class WorkflowsRuntimeHttpFeatureOptions
-    {
-        public string BasePath { get; set; } = string.Empty;
-    }
+    public string BasePath { get; set; } = string.Empty;
 }

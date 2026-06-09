@@ -1,7 +1,6 @@
-namespace Elsa.Api.FastEndpoints.Constants
+﻿namespace Elsa.Api.FastEndpoints.Constants;
+
+public static class PermissionNames
 {
-    public static class PermissionNames
-    {
-        public const string All = "*";
-    }
+    public const string All = "*";
 }

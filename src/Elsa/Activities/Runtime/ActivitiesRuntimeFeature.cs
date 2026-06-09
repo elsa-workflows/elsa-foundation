@@ -8,35 +8,34 @@ using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Activities.Runtime
+namespace Elsa.Activities.Runtime;
+
+/// <summary>
+/// Runtime-side feature for activity construction. Registers the dispatch factory, the
+/// descriptor-type → constructor registry, and the Registry + StartUp Task wiring that populates
+/// the registry from every contributed <see cref="IActivityConstructor"/>. Carries no Design
+/// dependency (Elsa §E2.2).
+/// </summary>
+[ShellFeature(
+    name: "ActivitiesRuntime",
+    DisplayName = "Activities Runtime",
+    Description = "Activity construction factory and descriptor-type-driven constructor registry."
+)]
+public class ActivitiesRuntimeFeature : IShellFeature
 {
-    /// <summary>
-    /// Runtime-side feature for activity construction. Registers the dispatch factory, the
-    /// descriptor-type → constructor registry, and the Registry + StartUp Task wiring that populates
-    /// the registry from every contributed <see cref="IActivityConstructor"/>. Carries no Design
-    /// dependency (Elsa §E2.2).
-    /// </summary>
-    [ShellFeature(
-        name: "ActivitiesRuntime",
-        DisplayName = "Activities Runtime",
-        Description = "Activity construction factory and descriptor-type-driven constructor registry."
-    )]
-    public class ActivitiesRuntimeFeature : IShellFeature
+    public void ConfigureServices(IServiceCollection services)
     {
-        public void ConfigureServices(IServiceCollection services)
-        {
-            // Registry — singleton; populated by the startup task below.
-            services.AddSingleton<IActivityConstructorRegistry, ActivityConstructorRegistry>();
+        // Registry — singleton; populated by the startup task below.
+        services.AddSingleton<IActivityConstructorRegistry, ActivityConstructorRegistry>();
 
-            // Dispatch factory.
-            services.AddScoped<IActivityFactory, ActivityFactory>();
+        // Dispatch factory.
+        services.AddScoped<IActivityFactory, ActivityFactory>();
 
-            // Registry + StartUp Task + Domain Event (framework §2.6.1): the startup task publishes the
-            // initialization event; the single aggregating handler adds every registered constructor;
-            // the task flushes them into the registry. Features contribute by registering an
-            // IActivityConstructor.
-            services.AddScoped<IStartupTask, ActivityConstructorsStartupTask>();
-            services.AddEventHandler<OnActivityConstructorsInitializing, RegisterActivityConstructors>();
-        }
+        // Registry + StartUp Task + Domain Event (framework §2.6.1): the startup task publishes the
+        // initialization event; the single aggregating handler adds every registered constructor;
+        // the task flushes them into the registry. Features contribute by registering an
+        // IActivityConstructor.
+        services.AddScoped<IStartupTask, ActivityConstructorsStartupTask>();
+        services.AddEventHandler<OnActivityConstructorsInitializing, RegisterActivityConstructors>();
     }
 }

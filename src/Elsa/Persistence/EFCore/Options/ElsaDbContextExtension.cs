@@ -1,38 +1,37 @@
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.EFCore.Options
+namespace Elsa.Persistence.EFCore.Options;
+
+/// <summary>
+/// Provides options for configuring Elsa's Entity Framework Core integration.
+/// </summary>
+public class ElsaDbContextOptionsExtension : IDbContextOptionsExtension
 {
     /// <summary>
-    /// Provides options for configuring Elsa's Entity Framework Core integration.
+    /// Initializes a new instance of the <see cref="ElsaDbContextOptionsExtension"/> class.
     /// </summary>
-    public class ElsaDbContextOptionsExtension : IDbContextOptionsExtension
+    /// <param name="options">The options.</param>
+    public ElsaDbContextOptionsExtension(ElsaDbContextOptions? options)
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ElsaDbContextOptionsExtension"/> class.
-        /// </summary>
-        /// <param name="options">The options.</param>
-        public ElsaDbContextOptionsExtension(ElsaDbContextOptions? options)
-        {
-            Options = options;
-        }
+        Options = options;
+    }
 
-        /// <summary>
-        /// Gets the options.
-        /// </summary>
-        public ElsaDbContextOptions? Options { get; }
+    /// <summary>
+    /// Gets the options.
+    /// </summary>
+    public ElsaDbContextOptions? Options { get; }
 
-        /// <inheritdoc />
-        public DbContextOptionsExtensionInfo Info => new CustomDbContextOptionsExtensionInfo(this);
+    /// <inheritdoc />
+    public DbContextOptionsExtensionInfo Info => new CustomDbContextOptionsExtensionInfo(this);
 
-        /// <inheritdoc />
-        public void ApplyServices(IServiceCollection services)
-        {
-        }
+    /// <inheritdoc />
+    public void ApplyServices(IServiceCollection services)
+    {
+    }
 
-        /// <inheritdoc />
-        public void Validate(IDbContextOptions options)
-        {
-        }
+    /// <inheritdoc />
+    public void Validate(IDbContextOptions options)
+    {
     }
 }

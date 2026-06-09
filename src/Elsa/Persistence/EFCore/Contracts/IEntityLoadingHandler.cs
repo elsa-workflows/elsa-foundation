@@ -1,17 +1,16 @@
 using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace Elsa.Persistence.EFCore.Contracts
-{
-    public interface IEntityLoadingHandler<TDbContext>
-        where TDbContext : DbContext
-    {
-    }
+namespace Elsa.Persistence.EFCore.Contracts;
 
-    public interface IEntityLoadingHandler<TDbContext, TEntity> : IEntityLoadingHandler<TDbContext>
-        where TDbContext : DbContext
-        where TEntity : Entity
-    {
-        ValueTask Handle(TDbContext dbContext, TEntity? entity, CancellationToken cancellationToken);
-    }
+public interface IEntityLoadingHandler<TDbContext>
+    where TDbContext : DbContext
+{
+}
+
+public interface IEntityLoadingHandler<TDbContext, TEntity> : IEntityLoadingHandler<TDbContext>
+    where TDbContext : DbContext
+    where TEntity : Entity
+{
+    ValueTask Handle(TDbContext dbContext, TEntity? entity, CancellationToken cancellationToken);
 }

@@ -1,7 +1,6 @@
-namespace Elsa.Tasks.Core
+namespace Elsa.Tasks.Core;
+
+public interface ITaskManager
 {
-    public interface ITaskManager
-    {
-        Task StartExecutingRegisteredTasks(CancellationToken token);
-    }
+    Task StartExecutingRegisteredTasks(CancellationToken token);
 }

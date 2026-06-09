@@ -5,30 +5,29 @@ using Elsa.Api.FastEndpoints.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Api.FastEndpoints
+namespace Elsa.Api.FastEndpoints;
+
+public abstract class FastEndpointsFeatureBase : IFastEndpointsShellFeature
 {
-    public abstract class FastEndpointsFeatureBase : IFastEndpointsShellFeature
+    public IEnumerable<FastEndpointsFilter> EndpointFilters { get; set; } = [];
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        public IEnumerable<FastEndpointsFilter> EndpointFilters { get; set; } = [];
+        services.TryAddEnumerable(
+            [
+                new(
+                    typeof(IFastEndpointsConfigurator),
+                    typeof(SerializationFastEndpointConfigurator),
+                    ServiceLifetime.Scoped
+                )
+            ]
+        );
 
-        public virtual void ConfigureServices(IServiceCollection services)
+        if (EndpointFilters.Any())
         {
-            services.TryAddEnumerable(
-                [
-                    new(
-                        typeof(IFastEndpointsConfigurator),
-                        typeof(SerializationFastEndpointConfigurator),
-                        ServiceLifetime.Scoped
-                    )
-                ]
+            services.AddScoped<IFastEndpointsConfigurator>(
+                sp => new EndpointFilterFastEndpointConfigurator(EndpointFilters)
             );
-
-            if (EndpointFilters.Any())
-            {
-                services.AddScoped<IFastEndpointsConfigurator>(
-                    sp => new EndpointFilterFastEndpointConfigurator(EndpointFilters)
-                );
-            }
         }
     }
 }

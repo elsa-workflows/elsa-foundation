@@ -1,7 +1,6 @@
-namespace Elsa.Expressions.Core.Contracts
+namespace Elsa.Expressions.Core.Contracts;
+
+public interface IExpressionEvaluatorOptions
 {
-    public interface IExpressionEvaluatorOptions
-    {
-        IDictionary<string, object> Arguments { get; }
-    }
+    IDictionary<string, object> Arguments { get; }
 }

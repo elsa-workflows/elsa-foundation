@@ -1,12 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace Elsa.Workflows.Runtime.Http.Models
-{
-    /// <summary>
-    /// Provides context about the faulted workflow.
-    /// </summary>
-    /// <param name="HttpContext">The HTTP context.</param>
-    /// <param name="WorkflowState">The faulted workflow state.</param>
-    /// <param name="CancellationToken">The cancellation token.</param>
-    public record HttpEndpointFaultContext(HttpContext HttpContext, IEnumerable<Exception> Exceptions, CancellationToken CancellationToken);
-}
+namespace Elsa.Workflows.Runtime.Http.Models;
+
+/// <summary>
+/// Provides context about the faulted workflow.
+/// </summary>
+/// <param name="HttpContext">The HTTP context.</param>
+/// <param name="WorkflowState">The faulted workflow state.</param>
+/// <param name="CancellationToken">The cancellation token.</param>
+public record HttpEndpointFaultContext(HttpContext HttpContext, IEnumerable<Exception> Exceptions, CancellationToken CancellationToken);

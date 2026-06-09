@@ -1,15 +1,14 @@
 ﻿using Elsa.Activities.Runtime.Core.Models;
 
-namespace Elsa.Activities.Runtime.Core.Contracts
+namespace Elsa.Activities.Runtime.Core.Contracts;
+
+/// <summary>
+/// Handles signals.
+/// </summary>
+public interface ISignalHandler
 {
     /// <summary>
-    /// Handles signals.
+    /// Receives a signal.
     /// </summary>
-    public interface ISignalHandler
-    {
-        /// <summary>
-        /// Receives a signal.
-        /// </summary>
-        ValueTask ReceiveSignalAsync(object signal, SignalContext context);
-    }
+    ValueTask ReceiveSignalAsync(object signal, SignalContext context);
 }

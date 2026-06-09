@@ -1,7 +1,6 @@
-namespace Elsa.Tasks.Core
+namespace Elsa.Tasks.Core;
+
+public interface ITask
 {
-    public interface ITask
-    {
-        Task ExecuteAsync(CancellationToken cancellationToken);
-    }
+    Task ExecuteAsync(CancellationToken cancellationToken);
 }

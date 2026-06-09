@@ -1,9 +1,8 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Models;
 
-namespace Elsa.Expressions.JavaScript.Core.Options
+namespace Elsa.Expressions.JavaScript.Core.Options;
+
+public sealed class JavaScriptOptions
 {
-    public sealed class JavaScriptOptions
-    {
-        public ICollection<JavaScriptTypeDescriptor> TypeDescriptors { get; } = [];
-    }
+    public ICollection<JavaScriptTypeDescriptor> TypeDescriptors { get; } = [];
 }

@@ -1,9 +1,8 @@
-﻿namespace Elsa.Workflows.Runtime.Core.Contracts
-{
-    public interface IWorkflowExecutionPool
-    {
-        ValueTask<IWorkflowExecutionContext> StartWorkflowExecution();
+﻿namespace Elsa.Workflows.Runtime.Core.Contracts;
 
-        ValueTask<IWorkflowExecutionContext> GetWorkflowExecution(string workflowExecutionId);
-    }
+public interface IWorkflowExecutionPool
+{
+    ValueTask<IWorkflowExecutionContext> StartWorkflowExecution();
+
+    ValueTask<IWorkflowExecutionContext> GetWorkflowExecution(string workflowExecutionId);
 }

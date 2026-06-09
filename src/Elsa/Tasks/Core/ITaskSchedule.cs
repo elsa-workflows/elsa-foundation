@@ -1,7 +1,6 @@
-namespace Elsa.Tasks.Core
+namespace Elsa.Tasks.Core;
+
+public interface ITaskSchedule
 {
-    public interface ITaskSchedule
-    {
-        IScheduledTaskExecution ScheduleExecution(Func<Task> action);
-    }
+    IScheduledTaskExecution ScheduleExecution(Func<Task> action);
 }

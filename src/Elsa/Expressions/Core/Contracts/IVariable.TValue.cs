@@ -1,23 +1,22 @@
-namespace Elsa.Expressions.Core.Contracts
+namespace Elsa.Expressions.Core.Contracts;
+
+public interface IVariable<TValue> : IVariable
 {
-    public interface IVariable<TValue> : IVariable
+    IVariable<TValue> WithId(string id)
     {
-        IVariable<TValue> WithId(string id)
-        {
-            Id = id;
-            return this;
-        }
+        Id = id;
+        return this;
+    }
 
-        IVariable<TValue> WithName(string name)
-        {
-            Name = name;
-            return this;
-        }
+    IVariable<TValue> WithName(string name)
+    {
+        Name = name;
+        return this;
+    }
 
-        IVariable<TValue> WithValue(TValue value)
-        {
-            DefaultValue = value;
-            return this;
-        }
+    IVariable<TValue> WithValue(TValue value)
+    {
+        DefaultValue = value;
+        return this;
     }
 }

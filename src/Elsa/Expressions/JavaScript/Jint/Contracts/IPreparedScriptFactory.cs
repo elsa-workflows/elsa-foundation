@@ -1,10 +1,9 @@
 ﻿using Acornima.Ast;
 using Jint;
 
-namespace Elsa.Expressions.JavaScript.Jint.Contracts
+namespace Elsa.Expressions.JavaScript.Jint.Contracts;
+
+public interface IPreparedScriptFactory
 {
-    public interface IPreparedScriptFactory
-    {
-        Prepared<Script> Create(string expression);
-    }
+    Prepared<Script> Create(string expression);
 }
