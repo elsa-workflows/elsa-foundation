@@ -222,7 +222,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user wants to compose an API/shell from selected Elsa features.
 
-**Workflow:** identify required capabilities; map them to projects/features; include dependencies; flag external package/version compatibility concerns; propose a minimal shell composition before generating config.
+**Workflow:** identify required capabilities; map them to projects/features; use [../reports/cshells-composition-evidence.md](../reports/cshells-composition-evidence.md#reviewed-classification-v1) for dependency/settings classification boundaries; include only required activations backed by evidence or explicit review; flag optional companions, provider/default choices, endpoint/API features, bridge features, host-loading needs, and external package/version compatibility concerns; propose a minimal shell composition before generating config.
 
 **Output:** selected feature set, dependency rationale, missing decisions, and config-generation inputs.
 
@@ -230,6 +230,6 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user has selected features and wants appsettings JSON for a CShells/Nuplane shell.
 
-**Workflow:** scan feature activation patterns and dependencies; generate JSON from selected features; include required dependencies; mark optional features separately.
+**Workflow:** scan feature activation patterns and dependencies; consume only explicit feature IDs and reviewed classification evidence from [../reports/cshells-composition-evidence.md](../reports/cshells-composition-evidence.md#reviewed-classification-v1); generate JSON from selected features only when required activations, feature-bound settings, shell-wide settings, and host-loading outputs are classified; mark optional features separately; block generation on duplicate concrete feature IDs or unknown required settings.
 
-**Output:** appsettings JSON and a note on how it was derived. Do not guess feature IDs when the repo does not expose them.
+**Output:** appsettings JSON and a note on how it was derived. Do not guess feature IDs, activation requirements, required setting values, secrets, host-loading output, or appsettings keys when the repo does not expose or classify them.

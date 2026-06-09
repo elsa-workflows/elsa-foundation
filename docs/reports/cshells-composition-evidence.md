@@ -62,35 +62,25 @@ External package compatibility:
 
 - Whether future duplicate feature IDs should fail map generation or remain report-only findings.
 - Which project-reference edges are true feature activation requirements.
-- Which provisional settings labels should be accepted, renamed, split, or merged before generator work.
-- How to represent assembly scanning/loading prerequisites independently from selected features.
+- Which concrete feature settings are required, optional, defaulted, secret, connection strings, filesystem paths, type-name selectors, collections, shell-wide, host-loading, or feature-bound.
+- The exact generated output shape for assembly scanning/loading prerequisites.
 - Whether feature dependencies should be declared manually, inferred from code, generated from registration tests, or a mix.
 - How Nuplane loading/shared assembly settings should be modeled for generated appsettings.
 
-## Recommended Next Work Unit
+## Reviewed Classification v1
 
-Name: Configuration and Feature Dependency Classification Review.
+Status: accepted as provisional planning guidance for agents and future composition tooling. This is not a ratified constitution gate and not generator behavior.
 
-Goal: review and refine the provisional classification rules that a future Feature Composition Explorer and CShells Appsettings Generator must consume.
+Use this section as the current boundary for Feature Composition Explorer and CShells Appsettings Generator work:
 
-Status of the classification language: provisional architecture knowledge. The labels below are a planning vocabulary, not ratified gates and not generator behavior. The first accepted version should be useful enough for the next composition work unit, but it must remain amendable. Architects may add, merge, split, or rename kinds as new providers, deployment models, security requirements, and shell-loading behavior are reviewed. Until ratified elsewhere, these labels belong in reports/maps-facing planning material, not in the constitution as frozen gates.
+- A future explorer may use these labels to explain dependency and settings evidence.
+- A future generator may consume these labels only after the relevant edges/settings are classified by evidence or architecture review.
+- Unknown, disputed, or merely inferred cases stay pending review and must not be guessed into generated appsettings.
+- These labels remain report-level architecture knowledge until the Configuration & Infrastructure follow-up decides whether any part belongs in the constitution, skill catalog, map schema, or generated output contract.
 
-Scope:
+### Dependency Kinds
 
-- Review feature dependency kinds: required activation, optional companion, provider/default implementation, source/contributor, bridge, endpoint/API, compile-time-only reference.
-- Review settings kinds: required, optional, defaulted, secret, connection string, filesystem path, type-name selector, collection, shell-wide, host-loading, feature-bound.
-- Review whether duplicate feature IDs should fail map generation or remain report-only findings.
-- Review how assembly scanning/loading evidence participates in composition output.
-- Produce docs/report guidance only. Update the feature dependency map generator only in a later implementation unit after the classification language is approved.
-
-Current no-code boundary:
-
-- Do not implement the CShells Appsettings Generator.
-- Do not change source feature registration, options, or activation code.
-- Do not update map generator behavior while map-generator work is assigned elsewhere.
-- Do not promote the classification language into the constitution until the Configuration & Infrastructure follow-up closes.
-
-Proposed dependency kinds:
+Accepted provisional labels:
 
 - `required activation`: selecting one feature requires another feature to be activated in the same shell.
 - `optional companion`: another feature enhances or extends behavior, but the selected feature can still start and operate meaningfully without it.
@@ -100,7 +90,17 @@ Proposed dependency kinds:
 - `endpoint/API`: exposes HTTP/API/endpoints for an underlying capability and may require host routing/API infrastructure separately.
 - `compile-time-only reference`: reference evidence required to build or type-check, but not evidence that another feature ID must be activated.
 
-Proposed settings kinds:
+Rules:
+
+- A dependency edge may carry multiple labels.
+- Direct project/package references are evidence, not activation policy.
+- Required activation needs direct registration evidence, tests, docs/catalog confirmation, or explicit architecture classification.
+- Project references to `.Core`, helper, or provider libraries can identify runtime prerequisites, but do not by themselves identify a CShells feature ID to activate.
+- Source/contributor and endpoint/API features are not automatically required just because they reference the capability they extend or expose.
+
+### Settings Kinds
+
+Accepted provisional labels:
 
 - `required`: absent value prevents valid startup or intended operation.
 - `optional`: absent value is valid.
@@ -114,27 +114,92 @@ Proposed settings kinds:
 - `host-loading`: controls package, assembly, or scanning behavior separately from feature activation.
 - `feature-bound`: belongs under `CShells:Shells:{shellName}:Features:{featureId}`.
 
-Classification rule:
+Rules:
 
-- A dependency edge or setting may carry multiple labels.
-- Direct project/package references are evidence, not activation policy.
-- Required activation should need direct registration evidence, tests, docs/catalog confirmation, or explicit architecture classification.
-- Unknown or disputed cases should stay marked pending review rather than guessed by the generator.
+- A setting may carry multiple labels.
+- Public settable feature properties are configuration evidence, not enough to prove requiredness.
+- Required/default/secret/path/type-name classification should come from code defaults, validation guards, docs, tests, or explicit review.
+- Secret and connection-string values must be represented as placeholders or external references, never as real generated values.
+- Host-loading settings stay separate from selected feature IDs, even when a feature-bound setting points at loading inputs such as folders or type names.
 
-Duplicate feature ID recommendation:
+### Duplicate Feature IDs
+
+Accepted provisional rule:
+
+- Duplicate concrete `ShellFeature` IDs block appsettings generation.
+
+Rationale:
 
 - Current evidence shows no duplicate explicit feature IDs after splitting workflow JavaScript design/runtime activation into `JavaScriptWorkflowsDesign` and `JavaScriptWorkflowsRuntime`.
-- Future duplicate concrete `ShellFeature` IDs should be modeled as ambiguous pending review and should block appsettings generation.
-- Do not allow duplicates "by context" unless the CShells configuration model gains an approved namespace/context mechanism; the observed IConfiguration shape keys selected features by `{featureId}` under a shell.
+- The observed IConfiguration shape keys selected features by `{featureId}` under a shell, so duplicates are ambiguous.
+- Do not allow duplicates "by context" unless the CShells configuration model gains an approved namespace/context mechanism.
 - Renaming is the preferred resolution when two concrete features are independently selectable.
 
-Assembly scanning/loading recommendation:
+Map-generation behavior remains separate: duplicates may remain report findings until a later map-generator implementation unit decides whether maps should fail hard.
 
-- Treat assembly scanning/loading as host-loading output, separate from selected feature IDs.
+### Assembly Scanning And Loading
+
+Accepted provisional rule:
+
+- Treat assembly scanning/loading as `host-loading` output, separate from selected feature IDs.
+
+Rationale:
+
 - Selected features answer which CShells features activate.
 - Host-loading output answers which packages, assemblies, shared assemblies, or folders the host must make available or scan.
 - Feature-bound settings may still point to scanning inputs, such as folder paths or type-name selectors.
 - Nuplane loading/shared assembly settings remain host-loading evidence until architecture approves the exact generated output shape.
+
+### Open Questions
+
+- Whether dependency labels should eventually live in generated map schema, hand-authored extension-point catalogs, feature registration tests, or a mix.
+- Whether settings labels should become explicit metadata near feature classes/options, stay report-level, or be generated from code/docs evidence.
+- The exact appsettings output shape for Nuplane package loading, shared assemblies, and scan folders.
+- Whether map generation should fail on duplicate feature IDs or continue producing maps with a blocking finding.
+
+## Next Work Units Enabled
+
+The classification review is complete enough for agents to stop guessing and start applying the boundary in smaller follow-up units.
+
+### Feature Classification Pass
+
+Goal: classify a selected slice of feature dependency edges using the dependency kinds above.
+
+Scope:
+
+- Start with one bounded shell goal or domain cluster, not the whole repo.
+- Use feature map and dependency map evidence, then classify only edges backed by registration evidence, docs/catalog confirmation, tests, or explicit architecture review.
+- Leave disputed edges pending review.
+- Produce docs/report guidance only unless a later implementation unit explicitly updates map schema or generator behavior.
+
+### Settings Classification Pass
+
+Goal: classify selected public feature properties and observed CShells settings using the settings kinds above.
+
+Scope:
+
+- Start with settings needed by the selected feature slice.
+- Identify required/default/secret/path/type-name evidence from code defaults, validation guards, docs, tests, or explicit review.
+- Represent secrets and connection strings as placeholders or external references only.
+- Leave unknown setting values pending review.
+
+### Generator Readiness Pass
+
+Goal: decide whether the current evidence is strong enough to implement a narrow CShells Appsettings Generator.
+
+Scope:
+
+- Confirm duplicate feature IDs remain absent.
+- Confirm required activations and required settings are classified for the selected slice.
+- Confirm host-loading output shape for the selected slice.
+- Only then plan implementation of generator behavior.
+
+Current no-code boundary:
+
+- Do not implement the CShells Appsettings Generator.
+- Do not change source feature registration, options, or activation code.
+- Do not update map generator behavior while map-generator work is assigned elsewhere.
+- Do not promote the classification language into the constitution until the Configuration & Infrastructure follow-up closes.
 
 Out of scope:
 
