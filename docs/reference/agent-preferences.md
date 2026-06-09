@@ -37,6 +37,7 @@ Use this table as the current setup registry. Add new rows here when a new local
 | Git operating model | `.agent-prefs/git-operating-model.md` | Before pushing, opening pull requests, changing remotes, or choosing a branch strategy. | [git-operating-models.md](git-operating-models.md) |
 | Session execution model | `.agent-prefs/session-execution-model.md` | Before substantial planning, substantial implementation, or multi-session/fresh-agent workflows. | This file |
 | Program goal selection model | `.agent-prefs/program-goal-selection.md` | Before substantial planning, "what next" ranking, roadmap/drift review, or multi-session handoff when the current program goal state is unclear. | This file |
+| Map script shell model | `.agent-prefs/map-script-shell.md` | Before refreshing generated maps when both PowerShell and Bash scripts are available. | This file |
 
 ## Quick Setup
 
@@ -71,6 +72,34 @@ Default behavior:
 
 Exceptions:
 - Handle small answers, inspections, and explicitly local edits in the current session.
+```
+
+Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.
+
+## Map Script Shell Models
+
+Map script shell selection controls which equivalent map generator family agents prefer when both PowerShell and Bash are available.
+
+Common local choices:
+
+- `prefer-powershell`: use `tools/maps/*.ps1` first; fall back to Bash when PowerShell is unavailable.
+- `prefer-bash`: use `bash tools/maps/*.sh` first; fall back to PowerShell when Bash is unavailable.
+- `platform-native`: use PowerShell on Windows and Bash on macOS/Linux unless the user asks otherwise.
+- `ask-each-time`: ask before refreshing maps when both script families can run.
+
+## Map Script Shell Template
+
+Create `.agent-prefs/map-script-shell.md` locally with content like:
+
+```md
+# Map Script Shell Preference
+
+Preferred model: platform-native
+
+Default behavior:
+- When both PowerShell and Bash map generators exist, choose the script family according to the preferred model.
+- If the preferred shell is unavailable, use the equivalent fallback script and note the fallback.
+- When verifying parity, run both script families regardless of the preferred default.
 ```
 
 Only commit `.agent-prefs/.gitkeep`; never commit the personal preference file.

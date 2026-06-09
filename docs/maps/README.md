@@ -53,9 +53,8 @@ macOS / Linux / Bash:
 bash tools/maps/generate-domain-map.sh
 bash tools/maps/generate-extension-point-map.sh
 bash tools/maps/generate-architecture-reference-map.sh
+bash tools/maps/generate-feature-dependency-map.sh
 ```
-
-The feature dependency map currently has a PowerShell generator only.
 
 ## Freshness
 

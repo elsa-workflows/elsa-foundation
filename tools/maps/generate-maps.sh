@@ -487,6 +487,8 @@ done
   printf '%s\n' "$repo_root/tools/maps/generate-extension-point-map.sh"
   printf '%s\n' "$repo_root/tools/maps/generate-architecture-reference-map.ps1"
   printf '%s\n' "$repo_root/tools/maps/generate-architecture-reference-map.sh"
+  printf '%s\n' "$repo_root/tools/maps/generate-feature-dependency-map.ps1"
+  printf '%s\n' "$repo_root/tools/maps/generate-feature-dependency-map.sh"
 } | sort -u > "$tmp_dir/input-files.txt"
 
 : > "$tmp_dir/input-hashes.txt"
@@ -541,6 +543,7 @@ cat > "$docs_maps/manifest.json" <<EOF
     "docs/maps/domain-map.md",
     "docs/maps/extension-point-map.md",
     "docs/maps/architecture-reference-map.md",
+    "docs/maps/feature-dependency-map.md",
     "docs/reports/maps-v2-findings.md",
     "docs/reports/maps-v1-findings.md"
   ]

@@ -243,6 +243,7 @@ function Get-InputFiles {
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-architecture-reference-map.ps1")
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-architecture-reference-map.sh")
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-feature-dependency-map.ps1")
+    $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-feature-dependency-map.sh")
 
     return @($files | Sort-Object FullName -Unique)
 }

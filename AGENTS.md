@@ -60,6 +60,7 @@ tools/maps/generate-maps.ps1
 tools/maps/generate-domain-map.ps1
 tools/maps/generate-extension-point-map.ps1
 tools/maps/generate-architecture-reference-map.ps1
+tools/maps/generate-feature-dependency-map.ps1
 ```
 
 macOS / Linux / Bash:
@@ -69,6 +70,7 @@ bash tools/maps/generate-maps.sh
 bash tools/maps/generate-domain-map.sh
 bash tools/maps/generate-extension-point-map.sh
 bash tools/maps/generate-architecture-reference-map.sh
+bash tools/maps/generate-feature-dependency-map.sh
 ```
 
 If the local shell is unavailable, try the other script if that shell is installed. If neither
