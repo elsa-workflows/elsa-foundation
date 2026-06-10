@@ -34,6 +34,9 @@ public sealed class GeneratorRegistration
         if (stopPolicy == GeneratorStopPolicy.TimeWindow && expiresAt is null)
             throw new ArgumentException("Time-window generator stop policy requires an expiration time.", nameof(expiresAt));
 
+        if (stopPolicy != GeneratorStopPolicy.TimeWindow && expiresAt is not null)
+            throw new ArgumentException("Generator expiration is only valid with the time-window stop policy.", nameof(expiresAt));
+
         GeneratorId = generatorId;
         WorkflowExecutionId = workflowExecutionId;
         GeneratorActivityExecutionId = generatorActivityExecutionId;

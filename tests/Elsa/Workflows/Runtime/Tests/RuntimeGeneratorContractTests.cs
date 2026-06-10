@@ -181,6 +181,22 @@ public sealed class RuntimeGeneratorContractTests
     }
 
     [Fact]
+    public void NonTimeWindowGeneratorStopPolicy_RejectsExpiration()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new GeneratorRegistration(
+            generatorId: "generator-1",
+            workflowExecutionId: "wfexec-1",
+            generatorActivityExecutionId: "actexec-generator",
+            owningScopeActivityExecutionId: "actexec-scope",
+            branchId: "branch-a",
+            registeredAt: _now,
+            stopPolicy: GeneratorStopPolicy.ScopeEnd,
+            expiresAt: _now.AddMinutes(5)));
+
+        Assert.Contains("time-window", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void GeneratedEvent_RejectsNegativeSequence()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => NewGeneratedEvent(sequence: -1));

@@ -10,7 +10,7 @@
 - `Status`: Runtime generator status.
 - `StopPolicy`: Generator lifetime rule; defaults to scope-end semantics at call sites.
 - `BackpressurePolicy`: Runtime response when generated events cannot be processed safely.
-- `RegisteredAt` / `ExpiresAt`: Registration time and optional time-window boundary.
+- `RegisteredAt` / `ExpiresAt`: Registration time and required boundary for `TimeWindow` stop policy; `ExpiresAt` is invalid for non-`TimeWindow` policies.
 - `Metadata`: Runtime provider/diagnostic metadata.
 
 ## `GeneratedEvent`

@@ -22,7 +22,7 @@
 - **FR-006**: Scheduler state MUST carry generated-event work separately from completion-drain work and continuation work.
 - **FR-007**: Generated event durability MUST be explicit as volatile, durable, or policy controlled.
 - **FR-008**: Generated event payloads that need runtime capture MUST reference durable values instead of embedding authored/design payload models.
-- **FR-009**: Contract tests MUST reject invalid generator registrations and generated events.
+- **FR-009**: Contract tests MUST reject invalid generator registrations and generated events, including ambiguous expiration policy combinations.
 - **FR-010**: Runtime execution projects MUST remain free of Design-owned authored workflow model dependencies.
 
 ## Non-Goals
