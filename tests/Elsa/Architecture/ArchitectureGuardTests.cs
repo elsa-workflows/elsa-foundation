@@ -192,6 +192,7 @@ public sealed class ArchitectureGuardTests
     {
         var sanitized = new char[text.Length];
         var state = SourceScanState.Code;
+        var rawStringQuoteCount = 0;
 
         for (var i = 0; i < text.Length; i++)
         {
@@ -209,6 +210,12 @@ public sealed class ArchitectureGuardTests
                     sanitized[i] = ' ';
                     sanitized[++i] = ' ';
                     state = SourceScanState.BlockComment;
+                    break;
+                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount):
+                    for (var j = 0; j < rawStringPrefixLength; j++)
+                        sanitized[i + j] = ' ';
+                    i += rawStringPrefixLength - 1;
+                    state = SourceScanState.RawString;
                     break;
                 case SourceScanState.Code when current == '@' && next == '"':
                     sanitized[i] = ' ';
@@ -251,6 +258,13 @@ public sealed class ArchitectureGuardTests
                     sanitized[i] = ' ';
                     state = SourceScanState.Code;
                     break;
+                case SourceScanState.RawString when HasRun(text, i, '"', rawStringQuoteCount):
+                    for (var j = 0; j < rawStringQuoteCount; j++)
+                        sanitized[i + j] = ' ';
+                    i += rawStringQuoteCount - 1;
+                    rawStringQuoteCount = 0;
+                    state = SourceScanState.Code;
+                    break;
                 case SourceScanState.Character when current == '\\' && next != '\0':
                     sanitized[i] = ' ';
                     sanitized[++i] = ' ';
@@ -266,6 +280,40 @@ public sealed class ArchitectureGuardTests
         }
 
         return new string(sanitized);
+    }
+
+    private static bool TryReadRawStringStart(string text, int index, out int prefixLength, out int quoteCount)
+    {
+        prefixLength = 0;
+        quoteCount = 0;
+
+        var quoteIndex = index;
+        while (quoteIndex < text.Length && text[quoteIndex] == '$')
+            quoteIndex++;
+
+        if (quoteIndex == index && text[index] != '"')
+            return false;
+
+        quoteCount = CountRun(text, quoteIndex, '"');
+        if (quoteCount < 3)
+        {
+            quoteCount = 0;
+            return false;
+        }
+
+        prefixLength = quoteIndex - index + quoteCount;
+        return true;
+    }
+
+    private static bool HasRun(string text, int index, char value, int count) => CountRun(text, index, value) >= count;
+
+    private static int CountRun(string text, int index, char value)
+    {
+        var count = 0;
+        while (index + count < text.Length && text[index + count] == value)
+            count++;
+
+        return count;
     }
 
     private static string ExpectedProjectPath(ProjectInfo project)
@@ -343,6 +391,7 @@ public sealed class ArchitectureGuardTests
         BlockComment,
         String,
         VerbatimString,
+        RawString,
         Character
     }
 
