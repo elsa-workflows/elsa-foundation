@@ -24,6 +24,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
 - **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
+### `IBookmarkResumeResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one resolver owns durable bookmark-to-artifact resume resolution for a runtime composition).
+- **Signature:** `Resolve(BookmarkResumeRequest request)`.
+- **Usage:** maps `BookmarkState.ResumeTargetId` through the pinned `WorkflowExecutable.ResumeTargets` table and returns the executable node plus runtime resume target. It does not load artifacts, invoke activity handlers, or implement the bookmark store.
+- **Default implementation:** `BookmarkResumeResolver` *(intra-domain default)*.
+
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
 - **Signature:** `GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default)`.
@@ -45,6 +51,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Register:** via `ActivityRuntimePipelineBuilder.Use<TMiddleware>(slotName, order, name)`.
 - **Usage:** registers activity execution middleware into stable slots from `RuntimeActivityPipelineSlots`. Plans are inspectable through `BuildPlan()`.
 - **Known implementations (shipped):** no-op built-in placeholders for load state, input evaluation, invoke, output capture, scheduling, checkpoint, and post-commit.
+
+### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
+- **Usage:** declares the stable resume target ID that compile/publish can place into `WorkflowExecutable.ResumeTargets`. Durable bookmarks store the ID, not the C# method name.
+- **Not a runtime callback store** — handler method names and delegates are implementation details and are not persisted in `BookmarkState`.
 
 ### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contributor (receives a signal and acts — push pattern).

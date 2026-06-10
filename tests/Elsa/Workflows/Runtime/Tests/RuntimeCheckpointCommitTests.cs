@@ -98,7 +98,7 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Equal(RuntimeStateChangeOperation.Upsert, commit.StateChanges.Scheduler!.Operation);
         Assert.Single(commit.StateChanges.ActivityExecutions);
         Assert.Single(commit.StateChanges.DurableValues);
-        Assert.Equal("node-resume-1", Assert.Single(commit.StateChanges.Bookmarks).ResumeTargetId);
+        Assert.Equal("node-resume-1", Assert.Single(commit.StateChanges.Bookmarks).State.ResumeTargetId);
         Assert.Equal(RuntimeStateCategory.Incident, Assert.Single(commit.StateChanges.Incidents).Category);
         Assert.Equal(RuntimeStateCategory.Operational, Assert.Single(commit.StateChanges.Operational).Category);
     }
@@ -127,8 +127,8 @@ public sealed class RuntimeCheckpointCommitTests
             immediateWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId),
             deferredWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId));
         Assert.Equal(
-            immediateWrite.Commit.StateChanges.Bookmarks.Select(change => change.ResumeTargetId),
-            deferredWrite.Commit.StateChanges.Bookmarks.Select(change => change.ResumeTargetId));
+            immediateWrite.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId),
+            deferredWrite.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId));
     }
 
     [Fact]
@@ -208,13 +208,13 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
-    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedReferenceCategories()
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentReferenceCategories()
     {
-        var invalidBookmarks = new[]
+        var invalidIncidents = new[]
         {
             new RuntimeStateChangeReference(
-                StateId: "incident-1",
-                Category: RuntimeStateCategory.Incident,
+                StateId: "bookmark-1",
+                Category: RuntimeStateCategory.Bookmark,
                 Operation: RuntimeStateChangeOperation.Append,
                 WorkflowExecutionId: "wfexec-1",
                 ActivityExecutionId: "actexec-1",
@@ -222,7 +222,21 @@ public sealed class RuntimeCheckpointCommitTests
                 Metadata: new Dictionary<string, string>())
         };
 
-        Assert.Throws<ArgumentException>(() => NewStateChanges(bookmarks: invalidBookmarks));
+        Assert.Throws<ArgumentException>(() => NewStateChanges(incidents: invalidIncidents));
+    }
+
+    [Fact]
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedBookmarkStateIds()
+    {
+        var invalidBookmarks = new[]
+        {
+            NewBookmarkChange("bookmark-state-change-id", "bookmark-state-id")
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(bookmarks: invalidBookmarks));
+
+        Assert.Contains("StateId", exception.Message);
+        Assert.Contains("BookmarkState.BookmarkId", exception.Message);
     }
 
     private RuntimeCheckpointCommit NewCommit(
@@ -253,7 +267,8 @@ public sealed class RuntimeCheckpointCommitTests
             Metadata: new Dictionary<string, string>());
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
-        IReadOnlyCollection<RuntimeStateChangeReference>? bookmarks = null) =>
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
+        IReadOnlyCollection<RuntimeStateChangeReference>? incidents = null) =>
         new(
             workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
                 StateId: _workflowState.WorkflowExecutionId,
@@ -275,14 +290,7 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             bookmarks: bookmarks ??
             [
-                new RuntimeStateChangeReference(
-                    StateId: "bookmark-1",
-                    Category: RuntimeStateCategory.Bookmark,
-                    Operation: RuntimeStateChangeOperation.Upsert,
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: "actexec-1",
-                    ResumeTargetId: "node-resume-1",
-                    Metadata: new Dictionary<string, string>())
+                NewBookmarkChange("bookmark-1", "bookmark-1")
             ],
             durableValues:
             [
@@ -292,7 +300,7 @@ public sealed class RuntimeCheckpointCommitTests
                     State: _durableValueState,
                     Metadata: new Dictionary<string, string>())
             ],
-            incidents:
+            incidents: incidents ??
             [
                 new RuntimeStateChangeReference(
                     StateId: "incident-1",
@@ -314,6 +322,24 @@ public sealed class RuntimeCheckpointCommitTests
                     ResumeTargetId: null,
                     Metadata: new Dictionary<string, string>())
             ]);
+
+    private RuntimeStateChange<BookmarkState> NewBookmarkChange(string stateId, string bookmarkId) =>
+        new(
+            StateId: stateId,
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: new BookmarkState(
+                BookmarkId: bookmarkId,
+                WorkflowExecutionId: "wfexec-1",
+                ActivityExecutionId: "actexec-1",
+                ExecutableNodeId: "node-1",
+                ResumeTargetId: "node-resume-1",
+                StimulusType: "delivery-status",
+                StimulusHash: "sha256:delivery-status:order-123",
+                Payload: Json("""{"expected":"delivered"}"""),
+                Metadata: new Dictionary<string, string>(),
+                CreatedAt: _now,
+                ExpiresAt: null),
+            Metadata: new Dictionary<string, string>());
 
     private RuntimeCheckpointCommitter NewCommitter(
         RuntimeCheckpointPersistenceMode mode,
