@@ -71,6 +71,17 @@ public sealed class RuntimeBookmarkResumeContractTests
     }
 
     [Fact]
+    public void WorkflowExecutable_DerivesNodeLookupFromExecutableNodes()
+    {
+        var node = NewDeliveryNode();
+        var executable = NewExecutable(nodes: [node]);
+
+        Assert.Same(node, executable.NodesById["node-delivery"]);
+        Assert.Same(node, Assert.Single(executable.Nodes));
+        Assert.Throws<ArgumentException>(() => NewExecutable(nodes: [NewDeliveryNode(), NewDeliveryNode()]));
+    }
+
+    [Fact]
     public void BookmarkResumeResolver_IgnoresSourceReferenceWhenCheckingPinnedExecutableSnapshot()
     {
         var workflowExecution = NewWorkflowExecution(_identity with
@@ -226,10 +237,9 @@ public sealed class RuntimeBookmarkResumeContractTests
         var executableNodes = nodes ?? [NewDeliveryNode()];
 
         return new(
-            Identity: identity ?? _identity,
-            Nodes: executableNodes,
-            NodesById: executableNodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal),
-            ResumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>
+            identity: identity ?? _identity,
+            nodes: executableNodes,
+            resumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-target:delivery"] = new(
                     ResumeTargetId: "resume-target:delivery",
@@ -237,9 +247,9 @@ public sealed class RuntimeBookmarkResumeContractTests
                     HandlerKey: "delivery-handler",
                     Metadata: new Dictionary<string, string>())
             },
-            CreatedAt: _now,
-            PublishedAt: _now,
-            CompatibilityMetadata: new Dictionary<string, string>());
+            createdAt: _now,
+            publishedAt: _now,
+            compatibilityMetadata: new Dictionary<string, string>());
     }
 
     private ExecutableNode NewDeliveryNode() =>

@@ -5,14 +5,38 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Runtime-owned executable artifact produced by compile/publish and consumed by workflow execution.
 /// </summary>
-public sealed record WorkflowExecutable(
-    WorkflowExecutableIdentity Identity,
-    IReadOnlyCollection<ExecutableNode> Nodes,
-    IReadOnlyDictionary<string, ExecutableNode> NodesById,
-    IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? PublishedAt,
-    IReadOnlyDictionary<string, string> CompatibilityMetadata);
+public sealed record WorkflowExecutable
+{
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        IReadOnlyCollection<ExecutableNode> nodes,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        DateTimeOffset? publishedAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(nodes);
+        ArgumentNullException.ThrowIfNull(resumeTargets);
+        ArgumentNullException.ThrowIfNull(compatibilityMetadata);
+
+        Nodes = nodes.ToArray();
+        Identity = identity;
+        NodesById = Nodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        ResumeTargets = resumeTargets;
+        CreatedAt = createdAt;
+        PublishedAt = publishedAt;
+        CompatibilityMetadata = compatibilityMetadata;
+    }
+
+    public WorkflowExecutableIdentity Identity { get; }
+    public IReadOnlyCollection<ExecutableNode> Nodes { get; }
+    public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
+    public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
+    public DateTimeOffset CreatedAt { get; }
+    public DateTimeOffset? PublishedAt { get; }
+    public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
+}
 
 /// <summary>
 /// Exact executable artifact snapshot identity pinned by workflow executions.

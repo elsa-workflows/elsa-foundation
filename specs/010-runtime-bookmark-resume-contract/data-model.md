@@ -34,7 +34,7 @@ Pure resolver output containing the bookmark, executable node, executable resume
 
 ## WorkflowExecutable.NodesById
 
-Artifact lookup table keyed by `ExecutableNodeId` so resume resolution can resolve the node referenced by a bookmark without scanning the executable node collection.
+Artifact-owned lookup table keyed by `ExecutableNodeId`, derived from the executable node collection so the collection and lookup view cannot diverge. Resume resolution uses this lookup to resolve the node referenced by a bookmark without scanning the executable node collection.
 
 ## RuntimeCheckpointStateChangeSet.Bookmarks
 

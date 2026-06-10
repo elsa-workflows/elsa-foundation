@@ -29,7 +29,7 @@ Resolution follows this path:
 BookmarkState.ResumeTargetId
   -> WorkflowExecutionState.PinnedExecutable
   -> WorkflowExecutable.ResumeTargets[ResumeTargetId]
-  -> WorkflowExecutable.Nodes[ExecutableNodeId]
+  -> WorkflowExecutable.NodesById[ExecutableNodeId]
 ```
 
 The resolver must fail when:
