@@ -3,12 +3,18 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using System.Collections.ObjectModel;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
 public sealed class Elsa3MigrationBoundaryTests
 {
+    private readonly Elsa3WorkflowDefinitionImporter _importer = new(new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
+        new Elsa3WorkflowDefinitionToState(null!, null!, null!),
+        new StubWorkflowDefinitionFactory(),
+        null!));
+
     [Theory]
     [InlineData(Elsa3MigrationInputKind.WorkflowDefinitionExportJson)]
     [InlineData(Elsa3MigrationInputKind.WorkflowDefinitionOriginalSource)]
@@ -94,12 +100,33 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
+    public void MetadataSnapshots_AreReadOnlyAndDetachedFromInput()
+    {
+        var metadata = new Dictionary<string, string> { ["Source"] = "source-a" };
+        var input = new Elsa3WorkflowDefinitionImportInput(
+            Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
+            new Elsa3WorkflowDefinition
+            {
+                Id = "version-1",
+                DefinitionId = "definition-1",
+                Name = "Imported workflow",
+                Root = new Elsa3Activity
+                {
+                    Id = "root",
+                    Type = "Flowchart"
+                }
+            },
+            metadata: metadata);
+
+        metadata["Source"] = "source-b";
+
+        Assert.IsType<ReadOnlyDictionary<string, string>>(input.Metadata);
+        Assert.Equal("source-a", input.Metadata["Source"]);
+    }
+
+    [Fact]
     public async Task WorkflowDefinitionImporter_ReturnsDiagnosticsForMalformedDefinitions()
     {
-        var importer = new Elsa3WorkflowDefinitionImporter(new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
-            new Elsa3WorkflowDefinitionToState(null!, null!, null!),
-            new StubWorkflowDefinitionFactory(),
-            null!));
         var input = new Elsa3WorkflowDefinitionImportInput(
             Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
             new Elsa3WorkflowDefinition
@@ -110,13 +137,36 @@ public sealed class Elsa3MigrationBoundaryTests
                 Description = "Missing root."
             });
 
-        var result = await importer.ImportAsync(input);
+        var result = await _importer.ImportAsync(input);
         var diagnostic = Assert.Single(result.Diagnostics);
 
         Assert.False(result.Succeeded);
         Assert.Equal(Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed, diagnostic.Code);
         Assert.Contains("definition-1", diagnostic.Message);
         Assert.Equal("WorkflowDefinitionExportJson", diagnostic.Metadata["InputKind"]);
+    }
+
+    [Fact]
+    public async Task WorkflowDefinitionImporter_ReturnsDiagnosticsWhenMalformedDefinitionIdIsMissing()
+    {
+        var input = new Elsa3WorkflowDefinitionImportInput(
+            Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
+            new Elsa3WorkflowDefinition
+            {
+                Id = "version-1",
+                DefinitionId = null!,
+                Name = "Broken workflow",
+                Description = "Missing root and definition ID."
+            });
+
+        var result = await _importer.ImportAsync(input);
+        var diagnostic = Assert.Single(result.Diagnostics);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed, diagnostic.Code);
+        Assert.Contains("<unspecified>", diagnostic.Message);
+        Assert.Equal("WorkflowDefinitionExportJson", diagnostic.Metadata["InputKind"]);
+        Assert.False(diagnostic.Metadata.ContainsKey("DefinitionId"));
     }
 
     private sealed class StubWorkflowDefinitionFactory : IWorkflowDefinitionFactory

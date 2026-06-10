@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 namespace Elsa3.Models;
 
 public sealed class Elsa3WorkflowDefinitionImportInput
@@ -166,7 +168,5 @@ public enum Elsa3MigrationDiagnosticSeverity
 internal static class Elsa3MigrationMetadata
 {
     public static IReadOnlyDictionary<string, string> Snapshot(IReadOnlyDictionary<string, string>? metadata) =>
-        metadata is null
-            ? new Dictionary<string, string>()
-            : new Dictionary<string, string>(metadata);
+        new ReadOnlyDictionary<string, string>((metadata ?? new Dictionary<string, string>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
 }

@@ -20,16 +20,23 @@ public sealed class Elsa3WorkflowDefinitionImporter(Elsa3WorkflowDefinitionToWor
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            var definitionId = string.IsNullOrWhiteSpace(input.Definition.DefinitionId)
+                ? "<unspecified>"
+                : input.Definition.DefinitionId;
+            var metadata = new Dictionary<string, string>
+            {
+                ["InputKind"] = input.InputKind.ToString()
+            };
+
+            if (!string.IsNullOrWhiteSpace(input.Definition.DefinitionId))
+                metadata["DefinitionId"] = input.Definition.DefinitionId;
+
             return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(new Elsa3MigrationDiagnostic(
                 Elsa3MigrationDiagnosticSeverity.Error,
                 Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed,
-                $"Elsa 3 workflow definition '{input.Definition.DefinitionId}' could not be mapped: {exception.Message}",
+                $"Elsa 3 workflow definition '{definitionId}' could not be mapped: {exception.Message}",
                 guidance: "Review the Elsa 3 definition and installed Elsa 4 activity catalog before retrying import.",
-                metadata: new Dictionary<string, string>
-                {
-                    ["InputKind"] = input.InputKind.ToString(),
-                    ["DefinitionId"] = input.Definition.DefinitionId
-                }));
+                metadata: metadata));
         }
     }
 
