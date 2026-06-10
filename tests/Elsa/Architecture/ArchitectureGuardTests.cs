@@ -133,6 +133,25 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()
+    {
+        const string text = "var message = $\"ActivityNode literal {typeof(ActivityNode).Name}\";";
+        var sanitized = StripCommentsAndStringLiterals(text);
+
+        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
+        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Source_scan_strips_raw_string_text()
+    {
+        const string text = "\"\"\"ActivityNode literal\"\"\"";
+        var sanitized = StripCommentsAndStringLiterals(text);
+
+        Assert.DoesNotContain("ActivityNode", sanitized, StringComparison.Ordinal);
+    }
+
     private static bool IsCoreSafeReference(string referenceName) =>
         referenceName.EndsWith(".Core", StringComparison.Ordinal) ||
         referenceName == "Elsa.Primitives" ||
@@ -192,6 +211,8 @@ public sealed class ArchitectureGuardTests
     {
         var sanitized = new char[text.Length];
         var state = SourceScanState.Code;
+        var interpolationReturnState = SourceScanState.Code;
+        var interpolationDepth = 0;
         var rawStringQuoteCount = 0;
 
         for (var i = 0; i < text.Length; i++)
@@ -211,11 +232,28 @@ public sealed class ArchitectureGuardTests
                     sanitized[++i] = ' ';
                     state = SourceScanState.BlockComment;
                     break;
-                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount):
+                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount, out var rawStringDollarCount):
                     for (var j = 0; j < rawStringPrefixLength; j++)
                         sanitized[i + j] = ' ';
                     i += rawStringPrefixLength - 1;
-                    state = SourceScanState.RawString;
+                    state = rawStringDollarCount == 0 ? SourceScanState.RawString : SourceScanState.InterpolatedRawString;
+                    break;
+                case SourceScanState.Code when current == '$' && next == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.InterpolatedString;
+                    break;
+                case SourceScanState.Code when current == '$' && next == '@' && i + 2 < text.Length && text[i + 2] == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.InterpolatedVerbatimString;
+                    break;
+                case SourceScanState.Code when current == '@' && next == '$' && i + 2 < text.Length && text[i + 2] == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.InterpolatedVerbatimString;
                     break;
                 case SourceScanState.Code when current == '@' && next == '"':
                     sanitized[i] = ' ';
@@ -265,6 +303,75 @@ public sealed class ArchitectureGuardTests
                     rawStringQuoteCount = 0;
                     state = SourceScanState.Code;
                     break;
+                case SourceScanState.InterpolatedRawString when HasRun(text, i, '"', rawStringQuoteCount):
+                    for (var j = 0; j < rawStringQuoteCount; j++)
+                        sanitized[i + j] = ' ';
+                    i += rawStringQuoteCount - 1;
+                    rawStringQuoteCount = 0;
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.InterpolatedRawString:
+                    sanitized[i] = current;
+                    break;
+                case SourceScanState.InterpolatedString when current == '\\' && next != '\0':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedString when current == '{' && next == '{':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedString when current == '{':
+                    sanitized[i] = current;
+                    interpolationDepth = 1;
+                    interpolationReturnState = state;
+                    state = SourceScanState.InterpolationExpression;
+                    break;
+                case SourceScanState.InterpolatedString when current == '}':
+                    sanitized[i] = next == '}' ? ' ' : current;
+                    if (next == '}')
+                        sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedString when current == '"':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.InterpolatedVerbatimString when current == '"' && next == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedVerbatimString when current == '{' && next == '{':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedVerbatimString when current == '{':
+                    sanitized[i] = current;
+                    interpolationDepth = 1;
+                    interpolationReturnState = state;
+                    state = SourceScanState.InterpolationExpression;
+                    break;
+                case SourceScanState.InterpolatedVerbatimString when current == '}':
+                    sanitized[i] = next == '}' ? ' ' : current;
+                    if (next == '}')
+                        sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.InterpolatedVerbatimString when current == '"':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.InterpolationExpression when current == '{':
+                    sanitized[i] = current;
+                    interpolationDepth++;
+                    break;
+                case SourceScanState.InterpolationExpression when current == '}':
+                    sanitized[i] = current;
+                    interpolationDepth--;
+                    if (interpolationDepth == 0)
+                        state = interpolationReturnState;
+                    break;
+                case SourceScanState.InterpolationExpression:
+                    sanitized[i] = current;
+                    break;
                 case SourceScanState.Character when current == '\\' && next != '\0':
                     sanitized[i] = ' ';
                     sanitized[++i] = ' ';
@@ -282,14 +389,16 @@ public sealed class ArchitectureGuardTests
         return new string(sanitized);
     }
 
-    private static bool TryReadRawStringStart(string text, int index, out int prefixLength, out int quoteCount)
+    private static bool TryReadRawStringStart(string text, int index, out int prefixLength, out int quoteCount, out int dollarCount)
     {
         prefixLength = 0;
         quoteCount = 0;
+        dollarCount = 0;
 
         var quoteIndex = index;
         while (quoteIndex < text.Length && text[quoteIndex] == '$')
             quoteIndex++;
+        dollarCount = quoteIndex - index;
 
         if (quoteIndex == index && text[index] != '"')
             return false;
@@ -392,6 +501,10 @@ public sealed class ArchitectureGuardTests
         String,
         VerbatimString,
         RawString,
+        InterpolatedString,
+        InterpolatedVerbatimString,
+        InterpolatedRawString,
+        InterpolationExpression,
         Character
     }
 
