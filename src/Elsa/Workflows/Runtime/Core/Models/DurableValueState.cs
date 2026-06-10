@@ -89,7 +89,7 @@ public sealed record DurableValueState
         }
 
         if (storage == DurableValueStorage.Custom && inlineValue.HasValue && externalReference is not null)
-            throw new ArgumentException("Custom durable value state cannot carry both inline value and external reference.");
+            throw new ArgumentException("Custom durable value state cannot carry both inline value and external reference.", nameof(externalReference));
     }
 }
 
