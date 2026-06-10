@@ -70,6 +70,39 @@ public sealed class RuntimeVolatileWaitContractTests
     }
 
     [Fact]
+    public void InternalContinuationWork_DoesNotUseVolatileWaitId()
+    {
+        var continuation = new SchedulerContinuationWorkItem(
+            workItemId: "continuation-1",
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "actexec-1",
+            branchId: "branch-a",
+            kind: SchedulerContinuationKind.InternalContinuation,
+            volatileWaitId: null,
+            enqueuedAt: _now,
+            reason: "internal scheduler continuation");
+
+        Assert.Equal(SchedulerContinuationKind.InternalContinuation, continuation.Kind);
+        Assert.Null(continuation.VolatileWaitId);
+    }
+
+    [Fact]
+    public void InternalContinuationWork_RejectsVolatileWaitId()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new SchedulerContinuationWorkItem(
+            workItemId: "continuation-1",
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "actexec-1",
+            branchId: "branch-a",
+            kind: SchedulerContinuationKind.InternalContinuation,
+            volatileWaitId: "wait-1",
+            enqueuedAt: _now,
+            reason: "internal scheduler continuation"));
+
+        Assert.Contains("must not be set", exception.Message);
+    }
+
+    [Fact]
     public void VolatileWaitRegistration_RejectsInvalidExpiration()
     {
         Assert.Throws<ArgumentException>(() => new VolatileWaitRegistration(

@@ -45,6 +45,9 @@ public sealed class SchedulerContinuationWorkItem
         if (RequiresVolatileWaitId(kind) && string.IsNullOrWhiteSpace(volatileWaitId))
             throw new ArgumentException("Volatile wait continuation work requires a volatile wait ID.", nameof(volatileWaitId));
 
+        if (!RequiresVolatileWaitId(kind) && volatileWaitId is not null)
+            throw new ArgumentException("Volatile wait ID must not be set for non-volatile-wait continuation kinds.", nameof(volatileWaitId));
+
         WorkItemId = workItemId;
         WorkflowExecutionId = workflowExecutionId;
         ActivityExecutionId = activityExecutionId;
