@@ -9,7 +9,7 @@ namespace Groundwork.RelationalProviders.Tests;
 
 public sealed class PostgreSqlProviderTests : RelationalProviderContractTests, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17-alpine")
+    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:17.6-alpine3.22")
         .WithDatabase("groundwork")
         .WithUsername("groundwork")
         .WithPassword("groundwork")

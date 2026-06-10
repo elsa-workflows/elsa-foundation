@@ -1,11 +1,12 @@
 using System.Xml.Linq;
+using Groundwork.TestInfrastructure;
 using Xunit;
 
 namespace Groundwork.Sqlite.Tests;
 
 public sealed class SqliteDependencyBoundaryTests
 {
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
+    private static readonly string RepositoryRoot = RepositoryRootLocator.FindRepositoryRoot();
 
     [Fact]
     public void GroundworkSqliteDoesNotReferenceElsaProjects()
@@ -20,12 +21,4 @@ public sealed class SqliteDependencyBoundaryTests
         Assert.All(references, reference => Assert.DoesNotContain("Elsa", reference, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
 }

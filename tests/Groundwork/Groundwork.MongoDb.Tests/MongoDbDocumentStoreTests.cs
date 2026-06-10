@@ -10,7 +10,7 @@ namespace Groundwork.MongoDb.Tests;
 
 public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
 {
-    private readonly MongoDbContainer container = new MongoDbBuilder("mongo:7.0").Build();
+    private readonly MongoDbContainer container = new MongoDbBuilder("mongo:7.0.24").Build();
 
     public async Task InitializeAsync() => await container.StartAsync();
 

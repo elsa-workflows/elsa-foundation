@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestInfrastructure\RepositoryRootLocator.cs" Link="TestInfrastructure\RepositoryRootLocator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Groundwork\PostgreSql\Groundwork.PostgreSql.csproj" />
     <ProjectReference Include="..\..\..\src\Groundwork\SqlServer\Groundwork.SqlServer.csproj" />
   </ItemGroup>

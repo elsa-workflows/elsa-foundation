@@ -1,11 +1,12 @@
 using System.Xml.Linq;
+using Groundwork.TestInfrastructure;
 using Xunit;
 
 namespace Groundwork.Tests;
 
 public sealed class GroundworkDependencyBoundaryTests
 {
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
+    private static readonly string RepositoryRoot = RepositoryRootLocator.FindRepositoryRoot();
 
     public static TheoryData<string, string[]> GroundworkProjectReferences => new()
     {
@@ -59,12 +60,4 @@ public sealed class GroundworkDependencyBoundaryTests
 
     private static string NormalizeMsBuildPath(string path) => path.Replace('\\', Path.DirectorySeparatorChar);
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
 }

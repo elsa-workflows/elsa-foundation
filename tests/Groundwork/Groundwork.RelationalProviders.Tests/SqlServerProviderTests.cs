@@ -10,7 +10,7 @@ namespace Groundwork.RelationalProviders.Tests;
 
 public sealed class SqlServerProviderTests : RelationalProviderContractTests, IAsyncLifetime
 {
-    private readonly MsSqlContainer container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly MsSqlContainer container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04").Build();
 
     public async Task InitializeAsync() => await container.StartAsync();
 
