@@ -64,10 +64,11 @@ public sealed class RuntimeCheckpointCommitTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
         _schedulerState = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 1,
-            PendingWork: [],
-            VolatileWaits: []);
+            workflowExecutionId: "wfexec-1",
+            version: 1,
+            pendingWork: [],
+            pendingContinuations: [],
+            volatileWaits: []);
         _durableValueState = new DurableValueState(
             durableValueId: "durable-1",
             workflowExecutionId: "wfexec-1",
