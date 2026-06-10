@@ -9,10 +9,13 @@ public sealed record SchedulerState
     private IReadOnlyCollection<SchedulerCompletionWorkItem> _pendingCompletionWork = [];
     private IReadOnlyCollection<SchedulerContinuationWorkItem> _pendingContinuations = [];
     private IReadOnlyCollection<VolatileWaitRegistration> _volatileWaits = [];
+    private IReadOnlyCollection<GeneratorRegistration> _activeGenerators = [];
+    private IReadOnlyCollection<SchedulerGeneratedEventWorkItem> _pendingGeneratedEvents = [];
 
     /// <remarks>
-    /// `pendingCompletionWork` is appended to preserve the existing positional constructor order.
+    /// New scheduler lanes are appended to preserve the existing positional constructor order.
     /// The completion-propagation contract expects schedulers to drain `PendingCompletionWork` before unrelated scheduled activity work.
+    /// Generated-event work is a separate lane because generator emissions are scheduler/history data, not activity executions.
     /// Prefer named arguments for new call sites.
     /// </remarks>
     public SchedulerState(
@@ -21,7 +24,9 @@ public sealed record SchedulerState
         IReadOnlyCollection<ScheduledActivityWorkItem>? pendingWork = null,
         IReadOnlyCollection<SchedulerContinuationWorkItem>? pendingContinuations = null,
         IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits = null,
-        IReadOnlyCollection<SchedulerCompletionWorkItem>? pendingCompletionWork = null)
+        IReadOnlyCollection<SchedulerCompletionWorkItem>? pendingCompletionWork = null,
+        IReadOnlyCollection<GeneratorRegistration>? activeGenerators = null,
+        IReadOnlyCollection<SchedulerGeneratedEventWorkItem>? pendingGeneratedEvents = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -31,6 +36,8 @@ public sealed record SchedulerState
         PendingCompletionWork = pendingCompletionWork ?? [];
         PendingContinuations = pendingContinuations ?? [];
         VolatileWaits = volatileWaits ?? [];
+        ActiveGenerators = activeGenerators ?? [];
+        PendingGeneratedEvents = pendingGeneratedEvents ?? [];
     }
 
     public string WorkflowExecutionId { get; init; }
@@ -58,6 +65,18 @@ public sealed record SchedulerState
     {
         get => _volatileWaits;
         init => _volatileWaits = Snapshot(value);
+    }
+
+    public IReadOnlyCollection<GeneratorRegistration> ActiveGenerators
+    {
+        get => _activeGenerators;
+        init => _activeGenerators = Snapshot(value);
+    }
+
+    public IReadOnlyCollection<SchedulerGeneratedEventWorkItem> PendingGeneratedEvents
+    {
+        get => _pendingGeneratedEvents;
+        init => _pendingGeneratedEvents = Snapshot(value);
     }
 
     private static IReadOnlyCollection<T> Snapshot<T>(IReadOnlyCollection<T>? values) => (values ?? []).ToArray();
