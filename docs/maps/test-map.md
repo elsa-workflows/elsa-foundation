@@ -6,9 +6,9 @@ Records direct test-project references only; it does not claim behavioral covera
 
 ## Summary
 
-- Test projects: 7
-- Source projects directly referenced by at least one test project: 39
-- Source projects not directly referenced by test projects: 30
+- Test projects: 8
+- Source projects directly referenced by at least one test project: 40
+- Source projects not directly referenced by test projects: 29
 
 ## Test Projects
 
@@ -21,6 +21,7 @@ Records direct test-project references only; it does not claim behavioral covera
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Workflows.Publishing.Api |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | Elsa.Workflows.Runtime.Core |
 
 ## Source Projects Without Direct Test Reference
 
@@ -49,7 +50,6 @@ Records direct test-project references only; it does not claim behavioral covera
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | Elsa.Workflows |
 | [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | Elsa.Workflows |
-| [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | Elsa.Workflows |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows |
 | [Elsa.Workflows.Runtime.StorageDrivers](../../src/Elsa/Workflows/Runtime/StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj) | Elsa.Workflows |

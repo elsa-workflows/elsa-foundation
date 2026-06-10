@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 68
-- Test projects: 7
-- Direct project references: 265
+- Test projects: 8
+- Direct project references: 266
 
 ## Projects
 
@@ -89,6 +89,7 @@ Records direct project references only.
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | net10.0 | false | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Workflows.Publishing.Api |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Runtime.Core |
 
 ## Domain Groups
 
@@ -109,5 +110,5 @@ Records direct project references only.
 | Elsa.Serialization | 3 | 0 |
 | Elsa.Server | 1 | 0 |
 | Elsa.Tasks | 3 | 0 |
-| Elsa.Workflows | 16 | 2 |
+| Elsa.Workflows | 16 | 3 |
 | Elsa3 | 3 | 0 |

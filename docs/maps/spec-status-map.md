@@ -14,3 +14,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 37 | 18 | retained, deferred, out of scope, construct-only |
+| [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Draft | - | 18 | 0 | deferred, out of scope |

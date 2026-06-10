@@ -1,8 +1,28 @@
 # Extension points — Workflows.Runtime domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Core` — this is the only project in this domain (no separate feature project); defaults for `ISignalHandler` and `IActivityCompletionHandler` are provided by `ActivityBase` in this Core. No published events in this domain.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Core`; provider/default implementations may live in sibling runtime projects. Runtime execution contracts are Design-free and operate on runtime-owned executable artifacts and execution state.
 
 ---
+
+## Overridable replacement contracts
+
+### `IRuntimeCheckpointPersistencePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides how checkpoints flush in a runtime composition).
+- **Signature:** `DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)`.
+- **Usage:** separates checkpoint semantics from persistence timing. The checkpoint name says what changed; the policy decides immediate, deferred, or skipped flush.
+- **Default implementation:** `ImmediateRuntimeCheckpointPersistencePolicy` *(intra-domain default)*.
+
+### `IRuntimeCheckpointWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one writer owns persistence of checkpoint envelopes for a runtime composition).
+- **Signature:** `WriteAsync(RuntimeCheckpoint checkpoint, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)`.
+- **Usage:** implemented by runtime persistence providers after the checkpoint state envelope is specified.
+- **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
+
+### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
+- **Signature:** `GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default)`.
+- **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Actor frameworks are provider choices; checkpoint state remains the source of truth.
+- **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
 
 ## Implementable contributor interfaces
 

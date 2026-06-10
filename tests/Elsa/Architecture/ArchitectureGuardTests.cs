@@ -110,6 +110,29 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Workflows_runtime_core_does_not_use_authored_workflow_models()
+    {
+        string[] forbiddenPatterns =
+        [
+            "Elsa.Workflows.Design",
+            "WorkflowDefinitionState",
+            "ActivityNode"
+        ];
+        var runtimeCoreDirectory = Path.Combine(RepoRoot, "src", "Elsa", "Workflows", "Runtime", "Core");
+        var violations = Directory.EnumerateFiles(runtimeCoreDirectory, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(file =>
+            {
+                var text = File.ReadAllText(file);
+                return forbiddenPatterns
+                    .Where(pattern => text.Contains(pattern, StringComparison.Ordinal))
+                    .Select(pattern => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {pattern}");
+            })
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     private static bool IsCoreSafeReference(string referenceName) =>
         referenceName.EndsWith(".Core", StringComparison.Ordinal) ||
         referenceName == "Elsa.Primitives" ||
