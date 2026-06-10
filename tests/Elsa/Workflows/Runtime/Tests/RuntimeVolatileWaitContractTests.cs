@@ -64,6 +64,20 @@ public sealed class RuntimeVolatileWaitContractTests
         Assert.Empty(scheduler.VolatileWaits);
     }
 
+    [Fact]
+    public void SchedulerState_PreservesRecordCopyShape()
+    {
+        var scheduler = new SchedulerState(
+            workflowExecutionId: "wfexec-1",
+            version: 1);
+
+        var advanced = scheduler with { Version = 2 };
+
+        Assert.Equal("wfexec-1", advanced.WorkflowExecutionId);
+        Assert.Equal(2, advanced.Version);
+        Assert.Empty(advanced.PendingContinuations);
+    }
+
     [Theory]
     [InlineData(SchedulerContinuationKind.VolatileWaitCompleted)]
     [InlineData(SchedulerContinuationKind.VolatileWaitCancelled)]

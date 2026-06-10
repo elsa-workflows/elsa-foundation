@@ -3,7 +3,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Minimal single-writer scheduler continuation state for a workflow execution.
 /// </summary>
-public sealed class SchedulerState
+public sealed record SchedulerState
 {
     public SchedulerState(
         string workflowExecutionId,
@@ -21,11 +21,11 @@ public sealed class SchedulerState
         VolatileWaits = (volatileWaits ?? []).ToArray();
     }
 
-    public string WorkflowExecutionId { get; }
-    public long Version { get; }
-    public IReadOnlyCollection<ScheduledActivityWorkItem> PendingWork { get; }
-    public IReadOnlyCollection<SchedulerContinuationWorkItem> PendingContinuations { get; }
-    public IReadOnlyCollection<VolatileWaitRegistration> VolatileWaits { get; }
+    public string WorkflowExecutionId { get; init; }
+    public long Version { get; init; }
+    public IReadOnlyCollection<ScheduledActivityWorkItem> PendingWork { get; init; }
+    public IReadOnlyCollection<SchedulerContinuationWorkItem> PendingContinuations { get; init; }
+    public IReadOnlyCollection<VolatileWaitRegistration> VolatileWaits { get; init; }
 }
 
 public sealed record ScheduledActivityWorkItem(
