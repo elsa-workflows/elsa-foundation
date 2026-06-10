@@ -1,3 +1,4 @@
+using Groundwork.TestInfrastructure;
 using System.Xml.Linq;
 using Xunit;
 
@@ -5,7 +6,13 @@ namespace Elsa.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkBridgeBoundaryTests
 {
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
+    private static readonly string RepositoryRoot = RepositoryRootLocator.FindRepositoryRoot();
+    private static readonly string[] AllowedBridgeGroundworkReferences =
+    [
+        "src/Groundwork/Core/Groundwork.Core.csproj",
+        "src/Groundwork/Documents/Groundwork.Documents.csproj",
+        "src/Groundwork/Relational/Groundwork.Relational.csproj"
+    ];
 
     [Fact]
     public void GroundworkProjectsDoNotReferenceElsaProjects()
@@ -24,9 +31,14 @@ public sealed class GroundworkBridgeBoundaryTests
     public void ElsaBridgeDoesNotReferenceProviderSpecificGroundworkPackages()
     {
         var project = Path.Combine(RepositoryRoot, "src", "Elsa", "Persistence", "Groundwork", "Elsa.Persistence.Groundwork.csproj");
-        var references = ProjectReferences(project).ToList();
+        var projectDirectory = Path.GetDirectoryName(project)!;
+        var allowedReferences = AllowedBridgeGroundworkReferences.ToHashSet(StringComparer.Ordinal);
+        var providerReferences = ProjectReferences(project)
+            .Select(reference => NormalizeRelativeProjectPath(Path.Combine(projectDirectory, NormalizeMsBuildPath(reference))))
+            .Where(reference => reference.StartsWith("src/Groundwork/", StringComparison.Ordinal) && !allowedReferences.Contains(reference))
+            .ToList();
 
-        Assert.DoesNotContain(references, reference => reference.Contains("Groundwork.Sqlite", StringComparison.OrdinalIgnoreCase));
+        Assert.True(providerReferences.Count == 0, string.Join(Environment.NewLine, providerReferences));
     }
 
     private static IEnumerable<string> ProjectReferences(string project)
@@ -37,12 +49,8 @@ public sealed class GroundworkBridgeBoundaryTests
             .OfType<string>();
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
+    private static string NormalizeRelativeProjectPath(string path) =>
+        Path.GetRelativePath(RepositoryRoot, Path.GetFullPath(path)).Replace('\\', '/');
 
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
+    private static string NormalizeMsBuildPath(string path) => path.Replace('\\', Path.DirectorySeparatorChar);
 }
