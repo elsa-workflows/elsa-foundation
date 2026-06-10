@@ -1,16 +1,17 @@
 using Groundwork.Relational.Materialization;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 
-namespace Groundwork.Sqlite.Materialization;
+namespace Groundwork.PostgreSql.Materialization;
 
-public sealed class SqliteGroundworkMaterializer(SqliteConnection connection) : RelationalMaterializerBase(connection)
+public sealed class PostgreSqlGroundworkMaterializer(NpgsqlConnection connection) : RelationalMaterializerBase(connection)
 {
     protected override IReadOnlyList<string> SchemaStatements { get; } = [DocumentTableSql, IndexTableSql, SchemaHistorySql];
 
     protected override string InsertSchemaHistorySql => """
-        INSERT OR IGNORE INTO groundwork_schema_history
+        INSERT INTO groundwork_schema_history
         (manifest_id, manifest_version, provider_name, provider_version, applied_utc)
-        VALUES (@manifestId, @manifestVersion, @providerName, @providerVersion, @appliedUtc);
+        VALUES (@manifestId, @manifestVersion, @providerName, @providerVersion, @appliedUtc)
+        ON CONFLICT (manifest_id, manifest_version, provider_name, provider_version) DO NOTHING;
         """;
 
     private const string DocumentTableSql = """
@@ -18,7 +19,7 @@ public sealed class SqliteGroundworkMaterializer(SqliteConnection connection) : 
             document_kind TEXT NOT NULL,
             id TEXT NOT NULL,
             schema_version TEXT NOT NULL,
-            version INTEGER NOT NULL,
+            version BIGINT NOT NULL,
             content_json TEXT NOT NULL,
             created_utc TEXT NOT NULL,
             updated_utc TEXT NOT NULL,

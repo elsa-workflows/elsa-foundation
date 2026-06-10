@@ -10,7 +10,7 @@ public sealed class GroundworkDependencyBoundaryTests
     public static TheoryData<string, string[]> GroundworkProjectReferences => new()
     {
         { "src/Groundwork/Core/Groundwork.Core.csproj", [] },
-        { "src/Groundwork/Relational/Groundwork.Relational.csproj", ["src/Groundwork/Core/Groundwork.Core.csproj"] },
+        { "src/Groundwork/Relational/Groundwork.Relational.csproj", ["src/Groundwork/Core/Groundwork.Core.csproj", "src/Groundwork/Documents/Groundwork.Documents.csproj"] },
         { "src/Groundwork/Documents/Groundwork.Documents.csproj", ["src/Groundwork/Core/Groundwork.Core.csproj"] }
     };
 

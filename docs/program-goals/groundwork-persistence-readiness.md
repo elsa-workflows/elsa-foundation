@@ -36,9 +36,10 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 1. Complete [Groundwork Persistence Foundation](../../specs/012-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
 2. Complete [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
 3. Complete [Groundwork SQLite Document Store](../../specs/014-groundwork-sqlite-document-store/plan.md) as the G2 provider validation slice.
-4. Implement [Groundwork Elsa Bridge](../../specs/015-groundwork-elsa-bridge/plan.md) as the G3 opt-in Elsa validation slice.
-5. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
-6. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
+4. Complete [Groundwork Elsa Bridge](../../specs/015-groundwork-elsa-bridge/plan.md) as the G3 opt-in Elsa validation slice.
+5. Implement [Groundwork SQL Server And PostgreSQL Providers](../../specs/016-groundwork-relational-providers/plan.md) as the G4 relational provider slice.
+6. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
+7. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
 
 ## Linked Surfaces
 
@@ -52,6 +53,8 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork SQLite Document Store plan](../../specs/014-groundwork-sqlite-document-store/plan.md)
 - [Groundwork Elsa Bridge spec](../../specs/015-groundwork-elsa-bridge/spec.md)
 - [Groundwork Elsa Bridge plan](../../specs/015-groundwork-elsa-bridge/plan.md)
+- [Groundwork SQL Server And PostgreSQL Providers spec](../../specs/016-groundwork-relational-providers/spec.md)
+- [Groundwork SQL Server And PostgreSQL Providers plan](../../specs/016-groundwork-relational-providers/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
@@ -61,6 +64,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - G1 adds generic Groundwork core/planner packages and tests before any Elsa store migration.
 - G2 adds the first provider-backed portable document store using SQLite.
 - G3 adds an opt-in Elsa bridge and validates a Secrets-like manifest through SQLite without replacing EF persistence paths.
+- G4 adds SQL Server and PostgreSQL providers against the same portable document-store contract.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
 
 ## Drift / Review Notes

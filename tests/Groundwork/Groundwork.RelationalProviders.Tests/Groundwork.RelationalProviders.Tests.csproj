@@ -9,19 +9,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.12.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.12.0" />
     <PackageReference Include="xunit" Version="2.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Groundwork\Relational\Groundwork.Relational.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Groundwork\Sqlite\Groundwork.Sqlite.csproj" />
+    <ProjectReference Include="..\..\..\src\Groundwork\PostgreSql\Groundwork.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\..\src\Groundwork\SqlServer\Groundwork.SqlServer.csproj" />
   </ItemGroup>
 
 </Project>
