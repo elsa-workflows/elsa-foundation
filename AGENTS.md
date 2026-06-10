@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Groundwork Persistence Foundation](specs/012-groundwork-persistence-foundation/plan.md)
+Current Speckit plan: [Groundwork Core Manifest And Planner Kernel](specs/013-groundwork-core-manifest-planner/plan.md)
 <!-- SPECKIT END -->

@@ -54,7 +54,7 @@
 
 ## Phase 6: Next Implementation Slice Preparation
 
-- [ ] T023 Prepare G1 specification for core manifest and planner kernel after G0 review is accepted
+- [x] T023 Prepare G1 specification for core manifest and planner kernel after G0 review is accepted
 - [ ] T024 Decide whether to create GitHub tracking issues from the Groundwork roadmap after G0 review is accepted
 - [ ] T025 Decide whether to keep future execution in this session or hand off G1 to a fresh worker/thread
 

@@ -34,7 +34,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 ## Active Objectives
 
 1. Complete [Groundwork Persistence Foundation](../../specs/012-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
-2. Use G0 to prepare G1: core manifest and planner kernel.
+2. Prepare [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
 3. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
 4. Keep Elsa validation in an explicit `Elsa.Persistence.Groundwork` bridge.
 5. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
@@ -45,6 +45,8 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork Persistence Foundation plan](../../specs/012-groundwork-persistence-foundation/plan.md)
 - [Groundwork boundary contract](../../specs/012-groundwork-persistence-foundation/contracts/groundwork-boundary.md)
 - [Groundwork roadmap slices](../../specs/012-groundwork-persistence-foundation/contracts/roadmap-slices.md)
+- [Groundwork Core Manifest And Planner Kernel spec](../../specs/013-groundwork-core-manifest-planner/spec.md)
+- [Groundwork Core Manifest And Planner Kernel plan](../../specs/013-groundwork-core-manifest-planner/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
