@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Diagnostics History And Incidents](specs/012-runtime-diagnostics-history-incidents/plan.md)
+Current Speckit plan: [Runtime Operational Recovery And Post-Commit Outbox](specs/013-runtime-operational-recovery-outbox/plan.md)
 <!-- SPECKIT END -->
