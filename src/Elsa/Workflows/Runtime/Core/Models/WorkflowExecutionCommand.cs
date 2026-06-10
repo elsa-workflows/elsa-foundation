@@ -21,5 +21,10 @@ public enum WorkflowExecutionCommandKind
     RunSchedulerWork,
     Cancel,
     PauseWorkflowExecution,
-    UnpauseWorkflowExecution
+    UnpauseWorkflowExecution,
+    ScheduleActivity,
+    CompleteActivity,
+    DeliverSignal,
+    CreateBookmark,
+    Checkpoint
 }
