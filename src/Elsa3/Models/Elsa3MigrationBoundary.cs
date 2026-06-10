@@ -68,6 +68,7 @@ public sealed class Elsa3MigrationDiagnostic
 }
 
 public sealed class Elsa3MigrationResult<T>
+    where T : class
 {
     private Elsa3MigrationResult(T? value, IReadOnlyCollection<Elsa3MigrationDiagnostic> diagnostics)
     {
@@ -128,6 +129,7 @@ public static class Elsa3MigrationCompatibility
         inputKind == Elsa3MigrationInputKind.WorkflowInstanceState;
 
     public static Elsa3MigrationResult<T> RejectUnsupportedInputKind<T>(Elsa3MigrationInputKind inputKind, string? sourceName = null)
+        where T : class
     {
         if (IsLiveInstanceStateInput(inputKind))
             return RejectLiveInstanceResume<T>(sourceName);
@@ -152,6 +154,7 @@ public static class Elsa3MigrationCompatibility
     }
 
     public static Elsa3MigrationResult<T> RejectLiveInstanceResume<T>(string? sourceName = null)
+        where T : class
     {
         if (sourceName is not null && string.IsNullOrWhiteSpace(sourceName))
             throw new ArgumentException("Migration source name cannot be blank.", nameof(sourceName));
