@@ -8,7 +8,7 @@ Runtime checkpoint commits are provider-facing contracts in `Elsa.Workflows.Runt
 2. Runtime code packages state changes and post-commit intents into `RuntimeCheckpointCommit`.
 3. `IRuntimeCheckpointPersistencePolicy.DecideAsync` chooses `Immediate`, `Deferred`, or `Skip`.
 4. `IRuntimeCheckpointWriter.WriteAsync` receives the full commit envelope and decision for `Immediate` and `Deferred`.
-5. `IRuntimePostCommitIntentDispatcher.DispatchAsync` receives intents only after the writer completes successfully.
+5. `IRuntimePostCommitIntentDispatcher.DispatchAsync` receives intents, in commit-envelope order, only after the writer completes successfully.
 
 ## Extension Points
 

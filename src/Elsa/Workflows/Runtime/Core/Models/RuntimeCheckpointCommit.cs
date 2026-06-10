@@ -9,7 +9,7 @@ public sealed record RuntimeCheckpointCommit(
     string CommitId,
     RuntimeCheckpoint Checkpoint,
     RuntimeCheckpointStateChangeSet StateChanges,
-    IReadOnlyCollection<RuntimePostCommitIntent> PostCommitIntents,
+    IReadOnlyList<RuntimePostCommitIntent> PostCommitIntents,
     IReadOnlyDictionary<string, string> Metadata)
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;

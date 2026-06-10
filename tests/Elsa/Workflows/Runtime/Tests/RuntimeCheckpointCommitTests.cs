@@ -227,7 +227,7 @@ public sealed class RuntimeCheckpointCommitTests
 
     private RuntimeCheckpointCommit NewCommit(
         string checkpointName,
-        IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents = null) =>
+        IReadOnlyList<RuntimePostCommitIntent>? postCommitIntents = null) =>
         new(
             CommitId: "commit-1",
             Checkpoint: new RuntimeCheckpoint(

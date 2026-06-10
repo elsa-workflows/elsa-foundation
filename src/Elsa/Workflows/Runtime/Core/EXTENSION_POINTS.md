@@ -21,7 +21,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 ### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).
 - **Signature:** `DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
-- **Usage:** dispatches post-commit intents only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
+- **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
 - **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*

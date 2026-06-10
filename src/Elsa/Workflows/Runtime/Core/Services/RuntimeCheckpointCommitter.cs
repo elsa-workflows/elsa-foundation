@@ -19,10 +19,13 @@ public sealed class RuntimeCheckpointCommitter(
 
         await checkpointWriter.WriteAsync(commit, decision, cancellationToken);
 
+        var postCommitIntents = commit.PostCommitIntents;
         var dispatchedIntentIds = new List<string>();
 
-        foreach (var intent in commit.PostCommitIntents)
+        for (var index = 0; index < postCommitIntents.Count; index++)
         {
+            var intent = postCommitIntents[index];
+
             try
             {
                 await postCommitIntentDispatcher.DispatchAsync(intent, cancellationToken);
@@ -34,8 +37,8 @@ public sealed class RuntimeCheckpointCommitter(
             }
             catch (Exception exception)
             {
-                var undispatchedIntentIds = commit.PostCommitIntents
-                    .Skip(dispatchedIntentIds.Count + 1)
+                var undispatchedIntentIds = postCommitIntents
+                    .Skip(index + 1)
                     .Select(undispatchedIntent => undispatchedIntent.IntentId)
                     .ToArray();
 

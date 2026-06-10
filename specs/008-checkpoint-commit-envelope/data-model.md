@@ -30,4 +30,4 @@ Represents a state change for categories whose concrete state models are intenti
 
 ## RuntimePostCommitIntent
 
-Placeholder for outbound work that depends on a committed checkpoint. It carries intent identity, kind, workflow/activity correlation, optional idempotency key, JSON payload, and metadata. It is not an outbox implementation.
+Placeholder for outbound work that depends on a committed checkpoint. It carries intent identity, kind, workflow/activity correlation, optional idempotency key, JSON payload, and metadata. Intents are stored on the commit envelope as an ordered list and dispatched in that order. It is not an outbox implementation.
