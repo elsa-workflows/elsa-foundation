@@ -237,6 +237,37 @@ public sealed class RuntimeValueBindingContractTests
         Assert.Equal("compile", node.Metadata["source"]);
     }
 
+    [Fact]
+    public void ExecutableNode_RejectsBindingAndCaptureKeysThatDoNotMatchModelNames()
+    {
+        var outputCapture = new RuntimeOutputCapture(
+            outputName: "customer",
+            valueId: "customer",
+            type: new RuntimeValueTypeDescriptor("reference", "crm.customer", null),
+            lifecycle: DurableValueLifecycle.Instance,
+            storage: DurableValueStorage.Inline,
+            captureOnSuccessfulCompletion: true);
+
+        Assert.Throws<ArgumentException>(() => NewExecutableNode(
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["recipient"] = DurableValueBinding("customer", "customer")
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["customer"] = outputCapture
+            }));
+        Assert.Throws<ArgumentException>(() => NewExecutableNode(
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["customer"] = DurableValueBinding("customer", "customer")
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["recipient"] = outputCapture
+            }));
+    }
+
     private RuntimeInputBindingResolutionContext NewContext() =>
         new(
             workflowExecutionId: "wfexec-1",
@@ -257,6 +288,20 @@ public sealed class RuntimeValueBindingContractTests
                     metadata: new Dictionary<string, string>())
             },
             activityOutputs: _outputs);
+
+    private static ExecutableNode NewExecutableNode(
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures) =>
+        new(
+            executableNodeId: "node-send",
+            authoredActivityId: "activity-send",
+            activityType: "Elsa.SendEmail",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: Json("{}"),
+            inputBindings: inputBindings,
+            outputCaptures: outputCaptures,
+            metadata: new Dictionary<string, string>());
 
     private static RuntimeInputBinding LiteralBinding(string inputName, JsonElement value) =>
         new(inputName, RuntimeInputBindingSource.Literal, literalValue: value);

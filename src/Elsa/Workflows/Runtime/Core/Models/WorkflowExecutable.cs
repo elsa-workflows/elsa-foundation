@@ -85,14 +85,29 @@ public sealed class ExecutableNode
         ArgumentNullException.ThrowIfNull(outputCaptures);
         ArgumentNullException.ThrowIfNull(metadata);
 
+        var inputBindingSnapshot = inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var outputCaptureSnapshot = outputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+        foreach (var (inputName, binding) in inputBindingSnapshot)
+        {
+            if (!StringComparer.Ordinal.Equals(inputName, binding.InputName))
+                throw new ArgumentException($"Input binding dictionary key '{inputName}' must match binding input name '{binding.InputName}'.", nameof(inputBindings));
+        }
+
+        foreach (var (outputName, capture) in outputCaptureSnapshot)
+        {
+            if (!StringComparer.Ordinal.Equals(outputName, capture.OutputName))
+                throw new ArgumentException($"Output capture dictionary key '{outputName}' must match capture output name '{capture.OutputName}'.", nameof(outputCaptures));
+        }
+
         ExecutableNodeId = executableNodeId;
         AuthoredActivityId = authoredActivityId;
         ActivityType = activityType;
         ActivityTypeVersion = activityTypeVersion;
         DescriptorType = descriptorType;
         DescriptorPayload = descriptorPayload.Clone();
-        InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
-        OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
+        OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
