@@ -63,6 +63,24 @@ public sealed class RuntimeVolatileWaitContractTests
         Assert.Empty(scheduler.PendingCompletionWork);
         Assert.Empty(scheduler.PendingContinuations);
         Assert.Empty(scheduler.VolatileWaits);
+        Assert.Empty(scheduler.ActiveGenerators);
+        Assert.Empty(scheduler.PendingGeneratedEvents);
+    }
+
+    [Fact]
+    public void SchedulerState_PreservesSixParameterConstructorShape()
+    {
+        var constructor = typeof(SchedulerState).GetConstructor(
+        [
+            typeof(string),
+            typeof(long),
+            typeof(IReadOnlyCollection<ScheduledActivityWorkItem>),
+            typeof(IReadOnlyCollection<SchedulerContinuationWorkItem>),
+            typeof(IReadOnlyCollection<VolatileWaitRegistration>),
+            typeof(IReadOnlyCollection<SchedulerCompletionWorkItem>)
+        ]);
+
+        Assert.NotNull(constructor);
     }
 
     [Fact]
@@ -78,6 +96,8 @@ public sealed class RuntimeVolatileWaitContractTests
         Assert.Equal(2, advanced.Version);
         Assert.Empty(advanced.PendingCompletionWork);
         Assert.Empty(advanced.PendingContinuations);
+        Assert.Empty(advanced.ActiveGenerators);
+        Assert.Empty(advanced.PendingGeneratedEvents);
     }
 
     [Fact]
@@ -104,13 +124,17 @@ public sealed class RuntimeVolatileWaitContractTests
         {
             PendingWork = pendingWork,
             PendingCompletionWork = null!,
-            PendingContinuations = null!
+            PendingContinuations = null!,
+            ActiveGenerators = null!,
+            PendingGeneratedEvents = null!
         };
         pendingWork.Clear();
 
         Assert.Single(copied.PendingWork);
         Assert.Empty(copied.PendingCompletionWork);
         Assert.Empty(copied.PendingContinuations);
+        Assert.Empty(copied.ActiveGenerators);
+        Assert.Empty(copied.PendingGeneratedEvents);
     }
 
     [Theory]

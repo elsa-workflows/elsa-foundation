@@ -9,11 +9,13 @@ public sealed record SchedulerState
     private IReadOnlyCollection<SchedulerCompletionWorkItem> _pendingCompletionWork = [];
     private IReadOnlyCollection<SchedulerContinuationWorkItem> _pendingContinuations = [];
     private IReadOnlyCollection<VolatileWaitRegistration> _volatileWaits = [];
+    private IReadOnlyCollection<GeneratorRegistration> _activeGenerators = [];
+    private IReadOnlyCollection<SchedulerGeneratedEventWorkItem> _pendingGeneratedEvents = [];
 
     /// <remarks>
-    /// `pendingCompletionWork` is appended to preserve the existing positional constructor order.
+    /// This overload preserves the existing six-parameter constructor signature for compiled consumers.
     /// The completion-propagation contract expects schedulers to drain `PendingCompletionWork` before unrelated scheduled activity work.
-    /// Prefer named arguments for new call sites.
+    /// Prefer named arguments for new source call sites.
     /// </remarks>
     public SchedulerState(
         string workflowExecutionId,
@@ -22,6 +24,32 @@ public sealed record SchedulerState
         IReadOnlyCollection<SchedulerContinuationWorkItem>? pendingContinuations = null,
         IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits = null,
         IReadOnlyCollection<SchedulerCompletionWorkItem>? pendingCompletionWork = null)
+        : this(
+            workflowExecutionId,
+            version,
+            pendingWork,
+            pendingContinuations,
+            volatileWaits,
+            pendingCompletionWork,
+            activeGenerators: null,
+            pendingGeneratedEvents: null)
+    {
+    }
+
+    /// <remarks>
+    /// Generator lanes are appended after the preserved six-parameter constructor shape.
+    /// Generated-event work is a separate lane because generator emissions are scheduler/history data, not activity executions.
+    /// Use named arguments for source call sites that need generator lanes.
+    /// </remarks>
+    public SchedulerState(
+        string workflowExecutionId,
+        long version,
+        IReadOnlyCollection<ScheduledActivityWorkItem>? pendingWork,
+        IReadOnlyCollection<SchedulerContinuationWorkItem>? pendingContinuations,
+        IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits,
+        IReadOnlyCollection<SchedulerCompletionWorkItem>? pendingCompletionWork,
+        IReadOnlyCollection<GeneratorRegistration>? activeGenerators,
+        IReadOnlyCollection<SchedulerGeneratedEventWorkItem>? pendingGeneratedEvents)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -31,6 +59,8 @@ public sealed record SchedulerState
         PendingCompletionWork = pendingCompletionWork ?? [];
         PendingContinuations = pendingContinuations ?? [];
         VolatileWaits = volatileWaits ?? [];
+        ActiveGenerators = activeGenerators ?? [];
+        PendingGeneratedEvents = pendingGeneratedEvents ?? [];
     }
 
     public string WorkflowExecutionId { get; init; }
@@ -58,6 +88,18 @@ public sealed record SchedulerState
     {
         get => _volatileWaits;
         init => _volatileWaits = Snapshot(value);
+    }
+
+    public IReadOnlyCollection<GeneratorRegistration> ActiveGenerators
+    {
+        get => _activeGenerators;
+        init => _activeGenerators = Snapshot(value);
+    }
+
+    public IReadOnlyCollection<SchedulerGeneratedEventWorkItem> PendingGeneratedEvents
+    {
+        get => _pendingGeneratedEvents;
+        init => _pendingGeneratedEvents = Snapshot(value);
     }
 
     private static IReadOnlyCollection<T> Snapshot<T>(IReadOnlyCollection<T>? values) => (values ?? []).ToArray();
