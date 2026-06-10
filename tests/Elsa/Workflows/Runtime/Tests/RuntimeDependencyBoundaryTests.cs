@@ -12,10 +12,10 @@ public sealed class RuntimeDependencyBoundaryTests
             .GetReferencedAssemblies()
             .Select(x => x.Name)
             .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
+            .Where(name => name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal))
+            .ToList();
 
-        Assert.DoesNotContain("Elsa.Workflows.Design.Core", referencedAssemblies);
-        Assert.DoesNotContain("Elsa.Workflows.Design.Api", referencedAssemblies);
+        Assert.True(referencedAssemblies.Count == 0, string.Join(Environment.NewLine, referencedAssemblies));
     }
 
     [Fact]
