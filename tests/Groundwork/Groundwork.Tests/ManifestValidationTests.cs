@@ -68,6 +68,29 @@ public sealed class ManifestValidationTests
     }
 
     [Fact]
+    public void CompoundIndexFailsUntilPortableSupportExists()
+    {
+        var manifest = WithSingleUnit(unit => unit with
+        {
+            Indexes =
+            [
+                new IndexDeclaration(
+                    "by-key-and-category",
+                    [new IndexField("key"), new IndexField("category")],
+                    IndexValueKind.Keyword,
+                    true,
+                    true,
+                    MissingValueBehavior.Excluded,
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
+            ]
+        });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-INDEX-006");
+    }
+
+    [Fact]
     public void ProviderSpecificRequiredPhysicalShapeFails()
     {
         var manifests = new[]

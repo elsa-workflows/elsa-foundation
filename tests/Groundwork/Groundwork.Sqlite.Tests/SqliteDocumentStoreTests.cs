@@ -1,5 +1,9 @@
 using System.Text.Json;
+using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using Groundwork.Relational.Documents;
 using Groundwork.Sqlite.Documents;
 using Groundwork.Sqlite.Materialization;
 using Microsoft.Data.Sqlite;
@@ -85,6 +89,44 @@ public sealed class SqliteDocumentStoreTests
     }
 
     [Fact]
+    public async Task CompoundIndexesAreNotQueryableUntilPortableSupportExists()
+    {
+        var manifest = WithCompoundIndex(SqliteTestManifests.MetadataManifest());
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await new SqliteGroundworkMaterializer(connection).MaterializeAsync(manifest, SqliteTestManifests.Provider);
+        var store = new SqliteDocumentStore(connection, manifest);
+
+        var exception = await Assert.ThrowsAsync<UndeclaredDocumentIndexException>(() =>
+            store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key-and-category", "alpha")));
+
+        Assert.Equal("configurationDocument", exception.DocumentKind);
+        Assert.Equal("by-key-and-category", exception.IndexName);
+    }
+
+    [Fact]
+    public async Task MissingRowDuringUnguardedUpdateReturnsNotFound()
+    {
+        await using var harness = await SqliteDocumentStoreHarness.Create();
+        var store = new RelationalDocumentStore(harness.Connection, SqliteTestManifests.MetadataManifest(), new MissingUpdateDialect());
+
+        await store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            "doc-1",
+            "1.0.0",
+            """{"key":"alpha","category":"system"}"""));
+
+        var result = await store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            "doc-1",
+            "1.0.0",
+            """{"key":"beta","category":"system"}"""));
+
+        Assert.Equal(DocumentStoreWriteStatus.NotFound, result.Status);
+        Assert.Single(await store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", "alpha")));
+        Assert.Empty(await store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", "beta")));
+    }
+
+    [Fact]
     public async Task StaleExpectedVersionDoesNotUpdateDocumentOrIndexes()
     {
         await using var harness = await SqliteDocumentStoreHarness.Create();
@@ -143,7 +185,7 @@ public sealed class SqliteDocumentStoreTests
             Store = store;
         }
 
-        private SqliteConnection Connection { get; }
+        public SqliteConnection Connection { get; }
         public SqliteDocumentStore Store { get; }
 
         public static async Task<SqliteDocumentStoreHarness> Create()
@@ -155,5 +197,32 @@ public sealed class SqliteDocumentStoreTests
         }
 
         public async ValueTask DisposeAsync() => await Connection.DisposeAsync();
+    }
+
+    private static StorageManifest WithCompoundIndex(StorageManifest manifest)
+    {
+        var unit = manifest.StorageUnits.Single();
+        var compoundIndex = new IndexDeclaration(
+            "by-key-and-category",
+            [new IndexField("key"), new IndexField("category")],
+            IndexValueKind.Keyword,
+            true,
+            true,
+            MissingValueBehavior.Excluded,
+            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+
+        return manifest with { StorageUnits = [unit with { Indexes = [compoundIndex] }] };
+    }
+
+    private sealed class MissingUpdateDialect : RelationalDocumentStoreDialect
+    {
+        public override string UpdateDocumentSql => $$"""
+            UPDATE groundwork_documents
+            SET schema_version = {{Parameter("schemaVersion")}},
+                version = {{Parameter("version")}},
+                content_json = {{Parameter("content")}},
+                updated_utc = {{Parameter("updatedUtc")}}
+            WHERE document_kind = {{Parameter("kind")}} AND id = '__missing__';
+            """;
     }
 }

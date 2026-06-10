@@ -102,6 +102,9 @@ public sealed class StorageManifestValidator
             if (index.Fields.Count == 0)
                 diagnostics.Add(GroundworkDiagnostic.Error("GW-INDEX-003", "Index must declare at least one field.", $"{target}.fields"));
 
+            if (index.Fields.Count > 1)
+                diagnostics.Add(GroundworkDiagnostic.Error("GW-INDEX-006", "Compound indexes are not supported by the portable persistence contract yet.", $"{target}.fields"));
+
             if (index.Fields.Any(field => string.IsNullOrWhiteSpace(field.Path)))
                 diagnostics.Add(GroundworkDiagnostic.Error("GW-INDEX-004", "Index field paths are required.", $"{target}.fields"));
 

@@ -42,8 +42,10 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         else
         {
             var updated = await UpdateDocumentAsync(request, version, now, transaction, cancellationToken);
-            if (!updated && request.ExpectedVersion is not null)
-                return DocumentStoreWriteResult.ConcurrencyConflict;
+            if (!updated)
+                return request.ExpectedVersion is null
+                    ? DocumentStoreWriteResult.NotFound
+                    : DocumentStoreWriteResult.ConcurrencyConflict;
         }
 
         try
@@ -113,6 +115,9 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             ?? throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
         if (!index.SupportedOperations.Contains(PortableQueryOperation.Equal))
+            throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
+
+        if (index.Fields.Count != 1)
             throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
         await EnsureOpenAsync(cancellationToken);
