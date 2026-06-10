@@ -18,11 +18,15 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand, TResponse>(ICommandSe
         {
             ThrowError(e, 400);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(TCommand));
 
-            ThrowError("Unexpected error occurred", 400);
+            ThrowError("Unexpected error occurred", 500);
         }
     }
 }
@@ -41,11 +45,15 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand>(ICommandSender comman
         {
             ThrowError(e, 400);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(TCommand));
 
-            ThrowError("Unexpected error occurred", 400);
+            ThrowError("Unexpected error occurred", 500);
         }
     }
 }

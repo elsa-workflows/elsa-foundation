@@ -1,8 +1,8 @@
 # Feature Specification: Runtime Volatile Wait Contract
 
-**Feature Branch**: `codex/runtime-volatile-wait-contract`  
-**Created**: 2026-06-10  
-**Status**: Draft  
+**Feature Branch**: `codex/runtime-volatile-wait-contract`
+**Created**: 2026-06-10
+**Status**: Draft
 **Input**: Locked runtime execution addendum decisions for volatile waits.
 
 ## User Scenarios & Testing

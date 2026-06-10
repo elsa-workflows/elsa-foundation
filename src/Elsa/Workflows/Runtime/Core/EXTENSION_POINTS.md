@@ -90,6 +90,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
 
+### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
+- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
+- **Usage:** stores and retrieves runtime-owned `WorkflowExecutable` artifacts. Publishing writes artifacts through this contract; Runtime execution reads artifacts through this contract and does not load Design-owned workflow state.
+- **Default implementation:** `InMemoryWorkflowExecutableStore` *(intra-domain demo default for the vertical slice; durable persistence remains future provider work)*.
+
+### `IWorkflowExecutor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one executor owns direct workflow artifact execution semantics for a runtime composition).
+- **Signature:** `ExecuteAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)`.
+- **Usage:** executes a runtime-owned artifact. The first implementation is deliberately sequential/literal-only and rejects unsupported shapes through deterministic diagnostics.
+- **Default implementation:** `SequentialWorkflowExecutor` *(intra-domain vertical-slice default)*.
+
 ## Implementable contributor interfaces
 
 ### `IWorkflowRuntimeMiddleware` *(Core — `Elsa.Workflows.Runtime.Core`)*

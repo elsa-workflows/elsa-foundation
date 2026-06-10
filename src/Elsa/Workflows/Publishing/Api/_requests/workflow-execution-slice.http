@@ -1,0 +1,217 @@
+### Workflow execution vertical slice demo
+###
+### Run the host first:
+###   dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
+###
+### CShells mounts the default shell under /default. If your host uses another
+### port, update @host.
+###
+### Most variables are captured from named responses by REST Client-compatible
+### clients. The manual demo values are the WriteLine activity definition and
+### version ids: run requests 01-03, find WriteLine, and paste the ids below.
+
+@host = http://localhost:5095/default
+@writeLineActivityDefinitionId = replace-with-write-line-activity-definition-id
+@writeLineActivityVersionId = replace-with-write-line-activity-version-id
+
+@definitionId = {{createWorkflowDefinition.response.body.$.definition.id}}
+@workflowVersionId = {{createWorkflowVersion.response.body.$.id}}
+@artifactId = {{publishWorkflow.response.body.$.artifactId}}
+@workflowExecutionId = {{executeWorkflow.response.body.$.workflowExecutionId}}
+@firstActivityExecutionId = {{executeWorkflow.response.body.$.activities[0].activityExecutionId}}
+
+### 01. Search activity definitions for WriteLine.
+### Copy the returned definition id into @writeLineActivityDefinitionId.
+# @name searchWriteLineActivityDefinitions
+GET {{host}}/design/activities/definitions?searchTerm=WriteLine
+
+### 02. List versions for the selected WriteLine activity definition.
+### Copy the returned version id into @writeLineActivityVersionId.
+# @name listWriteLineActivityVersions
+GET {{host}}/design/activities/definitions/{{writeLineActivityDefinitionId}}/versions
+
+### 03. List constructable activities.
+### This shows the publishing seam view. The selected WriteLine
+### activityVersionId should also appear here.
+# @name listConstructableActivities
+GET {{host}}/publishing/activities
+
+### 04. Inspect the selected WriteLine activity construction seam.
+### This proves the catalog row can be constructed into a runtime activity and
+### exposes the Text input that the workflow JSON below binds.
+# @name constructWriteLine
+GET {{host}}/publishing/activities/{{writeLineActivityVersionId}}/construct
+
+### 05. Optional: list workflow definitions before the demo create step.
+# @name listWorkflowDefinitionsBefore
+GET {{host}}/design/workflows/definitions
+
+### 06. Design: create the workflow definition.
+# @name createWorkflowDefinition
+POST {{host}}/design/workflows/definitions
+Content-Type: application/json
+
+{
+  "name": "Monday REST Demo",
+  "description": "Sequential WriteLine workflow designed, published and executed over REST."
+}
+
+### 07. Design: get the created workflow definition, including its draft.
+# @name getWorkflowDefinition
+GET {{host}}/design/workflows/definitions/{{definitionId}}
+
+### 08. Design: create version 1.0.0 with three sequential WriteLine nodes.
+### The execution path should print all three messages to the server console.
+# @name createWorkflowVersion
+POST {{host}}/design/workflows/versions
+Content-Type: application/json
+
+{
+  "definitionId": "{{definitionId}}",
+  "state": {
+    "variables": [],
+    "activityConnections": [
+      {
+        "source": { "activityNodeId": "write-start", "port": "Done" },
+        "target": { "activityNodeId": "write-middle", "port": "In" }
+      },
+      {
+        "source": { "activityNodeId": "write-middle", "port": "Done" },
+        "target": { "activityNodeId": "write-end", "port": "In" }
+      }
+    ],
+    "activities": [
+      {
+        "nodeId": "write-start",
+        "activityVersionId": "{{writeLineActivityVersionId}}",
+        "inputs": [
+          {
+            "referenceKey": "Text",
+            "value": { "value": "REST demo: workflow started", "expressionType": "Literal" },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null
+          }
+        ],
+        "outputs": [],
+        "isContainer": false,
+        "isStart": true,
+        "isTerminal": false,
+        "childActivities": []
+      },
+      {
+        "nodeId": "write-middle",
+        "activityVersionId": "{{writeLineActivityVersionId}}",
+        "inputs": [
+          {
+            "referenceKey": "Text",
+            "value": { "value": "REST demo: workflow is doing useful work", "expressionType": "Literal" },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null
+          }
+        ],
+        "outputs": [],
+        "isContainer": false,
+        "isStart": false,
+        "isTerminal": false,
+        "childActivities": []
+      },
+      {
+        "nodeId": "write-end",
+        "activityVersionId": "{{writeLineActivityVersionId}}",
+        "inputs": [
+          {
+            "referenceKey": "Text",
+            "value": { "value": "REST demo: workflow completed", "expressionType": "Literal" },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null
+          }
+        ],
+        "outputs": [],
+        "isContainer": false,
+        "isStart": false,
+        "isTerminal": true,
+        "childActivities": []
+      }
+    ],
+    "inputs": [],
+    "outputs": [],
+    "workflowActivityOptions": null,
+    "strategyOptions": null
+  }
+}
+
+### 09. Design: get the created workflow version.
+# @name getWorkflowVersion
+GET {{host}}/design/workflows/versions/{{workflowVersionId}}
+
+### 10. Design: list versions for the workflow definition.
+# @name listWorkflowVersions
+GET {{host}}/design/workflows/definitions/{{definitionId}}/versions
+
+### 11. Publishing: compile the workflow version into a WorkflowExecutable.
+# @name publishWorkflow
+POST {{host}}/publishing/workflows/{{workflowVersionId}}/publish
+Content-Type: application/json
+
+{}
+
+### 12. Runtime: execute the published artifact.
+### Current vertical-slice result already includes the workflow execution id,
+### status, activity executions and errors if any.
+# @name executeWorkflow
+POST {{host}}/runtime/workflows/{{artifactId}}/execute
+Content-Type: application/json
+
+{}
+
+### 13. Runtime: execute the same artifact again.
+### The artifact is content-addressed and reusable; the execution id should differ.
+# @name executeWorkflowAgain
+POST {{host}}/runtime/workflows/{{artifactId}}/execute
+Content-Type: application/json
+
+{}
+
+### 14. Runtime: negative check for an unknown artifact.
+# @name executeMissingArtifact
+POST {{host}}/runtime/workflows/missing-artifact/execute
+Content-Type: application/json
+
+{}
+
+### 15. Observability: get workflow execution / instance details.
+### Depends on the runtime persistence/observability endpoints landing. Until
+### those endpoints exist, use request 12's response as the current execution
+### details payload.
+# @name getWorkflowExecution
+GET {{host}}/runtime/workflow-executions/{{workflowExecutionId}}
+
+### 16. Observability: list activity executions for this workflow execution.
+### Expected to show the same activity ids returned by request 12, plus any
+### persisted state added by the runtime observability slice.
+# @name listActivityExecutions
+GET {{host}}/runtime/workflow-executions/{{workflowExecutionId}}/activities
+
+### 17. Observability: get one activity execution.
+# @name getActivityExecution
+GET {{host}}/runtime/workflow-executions/{{workflowExecutionId}}/activities/{{firstActivityExecutionId}}
+
+### 18. Observability: get the workflow audit trail.
+### Expected categories: workflow started/completed/faulted and activity
+### started/completed/skipped/faulted. Payload inclusion should be opt-in.
+# @name getWorkflowAuditTrail
+GET {{host}}/runtime/workflow-executions/{{workflowExecutionId}}/audit-trail
+
+### 19. Observability: get the workflow audit trail with payloads.
+# @name getWorkflowAuditTrailWithPayloads
+GET {{host}}/runtime/workflow-executions/{{workflowExecutionId}}/audit-trail?includePayloads=true
+
+### 20. Observability: list recent executions for the published artifact.
+# @name listArtifactExecutions
+GET {{host}}/runtime/workflows/{{artifactId}}/executions

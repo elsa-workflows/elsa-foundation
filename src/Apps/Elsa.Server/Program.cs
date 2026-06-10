@@ -20,6 +20,7 @@ using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Runtime.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -66,7 +67,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ClrActivityReconciliationFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
-            typeof(WorkflowsPublishingApiFeature).Assembly
+            typeof(WorkflowsPublishingApiFeature).Assembly,
+
+            // Runtime vertical slice: execute published WorkflowExecutable artifacts.
+            typeof(WorkflowsRuntimeApiFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
