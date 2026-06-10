@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Groundwork SQLite Document Store](specs/014-groundwork-sqlite-document-store/plan.md)
+Current Speckit plan: [Groundwork Elsa Bridge](specs/015-groundwork-elsa-bridge/plan.md)
 <!-- SPECKIT END -->

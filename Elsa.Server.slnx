@@ -72,6 +72,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">
     <Project Path="src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/EFCore/">
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
@@ -153,6 +154,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
