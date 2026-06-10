@@ -8,6 +8,8 @@ Related decisions: [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtim
 
 Related plan: [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md).
 
+Terminology report: [Elsa 4 runtime terminology decisions](elsa-4-runtime-terminology-decisions.md).
+
 Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
 
 ## Purpose
@@ -484,6 +486,75 @@ ContinueVolatileWait
 ```
 
 Resume is reserved for runtime continuation from durable suspension/bookmarks. Unpause is used for reversing administrative pause. Continue is used for volatile wait and internal scheduler continuations.
+
+### 5. Runtime Terminology And Glossary
+
+Elsa 4 should use a formal glossary for canonical runtime terms. During design, terminology decisions may first be captured in a report, then promoted into `docs/glossary/` when stable.
+
+Initial core vocabulary:
+
+```text
+Authored Workflow Document
+  Design-owned durable authoring/import/export shape.
+
+Workflow Executable
+  Runtime-owned compiled artifact that can be executed.
+
+Executable Node
+  Runtime node inside the executable artifact.
+
+Workflow Execution
+  One running or resumable execution of a workflow executable.
+
+Activity Execution
+  One concrete execution of one executable activity node.
+
+Trigger
+  External source that starts or resumes workflow execution.
+
+Generator
+  In-workflow activity that emits execution events over time.
+
+Bookmark
+  Durable runtime resume handle.
+
+Checkpoint
+  Named persistence boundary for runtime state changes and post-commit intents.
+
+Pause
+  Administrative hold.
+
+Unpause
+  Remove administrative hold.
+
+Suspend
+  Enter durable persisted wait/unload state.
+
+Resume
+  Continue from durable suspension/bookmark.
+
+Wait
+  Activity/execution is waiting.
+
+Continue
+  Proceed after volatile wait or internal scheduler event.
+
+Incident
+  Operator-visible problem record.
+
+Faulted
+  Lifecycle status meaning execution cannot continue normally.
+
+Failure
+  Generic explanatory word for something going wrong.
+```
+
+Fault terminology:
+
+- Use `Faulted` as a lifecycle status.
+- Use `Incident` as the persisted problem record.
+- Use `Failure` as a generic explanatory word.
+- Avoid `Fault` as a noun in new Elsa 4 model names unless referring to legacy/Elsa 3 behavior.
 
 ## Plan Impact
 
