@@ -20,9 +20,9 @@ public sealed record SchedulerState
 
         WorkflowExecutionId = workflowExecutionId;
         Version = version;
-        PendingWork = (pendingWork ?? []).ToArray();
-        PendingContinuations = (pendingContinuations ?? []).ToArray();
-        VolatileWaits = (volatileWaits ?? []).ToArray();
+        PendingWork = pendingWork ?? [];
+        PendingContinuations = pendingContinuations ?? [];
+        VolatileWaits = volatileWaits ?? [];
     }
 
     public string WorkflowExecutionId { get; init; }
