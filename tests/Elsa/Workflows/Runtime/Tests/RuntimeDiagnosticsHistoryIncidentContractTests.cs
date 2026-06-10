@@ -57,8 +57,8 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
         Assert.Equal("artifact-1", workflowEvent.PinnedExecutable!.ArtifactId);
         Assert.Equal("actexec-1", activityEvent.Execution.ActivityExecutionId);
         Assert.Equal("node-send", activityEvent.Execution.ExecutableNodeId);
-        Assert.DoesNotContain("Design", PublicTypeNames(workflowEvent));
-        Assert.DoesNotContain("Design", PublicTypeNames(activityEvent));
+        Assert.DoesNotContain(PublicPropertyTypeNames(workflowEvent), IsDesignOwnedTypeName);
+        Assert.DoesNotContain(PublicPropertyTypeNames(activityEvent), IsDesignOwnedTypeName);
     }
 
     [Fact]
@@ -88,6 +88,26 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
         Assert.Single(blockingIncidents);
         Assert.Equal("incident-1", blockingIncidents[0].IncidentId);
         Assert.Equal("boom", projection.DiagnosticPayload!.Value.GetProperty("exceptionMessage").GetString());
+    }
+
+    [Theory]
+    [InlineData(IncidentStatus.Resolved)]
+    [InlineData(IncidentStatus.Suppressed)]
+    public void IncidentState_RejectsTerminalStatusWithoutResolutionTime(IncidentStatus status)
+    {
+        var exception = Assert.Throws<ArgumentException>(() => NewIncident(status, useDefaultResolutionTime: false));
+
+        Assert.Contains("terminal incident status", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(IncidentStatus.Open)]
+    [InlineData(IncidentStatus.Blocking)]
+    public void IncidentState_RejectsNonTerminalStatusWithResolutionTime(IncidentStatus status)
+    {
+        var exception = Assert.Throws<ArgumentException>(() => NewIncident(status, resolvedAt: _now.AddMinutes(1)));
+
+        Assert.Contains("non-terminal incident status", exception.Message);
     }
 
     [Fact]
@@ -134,7 +154,11 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
         Assert.False(incidentDecision.CapturesPayload);
     }
 
-    private IncidentState NewIncident(IncidentStatus status, string incidentId = "incident-1") =>
+    private IncidentState NewIncident(
+        IncidentStatus status,
+        string incidentId = "incident-1",
+        DateTimeOffset? resolvedAt = null,
+        bool useDefaultResolutionTime = true) =>
         new(
             incidentId: incidentId,
             workflowExecutionId: "wfexec-1",
@@ -146,7 +170,7 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
             failureType: "ActivityFaulted",
             message: "Activity failed.",
             createdAt: _now,
-            resolvedAt: status == IncidentStatus.Resolved ? _now.AddMinutes(1) : null);
+            resolvedAt: resolvedAt ?? (useDefaultResolutionTime && (status is IncidentStatus.Resolved or IncidentStatus.Suppressed) ? _now.AddMinutes(1) : null));
 
     private RuntimePayloadCaptureRequest NewCaptureRequest(RuntimePayloadCaptureSubject subject, bool isSensitive = false) =>
         new(
@@ -157,13 +181,16 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
             valueName: "payload",
             isSensitive: isSensitive);
 
-    private static string PublicTypeNames(object instance) =>
-        string.Join(
-            '|',
-            instance.GetType()
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Select(property => property.PropertyType.FullName)
-                .Where(name => name is not null));
+    private static string[] PublicPropertyTypeNames(object instance) =>
+        instance.GetType()
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.PropertyType.FullName)
+            .OfType<string>()
+            .ToArray();
+
+    private static bool IsDesignOwnedTypeName(string typeName) =>
+        typeName.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal)
+        || typeName.StartsWith("Elsa.Activities.Design.", StringComparison.Ordinal);
 
     private static JsonElement Json(string json)
     {

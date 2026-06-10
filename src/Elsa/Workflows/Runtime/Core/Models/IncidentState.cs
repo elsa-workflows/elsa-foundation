@@ -29,6 +29,12 @@ public sealed class IncidentState
         if (resolvedAt < createdAt)
             throw new ArgumentException("Incident resolution time cannot be earlier than creation time.", nameof(resolvedAt));
 
+        if (IsTerminal(status) && resolvedAt is null)
+            throw new ArgumentException("A terminal incident status requires a resolution time.", nameof(resolvedAt));
+
+        if (!IsTerminal(status) && resolvedAt is not null)
+            throw new ArgumentException("A non-terminal incident status cannot carry a resolution time.", nameof(resolvedAt));
+
         IncidentId = incidentId;
         WorkflowExecutionId = workflowExecutionId;
         ActivityExecutionId = activityExecutionId;
@@ -56,6 +62,9 @@ public sealed class IncidentState
     public DateTimeOffset? ResolvedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public bool IsBlocking => Status == IncidentStatus.Blocking;
+
+    private static bool IsTerminal(IncidentStatus status) =>
+        status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
 }
 
 /// <summary>
