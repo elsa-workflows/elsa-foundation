@@ -271,8 +271,8 @@ public sealed class RuntimeBookmarkResumeContractTests
             ActivityTypeVersion: "1.0.0",
             DescriptorType: "test",
             DescriptorPayload: Json("{}"),
-            InputBindings: new Dictionary<string, JsonElement>(),
-            OutputCaptures: new Dictionary<string, JsonElement>(),
+            InputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            OutputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             Metadata: new Dictionary<string, string>());
 
     private static JsonElement Json(string json)

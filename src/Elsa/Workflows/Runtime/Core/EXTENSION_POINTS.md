@@ -30,6 +30,24 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** maps `BookmarkState.ResumeTargetId` through the pinned `WorkflowExecutable.ResumeTargets` table and returns the executable node plus runtime resume target. It does not load artifacts, invoke activity handlers, or implement the bookmark store.
 - **Default implementation:** `BookmarkResumeResolver` *(intra-domain default)*.
 
+### `IRuntimeActivityOutputRegister` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one active-scope output register owns execution-local activity output lookup for a runtime composition).
+- **Signature:** `Set(ActiveActivityOutput output)`, `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`, `ClearActivityOutputs(...)`.
+- **Usage:** stores activity outputs by `WorkflowExecutionId`, `ActivityExecutionId`, and output name while they remain in active execution scope. This is not durable continuation state.
+- **Default implementation:** `InMemoryRuntimeActivityOutputRegister` *(intra-domain default, contract/default for current slice)*.
+
+### `IRuntimeInputBindingResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one resolver owns runtime input binding materialization rules for a runtime composition).
+- **Signature:** `Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)`.
+- **Usage:** resolves literal, reference, durable-value, and active activity-output bindings without loading authored data links or history snapshots. Expression bindings remain declarations for expression middleware.
+- **Default implementation:** `RuntimeInputBindingResolver` *(intra-domain default)*.
+
+### `IRuntimeInputBindingValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one validator owns executable binding diagnostics for a runtime composition).
+- **Signature:** `Validate(RuntimeInputBinding binding, RuntimeInputBindingValidationContext context)`.
+- **Usage:** reports artifact/build diagnostics for output references that cross suspension boundaries or are ambiguous in loop/parallel scopes.
+- **Default implementation:** `RuntimeInputBindingValidator` *(intra-domain default)*.
+
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
 - **Signature:** `GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default)`.

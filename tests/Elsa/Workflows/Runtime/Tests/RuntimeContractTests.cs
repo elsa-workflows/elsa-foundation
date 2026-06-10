@@ -50,8 +50,14 @@ public sealed class RuntimeContractTests
             ActivityTypeVersion: "1.0.0",
             DescriptorType: "Elsa.Activities.SendEmailDescriptor",
             DescriptorPayload: Json("{}"),
-            InputBindings: new Dictionary<string, JsonElement> { ["to"] = Json("""{"source":"value","valueId":"customerEmail"}""") },
-            OutputCaptures: new Dictionary<string, JsonElement>(),
+            InputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["to"] = new(
+                    inputName: "to",
+                    source: RuntimeInputBindingSource.DurableValue,
+                    durableValue: new RuntimeDurableValueReference("customerEmail"))
+            },
+            OutputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             Metadata: new Dictionary<string, string>());
 
         Assert.Equal("node-runtime-1", node.ExecutableNodeId);

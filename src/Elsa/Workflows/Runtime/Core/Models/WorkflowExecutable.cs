@@ -63,16 +63,49 @@ public sealed record WorkflowExecutableSourceReference(
 /// <summary>
 /// Runtime-owned node inside a workflow executable.
 /// </summary>
-public sealed record ExecutableNode(
-    string ExecutableNodeId,
-    string AuthoredActivityId,
-    string ActivityType,
-    string ActivityTypeVersion,
-    string DescriptorType,
-    JsonElement DescriptorPayload,
-    IReadOnlyDictionary<string, JsonElement> InputBindings,
-    IReadOnlyDictionary<string, JsonElement> OutputCaptures,
-    IReadOnlyDictionary<string, string> Metadata);
+public sealed class ExecutableNode
+{
+    public ExecutableNode(
+        string ExecutableNodeId,
+        string AuthoredActivityId,
+        string ActivityType,
+        string ActivityTypeVersion,
+        string DescriptorType,
+        JsonElement DescriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures,
+        IReadOnlyDictionary<string, string> Metadata)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ExecutableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(AuthoredActivityId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ActivityType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ActivityTypeVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(DescriptorType);
+        ArgumentNullException.ThrowIfNull(InputBindings);
+        ArgumentNullException.ThrowIfNull(OutputCaptures);
+        ArgumentNullException.ThrowIfNull(Metadata);
+
+        this.ExecutableNodeId = ExecutableNodeId;
+        this.AuthoredActivityId = AuthoredActivityId;
+        this.ActivityType = ActivityType;
+        this.ActivityTypeVersion = ActivityTypeVersion;
+        this.DescriptorType = DescriptorType;
+        this.DescriptorPayload = DescriptorPayload.Clone();
+        this.InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(InputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        this.OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(OutputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        this.Metadata = RuntimeModelMetadata.Snapshot(Metadata);
+    }
+
+    public string ExecutableNodeId { get; }
+    public string AuthoredActivityId { get; }
+    public string ActivityType { get; }
+    public string ActivityTypeVersion { get; }
+    public string DescriptorType { get; }
+    public JsonElement DescriptorPayload { get; }
+    public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
+    public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+}
 
 /// <summary>
 /// Stable target inside a pinned executable artifact used to resolve durable resume handles.
