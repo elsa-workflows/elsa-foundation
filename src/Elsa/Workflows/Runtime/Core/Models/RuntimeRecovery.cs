@@ -2,22 +2,30 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class RuntimeRecoveryScanRequest
 {
-    public RuntimeRecoveryScanRequest(DateTimeOffset now, TimeSpan leaseTimeout, int limit, string? ownerId = null)
+    public RuntimeRecoveryScanRequest(DateTimeOffset now, TimeSpan leaseTimeout, TimeSpan heartbeatTimeout, int limit, string? ownerId = null)
     {
         if (leaseTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseTimeout), "Lease timeout must be greater than zero.");
 
+        if (heartbeatTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(heartbeatTimeout), "Heartbeat timeout must be greater than zero.");
+
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Recovery scan limit must be greater than zero.");
 
+        if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
+            throw new ArgumentException("Recovery scan owner filter cannot be blank.", nameof(ownerId));
+
         Now = now;
         LeaseTimeout = leaseTimeout;
+        HeartbeatTimeout = heartbeatTimeout;
         Limit = limit;
         OwnerId = ownerId;
     }
 
     public DateTimeOffset Now { get; }
     public TimeSpan LeaseTimeout { get; }
+    public TimeSpan HeartbeatTimeout { get; }
     public int Limit { get; }
     public string? OwnerId { get; }
 }

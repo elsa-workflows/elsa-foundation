@@ -24,6 +24,14 @@ Durable delivery state for a post-commit intent. It tracks pending, delivering, 
 
 Provider-facing recovery scanner result. It can request requeue from the last checkpoint without implying a workflow/activity domain retry.
 
+## RuntimeRecoveryScanRequest
+
+Provider-facing recovery scanner input. It carries separate lease and heartbeat timeouts so providers can detect lost leases and stale heartbeats without hard-coded thresholds.
+
+## RuntimePostCommitOutboxDeliveryResult
+
+Provider-facing delivery outcome for a post-commit outbox item. Failure messages are only valid for failed outcomes.
+
 ## RuntimeDomainRetryDecision
 
 Explicit workflow/activity retry decision boundary, separate from operational recovery.

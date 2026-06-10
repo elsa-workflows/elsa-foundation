@@ -130,6 +130,12 @@ public sealed class RuntimePostCommitOutboxQuery
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Outbox query limit must be greater than zero.");
 
+        if (workflowExecutionId is not null && string.IsNullOrWhiteSpace(workflowExecutionId))
+            throw new ArgumentException("Outbox workflow execution filter cannot be blank.", nameof(workflowExecutionId));
+
+        if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
+            throw new ArgumentException("Outbox owner filter cannot be blank.", nameof(ownerId));
+
         Now = now;
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
@@ -157,6 +163,9 @@ public sealed class RuntimePostCommitOutboxDeliveryResult
 
         if (status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
             ArgumentException.ThrowIfNullOrWhiteSpace(failureMessage);
+
+        if (status is not (RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal) && failureMessage is not null)
+            throw new ArgumentException("Only failed outbox delivery results can carry a failure message.", nameof(failureMessage));
 
         OutboxItemId = outboxItemId;
         Status = status;

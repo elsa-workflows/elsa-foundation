@@ -56,6 +56,12 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     [Fact]
     public void RecoveryCandidate_RequeuesFromLastCheckpointWithoutDomainRetry()
     {
+        var scanRequest = new RuntimeRecoveryScanRequest(
+            now: _now,
+            leaseTimeout: TimeSpan.FromMinutes(5),
+            heartbeatTimeout: TimeSpan.FromMinutes(1),
+            limit: 10,
+            ownerId: "worker-1");
         var candidate = new RuntimeRecoveryCandidate(
             workflowExecutionId: "wfexec-1",
             operationalStateId: "operational-1",
@@ -70,6 +76,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
             reason: "Operational recovery is not domain retry.",
             metadata: new Dictionary<string, string>());
 
+        Assert.Equal(TimeSpan.FromMinutes(1), scanRequest.HeartbeatTimeout);
         Assert.True(candidate.RequeueFromLastCheckpoint);
         Assert.Equal(RuntimeDomainRetryMode.DoNotRetry, retryDecision.Mode);
         Assert.Contains("not domain retry", retryDecision.Reason);
@@ -188,12 +195,16 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     [Fact]
     public void RecoveryAndOutboxQueries_RejectInvalidLimitsAndRetrySettings()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.Zero, 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.Zero, TimeSpan.FromMinutes(1), 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.FromMinutes(5), TimeSpan.Zero, 10));
+        Assert.Throws<ArgumentException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10, ownerId: " "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeDomainRetryDecision(
             RuntimeDomainRetryMode.RetryAfter,
             TimeSpan.Zero,
             "Back off."));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxQuery(_now, 0));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxQuery(_now, 10, workflowExecutionId: " "));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxQuery(_now, 10, ownerId: " "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(-1, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(3, TimeSpan.Zero));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitRetryPolicy(0, TimeSpan.FromSeconds(10)));
@@ -203,12 +214,18 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     [Fact]
     public void PostCommitOutboxDeliveryResult_RejectsIncompleteDeliveryOutcomes()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxDeliveryResult(
+        var incompleteException = Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: _now));
+        var contradictoryException = Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId: "outbox-1",
+            status: RuntimePostCommitOutboxStatus.Delivered,
+            recordedAt: _now,
+            failureMessage: "No failure."));
 
-        Assert.Contains("completed delivery outcome", exception.Message);
+        Assert.Contains("completed delivery outcome", incompleteException.Message);
+        Assert.Contains("Only failed outbox delivery results", contradictoryException.Message);
     }
 
     [Fact]
