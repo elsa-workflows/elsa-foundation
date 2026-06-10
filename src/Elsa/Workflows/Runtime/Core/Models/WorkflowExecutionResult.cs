@@ -27,5 +27,6 @@ public enum WorkflowExecutionResultStatus
 public enum ActivityExecutionResultStatus
 {
     Completed,
+    Skipped,
     Faulted
 }

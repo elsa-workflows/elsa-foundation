@@ -2,6 +2,9 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.Core.Options;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -80,6 +83,39 @@ public sealed class SequentialWorkflowExecutorTests
         Assert.Contains("exactly one start", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ReportsSkippedActivityWhenCanExecuteReturnsFalse()
+    {
+        var executable = Executable(
+            [Node("write-one", "one", canExecute: false)],
+            [],
+            ["write-one"]);
+
+        var result = await _executor.ExecuteAsync(executable);
+
+        Assert.Equal(WorkflowExecutionResultStatus.Completed, result.Status);
+        Assert.Empty(_messages);
+        var activity = Assert.Single(result.Activities);
+        Assert.Equal(ActivityExecutionResultStatus.Skipped, activity.Status);
+    }
+
+    [Fact]
+    public async Task LiteralMemoryBlockReferenceUsesObjectConverterForTypedReads()
+    {
+        var converter = new RecordingObjectConverter();
+        var executor = new SequentialWorkflowExecutor(_factory, new SingleServiceProvider(converter));
+        var executable = Executable(
+            [Node("write-one", "one", readFromReference: true)],
+            [],
+            ["write-one"]);
+
+        var result = await executor.ExecuteAsync(executable);
+
+        Assert.Equal(WorkflowExecutionResultStatus.Completed, result.Status);
+        Assert.Equal(typeof(string), converter.LastTargetType);
+        Assert.Collection(_messages, message => Assert.Equal("one", message));
+    }
+
     private static WorkflowExecutable Executable(
         IReadOnlyCollection<ExecutableNode> nodes,
         IReadOnlyCollection<ExecutableEdge> edges,
@@ -94,14 +130,14 @@ public sealed class SequentialWorkflowExecutorTests
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-    private static ExecutableNode Node(string id, string text) =>
+    private static ExecutableNode Node(string id, string text, bool canExecute = true, bool readFromReference = false) =>
         new(
             executableNodeId: id,
             authoredActivityId: id,
             activityType: typeof(RecordingTextActivity).FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: "Fake",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { id }),
+            descriptorPayload: JsonSerializer.SerializeToElement(new { id, canExecute, readFromReference }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Text"] = new(
@@ -122,9 +158,13 @@ public sealed class SequentialWorkflowExecutorTests
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default)
         {
+            var canExecute = payload.GetProperty("canExecute").GetBoolean();
+            var readFromReference = payload.GetProperty("readFromReference").GetBoolean();
             var activity = new RecordingTextActivity(messages)
             {
-                Text = (InputArgument<string>)inputs!["Text"]
+                Text = (InputArgument<string>)inputs!["Text"],
+                ShouldExecute = canExecute,
+                ReadFromReference = readFromReference
             };
 
             return ValueTask.FromResult<IActivity>(activity);
@@ -134,15 +174,55 @@ public sealed class SequentialWorkflowExecutorTests
     private sealed class RecordingTextActivity(List<string?> messages) : ActivityBase
     {
         public InputArgument<string> Text { get; set; } = null!;
+        public bool ShouldExecute { get; set; } = true;
+        public bool ReadFromReference { get; set; }
+
+        protected override ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context)
+        {
+            return ValueTask.FromResult(ShouldExecute);
+        }
 
         protected override void Execute(IActivityExecutionContext context)
         {
-            messages.Add(context.Get(Text));
+            var expressionContext = context.ExpressionExecutionContext;
+            var text = ReadFromReference
+                ? Text.MemoryBlockReference().Get<string>(expressionContext.Memory, expressionContext)
+                : context.Get(Text);
+
+            messages.Add(text);
         }
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
     {
         public object? GetService(Type serviceType) => null;
+    }
+
+    private sealed class SingleServiceProvider(object service) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType.IsInstanceOfType(service) ? service : null;
+    }
+
+    private sealed class RecordingObjectConverter : IObjectConverter
+    {
+        public Type? LastTargetType { get; private set; }
+
+        public T? ConvertTo<T>(object? value, ObjectConverterOptions? converterOptions = null)
+        {
+            LastTargetType = typeof(T);
+            return (T?)value;
+        }
+
+        public object? ConvertTo(object? value, Type targetType, ObjectConverterOptions? converterOptions = null)
+        {
+            LastTargetType = targetType;
+            return value;
+        }
+
+        public Result TryConvertTo(object? value, Type targetType, ObjectConverterOptions? converterOptions = null)
+        {
+            LastTargetType = targetType;
+            return new(true, value, null);
+        }
     }
 }

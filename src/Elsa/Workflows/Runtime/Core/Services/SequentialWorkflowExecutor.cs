@@ -1,6 +1,7 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using System.Text.Json;
@@ -64,8 +65,10 @@ public sealed class SequentialWorkflowExecutor(
             var context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
             SeedInputMemory(context, inputs);
 
-            if (await activity.CanExecuteAsync(context))
-                await activity.ExecuteAsync(context);
+            if (!await activity.CanExecuteAsync(context))
+                return new ActivityExecutionResult(activityExecutionId, node.ExecutableNodeId, node.ActivityType, ActivityExecutionResultStatus.Skipped, startedAt, DateTimeOffset.UtcNow, null);
+
+            await activity.ExecuteAsync(context);
 
             return new ActivityExecutionResult(activityExecutionId, node.ExecutableNodeId, node.ActivityType, ActivityExecutionResultStatus.Completed, startedAt, DateTimeOffset.UtcNow, null);
         }
@@ -159,13 +162,8 @@ public sealed class SequentialWorkflowExecutor(
         public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context)
         {
             var value = GetValue(memoryRegister);
-            if (value is null)
-                return default;
-
-            if (value is T typed)
-                return typed;
-
-            return (T?)Convert.ChangeType(value, Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T));
+            var objectConverter = context.GetRequiredService<IObjectConverter>();
+            return objectConverter.ConvertTo<T>(value);
         }
 
         public object? Get(IExpressionExecutionContext context) => context.Get(this);
