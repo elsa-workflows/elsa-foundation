@@ -127,6 +127,9 @@ public static class Elsa3MigrationCompatibility
 
     public static Elsa3MigrationResult<T> RejectUnsupportedInputKind<T>(Elsa3MigrationInputKind inputKind, string? sourceName = null)
     {
+        if (IsLiveInstanceStateInput(inputKind))
+            return RejectLiveInstanceResume<T>(sourceName);
+
         if (sourceName is not null && string.IsNullOrWhiteSpace(sourceName))
             throw new ArgumentException("Migration source name cannot be blank.", nameof(sourceName));
 

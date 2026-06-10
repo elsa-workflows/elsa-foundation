@@ -1,3 +1,6 @@
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Mappings;
@@ -11,9 +14,12 @@ namespace Elsa.Architecture.Tests;
 public sealed class Elsa3MigrationBoundaryTests
 {
     private readonly Elsa3WorkflowDefinitionImporter _importer = new(new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
-        new Elsa3WorkflowDefinitionToState(null!, null!, null!),
+        new Elsa3WorkflowDefinitionToState(
+            new StubWellKnownTypeRegistry(),
+            new Elsa3ActivityToState(new ThrowingActivityDefinitionLookup()),
+            new Elsa3ArgumentDefinitionToInputOutput(new StubWellKnownTypeRegistry())),
         new StubWorkflowDefinitionFactory(),
-        null!));
+        new ThrowingWorkflowDefinitionVersionFactory()));
 
     [Theory]
     [InlineData(Elsa3MigrationInputKind.WorkflowDefinitionExportJson)]
@@ -191,5 +197,68 @@ public sealed class Elsa3MigrationBoundaryTests
     {
         public IWorkflowDefinition Create(string name, string? description = null, string? id = null) =>
             new WorkflowDefinitionModel(id ?? "definition-1", name, description);
+    }
+
+    private sealed class ThrowingWorkflowDefinitionVersionFactory : IWorkflowDefinitionVersionFactory
+    {
+        public IWorkflowDefinitionVersion Create(
+            IWorkflowDefinition definition,
+            string version,
+            WorkflowDefinitionState state,
+            DateTimeOffset? sourceCreatedAt = null,
+            string? id = null) =>
+            throw new InvalidOperationException("The malformed definition test should fail before creating a workflow definition version.");
+    }
+
+    private sealed class StubWellKnownTypeRegistry : IWellKnownTypeRegistry
+    {
+        public void RegisterType(Type type, string alias)
+        {
+        }
+
+        public bool TryGetAlias(Type type, out string alias)
+        {
+            alias = type.AssemblyQualifiedName ?? type.FullName ?? type.Name;
+            return true;
+        }
+
+        public bool TryGetType(string alias, out Type type)
+        {
+            type = typeof(object);
+            return true;
+        }
+
+        public IEnumerable<Type> ListTypes() => [typeof(object)];
+
+        public string GetAliasOrDefault(Type type) => type.AssemblyQualifiedName ?? type.FullName ?? type.Name;
+
+        public Type GetTypeOrDefault(string alias) => typeof(object);
+
+        public bool TryGetTypeOrDefault(string alias, out Type type)
+        {
+            type = typeof(object);
+            return true;
+        }
+    }
+
+    private sealed class ThrowingActivityDefinitionLookup : IActivityDefinitionLookup
+    {
+        public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The malformed definition test should fail before resolving activity definitions.");
+
+        public Task<IEnumerable<IActivityDefinition>> ListDefinitions(
+            string? id = null,
+            string? category = null,
+            string? searchTerm = null,
+            string? displayName = null,
+            string? description = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Enumerable.Empty<IActivityDefinition>());
+
+        public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The malformed definition test should fail before resolving activity versions.");
+
+        public Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Enumerable.Empty<ActivityDefinitionVersionInfo>());
     }
 }
