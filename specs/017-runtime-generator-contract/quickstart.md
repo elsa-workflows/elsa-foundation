@@ -12,5 +12,5 @@ git diff --check
 ## Files
 
 - `src/Elsa/Workflows/Runtime/Core/Models/SchedulerState.cs`
-- `src/Elsa/Workflows/Runtime/Core/Models/GeneratorState.cs`
+- `src/Elsa/Workflows/Runtime/Core/Models/GeneratorModels.cs`
 - `tests/Elsa/Workflows/Runtime/Tests/RuntimeGeneratorContractTests.cs`
