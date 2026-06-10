@@ -12,7 +12,7 @@ public sealed record SchedulerState
 
     /// <remarks>
     /// `pendingCompletionWork` is appended to preserve the existing positional constructor order.
-    /// Scheduler implementations still drain `PendingCompletionWork` before unrelated scheduled activity work.
+    /// The completion-propagation contract expects schedulers to drain `PendingCompletionWork` before unrelated scheduled activity work.
     /// Prefer named arguments for new call sites.
     /// </remarks>
     public SchedulerState(
