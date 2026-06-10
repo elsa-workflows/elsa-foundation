@@ -55,7 +55,7 @@ Declared durable runtime value state.
 
 Validation:
 
-- `Lifecycle = None` cannot have a storage strategy.
+- `Lifecycle = None` must use `Storage = None` and cannot carry inline or external durable state.
 - Inline values are JSON-first.
 - External values store a reference/locator, not an arbitrary CLR object.
 - Activity output persistence happens only through capture into a declared durable value.

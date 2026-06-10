@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Elsa.Workflows.Runtime.Core.Constants;
 
 public static class RuntimeCheckpointNames
@@ -17,21 +19,10 @@ public static class RuntimeCheckpointNames
     public const string WorkflowCancelled = nameof(WorkflowCancelled);
     public const string PostCommitIntentRecorded = nameof(PostCommitIntentRecorded);
 
-    public static readonly IReadOnlyCollection<string> All =
-    [
-        WorkflowStarted,
-        ActivityScheduled,
-        ActivityStarted,
-        ActivityCompleted,
-        ActivitySuspended,
-        BookmarkCreated,
-        BookmarkConsumed,
-        DurableValueCaptured,
-        IncidentRecorded,
-        WorkflowSuspended,
-        WorkflowCompleted,
-        WorkflowFaulted,
-        WorkflowCancelled,
-        PostCommitIntentRecorded
-    ];
+    public static readonly IReadOnlyCollection<string> All = typeof(RuntimeCheckpointNames)
+        .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+        .Where(field => field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
 }

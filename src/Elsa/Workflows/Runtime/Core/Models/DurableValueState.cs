@@ -13,7 +13,7 @@ public sealed record DurableValueState
         string valueId,
         RuntimeValueTypeDescriptor type,
         DurableValueLifecycle lifecycle,
-        DurableValueStorage? storage,
+        DurableValueStorage storage,
         JsonElement? inlineValue,
         DurableValueExternalReference? externalReference,
         string? sourceActivityExecutionId,
@@ -40,7 +40,7 @@ public sealed record DurableValueState
     public string ValueId { get; }
     public RuntimeValueTypeDescriptor Type { get; }
     public DurableValueLifecycle Lifecycle { get; }
-    public DurableValueStorage? Storage { get; }
+    public DurableValueStorage Storage { get; }
     public JsonElement? InlineValue { get; }
     public DurableValueExternalReference? ExternalReference { get; }
     public string? SourceActivityExecutionId { get; }
@@ -49,14 +49,14 @@ public sealed record DurableValueState
 
     private static void Validate(
         DurableValueLifecycle lifecycle,
-        DurableValueStorage? storage,
+        DurableValueStorage storage,
         JsonElement? inlineValue,
         DurableValueExternalReference? externalReference)
     {
         if (lifecycle == DurableValueLifecycle.None)
         {
-            if (storage is not null)
-                throw new ArgumentException("A non-durable value cannot specify a storage strategy.", nameof(storage));
+            if (storage != DurableValueStorage.None)
+                throw new ArgumentException("A non-durable value must use the None storage strategy.", nameof(storage));
 
             if (inlineValue.HasValue)
                 throw new ArgumentException("A non-durable value cannot carry inline durable state.", nameof(inlineValue));
@@ -67,7 +67,7 @@ public sealed record DurableValueState
             return;
         }
 
-        if (storage is null)
+        if (storage == DurableValueStorage.None)
             throw new ArgumentException("A durable value lifecycle requires a storage strategy.", nameof(storage));
 
         if (storage == DurableValueStorage.Inline)
@@ -114,6 +114,7 @@ public enum DurableValueLifecycle
 
 public enum DurableValueStorage
 {
+    None,
     Inline,
     External,
     Custom

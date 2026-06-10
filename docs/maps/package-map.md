@@ -19,7 +19,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Authorization.Policy | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Workflows.Runtime.Http (2.3.10) |
-| Microsoft.AspNetCore.OpenApi | 10.0.8 | Elsa.Server (10.0.8) |
+| Microsoft.AspNetCore.OpenApi | 10.0.9 | Elsa.Server (10.0.9) |
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
@@ -150,7 +150,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.FastEndpoints | 0.0.24 |
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.8 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.9 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.EntityFrameworkCore.Design | 10.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane | 0.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane.Admin | 0.0.8 |

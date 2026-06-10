@@ -32,22 +32,57 @@ public sealed class RuntimeDependencyBoundaryTests
         Assert.True(designTypes.Count == 0, string.Join(Environment.NewLine, designTypes));
     }
 
+    [Fact]
+    public void PublicSurfaceTypes_UnwrapsGenericTypeArguments()
+    {
+        var surfaceTypes = PublicSurfaceTypes(typeof(GenericSurfaceProbe)).ToList();
+
+        Assert.Contains(typeof(Elsa.Workflows.Design.TestDoubles.DesignLeakProbe), surfaceTypes);
+    }
+
     private static IEnumerable<Type> PublicSurfaceTypes(Type type)
     {
-        yield return type;
+        foreach (var surfaceType in Expand(type))
+            yield return surfaceType;
 
         foreach (var property in type.GetProperties())
-            yield return property.PropertyType;
+        foreach (var surfaceType in Expand(property.PropertyType))
+            yield return surfaceType;
 
         foreach (var constructor in type.GetConstructors())
         foreach (var parameter in constructor.GetParameters())
-            yield return parameter.ParameterType;
+        foreach (var surfaceType in Expand(parameter.ParameterType))
+            yield return surfaceType;
 
         foreach (var method in type.GetMethods())
         {
-            yield return method.ReturnType;
+            foreach (var surfaceType in Expand(method.ReturnType))
+                yield return surfaceType;
+
             foreach (var parameter in method.GetParameters())
-                yield return parameter.ParameterType;
+            foreach (var surfaceType in Expand(parameter.ParameterType))
+                yield return surfaceType;
         }
+    }
+
+    private static IEnumerable<Type> Expand(Type type)
+    {
+        yield return type;
+
+        var elementType = type.GetElementType();
+        if (elementType is not null)
+        {
+            foreach (var surfaceType in Expand(elementType))
+                yield return surfaceType;
+        }
+
+        foreach (var argument in type.GetGenericArguments())
+        foreach (var surfaceType in Expand(argument))
+            yield return surfaceType;
+    }
+
+    private sealed class GenericSurfaceProbe
+    {
+        public IReadOnlyCollection<Elsa.Workflows.Design.TestDoubles.DesignLeakProbe> Items { get; } = [];
     }
 }

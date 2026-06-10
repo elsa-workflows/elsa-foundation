@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -8,6 +10,7 @@ public sealed record WorkflowExecutionCommand(
     string WorkflowExecutionId,
     WorkflowExecutionCommandKind Kind,
     DateTimeOffset EnqueuedAt,
+    JsonElement? Payload,
     IReadOnlyDictionary<string, string> Metadata);
 
 public enum WorkflowExecutionCommandKind

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -136,10 +137,10 @@ public sealed class RuntimeContractTests
 
     [Theory]
     [InlineData(DurableValueLifecycle.None, DurableValueStorage.Inline)]
-    [InlineData(DurableValueLifecycle.Instance, null)]
+    [InlineData(DurableValueLifecycle.Instance, DurableValueStorage.None)]
     public void DurableValueState_RejectsInvalidLifecycleAndStorageCombinations(
         DurableValueLifecycle lifecycle,
-        DurableValueStorage? storage)
+        DurableValueStorage storage)
     {
         Assert.Throws<ArgumentException>(() => NewDurableValueState(lifecycle, storage, Json("""{"value":1}"""), null));
     }
@@ -189,6 +190,34 @@ public sealed class RuntimeContractTests
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, checkpoint.Name);
     }
 
+    [Fact]
+    public void CheckpointNameCollection_ContainsEveryDeclaredCheckpointConstant()
+    {
+        var declaredNames = typeof(RuntimeCheckpointNames)
+            .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+            .Where(field => field is { IsLiteral: true, IsInitOnly: false } && field.FieldType == typeof(string))
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToArray();
+
+        Assert.Equal(declaredNames.Order(StringComparer.Ordinal), RuntimeCheckpointNames.All);
+    }
+
+    [Fact]
+    public void WorkflowExecutionCommand_CarriesStructuredPayload()
+    {
+        var payload = Json("""{"bookmarkId":"bookmark-1","input":{"status":"approved"}}""");
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-1",
+            WorkflowExecutionId: "wfexec-1",
+            Kind: WorkflowExecutionCommandKind.ResumeBookmark,
+            EnqueuedAt: DateTimeOffset.UtcNow,
+            Payload: payload,
+            Metadata: new Dictionary<string, string>());
+
+        Assert.Equal("bookmark-1", command.Payload!.Value.GetProperty("bookmarkId").GetString());
+        Assert.Equal("approved", command.Payload.Value.GetProperty("input").GetProperty("status").GetString());
+    }
+
     private static JsonElement Json(string json)
     {
         using var document = JsonDocument.Parse(json);
@@ -197,7 +226,7 @@ public sealed class RuntimeContractTests
 
     private static DurableValueState NewDurableValueState(
         DurableValueLifecycle lifecycle,
-        DurableValueStorage? storage,
+        DurableValueStorage storage,
         JsonElement? inlineValue,
         DurableValueExternalReference? externalReference) =>
         new(
