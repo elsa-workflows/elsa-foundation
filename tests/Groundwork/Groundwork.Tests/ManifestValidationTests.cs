@@ -70,11 +70,17 @@ public sealed class ManifestValidationTests
     [Fact]
     public void ProviderSpecificRequiredPhysicalShapeFails()
     {
-        var manifest = WithSingleUnit(unit => unit with { Identity = new StorageUnitIdentity("table:configuration_documents") });
+        var manifests = new[]
+        {
+            WithSingleUnit(unit => unit with { Identity = new StorageUnitIdentity("table:configuration_documents") }),
+            WithSingleUnit(unit => unit with { Identity = new StorageUnitIdentity("postgresql:configuration_documents") })
+        };
 
-        var result = _validator.Validate(manifest);
-
-        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-UNIT-002");
+        foreach (var manifest in manifests)
+        {
+            var result = _validator.Validate(manifest);
+            Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-UNIT-002");
+        }
     }
 
     [Fact]

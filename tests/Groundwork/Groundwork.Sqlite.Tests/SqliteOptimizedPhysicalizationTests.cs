@@ -1,4 +1,5 @@
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Documents.Store;
 using Groundwork.Relational.Physicalization;
 using Groundwork.Sqlite.Documents;
@@ -95,9 +96,12 @@ public sealed class SqliteOptimizedPhysicalizationTests
 
         public async Task<(string Key, string Category, long Version)> LoadProjectionAsync(string documentId)
         {
+            var fields = PhysicalizationProjection.EligibleFields(Unit).ToDictionary(field => field.Name, StringComparer.Ordinal);
+            var keyColumn = RelationalPhysicalizationNames.ColumnName(fields["by-key"]);
+            var categoryColumn = RelationalPhysicalizationNames.ColumnName(fields["by-category"]);
             await using var command = Connection.CreateCommand();
             command.CommandText = $"""
-                SELECT p_by_x002d_key, p_by_x002d_category, document_version
+                SELECT {keyColumn}, {categoryColumn}, document_version
                 FROM {RelationalPhysicalizationNames.TableName(Unit)}
                 WHERE document_kind = $kind AND document_id = $id;
                 """;

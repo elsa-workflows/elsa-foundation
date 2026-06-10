@@ -58,10 +58,12 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
 
     private static async Task EnsureDeclaredIndexesAsync(IMongoCollection<BsonDocument> collection, StorageUnit unit, CancellationToken cancellationToken)
     {
+        var physicalizedFields = PhysicalizationProjection.EligibleFields(unit)
+            .ToDictionary(field => field.Name, StringComparer.Ordinal);
+
         foreach (var index in unit.Indexes.Where(index => index.Fields.Count == 1))
         {
-            var physicalizedField = PhysicalizationProjection.EligibleFields(unit).SingleOrDefault(field => field.Name == index.Identity);
-            var path = physicalizedField is null
+            var path = !physicalizedFields.TryGetValue(index.Identity, out var physicalizedField)
                 ? $"content.{index.Fields[0].Path}"
                 : $"physicalized.{MongoDbGroundworkNames.PhysicalizedFieldName(physicalizedField)}";
             var keys = Builders<BsonDocument>.IndexKeys.Ascending(path);

@@ -29,7 +29,14 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
 
         if (existing is null)
         {
-            await collection.InsertOneAsync(document, cancellationToken: cancellationToken);
+            try
+            {
+                await collection.InsertOneAsync(document, cancellationToken: cancellationToken);
+            }
+            catch (MongoWriteException exception) when (IsDuplicateDocumentId(exception))
+            {
+                return DocumentStoreWriteResult.ConcurrencyConflict;
+            }
         }
         else
         {
@@ -181,4 +188,8 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             IndexValueKind.Boolean when bool.TryParse(value, out var boolValue) => boolValue,
             _ => value
         };
+
+    private static bool IsDuplicateDocumentId(MongoWriteException exception) =>
+        exception.WriteError?.Code == 11000 &&
+        exception.WriteError.Message.Contains("index: _id_", StringComparison.OrdinalIgnoreCase);
 }

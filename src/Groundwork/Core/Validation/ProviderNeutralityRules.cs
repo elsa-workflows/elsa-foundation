@@ -11,6 +11,7 @@ public static class ProviderNeutralityRules
         "mongodb:",
         "sqlite:",
         "postgres:",
+        "postgresql:",
         "sqlserver:"
     ];
 
