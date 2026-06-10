@@ -22,7 +22,7 @@ public sealed class RuntimeInputBinding
 
         InputName = inputName;
         Source = source;
-        LiteralValue = literalValue;
+        LiteralValue = literalValue?.Clone();
         Expression = expression;
         ActivityOutput = activityOutput;
         DurableValue = durableValue;
@@ -151,7 +151,7 @@ public sealed class RuntimeReferenceValue
 
         ReferenceType = referenceType;
         ReferenceId = referenceId;
-        Payload = payload;
+        Payload = payload?.Clone();
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 

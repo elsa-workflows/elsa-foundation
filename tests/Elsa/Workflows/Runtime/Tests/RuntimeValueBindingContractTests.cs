@@ -170,6 +170,35 @@ public sealed class RuntimeValueBindingContractTests
     }
 
     [Fact]
+    public void RuntimeValueBindingModels_OwnJsonElementPayloads()
+    {
+        ActiveActivityOutput output;
+        RuntimeInputBinding literal;
+        RuntimeReferenceValue reference;
+
+        using (var document = JsonDocument.Parse("""{"value":42}"""))
+        {
+            output = new ActiveActivityOutput(
+                key: new ActiveActivityOutputKey("wfexec-1", "actexec-1", "answer"),
+                value: document.RootElement,
+                type: new RuntimeValueTypeDescriptor("primitive", "number", null),
+                recordedAt: _now);
+            literal = new RuntimeInputBinding(
+                inputName: "answer",
+                source: RuntimeInputBindingSource.Literal,
+                literalValue: document.RootElement);
+            reference = new RuntimeReferenceValue(
+                referenceType: "demo.answer",
+                referenceId: "answer-42",
+                payload: document.RootElement);
+        }
+
+        Assert.Equal(42, output.Value.GetProperty("value").GetInt32());
+        Assert.Equal(42, literal.LiteralValue!.Value.GetProperty("value").GetInt32());
+        Assert.Equal(42, reference.Payload!.Value.GetProperty("value").GetInt32());
+    }
+
+    [Fact]
     public void ExecutableNode_SnapshotsBindingCaptureAndMetadataDictionaries()
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>

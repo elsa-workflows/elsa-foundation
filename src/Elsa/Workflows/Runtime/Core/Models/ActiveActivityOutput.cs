@@ -48,7 +48,7 @@ public sealed class ActiveActivityOutput
         ArgumentNullException.ThrowIfNull(key);
 
         Key = key;
-        Value = value;
+        Value = value.Clone();
         Type = type;
         RecordedAt = recordedAt;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
