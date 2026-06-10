@@ -44,7 +44,7 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         catch (Exception e)
         {
             _logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(ExecuteWorkflow));
-            ThrowError("Unexpected error occurred", 400);
+            ThrowError("Unexpected error occurred", 500);
         }
     }
 }
