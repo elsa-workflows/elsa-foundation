@@ -5,22 +5,22 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `src/Groundwork/Core/Groundwork.Core.csproj`
-- [ ] T002 Create `src/Groundwork/Relational/Groundwork.Relational.csproj` referencing `src/Groundwork/Core/Groundwork.Core.csproj`
-- [ ] T003 Create `src/Groundwork/Documents/Groundwork.Documents.csproj` referencing `src/Groundwork/Core/Groundwork.Core.csproj`
-- [ ] T004 Create `tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj` referencing the three Groundwork source projects
-- [ ] T005 Add Groundwork source and test project entries to `Elsa.Server.slnx`
+- [x] T001 Create `src/Groundwork/Core/Groundwork.Core.csproj`
+- [x] T002 Create `src/Groundwork/Relational/Groundwork.Relational.csproj` referencing `src/Groundwork/Core/Groundwork.Core.csproj`
+- [x] T003 Create `src/Groundwork/Documents/Groundwork.Documents.csproj` referencing `src/Groundwork/Core/Groundwork.Core.csproj`
+- [x] T004 Create `tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj` referencing the three Groundwork source projects
+- [x] T005 Add Groundwork source and test project entries to `Elsa.Server.slnx`
 
 ## Phase 2: Foundational Core Types
 
-- [ ] T006 [P] Define diagnostic result primitives in `src/Groundwork/Core/Validation/GroundworkDiagnostic.cs`
-- [ ] T007 [P] Define manifest identity/version records in `src/Groundwork/Core/Manifests/ManifestIdentity.cs`
-- [ ] T008 [P] Define workload classification enums/records in `src/Groundwork/Core/Workloads/WorkloadClassification.cs`
-- [ ] T009 [P] Define lifecycle/identity/tenancy/concurrency/serialization/physicalization policies in `src/Groundwork/Core/Manifests/StoragePolicies.cs`
-- [ ] T010 [P] Define index declarations in `src/Groundwork/Core/Indexing/IndexDeclaration.cs`
-- [ ] T011 [P] Define portable query declarations in `src/Groundwork/Core/Queries/PortableQueryDeclaration.cs`
-- [ ] T012 Define `StorageUnit` in `src/Groundwork/Core/Manifests/StorageUnit.cs`
-- [ ] T013 Define `StorageManifest` in `src/Groundwork/Core/Manifests/StorageManifest.cs`
+- [x] T006 [P] Define diagnostic result primitives in `src/Groundwork/Core/Validation/GroundworkDiagnostic.cs`
+- [x] T007 [P] Define manifest identity/version records in `src/Groundwork/Core/Manifests/ManifestIdentity.cs`
+- [x] T008 [P] Define workload classification enums/records in `src/Groundwork/Core/Workloads/WorkloadClassification.cs`
+- [x] T009 [P] Define lifecycle/identity/tenancy/concurrency/serialization/physicalization policies in `src/Groundwork/Core/Manifests/StoragePolicies.cs`
+- [x] T010 [P] Define index declarations in `src/Groundwork/Core/Indexing/IndexDeclaration.cs`
+- [x] T011 [P] Define portable query declarations in `src/Groundwork/Core/Queries/PortableQueryDeclaration.cs`
+- [x] T012 Define `StorageUnit` in `src/Groundwork/Core/Manifests/StorageUnit.cs`
+- [x] T013 Define `StorageManifest` in `src/Groundwork/Core/Manifests/StorageManifest.cs`
 
 ## Phase 3: User Story 1 - Declare Provider-Neutral Storage Intent (P1)
 
@@ -28,11 +28,11 @@
 
 **Independent Test**: A generic sample metadata manifest validates without any provider or Elsa references.
 
-- [ ] T014 [P] [US1] Add manifest validation tests in `tests/Groundwork/Groundwork.Tests/ManifestValidationTests.cs`
-- [ ] T015 [P] [US1] Add generic sample manifest factory in `tests/Groundwork/Groundwork.Tests/SampleManifests.cs`
-- [ ] T016 [US1] Implement manifest validator in `src/Groundwork/Core/Validation/StorageManifestValidator.cs`
-- [ ] T017 [US1] Add validation result aggregation in `src/Groundwork/Core/Validation/ManifestValidationResult.cs`
-- [ ] T018 [US1] Add provider-neutrality validation rules in `src/Groundwork/Core/Validation/ProviderNeutralityRules.cs`
+- [x] T014 [P] [US1] Add manifest validation tests in `tests/Groundwork/Groundwork.Tests/ManifestValidationTests.cs`
+- [x] T015 [P] [US1] Add generic sample manifest factory in `tests/Groundwork/Groundwork.Tests/SampleManifests.cs`
+- [x] T016 [US1] Implement manifest validator in `src/Groundwork/Core/Validation/StorageManifestValidator.cs`
+- [x] T017 [US1] Add validation result aggregation in `src/Groundwork/Core/Validation/ManifestValidationResult.cs`
+- [x] T018 [US1] Add provider-neutrality validation rules in `src/Groundwork/Core/Validation/ProviderNeutralityRules.cs`
 
 ## Phase 4: User Story 2 - Produce Relational And Document Plans (P2)
 
@@ -40,13 +40,13 @@
 
 **Independent Test**: The sample manifest produces both relational and document plans preserving indexes, concurrency, and schema-history intent.
 
-- [ ] T019 [P] [US2] Add planner contract tests in `tests/Groundwork/Groundwork.Tests/PlannerContractTests.cs`
-- [ ] T020 [P] [US2] Define materialization plan concepts in `src/Groundwork/Core/Materialization/MaterializationPlan.cs`
-- [ ] T021 [P] [US2] Define schema-history entry concepts in `src/Groundwork/Core/Materialization/SchemaHistoryEntry.cs`
-- [ ] T022 [US2] Define relational plan model in `src/Groundwork/Relational/Planning/RelationalPlan.cs`
-- [ ] T023 [US2] Implement relational planner in `src/Groundwork/Relational/Planning/RelationalManifestPlanner.cs`
-- [ ] T024 [US2] Define document plan model in `src/Groundwork/Documents/Planning/DocumentPlan.cs`
-- [ ] T025 [US2] Implement document planner in `src/Groundwork/Documents/Planning/DocumentManifestPlanner.cs`
+- [x] T019 [P] [US2] Add planner contract tests in `tests/Groundwork/Groundwork.Tests/PlannerContractTests.cs`
+- [x] T020 [P] [US2] Define materialization plan concepts in `src/Groundwork/Core/Materialization/MaterializationPlan.cs`
+- [x] T021 [P] [US2] Define schema-history entry concepts in `src/Groundwork/Core/Materialization/SchemaHistoryEntry.cs`
+- [x] T022 [US2] Define relational plan model in `src/Groundwork/Relational/Planning/RelationalPlan.cs`
+- [x] T023 [US2] Implement relational planner in `src/Groundwork/Relational/Planning/RelationalManifestPlanner.cs`
+- [x] T024 [US2] Define document plan model in `src/Groundwork/Documents/Planning/DocumentPlan.cs`
+- [x] T025 [US2] Implement document planner in `src/Groundwork/Documents/Planning/DocumentManifestPlanner.cs`
 
 ## Phase 5: User Story 3 - Validate Provider Capabilities (P3)
 
@@ -54,25 +54,25 @@
 
 **Independent Test**: Compatible capability reports allow planning; unsupported required capabilities block planning with structured diagnostics.
 
-- [ ] T026 [P] [US3] Add provider capability tests in `tests/Groundwork/Groundwork.Tests/ProviderCapabilityTests.cs`
-- [ ] T027 [P] [US3] Define provider capability report in `src/Groundwork/Core/Capabilities/ProviderCapabilityReport.cs`
-- [ ] T028 [P] [US3] Define capability compatibility result in `src/Groundwork/Core/Capabilities/CapabilityCompatibilityResult.cs`
-- [ ] T029 [US3] Implement capability validator in `src/Groundwork/Core/Capabilities/ProviderCapabilityValidator.cs`
-- [ ] T030 [US3] Integrate compatibility checks into relational planner in `src/Groundwork/Relational/Planning/RelationalManifestPlanner.cs`
-- [ ] T031 [US3] Integrate compatibility checks into document planner in `src/Groundwork/Documents/Planning/DocumentManifestPlanner.cs`
+- [x] T026 [P] [US3] Add provider capability tests in `tests/Groundwork/Groundwork.Tests/ProviderCapabilityTests.cs`
+- [x] T027 [P] [US3] Define provider capability report in `src/Groundwork/Core/Capabilities/ProviderCapabilityReport.cs`
+- [x] T028 [P] [US3] Define capability compatibility result in `src/Groundwork/Core/Capabilities/CapabilityCompatibilityResult.cs`
+- [x] T029 [US3] Implement capability validator in `src/Groundwork/Core/Capabilities/ProviderCapabilityValidator.cs`
+- [x] T030 [US3] Integrate compatibility checks into relational planner in `src/Groundwork/Relational/Planning/RelationalManifestPlanner.cs`
+- [x] T031 [US3] Integrate compatibility checks into document planner in `src/Groundwork/Documents/Planning/DocumentManifestPlanner.cs`
 
 ## Phase 6: Boundary And Documentation
 
-- [ ] T032 [P] Add Groundwork dependency boundary tests in `tests/Groundwork/Groundwork.Tests/GroundworkDependencyBoundaryTests.cs`
-- [ ] T033 [P] Add feature documentation for Groundwork Core in `src/Groundwork/Core/README.md`
-- [ ] T034 [P] Add feature documentation for Groundwork Relational in `src/Groundwork/Relational/README.md`
-- [ ] T035 [P] Add feature documentation for Groundwork Documents in `src/Groundwork/Documents/README.md`
+- [x] T032 [P] Add Groundwork dependency boundary tests in `tests/Groundwork/Groundwork.Tests/GroundworkDependencyBoundaryTests.cs`
+- [x] T033 [P] Add feature documentation for Groundwork Core in `src/Groundwork/Core/README.md`
+- [x] T034 [P] Add feature documentation for Groundwork Relational in `src/Groundwork/Relational/README.md`
+- [x] T035 [P] Add feature documentation for Groundwork Documents in `src/Groundwork/Documents/README.md`
 
 ## Phase 7: Validation
 
-- [ ] T036 Run `dotnet test tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj`
-- [ ] T037 Run `dotnet test Elsa.Server.slnx --no-restore`
-- [ ] T038 Update `specs/013-groundwork-core-manifest-planner/quickstart.md` if validation commands need correction
+- [x] T036 Run `dotnet test tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj`
+- [x] T037 Run `dotnet test Elsa.Server.slnx --no-restore`
+- [x] T038 Update `specs/013-groundwork-core-manifest-planner/quickstart.md` if validation commands need correction
 
 ## Dependencies
 

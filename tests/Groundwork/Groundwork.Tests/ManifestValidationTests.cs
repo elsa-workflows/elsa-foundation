@@ -1,0 +1,98 @@
+using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Validation;
+using Groundwork.Core.Workloads;
+using Xunit;
+
+namespace Groundwork.Tests;
+
+public sealed class ManifestValidationTests
+{
+    private readonly StorageManifestValidator _validator = new();
+
+    [Fact]
+    public void ValidSampleManifestSucceeds()
+    {
+        var result = _validator.Validate(SampleManifests.MetadataManifest());
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void EmptyManifestFails()
+    {
+        var result = _validator.Validate(SampleManifests.MetadataManifest() with { StorageUnits = [] });
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-MANIFEST-004");
+    }
+
+    [Fact]
+    public void MissingWorkloadClassificationFails()
+    {
+        var manifest = WithSingleUnit(unit => unit with { Workload = null! });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-UNIT-003");
+    }
+
+    [Fact]
+    public void MissingSchemaVersionFails()
+    {
+        var result = _validator.Validate(SampleManifests.MetadataManifest() with { Version = new StorageManifestVersion("") });
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-MANIFEST-003");
+    }
+
+    [Fact]
+    public void QueryReferencingUndeclaredIndexFails()
+    {
+        var manifest = WithSingleUnit(unit => unit with
+        {
+            Queries =
+            [
+                new PortableQueryDeclaration(
+                    "find-by-missing",
+                    "missing-index",
+                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                    QuerySortSupport.None,
+                    QueryPagingSupport.None)
+            ]
+        });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-QUERY-002");
+    }
+
+    [Fact]
+    public void ProviderSpecificRequiredPhysicalShapeFails()
+    {
+        var manifest = WithSingleUnit(unit => unit with { Identity = new StorageUnitIdentity("table:configuration_documents") });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-UNIT-002");
+    }
+
+    [Fact]
+    public void OperationalWorkloadCannotUsePortableDefault()
+    {
+        var manifest = WithSingleUnit(unit => unit with
+        {
+            Workload = new WorkloadClassification(WorkloadFamily.OperationalStream, WorkloadCandidateCategory.GroundworkDefault)
+        });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-UNIT-004");
+    }
+
+    private static StorageManifest WithSingleUnit(Func<StorageUnit, StorageUnit> configure)
+    {
+        var manifest = SampleManifests.MetadataManifest();
+        return manifest with { StorageUnits = [configure(manifest.StorageUnits.Single())] };
+    }
+}

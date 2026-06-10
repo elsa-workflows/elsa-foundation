@@ -1,0 +1,75 @@
+using Groundwork.Core.Capabilities;
+using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Validation;
+using Xunit;
+
+namespace Groundwork.Tests;
+
+public sealed class ProviderCapabilityTests
+{
+    private readonly ProviderCapabilityValidator _validator = new();
+
+    [Fact]
+    public void CompatibleCapabilityReportAllowsPlanning()
+    {
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), SampleManifests.PortableCapabilities());
+
+        Assert.True(result.IsCompatible);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void UnsupportedRequiredIndexCapabilityBlocksCompatibility()
+    {
+        var capabilities = SampleManifests.PortableCapabilities() with
+        {
+            Indexes = IndexCapabilities.All with { SupportsUniqueIndexes = false }
+        };
+
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+
+        Assert.False(result.IsCompatible);
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-007");
+    }
+
+    [Fact]
+    public void UnsupportedConcurrencyModeBlocksCompatibility()
+    {
+        var capabilities = SampleManifests.PortableCapabilities() with
+        {
+            SupportedConcurrencyModes = new HashSet<ConcurrencyKind> { ConcurrencyKind.None }
+        };
+
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+
+        Assert.False(result.IsCompatible);
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-005");
+    }
+
+    [Fact]
+    public void SupportedFallbackEmitsWarningWithoutChangingManifestIntent()
+    {
+        var capabilities = SampleManifests.PortableCapabilities() with
+        {
+            Warnings = ["Provider will materialize indexes lazily."]
+        };
+
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+
+        Assert.True(result.IsCompatible);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "GW-CAP-002");
+        Assert.Equal(ConcurrencyKind.Optimistic, SampleManifests.MetadataManifest().StorageUnits.Single().Concurrency.Kind);
+    }
+
+    [Fact]
+    public void MissingSchemaHistorySupportBlocksCompatibility()
+    {
+        var capabilities = SampleManifests.PortableCapabilities() with { SupportsSchemaHistory = false };
+
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+
+        Assert.False(result.IsCompatible);
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-001");
+    }
+}

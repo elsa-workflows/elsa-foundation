@@ -135,6 +135,11 @@
   <Folder Name="/src/Elsa3/Activities/Design/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
+  <Folder Name="/src/Groundwork/">
+    <Project Path="src/Groundwork/Core/Groundwork.Core.csproj" />
+    <Project Path="src/Groundwork/Documents/Groundwork.Documents.csproj" />
+    <Project Path="src/Groundwork/Relational/Groundwork.Relational.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
   </Folder>
@@ -156,5 +161,8 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj" />
   </Folder>
 </Solution>
