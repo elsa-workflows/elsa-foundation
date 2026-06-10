@@ -24,10 +24,10 @@ public sealed class RuntimeVolatileWaitContractTests
     public void SchedulerState_CarriesVolatileContinuationWorkSeparatelyFromActivityScheduling()
     {
         var scheduler = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 4,
-            PendingWork: [],
-            PendingContinuations:
+            workflowExecutionId: "wfexec-1",
+            version: 4,
+            pendingWork: [],
+            pendingContinuations:
             [
                 new SchedulerContinuationWorkItem(
                     workItemId: "continuation-1",
@@ -39,7 +39,7 @@ public sealed class RuntimeVolatileWaitContractTests
                     enqueuedAt: _now.AddSeconds(5),
                     reason: "VolatileWaitCompleted")
             ],
-            VolatileWaits: [NewVolatileWait()]);
+            volatileWaits: [NewVolatileWait()]);
 
         Assert.Empty(scheduler.PendingWork);
         var continuation = Assert.Single(scheduler.PendingContinuations);
@@ -53,11 +53,11 @@ public sealed class RuntimeVolatileWaitContractTests
     public void SchedulerState_NormalizesMissingCollectionsToEmpty()
     {
         var scheduler = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 1,
-            PendingWork: null,
-            PendingContinuations: null,
-            VolatileWaits: null);
+            workflowExecutionId: "wfexec-1",
+            version: 1,
+            pendingWork: null,
+            pendingContinuations: null,
+            volatileWaits: null);
 
         Assert.Empty(scheduler.PendingWork);
         Assert.Empty(scheduler.PendingContinuations);

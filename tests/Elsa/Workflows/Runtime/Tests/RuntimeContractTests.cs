@@ -86,9 +86,9 @@ public sealed class RuntimeContractTests
     public void SchedulerState_ReferencesExecutableNodesAndActivityExecutions()
     {
         var scheduler = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 3,
-            PendingWork:
+            workflowExecutionId: "wfexec-1",
+            version: 3,
+            pendingWork:
             [
                 new ScheduledActivityWorkItem(
                     WorkItemId: "work-1",
@@ -101,8 +101,8 @@ public sealed class RuntimeContractTests
                     EnqueuedAt: DateTimeOffset.UtcNow,
                     Reason: "ActivityScheduled")
             ],
-            PendingContinuations: [],
-            VolatileWaits:
+            pendingContinuations: [],
+            volatileWaits:
             [
                 new VolatileWaitRegistration(
                     waitId: "wait-1",

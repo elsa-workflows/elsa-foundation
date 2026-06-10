@@ -6,19 +6,19 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class SchedulerState
 {
     public SchedulerState(
-        string WorkflowExecutionId,
-        long Version,
-        IReadOnlyCollection<ScheduledActivityWorkItem>? PendingWork = null,
-        IReadOnlyCollection<SchedulerContinuationWorkItem>? PendingContinuations = null,
-        IReadOnlyCollection<VolatileWaitRegistration>? VolatileWaits = null)
+        string workflowExecutionId,
+        long version,
+        IReadOnlyCollection<ScheduledActivityWorkItem>? pendingWork = null,
+        IReadOnlyCollection<SchedulerContinuationWorkItem>? pendingContinuations = null,
+        IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        this.WorkflowExecutionId = WorkflowExecutionId;
-        this.Version = Version;
-        this.PendingWork = (PendingWork ?? []).ToArray();
-        this.PendingContinuations = (PendingContinuations ?? []).ToArray();
-        this.VolatileWaits = (VolatileWaits ?? []).ToArray();
+        WorkflowExecutionId = workflowExecutionId;
+        Version = version;
+        PendingWork = (pendingWork ?? []).ToArray();
+        PendingContinuations = (pendingContinuations ?? []).ToArray();
+        VolatileWaits = (volatileWaits ?? []).ToArray();
     }
 
     public string WorkflowExecutionId { get; }
