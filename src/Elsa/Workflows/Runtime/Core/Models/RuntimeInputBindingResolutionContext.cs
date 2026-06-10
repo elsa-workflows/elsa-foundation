@@ -9,7 +9,7 @@ public sealed class RuntimeInputBindingResolutionContext
         string workflowExecutionId,
         string activityExecutionId,
         IReadOnlyDictionary<string, DurableValueState> durableValuesByValueId,
-        IRuntimeActivityOutputRegister activityOutputs)
+        IRuntimeActivityOutputReader activityOutputs)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -25,5 +25,5 @@ public sealed class RuntimeInputBindingResolutionContext
     public string WorkflowExecutionId { get; }
     public string ActivityExecutionId { get; }
     public IReadOnlyDictionary<string, DurableValueState> DurableValuesByValueId { get; }
-    public IRuntimeActivityOutputRegister ActivityOutputs { get; }
+    public IRuntimeActivityOutputReader ActivityOutputs { get; }
 }

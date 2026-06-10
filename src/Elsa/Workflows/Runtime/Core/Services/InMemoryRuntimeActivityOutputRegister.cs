@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -5,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class InMemoryRuntimeActivityOutputRegister : IRuntimeActivityOutputRegister
 {
-    private readonly Dictionary<ActiveActivityOutputKey, ActiveActivityOutput> _outputs = new();
+    private readonly ConcurrentDictionary<ActiveActivityOutputKey, ActiveActivityOutput> _outputs = new();
 
     public void Set(ActiveActivityOutput output)
     {
@@ -36,11 +37,9 @@ public sealed class InMemoryRuntimeActivityOutputRegister : IRuntimeActivityOutp
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
 
-        foreach (var key in _outputs.Keys
-                     .Where(key => key.WorkflowExecutionId == workflowExecutionId && key.ActivityExecutionId == activityExecutionId)
-                     .ToArray())
+        foreach (var key in _outputs.Keys.Where(key => key.WorkflowExecutionId == workflowExecutionId && key.ActivityExecutionId == activityExecutionId))
         {
-            _outputs.Remove(key);
+            _outputs.TryRemove(key, out _);
         }
     }
 }

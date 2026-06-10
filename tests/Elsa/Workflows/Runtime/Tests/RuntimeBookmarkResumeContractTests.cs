@@ -265,15 +265,15 @@ public sealed class RuntimeBookmarkResumeContractTests
 
     private ExecutableNode NewDeliveryNode() =>
         new(
-            ExecutableNodeId: "node-delivery",
-            AuthoredActivityId: "activity-delivery",
-            ActivityType: "Elsa.WaitForDeliveryStatus",
-            ActivityTypeVersion: "1.0.0",
-            DescriptorType: "test",
-            DescriptorPayload: Json("{}"),
-            InputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            OutputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            Metadata: new Dictionary<string, string>());
+            executableNodeId: "node-delivery",
+            authoredActivityId: "activity-delivery",
+            activityType: "Elsa.WaitForDeliveryStatus",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: Json("{}"),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
 
     private static JsonElement Json(string json)
     {

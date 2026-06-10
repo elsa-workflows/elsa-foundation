@@ -30,9 +30,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** maps `BookmarkState.ResumeTargetId` through the pinned `WorkflowExecutable.ResumeTargets` table and returns the executable node plus runtime resume target. It does not load artifacts, invoke activity handlers, or implement the bookmark store.
 - **Default implementation:** `BookmarkResumeResolver` *(intra-domain default)*.
 
+### `IRuntimeActivityOutputReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Query surface (read-only active-scope output lookup used by resolvers and resolution contexts).
+- **Signature:** `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`.
+- **Usage:** exposes active execution outputs without granting mutation rights to consumers that only materialize runtime input bindings.
+- **Default implementation:** `InMemoryRuntimeActivityOutputRegister` *(through `IRuntimeActivityOutputRegister`)*.
+
 ### `IRuntimeActivityOutputRegister` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one active-scope output register owns execution-local activity output lookup for a runtime composition).
-- **Signature:** `Set(ActiveActivityOutput output)`, `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`, `ClearActivityOutputs(...)`.
+- **Signature:** inherits `IRuntimeActivityOutputReader`; adds `Set(ActiveActivityOutput output)`, `ClearActivityOutputs(...)`.
 - **Usage:** stores activity outputs by `WorkflowExecutionId`, `ActivityExecutionId`, and output name while they remain in active execution scope. This is not durable continuation state.
 - **Default implementation:** `InMemoryRuntimeActivityOutputRegister` *(intra-domain default, contract/default for current slice)*.
 

@@ -66,34 +66,34 @@ public sealed record WorkflowExecutableSourceReference(
 public sealed class ExecutableNode
 {
     public ExecutableNode(
-        string ExecutableNodeId,
-        string AuthoredActivityId,
-        string ActivityType,
-        string ActivityTypeVersion,
-        string DescriptorType,
-        JsonElement DescriptorPayload,
-        IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings,
-        IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures,
-        IReadOnlyDictionary<string, string> Metadata)
+        string executableNodeId,
+        string authoredActivityId,
+        string activityType,
+        string activityTypeVersion,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
+        IReadOnlyDictionary<string, string> metadata)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ExecutableNodeId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(AuthoredActivityId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ActivityType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ActivityTypeVersion);
-        ArgumentException.ThrowIfNullOrWhiteSpace(DescriptorType);
-        ArgumentNullException.ThrowIfNull(InputBindings);
-        ArgumentNullException.ThrowIfNull(OutputCaptures);
-        ArgumentNullException.ThrowIfNull(Metadata);
+        ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityTypeVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(descriptorType);
+        ArgumentNullException.ThrowIfNull(inputBindings);
+        ArgumentNullException.ThrowIfNull(outputCaptures);
+        ArgumentNullException.ThrowIfNull(metadata);
 
-        this.ExecutableNodeId = ExecutableNodeId;
-        this.AuthoredActivityId = AuthoredActivityId;
-        this.ActivityType = ActivityType;
-        this.ActivityTypeVersion = ActivityTypeVersion;
-        this.DescriptorType = DescriptorType;
-        this.DescriptorPayload = DescriptorPayload.Clone();
-        this.InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(InputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
-        this.OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(OutputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
-        this.Metadata = RuntimeModelMetadata.Snapshot(Metadata);
+        ExecutableNodeId = executableNodeId;
+        AuthoredActivityId = authoredActivityId;
+        ActivityType = activityType;
+        ActivityTypeVersion = activityTypeVersion;
+        DescriptorType = descriptorType;
+        DescriptorPayload = descriptorPayload.Clone();
+        InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
     public string ExecutableNodeId { get; }

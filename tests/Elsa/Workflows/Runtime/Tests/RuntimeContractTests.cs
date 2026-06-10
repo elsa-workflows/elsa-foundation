@@ -44,21 +44,21 @@ public sealed class RuntimeContractTests
     public void ExecutableNode_SeparatesRuntimeNodeIdentityFromAuthoredActivityIdentity()
     {
         var node = new ExecutableNode(
-            ExecutableNodeId: "node-runtime-1",
-            AuthoredActivityId: "activity-authored-1",
-            ActivityType: "Elsa.SendEmail",
-            ActivityTypeVersion: "1.0.0",
-            DescriptorType: "Elsa.Activities.SendEmailDescriptor",
-            DescriptorPayload: Json("{}"),
-            InputBindings: new Dictionary<string, RuntimeInputBinding>
+            executableNodeId: "node-runtime-1",
+            authoredActivityId: "activity-authored-1",
+            activityType: "Elsa.SendEmail",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "Elsa.Activities.SendEmailDescriptor",
+            descriptorPayload: Json("{}"),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["to"] = new(
                     inputName: "to",
                     source: RuntimeInputBindingSource.DurableValue,
                     durableValue: new RuntimeDurableValueReference("customerEmail"))
             },
-            OutputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            Metadata: new Dictionary<string, string>());
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
 
         Assert.Equal("node-runtime-1", node.ExecutableNodeId);
         Assert.Equal("activity-authored-1", node.AuthoredActivityId);

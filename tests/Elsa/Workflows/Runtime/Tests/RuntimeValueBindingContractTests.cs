@@ -38,15 +38,15 @@ public sealed class RuntimeValueBindingContractTests
         };
 
         var node = new ExecutableNode(
-            ExecutableNodeId: "node-send",
-            AuthoredActivityId: "activity-send",
-            ActivityType: "Elsa.SendEmail",
-            ActivityTypeVersion: "1.0.0",
-            DescriptorType: "test",
-            DescriptorPayload: Json("{}"),
-            InputBindings: inputBindings,
-            OutputCaptures: outputCaptures,
-            Metadata: new Dictionary<string, string>());
+            executableNodeId: "node-send",
+            authoredActivityId: "activity-send",
+            activityType: "Elsa.SendEmail",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: Json("{}"),
+            inputBindings: inputBindings,
+            outputCaptures: outputCaptures,
+            metadata: new Dictionary<string, string>());
 
         Assert.Equal(RuntimeInputBindingSource.DurableValue, node.InputBindings["customer"].Source);
         Assert.Equal(RuntimeInputBindingSource.Expression, node.InputBindings["subject"].Source);
@@ -102,6 +102,33 @@ public sealed class RuntimeValueBindingContractTests
         Assert.Equal(RuntimeInputBindingResolutionFailureReason.ActivityOutputMissing, exception.Reason);
         Assert.Equal("customer-1", durable.Value!.Value.GetProperty("id").GetString());
         Assert.Equal("durable-customer", durable.DurableValue!.DurableValueId);
+    }
+
+    [Fact]
+    public void RuntimeInputBindingResolutionContext_ExposesReadOnlyActivityOutputReader()
+    {
+        var activityOutputsProperty = typeof(RuntimeInputBindingResolutionContext).GetProperty(nameof(RuntimeInputBindingResolutionContext.ActivityOutputs))!;
+
+        Assert.Equal(typeof(IRuntimeActivityOutputReader), activityOutputsProperty.PropertyType);
+    }
+
+    [Fact]
+    public void InMemoryRuntimeActivityOutputRegister_AllowsConcurrentWritesAndReads()
+    {
+        const int outputCount = 256;
+
+        Parallel.For(0, outputCount, index =>
+        {
+            _outputs.Set(new ActiveActivityOutput(
+                key: new ActiveActivityOutputKey("wfexec-1", "actexec-parallel", $"output-{index}"),
+                value: Json($$"""{"value":{{index}}}"""),
+                type: new RuntimeValueTypeDescriptor("primitive", "number", null),
+                recordedAt: _now));
+
+            _outputs.GetActivityOutputs("wfexec-1", "actexec-parallel");
+        });
+
+        Assert.Equal(outputCount, _outputs.GetActivityOutputs("wfexec-1", "actexec-parallel").Count);
     }
 
     [Fact]
@@ -162,15 +189,15 @@ public sealed class RuntimeValueBindingContractTests
         var metadata = new Dictionary<string, string> { ["source"] = "compile" };
 
         var node = new ExecutableNode(
-            ExecutableNodeId: "node-send",
-            AuthoredActivityId: "activity-send",
-            ActivityType: "Elsa.SendEmail",
-            ActivityTypeVersion: "1.0.0",
-            DescriptorType: "test",
-            DescriptorPayload: Json("{}"),
-            InputBindings: inputBindings,
-            OutputCaptures: outputCaptures,
-            Metadata: metadata);
+            executableNodeId: "node-send",
+            authoredActivityId: "activity-send",
+            activityType: "Elsa.SendEmail",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: Json("{}"),
+            inputBindings: inputBindings,
+            outputCaptures: outputCaptures,
+            metadata: metadata);
 
         inputBindings["late"] = LiteralBinding("late", Json("""{"value":1}"""));
         outputCaptures.Clear();
