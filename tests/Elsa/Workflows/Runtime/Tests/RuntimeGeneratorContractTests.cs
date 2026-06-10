@@ -155,14 +155,17 @@ public sealed class RuntimeGeneratorContractTests
     [Fact]
     public void GeneratorRegistration_RejectsInvalidExpiration()
     {
-        Assert.Throws<ArgumentException>(() => new GeneratorRegistration(
+        var exception = Assert.Throws<ArgumentException>(() => new GeneratorRegistration(
             generatorId: "generator-1",
             workflowExecutionId: "wfexec-1",
             generatorActivityExecutionId: "actexec-generator",
             owningScopeActivityExecutionId: "actexec-scope",
             branchId: "branch-a",
             registeredAt: _now,
+            stopPolicy: GeneratorStopPolicy.TimeWindow,
             expiresAt: _now));
+
+        Assert.Contains("after registration", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
