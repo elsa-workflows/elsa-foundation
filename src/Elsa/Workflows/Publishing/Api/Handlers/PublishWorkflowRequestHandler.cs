@@ -230,7 +230,7 @@ public sealed class PublishWorkflowRequestHandler(
             version.Version,
             string.Join('|', startNodeIds.Order(StringComparer.Ordinal)),
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
-                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(input => $"{input.Key}={input.Value.LiteralValue?.GetRawText()}"))}")),
+                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}")),
             string.Join('|', edges
                 .OrderBy(edge => edge.SourceNodeId, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourcePort, StringComparer.Ordinal)
@@ -240,5 +240,14 @@ public sealed class PublishWorkflowRequestHandler(
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static string FormatInputBinding(KeyValuePair<string, RuntimeInputBinding> input)
+    {
+        var metadata = string.Join(',', input.Value.Metadata
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key}={item.Value}"));
+
+        return $"{input.Key}={input.Value.LiteralValue?.GetRawText()}[{metadata}]";
     }
 }

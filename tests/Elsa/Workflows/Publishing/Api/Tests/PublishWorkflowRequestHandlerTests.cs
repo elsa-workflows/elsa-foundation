@@ -163,10 +163,28 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(firstView.ArtifactHash, secondView.ArtifactHash);
     }
 
+    [Fact]
+    public async Task ComputesDifferentArtifactIdWhenLiteralInputTypeMetadataChanges()
+    {
+        var workflowVersion = WorkflowVersion(
+            activities: [Node("write-one", isStart: true, isTerminal: true, Text("1"))],
+            connections: []);
+        var stringView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.String))
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.Integer))
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.NotEqual(stringView.ArtifactId, integerView.ArtifactId);
+        Assert.NotEqual(stringView.ArtifactHash, integerView.ArtifactHash);
+    }
+
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
+        Handler(workflowVersion, _writeLineActivity);
+
+    private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, ActivityDefinitionVersion activityVersion) =>
         new(
             new FakeQueries<WorkflowDefinitionVersion>([workflowVersion]),
-            new FakeQueries<ActivityDefinitionVersion>([_writeLineActivity]),
+            new FakeQueries<ActivityDefinitionVersion>([activityVersion]),
             _store);
 
     private static WorkflowDefinitionVersion WorkflowVersion(
