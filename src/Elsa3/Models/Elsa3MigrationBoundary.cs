@@ -93,6 +93,8 @@ public sealed class Elsa3MigrationResult<T>
 
     public static Elsa3MigrationResult<T> Failure(IEnumerable<Elsa3MigrationDiagnostic> diagnostics)
     {
+        ArgumentNullException.ThrowIfNull(diagnostics);
+
         var snapshot = SnapshotDiagnostics(diagnostics);
         if (snapshot.Count == 0)
             throw new ArgumentException("Failed Elsa 3 migration results require at least one diagnostic.", nameof(diagnostics));

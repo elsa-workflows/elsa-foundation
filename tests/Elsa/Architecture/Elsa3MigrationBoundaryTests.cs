@@ -109,6 +109,12 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
+    public void MigrationResult_FailureRequiresDiagnosticsCollection()
+    {
+        Assert.Throws<ArgumentNullException>(() => Elsa3MigrationResult<object>.Failure((IEnumerable<Elsa3MigrationDiagnostic>)null!));
+    }
+
+    [Fact]
     public void MigrationResult_SuccessCannotCarryErrors()
     {
         var error = new Elsa3MigrationDiagnostic(
