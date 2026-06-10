@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\Groundwork\Core\Groundwork.Core.csproj" />
+    <ProjectReference Include="..\..\..\Groundwork\Documents\Groundwork.Documents.csproj" />
   </ItemGroup>
 
 </Project>

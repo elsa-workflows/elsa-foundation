@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Groundwork MongoDB Provider](specs/017-groundwork-mongodb-provider/plan.md)
+Current Speckit plan: [Groundwork Runtime-Defined Entities](specs/018-groundwork-runtime-entities/plan.md)
 <!-- SPECKIT END -->
