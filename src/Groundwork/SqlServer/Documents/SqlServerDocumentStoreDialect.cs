@@ -1,6 +1,10 @@
-namespace Groundwork.Relational.Documents;
+using System.Data.Common;
+using Groundwork.Relational.Documents;
+using Microsoft.Data.SqlClient;
 
-public sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDialect
+namespace Groundwork.SqlServer.Documents;
+
+internal sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDialect
 {
     public override string QueryByIndexSql => $$"""
         SELECT d.document_kind, d.id, d.schema_version, d.version, d.content_json, d.created_utc, d.updated_utc
@@ -21,4 +25,8 @@ public sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDiale
         ORDER BY d.id
         OFFSET {{Parameter("skip")}} ROWS FETCH NEXT {{Parameter("take")}} ROWS ONLY;
         """;
+
+    public override bool IsDuplicateDocumentKeyException(DbException exception) =>
+        exception is SqlException { Number: 2627 or 2601 } sqlException &&
+        sqlException.Message.Contains("pk_groundwork_documents", StringComparison.OrdinalIgnoreCase);
 }

@@ -10,10 +10,7 @@ public class RelationalDocumentStoreDialect
 
     public virtual object Boolean(bool value) => value ? 1 : 0;
 
-    public virtual bool IsDuplicateDocumentKeyException(DbException exception) =>
-        Contains(exception.Message, "groundwork_documents.document_kind, groundwork_documents.id") ||
-        Contains(exception.Message, "groundwork_documents_pkey") ||
-        Contains(exception.Message, "pk_groundwork_documents");
+    public virtual bool IsDuplicateDocumentKeyException(DbException exception) => false;
 
     public virtual string InsertDocumentSql => $$"""
         INSERT INTO groundwork_documents
@@ -29,6 +26,18 @@ public class RelationalDocumentStoreDialect
             updated_utc = {{Parameter("updatedUtc")}}
         WHERE document_kind = {{Parameter("kind")}} AND id = {{Parameter("id")}};
         """;
+
+    public virtual string UpdateDocumentCommandSql(bool checkVersion) =>
+        checkVersion
+            ? $$"""
+              UPDATE groundwork_documents
+              SET schema_version = {{Parameter("schemaVersion")}},
+                  version = {{Parameter("version")}},
+                  content_json = {{Parameter("content")}},
+                  updated_utc = {{Parameter("updatedUtc")}}
+              WHERE document_kind = {{Parameter("kind")}} AND id = {{Parameter("id")}} AND version = {{Parameter("expectedVersion")}};
+              """
+            : UpdateDocumentSql;
 
     public virtual string LoadDocumentSql => $$"""
         SELECT document_kind, id, schema_version, version, content_json, created_utc, updated_utc
@@ -95,7 +104,4 @@ public class RelationalDocumentStoreDialect
         ORDER BY d.id
         LIMIT {{Parameter("take")}} OFFSET {{Parameter("skip")}};
         """;
-
-    private static bool Contains(string value, string fragment) =>
-        value.Contains(fragment, StringComparison.OrdinalIgnoreCase);
 }

@@ -5,4 +5,4 @@ using Npgsql;
 namespace Groundwork.PostgreSql.Documents;
 
 public sealed class PostgreSqlDocumentStore(NpgsqlConnection connection, StorageManifest manifest)
-    : RelationalDocumentStore(connection, manifest, new RelationalDocumentStoreDialect());
+    : RelationalDocumentStore(connection, manifest, new PostgreSqlDocumentStoreDialect());

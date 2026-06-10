@@ -41,7 +41,9 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         }
         else
         {
-            await UpdateDocumentAsync(request, version, now, transaction, cancellationToken);
+            var updated = await UpdateDocumentAsync(request, version, now, transaction, cancellationToken);
+            if (!updated && request.ExpectedVersion is not null)
+                return DocumentStoreWriteResult.ConcurrencyConflict;
         }
 
         await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
@@ -146,16 +148,19 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task UpdateDocumentAsync(
+    private async Task<bool> UpdateDocumentAsync(
         SaveDocumentRequest request,
         long version,
         DateTimeOffset updatedAt,
         DbTransaction transaction,
         CancellationToken cancellationToken)
     {
-        await using var command = CreateCommand(dialect.UpdateDocumentSql, transaction);
+        await using var command = CreateCommand(dialect.UpdateDocumentCommandSql(request.ExpectedVersion is not null), transaction);
         AddDocumentParameters(command, request, version, updatedAt);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        if (request.ExpectedVersion is not null)
+            AddParameter(command, "expectedVersion", request.ExpectedVersion.Value);
+
+        return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
     }
 
     private void AddDocumentParameters(DbCommand command, SaveDocumentRequest request, long version, DateTimeOffset createdAt, DateTimeOffset updatedAt)

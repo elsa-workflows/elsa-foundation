@@ -85,7 +85,7 @@ public sealed class GroundworkRuntimeEntityStoreTests
 
         await harness.Store.SaveInstanceAsync(definition, "customer-1", """{"email":"one@example.com","segment":"vip"}""");
 
-        await Assert.ThrowsAnyAsync<Exception>(() =>
+        await Assert.ThrowsAsync<SqliteException>(() =>
             harness.Store.SaveInstanceAsync(definition, "customer-2", """{"email":"one@example.com","segment":"vip"}"""));
     }
 
