@@ -156,12 +156,28 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     }
 
     [Fact]
+    public void PostCommitOutboxItem_RejectsActiveDeliveryOwnershipOutsideDeliveringState()
+    {
+        var ownerException = Assert.Throws<ArgumentException>(() => NewOutboxItem(
+            RuntimePostCommitOutboxStatus.Pending,
+            deliveringOwnerId: "dispatcher-1"));
+        var startException = Assert.Throws<ArgumentException>(() => NewOutboxItem(
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            deliveryStartedAt: _now.AddSeconds(1)));
+
+        Assert.Contains("Only delivering outbox items", ownerException.Message);
+        Assert.Contains("Only delivering outbox items", startException.Message);
+    }
+
+    [Fact]
     public void RecoveryAndOutboxQueries_RejectInvalidLimitsAndRetrySettings()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.Zero, 10));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxQuery(_now, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(-1, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(3, TimeSpan.Zero));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitRetryPolicy(0, TimeSpan.FromSeconds(10)));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitRetryPolicy(3, null));
     }
 
     [Fact]

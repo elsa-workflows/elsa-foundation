@@ -71,6 +71,14 @@ public sealed class RuntimePostCommitOutboxItem
             if (deliveryStartedAt is null)
                 throw new ArgumentException("A delivering outbox item requires a delivery start time.", nameof(deliveryStartedAt));
         }
+        else
+        {
+            if (deliveringOwnerId is not null)
+                throw new ArgumentException("Only delivering outbox items can carry active delivery ownership.", nameof(deliveringOwnerId));
+
+            if (deliveryStartedAt is not null)
+                throw new ArgumentException("Only delivering outbox items can carry active delivery ownership.", nameof(deliveryStartedAt));
+        }
 
         if (status == RuntimePostCommitOutboxStatus.Delivered && deliveredAt is null)
             throw new ArgumentException("A delivered outbox item requires a delivered time.", nameof(deliveredAt));
@@ -89,6 +97,12 @@ public sealed class RuntimePostCommitRetryPolicy
     {
         if (maxAttempts < 0)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), "Maximum delivery attempts cannot be negative.");
+
+        if (maxAttempts == 0 && delay is not null)
+            throw new ArgumentException("A retry policy with no attempts cannot carry a retry delay.", nameof(delay));
+
+        if (maxAttempts > 0 && delay is null)
+            throw new ArgumentException("A retry policy with attempts requires a retry delay.", nameof(delay));
 
         if (delay <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(delay), "Retry delay must be greater than zero.");
