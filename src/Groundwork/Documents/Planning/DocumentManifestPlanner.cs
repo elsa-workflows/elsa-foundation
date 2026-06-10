@@ -46,7 +46,7 @@ public sealed class DocumentManifestPlanner(
                     .Select(query => new DocumentQueryPlan(
                         query.Identity,
                         query.IndexIdentity,
-                        query.Operations.Select(operation => operation.ToString()).ToList()))
+                        query.Operations.ToList()))
                     .ToList()))
             .ToList();
 

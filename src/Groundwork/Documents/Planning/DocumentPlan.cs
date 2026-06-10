@@ -1,3 +1,4 @@
+using Groundwork.Core.Indexing;
 using Groundwork.Core.Materialization;
 using Groundwork.Core.Validation;
 
@@ -33,4 +34,4 @@ public sealed record DocumentIndexPlan(
 public sealed record DocumentQueryPlan(
     string Name,
     string IndexName,
-    IReadOnlyList<string> Operations);
+    IReadOnlyList<PortableQueryOperation> Operations);

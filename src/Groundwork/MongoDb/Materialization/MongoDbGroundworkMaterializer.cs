@@ -10,25 +10,34 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
 {
     public async Task MaterializeAsync(StorageManifest manifest, ProviderIdentity provider, CancellationToken cancellationToken = default)
     {
-        await EnsureCollectionAsync(MongoDbGroundworkNames.SchemaHistoryCollection, cancellationToken);
+        var collections = await GetCollectionNamesAsync(cancellationToken);
+        await EnsureCollectionAsync(collections, MongoDbGroundworkNames.SchemaHistoryCollection, cancellationToken);
         await EnsureSchemaHistoryIndexAsync(cancellationToken);
 
         foreach (var unit in manifest.StorageUnits)
         {
             var collectionName = MongoDbGroundworkNames.CollectionName(unit);
-            await EnsureCollectionAsync(collectionName, cancellationToken);
+            await EnsureCollectionAsync(collections, collectionName, cancellationToken);
             await EnsureDeclaredIndexesAsync(database.GetCollection<BsonDocument>(collectionName), unit, cancellationToken);
         }
 
         await RecordSchemaHistoryAsync(manifest, provider, cancellationToken);
     }
 
-    private async Task EnsureCollectionAsync(string collectionName, CancellationToken cancellationToken)
+    private async Task<HashSet<string>> GetCollectionNamesAsync(CancellationToken cancellationToken)
     {
         var cursor = await database.ListCollectionNamesAsync(cancellationToken: cancellationToken);
         var names = await cursor.ToListAsync(cancellationToken);
-        if (!names.Contains(collectionName, StringComparer.Ordinal))
-            await database.CreateCollectionAsync(collectionName, cancellationToken: cancellationToken);
+        return names.ToHashSet(StringComparer.Ordinal);
+    }
+
+    private async Task EnsureCollectionAsync(HashSet<string> collections, string collectionName, CancellationToken cancellationToken)
+    {
+        if (collections.Contains(collectionName))
+            return;
+
+        await database.CreateCollectionAsync(collectionName, cancellationToken: cancellationToken);
+        collections.Add(collectionName);
     }
 
     private async Task EnsureSchemaHistoryIndexAsync(CancellationToken cancellationToken)

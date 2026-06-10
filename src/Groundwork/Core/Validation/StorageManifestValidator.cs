@@ -52,7 +52,7 @@ public sealed class StorageManifestValidator
         {
             diagnostics.Add(GroundworkDiagnostic.Error(
                 "GW-UNIT-004",
-                "Operational stream workloads must use the specialized-provider category in G1.",
+                "Operational stream workloads must use the specialized-provider category unless a provider-specific contract proves otherwise.",
                 $"{target}.workload"));
         }
         else if (unit.Workload.Family == WorkloadFamily.RuntimeContinuationState &&
