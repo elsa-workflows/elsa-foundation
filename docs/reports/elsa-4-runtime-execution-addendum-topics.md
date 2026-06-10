@@ -556,6 +556,106 @@ Fault terminology:
 - Use `Failure` as a generic explanatory word.
 - Avoid `Fault` as a noun in new Elsa 4 model names unless referring to legacy/Elsa 3 behavior.
 
+### 6. Wait Registration Ordering And Correlated Post-Commit Intents
+
+Elsa 4 should not use a global bookmark inbox as the universal race-condition fix for early signals.
+
+Problem:
+
+```text
+A workflow registers a wait for a signal.
+The signal can arrive before the wait registration is durable.
+The signal handler finds no wait/bookmark and the workflow never continues.
+```
+
+This can happen with internal workflow dispatch, send-message/request-reply patterns, external services, queues, message brokers, webhooks, and other signal sources.
+
+Core principle:
+
+```text
+If Elsa causes the side effect that may produce the signal,
+register the wait before delivering the side effect.
+```
+
+Elsa should pair wait registration with a runtime outbox pattern:
+
+```text
+write workflow state change
+write wait registration / correlation reservation
+write post-commit intent
+commit checkpoint
+dispatcher delivers intent
+wait becomes active / remains correlated
+reply resumes workflow
+```
+
+This is the outbox pattern with runtime wait correlation.
+
+Model pieces:
+
+```text
+WaitRegistration
+  correlationId
+  match criteria
+  state: Reserved | Active | Satisfied | Cancelled | Expired | Faulted
+  dependsOnIntentId?
+  timeout
+  failurePolicy
+
+PostCommitIntent
+  kind
+  payload/reference
+  state: Pending | Delivering | Delivered | FailedRetryable | FailedFinal | Cancelled
+  retryPolicy
+```
+
+State transitions:
+
+```text
+checkpoint committed
+  -> intent Pending
+
+intent delivery succeeds
+  -> intent Delivered
+  -> dependent wait Active
+
+intent delivery fails retryably
+  -> intent FailedRetryable
+  -> wait remains Reserved
+
+intent delivery fails finally
+  -> intent FailedFinal
+  -> wait applies failurePolicy
+
+signal arrives before Delivered
+  -> match Reserved wait by correlation
+  -> satisfy or buffer according to wait policy
+```
+
+Wait failure policies can include:
+
+```text
+FaultWorkflow
+CompleteWithFailureResult
+CancelWait
+Compensate
+KeepWaitingManualIntervention
+```
+
+Layered signal handling:
+
+- If Elsa causes the side effect, use wait registration plus post-commit intent so the wait/correlation is durable before delivery.
+- If the external source is durable, prefer source-native retry, defer, nack, abandon, offset, dead-letter, or pause semantics.
+- If the external signal is transient and Elsa did not cause it, require an explicit bounded inbox/expectation policy or accept possible loss.
+
+Rationale:
+
+The global bookmark inbox pattern captures unmatched stimuli broadly and then needs retention cleanup. Retention that is too short can still miss events; retention that is too long can grow without useful bounds. Correlated post-commit intents are causal: the runtime knows which wait expects which signal because of which delivered intent.
+
+Naming:
+
+Use the precise phrase `wait-dependent post-commit intent` in specifications unless a shorter term is later selected.
+
 ## Plan Impact
 
 The current action plan should be amended after this addendum is reviewed:
@@ -565,4 +665,5 @@ The current action plan should be amended after this addendum is reviewed:
 - Slice 5, bookmark resume contract, must distinguish durable resume from volatile continuation.
 - Slice 6, input bindings and durable value capture, must account for generator emissions and in-memory waits.
 - Slice 8, operational recovery and outbox, should include pause/resume control-plane boundaries or explicitly defer them to a companion plan.
+- Slice 8, operational recovery and outbox, must include wait-dependent post-commit intents and wait activation/failure policy.
 - A glossary/terminology report should be created before final Speckit wording freezes public concepts.
