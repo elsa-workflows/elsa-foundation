@@ -77,7 +77,7 @@ public sealed class RuntimePostCommitOutboxItem
                 throw new ArgumentException("Only delivering outbox items can carry active delivery ownership.", nameof(deliveringOwnerId));
 
             if (deliveryStartedAt is not null)
-                throw new ArgumentException("Only delivering outbox items can carry active delivery ownership.", nameof(deliveryStartedAt));
+                throw new ArgumentException("Only delivering outbox items can carry a delivery start time.", nameof(deliveryStartedAt));
         }
 
         if (status == RuntimePostCommitOutboxStatus.Delivered && deliveredAt is null)

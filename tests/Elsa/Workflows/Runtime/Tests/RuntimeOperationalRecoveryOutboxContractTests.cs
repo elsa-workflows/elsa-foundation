@@ -76,6 +76,20 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     }
 
     [Fact]
+    public void RecoveryCandidate_RequiresCheckpointIdWhenRequeueingFromLastCheckpoint()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new RuntimeRecoveryCandidate(
+            workflowExecutionId: "wfexec-1",
+            operationalStateId: "operational-1",
+            lastCheckpointId: null,
+            reason: RuntimeInterruptionReason.LeaseLost,
+            detectedAt: _now,
+            requeueFromLastCheckpoint: true));
+
+        Assert.Contains("last checkpoint ID", exception.Message);
+    }
+
+    [Fact]
     public void PostCommitIntent_CanDeclareWaitDependencyWithoutGlobalBookmarkInbox()
     {
         var intent = NewIntent(
@@ -98,11 +112,13 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     [Fact]
     public void PostCommitIntent_RejectsBlankWaitDependency()
     {
-        var exception = Assert.Throws<ArgumentException>(() => NewIntent(
+        var blankWithPolicy = Assert.Throws<ArgumentException>(() => NewIntent(
             dependsOnWaitRegistrationId: " ",
             failurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow));
+        var blankWithoutPolicy = Assert.Throws<ArgumentException>(() => NewIntent(dependsOnWaitRegistrationId: " "));
 
-        Assert.Contains("wait registration dependency", exception.Message);
+        Assert.Contains("wait registration dependency", blankWithPolicy.Message);
+        Assert.Contains("wait registration dependency", blankWithoutPolicy.Message);
     }
 
     [Fact]
@@ -166,7 +182,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
             deliveryStartedAt: _now.AddSeconds(1)));
 
         Assert.Contains("Only delivering outbox items", ownerException.Message);
-        Assert.Contains("Only delivering outbox items", startException.Message);
+        Assert.Contains("delivery start time", startException.Message);
     }
 
     [Fact]

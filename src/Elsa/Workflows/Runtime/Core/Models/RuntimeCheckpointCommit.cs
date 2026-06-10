@@ -96,10 +96,13 @@ public sealed class RuntimePostCommitIntent
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);
 
-        if (waitFailurePolicy is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
+        if (dependsOnWaitRegistrationId is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
+            throw new ArgumentException("A wait registration dependency cannot be blank.", nameof(dependsOnWaitRegistrationId));
+
+        if (waitFailurePolicy is not null && dependsOnWaitRegistrationId is null)
             throw new ArgumentException("A wait failure policy requires a wait registration dependency.", nameof(dependsOnWaitRegistrationId));
 
-        if (!string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId) && waitFailurePolicy is null)
+        if (dependsOnWaitRegistrationId is not null && waitFailurePolicy is null)
             throw new ArgumentException("A wait-dependent post-commit intent requires a wait failure policy.", nameof(waitFailurePolicy));
 
         IntentId = intentId;

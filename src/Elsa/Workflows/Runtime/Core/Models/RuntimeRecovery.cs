@@ -35,6 +35,9 @@ public sealed class RuntimeRecoveryCandidate
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
+        if (requeueFromLastCheckpoint && string.IsNullOrWhiteSpace(lastCheckpointId))
+            throw new ArgumentException("A recovery candidate that requeues from the last checkpoint requires a last checkpoint ID.", nameof(lastCheckpointId));
+
         WorkflowExecutionId = workflowExecutionId;
         OperationalStateId = operationalStateId;
         LastCheckpointId = lastCheckpointId;
