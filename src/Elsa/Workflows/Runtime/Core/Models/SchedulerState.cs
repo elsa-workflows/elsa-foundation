@@ -60,10 +60,12 @@ public sealed class SchedulerContinuationWorkItem
         if (branchId is not null && string.IsNullOrWhiteSpace(branchId))
             throw new ArgumentException("Branch ID cannot be blank when provided.", nameof(branchId));
 
-        if (RequiresVolatileWaitId(kind) && string.IsNullOrWhiteSpace(volatileWaitId))
+        var isVolatileWaitContinuation = RequiresVolatileWaitId(kind);
+
+        if (isVolatileWaitContinuation && string.IsNullOrWhiteSpace(volatileWaitId))
             throw new ArgumentException("Volatile wait continuation work requires a volatile wait ID.", nameof(volatileWaitId));
 
-        if (!RequiresVolatileWaitId(kind) && volatileWaitId is not null)
+        if (!isVolatileWaitContinuation && volatileWaitId is not null)
             throw new ArgumentException("Volatile wait ID must not be set for non-volatile-wait continuation kinds.", nameof(volatileWaitId));
 
         WorkItemId = workItemId;
