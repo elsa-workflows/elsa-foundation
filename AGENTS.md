@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Elsa 3 Migration Boundary](specs/014-runtime-elsa3-migration-boundary/plan.md)
+Current Speckit plan: [Runtime Volatile Wait Contract](specs/015-runtime-volatile-wait-contract/plan.md)
 <!-- SPECKIT END -->

@@ -100,7 +100,7 @@ public sealed class ArchitectureGuardTests
     public void Runtime_projects_do_not_add_design_references()
     {
         var violations = ProjectFiles()
-            .Where(project => project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal) || project.Name == "Elsa.Workflows.Runtime")
+            .Where(IsRuntimeProject)
             .SelectMany(project => ProjectReferences(project)
                 .Where(reference => reference.Name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal))
                 .Where(reference => !DeferredRuntimeDesignReferences.Contains((project.Name, reference.Name)))
