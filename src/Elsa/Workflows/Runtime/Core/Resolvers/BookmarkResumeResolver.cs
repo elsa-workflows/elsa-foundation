@@ -20,11 +20,11 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
                 BookmarkResumeResolutionFailureReason.WorkflowExecutionMismatch,
                 $"Bookmark '{bookmark.BookmarkId}' belongs to workflow execution '{bookmark.WorkflowExecutionId}', not '{workflowExecution.WorkflowExecutionId}'.");
 
-        if (executable.Identity != workflowExecution.PinnedExecutable)
+        if (!MatchesPinnedExecutable(executable.Identity, workflowExecution.PinnedExecutable))
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ExecutableArtifactNotPinned,
-                $"Executable artifact '{executable.Identity.ArtifactId}' is not the pinned artifact for workflow execution '{workflowExecution.WorkflowExecutionId}'.");
+                $"Executable artifact '{FormatIdentity(executable.Identity)}' is not the pinned artifact '{FormatIdentity(workflowExecution.PinnedExecutable)}' for workflow execution '{workflowExecution.WorkflowExecutionId}'.");
 
         if (!executable.ResumeTargets.TryGetValue(bookmark.ResumeTargetId, out var resumeTarget))
             throw NewException(
@@ -32,15 +32,19 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
                 BookmarkResumeResolutionFailureReason.ResumeTargetMissing,
                 $"Resume target '{bookmark.ResumeTargetId}' is not declared by executable artifact '{executable.Identity.ArtifactId}'.");
 
-        if (resumeTarget.ResumeTargetId != bookmark.ResumeTargetId || resumeTarget.ExecutableNodeId != bookmark.ExecutableNodeId)
+        if (resumeTarget.ResumeTargetId != bookmark.ResumeTargetId)
+            throw NewException(
+                bookmark,
+                BookmarkResumeResolutionFailureReason.ResumeTargetIdentityMismatch,
+                $"Resume target table entry '{bookmark.ResumeTargetId}' contains target ID '{resumeTarget.ResumeTargetId}'.");
+
+        if (resumeTarget.ExecutableNodeId != bookmark.ExecutableNodeId)
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ResumeTargetNodeMismatch,
                 $"Resume target '{bookmark.ResumeTargetId}' does not point at executable node '{bookmark.ExecutableNodeId}'.");
 
-        var executableNode = executable.Nodes.FirstOrDefault(node => node.ExecutableNodeId == bookmark.ExecutableNodeId);
-
-        if (executableNode is null)
+        if (!executable.NodesById.TryGetValue(bookmark.ExecutableNodeId, out var executableNode))
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ExecutableNodeMissing,
@@ -59,4 +63,14 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
             bookmark.WorkflowExecutionId,
             bookmark.BookmarkId,
             bookmark.ResumeTargetId);
+
+    private static bool MatchesPinnedExecutable(WorkflowExecutableIdentity executable, WorkflowExecutableIdentity pinned) =>
+        executable.ArtifactId == pinned.ArtifactId &&
+        executable.DefinitionId == pinned.DefinitionId &&
+        executable.DefinitionVersionId == pinned.DefinitionVersionId &&
+        executable.ArtifactVersion == pinned.ArtifactVersion &&
+        executable.ArtifactHash == pinned.ArtifactHash;
+
+    private static string FormatIdentity(WorkflowExecutableIdentity identity) =>
+        $"{identity.ArtifactId}@{identity.ArtifactVersion}/{identity.ArtifactHash}";
 }

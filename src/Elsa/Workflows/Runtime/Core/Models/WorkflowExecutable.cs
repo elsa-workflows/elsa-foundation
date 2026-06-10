@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed record WorkflowExecutable(
     WorkflowExecutableIdentity Identity,
     IReadOnlyCollection<ExecutableNode> Nodes,
+    IReadOnlyDictionary<string, ExecutableNode> NodesById,
     IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets,
     DateTimeOffset CreatedAt,
     DateTimeOffset? PublishedAt,

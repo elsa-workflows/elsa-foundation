@@ -32,6 +32,10 @@ Pure resolver input containing the workflow execution state, pinned executable a
 
 Pure resolver output containing the bookmark, executable node, executable resume target, and optional resume input payload.
 
+## WorkflowExecutable.NodesById
+
+Artifact lookup table keyed by `ExecutableNodeId` so resume resolution can resolve the node referenced by a bookmark without scanning the executable node collection.
+
 ## RuntimeCheckpointStateChangeSet.Bookmarks
 
 Typed bookmark state changes included in checkpoint commit envelopes. The full bookmark store/index remains a later slice.

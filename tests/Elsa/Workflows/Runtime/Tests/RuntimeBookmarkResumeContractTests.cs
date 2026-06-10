@@ -71,6 +71,38 @@ public sealed class RuntimeBookmarkResumeContractTests
     }
 
     [Fact]
+    public void BookmarkResumeResolver_IgnoresSourceReferenceWhenCheckingPinnedExecutableSnapshot()
+    {
+        var workflowExecution = NewWorkflowExecution(_identity with
+        {
+            Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "orders-v7", "7.0.0")
+        });
+        var executable = NewExecutable(_identity with { Source = null });
+        var request = new BookmarkResumeRequest(
+            WorkflowExecution: workflowExecution,
+            Executable: executable,
+            Bookmark: NewBookmark(),
+            Input: null);
+        var resolver = new BookmarkResumeResolver();
+
+        var resolution = resolver.Resolve(request);
+
+        Assert.Equal("node-delivery", resolution.ExecutableNode.ExecutableNodeId);
+    }
+
+    [Fact]
+    public void BookmarkResumeResolver_RejectsBookmarkForDifferentWorkflowExecution()
+    {
+        var request = NewRequest(NewExecutable(), bookmark: NewBookmark() with { WorkflowExecutionId = "wfexec-other" });
+        var resolver = new BookmarkResumeResolver();
+
+        var exception = Assert.Throws<BookmarkResumeResolutionException>(() => resolver.Resolve(request));
+
+        Assert.Equal(BookmarkResumeResolutionFailureReason.WorkflowExecutionMismatch, exception.Reason);
+        Assert.Equal("wfexec-other", exception.WorkflowExecutionId);
+    }
+
+    [Fact]
     public void BookmarkResumeResolver_RejectsExecutableThatIsNotPinned()
     {
         var executable = NewExecutable(_identity with { ArtifactHash = "sha256:other" });
@@ -82,6 +114,8 @@ public sealed class RuntimeBookmarkResumeContractTests
         Assert.Equal(BookmarkResumeResolutionFailureReason.ExecutableArtifactNotPinned, exception.Reason);
         Assert.Equal("bookmark-1", exception.BookmarkId);
         Assert.Equal("resume-target:delivery", exception.ResumeTargetId);
+        Assert.Contains("sha256:other", exception.Message);
+        Assert.Contains("sha256:artifact", exception.Message);
     }
 
     [Fact]
@@ -117,6 +151,26 @@ public sealed class RuntimeBookmarkResumeContractTests
     }
 
     [Fact]
+    public void BookmarkResumeResolver_RejectsResumeTargetWhoseIdDoesNotMatchLookupKey()
+    {
+        var executable = NewExecutable(resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
+        {
+            ["resume-target:delivery"] = new(
+                ResumeTargetId: "resume-target:other",
+                ExecutableNodeId: "node-delivery",
+                HandlerKey: "delivery-handler",
+                Metadata: new Dictionary<string, string>())
+        });
+        var request = NewRequest(executable);
+        var resolver = new BookmarkResumeResolver();
+
+        var exception = Assert.Throws<BookmarkResumeResolutionException>(() => resolver.Resolve(request));
+
+        Assert.Equal(BookmarkResumeResolutionFailureReason.ResumeTargetIdentityMismatch, exception.Reason);
+        Assert.Contains("resume-target:other", exception.Message);
+    }
+
+    [Fact]
     public void BookmarkResumeResolver_RejectsMissingExecutableNode()
     {
         var executable = NewExecutable(nodes: []);
@@ -128,17 +182,17 @@ public sealed class RuntimeBookmarkResumeContractTests
         Assert.Equal(BookmarkResumeResolutionFailureReason.ExecutableNodeMissing, exception.Reason);
     }
 
-    private BookmarkResumeRequest NewRequest(WorkflowExecutable executable) =>
+    private BookmarkResumeRequest NewRequest(WorkflowExecutable executable, BookmarkState? bookmark = null) =>
         new(
             WorkflowExecution: NewWorkflowExecution(),
             Executable: executable,
-            Bookmark: NewBookmark(),
+            Bookmark: bookmark ?? NewBookmark(),
             Input: null);
 
-    private WorkflowExecutionState NewWorkflowExecution() =>
+    private WorkflowExecutionState NewWorkflowExecution(WorkflowExecutableIdentity? pinnedExecutable = null) =>
         new(
             WorkflowExecutionId: "wfexec-1",
-            PinnedExecutable: _identity,
+            PinnedExecutable: pinnedExecutable ?? _identity,
             Status: WorkflowExecutionStatus.Suspended,
             SubStatus: null,
             CreatedAt: _now,
@@ -167,22 +221,14 @@ public sealed class RuntimeBookmarkResumeContractTests
     private WorkflowExecutable NewExecutable(
         WorkflowExecutableIdentity? identity = null,
         IReadOnlyCollection<ExecutableNode>? nodes = null,
-        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>? resumeTargets = null) =>
-        new(
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>? resumeTargets = null)
+    {
+        var executableNodes = nodes ?? [NewDeliveryNode()];
+
+        return new(
             Identity: identity ?? _identity,
-            Nodes: nodes ??
-            [
-                new ExecutableNode(
-                    ExecutableNodeId: "node-delivery",
-                    AuthoredActivityId: "activity-delivery",
-                    ActivityType: "Elsa.WaitForDeliveryStatus",
-                    ActivityTypeVersion: "1.0.0",
-                    DescriptorType: "test",
-                    DescriptorPayload: Json("{}"),
-                    InputBindings: new Dictionary<string, JsonElement>(),
-                    OutputCaptures: new Dictionary<string, JsonElement>(),
-                    Metadata: new Dictionary<string, string>())
-            ],
+            Nodes: executableNodes,
+            NodesById: executableNodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal),
             ResumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-target:delivery"] = new(
@@ -194,6 +240,19 @@ public sealed class RuntimeBookmarkResumeContractTests
             CreatedAt: _now,
             PublishedAt: _now,
             CompatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private ExecutableNode NewDeliveryNode() =>
+        new(
+            ExecutableNodeId: "node-delivery",
+            AuthoredActivityId: "activity-delivery",
+            ActivityType: "Elsa.WaitForDeliveryStatus",
+            ActivityTypeVersion: "1.0.0",
+            DescriptorType: "test",
+            DescriptorPayload: Json("{}"),
+            InputBindings: new Dictionary<string, JsonElement>(),
+            OutputCaptures: new Dictionary<string, JsonElement>(),
+            Metadata: new Dictionary<string, string>());
 
     private static JsonElement Json(string json)
     {

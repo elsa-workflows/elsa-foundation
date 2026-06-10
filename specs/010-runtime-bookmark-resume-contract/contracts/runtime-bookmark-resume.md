@@ -36,6 +36,7 @@ The resolver must fail when:
 
 - The executable artifact is not the workflow execution's pinned artifact.
 - The bookmark's resume target ID is missing from the artifact.
+- The resume-target table entry's value does not carry the same resume target ID as its lookup key.
 - The resolved resume target points at a different executable node than the bookmark.
 - The resolved executable node is missing from the artifact.
 

@@ -18,6 +18,7 @@ public enum BookmarkResumeResolutionFailureReason
     WorkflowExecutionMismatch,
     ExecutableArtifactNotPinned,
     ResumeTargetMissing,
+    ResumeTargetIdentityMismatch,
     ResumeTargetNodeMismatch,
     ExecutableNodeMissing
 }
