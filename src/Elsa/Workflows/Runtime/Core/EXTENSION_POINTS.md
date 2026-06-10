@@ -32,6 +32,20 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ## Implementable contributor interfaces
 
+### `IWorkflowRuntimeMiddleware` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (workflow runtime pipeline step).
+- **Signature:** `InvokeAsync(WorkflowRuntimePipelineContext context, WorkflowRuntimeMiddlewareDelegate next)`.
+- **Register:** via `WorkflowRuntimePipelineBuilder.Use<TMiddleware>(slotName, order, name)`.
+- **Usage:** registers workflow execution middleware into stable slots from `RuntimeWorkflowPipelineSlots`. Plans are inspectable through `BuildPlan()`.
+- **Known implementations (shipped):** no-op built-in placeholders for load state, scheduling, checkpoint, and post-commit.
+
+### `IActivityRuntimeMiddleware` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (activity runtime pipeline step).
+- **Signature:** `InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next)`.
+- **Register:** via `ActivityRuntimePipelineBuilder.Use<TMiddleware>(slotName, order, name)`.
+- **Usage:** registers activity execution middleware into stable slots from `RuntimeActivityPipelineSlots`. Plans are inspectable through `BuildPlan()`.
+- **Known implementations (shipped):** no-op built-in placeholders for load state, input evaluation, invoke, output capture, scheduling, checkpoint, and post-commit.
+
 ### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contributor (receives a signal and acts — push pattern).
 - **Signature:** `ValueTask ReceiveSignalAsync(object signal, SignalContext context);`
