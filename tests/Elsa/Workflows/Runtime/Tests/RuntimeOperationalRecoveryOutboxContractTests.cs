@@ -173,6 +173,10 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     public void RecoveryAndOutboxQueries_RejectInvalidLimitsAndRetrySettings()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeRecoveryScanRequest(_now, TimeSpan.Zero, 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeDomainRetryDecision(
+            RuntimeDomainRetryMode.RetryAfter,
+            TimeSpan.Zero,
+            "Back off."));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxQuery(_now, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(-1, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(3, TimeSpan.Zero));

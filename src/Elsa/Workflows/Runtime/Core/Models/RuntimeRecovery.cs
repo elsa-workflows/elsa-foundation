@@ -98,6 +98,9 @@ public sealed class RuntimeDomainRetryDecision
         if (mode == RuntimeDomainRetryMode.RetryAfter && delay is null)
             throw new ArgumentException("RetryAfter decisions require a delay.", nameof(delay));
 
+        if (mode == RuntimeDomainRetryMode.RetryAfter && delay <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(delay), "RetryAfter delay must be greater than zero.");
+
         if (mode != RuntimeDomainRetryMode.RetryAfter && delay is not null)
             throw new ArgumentException("Only RetryAfter decisions can carry a delay.", nameof(delay));
 
