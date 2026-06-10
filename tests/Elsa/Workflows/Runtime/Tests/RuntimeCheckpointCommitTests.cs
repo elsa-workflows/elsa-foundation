@@ -233,7 +233,10 @@ public sealed class RuntimeCheckpointCommitTests
             NewBookmarkChange("bookmark-state-change-id", "bookmark-state-id")
         };
 
-        Assert.Throws<ArgumentException>(() => NewStateChanges(bookmarks: invalidBookmarks));
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(bookmarks: invalidBookmarks));
+
+        Assert.Contains("StateId", exception.Message);
+        Assert.Contains("BookmarkState.BookmarkId", exception.Message);
     }
 
     private RuntimeCheckpointCommit NewCommit(

@@ -52,7 +52,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         string parameterName)
     {
         if (bookmarks.Any(change => change.StateId != change.State.BookmarkId))
-            throw new ArgumentException("Bookmark state change IDs must match their bookmark state IDs.", parameterName);
+            throw new ArgumentException("Bookmark state change StateId must match BookmarkState.BookmarkId.", parameterName);
     }
 
     private static void ValidateReferences(

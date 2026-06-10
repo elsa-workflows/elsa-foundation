@@ -72,5 +72,5 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
         executable.ArtifactHash == pinned.ArtifactHash;
 
     private static string FormatIdentity(WorkflowExecutableIdentity identity) =>
-        $"{identity.ArtifactId}@{identity.ArtifactVersion}/{identity.ArtifactHash}";
+        $"{identity.ArtifactId}@{identity.ArtifactVersion}/{identity.ArtifactHash} ({identity.DefinitionId}/{identity.DefinitionVersionId})";
 }

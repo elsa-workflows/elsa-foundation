@@ -116,7 +116,7 @@ public sealed class RuntimeBookmarkResumeContractTests
     [Fact]
     public void BookmarkResumeResolver_RejectsExecutableThatIsNotPinned()
     {
-        var executable = NewExecutable(_identity with { ArtifactHash = "sha256:other" });
+        var executable = NewExecutable(_identity with { DefinitionVersionId = "orders-v8", ArtifactHash = "sha256:other" });
         var request = NewRequest(executable);
         var resolver = new BookmarkResumeResolver();
 
@@ -127,6 +127,8 @@ public sealed class RuntimeBookmarkResumeContractTests
         Assert.Equal("resume-target:delivery", exception.ResumeTargetId);
         Assert.Contains("sha256:other", exception.Message);
         Assert.Contains("sha256:artifact", exception.Message);
+        Assert.Contains("orders-v8", exception.Message);
+        Assert.Contains("orders-v7", exception.Message);
     }
 
     [Fact]
