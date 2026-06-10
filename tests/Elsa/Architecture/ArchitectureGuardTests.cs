@@ -144,6 +144,16 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Source_scan_strips_interpolated_raw_string_text_but_preserves_interpolation_code()
+    {
+        const string text = "var message = $\"\"\"ActivityNode literal {typeof(ActivityNode).Name}\"\"\";";
+        var sanitized = StripCommentsAndStringLiterals(text);
+
+        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
+        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Source_scan_strips_raw_string_text()
     {
         const string text = "\"\"\"ActivityNode literal\"\"\"";
@@ -212,7 +222,9 @@ public sealed class ArchitectureGuardTests
         var sanitized = new char[text.Length];
         var state = SourceScanState.Code;
         var interpolationReturnState = SourceScanState.Code;
+        var interpolationCloseBraceCount = 1;
         var interpolationDepth = 0;
+        var rawStringDollarCount = 0;
         var rawStringQuoteCount = 0;
 
         for (var i = 0; i < text.Length; i++)
@@ -232,7 +244,8 @@ public sealed class ArchitectureGuardTests
                     sanitized[++i] = ' ';
                     state = SourceScanState.BlockComment;
                     break;
-                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount, out var rawStringDollarCount):
+                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount, out var detectedRawStringDollarCount):
+                    rawStringDollarCount = detectedRawStringDollarCount;
                     for (var j = 0; j < rawStringPrefixLength; j++)
                         sanitized[i + j] = ' ';
                     i += rawStringPrefixLength - 1;
@@ -307,11 +320,21 @@ public sealed class ArchitectureGuardTests
                     for (var j = 0; j < rawStringQuoteCount; j++)
                         sanitized[i + j] = ' ';
                     i += rawStringQuoteCount - 1;
+                    rawStringDollarCount = 0;
                     rawStringQuoteCount = 0;
                     state = SourceScanState.Code;
                     break;
+                case SourceScanState.InterpolatedRawString when HasRun(text, i, '{', rawStringDollarCount):
+                    for (var j = 0; j < rawStringDollarCount; j++)
+                        sanitized[i + j] = '{';
+                    i += rawStringDollarCount - 1;
+                    interpolationDepth = 1;
+                    interpolationCloseBraceCount = rawStringDollarCount;
+                    interpolationReturnState = state;
+                    state = SourceScanState.InterpolationExpression;
+                    break;
                 case SourceScanState.InterpolatedRawString:
-                    sanitized[i] = current;
+                    sanitized[i] = current is '\r' or '\n' ? current : ' ';
                     break;
                 case SourceScanState.InterpolatedString when current == '\\' && next != '\0':
                     sanitized[i] = ' ';
@@ -324,6 +347,7 @@ public sealed class ArchitectureGuardTests
                 case SourceScanState.InterpolatedString when current == '{':
                     sanitized[i] = current;
                     interpolationDepth = 1;
+                    interpolationCloseBraceCount = 1;
                     interpolationReturnState = state;
                     state = SourceScanState.InterpolationExpression;
                     break;
@@ -347,6 +371,7 @@ public sealed class ArchitectureGuardTests
                 case SourceScanState.InterpolatedVerbatimString when current == '{':
                     sanitized[i] = current;
                     interpolationDepth = 1;
+                    interpolationCloseBraceCount = 1;
                     interpolationReturnState = state;
                     state = SourceScanState.InterpolationExpression;
                     break;
@@ -363,11 +388,16 @@ public sealed class ArchitectureGuardTests
                     sanitized[i] = current;
                     interpolationDepth++;
                     break;
-                case SourceScanState.InterpolationExpression when current == '}':
-                    sanitized[i] = current;
+                case SourceScanState.InterpolationExpression when HasRun(text, i, '}', interpolationCloseBraceCount):
+                    for (var j = 0; j < interpolationCloseBraceCount; j++)
+                        sanitized[i + j] = '}';
+                    i += interpolationCloseBraceCount - 1;
                     interpolationDepth--;
                     if (interpolationDepth == 0)
+                    {
+                        interpolationCloseBraceCount = 1;
                         state = interpolationReturnState;
+                    }
                     break;
                 case SourceScanState.InterpolationExpression:
                     sanitized[i] = current;
