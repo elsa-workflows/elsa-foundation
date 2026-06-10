@@ -21,6 +21,7 @@ public sealed class RuntimePipelineContractTests
             .ToArray();
 
         Assert.Equal(RuntimePipelineKind.Workflow, plan.PipelineKind);
+        Assert.Equal(2, schedulingSteps.Length);
         Assert.Equal(typeof(CustomWorkflowSchedulingMiddleware), schedulingSteps[0].MiddlewareType);
         Assert.Equal(typeof(RuntimeWorkflowSchedulingMiddleware), schedulingSteps[1].MiddlewareType);
         Assert.Equal("custom-scheduler", schedulingSteps[0].Name);
@@ -40,6 +41,7 @@ public sealed class RuntimePipelineContractTests
             .ToArray();
 
         Assert.Equal(RuntimePipelineKind.Activity, plan.PipelineKind);
+        Assert.Equal(2, invokeSteps.Length);
         Assert.Equal(typeof(RuntimeActivityInvokeMiddleware), invokeSteps[0].MiddlewareType);
         Assert.Equal(typeof(CustomActivityInvokeMiddleware), invokeSteps[1].MiddlewareType);
         Assert.Equal(10, invokeSteps[1].Order);
