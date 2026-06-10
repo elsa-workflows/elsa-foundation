@@ -123,7 +123,7 @@ public sealed class ArchitectureGuardTests
         var violations = Directory.EnumerateFiles(runtimeCoreDirectory, "*.cs", SearchOption.AllDirectories)
             .SelectMany(file =>
             {
-                var text = File.ReadAllText(file);
+                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
                 return forbiddenPatterns
                     .Where(pattern => text.Contains(pattern, StringComparison.Ordinal))
                     .Select(pattern => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {pattern}");
@@ -186,6 +186,86 @@ public sealed class ArchitectureGuardTests
         return document.Descendants("PackageReference")
             .Select(x => x.Attribute("Include")?.Value)
             .OfType<string>();
+    }
+
+    private static string StripCommentsAndStringLiterals(string text)
+    {
+        var sanitized = new char[text.Length];
+        var state = SourceScanState.Code;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var current = text[i];
+            var next = i + 1 < text.Length ? text[i + 1] : '\0';
+
+            switch (state)
+            {
+                case SourceScanState.Code when current == '/' && next == '/':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.LineComment;
+                    break;
+                case SourceScanState.Code when current == '/' && next == '*':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.BlockComment;
+                    break;
+                case SourceScanState.Code when current == '@' && next == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.VerbatimString;
+                    break;
+                case SourceScanState.Code when current == '"':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.String;
+                    break;
+                case SourceScanState.Code when current == '\'':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Character;
+                    break;
+                case SourceScanState.Code:
+                    sanitized[i] = current;
+                    break;
+                case SourceScanState.LineComment when current is '\r' or '\n':
+                    sanitized[i] = current;
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.BlockComment when current == '*' && next == '/':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.String when current == '\\' && next != '\0':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.String when current == '"':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.VerbatimString when current == '"' && next == '"':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.VerbatimString when current == '"':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                case SourceScanState.Character when current == '\\' && next != '\0':
+                    sanitized[i] = ' ';
+                    sanitized[++i] = ' ';
+                    break;
+                case SourceScanState.Character when current == '\'':
+                    sanitized[i] = ' ';
+                    state = SourceScanState.Code;
+                    break;
+                default:
+                    sanitized[i] = current is '\r' or '\n' ? current : ' ';
+                    break;
+            }
+        }
+
+        return new string(sanitized);
     }
 
     private static string ExpectedProjectPath(ProjectInfo project)
@@ -254,6 +334,16 @@ public sealed class ArchitectureGuardTests
                 normalizedFullPath,
                 Path.GetRelativePath(repoRoot, normalizedFullPath).Replace(Path.DirectorySeparatorChar, '/'));
         }
+    }
+
+    private enum SourceScanState
+    {
+        Code,
+        LineComment,
+        BlockComment,
+        String,
+        VerbatimString,
+        Character
     }
 
     private sealed record SolutionProjectInfo(string Folder, string Path);

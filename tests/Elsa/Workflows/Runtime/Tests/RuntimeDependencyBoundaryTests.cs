@@ -11,6 +11,7 @@ public sealed class RuntimeDependencyBoundaryTests
         var referencedAssemblies = typeof(WorkflowExecutable).Assembly
             .GetReferencedAssemblies()
             .Select(x => x.Name)
+            .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.DoesNotContain("Elsa.Workflows.Design.Core", referencedAssemblies);
