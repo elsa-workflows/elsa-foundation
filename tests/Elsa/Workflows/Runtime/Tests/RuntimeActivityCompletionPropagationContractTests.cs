@@ -148,6 +148,24 @@ public sealed class RuntimeActivityCompletionPropagationContractTests
     }
 
     [Fact]
+    public void CompletionDrainWork_RejectsDuplicateJoinPrerequisites()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new SchedulerCompletionWorkItem(
+            workItemId: "completion-2",
+            workflowExecutionId: "wfexec-1",
+            subjectActivityExecutionId: "actexec-parent",
+            completedChildActivityExecutionId: "actexec-child",
+            branchId: "branch-a",
+            kind: SchedulerCompletionKind.ParentCompletionEvaluation,
+            sequence: 2,
+            enqueuedAt: _now,
+            reason: "ParentCompletionEvaluation",
+            requiredCompletedActivityExecutionIds: ["actexec-child", "actexec-child"]));
+
+        Assert.Contains("duplicates", exception.Message);
+    }
+
+    [Fact]
     public void ParentCompletionEvaluation_RequiresJoinPrerequisitesToIncludeCompletedChild()
     {
         var exception = Assert.Throws<ArgumentException>(() => new SchedulerCompletionWorkItem(

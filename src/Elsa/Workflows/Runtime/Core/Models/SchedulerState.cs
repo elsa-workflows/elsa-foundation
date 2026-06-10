@@ -10,6 +10,11 @@ public sealed record SchedulerState
     private IReadOnlyCollection<SchedulerContinuationWorkItem> _pendingContinuations = [];
     private IReadOnlyCollection<VolatileWaitRegistration> _volatileWaits = [];
 
+    /// <remarks>
+    /// `pendingCompletionWork` is appended to preserve the existing positional constructor order.
+    /// Scheduler implementations still drain `PendingCompletionWork` before unrelated scheduled activity work.
+    /// Prefer named arguments for new call sites.
+    /// </remarks>
     public SchedulerState(
         string workflowExecutionId,
         long version,
@@ -105,11 +110,14 @@ public sealed class SchedulerCompletionWorkItem
         if (kind != SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId is not null)
             throw new ArgumentException("Completed child activity execution ID is only valid for parent completion evaluation work.", nameof(completedChildActivityExecutionId));
 
-        if (completedChildActivityExecutionId == subjectActivityExecutionId)
+        if (kind == SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId == subjectActivityExecutionId)
             throw new ArgumentException("Parent completion evaluation cannot use the same activity execution as parent and completed child.", nameof(completedChildActivityExecutionId));
 
         var outcomeSnapshot = SnapshotNonBlank(outcomeNames, nameof(outcomeNames), "Outcome name");
         var requiredCompletionSnapshot = SnapshotNonBlank(requiredCompletedActivityExecutionIds, nameof(requiredCompletedActivityExecutionIds), "Required completed activity execution ID");
+
+        if (requiredCompletionSnapshot.Distinct(StringComparer.Ordinal).Count() != requiredCompletionSnapshot.Count)
+            throw new ArgumentException("Required completed activity execution IDs cannot contain duplicates.", nameof(requiredCompletedActivityExecutionIds));
 
         if (kind != SchedulerCompletionKind.ParentCompletionEvaluation && requiredCompletionSnapshot.Count > 0)
             throw new ArgumentException("Required completed activity execution IDs are only valid for parent completion evaluation work.", nameof(requiredCompletedActivityExecutionIds));
