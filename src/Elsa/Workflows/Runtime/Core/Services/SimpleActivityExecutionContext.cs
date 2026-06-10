@@ -17,7 +17,7 @@ public sealed class SimpleActivityExecutionContext(
 
     public IExpressionExecutionContext ExpressionExecutionContext => this;
     public IActivity Activity { get; } = activity;
-    public IActivityExecutionContext ParentActivityExecutionContext => this;
+    public IActivityExecutionContext ParentActivityExecutionContext => null!;
     public IMemoryRegister Memory => _memory;
     public IExpressionExecutionContext? ParentContext { get; set; }
     public CancellationToken CancellationToken { get; } = cancellationToken;

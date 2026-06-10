@@ -13,6 +13,6 @@ internal sealed class PublishWorkflowEndpoint(IRequestSender requestSender, ILog
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("workflows/{versionId}/publish"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

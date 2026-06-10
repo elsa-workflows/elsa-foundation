@@ -27,6 +27,8 @@ public sealed class PublishWorkflowRequestHandler(
     private const string LiteralExpressionType = "Literal";
     private const string InputTypeMetadataKey = "typeName";
     private const string ReferenceKeyMetadataKey = "referenceKey";
+    private const string ArtifactHashPrefix = "sha256:";
+    private const int ArtifactIdHashLength = 12;
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
@@ -50,7 +52,7 @@ public sealed class PublishWorkflowRequestHandler(
             .ToArray();
         var startNodeIds = activities.Where(activity => activity.IsStart).Select(activity => activity.NodeId).ToArray();
         var artifactHash = ComputeHash(version, nodes, edges, startNodeIds);
-        var artifactId = $"artifact-{artifactHash["sha256:".Length..("sha256:".Length + 12)]}";
+        var artifactId = CreateArtifactId(artifactHash);
         var now = DateTimeOffset.UtcNow;
 
         var executable = new WorkflowExecutable(
@@ -83,6 +85,15 @@ public sealed class PublishWorkflowRequestHandler(
             executable.Nodes.Count,
             executable.Edges.Count,
             executable.StartNodeIds.ToArray());
+    }
+
+    private static string CreateArtifactId(string artifactHash)
+    {
+        if (!artifactHash.StartsWith(ArtifactHashPrefix, StringComparison.Ordinal) ||
+            artifactHash.Length < ArtifactHashPrefix.Length + ArtifactIdHashLength)
+            throw new ArgumentException($"Artifact hash '{artifactHash}' does not use the expected '{ArtifactHashPrefix}' format.", nameof(artifactHash));
+
+        return $"artifact-{artifactHash[ArtifactHashPrefix.Length..(ArtifactHashPrefix.Length + ArtifactIdHashLength)]}";
     }
 
     private static ExecutableNode CompileNode(ActivityNode activity, ActivityDefinitionVersion activityVersion)
@@ -193,7 +204,7 @@ public sealed class PublishWorkflowRequestHandler(
             throw new ArgumentException($"Sequential publishing does not support fan-out from activity node '{fanOut.Key}'.");
 
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        var current = startNodes[0].NodeId;
+        string? current = startNodes[0].NodeId;
         while (current is not null)
         {
             if (!visited.Add(current))

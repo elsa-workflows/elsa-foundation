@@ -24,7 +24,7 @@ public sealed class SequentialWorkflowExecutor(
 
         try
         {
-            var current = GetStartNode(executable);
+            ExecutableNode? current = GetStartNode(executable);
             var visited = new HashSet<string>(StringComparer.Ordinal);
 
             while (current is not null)

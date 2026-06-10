@@ -13,6 +13,6 @@ internal sealed class Execute(IRequestSender requestSender, ILogger<Execute> log
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("{artifactId}/execute"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }
