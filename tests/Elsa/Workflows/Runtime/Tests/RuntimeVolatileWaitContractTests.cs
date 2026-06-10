@@ -68,6 +68,22 @@ public sealed class RuntimeVolatileWaitContractTests
     }
 
     [Fact]
+    public void SchedulerState_PreservesSixParameterConstructorShape()
+    {
+        var constructor = typeof(SchedulerState).GetConstructor(
+        [
+            typeof(string),
+            typeof(long),
+            typeof(IReadOnlyCollection<ScheduledActivityWorkItem>),
+            typeof(IReadOnlyCollection<SchedulerContinuationWorkItem>),
+            typeof(IReadOnlyCollection<VolatileWaitRegistration>),
+            typeof(IReadOnlyCollection<SchedulerCompletionWorkItem>)
+        ]);
+
+        Assert.NotNull(constructor);
+    }
+
+    [Fact]
     public void SchedulerState_PreservesRecordCopyShape()
     {
         var scheduler = new SchedulerState(

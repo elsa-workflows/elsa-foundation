@@ -124,6 +124,10 @@ public sealed class RuntimeGeneratorContractTests
         var scheduler = new SchedulerState(
             workflowExecutionId: "wfexec-1",
             version: 1,
+            pendingWork: null,
+            pendingContinuations: null,
+            volatileWaits: null,
+            pendingCompletionWork: null,
             activeGenerators: null,
             pendingGeneratedEvents: null);
 
