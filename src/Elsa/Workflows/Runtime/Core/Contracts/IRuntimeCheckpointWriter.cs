@@ -4,5 +4,5 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IRuntimeCheckpointWriter
 {
-    ValueTask WriteAsync(RuntimeCheckpoint checkpoint, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default);
+    ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default);
 }

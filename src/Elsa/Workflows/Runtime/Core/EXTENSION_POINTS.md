@@ -14,9 +14,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ### `IRuntimeCheckpointWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one writer owns persistence of checkpoint envelopes for a runtime composition).
-- **Signature:** `WriteAsync(RuntimeCheckpoint checkpoint, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)`.
-- **Usage:** implemented by runtime persistence providers after the checkpoint state envelope is specified.
-- **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
+- **Signature:** `WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)`.
+- **Usage:** implemented by runtime persistence providers to commit the checkpoint boundary and its atomic state-change envelope.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimePostCommitIntentDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one dispatcher owns delivery of committed outbound runtime intents for a composition).
+- **Signature:** `DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)`.
+- **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
