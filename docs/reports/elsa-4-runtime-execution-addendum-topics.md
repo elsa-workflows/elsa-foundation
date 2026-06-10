@@ -656,6 +656,93 @@ Naming:
 
 Use the precise phrase `wait-dependent post-commit intent` in specifications unless a shorter term is later selected.
 
+### 7. Actor-Style Distributed Workflow Execution
+
+Elsa 4 should adopt actor-style execution semantics, but Elsa Core should not directly depend on one actor framework as its domain model.
+
+Core model:
+
+```text
+WorkflowExecutionId -> one active execution agent/mailbox
+```
+
+The execution agent serializes commands for one workflow execution:
+
+```text
+Start
+ScheduleActivity
+CompleteActivity
+ContinueVolatileWait
+DeliverSignal
+CreateBookmark
+Pause
+Unpause
+Cancel
+Checkpoint
+```
+
+Primary correctness property:
+
+```text
+single-writer workflow state mutation
+```
+
+The execution agent/runtime provider owns activation, message ordering, in-memory state, lifecycle, placement, and provider-specific delivery mechanics.
+
+Elsa-owned durable stores remain the source of truth:
+
+```text
+WorkflowExecutionState
+SchedulerState
+ActivityExecutionState
+BookmarkState
+DurableValueState
+IncidentState
+OperationalState
+PostCommitIntent state
+```
+
+Boundary rule:
+
+Do not make Elsa's durable runtime state equal to an actor framework's persistence model. Actor frameworks can host or route execution agents, but Elsa checkpoint state remains authoritative and portable.
+
+Provider model:
+
+```text
+WorkflowExecutionAgent
+  Single-writer command processor for one workflow execution.
+
+WorkflowExecutionAgentProvider
+  Provider implementation for activation, routing, mailbox delivery, and placement.
+```
+
+Possible providers:
+
+```text
+InProcessMailboxProvider
+DistributedLeaseProvider
+OrleansProvider
+ProtoActorProvider
+DaprActorProvider
+```
+
+Default runtime direction:
+
+The default single-node runtime should still be actor-like: one in-process mailbox per `WorkflowExecutionId`, sequential command processing, and checkpoint store as the durable source of truth. It should not be the Elsa 3 local runtime pattern of relying primarily on locks around parallel mutation.
+
+Implications:
+
+- Distributed locking may still be useful as a provider implementation detail or fallback, but should not be the primary conceptual runtime model.
+- Volatile waits can be held by the active execution agent and resumed by posting a command back to the same mailbox.
+- Pause/unpause, signals, generator emissions, completion propagation, and checkpoint requests become ordered commands.
+- Provider implementations may use framework-specific timers, reminders, placement, or persistence for operational mechanics, but Elsa state contracts stay framework-neutral.
+- A workflow execution can be passivated/deactivated only at a safe checkpoint or provider-defined safe boundary.
+- If provider delivery is at-least-once, commands need idempotency keys or sequence handling at the Elsa command layer.
+
+Rationale:
+
+Actor-style execution gives Elsa the single-writer property needed for deterministic workflow state mutation without making distributed locks the central mental model. Keeping the actor framework behind a provider boundary avoids betting Elsa Core on one actor implementation too early.
+
 ## Plan Impact
 
 The current action plan should be amended after this addendum is reviewed:
@@ -666,4 +753,5 @@ The current action plan should be amended after this addendum is reviewed:
 - Slice 6, input bindings and durable value capture, must account for generator emissions and in-memory waits.
 - Slice 8, operational recovery and outbox, should include pause/resume control-plane boundaries or explicitly defer them to a companion plan.
 - Slice 8, operational recovery and outbox, must include wait-dependent post-commit intents and wait activation/failure policy.
+- Distributed execution planning should add an execution-agent/provider slice or explicitly fold it into the first executable artifact and execution state Speckit.
 - A glossary/terminology report should be created before final Speckit wording freezes public concepts.
