@@ -7,7 +7,6 @@ internal static class JsonSerializerOptionsCache
 {
     internal static readonly JsonSerializerOptions Instance = Create();
 
-
     private static JsonSerializerOptions Create()
     {
         var result = new JsonSerializerOptions
