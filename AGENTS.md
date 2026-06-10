@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Control Plane Contract](specs/018-runtime-control-plane-contract/plan.md)
+Current Speckit plan: [Runtime Wait Registration And Post-Commit Intent Contract](specs/019-runtime-wait-intent-contract/plan.md)
 <!-- SPECKIT END -->

@@ -135,7 +135,8 @@ public enum RuntimeWaitDependentIntentFailurePolicy
     FaultWorkflow,
     CompleteWithFailureResult,
     CancelWait,
-    KeepWaitingManualIntervention
+    KeepWaitingManualIntervention,
+    Compensate
 }
 
 public enum RuntimeStateCategory
