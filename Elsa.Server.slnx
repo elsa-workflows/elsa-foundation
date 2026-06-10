@@ -139,6 +139,7 @@
     <Project Path="src/Groundwork/Core/Groundwork.Core.csproj" />
     <Project Path="src/Groundwork/Documents/Groundwork.Documents.csproj" />
     <Project Path="src/Groundwork/Relational/Groundwork.Relational.csproj" />
+    <Project Path="src/Groundwork/Sqlite/Groundwork.Sqlite.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
@@ -164,5 +165,8 @@
   </Folder>
   <Folder Name="/tests/Groundwork/Groundwork.Tests/">
     <Project Path="tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.Sqlite.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj" />
   </Folder>
 </Solution>

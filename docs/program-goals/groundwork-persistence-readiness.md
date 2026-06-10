@@ -34,10 +34,11 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 ## Active Objectives
 
 1. Complete [Groundwork Persistence Foundation](../../specs/012-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
-2. Prepare [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
-3. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
-4. Keep Elsa validation in an explicit `Elsa.Persistence.Groundwork` bridge.
-5. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
+2. Complete [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
+3. Implement [Groundwork SQLite Document Store](../../specs/014-groundwork-sqlite-document-store/plan.md) as the G2 provider validation slice.
+4. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
+5. Keep Elsa validation in an explicit `Elsa.Persistence.Groundwork` bridge.
+6. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
 
 ## Linked Surfaces
 
@@ -47,13 +48,16 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork roadmap slices](../../specs/012-groundwork-persistence-foundation/contracts/roadmap-slices.md)
 - [Groundwork Core Manifest And Planner Kernel spec](../../specs/013-groundwork-core-manifest-planner/spec.md)
 - [Groundwork Core Manifest And Planner Kernel plan](../../specs/013-groundwork-core-manifest-planner/plan.md)
+- [Groundwork SQLite Document Store spec](../../specs/014-groundwork-sqlite-document-store/spec.md)
+- [Groundwork SQLite Document Store plan](../../specs/014-groundwork-sqlite-document-store/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
 ## Current Roadmap Notes
 
 - G0 defines the product and planning boundary only.
-- G1 should add generic Groundwork core/planner packages and tests before any Elsa store migration.
+- G1 adds generic Groundwork core/planner packages and tests before any Elsa store migration.
+- G2 adds the first provider-backed portable document store using SQLite.
 - G3 should validate one low-risk Elsa module before broad provider expansion continues.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
 
