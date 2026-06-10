@@ -25,7 +25,7 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
         var firstKey = $"alpha-{Guid.NewGuid():N}";
         var secondKey = $"beta-{Guid.NewGuid():N}";
 
-        await harness.AssertIndexTargetsAsync("by-key", "physicalized.by-key");
+        await harness.AssertIndexTargetsAsync("by-key", "physicalized.by_x002d_key");
 
         var saved = await harness.Store.SaveAsync(new SaveDocumentRequest(
             "configurationDocument",
@@ -115,8 +115,8 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
                 .SingleAsync();
             var physicalized = document.GetValue("physicalized").AsBsonDocument;
             return (
-                physicalized.GetValue("by-key").AsString,
-                physicalized.GetValue("by-category").AsString,
+                physicalized.GetValue("by_x002d_key").AsString,
+                physicalized.GetValue("by_x002d_category").AsString,
                 document.GetValue("version").ToInt64());
         }
 

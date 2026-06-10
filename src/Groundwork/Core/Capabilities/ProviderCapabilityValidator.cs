@@ -1,5 +1,6 @@
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Core.Validation;
 
 namespace Groundwork.Core.Capabilities;
@@ -52,8 +53,35 @@ public sealed class ProviderCapabilityValidator
                 $"storageUnits.{unit.Identity}.concurrency"));
         }
 
+        ValidateMaterializationOperations(unit, capabilities, diagnostics);
+
         foreach (var index in unit.Indexes)
             ValidateIndex(unit, index, capabilities, diagnostics);
+    }
+
+    private static void ValidateMaterializationOperations(StorageUnit unit, ProviderCapabilityReport capabilities, List<GroundworkDiagnostic> diagnostics)
+    {
+        foreach (var operation in RequiredMaterializationOperations(unit))
+        {
+            if (capabilities.SupportedMaterializationOperations.Contains(operation))
+                continue;
+
+            diagnostics.Add(GroundworkDiagnostic.Error(
+                "GW-CAP-011",
+                $"Provider does not support materialization operation '{operation}' required by storage unit '{unit.Identity.Value}'.",
+                $"storageUnits.{unit.Identity}.materialization"));
+        }
+    }
+
+    private static IEnumerable<MaterializationOperationKind> RequiredMaterializationOperations(StorageUnit unit)
+    {
+        yield return MaterializationOperationKind.CreateStorageUnit;
+
+        if (unit.Indexes.Count != 0)
+            yield return MaterializationOperationKind.CreateIndex;
+
+        if (PhysicalizationProjection.EligibleFields(unit).Count != 0)
+            yield return MaterializationOperationKind.CreateOptimizedProjection;
     }
 
     private static void ValidateIndex(StorageUnit unit, IndexDeclaration index, ProviderCapabilityReport capabilities, List<GroundworkDiagnostic> diagnostics)

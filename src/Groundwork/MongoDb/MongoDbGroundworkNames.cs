@@ -9,5 +9,5 @@ internal static class MongoDbGroundworkNames
 
     public static string CollectionName(StorageUnit unit) => $"groundwork_{unit.Identity.Value}";
 
-    public static string PhysicalizedFieldName(PhysicalizedFieldPlan field) => field.Name.Replace('.', '_');
+    public static string PhysicalizedFieldName(PhysicalizedFieldPlan field) => PhysicalizationNameEncoder.Encode(field.Name);
 }

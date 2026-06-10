@@ -5,9 +5,9 @@ namespace Groundwork.Relational.Physicalization;
 
 public static class RelationalPhysicalizationNames
 {
-    public static string TableName(StorageUnit unit) => $"groundwork_physicalized_{Sanitize(unit.Identity.Value)}";
+    public static string TableName(StorageUnit unit) => $"groundwork_physicalized_{PhysicalizationNameEncoder.Encode(unit.Identity.Value)}";
 
-    public static string ColumnName(PhysicalizedFieldPlan field) => $"p_{Sanitize(field.Name)}";
+    public static string ColumnName(PhysicalizedFieldPlan field) => $"p_{PhysicalizationNameEncoder.Encode(field.Name)}";
 
     public static string IndexName(StorageUnit unit, PhysicalizedFieldPlan field, bool unique)
     {
@@ -15,9 +15,4 @@ public static class RelationalPhysicalizationNames
         return $"{prefix}_{TableName(unit)}_{ColumnName(field)}";
     }
 
-    private static string Sanitize(string value)
-    {
-        var characters = value.Select(character => char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '_');
-        return string.Concat(characters);
-    }
 }

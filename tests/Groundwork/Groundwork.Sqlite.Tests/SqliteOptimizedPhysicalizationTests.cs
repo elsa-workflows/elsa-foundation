@@ -97,7 +97,7 @@ public sealed class SqliteOptimizedPhysicalizationTests
         {
             await using var command = Connection.CreateCommand();
             command.CommandText = $"""
-                SELECT p_by_key, p_by_category, document_version
+                SELECT p_by_x002d_key, p_by_x002d_category, document_version
                 FROM {RelationalPhysicalizationNames.TableName(Unit)}
                 WHERE document_kind = $kind AND document_id = $id;
                 """;

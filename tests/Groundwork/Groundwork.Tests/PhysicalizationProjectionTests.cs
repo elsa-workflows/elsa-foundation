@@ -1,6 +1,7 @@
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Physicalization;
+using Groundwork.Relational.Physicalization;
 using Xunit;
 
 namespace Groundwork.Tests;
@@ -51,5 +52,26 @@ public sealed class PhysicalizationProjectionTests
         var fields = PhysicalizationProjection.EligibleFields(optimized);
 
         Assert.DoesNotContain(fields, field => field.Name == "by-compound");
+    }
+
+    [Fact]
+    public void PhysicalizedProviderNamesDoNotCollideForDistinctIndexIdentities()
+    {
+        var unit = SampleManifests.MetadataManifest().StorageUnits.Single();
+        var first = new PhysicalizedFieldPlan("by-key", "key", IndexValueKind.Keyword, false, true);
+        var second = new PhysicalizedFieldPlan("by_key", "key", IndexValueKind.Keyword, false, true);
+        var third = new PhysicalizedFieldPlan("ByKey", "key", IndexValueKind.Keyword, false, true);
+
+        var names = new[]
+        {
+            RelationalPhysicalizationNames.ColumnName(first),
+            RelationalPhysicalizationNames.ColumnName(second),
+            RelationalPhysicalizationNames.ColumnName(third),
+            RelationalPhysicalizationNames.IndexName(unit, first, false),
+            RelationalPhysicalizationNames.IndexName(unit, second, false),
+            RelationalPhysicalizationNames.IndexName(unit, third, false)
+        };
+
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
 }

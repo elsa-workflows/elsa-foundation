@@ -72,4 +72,23 @@ public sealed class ProviderCapabilityTests
         Assert.False(result.IsCompatible);
         Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-001");
     }
+
+    [Fact]
+    public void UnsupportedOptimizedProjectionMaterializationBlocksCompatibility()
+    {
+        var manifest = SampleManifests.MetadataManifest();
+        var optimizedUnit = manifest.StorageUnits.Single() with { Physicalization = PhysicalizationPolicy.Optimized };
+        var capabilities = SampleManifests.PortableCapabilities() with
+        {
+            SupportedMaterializationOperations =
+                Enum.GetValues<MaterializationOperationKind>()
+                    .Where(operation => operation != MaterializationOperationKind.CreateOptimizedProjection)
+                    .ToHashSet()
+        };
+
+        var result = _validator.Validate(manifest with { StorageUnits = [optimizedUnit] }, capabilities);
+
+        Assert.False(result.IsCompatible);
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-011");
+    }
 }
