@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Volatile Wait Contract](specs/015-runtime-volatile-wait-contract/plan.md)
+Current Speckit plan: [Runtime Completion Propagation Contract](specs/016-runtime-completion-propagation-contract/plan.md)
 <!-- SPECKIT END -->

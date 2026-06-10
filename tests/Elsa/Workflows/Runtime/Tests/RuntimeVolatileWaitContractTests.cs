@@ -60,6 +60,7 @@ public sealed class RuntimeVolatileWaitContractTests
             volatileWaits: null);
 
         Assert.Empty(scheduler.PendingWork);
+        Assert.Empty(scheduler.PendingCompletionWork);
         Assert.Empty(scheduler.PendingContinuations);
         Assert.Empty(scheduler.VolatileWaits);
     }
@@ -75,6 +76,7 @@ public sealed class RuntimeVolatileWaitContractTests
 
         Assert.Equal("wfexec-1", advanced.WorkflowExecutionId);
         Assert.Equal(2, advanced.Version);
+        Assert.Empty(advanced.PendingCompletionWork);
         Assert.Empty(advanced.PendingContinuations);
     }
 
@@ -101,11 +103,13 @@ public sealed class RuntimeVolatileWaitContractTests
         var copied = scheduler with
         {
             PendingWork = pendingWork,
+            PendingCompletionWork = null!,
             PendingContinuations = null!
         };
         pendingWork.Clear();
 
         Assert.Single(copied.PendingWork);
+        Assert.Empty(copied.PendingCompletionWork);
         Assert.Empty(copied.PendingContinuations);
     }
 

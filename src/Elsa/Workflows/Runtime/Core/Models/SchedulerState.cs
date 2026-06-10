@@ -6,6 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed record SchedulerState
 {
     private IReadOnlyCollection<ScheduledActivityWorkItem> _pendingWork = [];
+    private IReadOnlyCollection<SchedulerCompletionWorkItem> _pendingCompletionWork = [];
     private IReadOnlyCollection<SchedulerContinuationWorkItem> _pendingContinuations = [];
     private IReadOnlyCollection<VolatileWaitRegistration> _volatileWaits = [];
 
@@ -14,13 +15,15 @@ public sealed record SchedulerState
         long version,
         IReadOnlyCollection<ScheduledActivityWorkItem>? pendingWork = null,
         IReadOnlyCollection<SchedulerContinuationWorkItem>? pendingContinuations = null,
-        IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits = null)
+        IReadOnlyCollection<VolatileWaitRegistration>? volatileWaits = null,
+        IReadOnlyCollection<SchedulerCompletionWorkItem>? pendingCompletionWork = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
         WorkflowExecutionId = workflowExecutionId;
         Version = version;
         PendingWork = pendingWork ?? [];
+        PendingCompletionWork = pendingCompletionWork ?? [];
         PendingContinuations = pendingContinuations ?? [];
         VolatileWaits = volatileWaits ?? [];
     }
@@ -31,20 +34,28 @@ public sealed record SchedulerState
     public IReadOnlyCollection<ScheduledActivityWorkItem> PendingWork
     {
         get => _pendingWork;
-        init => _pendingWork = (value ?? []).ToArray();
+        init => _pendingWork = Snapshot(value);
+    }
+
+    public IReadOnlyCollection<SchedulerCompletionWorkItem> PendingCompletionWork
+    {
+        get => _pendingCompletionWork;
+        init => _pendingCompletionWork = Snapshot(value);
     }
 
     public IReadOnlyCollection<SchedulerContinuationWorkItem> PendingContinuations
     {
         get => _pendingContinuations;
-        init => _pendingContinuations = (value ?? []).ToArray();
+        init => _pendingContinuations = Snapshot(value);
     }
 
     public IReadOnlyCollection<VolatileWaitRegistration> VolatileWaits
     {
         get => _volatileWaits;
-        init => _volatileWaits = (value ?? []).ToArray();
+        init => _volatileWaits = Snapshot(value);
     }
+
+    private static IReadOnlyCollection<T> Snapshot<T>(IReadOnlyCollection<T>? values) => (values ?? []).ToArray();
 }
 
 public sealed record ScheduledActivityWorkItem(
@@ -57,6 +68,96 @@ public sealed record ScheduledActivityWorkItem(
     string? IterationId,
     DateTimeOffset EnqueuedAt,
     string Reason);
+
+public sealed class SchedulerCompletionWorkItem
+{
+    public SchedulerCompletionWorkItem(
+        string workItemId,
+        string workflowExecutionId,
+        string subjectActivityExecutionId,
+        string? completedChildActivityExecutionId,
+        string? branchId,
+        SchedulerCompletionKind kind,
+        long sequence,
+        DateTimeOffset enqueuedAt,
+        string reason,
+        IReadOnlyCollection<string>? outcomeNames = null,
+        IReadOnlyCollection<string>? requiredCompletedActivityExecutionIds = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(subjectActivityExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (completedChildActivityExecutionId is not null && string.IsNullOrWhiteSpace(completedChildActivityExecutionId))
+            throw new ArgumentException("Completed child activity execution ID cannot be blank when provided.", nameof(completedChildActivityExecutionId));
+
+        if (branchId is not null && string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID cannot be blank when provided.", nameof(branchId));
+
+        if (sequence < 0)
+            throw new ArgumentOutOfRangeException(nameof(sequence), "Completion work sequence cannot be negative.");
+
+        if (kind == SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId is null)
+            throw new ArgumentException("Parent completion evaluation work requires a completed child activity execution ID.", nameof(completedChildActivityExecutionId));
+
+        if (kind != SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId is not null)
+            throw new ArgumentException("Completed child activity execution ID is only valid for parent completion evaluation work.", nameof(completedChildActivityExecutionId));
+
+        if (completedChildActivityExecutionId == subjectActivityExecutionId)
+            throw new ArgumentException("Parent completion evaluation cannot use the same activity execution as parent and completed child.", nameof(completedChildActivityExecutionId));
+
+        var outcomeSnapshot = SnapshotNonBlank(outcomeNames, nameof(outcomeNames), "Outcome name");
+        var requiredCompletionSnapshot = SnapshotNonBlank(requiredCompletedActivityExecutionIds, nameof(requiredCompletedActivityExecutionIds), "Required completed activity execution ID");
+
+        if (kind != SchedulerCompletionKind.ParentCompletionEvaluation && requiredCompletionSnapshot.Count > 0)
+            throw new ArgumentException("Required completed activity execution IDs are only valid for parent completion evaluation work.", nameof(requiredCompletedActivityExecutionIds));
+
+        if (kind == SchedulerCompletionKind.ParentCompletionEvaluation
+            && requiredCompletionSnapshot.Count > 0
+            && !requiredCompletionSnapshot.Contains(completedChildActivityExecutionId!, StringComparer.Ordinal))
+            throw new ArgumentException("Required completed activity execution IDs must include the completed child activity execution ID.", nameof(requiredCompletedActivityExecutionIds));
+
+        WorkItemId = workItemId;
+        WorkflowExecutionId = workflowExecutionId;
+        SubjectActivityExecutionId = subjectActivityExecutionId;
+        CompletedChildActivityExecutionId = completedChildActivityExecutionId;
+        BranchId = branchId;
+        Kind = kind;
+        Sequence = sequence;
+        EnqueuedAt = enqueuedAt;
+        Reason = reason;
+        OutcomeNames = outcomeSnapshot;
+        RequiredCompletedActivityExecutionIds = requiredCompletionSnapshot;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+    }
+
+    public string WorkItemId { get; }
+    public string WorkflowExecutionId { get; }
+    public string SubjectActivityExecutionId { get; }
+    public string? CompletedChildActivityExecutionId { get; }
+    public string? BranchId { get; }
+    public SchedulerCompletionKind Kind { get; }
+    public long Sequence { get; }
+    public DateTimeOffset EnqueuedAt { get; }
+    public string Reason { get; }
+    public IReadOnlyCollection<string> OutcomeNames { get; }
+    public IReadOnlyCollection<string> RequiredCompletedActivityExecutionIds { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    private static IReadOnlyCollection<string> SnapshotNonBlank(IReadOnlyCollection<string>? values, string parameterName, string label)
+    {
+        if (values is null)
+            return [];
+
+        var snapshot = values.ToArray();
+        if (snapshot.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException($"{label} cannot be blank.", parameterName);
+
+        return snapshot;
+    }
+}
 
 public sealed class SchedulerContinuationWorkItem
 {
@@ -273,6 +374,13 @@ public enum SchedulerContinuationKind
     VolatileWaitCancelled,
     VolatileWaitExpired,
     VolatileWaitFaulted
+}
+
+public enum SchedulerCompletionKind
+{
+    ActivityCompleted,
+    ParentCompletionEvaluation,
+    ContinuationScheduling
 }
 
 public enum VolatileWaitHostShutdownBehavior
