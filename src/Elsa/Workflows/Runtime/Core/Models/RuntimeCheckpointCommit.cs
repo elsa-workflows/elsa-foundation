@@ -24,11 +24,11 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
-        IReadOnlyCollection<RuntimeStateChangeReference> operational)
+        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational)
     {
         ValidateBookmarks(bookmarks, nameof(bookmarks));
         ValidateIncidents(incidents, nameof(incidents));
-        ValidateReferences(operational, RuntimeStateCategory.Operational, nameof(operational));
+        ValidateOperational(operational, nameof(operational));
 
         WorkflowExecution = workflowExecution;
         Scheduler = scheduler;
@@ -45,7 +45,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<BookmarkState>> Bookmarks { get; }
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
-    public IReadOnlyCollection<RuntimeStateChangeReference> Operational { get; }
+    public IReadOnlyCollection<RuntimeStateChange<OperationalState>> Operational { get; }
 
     private static void ValidateBookmarks(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
@@ -55,21 +55,20 @@ public sealed class RuntimeCheckpointStateChangeSet
             throw new ArgumentException("Bookmark state change StateId must match BookmarkState.BookmarkId.", parameterName);
     }
 
-    private static void ValidateReferences(
-        IReadOnlyCollection<RuntimeStateChangeReference> references,
-        RuntimeStateCategory expectedCategory,
-        string parameterName)
-    {
-        if (references.Any(reference => reference.Category != expectedCategory))
-            throw new ArgumentException($"All state references must use the {expectedCategory} category.", parameterName);
-    }
-
     private static void ValidateIncidents(
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
         string parameterName)
     {
         if (incidents.Any(change => change.StateId != change.State.IncidentId))
             throw new ArgumentException("Incident state change StateId must match IncidentState.IncidentId.", parameterName);
+    }
+
+    private static void ValidateOperational(
+        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational,
+        string parameterName)
+    {
+        if (operational.Any(change => change.StateId != change.State.OperationalStateId))
+            throw new ArgumentException("Operational state change StateId must match OperationalState.OperationalStateId.", parameterName);
     }
 }
 
@@ -79,24 +78,65 @@ public sealed record RuntimeStateChange<TState>(
     TState State,
     IReadOnlyDictionary<string, string> Metadata);
 
-public sealed record RuntimeStateChangeReference(
-    string StateId,
-    RuntimeStateCategory Category,
-    RuntimeStateChangeOperation Operation,
-    string WorkflowExecutionId,
-    string? ActivityExecutionId,
-    string? ResumeTargetId,
-    IReadOnlyDictionary<string, string> Metadata);
+public sealed class RuntimePostCommitIntent
+{
+    public RuntimePostCommitIntent(
+        string intentId,
+        string workflowExecutionId,
+        string kind,
+        DateTimeOffset recordedAt,
+        string? activityExecutionId,
+        string? idempotencyKey,
+        JsonElement? payload,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? dependsOnWaitRegistrationId = null,
+        RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
 
-public sealed record RuntimePostCommitIntent(
-    string IntentId,
-    string WorkflowExecutionId,
-    string Kind,
-    DateTimeOffset RecordedAt,
-    string? ActivityExecutionId,
-    string? IdempotencyKey,
-    JsonElement? Payload,
-    IReadOnlyDictionary<string, string> Metadata);
+        if (dependsOnWaitRegistrationId is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
+            throw new ArgumentException("A wait registration dependency cannot be blank.", nameof(dependsOnWaitRegistrationId));
+
+        if (waitFailurePolicy is not null && dependsOnWaitRegistrationId is null)
+            throw new ArgumentException("A wait failure policy requires a wait registration dependency.", nameof(dependsOnWaitRegistrationId));
+
+        if (dependsOnWaitRegistrationId is not null && waitFailurePolicy is null)
+            throw new ArgumentException("A wait-dependent post-commit intent requires a wait failure policy.", nameof(waitFailurePolicy));
+
+        IntentId = intentId;
+        WorkflowExecutionId = workflowExecutionId;
+        Kind = kind;
+        RecordedAt = recordedAt;
+        ActivityExecutionId = activityExecutionId;
+        IdempotencyKey = idempotencyKey;
+        Payload = payload?.Clone();
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
+        WaitFailurePolicy = waitFailurePolicy;
+    }
+
+    public string IntentId { get; }
+    public string WorkflowExecutionId { get; }
+    public string Kind { get; }
+    public DateTimeOffset RecordedAt { get; }
+    public string? ActivityExecutionId { get; }
+    public string? IdempotencyKey { get; }
+    public JsonElement? Payload { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+    public string? DependsOnWaitRegistrationId { get; }
+    public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
+    public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+}
+
+public enum RuntimeWaitDependentIntentFailurePolicy
+{
+    FaultWorkflow,
+    CompleteWithFailureResult,
+    CancelWait,
+    KeepWaitingManualIntervention
+}
 
 public enum RuntimeStateCategory
 {

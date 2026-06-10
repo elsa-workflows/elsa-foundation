@@ -24,6 +24,24 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
 - **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
+### `IRuntimePostCommitOutboxStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns durable post-commit outbox state for a runtime composition).
+- **Signature:** `SavePendingAsync(RuntimePostCommitOutboxItem item, ...)`, `GetDeliverableAsync(RuntimePostCommitOutboxQuery query, ...)`, `RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, ...)`.
+- **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimeRecoveryScanner` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one scanner identifies interrupted workflow executions for a runtime composition).
+- **Signature:** `ScanAsync(RuntimeRecoveryScanRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** provider implementations inspect operational state such as leases and heartbeats and return recovery candidates that requeue from the last checkpoint without invoking domain retry policy.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
+- **Signature:** `Decide(RuntimeDomainRetryRequest request)`.
+- **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
 ### `IBookmarkResumeResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one resolver owns durable bookmark-to-artifact resume resolution for a runtime composition).
 - **Signature:** `Resolve(BookmarkResumeRequest request)`.
