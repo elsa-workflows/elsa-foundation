@@ -46,9 +46,16 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
                 return DocumentStoreWriteResult.ConcurrencyConflict;
         }
 
-        await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
-        await InsertIndexesAsync(unit, request.Id, request.ContentJson, transaction, cancellationToken);
-        await RefreshPhysicalizedAsync(unit, request.Id, version, request.ContentJson, transaction, cancellationToken);
+        try
+        {
+            await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
+            await InsertIndexesAsync(unit, request.Id, request.ContentJson, transaction, cancellationToken);
+            await RefreshPhysicalizedAsync(unit, request.Id, version, request.ContentJson, transaction, cancellationToken);
+        }
+        catch (DbException exception) when (dialect.IsUniqueIndexException(exception))
+        {
+            return DocumentStoreWriteResult.ConcurrencyConflict;
+        }
 
         await transaction.CommitAsync(cancellationToken);
 

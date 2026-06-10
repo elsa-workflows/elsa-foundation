@@ -75,12 +75,13 @@ public sealed class SqliteDocumentStoreTests
             "1.0.0",
             """{"key":"alpha","category":"system"}"""));
 
-        await Assert.ThrowsAsync<SqliteException>(() =>
-            harness.Store.SaveAsync(new SaveDocumentRequest(
-                "configurationDocument",
-                "doc-2",
-                "1.0.0",
-                """{"key":"alpha","category":"system"}""")));
+        var duplicate = await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            "doc-2",
+            "1.0.0",
+            """{"key":"alpha","category":"system"}"""));
+
+        Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, duplicate.Status);
     }
 
     [Fact]

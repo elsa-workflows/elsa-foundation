@@ -29,4 +29,7 @@ internal sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDia
     public override bool IsDuplicateDocumentKeyException(DbException exception) =>
         exception is SqlException { Number: 2627 or 2601 } sqlException &&
         sqlException.Message.Contains("pk_groundwork_documents", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsUniqueIndexException(DbException exception) =>
+        exception is SqlException { Number: 2627 or 2601 };
 }

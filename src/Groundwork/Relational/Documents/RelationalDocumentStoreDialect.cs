@@ -12,6 +12,8 @@ public class RelationalDocumentStoreDialect
 
     public virtual bool IsDuplicateDocumentKeyException(DbException exception) => false;
 
+    public virtual bool IsUniqueIndexException(DbException exception) => false;
+
     public virtual string InsertDocumentSql => $$"""
         INSERT INTO groundwork_documents
         (document_kind, id, schema_version, version, content_json, created_utc, updated_utc)

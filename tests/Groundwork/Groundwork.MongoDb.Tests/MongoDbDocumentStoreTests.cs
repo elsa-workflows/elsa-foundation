@@ -86,12 +86,13 @@ public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
             "1.0.0",
             $$"""{"key":"{{key}}","category":"system"}"""));
 
-        await Assert.ThrowsAnyAsync<MongoWriteException>(() =>
-            harness.Store.SaveAsync(new SaveDocumentRequest(
-                "configurationDocument",
-                NewId(),
-                "1.0.0",
-                $$"""{"key":"{{key}}","category":"system"}""")));
+        var duplicate = await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            NewId(),
+            "1.0.0",
+            $$"""{"key":"{{key}}","category":"system"}"""));
+
+        Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, duplicate.Status);
     }
 
     [Fact]

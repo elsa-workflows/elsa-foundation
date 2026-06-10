@@ -34,7 +34,7 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             {
                 await collection.InsertOneAsync(document, cancellationToken: cancellationToken);
             }
-            catch (MongoWriteException exception) when (IsDuplicateDocumentId(exception))
+            catch (MongoWriteException exception) when (IsDuplicateKey(exception))
             {
                 return DocumentStoreWriteResult.ConcurrencyConflict;
             }
@@ -44,7 +44,16 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             var filter = request.ExpectedVersion is null
                 ? Builders<BsonDocument>.Filter.Eq("_id", request.Id)
                 : Builders<BsonDocument>.Filter.Eq("_id", request.Id) & Builders<BsonDocument>.Filter.Eq("version", request.ExpectedVersion.Value);
-            var result = await collection.ReplaceOneAsync(filter, document, cancellationToken: cancellationToken);
+            ReplaceOneResult result;
+            try
+            {
+                result = await collection.ReplaceOneAsync(filter, document, cancellationToken: cancellationToken);
+            }
+            catch (MongoWriteException exception) when (IsDuplicateKey(exception))
+            {
+                return DocumentStoreWriteResult.ConcurrencyConflict;
+            }
+
             if (request.ExpectedVersion is not null && result.MatchedCount == 0)
                 return await LoadCoreAsync(unit, request.Id, cancellationToken) is null
                     ? DocumentStoreWriteResult.NotFound
@@ -196,7 +205,6 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             _ => value
         };
 
-    private static bool IsDuplicateDocumentId(MongoWriteException exception) =>
-        exception.WriteError?.Code == 11000 &&
-        exception.WriteError.Message.Contains("index: _id_", StringComparison.OrdinalIgnoreCase);
+    private static bool IsDuplicateKey(MongoWriteException exception) =>
+        exception.WriteError?.Code == 11000;
 }

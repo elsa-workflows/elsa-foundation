@@ -9,4 +9,8 @@ internal sealed class SqliteDocumentStoreDialect : RelationalDocumentStoreDialec
     public override bool IsDuplicateDocumentKeyException(DbException exception) =>
         exception is SqliteException { SqliteErrorCode: 19 } sqliteException &&
         sqliteException.Message.Contains("UNIQUE constraint failed: groundwork_documents.document_kind, groundwork_documents.id", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsUniqueIndexException(DbException exception) =>
+        exception is SqliteException { SqliteErrorCode: 19 } sqliteException &&
+        sqliteException.Message.Contains("UNIQUE constraint failed:", StringComparison.OrdinalIgnoreCase);
 }

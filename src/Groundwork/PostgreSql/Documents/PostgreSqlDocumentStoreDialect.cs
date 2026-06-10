@@ -8,4 +8,7 @@ internal sealed class PostgreSqlDocumentStoreDialect : RelationalDocumentStoreDi
 {
     public override bool IsDuplicateDocumentKeyException(DbException exception) =>
         exception is PostgresException { SqlState: "23505", ConstraintName: "groundwork_documents_pkey" };
+
+    public override bool IsUniqueIndexException(DbException exception) =>
+        exception is PostgresException { SqlState: "23505" };
 }

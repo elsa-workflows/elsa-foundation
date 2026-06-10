@@ -85,8 +85,9 @@ public sealed class GroundworkRuntimeEntityStoreTests
 
         await harness.Store.SaveInstanceAsync(definition, "customer-1", """{"email":"one@example.com","segment":"vip"}""");
 
-        await Assert.ThrowsAsync<SqliteException>(() =>
-            harness.Store.SaveInstanceAsync(definition, "customer-2", """{"email":"one@example.com","segment":"vip"}"""));
+        var duplicate = await harness.Store.SaveInstanceAsync(definition, "customer-2", """{"email":"one@example.com","segment":"vip"}""");
+
+        Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, duplicate.Status);
     }
 
     private sealed class RuntimeEntityHarness : IAsyncDisposable

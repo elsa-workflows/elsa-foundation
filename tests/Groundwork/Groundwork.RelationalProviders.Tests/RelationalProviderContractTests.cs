@@ -1,4 +1,3 @@
-using System.Data.Common;
 using System.Text.Json;
 using Groundwork.Documents.Store;
 using Xunit;
@@ -92,12 +91,13 @@ public abstract class RelationalProviderContractTests
             "1.0.0",
             $$"""{"key":"{{key}}","category":"system"}"""));
 
-        await Assert.ThrowsAnyAsync<DbException>(() =>
-            harness.Store.SaveAsync(new SaveDocumentRequest(
-                "configurationDocument",
-                NewId(),
-                "1.0.0",
-                $$"""{"key":"{{key}}","category":"system"}""")));
+        var duplicate = await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            NewId(),
+            "1.0.0",
+            $$"""{"key":"{{key}}","category":"system"}"""));
+
+        Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, duplicate.Status);
     }
 
     [Fact]
