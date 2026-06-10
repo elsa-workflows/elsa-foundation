@@ -30,7 +30,7 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ResumeTargetMissing,
-                $"Resume target '{bookmark.ResumeTargetId}' is not declared by executable artifact '{executable.Identity.ArtifactId}'.");
+                $"Resume target '{bookmark.ResumeTargetId}' is not declared by executable artifact '{FormatIdentity(executable.Identity)}'.");
 
         if (resumeTarget.ResumeTargetId != bookmark.ResumeTargetId)
             throw NewException(
@@ -48,7 +48,7 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ExecutableNodeMissing,
-                $"Executable node '{bookmark.ExecutableNodeId}' for bookmark '{bookmark.BookmarkId}' is missing from executable artifact '{executable.Identity.ArtifactId}'.");
+                $"Executable node '{bookmark.ExecutableNodeId}' for bookmark '{bookmark.BookmarkId}' is missing from executable artifact '{FormatIdentity(executable.Identity)}'.");
 
         return new BookmarkResumeResolution(bookmark, executableNode, resumeTarget, request.Input);
     }

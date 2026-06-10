@@ -140,6 +140,7 @@ public sealed class RuntimeBookmarkResumeContractTests
 
         Assert.Equal(BookmarkResumeResolutionFailureReason.ResumeTargetMissing, exception.Reason);
         Assert.Contains("Resume target 'resume-target:delivery'", exception.Message);
+        Assert.Contains("sha256:artifact", exception.Message);
     }
 
     [Fact]
@@ -191,6 +192,7 @@ public sealed class RuntimeBookmarkResumeContractTests
         var exception = Assert.Throws<BookmarkResumeResolutionException>(() => resolver.Resolve(request));
 
         Assert.Equal(BookmarkResumeResolutionFailureReason.ExecutableNodeMissing, exception.Reason);
+        Assert.Contains("sha256:artifact", exception.Message);
     }
 
     private BookmarkResumeRequest NewRequest(WorkflowExecutable executable, BookmarkState? bookmark = null) =>
