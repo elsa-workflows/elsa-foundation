@@ -20,9 +20,11 @@ public sealed record WorkflowExecutable
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
 
-        Nodes = nodes.ToArray();
+        var nodeSnapshot = nodes.ToArray();
+
+        Nodes = Array.AsReadOnly(nodeSnapshot);
         Identity = identity;
-        NodesById = Nodes.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
+        NodesById = nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
         ResumeTargets = resumeTargets;
         CreatedAt = createdAt;
         PublishedAt = publishedAt;

@@ -78,6 +78,7 @@ public sealed class RuntimeBookmarkResumeContractTests
 
         Assert.Same(node, executable.NodesById["node-delivery"]);
         Assert.Same(node, Assert.Single(executable.Nodes));
+        Assert.IsNotType<ExecutableNode[]>(executable.Nodes);
         Assert.Throws<ArgumentException>(() => NewExecutable(nodes: [NewDeliveryNode(), NewDeliveryNode()]));
     }
 
