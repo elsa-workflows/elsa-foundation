@@ -18,11 +18,15 @@ public abstract class ElsaRequestHandlerEndpoint<TRequest, TResponse>(IRequestSe
         {
             ThrowError(e, 400);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             logger.LogError(e, "Unexpected error occurred when handling request '{type}'", typeof(TRequest));
 
-            ThrowError("Unexpected error occurred", 400);
+            ThrowError("Unexpected error occurred", 500);
         }
     }
 }
