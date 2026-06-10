@@ -78,6 +78,37 @@ public sealed class RuntimeVolatileWaitContractTests
         Assert.Empty(advanced.PendingContinuations);
     }
 
+    [Fact]
+    public void SchedulerState_RecordCopyNormalizesCollectionAssignments()
+    {
+        var scheduler = new SchedulerState(
+            workflowExecutionId: "wfexec-1",
+            version: 1);
+        var pendingWork = new List<ScheduledActivityWorkItem>
+        {
+            new(
+                WorkItemId: "work-1",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-1",
+                ActivityExecutionId: null,
+                SchedulingActivityExecutionId: null,
+                BranchId: null,
+                IterationId: null,
+                EnqueuedAt: _now,
+                Reason: "test")
+        };
+
+        var copied = scheduler with
+        {
+            PendingWork = pendingWork,
+            PendingContinuations = null!
+        };
+        pendingWork.Clear();
+
+        Assert.Single(copied.PendingWork);
+        Assert.Empty(copied.PendingContinuations);
+    }
+
     [Theory]
     [InlineData(SchedulerContinuationKind.VolatileWaitCompleted)]
     [InlineData(SchedulerContinuationKind.VolatileWaitCancelled)]

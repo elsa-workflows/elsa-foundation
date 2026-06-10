@@ -5,6 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed record SchedulerState
 {
+    private IReadOnlyCollection<ScheduledActivityWorkItem> _pendingWork = [];
+    private IReadOnlyCollection<SchedulerContinuationWorkItem> _pendingContinuations = [];
+    private IReadOnlyCollection<VolatileWaitRegistration> _volatileWaits = [];
+
     public SchedulerState(
         string workflowExecutionId,
         long version,
@@ -23,9 +27,24 @@ public sealed record SchedulerState
 
     public string WorkflowExecutionId { get; init; }
     public long Version { get; init; }
-    public IReadOnlyCollection<ScheduledActivityWorkItem> PendingWork { get; init; }
-    public IReadOnlyCollection<SchedulerContinuationWorkItem> PendingContinuations { get; init; }
-    public IReadOnlyCollection<VolatileWaitRegistration> VolatileWaits { get; init; }
+
+    public IReadOnlyCollection<ScheduledActivityWorkItem> PendingWork
+    {
+        get => _pendingWork;
+        init => _pendingWork = (value ?? []).ToArray();
+    }
+
+    public IReadOnlyCollection<SchedulerContinuationWorkItem> PendingContinuations
+    {
+        get => _pendingContinuations;
+        init => _pendingContinuations = (value ?? []).ToArray();
+    }
+
+    public IReadOnlyCollection<VolatileWaitRegistration> VolatileWaits
+    {
+        get => _volatileWaits;
+        init => _volatileWaits = (value ?? []).ToArray();
+    }
 }
 
 public sealed record ScheduledActivityWorkItem(
