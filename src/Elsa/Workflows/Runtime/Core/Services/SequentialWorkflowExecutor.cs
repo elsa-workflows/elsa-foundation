@@ -108,7 +108,7 @@ public sealed class SequentialWorkflowExecutor(
             if (!binding.Metadata.TryGetValue(InputTypeMetadataKey, out var typeName))
                 throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is missing '{InputTypeMetadataKey}' metadata.");
 
-            var type = Type.GetType(typeName, throwOnError: true)!;
+            var type = ResolveType(typeName, node.ExecutableNodeId, inputName);
             var memoryReference = new LiteralMemoryBlockReference($"{node.ExecutableNodeId}:{inputName}");
             var argumentType = typeof(InputArgument<>).MakeGenericType(type);
             var argument = (InputArgument)Activator.CreateInstance(argumentType, memoryReference)!;
@@ -117,6 +117,29 @@ public sealed class SequentialWorkflowExecutor(
         }
 
         return inputs;
+    }
+
+    private static Type ResolveType(string typeName, string nodeId, string inputName)
+    {
+        var type = Type.GetType(typeName, throwOnError: false);
+        if (type is not null)
+            return type;
+
+        var delimiterIndex = typeName.IndexOf(',', StringComparison.Ordinal);
+        var fullName = delimiterIndex >= 0 ? typeName[..delimiterIndex].Trim() : typeName.Trim();
+        var assemblyName = delimiterIndex >= 0 ? typeName[(delimiterIndex + 1)..].Split(',')[0].Trim() : null;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (!string.IsNullOrWhiteSpace(assemblyName) && !StringComparer.Ordinal.Equals(assembly.GetName().Name, assemblyName))
+                continue;
+
+            type = assembly.GetType(fullName, throwOnError: false);
+            if (type is not null)
+                return type;
+        }
+
+        throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares type '{typeName}', but that type could not be loaded.");
     }
 
     private static void SeedInputMemory(SimpleActivityExecutionContext context, IReadOnlyList<MaterializedInput> inputs)

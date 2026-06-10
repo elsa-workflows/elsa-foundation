@@ -134,9 +134,17 @@ public sealed class PublishWorkflowRequestHandler(
             literalValue: literal,
             metadata: new Dictionary<string, string>
             {
-                [InputTypeMetadataKey] = inputType.AssemblyQualifiedName!,
+                [InputTypeMetadataKey] = GetRuntimeTypeName(inputType),
                 [ReferenceKeyMetadataKey] = inputDefinition.ReferenceKey
             });
+    }
+
+    private static string GetRuntimeTypeName(Type type)
+    {
+        var fullName = type.FullName
+            ?? throw new ArgumentException($"Input type '{type}' does not have a stable full name.", nameof(type));
+
+        return $"{fullName}, {type.Assembly.GetName().Name}";
     }
 
     private static object? ConvertLiteral(string? value, Type targetType)

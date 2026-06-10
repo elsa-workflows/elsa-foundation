@@ -10,13 +10,17 @@ namespace Elsa.Activities.Runtime.Services;
 /// to it. No type resolution or argument binding lives here — those are kind-specific and owned by
 /// each <see cref="IActivityConstructor"/>.
 /// </summary>
-public sealed class ActivityFactory(
-    IActivityConstructorRegistry registry,
-    IEnumerable<IActivityConstructor>? constructors = null)
-    : IActivityFactory
+public sealed class ActivityFactory : IActivityFactory
 {
-    private readonly Lock _constructorRegistrationGate = new();
-    private bool _constructorsRegistered;
+    private readonly IActivityConstructorRegistry _registry;
+
+    public ActivityFactory(
+        IActivityConstructorRegistry registry,
+        IEnumerable<IActivityConstructor>? constructors = null)
+    {
+        registry.AddAll(constructors ?? []);
+        _registry = registry;
+    }
 
     public ValueTask<IActivity> Create(
         string descriptorType,
@@ -25,24 +29,7 @@ public sealed class ActivityFactory(
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken = default)
     {
-        EnsureContributedConstructorsRegistered();
-
-        var constructor = registry.Resolve(descriptorType);
+        var constructor = _registry.Resolve(descriptorType);
         return constructor.Construct(payload, inputs, outputs, cancellationToken);
-    }
-
-    private void EnsureContributedConstructorsRegistered()
-    {
-        if (_constructorsRegistered)
-            return;
-
-        lock (_constructorRegistrationGate)
-        {
-            if (_constructorsRegistered)
-                return;
-
-            registry.AddAll(constructors ?? []);
-            _constructorsRegistered = true;
-        }
     }
 }

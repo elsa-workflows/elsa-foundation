@@ -108,7 +108,7 @@ public sealed class SequentialWorkflowExecutorTests
                     inputName: "Text",
                     source: RuntimeInputBindingSource.Literal,
                     literalValue: JsonSerializer.SerializeToElement(text),
-                    metadata: new Dictionary<string, string> { ["typeName"] = typeof(string).AssemblyQualifiedName! })
+                    metadata: new Dictionary<string, string> { ["typeName"] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" })
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

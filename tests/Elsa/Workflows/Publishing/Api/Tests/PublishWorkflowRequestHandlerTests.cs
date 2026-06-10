@@ -46,7 +46,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(1, view.EdgeCount);
         Assert.Equal(["write-one"], view.StartNodeIds);
         Assert.Equal("one", executable.NodesById["write-one"].InputBindings["Text"].LiteralValue!.Value.GetString());
-        Assert.Equal(typeof(string).AssemblyQualifiedName, executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
+        Assert.Equal($"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}", executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
     }
 
     [Fact]
