@@ -16,7 +16,7 @@ public static class ActivityDefinitionVersionQueryExtensions
             cancellationToken
         );
 
-        return result ?? throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
+        return result ?? throw new ArgumentException($"Activity definition version with id '{versionId}' does not exist");
     }
 
     /// <summary>

@@ -125,6 +125,8 @@ public sealed class PublishWorkflowRequestHandlerTests
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
         Assert.Contains("missing-activity", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Activity definition version", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Workflow definition version", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
