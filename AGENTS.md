@@ -159,6 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Current Speckit plan: [Runtime Executable Artifact And Execution State Contracts](specs/007-runtime-executable-state-contracts/plan.md)
 <!-- SPECKIT END -->

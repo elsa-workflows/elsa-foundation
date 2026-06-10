@@ -19,7 +19,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Authorization.Policy | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Workflows.Runtime.Http (2.3.10) |
-| Microsoft.AspNetCore.OpenApi | 10.0.8 | Elsa.Server (10.0.8) |
+| Microsoft.AspNetCore.OpenApi | 10.0.9 | Elsa.Server (10.0.9) |
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
@@ -36,7 +36,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.Extensions.Logging.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events (10.0.8)<br>Elsa.Expressions (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Mediator (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Tasks.Schedules (10.0.8)<br>Elsa.Workflows.Design.Reconciliation (10.0.8)<br>Elsa3.Activities.Design.Import (10.0.8) |
 | Microsoft.Extensions.Options | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Http.JavaScript (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Workflows.Design.JavaScript (10.0.8)<br>Elsa.Workflows.Design.Validations (10.0.8) |
 | Microsoft.Extensions.Primitives | 10.0.8 | Elsa.Caching.Core (10.0.8) |
-| Microsoft.NET.Test.Sdk | 17.11.1 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1) |
+| Microsoft.NET.Test.Sdk | 17.11.1 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1)<br>Elsa.Workflows.Runtime.Tests (17.11.1) |
 | Newtonsoft.Json | 13.0.4 | Elsa.Serialization.Newtonsoft (13.0.4) |
 | Nuplane | 0.0.8 | Elsa.Server (0.0.8) |
 | Nuplane.Admin | 0.0.8 | Elsa.Server (0.0.8) |
@@ -46,9 +46,9 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | System.CommandLine | 2.0.8 | Elsa.Persistence.EFCore (2.0.8) |
 | System.Reflection.MetadataLoadContext | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8) |
 | Ulid | 1.4.1 | Elsa.Persistence.EFCore (1.4.1) |
-| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2) |
-| xunit | 2.9.0 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0) |
-| xunit.runner.visualstudio | 2.8.2 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2) |
+| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2)<br>Elsa.Workflows.Runtime.Tests (6.0.2) |
+| xunit | 2.9.0 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0)<br>Elsa.Workflows.Runtime.Tests (2.9.0) |
+| xunit.runner.visualstudio | 2.8.2 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2)<br>Elsa.Workflows.Runtime.Tests (2.8.2) |
 
 ## Direct Package References
 
@@ -150,7 +150,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.FastEndpoints | 0.0.24 |
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.8 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.9 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.EntityFrameworkCore.Design | 10.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane | 0.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane.Admin | 0.0.8 |
@@ -184,6 +184,10 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Authorization | 10.0.8 |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | CShells.Abstractions | 0.0.24 |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | xunit | 2.9.0 |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | CShells.Abstractions | 0.0.24 |
