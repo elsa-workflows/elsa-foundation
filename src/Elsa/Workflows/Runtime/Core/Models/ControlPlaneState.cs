@@ -19,7 +19,7 @@ public sealed class ControlPlaneState
 
         var activeHoldSnapshot = SnapshotHolds(activeHolds, nameof(activeHolds));
         var releasedHoldSnapshot = SnapshotHolds(releasedHolds, nameof(releasedHolds));
-        ValidateUniqueHoldIds(activeHoldSnapshot.Concat(releasedHoldSnapshot), nameof(activeHolds));
+        ValidateUniqueHoldIds(activeHoldSnapshot.Concat(releasedHoldSnapshot));
 
         if (workflowExecutionId is not null)
         {
@@ -58,7 +58,7 @@ public sealed class ControlPlaneState
         return snapshot;
     }
 
-    private static void ValidateUniqueHoldIds(IEnumerable<ControlPlaneHold> holds, string parameterName)
+    private static void ValidateUniqueHoldIds(IEnumerable<ControlPlaneHold> holds)
     {
         var duplicateHoldId = holds
             .GroupBy(hold => hold.HoldId, StringComparer.Ordinal)
@@ -66,7 +66,7 @@ public sealed class ControlPlaneState
             ?.Key;
 
         if (duplicateHoldId is not null)
-            throw new ArgumentException($"Control-plane hold ID '{duplicateHoldId}' cannot appear in more than one hold collection.", parameterName);
+            throw new ArgumentException($"Control-plane hold ID '{duplicateHoldId}' cannot appear in more than one hold collection.");
     }
 
     private static void ValidateWorkflowScopedHolds(string workflowExecutionId, IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)

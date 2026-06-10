@@ -27,7 +27,9 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Equal("wfexec-1", state.WorkflowExecutionId);
         Assert.Single(state.ActiveHolds);
         Assert.Equal("RuntimeControlPlane", state.Metadata["Owner"]);
-        Assert.DoesNotContain(nameof(ControlPlaneState), typeof(WorkflowExecutionState).GetProperties().Select(property => property.PropertyType.Name));
+        Assert.DoesNotContain(
+            typeof(WorkflowExecutionState).GetProperties(),
+            property => property.PropertyType.ToString().Contains(nameof(ControlPlaneState), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -133,6 +135,7 @@ public sealed class RuntimeControlPlaneContractTests
             releasedHolds: [releasedHold]));
 
         Assert.Contains("more than one hold collection", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(exception.ParamName);
     }
 
     [Fact]
