@@ -12,8 +12,7 @@ public static class RuntimeActivityPipelineSlots
     public const string Checkpoint = nameof(Checkpoint);
     public const string PostCommit = nameof(PostCommit);
 
-    public static readonly IReadOnlyList<RuntimePipelineSlotDefinition> All =
-    [
+    public static readonly IReadOnlyList<RuntimePipelineSlotDefinition> All = Array.AsReadOnly<RuntimePipelineSlotDefinition>([
         new(LoadState, 100),
         new(InputEvaluation, 200),
         new(Invoke, 300),
@@ -21,5 +20,5 @@ public static class RuntimeActivityPipelineSlots
         new(Scheduling, 500),
         new(Checkpoint, 600),
         new(PostCommit, 700)
-    ];
+    ]);
 }

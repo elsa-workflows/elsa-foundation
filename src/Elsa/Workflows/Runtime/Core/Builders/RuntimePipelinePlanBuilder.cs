@@ -18,7 +18,7 @@ public abstract class RuntimePipelinePlanBuilder
 
     public RuntimePipelineKind PipelineKind { get; }
     public IReadOnlyList<RuntimePipelineSlotDefinition> Slots { get; }
-    public IReadOnlyList<RuntimePipelineMiddlewareRegistration> Registrations => _registrations;
+    public IReadOnlyList<RuntimePipelineMiddlewareRegistration> Registrations => _registrations.AsReadOnly();
 
     public RuntimePipelinePlan BuildPlan()
     {
@@ -36,7 +36,7 @@ public abstract class RuntimePipelinePlanBuilder
             .ThenBy(step => step.RegistrationIndex)
             .ToArray();
 
-        return new RuntimePipelinePlan(PipelineKind, steps);
+        return new RuntimePipelinePlan(PipelineKind, Array.AsReadOnly(steps));
     }
 
     protected void AddRegistration(

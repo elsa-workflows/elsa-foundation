@@ -86,6 +86,18 @@ public sealed class RuntimePipelineContractTests
         Assert.NotEqual(workflowContextParameter, activityContextParameter);
     }
 
+    [Fact]
+    public void PipelineContracts_DoNotExposeMutableCollectionImplementations()
+    {
+        var workflowBuilder = new WorkflowRuntimePipelineBuilder();
+        var plan = workflowBuilder.BuildPlan();
+
+        Assert.False(RuntimeWorkflowPipelineSlots.All is RuntimePipelineSlotDefinition[]);
+        Assert.False(RuntimeActivityPipelineSlots.All is RuntimePipelineSlotDefinition[]);
+        Assert.False(workflowBuilder.Registrations is List<RuntimePipelineMiddlewareRegistration>);
+        Assert.False(plan.Steps is RuntimePipelinePlanStep[]);
+    }
+
     private static Type InvokeContextType<TMiddleware>(string methodName)
     {
         var method = typeof(TMiddleware).GetMethod(methodName);

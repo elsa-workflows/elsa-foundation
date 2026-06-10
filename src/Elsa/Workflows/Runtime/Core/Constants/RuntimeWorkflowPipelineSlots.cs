@@ -9,11 +9,10 @@ public static class RuntimeWorkflowPipelineSlots
     public const string Checkpoint = nameof(Checkpoint);
     public const string PostCommit = nameof(PostCommit);
 
-    public static readonly IReadOnlyList<RuntimePipelineSlotDefinition> All =
-    [
+    public static readonly IReadOnlyList<RuntimePipelineSlotDefinition> All = Array.AsReadOnly<RuntimePipelineSlotDefinition>([
         new(LoadState, 100),
         new(Scheduling, 200),
         new(Checkpoint, 300),
         new(PostCommit, 400)
-    ];
+    ]);
 }
