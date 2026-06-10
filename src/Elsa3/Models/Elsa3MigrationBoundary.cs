@@ -114,7 +114,7 @@ public sealed class Elsa3MigrationResult<T>
         if (snapshot.Any(diagnostic => diagnostic is null))
             throw new ArgumentException("Migration diagnostics cannot contain null entries.", nameof(diagnostics));
 
-        return snapshot;
+        return Array.AsReadOnly(snapshot);
     }
 }
 

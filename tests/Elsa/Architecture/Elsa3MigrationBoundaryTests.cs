@@ -105,6 +105,7 @@ public sealed class Elsa3MigrationBoundaryTests
         var failure = Elsa3MigrationResult<object>.Failure(error);
 
         Assert.False(failure.Succeeded);
+        Assert.IsType<ReadOnlyCollection<Elsa3MigrationDiagnostic>>(failure.Diagnostics);
         Assert.Same(error, Assert.Single(failure.Diagnostics));
     }
 
