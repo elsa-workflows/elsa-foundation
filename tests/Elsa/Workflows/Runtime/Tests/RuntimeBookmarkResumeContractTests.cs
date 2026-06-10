@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -79,6 +80,9 @@ public sealed class RuntimeBookmarkResumeContractTests
         Assert.Same(node, executable.NodesById["node-delivery"]);
         Assert.Same(node, Assert.Single(executable.Nodes));
         Assert.IsNotType<ExecutableNode[]>(executable.Nodes);
+        Assert.IsType<ReadOnlyDictionary<string, ExecutableNode>>(executable.NodesById);
+        Assert.IsType<ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>>(executable.ResumeTargets);
+        Assert.IsType<ReadOnlyDictionary<string, string>>(executable.CompatibilityMetadata);
         Assert.Throws<ArgumentException>(() => NewExecutable(nodes: [NewDeliveryNode(), NewDeliveryNode()]));
     }
 

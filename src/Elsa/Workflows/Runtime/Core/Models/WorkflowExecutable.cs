@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -5,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Runtime-owned executable artifact produced by compile/publish and consumed by workflow execution.
 /// </summary>
-public sealed record WorkflowExecutable
+public sealed class WorkflowExecutable
 {
     public WorkflowExecutable(
         WorkflowExecutableIdentity identity,
@@ -24,11 +25,11 @@ public sealed record WorkflowExecutable
 
         Nodes = Array.AsReadOnly(nodeSnapshot);
         Identity = identity;
-        NodesById = nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal);
-        ResumeTargets = resumeTargets;
+        NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
+        ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         CreatedAt = createdAt;
         PublishedAt = publishedAt;
-        CompatibilityMetadata = compatibilityMetadata;
+        CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
     }
 
     public WorkflowExecutableIdentity Identity { get; }
