@@ -16,7 +16,6 @@ using Elsa.Mediator;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
-using Elsa.Server.Shells;
 using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
@@ -76,8 +75,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             options.EnablePathRouting = true;
         });
 });
-
-builder.Services.AddHostedService<ShellRegisteredTaskRunnerHostedService>();
 
 var app = builder.Build();
 

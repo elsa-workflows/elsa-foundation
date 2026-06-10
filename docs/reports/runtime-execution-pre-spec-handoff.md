@@ -222,6 +222,8 @@ Integration testing remains constitutionally out of scope for the current framew
 
 ## Candidate Speckit Starting Scope
 
+Update after execution-layer brainstorm: the recommended starting scope below is now refined by [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md) and [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md). Treat those newer reports as the active source for the first runtime execution Speckit candidate.
+
 Recommended first architect-owned Speckit unit:
 
 `Runtime execution seam and runnable artifact contract`
