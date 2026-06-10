@@ -1,6 +1,7 @@
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Materialization;
+using Groundwork.Core.Physicalization;
 using Groundwork.Core.Validation;
 
 namespace Groundwork.Documents.Planning;
@@ -74,6 +75,19 @@ public sealed class DocumentManifestPlanner(
                 MaterializationOperationKind.CreateIndex,
                 $"{unit.Identity.Value}.{index.Identity}",
                 new Dictionary<string, string> { ["shape"] = "document-index" });
+        }
+
+        foreach (var field in PhysicalizationProjection.EligibleFields(unit))
+        {
+            yield return new MaterializationOperation(
+                MaterializationOperationKind.CreateOptimizedProjection,
+                $"{unit.Identity.Value}.{field.Name}",
+                new Dictionary<string, string>
+                {
+                    ["shape"] = "optimized-projection",
+                    ["path"] = field.Path,
+                    ["unique"] = field.IsUnique.ToString()
+                });
         }
     }
 

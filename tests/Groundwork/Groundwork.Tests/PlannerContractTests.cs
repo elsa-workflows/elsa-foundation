@@ -1,5 +1,6 @@
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
+using Groundwork.Core.Manifests;
 using Groundwork.Core.Validation;
 using Groundwork.Core.Workloads;
 using Groundwork.Documents.Planning;
@@ -49,6 +50,24 @@ public sealed class PlannerContractTests
         Assert.Equal(["find-by-key", "list-by-category"], document.Queries.Select(query => query.Name));
         Assert.Contains(plan.Operations, operation => operation.Kind == MaterializationOperationKind.RecordSchemaHistory);
         Assert.Equal("configuration.documents", plan.SchemaHistory.ManifestIdentity.Value);
+    }
+
+    [Fact]
+    public void DocumentPlanAddsOptimizedProjectionOperationsForOptimizedUnits()
+    {
+        var manifest = SampleManifests.MetadataManifest();
+        var optimizedUnit = manifest.StorageUnits.Single() with
+        {
+            Physicalization = PhysicalizationPolicy.Optimized
+        };
+
+        var plan = NewDocumentPlanner().Plan(
+            manifest with { StorageUnits = [optimizedUnit] },
+            SampleManifests.PortableCapabilities());
+
+        Assert.Contains(plan.Operations, operation =>
+            operation.Kind == MaterializationOperationKind.CreateOptimizedProjection &&
+            operation.Target == "configurationDocument.by-key");
     }
 
     [Fact]

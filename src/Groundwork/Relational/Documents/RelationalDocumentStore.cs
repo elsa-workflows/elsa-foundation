@@ -3,7 +3,9 @@ using System.Data.Common;
 using System.Text.Json;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Documents.Store;
+using Groundwork.Relational.Physicalization;
 
 namespace Groundwork.Relational.Documents;
 
@@ -33,6 +35,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
 
         await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
         await InsertIndexesAsync(unit, request.Id, request.ContentJson, transaction, cancellationToken);
+        await RefreshPhysicalizedAsync(unit, request.Id, version, request.ContentJson, transaction, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
@@ -55,7 +58,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
 
     public async Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
-        _ = GetUnit(request.DocumentKind);
+        var unit = GetUnit(request.DocumentKind);
         await EnsureOpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -67,6 +70,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             return DocumentStoreWriteResult.ConcurrencyConflict;
 
         await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
+        await DeletePhysicalizedAsync(unit, request.Id, transaction, cancellationToken);
         await using var command = CreateCommand(dialect.DeleteDocumentSql, transaction);
         AddParameter(command, "kind", request.DocumentKind);
         AddParameter(command, "id", request.Id);
@@ -86,7 +90,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
         await EnsureOpenAsync(cancellationToken);
-        await using var command = CreateCommand(dialect.QueryByIndexSql);
+        await using var command = CreateQueryCommand(unit, query);
         AddParameter(command, "kind", query.DocumentKind);
         AddParameter(command, "index", query.IndexName);
         AddParameter(command, "value", query.Value);
@@ -99,6 +103,17 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             documents.Add(ReadEnvelope(reader));
 
         return documents;
+    }
+
+    private DbCommand CreateQueryCommand(StorageUnit unit, DocumentStoreQuery query)
+    {
+        var physicalizedField = PhysicalizationProjection.EligibleFields(unit).SingleOrDefault(field => field.Name == query.IndexName);
+        if (physicalizedField is null)
+            return CreateCommand(dialect.QueryByIndexSql);
+
+        var table = RelationalPhysicalizationNames.TableName(unit);
+        var column = RelationalPhysicalizationNames.ColumnName(physicalizedField);
+        return CreateCommand(dialect.QueryByPhysicalizedSql(table, column));
     }
 
     private async Task InsertDocumentAsync(
@@ -171,6 +186,50 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             AddParameter(command, "isUnique", dialect.Boolean(index.IsUnique));
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+    }
+
+    private async Task RefreshPhysicalizedAsync(
+        StorageUnit unit,
+        string id,
+        long version,
+        string contentJson,
+        DbTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var fields = PhysicalizationProjection.EligibleFields(unit);
+        if (fields.Count == 0)
+            return;
+
+        await DeletePhysicalizedAsync(unit, id, transaction, cancellationToken);
+
+        using var document = JsonDocument.Parse(contentJson);
+        var table = RelationalPhysicalizationNames.TableName(unit);
+        var columnNames = fields.Select(RelationalPhysicalizationNames.ColumnName).ToList();
+        await using var command = CreateCommand(dialect.InsertPhysicalizedSql(table, columnNames), transaction);
+        AddParameter(command, "kind", unit.Identity.Value);
+        AddParameter(command, "id", id);
+        AddParameter(command, "version", version);
+
+        for (var index = 0; index < fields.Count; index++)
+        {
+            var value = TryGetPropertyPath(document.RootElement, fields[index].Path, out var element)
+                ? NormalizeValue(element)
+                : null;
+            AddParameter(command, $"physicalized{index}", value is null ? DBNull.Value : value);
+        }
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task DeletePhysicalizedAsync(StorageUnit unit, string id, DbTransaction transaction, CancellationToken cancellationToken)
+    {
+        if (PhysicalizationProjection.EligibleFields(unit).Count == 0)
+            return;
+
+        await using var command = CreateCommand(dialect.DeletePhysicalizedSql(RelationalPhysicalizationNames.TableName(unit)), transaction);
+        AddParameter(command, "kind", unit.Identity.Value);
+        AddParameter(command, "id", id);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private DbCommand CreateCommand(string commandText, DbTransaction? transaction = null)

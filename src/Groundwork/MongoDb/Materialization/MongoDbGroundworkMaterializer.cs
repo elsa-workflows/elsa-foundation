@@ -1,5 +1,6 @@
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -50,7 +51,11 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
     {
         foreach (var index in unit.Indexes.Where(index => index.Fields.Count == 1))
         {
-            var keys = Builders<BsonDocument>.IndexKeys.Ascending($"content.{index.Fields[0].Path}");
+            var physicalizedField = PhysicalizationProjection.EligibleFields(unit).SingleOrDefault(field => field.Name == index.Identity);
+            var path = physicalizedField is null
+                ? $"content.{index.Fields[0].Path}"
+                : $"physicalized.{MongoDbGroundworkNames.PhysicalizedFieldName(physicalizedField)}";
+            var keys = Builders<BsonDocument>.IndexKeys.Ascending(path);
             var options = new CreateIndexOptions
             {
                 Name = index.Identity,

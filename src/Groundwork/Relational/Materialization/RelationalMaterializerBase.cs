@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 
 namespace Groundwork.Relational.Materialization;
 
@@ -13,6 +14,8 @@ public abstract class RelationalMaterializerBase(DbConnection connection)
 
     protected abstract string InsertSchemaHistorySql { get; }
 
+    protected abstract IReadOnlyList<string> CreateOptimizedProjectionStatements(StorageUnit unit, IReadOnlyList<PhysicalizedFieldPlan> fields);
+
     public async Task MaterializeAsync(StorageManifest manifest, ProviderIdentity provider, CancellationToken cancellationToken = default)
     {
         await EnsureOpenAsync(cancellationToken);
@@ -20,6 +23,16 @@ public abstract class RelationalMaterializerBase(DbConnection connection)
 
         foreach (var statement in SchemaStatements)
             await ExecuteAsync(statement, transaction, cancellationToken);
+
+        foreach (var unit in manifest.StorageUnits)
+        {
+            var fields = PhysicalizationProjection.EligibleFields(unit);
+            if (fields.Count == 0)
+                continue;
+
+            foreach (var statement in CreateOptimizedProjectionStatements(unit, fields))
+                await ExecuteAsync(statement, transaction, cancellationToken);
+        }
 
         await using var command = CreateCommand(InsertSchemaHistorySql, transaction);
         AddParameter(command, "manifestId", manifest.Identity.Value);

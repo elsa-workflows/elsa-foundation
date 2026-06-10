@@ -11,4 +11,14 @@ public sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDiale
         ORDER BY d.id
         OFFSET {{Parameter("skip")}} ROWS FETCH NEXT {{Parameter("take")}} ROWS ONLY;
         """;
+
+    public override string QueryByPhysicalizedSql(string tableName, string columnName) => $$"""
+        SELECT d.document_kind, d.id, d.schema_version, d.version, d.content_json, d.created_utc, d.updated_utc
+        FROM groundwork_documents d
+        INNER JOIN {{tableName}} p
+            ON p.document_kind = d.document_kind AND p.document_id = d.id
+        WHERE p.document_kind = {{Parameter("kind")}} AND p.{{columnName}} = {{Parameter("value")}}
+        ORDER BY d.id
+        OFFSET {{Parameter("skip")}} ROWS FETCH NEXT {{Parameter("take")}} ROWS ONLY;
+        """;
 }

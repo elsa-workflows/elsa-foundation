@@ -51,5 +51,6 @@ public enum MaterializationOperationKind
 {
     CreateStorageUnit,
     CreateIndex,
+    CreateOptimizedProjection,
     RecordSchemaHistory
 }

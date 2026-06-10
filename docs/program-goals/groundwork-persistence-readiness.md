@@ -40,9 +40,10 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 5. Complete [Groundwork SQL Server And PostgreSQL Providers](../../specs/016-groundwork-relational-providers/plan.md) as the G4 relational provider slice.
 6. Complete [Groundwork MongoDB Provider](../../specs/017-groundwork-mongodb-provider/plan.md) as the G5 document-provider slice.
 7. Complete [Groundwork Runtime-Defined Entities](../../specs/018-groundwork-runtime-entities/plan.md) as the G6 runtime-defined business data slice.
-8. Implement G7 physicalization and performance validation as the next provider-optimization slice.
-9. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
-10. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
+8. Complete [Groundwork Physicalization And Performance](../../specs/019-groundwork-physicalization-performance/plan.md) as the G7 provider-optimization slice.
+9. Implement G8 runtime evaluation and hardening as the final go/no-go slice.
+10. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
+11. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
 
 ## Linked Surfaces
 
@@ -62,6 +63,8 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork MongoDB Provider plan](../../specs/017-groundwork-mongodb-provider/plan.md)
 - [Groundwork Runtime-Defined Entities spec](../../specs/018-groundwork-runtime-entities/spec.md)
 - [Groundwork Runtime-Defined Entities plan](../../specs/018-groundwork-runtime-entities/plan.md)
+- [Groundwork Physicalization And Performance spec](../../specs/019-groundwork-physicalization-performance/spec.md)
+- [Groundwork Physicalization And Performance plan](../../specs/019-groundwork-physicalization-performance/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
@@ -74,7 +77,8 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - G4 adds SQL Server and PostgreSQL providers against the same portable document-store contract.
 - G5 adds MongoDB native collections and declared indexes against the portable document-store contract.
 - G6 adds an Elsa bridge runtime-defined entity mapping over portable document storage.
-- G7 should prove opt-in physicalization/performance paths without making physical tables the runtime-defined entity default.
+- G7 proves opt-in physicalization paths without making physical tables the runtime-defined entity default.
+- G8 should make runtime-store go/no-go decisions using benchmark, concurrency, retry, and operational evidence.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
 
 ## Drift / Review Notes

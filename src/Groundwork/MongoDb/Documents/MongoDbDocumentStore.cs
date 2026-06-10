@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Documents.Store;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -25,7 +26,7 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
         var now = DateTimeOffset.UtcNow;
         var version = existing is null ? 1 : existing.Version + 1;
         var createdAt = existing?.CreatedAt ?? now;
-        var document = CreateDocument(request, version, createdAt, now);
+        var document = CreateDocument(unit, request, version, createdAt, now);
 
         if (existing is null)
         {
@@ -86,8 +87,11 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
         var collection = GetCollection(unit);
-        var path = $"content.{index.Fields[0].Path}";
-        var filter = Builders<BsonDocument>.Filter.Eq(path, ToBsonValue(index, query.Value));
+        var physicalizedField = PhysicalizationProjection.EligibleFields(unit).SingleOrDefault(field => field.Name == query.IndexName);
+        var path = physicalizedField is null
+            ? $"content.{index.Fields[0].Path}"
+            : $"physicalized.{MongoDbGroundworkNames.PhysicalizedFieldName(physicalizedField)}";
+        var filter = Builders<BsonDocument>.Filter.Eq(path, ToBsonValue(index.ValueKind, query.Value));
         var documents = await collection
             .Find(filter)
             .Sort(Builders<BsonDocument>.Sort.Ascending("_id"))
@@ -114,16 +118,25 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
         manifest.StorageUnits.SingleOrDefault(unit => unit.Identity.Value == documentKind)
         ?? throw new InvalidOperationException($"Document kind '{documentKind}' is not declared by manifest '{manifest.Identity}'.");
 
-    private static BsonDocument CreateDocument(SaveDocumentRequest request, long version, DateTimeOffset createdAt, DateTimeOffset updatedAt) =>
-        new()
+    private static BsonDocument CreateDocument(StorageUnit unit, SaveDocumentRequest request, long version, DateTimeOffset createdAt, DateTimeOffset updatedAt)
+    {
+        var content = BsonDocument.Parse(request.ContentJson);
+        var document = new BsonDocument
         {
             ["_id"] = request.Id,
             ["schema_version"] = request.SchemaVersion,
             ["version"] = version,
-            ["content"] = BsonDocument.Parse(request.ContentJson),
+            ["content"] = content,
             ["created_utc"] = createdAt.ToString("O"),
             ["updated_utc"] = updatedAt.ToString("O")
         };
+
+        var physicalized = CreatePhysicalizedDocument(unit, content);
+        if (physicalized.ElementCount > 0)
+            document["physicalized"] = physicalized;
+
+        return document;
+    }
 
     private static DocumentEnvelope ReadEnvelope(StorageUnit unit, BsonDocument document) =>
         new(
@@ -135,8 +148,34 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             DateTimeOffset.Parse(document.GetValue("created_utc").AsString),
             DateTimeOffset.Parse(document.GetValue("updated_utc").AsString));
 
-    private static BsonValue ToBsonValue(IndexDeclaration index, string value) =>
-        index.ValueKind switch
+    private static BsonDocument CreatePhysicalizedDocument(StorageUnit unit, BsonDocument content)
+    {
+        var physicalized = new BsonDocument();
+        foreach (var field in PhysicalizationProjection.EligibleFields(unit))
+        {
+            if (TryGetBsonPath(content, field.Path, out var value) && value is not BsonNull)
+                physicalized[MongoDbGroundworkNames.PhysicalizedFieldName(field)] = value;
+        }
+
+        return physicalized;
+    }
+
+    private static bool TryGetBsonPath(BsonDocument root, string path, out BsonValue value)
+    {
+        value = BsonNull.Value;
+        BsonValue current = root;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!current.IsBsonDocument || !current.AsBsonDocument.TryGetValue(segment, out current))
+                return false;
+        }
+
+        value = current;
+        return true;
+    }
+
+    private static BsonValue ToBsonValue(IndexValueKind valueKind, string value) =>
+        valueKind switch
         {
             IndexValueKind.Number when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue) => longValue,
             IndexValueKind.Number when double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue) => doubleValue,

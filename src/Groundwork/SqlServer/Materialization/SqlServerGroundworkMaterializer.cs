@@ -1,4 +1,7 @@
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Relational.Materialization;
+using Groundwork.Relational.Physicalization;
 using Microsoft.Data.SqlClient;
 
 namespace Groundwork.SqlServer.Materialization;
@@ -22,6 +25,46 @@ public sealed class SqlServerGroundworkMaterializer(SqlConnection connection) : 
             VALUES (@manifestId, @manifestVersion, @providerName, @providerVersion, @appliedUtc);
         END;
         """;
+
+    protected override IReadOnlyList<string> CreateOptimizedProjectionStatements(StorageUnit unit, IReadOnlyList<PhysicalizedFieldPlan> fields)
+    {
+        var table = RelationalPhysicalizationNames.TableName(unit);
+        var columns = string.Join(",\n        ", fields.Select(field => $"{RelationalPhysicalizationNames.ColumnName(field)} NVARCHAR(450) NULL"));
+        var statements = new List<string>
+        {
+            $"""
+            IF OBJECT_ID(N'{table}', N'U') IS NULL
+            BEGIN
+                CREATE TABLE {table} (
+                    document_kind NVARCHAR(450) NOT NULL,
+                    document_id NVARCHAR(450) NOT NULL,
+                    document_version BIGINT NOT NULL{(fields.Count == 0 ? "" : $",\n        {columns}")},
+                    CONSTRAINT pk_{table} PRIMARY KEY (document_kind, document_id),
+                    CONSTRAINT fk_{table}_documents FOREIGN KEY (document_kind, document_id)
+                        REFERENCES groundwork_documents(document_kind, id)
+                        ON DELETE CASCADE
+                );
+            END;
+            """
+        };
+
+        statements.AddRange(fields.Select(field =>
+        {
+            var column = RelationalPhysicalizationNames.ColumnName(field);
+            var indexName = RelationalPhysicalizationNames.IndexName(unit, field, field.IsUnique);
+            var unique = field.IsUnique ? "UNIQUE " : "";
+            return $"""
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{indexName}' AND object_id = OBJECT_ID(N'{table}'))
+                BEGIN
+                    CREATE {unique}INDEX {indexName}
+                    ON {table}({column})
+                    WHERE {column} IS NOT NULL;
+                END;
+                """;
+        }));
+
+        return statements;
+    }
 
     private const string DocumentTableSql = """
         IF OBJECT_ID(N'groundwork_documents', N'U') IS NULL
