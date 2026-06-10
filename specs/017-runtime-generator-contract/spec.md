@@ -16,7 +16,7 @@
 
 - **FR-001**: Runtime contracts MUST distinguish in-workflow generators from external triggers.
 - **FR-002**: A generator registration MUST identify the owning workflow execution and generator activity execution.
-- **FR-003**: Generator state MUST carry the owning execution scope boundary and default to scope-end lifetime.
+- **FR-003**: Generator state MUST carry the owning execution scope boundary when the generator is scoped below the workflow root and MUST default to scope-end lifetime.
 - **FR-004**: Each generated event MUST have durable diagnostic identity, sequence, name, occurrence time, and generator activity execution identity.
 - **FR-005**: Scheduler state MUST carry generated-event work separately from ordinary scheduled activity work.
 - **FR-006**: Scheduler state MUST carry generated-event work separately from completion-drain work and continuation work.
