@@ -85,7 +85,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Activities runtime (resolver sources + implementation descriptor sources) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
+| Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
@@ -99,7 +99,7 @@ not automatic constitution violations.
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Workflows runtime (checkpoint policy/writer, post-commit dispatcher, execution agent provider, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
+| Workflows runtime (checkpoint policy/writer, post-commit dispatcher, bookmark resume resolver, execution agent provider, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 
 ### Legacy

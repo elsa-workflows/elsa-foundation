@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Pipeline Slots And Inspectable Plans](specs/009-runtime-pipeline-slots/plan.md)
+Current Speckit plan: [Runtime Bookmark Resume Contract](specs/010-runtime-bookmark-resume-contract/plan.md)
 <!-- SPECKIT END -->

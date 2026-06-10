@@ -21,12 +21,12 @@ public sealed class RuntimeCheckpointStateChangeSet
         RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
         RuntimeStateChange<SchedulerState>? scheduler,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions,
-        IReadOnlyCollection<RuntimeStateChangeReference> bookmarks,
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
         IReadOnlyCollection<RuntimeStateChangeReference> incidents,
         IReadOnlyCollection<RuntimeStateChangeReference> operational)
     {
-        ValidateReferences(bookmarks, RuntimeStateCategory.Bookmark, nameof(bookmarks));
+        ValidateBookmarks(bookmarks, nameof(bookmarks));
         ValidateReferences(incidents, RuntimeStateCategory.Incident, nameof(incidents));
         ValidateReferences(operational, RuntimeStateCategory.Operational, nameof(operational));
 
@@ -42,10 +42,18 @@ public sealed class RuntimeCheckpointStateChangeSet
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
     public RuntimeStateChange<SchedulerState>? Scheduler { get; }
     public IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions { get; }
-    public IReadOnlyCollection<RuntimeStateChangeReference> Bookmarks { get; }
+    public IReadOnlyCollection<RuntimeStateChange<BookmarkState>> Bookmarks { get; }
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
     public IReadOnlyCollection<RuntimeStateChangeReference> Incidents { get; }
     public IReadOnlyCollection<RuntimeStateChangeReference> Operational { get; }
+
+    private static void ValidateBookmarks(
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
+        string parameterName)
+    {
+        if (bookmarks.Any(change => change.StateId != change.State.BookmarkId))
+            throw new ArgumentException("Bookmark state change IDs must match their bookmark state IDs.", parameterName);
+    }
 
     private static void ValidateReferences(
         IReadOnlyCollection<RuntimeStateChangeReference> references,

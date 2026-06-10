@@ -8,6 +8,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ## Implementable contributor interfaces
 
+### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
+- **Usage:** declares a stable runtime resume target ID. Workflow compile/publish can copy the ID into a runtime executable artifact's resume-target table. Durable bookmarks store this ID, not the C# method name.
+- **Related runtime seam:** `IBookmarkResumeResolver` in `Elsa.Workflows.Runtime.Core`.
+
 ### `IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contribution (one constructor per descriptor type).
 - **Signature:** `string DescriptorType { get; }`; `ValueTask<IActivity> Construct(TDescriptor descriptor, IDictionary<string, InputArgument>?, IDictionary<string, OutputArgument>?, CancellationToken)` (with the non-generic `IActivityConstructor` bridge that owns `payload.Deserialize<TDescriptor>()`).
