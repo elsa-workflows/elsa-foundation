@@ -1,5 +1,7 @@
 ﻿using CShells.Features;
+using Elsa3.Mapping.Contracts;
 using Elsa3.Mapping.Mappings;
+using Elsa3.Mapping.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa3.Mapping;
@@ -16,5 +18,6 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddScoped<Elsa3ActivityToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToState>();
         services.AddScoped<Elsa3WorkflowDefinitionToWorkflowDefinitionVersion>();
+        services.AddScoped<IElsa3WorkflowDefinitionImporter, Elsa3WorkflowDefinitionImporter>();
     }
 }

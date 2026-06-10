@@ -19,6 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />
   </ItemGroup>
 
 </Project>
