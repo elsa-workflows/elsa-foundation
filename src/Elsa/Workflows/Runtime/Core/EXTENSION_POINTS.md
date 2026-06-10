@@ -54,6 +54,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** reports artifact/build diagnostics for output references that cross suspension boundaries or are ambiguous in loop/parallel scopes.
 - **Default implementation:** `RuntimeInputBindingValidator` *(intra-domain default)*.
 
+### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides which runtime observability payloads may be captured for a runtime composition).
+- **Signature:** `Decide(RuntimePayloadCaptureRequest request)`.
+- **Usage:** controls whether history, diagnostics, incidents, values, and input/output observations capture no payload, metadata only, or full payload. Continuation state does not read these observability payloads. The default excludes sensitive values and omits workflow/activity input and output snapshots.
+- **Default implementation:** `DefaultRuntimePayloadCapturePolicy` *(intra-domain default)*.
+
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
 - **Signature:** `GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default)`.

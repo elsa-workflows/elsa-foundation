@@ -23,11 +23,11 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
-        IReadOnlyCollection<RuntimeStateChangeReference> incidents,
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
         IReadOnlyCollection<RuntimeStateChangeReference> operational)
     {
         ValidateBookmarks(bookmarks, nameof(bookmarks));
-        ValidateReferences(incidents, RuntimeStateCategory.Incident, nameof(incidents));
+        ValidateIncidents(incidents, nameof(incidents));
         ValidateReferences(operational, RuntimeStateCategory.Operational, nameof(operational));
 
         WorkflowExecution = workflowExecution;
@@ -44,7 +44,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions { get; }
     public IReadOnlyCollection<RuntimeStateChange<BookmarkState>> Bookmarks { get; }
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
-    public IReadOnlyCollection<RuntimeStateChangeReference> Incidents { get; }
+    public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
     public IReadOnlyCollection<RuntimeStateChangeReference> Operational { get; }
 
     private static void ValidateBookmarks(
@@ -62,6 +62,14 @@ public sealed class RuntimeCheckpointStateChangeSet
     {
         if (references.Any(reference => reference.Category != expectedCategory))
             throw new ArgumentException($"All state references must use the {expectedCategory} category.", parameterName);
+    }
+
+    private static void ValidateIncidents(
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
+        string parameterName)
+    {
+        if (incidents.Any(change => change.StateId != change.State.IncidentId))
+            throw new ArgumentException("Incident state change StateId must match IncidentState.IncidentId.", parameterName);
     }
 }
 
