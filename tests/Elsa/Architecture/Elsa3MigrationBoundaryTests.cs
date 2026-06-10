@@ -69,6 +69,20 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
+    public void UnsupportedInputKind_CanBeRejectedWithDiagnostics()
+    {
+        var result = Elsa3MigrationCompatibility.RejectUnsupportedInputKind<object>(
+            (Elsa3MigrationInputKind)999,
+            "workflow-instance.json");
+        var diagnostic = Assert.Single(result.Diagnostics);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(Elsa3MigrationDiagnosticCodes.UnsupportedInputKind, diagnostic.Code);
+        Assert.Equal("999", diagnostic.Metadata["InputKind"]);
+        Assert.Equal("workflow-instance.json", diagnostic.Metadata["SourceName"]);
+    }
+
+    [Fact]
     public void MigrationResult_RequiresErrorDiagnosticsForFailure()
     {
         var warning = new Elsa3MigrationDiagnostic(
@@ -135,7 +149,9 @@ public sealed class Elsa3MigrationBoundaryTests
                 DefinitionId = "definition-1",
                 Name = "Broken workflow",
                 Description = "Missing root."
-            });
+            },
+            sourceName: "workflow.json",
+            metadata: new Dictionary<string, string> { ["TenantId"] = "tenant-1" });
 
         var result = await _importer.ImportAsync(input);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -144,6 +160,8 @@ public sealed class Elsa3MigrationBoundaryTests
         Assert.Equal(Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed, diagnostic.Code);
         Assert.Contains("definition-1", diagnostic.Message);
         Assert.Equal("WorkflowDefinitionExportJson", diagnostic.Metadata["InputKind"]);
+        Assert.Equal("workflow.json", diagnostic.Metadata["SourceName"]);
+        Assert.Equal("tenant-1", diagnostic.Metadata["TenantId"]);
     }
 
     [Fact]

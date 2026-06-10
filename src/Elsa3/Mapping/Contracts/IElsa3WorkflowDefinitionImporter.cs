@@ -9,5 +9,7 @@ public interface IElsa3WorkflowDefinitionImporter
         Elsa3WorkflowDefinitionImportInput input,
         CancellationToken cancellationToken = default);
 
+    Elsa3MigrationResult<IWorkflowDefinitionVersion> RejectUnsupportedInputKind(Elsa3MigrationInputKind inputKind, string? sourceName = null);
+
     Elsa3MigrationResult<IWorkflowDefinitionVersion> RejectWorkflowInstanceState(string? sourceName = null);
 }

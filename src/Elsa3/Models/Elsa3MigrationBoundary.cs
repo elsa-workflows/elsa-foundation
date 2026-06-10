@@ -125,6 +125,27 @@ public static class Elsa3MigrationCompatibility
     public static bool IsLiveInstanceStateInput(Elsa3MigrationInputKind inputKind) =>
         inputKind == Elsa3MigrationInputKind.WorkflowInstanceState;
 
+    public static Elsa3MigrationResult<T> RejectUnsupportedInputKind<T>(Elsa3MigrationInputKind inputKind, string? sourceName = null)
+    {
+        if (sourceName is not null && string.IsNullOrWhiteSpace(sourceName))
+            throw new ArgumentException("Migration source name cannot be blank.", nameof(sourceName));
+
+        var metadata = new Dictionary<string, string>
+        {
+            ["InputKind"] = inputKind.ToString()
+        };
+
+        if (sourceName is not null)
+            metadata["SourceName"] = sourceName;
+
+        return Elsa3MigrationResult<T>.Failure(new Elsa3MigrationDiagnostic(
+            Elsa3MigrationDiagnosticSeverity.Error,
+            Elsa3MigrationDiagnosticCodes.UnsupportedInputKind,
+            $"Elsa 3 migration input kind '{inputKind}' is not supported by this boundary.",
+            guidance: "Use authored Elsa 3 workflow definition input for definition import. Elsa 3 workflow instance state requires a separate explicit migration tool.",
+            metadata: metadata));
+    }
+
     public static Elsa3MigrationResult<T> RejectLiveInstanceResume<T>(string? sourceName = null)
     {
         if (sourceName is not null && string.IsNullOrWhiteSpace(sourceName))

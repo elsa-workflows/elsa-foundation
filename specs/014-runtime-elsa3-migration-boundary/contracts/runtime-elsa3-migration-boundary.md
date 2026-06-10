@@ -11,5 +11,5 @@ Rules:
 
 - Runtime does not read Elsa 3 workflow instance state as Elsa 4 continuation state.
 - Runtime projects do not reference `Elsa3.*` import or compatibility modules.
-- Authored definition migration returns diagnostics rather than requiring callers to infer compatibility from arbitrary exceptions.
+- Authored definition migration and unsupported input-kind rejection return diagnostics rather than requiring callers to infer compatibility from arbitrary exceptions.
 - Migration diagnostics include actionable guidance for live instance cutover.

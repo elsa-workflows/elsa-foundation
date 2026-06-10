@@ -23,10 +23,7 @@ public sealed class Elsa3WorkflowDefinitionImporter(Elsa3WorkflowDefinitionToWor
             var definitionId = string.IsNullOrWhiteSpace(input.Definition.DefinitionId)
                 ? "<unspecified>"
                 : input.Definition.DefinitionId;
-            var metadata = new Dictionary<string, string>
-            {
-                ["InputKind"] = input.InputKind.ToString()
-            };
+            var metadata = BuildDiagnosticMetadata(input);
 
             if (!string.IsNullOrWhiteSpace(input.Definition.DefinitionId))
                 metadata["DefinitionId"] = input.Definition.DefinitionId;
@@ -40,6 +37,21 @@ public sealed class Elsa3WorkflowDefinitionImporter(Elsa3WorkflowDefinitionToWor
         }
     }
 
+    public Elsa3MigrationResult<IWorkflowDefinitionVersion> RejectUnsupportedInputKind(Elsa3MigrationInputKind inputKind, string? sourceName = null) =>
+        Elsa3MigrationCompatibility.RejectUnsupportedInputKind<IWorkflowDefinitionVersion>(inputKind, sourceName);
+
     public Elsa3MigrationResult<IWorkflowDefinitionVersion> RejectWorkflowInstanceState(string? sourceName = null) =>
         Elsa3MigrationCompatibility.RejectLiveInstanceResume<IWorkflowDefinitionVersion>(sourceName);
+
+    private static Dictionary<string, string> BuildDiagnosticMetadata(Elsa3WorkflowDefinitionImportInput input)
+    {
+        var metadata = input.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+
+        metadata["InputKind"] = input.InputKind.ToString();
+
+        if (input.SourceName is not null)
+            metadata["SourceName"] = input.SourceName;
+
+        return metadata;
+    }
 }
