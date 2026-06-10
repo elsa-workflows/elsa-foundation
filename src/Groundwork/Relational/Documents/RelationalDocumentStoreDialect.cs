@@ -11,7 +11,9 @@ public class RelationalDocumentStoreDialect
     public virtual object Boolean(bool value) => value ? 1 : 0;
 
     public virtual bool IsDuplicateDocumentKeyException(DbException exception) =>
-        exception.Message.Contains("groundwork_documents", StringComparison.OrdinalIgnoreCase);
+        Contains(exception.Message, "groundwork_documents.document_kind, groundwork_documents.id") ||
+        Contains(exception.Message, "groundwork_documents_pkey") ||
+        Contains(exception.Message, "pk_groundwork_documents");
 
     public virtual string InsertDocumentSql => $$"""
         INSERT INTO groundwork_documents
@@ -93,4 +95,7 @@ public class RelationalDocumentStoreDialect
         ORDER BY d.id
         LIMIT {{Parameter("take")}} OFFSET {{Parameter("skip")}};
         """;
+
+    private static bool Contains(string value, string fragment) =>
+        value.Contains(fragment, StringComparison.OrdinalIgnoreCase);
 }
