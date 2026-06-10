@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Generator Contract](specs/017-runtime-generator-contract/plan.md)
+Current Speckit plan: [Runtime Control Plane Contract](specs/018-runtime-control-plane-contract/plan.md)
 <!-- SPECKIT END -->
