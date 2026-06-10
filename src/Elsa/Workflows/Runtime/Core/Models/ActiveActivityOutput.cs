@@ -60,20 +60,3 @@ public sealed class ActiveActivityOutput
     public DateTimeOffset RecordedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
-
-public sealed record RuntimeInputBindingValidationContext(
-    string ExecutableNodeId,
-    bool CrossesSuspensionBoundary,
-    bool HasAmbiguousProducerExecution);
-
-public sealed record RuntimeInputBindingDiagnostic(
-    RuntimeInputBindingDiagnosticCode Code,
-    string InputName,
-    string ExecutableNodeId,
-    string Message);
-
-public enum RuntimeInputBindingDiagnosticCode
-{
-    AmbiguousActivityOutputReference,
-    ActivityOutputCrossesSuspensionBoundary
-}
