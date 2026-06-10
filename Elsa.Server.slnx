@@ -139,6 +139,7 @@
   <Folder Name="/src/Groundwork/">
     <Project Path="src/Groundwork/Core/Groundwork.Core.csproj" />
     <Project Path="src/Groundwork/Documents/Groundwork.Documents.csproj" />
+    <Project Path="src/Groundwork/MongoDb/Groundwork.MongoDb.csproj" />
     <Project Path="src/Groundwork/PostgreSql/Groundwork.PostgreSql.csproj" />
     <Project Path="src/Groundwork/Relational/Groundwork.Relational.csproj" />
     <Project Path="src/Groundwork/SqlServer/Groundwork.SqlServer.csproj" />
@@ -174,6 +175,9 @@
   </Folder>
   <Folder Name="/tests/Groundwork/Groundwork.Sqlite.Tests/">
     <Project Path="tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.MongoDb.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Groundwork/Groundwork.RelationalProviders.Tests/">
     <Project Path="tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj" />
