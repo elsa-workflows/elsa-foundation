@@ -167,6 +167,8 @@ public sealed class RuntimeBookmarkResumeContractTests
         var exception = Assert.Throws<BookmarkResumeResolutionException>(() => resolver.Resolve(request));
 
         Assert.Equal(BookmarkResumeResolutionFailureReason.ResumeTargetNodeMismatch, exception.Reason);
+        Assert.Contains("node-other", exception.Message);
+        Assert.Contains("node-delivery", exception.Message);
     }
 
     [Fact]

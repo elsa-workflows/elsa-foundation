@@ -42,7 +42,7 @@ public sealed class BookmarkResumeResolver : IBookmarkResumeResolver
             throw NewException(
                 bookmark,
                 BookmarkResumeResolutionFailureReason.ResumeTargetNodeMismatch,
-                $"Resume target '{bookmark.ResumeTargetId}' does not point at executable node '{bookmark.ExecutableNodeId}'.");
+                $"Resume target '{bookmark.ResumeTargetId}' points at executable node '{resumeTarget.ExecutableNodeId}', not bookmark executable node '{bookmark.ExecutableNodeId}'.");
 
         if (!executable.NodesById.TryGetValue(bookmark.ExecutableNodeId, out var executableNode))
             throw NewException(
