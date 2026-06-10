@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Checkpoint Commit Envelope And Post-Commit Intent Boundary](specs/008-checkpoint-commit-envelope/plan.md)
+Current Speckit plan: [Runtime Pipeline Slots And Inspectable Plans](specs/009-runtime-pipeline-slots/plan.md)
 <!-- SPECKIT END -->
