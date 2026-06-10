@@ -154,6 +154,16 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Source_scan_preserves_multi_dollar_raw_interpolation_code_with_nested_braces()
+    {
+        const string text = "var message = $$\"\"\"ActivityNode literal {{ new { Name = typeof(ActivityNode).Name } }}\"\"\";";
+        var sanitized = StripCommentsAndStringLiterals(text);
+
+        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
+        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Source_scan_strips_raw_string_text()
     {
         const string text = "\"\"\"ActivityNode literal\"\"\"";
@@ -388,6 +398,10 @@ public sealed class ArchitectureGuardTests
                     sanitized[i] = current;
                     interpolationDepth++;
                     break;
+                case SourceScanState.InterpolationExpression when current == '}' && interpolationDepth > 1:
+                    sanitized[i] = current;
+                    interpolationDepth--;
+                    break;
                 case SourceScanState.InterpolationExpression when HasRun(text, i, '}', interpolationCloseBraceCount):
                     for (var j = 0; j < interpolationCloseBraceCount; j++)
                         sanitized[i + j] = '}';
@@ -398,6 +412,12 @@ public sealed class ArchitectureGuardTests
                         interpolationCloseBraceCount = 1;
                         state = interpolationReturnState;
                     }
+                    break;
+                case SourceScanState.InterpolationExpression when current == '}':
+                    sanitized[i] = current;
+                    interpolationDepth--;
+                    if (interpolationDepth == 0)
+                        state = interpolationReturnState;
                     break;
                 case SourceScanState.InterpolationExpression:
                     sanitized[i] = current;
