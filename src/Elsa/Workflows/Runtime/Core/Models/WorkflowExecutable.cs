@@ -107,7 +107,9 @@ public sealed class ExecutableEdge
         string targetPort)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePort);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPort);
 
         SourceNodeId = sourceNodeId;
         SourcePort = sourcePort;

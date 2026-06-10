@@ -15,6 +15,9 @@ public sealed class ActivityFactory(
     IEnumerable<IActivityConstructor>? constructors = null)
     : IActivityFactory
 {
+    private readonly Lock _constructorRegistrationGate = new();
+    private bool _constructorsRegistered;
+
     public ValueTask<IActivity> Create(
         string descriptorType,
         JsonElement payload,
@@ -22,9 +25,24 @@ public sealed class ActivityFactory(
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken = default)
     {
-        registry.AddAll(constructors ?? []);
+        EnsureContributedConstructorsRegistered();
 
         var constructor = registry.Resolve(descriptorType);
         return constructor.Construct(payload, inputs, outputs, cancellationToken);
+    }
+
+    private void EnsureContributedConstructorsRegistered()
+    {
+        if (_constructorsRegistered)
+            return;
+
+        lock (_constructorRegistrationGate)
+        {
+            if (_constructorsRegistered)
+                return;
+
+            registry.AddAll(constructors ?? []);
+            _constructorsRegistered = true;
+        }
     }
 }

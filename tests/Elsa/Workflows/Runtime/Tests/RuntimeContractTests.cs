@@ -66,6 +66,13 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void ExecutableEdge_RequiresEndpointPorts()
+    {
+        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "", "target", "In"));
+        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "Done", "target", " "));
+    }
+
+    [Fact]
     public void ActivityExecution_IdentifiesConcreteRunsOfTheSameExecutableNode()
     {
         var first = new ActivityExecution(
