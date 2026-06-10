@@ -13,5 +13,5 @@ This feature implements contributor interfaces from other domains:
 - **`IScriptPostProcessor`** *(Core — `Elsa.Expressions.JavaScript.Core`)* — `CopyVariablesToWorkflowContext` propagates any variable mutations made inside the script back into the workflow execution context. Aggregated by `PostProcessScript` in `Elsa.Expressions.JavaScript`.
   - Catalog: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md)
 
-- **`IActivityCompletionHandler`** *(Core — `Elsa.Workflows.Runtime.Core`)* — `ActivityCompletionHandler` (test support implementation for JS-context activity completion in unit tests).
+- **`IActivityCompletionHandler`** *(Core — `Elsa.Activities.Runtime.Core`)* — `ActivityCompletionHandler` (test support implementation for JS-context activity completion in unit tests).
   - Catalog: [`Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md)

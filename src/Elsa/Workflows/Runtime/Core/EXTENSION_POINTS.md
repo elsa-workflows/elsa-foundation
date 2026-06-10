@@ -26,7 +26,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ## Implementable contributor interfaces
 
-### `ISignalHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contributor (receives a signal and acts — push pattern).
 - **Signature:** `ValueTask ReceiveSignalAsync(object signal, SignalContext context);`
 - **Usage:** implement on activity classes to receive signals sent to the workflow. `ActivityBase` exposes `ReceiveSignalAsync` which dispatches to the activity's `ISignalHandler` implementation.
@@ -36,7 +36,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 **Known implementations (shipped):**
 - Activity classes that override `ReceiveSignalAsync` in the codebase.
 
-### `IActivityCompletionHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+### `IActivityCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Overridable single-impl (one handler expected at a time, injected by DI).
 - **Signature:** `CompleteActivityAsync(IActivityExecutionContext context)`, `CompleteActivityAsync(IActivityExecutionContext context, object result)`, `CompleteActivityAsync(IActivityExecutionContext context, IEnumerable<string> outcomes)`, `CompleteActivityAsync(IActivityExecutionContext context, object result, IEnumerable<string> outcomes)`.
 - **Register:** `services.Replace(ServiceDescriptor.Scoped<IActivityCompletionHandler, MyHandler>())` — single-impl; a replacement steps aside the previous one.
