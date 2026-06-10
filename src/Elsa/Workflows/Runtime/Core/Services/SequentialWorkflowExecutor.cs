@@ -44,6 +44,10 @@ public sealed class SequentialWorkflowExecutor(
 
             return new WorkflowExecutionResult(workflowExecutionId, executable.Identity.ArtifactId, WorkflowExecutionResultStatus.Completed, startedAt, DateTimeOffset.UtcNow, activityResults, null);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             return new WorkflowExecutionResult(workflowExecutionId, executable.Identity.ArtifactId, WorkflowExecutionResultStatus.Faulted, startedAt, DateTimeOffset.UtcNow, activityResults, e.Message);
@@ -71,6 +75,10 @@ public sealed class SequentialWorkflowExecutor(
             await activity.ExecuteAsync(context);
 
             return new ActivityExecutionResult(activityExecutionId, node.ExecutableNodeId, node.ActivityType, ActivityExecutionResultStatus.Completed, startedAt, DateTimeOffset.UtcNow, null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception e)
         {

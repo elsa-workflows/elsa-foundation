@@ -100,6 +100,15 @@ public sealed class SequentialWorkflowExecutorTests
     }
 
     [Fact]
+    public async Task PropagatesCancellationDuringActivityExecution()
+    {
+        var executor = new SequentialWorkflowExecutor(new CancelingActivityFactory(), new EmptyServiceProvider());
+        var executable = Executable([Node("write-one", "one")], [], ["write-one"]);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => executor.ExecuteAsync(executable).AsTask());
+    }
+
+    [Fact]
     public async Task LiteralMemoryBlockReferenceUsesObjectConverterForTypedReads()
     {
         var converter = new RecordingObjectConverter();
@@ -171,6 +180,17 @@ public sealed class SequentialWorkflowExecutorTests
         }
     }
 
+    private sealed class CancelingActivityFactory : IActivityFactory
+    {
+        public ValueTask<IActivity> Create(
+            string descriptorType,
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IActivity>(new CancelingActivity());
+    }
+
     private sealed class RecordingTextActivity(List<string?> messages) : ActivityBase
     {
         public InputArgument<string> Text { get; set; } = null!;
@@ -191,6 +211,12 @@ public sealed class SequentialWorkflowExecutorTests
 
             messages.Add(text);
         }
+    }
+
+    private sealed class CancelingActivity : ActivityBase
+    {
+        protected override void Execute(IActivityExecutionContext context) =>
+            throw new OperationCanceledException(context.CancellationToken);
     }
 
     private sealed class EmptyServiceProvider : IServiceProvider
