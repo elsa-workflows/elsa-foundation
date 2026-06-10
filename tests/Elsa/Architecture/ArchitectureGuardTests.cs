@@ -111,6 +111,19 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Runtime_projects_do_not_reference_elsa3_compatibility_projects()
+    {
+        var violations = ProjectFiles()
+            .Where(project => project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal) || project.Name == "Elsa.Workflows.Runtime")
+            .SelectMany(project => ProjectReferences(project)
+                .Where(reference => reference.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
     public void Workflows_runtime_core_does_not_use_authored_workflow_models()
     {
         string[] forbiddenPatterns =
