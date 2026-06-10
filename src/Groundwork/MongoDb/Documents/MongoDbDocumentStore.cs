@@ -54,10 +54,15 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
                 return DocumentStoreWriteResult.ConcurrencyConflict;
             }
 
-            if (request.ExpectedVersion is not null && result.MatchedCount == 0)
+            if (result.MatchedCount == 0)
+            {
+                if (request.ExpectedVersion is null)
+                    return DocumentStoreWriteResult.NotFound;
+
                 return await LoadCoreAsync(unit, request.Id, cancellationToken) is null
                     ? DocumentStoreWriteResult.NotFound
                     : DocumentStoreWriteResult.ConcurrencyConflict;
+            }
         }
 
         return DocumentStoreWriteResult.Saved(new DocumentEnvelope(
