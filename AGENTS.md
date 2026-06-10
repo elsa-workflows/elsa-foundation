@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Executable Artifact And Execution State Contracts](specs/007-runtime-executable-state-contracts/plan.md)
+Current Speckit plan: [Checkpoint Commit Envelope And Post-Commit Intent Boundary](specs/008-checkpoint-commit-envelope/plan.md)
 <!-- SPECKIT END -->
