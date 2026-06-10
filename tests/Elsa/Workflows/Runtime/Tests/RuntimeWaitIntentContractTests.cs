@@ -92,6 +92,18 @@ public sealed class RuntimeWaitIntentContractTests
 
         Assert.Equal("order-123", wait.MatchCriteria["orderId"]);
         Assert.Equal("wait-dependent post-commit intent", wait.Metadata["causality"]);
+        Assert.IsNotType<Dictionary<string, string>>(wait.MatchCriteria);
+        Assert.IsNotType<Dictionary<string, string>>(wait.Metadata);
+    }
+
+    [Fact]
+    public void WaitRegistration_RequiresDependentIntentForCompensationPolicy()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => NewWaitRegistration(
+            dependsOnPostCommitIntentId: null,
+            failurePolicy: RuntimeWaitDependentIntentFailurePolicy.Compensate));
+
+        Assert.Contains("dependent post-commit intent", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -112,6 +124,16 @@ public sealed class RuntimeWaitIntentContractTests
         var exception = Assert.Throws<ArgumentException>(() => NewIntent(dependsOnWaitRegistrationId: "wait-1"));
 
         Assert.Contains("wait-dependent post-commit intent", exception.Message);
+    }
+
+    [Fact]
+    public void PostCommitIntent_RejectsFailurePolicyWithoutWaitDependency()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => NewIntent(
+            dependsOnWaitRegistrationId: null,
+            failurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow));
+
+        Assert.Contains("wait registration dependency", exception.Message);
     }
 
     [Fact]
@@ -141,6 +163,7 @@ public sealed class RuntimeWaitIntentContractTests
         string? dependsOnPostCommitIntentId = null,
         RuntimeEarlySignalPolicy earlySignalPolicy = RuntimeEarlySignalPolicy.BufferUntilIntentDelivered,
         string correlationId = "order:123:reply",
+        RuntimeWaitDependentIntentFailurePolicy failurePolicy = RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow,
         IReadOnlyDictionary<string, string>? matchCriteria = null,
         IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
@@ -158,7 +181,7 @@ public sealed class RuntimeWaitIntentContractTests
             status: status,
             registeredAt: _now,
             expiresAt: _now.AddMinutes(5),
-            failurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow,
+            failurePolicy: failurePolicy,
             earlySignalPolicy: earlySignalPolicy,
             dependsOnPostCommitIntentId: dependsOnPostCommitIntentId,
             metadata: metadata);

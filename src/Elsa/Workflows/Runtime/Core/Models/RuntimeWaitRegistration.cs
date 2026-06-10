@@ -33,6 +33,9 @@ public sealed class RuntimeWaitRegistration
         if (dependsOnPostCommitIntentId is not null && string.IsNullOrWhiteSpace(dependsOnPostCommitIntentId))
             throw new ArgumentException("Dependent post-commit intent ID cannot be blank when provided.", nameof(dependsOnPostCommitIntentId));
 
+        if (failurePolicy == RuntimeWaitDependentIntentFailurePolicy.Compensate && dependsOnPostCommitIntentId is null)
+            throw new ArgumentException("Compensation failure policy requires a dependent post-commit intent.", nameof(dependsOnPostCommitIntentId));
+
         if (expiresAt is not null && expiresAt <= registeredAt)
             throw new ArgumentException("Wait registration expiration must be after registration time.", nameof(expiresAt));
 
@@ -87,7 +90,7 @@ public sealed class RuntimeWaitRegistration
         if (matchCriteria.Any(pair => string.IsNullOrWhiteSpace(pair.Value)))
             throw new ArgumentException("Wait registration match criteria values cannot be blank.", parameterName);
 
-        return new Dictionary<string, string>(matchCriteria, StringComparer.Ordinal);
+        return RuntimeModelMetadata.Snapshot(matchCriteria);
     }
 }
 
