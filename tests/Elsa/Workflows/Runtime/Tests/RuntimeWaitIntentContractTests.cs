@@ -198,7 +198,7 @@ public sealed class RuntimeWaitIntentContractTests
             recordedAt: _now,
             activityExecutionId: "actexec-1",
             idempotencyKey: "checkpoint-1:intent-1",
-            payload: document.RootElement.Clone(),
+            payload: document.RootElement,
             metadata: new Dictionary<string, string>(),
             dependsOnWaitRegistrationId: dependsOnWaitRegistrationId,
             waitFailurePolicy: failurePolicy);
