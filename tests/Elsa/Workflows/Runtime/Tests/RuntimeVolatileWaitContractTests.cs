@@ -49,6 +49,21 @@ public sealed class RuntimeVolatileWaitContractTests
         Assert.Equal("branch-a", continuation.BranchId);
     }
 
+    [Fact]
+    public void SchedulerState_NormalizesMissingCollectionsToEmpty()
+    {
+        var scheduler = new SchedulerState(
+            WorkflowExecutionId: "wfexec-1",
+            Version: 1,
+            PendingWork: null,
+            PendingContinuations: null,
+            VolatileWaits: null);
+
+        Assert.Empty(scheduler.PendingWork);
+        Assert.Empty(scheduler.PendingContinuations);
+        Assert.Empty(scheduler.VolatileWaits);
+    }
+
     [Theory]
     [InlineData(SchedulerContinuationKind.VolatileWaitCompleted)]
     [InlineData(SchedulerContinuationKind.VolatileWaitCancelled)]
