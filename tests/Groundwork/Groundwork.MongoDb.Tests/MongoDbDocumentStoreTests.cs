@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Groundwork.Documents.Store;
 using Groundwork.MongoDb.Documents;
 using Groundwork.MongoDb.Materialization;
@@ -35,7 +36,8 @@ public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
 
         var loaded = await store.LoadAsync("configurationDocument", id);
         Assert.NotNull(loaded);
-        Assert.Equal(firstKey, loaded.Content.RootElement.GetProperty("key").GetString());
+        using var loadedContent = JsonDocument.Parse(loaded.ContentJson);
+        Assert.Equal(firstKey, loadedContent.RootElement.GetProperty("key").GetString());
 
         Assert.Single(await store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", firstKey)));
 

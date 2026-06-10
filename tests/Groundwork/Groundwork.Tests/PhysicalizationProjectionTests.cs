@@ -74,4 +74,30 @@ public sealed class PhysicalizationProjectionTests
 
         Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
+
+    [Fact]
+    public void PhysicalizedRelationalNamesStayWithinPostgreSqlIdentifierLimit()
+    {
+        var unit = SampleManifests.MetadataManifest().StorageUnits.Single() with
+        {
+            Identity = new StorageUnitIdentity("runtimeEntityInstanceWithAnIntentionallyLongIdentityThatWouldOverflowProviderLimits")
+        };
+        var field = new PhysicalizedFieldPlan(
+            "byFieldWithUppercaseAndSeparators.ThatWouldOtherwiseProduceAnOversizedEncodedIdentifier",
+            "key",
+            IndexValueKind.Keyword,
+            false,
+            true);
+
+        var names = new[]
+        {
+            RelationalPhysicalizationNames.TableName(unit),
+            RelationalPhysicalizationNames.ColumnName(field),
+            RelationalPhysicalizationNames.IndexName(unit, field, false),
+            RelationalPhysicalizationNames.IndexName(unit, field, true)
+        };
+
+        Assert.All(names, name => Assert.True(name.Length <= 63, $"{name} exceeded the PostgreSQL identifier limit."));
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
+    }
 }

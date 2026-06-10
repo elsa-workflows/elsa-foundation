@@ -20,11 +20,9 @@ public sealed class ProviderCapabilityValidator
         foreach (var unit in manifest.StorageUnits)
             ValidateUnit(unit, capabilities, diagnostics);
 
-        return diagnostics.Any(diagnostic => diagnostic.IsError)
-            ? new CapabilityCompatibilityResult(diagnostics)
-            : diagnostics.Count == 0
-                ? CapabilityCompatibilityResult.Compatible
-                : new CapabilityCompatibilityResult(diagnostics);
+        return diagnostics.Count == 0
+            ? CapabilityCompatibilityResult.Compatible
+            : new CapabilityCompatibilityResult(diagnostics);
     }
 
     private static void ValidateUnit(StorageUnit unit, ProviderCapabilityReport capabilities, List<GroundworkDiagnostic> diagnostics)

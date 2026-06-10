@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -38,7 +39,8 @@ public abstract class RelationalProviderContractTests
 
         var loaded = await store.LoadAsync("configurationDocument", id);
         Assert.NotNull(loaded);
-        Assert.Equal(firstKey, loaded.Content.RootElement.GetProperty("key").GetString());
+        using var loadedContent = JsonDocument.Parse(loaded.ContentJson);
+        Assert.Equal(firstKey, loadedContent.RootElement.GetProperty("key").GetString());
 
         var byKey = await store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", firstKey));
         Assert.Single(byKey);

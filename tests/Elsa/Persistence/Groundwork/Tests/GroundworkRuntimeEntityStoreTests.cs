@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.Groundwork.RuntimeEntities;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -34,7 +35,8 @@ public sealed class GroundworkRuntimeEntityStoreTests
 
         var loaded = await store.LoadInstanceAsync(definition, "customer-1");
         Assert.NotNull(loaded);
-        Assert.Equal("one@example.com", loaded.Content.RootElement.GetProperty("email").GetString());
+        using var loadedContent = JsonDocument.Parse(loaded.ContentJson);
+        Assert.Equal("one@example.com", loadedContent.RootElement.GetProperty("email").GetString());
 
         var byEmail = await store.QueryInstancesAsync(definition, "by-email", "one@example.com");
         Assert.Single(byEmail);

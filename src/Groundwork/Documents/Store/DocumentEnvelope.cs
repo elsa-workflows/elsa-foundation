@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Groundwork.Documents.Store;
 
 public sealed record DocumentEnvelope(
@@ -7,9 +5,6 @@ public sealed record DocumentEnvelope(
     string Id,
     string SchemaVersion,
     long Version,
-    JsonDocument Content,
+    string ContentJson,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
-{
-    public string ContentJson => Content.RootElement.GetRawText();
-}
+    DateTimeOffset UpdatedAt);

@@ -44,7 +44,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             request.Id,
             request.SchemaVersion,
             version,
-            JsonDocument.Parse(request.ContentJson),
+            request.ContentJson,
             createdAt,
             now));
     }
@@ -137,19 +137,30 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(dialect.UpdateDocumentSql, transaction);
-        AddDocumentParameters(command, request, version, DateTimeOffset.UtcNow, updatedAt);
+        AddDocumentParameters(command, request, version, updatedAt);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private void AddDocumentParameters(DbCommand command, SaveDocumentRequest request, long version, DateTimeOffset createdAt, DateTimeOffset updatedAt)
+    {
+        AddDocumentParameters(command, request, version);
+        AddParameter(command, "createdUtc", createdAt.ToString("O"));
+        AddParameter(command, "updatedUtc", updatedAt.ToString("O"));
+    }
+
+    private void AddDocumentParameters(DbCommand command, SaveDocumentRequest request, long version, DateTimeOffset updatedAt)
+    {
+        AddDocumentParameters(command, request, version);
+        AddParameter(command, "updatedUtc", updatedAt.ToString("O"));
+    }
+
+    private void AddDocumentParameters(DbCommand command, SaveDocumentRequest request, long version)
     {
         AddParameter(command, "kind", request.DocumentKind);
         AddParameter(command, "id", request.Id);
         AddParameter(command, "schemaVersion", request.SchemaVersion);
         AddParameter(command, "version", version);
         AddParameter(command, "content", request.ContentJson);
-        AddParameter(command, "createdUtc", createdAt.ToString("O"));
-        AddParameter(command, "updatedUtc", updatedAt.ToString("O"));
     }
 
     private async Task<DocumentEnvelope?> LoadCoreAsync(string documentKind, string id, DbTransaction? transaction, CancellationToken cancellationToken)
@@ -293,7 +304,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             reader.GetString(1),
             reader.GetString(2),
             reader.GetInt64(3),
-            JsonDocument.Parse(reader.GetString(4)),
+            reader.GetString(4),
             DateTimeOffset.Parse(reader.GetString(5)),
             DateTimeOffset.Parse(reader.GetString(6)));
 

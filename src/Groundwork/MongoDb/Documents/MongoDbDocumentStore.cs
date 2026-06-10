@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Physicalization;
@@ -49,7 +48,7 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             request.Id,
             request.SchemaVersion,
             version,
-            JsonDocument.Parse(request.ContentJson),
+            request.ContentJson,
             createdAt,
             now));
     }
@@ -144,7 +143,7 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             document.GetValue("_id").AsString,
             document.GetValue("schema_version").AsString,
             document.GetValue("version").ToInt64(),
-            JsonDocument.Parse(document.GetValue("content").AsBsonDocument.ToJson()),
+            document.GetValue("content").AsBsonDocument.ToJson(),
             DateTimeOffset.Parse(document.GetValue("created_utc").AsString),
             DateTimeOffset.Parse(document.GetValue("updated_utc").AsString));
 

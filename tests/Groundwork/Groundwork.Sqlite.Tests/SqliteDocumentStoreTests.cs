@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Groundwork.Sqlite.Materialization;
@@ -25,7 +26,8 @@ public sealed class SqliteDocumentStoreTests
 
         var loaded = await store.LoadAsync("configurationDocument", "doc-1");
         Assert.NotNull(loaded);
-        Assert.Equal("alpha", loaded.Content.RootElement.GetProperty("key").GetString());
+        using var loadedContent = JsonDocument.Parse(loaded.ContentJson);
+        Assert.Equal("alpha", loadedContent.RootElement.GetProperty("key").GetString());
 
         var byKey = await store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", "alpha"));
         Assert.Single(byKey);
