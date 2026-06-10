@@ -71,7 +71,7 @@ public sealed class ControlPlaneState
 
     private static void ValidateWorkflowScopedHolds(string workflowExecutionId, IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
     {
-        if (holds.Any(hold => hold.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(workflowExecutionId, hold.WorkflowExecutionId)))
+        if (holds.Any(hold => hold.WorkflowExecutionId is null || !StringComparer.Ordinal.Equals(workflowExecutionId, hold.WorkflowExecutionId)))
             throw new ArgumentException("Control-plane workflow-scoped holds must belong to the same workflow execution.", parameterName);
     }
 }

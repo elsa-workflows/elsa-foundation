@@ -149,6 +149,27 @@ public sealed class RuntimeControlPlaneContractTests
     }
 
     [Fact]
+    public void ControlPlaneState_RejectsGlobalHoldWhenWorkflowScoped()
+    {
+        var ingress = new ControlPlaneHold(
+            holdId: "ingress-pause-1",
+            scope: ControlPlaneHoldScope.Ingress,
+            status: ControlPlaneHoldStatus.Requested,
+            requestedAt: _now,
+            requestedBy: "operator",
+            reason: "maintenance",
+            ingressSourceId: "http-endpoint-1",
+            ingressPolicy: IngressPausePolicy.DefaultFor(RuntimeIngressSourceKind.HttpEndpoint));
+
+        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            activeHolds: [ingress]));
+
+        Assert.Contains("same workflow execution", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void SchedulerPauseDecision_NamesSafeBoundaryAndBlocksAdvancement()
     {
         var decision = new SchedulerPauseDecision(
