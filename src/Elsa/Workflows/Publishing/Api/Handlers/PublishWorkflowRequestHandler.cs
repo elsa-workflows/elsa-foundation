@@ -228,9 +228,15 @@ public sealed class PublishWorkflowRequestHandler(
             '\n',
             version.Id,
             version.Version,
-            string.Join('|', startNodeIds),
-            string.Join('|', nodes.Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(input => $"{input.Key}={input.Value.LiteralValue?.GetRawText()}"))}")),
-            string.Join('|', edges.Select(edge => $"{edge.SourceNodeId}:{edge.SourcePort}>{edge.TargetNodeId}:{edge.TargetPort}")));
+            string.Join('|', startNodeIds.Order(StringComparer.Ordinal)),
+            string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
+                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(input => $"{input.Key}={input.Value.LiteralValue?.GetRawText()}"))}")),
+            string.Join('|', edges
+                .OrderBy(edge => edge.SourceNodeId, StringComparer.Ordinal)
+                .ThenBy(edge => edge.SourcePort, StringComparer.Ordinal)
+                .ThenBy(edge => edge.TargetNodeId, StringComparer.Ordinal)
+                .ThenBy(edge => edge.TargetPort, StringComparer.Ordinal)
+                .Select(edge => $"{edge.SourceNodeId}:{edge.SourcePort}>{edge.TargetNodeId}:{edge.TargetPort}")));
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";

@@ -129,6 +129,40 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.DoesNotContain("Workflow definition version", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ComputesSameArtifactIdForEquivalentWorkflowOrdering()
+    {
+        var firstWorkflowVersion = WorkflowVersion(
+            activities:
+            [
+                Node("write-one", isStart: true, isTerminal: false, Text("one")),
+                Node("write-two", isStart: false, isTerminal: false, Text("two")),
+                Node("write-three", isStart: false, isTerminal: true, Text("three"))
+            ],
+            connections:
+            [
+                Connection("write-one", "write-two"),
+                Connection("write-two", "write-three")
+            ]);
+        var secondWorkflowVersion = WorkflowVersion(
+            activities:
+            [
+                Node("write-three", isStart: false, isTerminal: true, Text("three")),
+                Node("write-one", isStart: true, isTerminal: false, Text("one")),
+                Node("write-two", isStart: false, isTerminal: false, Text("two"))
+            ],
+            connections:
+            [
+                Connection("write-two", "write-three"),
+                Connection("write-one", "write-two")
+            ]);
+        var firstView = await Handler(firstWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var secondView = await Handler(secondWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.Equal(firstView.ArtifactId, secondView.ArtifactId);
+        Assert.Equal(firstView.ArtifactHash, secondView.ArtifactHash);
+    }
+
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
         new(
             new FakeQueries<WorkflowDefinitionVersion>([workflowVersion]),
