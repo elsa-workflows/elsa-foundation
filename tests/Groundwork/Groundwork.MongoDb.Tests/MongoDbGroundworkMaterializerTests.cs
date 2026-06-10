@@ -1,3 +1,4 @@
+using Groundwork.Core.Manifests;
 using Groundwork.MongoDb.Materialization;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -25,13 +26,33 @@ public sealed class MongoDbGroundworkMaterializerTests : IAsyncLifetime
         await materializer.MaterializeAsync(manifest, MongoDbTestManifests.Provider);
 
         var collectionNames = await (await database.ListCollectionNamesAsync()).ToListAsync();
-        Assert.Contains("groundwork_configurationDocument", collectionNames);
+        Assert.Contains(MongoDbGroundworkNames.CollectionName(manifest.StorageUnits.Single()), collectionNames);
         Assert.Contains("groundwork_schema_history", collectionNames);
         Assert.Equal(1, await CountSchemaHistoryRows(database));
 
-        var indexNames = await ReadIndexNames(database.GetCollection<BsonDocument>("groundwork_configurationDocument"));
+        var indexNames = await ReadIndexNames(database.GetCollection<BsonDocument>(MongoDbGroundworkNames.CollectionName(manifest.StorageUnits.Single())));
         Assert.Contains("by-key", indexNames);
         Assert.Contains("by-category", indexNames);
+    }
+
+    [Fact]
+    public async Task MaterializeEncodesLongCollectionNamesDeterministically()
+    {
+        var database = CreateDatabase();
+        var manifest = MongoDbTestManifests.MetadataManifest();
+        var unit = manifest.StorageUnits.Single() with
+        {
+            Identity = new StorageUnitIdentity("RuntimeEntityInstance.Customer.Profile.WithSymbols$AndAnIntentionallyLongIdentityThatWouldOtherwiseRiskMongoNamespaceLimits")
+        };
+        manifest = manifest with { StorageUnits = [unit] };
+
+        await new MongoDbGroundworkMaterializer(database).MaterializeAsync(manifest, MongoDbTestManifests.Provider);
+
+        var collectionName = MongoDbGroundworkNames.CollectionName(unit);
+        var collectionNames = await (await database.ListCollectionNamesAsync()).ToListAsync();
+        Assert.Contains(collectionName, collectionNames);
+        Assert.DoesNotContain("$", collectionName);
+        Assert.True(collectionName.Length <= "groundwork_".Length + MongoDbGroundworkNames.MaxEncodedIdentityLength);
     }
 
     private IMongoDatabase CreateDatabase() =>

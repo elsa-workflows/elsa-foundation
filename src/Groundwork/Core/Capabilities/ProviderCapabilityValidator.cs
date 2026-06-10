@@ -17,12 +17,46 @@ public sealed class ProviderCapabilityValidator
         foreach (var warning in capabilities.Warnings)
             diagnostics.Add(GroundworkDiagnostic.Warning("GW-CAP-002", warning, "provider.warnings"));
 
+        ValidateRequiredCapabilities(manifest, capabilities, diagnostics);
+
         foreach (var unit in manifest.StorageUnits)
             ValidateUnit(unit, capabilities, diagnostics);
 
         return diagnostics.Count == 0
             ? CapabilityCompatibilityResult.Compatible
             : new CapabilityCompatibilityResult(diagnostics);
+    }
+
+    private static void ValidateRequiredCapabilities(StorageManifest manifest, ProviderCapabilityReport capabilities, List<GroundworkDiagnostic> diagnostics)
+    {
+        foreach (var requiredCapability in manifest.RequiredCapabilities)
+        {
+            switch (requiredCapability)
+            {
+                case "schema-history" when !capabilities.SupportsSchemaHistory:
+                    diagnostics.Add(GroundworkDiagnostic.Error(
+                        "GW-CAP-001",
+                        "Provider must support schema history for materializable plans.",
+                        "requiredCapabilities.schema-history"));
+                    break;
+                case "schema-history":
+                    break;
+                case "optimistic-concurrency" when !capabilities.SupportedConcurrencyModes.Contains(ConcurrencyKind.Optimistic):
+                    diagnostics.Add(GroundworkDiagnostic.Error(
+                        "GW-CAP-005",
+                        "Provider does not support required manifest capability 'optimistic-concurrency'.",
+                        "requiredCapabilities.optimistic-concurrency"));
+                    break;
+                case "optimistic-concurrency":
+                    break;
+                default:
+                    diagnostics.Add(GroundworkDiagnostic.Error(
+                        "GW-CAP-012",
+                        $"Manifest requires unknown provider capability '{requiredCapability}'.",
+                        $"requiredCapabilities.{requiredCapability}"));
+                    break;
+            }
+        }
     }
 
     private static void ValidateUnit(StorageUnit unit, ProviderCapabilityReport capabilities, List<GroundworkDiagnostic> diagnostics)

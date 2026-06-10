@@ -1,3 +1,5 @@
+using System.Data.Common;
+
 namespace Groundwork.Relational.Documents;
 
 public class RelationalDocumentStoreDialect
@@ -7,6 +9,9 @@ public class RelationalDocumentStoreDialect
     public string Parameter(string name) => $"{ParameterPrefix}{name}";
 
     public virtual object Boolean(bool value) => value ? 1 : 0;
+
+    public virtual bool IsDuplicateDocumentKeyException(DbException exception) =>
+        exception.Message.Contains("groundwork_documents", StringComparison.OrdinalIgnoreCase);
 
     public virtual string InsertDocumentSql => $$"""
         INSERT INTO groundwork_documents

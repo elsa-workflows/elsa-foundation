@@ -115,6 +115,26 @@ public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LoadedContentJsonRemainsStandardJsonForLargeNumbers()
+    {
+        await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());
+        var id = NewId();
+        const long largeValue = 1717254000000;
+
+        await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            id,
+            "1.0.0",
+            $$"""{"key":"{{NewValue("large")}}","category":"system","value":{{largeValue}}}"""));
+
+        var loaded = await harness.Store.LoadAsync("configurationDocument", id);
+
+        Assert.NotNull(loaded);
+        using var content = JsonDocument.Parse(loaded.ContentJson);
+        Assert.Equal(largeValue, content.RootElement.GetProperty("value").GetInt64());
+    }
+
+    [Fact]
     public async Task StaleExpectedVersionDoesNotUpdateDocument()
     {
         await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());

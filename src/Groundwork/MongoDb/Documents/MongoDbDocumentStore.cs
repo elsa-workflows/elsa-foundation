@@ -4,6 +4,7 @@ using Groundwork.Core.Manifests;
 using Groundwork.Core.Physicalization;
 using Groundwork.Documents.Store;
 using MongoDB.Bson;
+using MongoDB.Bson.IO;
 using MongoDB.Driver;
 
 namespace Groundwork.MongoDb.Documents;
@@ -133,6 +134,7 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             ["schema_version"] = request.SchemaVersion,
             ["version"] = version,
             ["content"] = content,
+            ["content_json"] = request.ContentJson,
             ["created_utc"] = createdAt.ToString("O"),
             ["updated_utc"] = updatedAt.ToString("O")
         };
@@ -150,9 +152,14 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
             document.GetValue("_id").AsString,
             document.GetValue("schema_version").AsString,
             document.GetValue("version").ToInt64(),
-            document.GetValue("content").AsBsonDocument.ToJson(),
+            ReadContentJson(document),
             DateTimeOffset.Parse(document.GetValue("created_utc").AsString),
             DateTimeOffset.Parse(document.GetValue("updated_utc").AsString));
+
+    private static string ReadContentJson(BsonDocument document) =>
+        document.TryGetValue("content_json", out var contentJson)
+            ? contentJson.AsString
+            : document.GetValue("content").AsBsonDocument.ToJson(new JsonWriterSettings { OutputMode = JsonOutputMode.RelaxedExtendedJson });
 
     private static BsonDocument CreatePhysicalizedDocument(StorageUnit unit, BsonDocument content)
     {

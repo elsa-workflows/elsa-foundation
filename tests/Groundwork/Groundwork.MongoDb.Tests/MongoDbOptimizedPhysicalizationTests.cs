@@ -1,4 +1,5 @@
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Physicalization;
 using Groundwork.Documents.Store;
 using Groundwork.MongoDb.Documents;
 using Groundwork.MongoDb.Materialization;
@@ -25,7 +26,7 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
         var firstKey = $"alpha-{Guid.NewGuid():N}";
         var secondKey = $"beta-{Guid.NewGuid():N}";
 
-        await harness.AssertIndexTargetsAsync("by-key", "physicalized.by_x002d_key");
+        await harness.AssertIndexTargetsAsync("by-key", harness.PhysicalizedPath("by-key"));
 
         var saved = await harness.Store.SaveAsync(new SaveDocumentRequest(
             "configurationDocument",
@@ -76,19 +77,21 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
 
     private sealed class MongoDbOptimizedHarness : IAsyncDisposable
     {
-        private MongoDbOptimizedHarness(IMongoClient client, IMongoDatabase database, MongoDbDocumentStore store)
+        private MongoDbOptimizedHarness(IMongoClient client, IMongoDatabase database, MongoDbDocumentStore store, StorageUnit unit)
         {
             Client = client;
             Database = database;
             Store = store;
+            Unit = unit;
         }
 
         private IMongoClient Client { get; }
         private IMongoDatabase Database { get; }
         public MongoDbDocumentStore Store { get; }
+        public StorageUnit Unit { get; }
 
         private IMongoCollection<BsonDocument> Collection =>
-            Database.GetCollection<BsonDocument>("groundwork_configurationDocument");
+            Database.GetCollection<BsonDocument>(MongoDbGroundworkNames.CollectionName(Unit));
 
         public static async Task<MongoDbOptimizedHarness> Create(string connectionString)
         {
@@ -98,7 +101,13 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
             var unit = manifest.StorageUnits.Single() with { Physicalization = PhysicalizationPolicy.Optimized };
             manifest = manifest with { StorageUnits = [unit] };
             await new MongoDbGroundworkMaterializer(database).MaterializeAsync(manifest, MongoDbTestManifests.Provider);
-            return new MongoDbOptimizedHarness(client, database, new MongoDbDocumentStore(database, manifest));
+            return new MongoDbOptimizedHarness(client, database, new MongoDbDocumentStore(database, manifest), unit);
+        }
+
+        public string PhysicalizedPath(string indexName)
+        {
+            var field = PhysicalizationProjection.EligibleFields(Unit).Single(field => field.Name == indexName);
+            return $"physicalized.{MongoDbGroundworkNames.PhysicalizedFieldName(field)}";
         }
 
         public async Task AssertIndexTargetsAsync(string indexName, string keyPath)
@@ -114,9 +123,10 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
                 .Find(Builders<BsonDocument>.Filter.Eq("_id", id))
                 .SingleAsync();
             var physicalized = document.GetValue("physicalized").AsBsonDocument;
+            var fields = PhysicalizationProjection.EligibleFields(Unit).ToDictionary(field => field.Name, StringComparer.Ordinal);
             return (
-                physicalized.GetValue("by_x002d_key").AsString,
-                physicalized.GetValue("by_x002d_category").AsString,
+                physicalized.GetValue(MongoDbGroundworkNames.PhysicalizedFieldName(fields["by-key"])).AsString,
+                physicalized.GetValue(MongoDbGroundworkNames.PhysicalizedFieldName(fields["by-category"])).AsString,
                 document.GetValue("version").ToInt64());
         }
 

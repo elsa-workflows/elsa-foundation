@@ -29,9 +29,20 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         var createdAt = existing?.CreatedAt ?? now;
 
         if (existing is null)
-            await InsertDocumentAsync(request, version, createdAt, now, transaction, cancellationToken);
+        {
+            try
+            {
+                await InsertDocumentAsync(request, version, createdAt, now, transaction, cancellationToken);
+            }
+            catch (DbException exception) when (dialect.IsDuplicateDocumentKeyException(exception))
+            {
+                return DocumentStoreWriteResult.ConcurrencyConflict;
+            }
+        }
         else
+        {
             await UpdateDocumentAsync(request, version, now, transaction, cancellationToken);
+        }
 
         await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
         await InsertIndexesAsync(unit, request.Id, request.ContentJson, transaction, cancellationToken);

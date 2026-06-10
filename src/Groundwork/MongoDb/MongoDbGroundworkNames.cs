@@ -3,11 +3,12 @@ using Groundwork.Core.Physicalization;
 
 namespace Groundwork.MongoDb;
 
-internal static class MongoDbGroundworkNames
+public static class MongoDbGroundworkNames
 {
+    public const int MaxEncodedIdentityLength = 120;
     public const string SchemaHistoryCollection = "groundwork_schema_history";
 
-    public static string CollectionName(StorageUnit unit) => $"groundwork_{unit.Identity.Value}";
+    public static string CollectionName(StorageUnit unit) => $"groundwork_{PhysicalizationNameEncoder.Encode(unit.Identity.Value, MaxEncodedIdentityLength)}";
 
     public static string PhysicalizedFieldName(PhysicalizedFieldPlan field) => PhysicalizationNameEncoder.Encode(field.Name);
 }

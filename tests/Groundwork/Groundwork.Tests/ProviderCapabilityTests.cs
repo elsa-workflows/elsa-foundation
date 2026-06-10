@@ -74,6 +74,20 @@ public sealed class ProviderCapabilityTests
     }
 
     [Fact]
+    public void UnknownManifestRequiredCapabilityBlocksCompatibility()
+    {
+        var manifest = SampleManifests.MetadataManifest() with
+        {
+            RequiredCapabilities = new HashSet<string> { "schema-history", "custom-required-capability" }
+        };
+
+        var result = _validator.Validate(manifest, SampleManifests.PortableCapabilities());
+
+        Assert.False(result.IsCompatible);
+        Assert.Contains(result.Errors, diagnostic => diagnostic.Code == "GW-CAP-012");
+    }
+
+    [Fact]
     public void UnsupportedOptimizedProjectionMaterializationBlocksCompatibility()
     {
         var manifest = SampleManifests.MetadataManifest();
