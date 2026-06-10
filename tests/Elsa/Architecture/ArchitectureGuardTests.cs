@@ -114,7 +114,7 @@ public sealed class ArchitectureGuardTests
     public void Runtime_projects_do_not_reference_elsa3_compatibility_projects()
     {
         var violations = ProjectFiles()
-            .Where(project => project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal) || project.Name == "Elsa.Workflows.Runtime")
+            .Where(IsRuntimeProject)
             .SelectMany(project => ProjectReferences(project)
                 .Where(reference => reference.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
                 .Select(reference => $"{project.Name} -> {reference.Name}"))
@@ -145,6 +145,12 @@ public sealed class ArchitectureGuardTests
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
+
+    private static bool IsRuntimeProject(ProjectInfo project) =>
+        project.Name == "Elsa.Workflows.Runtime"
+        || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Runtime"
+        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal);
 
     [Fact]
     public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()

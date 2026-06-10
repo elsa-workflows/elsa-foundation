@@ -75,6 +75,18 @@ public sealed class Elsa3MigrationBoundaryTests
     }
 
     [Fact]
+    public void DefinitionImportInput_RejectsReservedDiagnosticMetadataKeys()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new Elsa3WorkflowDefinitionImportInput(
+            Elsa3MigrationInputKind.WorkflowDefinitionExportJson,
+            new Elsa3WorkflowDefinition(),
+            metadata: new Dictionary<string, string> { ["InputKind"] = "caller-value" }));
+
+        Assert.Contains("reserved diagnostic keys", exception.Message);
+        Assert.Contains("InputKind", exception.Message);
+    }
+
+    [Fact]
     public void UnsupportedInputKind_CanBeRejectedWithDiagnostics()
     {
         var result = Elsa3MigrationCompatibility.RejectUnsupportedInputKind<object>(

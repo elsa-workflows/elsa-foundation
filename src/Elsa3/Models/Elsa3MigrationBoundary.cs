@@ -18,10 +18,15 @@ public sealed class Elsa3WorkflowDefinitionImportInput
         if (sourceName is not null && string.IsNullOrWhiteSpace(sourceName))
             throw new ArgumentException("Migration source name cannot be blank.", nameof(sourceName));
 
+        var metadataSnapshot = Elsa3MigrationMetadata.Snapshot(metadata);
+        var reservedMetadataKeys = Elsa3MigrationMetadata.ReservedDiagnosticKeys.Where(metadataSnapshot.ContainsKey).ToArray();
+        if (reservedMetadataKeys.Length > 0)
+            throw new ArgumentException($"Migration input metadata contains reserved diagnostic keys: {string.Join(", ", reservedMetadataKeys)}.", nameof(metadata));
+
         InputKind = inputKind;
         Definition = definition;
         SourceName = sourceName;
-        Metadata = Elsa3MigrationMetadata.Snapshot(metadata);
+        Metadata = metadataSnapshot;
     }
 
     public Elsa3MigrationInputKind InputKind { get; }
@@ -196,6 +201,13 @@ public enum Elsa3MigrationDiagnosticSeverity
 
 internal static class Elsa3MigrationMetadata
 {
+    public static readonly IReadOnlyCollection<string> ReservedDiagnosticKeys = Array.AsReadOnly(new[]
+    {
+        "InputKind",
+        "SourceName",
+        "DefinitionId"
+    });
+
     public static IReadOnlyDictionary<string, string> Snapshot(IReadOnlyDictionary<string, string>? metadata) =>
         new ReadOnlyDictionary<string, string>((metadata ?? new Dictionary<string, string>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
 }
