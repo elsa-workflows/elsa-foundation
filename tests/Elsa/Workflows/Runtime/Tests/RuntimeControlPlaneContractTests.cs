@@ -139,6 +139,43 @@ public sealed class RuntimeControlPlaneContractTests
     }
 
     [Fact]
+    public void ControlPlaneState_RejectsReleasedHoldInActiveCollection()
+    {
+        var releasedHold = new ControlPlaneHold(
+            holdId: "pause-1",
+            scope: ControlPlaneHoldScope.WorkflowExecution,
+            status: ControlPlaneHoldStatus.Released,
+            requestedAt: _now,
+            requestedBy: "operator",
+            reason: "maintenance",
+            workflowExecutionId: "wfexec-1",
+            releasedAt: _now.AddMinutes(1),
+            releasedBy: "operator");
+
+        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            activeHolds: [releasedHold]));
+
+        Assert.Contains("Active holds", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("activeHolds", exception.ParamName);
+    }
+
+    [Fact]
+    public void ControlPlaneState_RejectsEffectiveHoldInReleasedCollection()
+    {
+        var activeHold = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
+
+        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            releasedHolds: [activeHold]));
+
+        Assert.Contains("Released holds", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("releasedHolds", exception.ParamName);
+    }
+
+    [Fact]
     public void ControlPlaneState_RejectsHoldFromAnotherWorkflowWhenWorkflowScoped()
     {
         var pause = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-2", _now, "operator", "maintenance");

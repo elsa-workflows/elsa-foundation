@@ -20,6 +20,8 @@ public sealed class ControlPlaneState
         var activeHoldSnapshot = SnapshotHolds(activeHolds, nameof(activeHolds));
         var releasedHoldSnapshot = SnapshotHolds(releasedHolds, nameof(releasedHolds));
         ValidateUniqueHoldIds(activeHoldSnapshot.Concat(releasedHoldSnapshot));
+        ValidateActiveHolds(activeHoldSnapshot, nameof(activeHolds));
+        ValidateReleasedHolds(releasedHoldSnapshot, nameof(releasedHolds));
 
         if (workflowExecutionId is not null)
         {
@@ -67,6 +69,18 @@ public sealed class ControlPlaneState
 
         if (duplicateHoldId is not null)
             throw new ArgumentException($"Control-plane hold ID '{duplicateHoldId}' cannot appear in more than one hold collection.");
+    }
+
+    private static void ValidateActiveHolds(IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
+    {
+        if (holds.Any(hold => !hold.IsEffective))
+            throw new ArgumentException("Active holds must have Requested or Active status.", parameterName);
+    }
+
+    private static void ValidateReleasedHolds(IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
+    {
+        if (holds.Any(hold => hold.Status != ControlPlaneHoldStatus.Released))
+            throw new ArgumentException("Released holds must have Released status.", parameterName);
     }
 
     private static void ValidateWorkflowScopedHolds(string workflowExecutionId, IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
