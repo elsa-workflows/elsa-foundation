@@ -39,6 +39,14 @@ public class RelationalDocumentStoreDialect
         WHERE document_kind = {{Parameter("kind")}} AND id = {{Parameter("id")}};
         """;
 
+    public virtual string DeleteDocumentCommandSql(bool checkVersion) =>
+        checkVersion
+            ? $$"""
+              DELETE FROM groundwork_documents
+              WHERE document_kind = {{Parameter("kind")}} AND id = {{Parameter("id")}} AND version = {{Parameter("expectedVersion")}};
+              """
+            : DeleteDocumentSql;
+
     public virtual string DeleteIndexesSql => $$"""
         DELETE FROM groundwork_document_indexes
         WHERE document_kind = {{Parameter("kind")}} AND document_id = {{Parameter("id")}};

@@ -80,12 +80,18 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         if (request.ExpectedVersion is not null && existing.Version != request.ExpectedVersion)
             return DocumentStoreWriteResult.ConcurrencyConflict;
 
-        await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
-        await DeletePhysicalizedAsync(unit, request.Id, transaction, cancellationToken);
-        await using var command = CreateCommand(dialect.DeleteDocumentSql, transaction);
+        await using var command = CreateCommand(dialect.DeleteDocumentCommandSql(request.ExpectedVersion is not null), transaction);
         AddParameter(command, "kind", request.DocumentKind);
         AddParameter(command, "id", request.Id);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        if (request.ExpectedVersion is not null)
+            AddParameter(command, "expectedVersion", request.ExpectedVersion.Value);
+
+        var deletedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (deletedRows == 0 && request.ExpectedVersion is not null)
+            return DocumentStoreWriteResult.ConcurrencyConflict;
+
+        await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
+        await DeletePhysicalizedAsync(unit, request.Id, transaction, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return DocumentStoreWriteResult.Deleted;
