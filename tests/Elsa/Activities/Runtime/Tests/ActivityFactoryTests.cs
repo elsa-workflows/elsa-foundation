@@ -20,6 +20,17 @@ public class ActivityFactoryTests
         Assert.Same(constructor.Returned, activity);
     }
 
+    [Fact]
+    public async Task Create_LoadsContributedConstructorsIntoEmptyRegistry()
+    {
+        var constructor = new FakeConstructorA("Dispatch.Target");
+        var factory = new ActivityFactory(new ActivityConstructorRegistry(), [constructor]);
+
+        var activity = await factory.Create("Dispatch.Target", default, null, null);
+
+        Assert.Same(constructor.Returned, activity);
+    }
+
     [Fact] // US2 edge case / FR-005
     public async Task Create_UnknownDescriptorType_Throws()
     {

@@ -1,0 +1,90 @@
+@host = http://localhost:5000/default
+@definitionId = replace-with-definition-id
+@workflowVersionId = replace-with-workflow-version-id
+@writeLineActivityVersionId = replace-with-write-line-activity-version-id
+@artifactId = replace-with-artifact-id
+
+### 1. Discover constructable activities and find WriteLine
+GET {{host}}/publishing/activities
+
+### 2. Create workflow definition
+POST {{host}}/design/workflows/definitions
+Content-Type: application/json
+
+{
+  "name": "Monday Demo",
+  "description": "Sequential WriteLine workflow"
+}
+
+### 3. Create workflow version with two WriteLine nodes
+POST {{host}}/design/workflows/versions
+Content-Type: application/json
+
+{
+  "definitionId": "{{definitionId}}",
+  "state": {
+    "variables": [],
+    "activityConnections": [
+      {
+        "source": { "activityNodeId": "write-hello", "port": "Done" },
+        "target": { "activityNodeId": "write-goodbye", "port": "In" }
+      }
+    ],
+    "activities": [
+      {
+        "nodeId": "write-hello",
+        "activityVersionId": "{{writeLineActivityVersionId}}",
+        "inputs": [
+          {
+            "referenceKey": "Text",
+            "value": { "value": "Hello from a REST-defined workflow", "expressionType": "Literal" },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null
+          }
+        ],
+        "outputs": [],
+        "isContainer": false,
+        "isStart": true,
+        "isTerminal": false,
+        "childActivities": []
+      },
+      {
+        "nodeId": "write-goodbye",
+        "activityVersionId": "{{writeLineActivityVersionId}}",
+        "inputs": [
+          {
+            "referenceKey": "Text",
+            "value": { "value": "Workflow execution completed", "expressionType": "Literal" },
+            "autoEvaluate": null,
+            "evaluatorType": null,
+            "storageDriverType": null,
+            "isSensitive": null
+          }
+        ],
+        "outputs": [],
+        "isContainer": false,
+        "isStart": false,
+        "isTerminal": true,
+        "childActivities": []
+      }
+    ],
+    "inputs": [],
+    "outputs": [],
+    "workflowActivityOptions": null,
+    "strategyOptions": null
+  }
+}
+
+### 4. Publish workflow version into WorkflowExecutable
+POST {{host}}/publishing/workflows/{{workflowVersionId}}/publish
+Content-Type: application/json
+
+{}
+
+### 5. Execute published artifact
+POST {{host}}/runtime/workflows/{{artifactId}}/execute
+Content-Type: application/json
+
+{}

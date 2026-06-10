@@ -5,11 +5,15 @@ using Elsa.Activities.Runtime.Core.Models;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Pure dispatch / lifecycle orchestrator. Resolves the constructor registered for the descriptor
-/// type and delegates construction to it. No type resolution or argument binding lives here — those
-/// are kind-specific and owned by each <see cref="IActivityConstructor"/>.
+/// Pure dispatch / lifecycle orchestrator. Ensures contributed constructors are visible to the
+/// registry, resolves the constructor registered for the descriptor type, and delegates construction
+/// to it. No type resolution or argument binding lives here — those are kind-specific and owned by
+/// each <see cref="IActivityConstructor"/>.
 /// </summary>
-public sealed class ActivityFactory(IActivityConstructorRegistry registry) : IActivityFactory
+public sealed class ActivityFactory(
+    IActivityConstructorRegistry registry,
+    IEnumerable<IActivityConstructor>? constructors = null)
+    : IActivityFactory
 {
     public ValueTask<IActivity> Create(
         string descriptorType,
@@ -18,6 +22,8 @@ public sealed class ActivityFactory(IActivityConstructorRegistry registry) : IAc
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken = default)
     {
+        registry.AddAll(constructors ?? []);
+
         var constructor = registry.Resolve(descriptorType);
         return constructor.Construct(payload, inputs, outputs, cancellationToken);
     }
