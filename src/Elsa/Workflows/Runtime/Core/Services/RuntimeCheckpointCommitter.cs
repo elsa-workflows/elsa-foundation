@@ -19,10 +19,10 @@ public sealed class RuntimeCheckpointCommitter(
 
         await checkpointWriter.WriteAsync(commit, decision, cancellationToken);
 
-        var postCommitIntents = commit.PostCommitIntents;
+        var postCommitIntents = commit.PostCommitIntents.ToArray();
         var dispatchedIntentIds = new List<string>();
 
-        for (var index = 0; index < postCommitIntents.Count; index++)
+        for (var index = 0; index < postCommitIntents.Length; index++)
         {
             var intent = postCommitIntents[index];
 
