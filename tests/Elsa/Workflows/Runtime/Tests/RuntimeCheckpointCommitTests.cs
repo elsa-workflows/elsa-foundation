@@ -67,6 +67,7 @@ public sealed class RuntimeCheckpointCommitTests
             WorkflowExecutionId: "wfexec-1",
             Version: 1,
             PendingWork: [],
+            PendingContinuations: [],
             VolatileWaits: []);
         _durableValueState = new DurableValueState(
             durableValueId: "durable-1",

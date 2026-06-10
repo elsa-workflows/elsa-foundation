@@ -42,6 +42,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
 - **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
+### `IRuntimeVolatileWaitPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides whether in-memory volatile waits are allowed in a runtime composition).
+- **Signature:** `Decide(RuntimeVolatileWaitPolicyRequest request)`.
+- **Usage:** evaluates host support, requested duration, requested host-shutdown behavior, requested cancellation behavior, and durable fallback posture. Volatile waits remain scheduler continuation state and are not durable bookmark resume state.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
 ### `IBookmarkResumeResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one resolver owns durable bookmark-to-artifact resume resolution for a runtime composition).
 - **Signature:** `Resolve(BookmarkResumeRequest request)`.

@@ -101,16 +101,20 @@ public sealed class RuntimeContractTests
                     EnqueuedAt: DateTimeOffset.UtcNow,
                     Reason: "ActivityScheduled")
             ],
+            PendingContinuations: [],
             VolatileWaits:
             [
                 new VolatileWaitRegistration(
-                    WaitId: "wait-1",
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: "actexec-1",
-                    BranchId: "branch-a",
-                    RegisteredAt: DateTimeOffset.UtcNow,
-                    ExpiresAt: DateTimeOffset.UtcNow.AddSeconds(5),
-                    AwaitableKind: "timer")
+                    waitId: "wait-1",
+                    workflowExecutionId: "wfexec-1",
+                    activityExecutionId: "actexec-1",
+                    branchId: "branch-a",
+                    registeredAt: DateTimeOffset.UtcNow,
+                    expiresAt: DateTimeOffset.UtcNow.AddSeconds(5),
+                    awaitableKind: "timer",
+                    status: VolatileWaitStatus.Registered,
+                    hostShutdownBehavior: VolatileWaitHostShutdownBehavior.CancelWait,
+                    cancellationBehavior: VolatileWaitCancellationBehavior.CancelWait)
             ]);
 
         var workItem = Assert.Single(scheduler.PendingWork);
