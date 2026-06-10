@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Groundwork Physicalization And Performance](specs/019-groundwork-physicalization-performance/plan.md)
+Current Speckit plan: [Groundwork Runtime Evaluation And Hardening](specs/020-groundwork-runtime-evaluation-hardening/plan.md)
 <!-- SPECKIT END -->
