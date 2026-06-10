@@ -67,6 +67,8 @@ public sealed class RuntimePipelineContractTests
         var workflowBuilder = new WorkflowRuntimePipelineBuilder();
         var activityBuilder = new ActivityRuntimePipelineBuilder();
 
+        Assert.Throws<ArgumentException>(() => workflowBuilder.Use<CustomWorkflowSchedulingMiddleware>(null!));
+        Assert.Throws<ArgumentException>(() => activityBuilder.Use<CustomActivityInvokeMiddleware>(null!));
         Assert.Throws<ArgumentException>(() => workflowBuilder.Use<CustomWorkflowSchedulingMiddleware>("UnknownSlot"));
         Assert.Throws<ArgumentException>(() => activityBuilder.Use<CustomActivityInvokeMiddleware>("UnknownSlot"));
     }
@@ -74,19 +76,21 @@ public sealed class RuntimePipelineContractTests
     [Fact]
     public void WorkflowAndActivityMiddleware_UseDistinctContextTypes()
     {
-        var workflowContextParameter = InvokeContextType(typeof(IWorkflowRuntimeMiddleware));
-        var activityContextParameter = InvokeContextType(typeof(IActivityRuntimeMiddleware));
+        var workflowContextParameter = InvokeContextType<IWorkflowRuntimeMiddleware>(nameof(IWorkflowRuntimeMiddleware.InvokeAsync));
+        var activityContextParameter = InvokeContextType<IActivityRuntimeMiddleware>(nameof(IActivityRuntimeMiddleware.InvokeAsync));
 
         Assert.Equal(typeof(WorkflowRuntimePipelineContext), workflowContextParameter);
         Assert.Equal(typeof(ActivityRuntimePipelineContext), activityContextParameter);
         Assert.NotEqual(workflowContextParameter, activityContextParameter);
     }
 
-    private static Type InvokeContextType(Type middlewareContract) =>
-        middlewareContract
-            .GetMethod(nameof(IWorkflowRuntimeMiddleware.InvokeAsync))!
-            .GetParameters()[0]
-            .ParameterType;
+    private static Type InvokeContextType<TMiddleware>(string methodName)
+    {
+        var method = typeof(TMiddleware).GetMethod(methodName);
+
+        Assert.NotNull(method);
+        return method.GetParameters()[0].ParameterType;
+    }
 
     private sealed class CustomWorkflowSchedulingMiddleware : WorkflowRuntimeMiddlewareBase;
 

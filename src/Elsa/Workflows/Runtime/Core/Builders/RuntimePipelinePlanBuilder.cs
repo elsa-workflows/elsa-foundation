@@ -46,6 +46,9 @@ public abstract class RuntimePipelinePlanBuilder
         string? name,
         bool isBuiltIn)
     {
+        if (string.IsNullOrWhiteSpace(slotName))
+            throw new ArgumentException("A runtime pipeline slot name is required.", nameof(slotName));
+
         if (!_slotsByName.ContainsKey(slotName))
             throw new ArgumentException($"Unknown {PipelineKind} runtime pipeline slot '{slotName}'.", nameof(slotName));
 
