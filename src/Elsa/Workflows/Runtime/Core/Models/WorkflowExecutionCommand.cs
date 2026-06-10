@@ -16,7 +16,5 @@ public enum WorkflowExecutionCommandKind
     ResumeBookmark,
     ContinueVolatileWait,
     RunSchedulerWork,
-    Pause,
-    Unpause,
     Cancel
 }

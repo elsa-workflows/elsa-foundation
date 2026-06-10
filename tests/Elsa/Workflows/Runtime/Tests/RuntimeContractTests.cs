@@ -116,22 +116,57 @@ public sealed class RuntimeContractTests
     public void DurableValueState_UsesDeclaredLifecycleAndStorageBoundary()
     {
         var state = new DurableValueState(
-            DurableValueId: "durable-1",
-            WorkflowExecutionId: "wfexec-1",
-            ValueId: "customer",
-            Type: new RuntimeValueTypeDescriptor("reference", "crm.customer", Json("""{"type":"object"}""")),
-            Lifecycle: DurableValueLifecycle.Instance,
-            Storage: DurableValueStorage.Inline,
-            InlineValue: Json("""{"id":"cust-123"}"""),
-            ExternalReference: null,
-            SourceActivityExecutionId: "actexec-fetch-customer",
-            CapturedAt: DateTimeOffset.UtcNow,
-            Metadata: new Dictionary<string, string>());
+            durableValueId: "durable-1",
+            workflowExecutionId: "wfexec-1",
+            valueId: "customer",
+            type: new RuntimeValueTypeDescriptor("reference", "crm.customer", Json("""{"type":"object"}""")),
+            lifecycle: DurableValueLifecycle.Instance,
+            storage: DurableValueStorage.Inline,
+            inlineValue: Json("""{"id":"cust-123"}"""),
+            externalReference: null,
+            sourceActivityExecutionId: "actexec-fetch-customer",
+            capturedAt: DateTimeOffset.UtcNow,
+            metadata: new Dictionary<string, string>());
 
         Assert.Equal(DurableValueLifecycle.Instance, state.Lifecycle);
         Assert.Equal(DurableValueStorage.Inline, state.Storage);
         Assert.Equal("actexec-fetch-customer", state.SourceActivityExecutionId);
         Assert.Equal("cust-123", state.InlineValue!.Value.GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData(DurableValueLifecycle.None, DurableValueStorage.Inline)]
+    [InlineData(DurableValueLifecycle.Instance, null)]
+    public void DurableValueState_RejectsInvalidLifecycleAndStorageCombinations(
+        DurableValueLifecycle lifecycle,
+        DurableValueStorage? storage)
+    {
+        Assert.Throws<ArgumentException>(() => NewDurableValueState(lifecycle, storage, Json("""{"value":1}"""), null));
+    }
+
+    [Fact]
+    public void DurableValueState_RejectsExternalStorageWithoutReference()
+    {
+        Assert.Throws<ArgumentException>(() => NewDurableValueState(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.External,
+            inlineValue: null,
+            externalReference: null));
+    }
+
+    [Fact]
+    public void DurableValueState_RejectsMixedInlineAndExternalStorage()
+    {
+        var externalReference = new DurableValueExternalReference(
+            StorageProfile: "documents",
+            Locator: "doc-1",
+            Metadata: new Dictionary<string, string>());
+
+        Assert.Throws<ArgumentException>(() => NewDurableValueState(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            Json("""{"value":1}"""),
+            externalReference));
     }
 
     [Fact]
@@ -159,4 +194,22 @@ public sealed class RuntimeContractTests
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
     }
+
+    private static DurableValueState NewDurableValueState(
+        DurableValueLifecycle lifecycle,
+        DurableValueStorage? storage,
+        JsonElement? inlineValue,
+        DurableValueExternalReference? externalReference) =>
+        new(
+            durableValueId: "durable-1",
+            workflowExecutionId: "wfexec-1",
+            valueId: "customer",
+            type: new RuntimeValueTypeDescriptor("reference", "crm.customer", null),
+            lifecycle: lifecycle,
+            storage: storage,
+            inlineValue: inlineValue,
+            externalReference: externalReference,
+            sourceActivityExecutionId: null,
+            capturedAt: DateTimeOffset.UtcNow,
+            metadata: new Dictionary<string, string>());
 }
