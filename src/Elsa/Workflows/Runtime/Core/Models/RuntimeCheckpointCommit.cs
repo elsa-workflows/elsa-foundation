@@ -81,37 +81,37 @@ public sealed record RuntimeStateChange<TState>(
 public sealed class RuntimePostCommitIntent
 {
     public RuntimePostCommitIntent(
-        string IntentId,
-        string WorkflowExecutionId,
-        string Kind,
-        DateTimeOffset RecordedAt,
-        string? ActivityExecutionId,
-        string? IdempotencyKey,
-        JsonElement? Payload,
-        IReadOnlyDictionary<string, string>? Metadata = null,
-        string? DependsOnWaitRegistrationId = null,
-        RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy = null)
+        string intentId,
+        string workflowExecutionId,
+        string kind,
+        DateTimeOffset recordedAt,
+        string? activityExecutionId,
+        string? idempotencyKey,
+        JsonElement? payload,
+        IReadOnlyDictionary<string, string>? metadata = null,
+        string? dependsOnWaitRegistrationId = null,
+        RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(IntentId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(WorkflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(Kind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
 
-        if (WaitFailurePolicy is not null && DependsOnWaitRegistrationId is null)
-            throw new ArgumentException("A wait failure policy requires a wait registration dependency.", nameof(WaitFailurePolicy));
+        if (waitFailurePolicy is not null && string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId))
+            throw new ArgumentException("A wait failure policy requires a wait registration dependency.", nameof(dependsOnWaitRegistrationId));
 
-        if (DependsOnWaitRegistrationId is not null && WaitFailurePolicy is null)
-            throw new ArgumentException("A wait-dependent post-commit intent requires a wait failure policy.", nameof(WaitFailurePolicy));
+        if (!string.IsNullOrWhiteSpace(dependsOnWaitRegistrationId) && waitFailurePolicy is null)
+            throw new ArgumentException("A wait-dependent post-commit intent requires a wait failure policy.", nameof(waitFailurePolicy));
 
-        this.IntentId = IntentId;
-        this.WorkflowExecutionId = WorkflowExecutionId;
-        this.Kind = Kind;
-        this.RecordedAt = RecordedAt;
-        this.ActivityExecutionId = ActivityExecutionId;
-        this.IdempotencyKey = IdempotencyKey;
-        this.Payload = Payload?.Clone();
-        this.Metadata = RuntimeModelMetadata.Snapshot(Metadata);
-        this.DependsOnWaitRegistrationId = DependsOnWaitRegistrationId;
-        this.WaitFailurePolicy = WaitFailurePolicy;
+        IntentId = intentId;
+        WorkflowExecutionId = workflowExecutionId;
+        Kind = kind;
+        RecordedAt = recordedAt;
+        ActivityExecutionId = activityExecutionId;
+        IdempotencyKey = idempotencyKey;
+        Payload = payload?.Clone();
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
+        WaitFailurePolicy = waitFailurePolicy;
     }
 
     public string IntentId { get; }
@@ -124,7 +124,7 @@ public sealed class RuntimePostCommitIntent
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
-    public bool IsWaitDependent => DependsOnWaitRegistrationId is not null;
+    public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
 }
 
 public enum RuntimeWaitDependentIntentFailurePolicy

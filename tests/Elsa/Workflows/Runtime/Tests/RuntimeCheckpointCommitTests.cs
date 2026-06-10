@@ -308,16 +308,16 @@ public sealed class RuntimeCheckpointCommitTests
 
     private RuntimePostCommitIntent NewIntent(string intentId) =>
         new(
-            IntentId: intentId,
-            WorkflowExecutionId: "wfexec-1",
-            Kind: "DispatchBookmarkRegistration",
-            RecordedAt: _now,
-            ActivityExecutionId: "actexec-1",
-            IdempotencyKey: $"checkpoint-1:{intentId}",
-            Payload: Json("""{"bookmarkId":"bookmark-1"}"""),
-            Metadata: new Dictionary<string, string>(),
-            DependsOnWaitRegistrationId: "wait-1",
-            WaitFailurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow);
+            intentId: intentId,
+            workflowExecutionId: "wfexec-1",
+            kind: "DispatchBookmarkRegistration",
+            recordedAt: _now,
+            activityExecutionId: "actexec-1",
+            idempotencyKey: $"checkpoint-1:{intentId}",
+            payload: Json("""{"bookmarkId":"bookmark-1"}"""),
+            metadata: new Dictionary<string, string>(),
+            dependsOnWaitRegistrationId: "wait-1",
+            waitFailurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow);
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,

@@ -96,6 +96,16 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     }
 
     [Fact]
+    public void PostCommitIntent_RejectsBlankWaitDependency()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => NewIntent(
+            dependsOnWaitRegistrationId: " ",
+            failurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow));
+
+        Assert.Contains("wait registration dependency", exception.Message);
+    }
+
+    [Fact]
     public void OperationalState_RejectsChildStateFromAnotherWorkflowExecution()
     {
         var lease = new RuntimeExecutionLease(
@@ -201,15 +211,15 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     {
         using var document = JsonDocument.Parse("""{"signal":"sent"}""");
         return new RuntimePostCommitIntent(
-            IntentId: "intent-1",
-            WorkflowExecutionId: "wfexec-1",
-            Kind: "DispatchSignal",
-            RecordedAt: _now,
-            ActivityExecutionId: "actexec-1",
-            IdempotencyKey: "checkpoint-1:intent-1",
-            Payload: document.RootElement.Clone(),
-            Metadata: new Dictionary<string, string>(),
-            DependsOnWaitRegistrationId: dependsOnWaitRegistrationId,
-            WaitFailurePolicy: failurePolicy);
+            intentId: "intent-1",
+            workflowExecutionId: "wfexec-1",
+            kind: "DispatchSignal",
+            recordedAt: _now,
+            activityExecutionId: "actexec-1",
+            idempotencyKey: "checkpoint-1:intent-1",
+            payload: document.RootElement.Clone(),
+            metadata: new Dictionary<string, string>(),
+            dependsOnWaitRegistrationId: dependsOnWaitRegistrationId,
+            waitFailurePolicy: failurePolicy);
     }
 }
