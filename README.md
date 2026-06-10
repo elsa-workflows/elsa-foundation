@@ -1,4 +1,4 @@
-![Elsa Foundation: a thin protocol spine with opt-in modules attached](docs/assets/elsa-foundation-header.png)
+![Elsa Foundation architectural blueprint header](docs/assets/elsa-foundation-header.png)
 
 # Elsa Foundation
 
