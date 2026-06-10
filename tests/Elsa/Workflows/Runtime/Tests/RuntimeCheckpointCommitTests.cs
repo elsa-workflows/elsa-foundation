@@ -118,7 +118,17 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, immediateWrite.Decision.Mode);
         Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, deferredWrite.Decision.Mode);
         Assert.Equal(immediateWrite.Commit.Checkpoint, deferredWrite.Commit.Checkpoint);
-        Assert.Equal(immediateWrite.Commit.StateChanges, deferredWrite.Commit.StateChanges);
+        Assert.Equal(immediateWrite.Commit.StateChanges.WorkflowExecution!.State, deferredWrite.Commit.StateChanges.WorkflowExecution!.State);
+        Assert.Equal(immediateWrite.Commit.StateChanges.Scheduler!.State, deferredWrite.Commit.StateChanges.Scheduler!.State);
+        Assert.Equal(
+            immediateWrite.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId),
+            deferredWrite.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
+        Assert.Equal(
+            immediateWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId),
+            deferredWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId));
+        Assert.Equal(
+            immediateWrite.Commit.StateChanges.Bookmarks.Select(change => change.ResumeTargetId),
+            deferredWrite.Commit.StateChanges.Bookmarks.Select(change => change.ResumeTargetId));
     }
 
     [Fact]
@@ -147,6 +157,41 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Equal(["write:commit-1"], events);
         Assert.Empty(dispatcher.Intents);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_ReportsPartialPostCommitIntentDispatchFailures()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-2", failure: new InvalidOperationException("Intent failed."));
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2"),
+                NewIntent("intent-3")
+            ]);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher).CommitAsync(commit));
+
+        Assert.Equal("commit-1", exception.CommitId);
+        Assert.Equal("intent-2", exception.FailedIntentId);
+        Assert.Equal(["intent-1"], exception.DispatchedIntentIds);
+        Assert.Equal(["intent-3"], exception.UndispatchedIntentIds);
+        Assert.Equal(["write:commit-1", "dispatch:intent-1", "dispatch:intent-2"], events);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotWrapPostCommitIntentDispatchCancellation()
+    {
+        var dispatcher = new RecordingDispatcher(
+            failOnIntentId: "intent-1",
+            failure: new OperationCanceledException());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
     }
 
     [Fact]
@@ -180,7 +225,9 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Throws<ArgumentException>(() => NewStateChanges(bookmarks: invalidBookmarks));
     }
 
-    private RuntimeCheckpointCommit NewCommit(string checkpointName) =>
+    private RuntimeCheckpointCommit NewCommit(
+        string checkpointName,
+        IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents = null) =>
         new(
             CommitId: "commit-1",
             Checkpoint: new RuntimeCheckpoint(
@@ -191,18 +238,18 @@ public sealed class RuntimeCheckpointCommitTests
                 ActivityExecutionIds: ["actexec-1"],
                 Metadata: new Dictionary<string, string>()),
             StateChanges: NewStateChanges(),
-            PostCommitIntents:
-            [
-                new RuntimePostCommitIntent(
-                    IntentId: "intent-1",
-                    WorkflowExecutionId: "wfexec-1",
-                    Kind: "DispatchBookmarkRegistration",
-                    RecordedAt: _now,
-                    ActivityExecutionId: "actexec-1",
-                    IdempotencyKey: "checkpoint-1:intent-1",
-                    Payload: Json("""{"bookmarkId":"bookmark-1"}"""),
-                    Metadata: new Dictionary<string, string>())
-            ],
+            PostCommitIntents: postCommitIntents ?? [NewIntent("intent-1")],
+            Metadata: new Dictionary<string, string>());
+
+    private RuntimePostCommitIntent NewIntent(string intentId) =>
+        new(
+            IntentId: intentId,
+            WorkflowExecutionId: "wfexec-1",
+            Kind: "DispatchBookmarkRegistration",
+            RecordedAt: _now,
+            ActivityExecutionId: "actexec-1",
+            IdempotencyKey: $"checkpoint-1:{intentId}",
+            Payload: Json("""{"bookmarkId":"bookmark-1"}"""),
             Metadata: new Dictionary<string, string>());
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
@@ -305,13 +352,20 @@ public sealed class RuntimeCheckpointCommitTests
         }
     }
 
-    private sealed class RecordingDispatcher(List<string>? events = null) : IRuntimePostCommitIntentDispatcher
+    private sealed class RecordingDispatcher(
+        List<string>? events = null,
+        string? failOnIntentId = null,
+        Exception? failure = null) : IRuntimePostCommitIntentDispatcher
     {
         public List<RuntimePostCommitIntent> Intents { get; } = [];
 
         public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
         {
             events?.Add($"dispatch:{intent.IntentId}");
+
+            if (intent.IntentId == failOnIntentId)
+                throw failure ?? new InvalidOperationException($"Intent {intent.IntentId} failed.");
+
             Intents.Add(intent);
             return ValueTask.CompletedTask;
         }

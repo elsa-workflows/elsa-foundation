@@ -15,7 +15,7 @@ public sealed record RuntimeCheckpointCommit(
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 }
 
-public sealed record RuntimeCheckpointStateChangeSet
+public sealed class RuntimeCheckpointStateChangeSet
 {
     public RuntimeCheckpointStateChangeSet(
         RuntimeStateChange<WorkflowExecutionState>? workflowExecution,
