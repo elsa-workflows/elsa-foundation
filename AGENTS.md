@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Value Binding Contract](specs/011-runtime-value-binding-contract/plan.md)
+Current Speckit plan: [Runtime Diagnostics History And Incidents](specs/012-runtime-diagnostics-history-incidents/plan.md)
 <!-- SPECKIT END -->

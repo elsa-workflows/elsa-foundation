@@ -15,6 +15,7 @@ public sealed class RuntimeCheckpointCommitTests
     private readonly ActivityExecutionState _activityState;
     private readonly SchedulerState _schedulerState;
     private readonly DurableValueState _durableValueState;
+    private readonly IncidentState _incidentState;
 
     public RuntimeCheckpointCommitTests()
     {
@@ -78,6 +79,19 @@ public sealed class RuntimeCheckpointCommitTests
             sourceActivityExecutionId: "actexec-1",
             capturedAt: _now,
             metadata: new Dictionary<string, string>());
+        _incidentState = new IncidentState(
+            incidentId: "incident-1",
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "actexec-1",
+            executableNodeId: "node-1",
+            severity: IncidentSeverity.Error,
+            status: IncidentStatus.Blocking,
+            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+            failureType: "ActivityFaulted",
+            message: "Activity failed.",
+            createdAt: _now,
+            resolvedAt: null,
+            metadata: new Dictionary<string, string>());
     }
 
     [Theory]
@@ -99,7 +113,7 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Single(commit.StateChanges.ActivityExecutions);
         Assert.Single(commit.StateChanges.DurableValues);
         Assert.Equal("node-resume-1", Assert.Single(commit.StateChanges.Bookmarks).State.ResumeTargetId);
-        Assert.Equal(RuntimeStateCategory.Incident, Assert.Single(commit.StateChanges.Incidents).Category);
+        Assert.True(Assert.Single(commit.StateChanges.Incidents).State.IsBlocking);
         Assert.Equal(RuntimeStateCategory.Operational, Assert.Single(commit.StateChanges.Operational).Category);
     }
 
@@ -208,21 +222,20 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
-    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentReferenceCategories()
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
         {
-            new RuntimeStateChangeReference(
+            new RuntimeStateChange<IncidentState>(
                 StateId: "bookmark-1",
-                Category: RuntimeStateCategory.Bookmark,
                 Operation: RuntimeStateChangeOperation.Append,
-                WorkflowExecutionId: "wfexec-1",
-                ActivityExecutionId: "actexec-1",
-                ResumeTargetId: null,
+                State: _incidentState,
                 Metadata: new Dictionary<string, string>())
         };
 
-        Assert.Throws<ArgumentException>(() => NewStateChanges(incidents: invalidIncidents));
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(incidents: invalidIncidents));
+
+        Assert.Contains("IncidentState.IncidentId", exception.Message);
     }
 
     [Fact]
@@ -268,7 +281,7 @@ public sealed class RuntimeCheckpointCommitTests
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
-        IReadOnlyCollection<RuntimeStateChangeReference>? incidents = null) =>
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>>? incidents = null) =>
         new(
             workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
                 StateId: _workflowState.WorkflowExecutionId,
@@ -302,13 +315,10 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             incidents: incidents ??
             [
-                new RuntimeStateChangeReference(
-                    StateId: "incident-1",
-                    Category: RuntimeStateCategory.Incident,
+                new RuntimeStateChange<IncidentState>(
+                    StateId: _incidentState.IncidentId,
                     Operation: RuntimeStateChangeOperation.Append,
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: "actexec-1",
-                    ResumeTargetId: null,
+                    State: _incidentState,
                     Metadata: new Dictionary<string, string>())
             ],
             operational:
