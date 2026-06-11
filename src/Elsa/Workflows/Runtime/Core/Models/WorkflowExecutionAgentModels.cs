@@ -56,8 +56,11 @@ public sealed class WorkflowExecutionCommandDispatchResult
         ArgumentException.ThrowIfNullOrWhiteSpace(envelopeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
+        if (reason is not null && string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Command dispatch reason cannot be blank when provided.", nameof(reason));
+
         if (status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred)
-            ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+            ArgumentNullException.ThrowIfNull(reason);
 
         if (status == WorkflowExecutionCommandDispatchStatus.Accepted && reason is not null)
             throw new ArgumentException("Accepted command dispatch results cannot carry a reason.", nameof(reason));

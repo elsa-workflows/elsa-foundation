@@ -189,6 +189,12 @@ public sealed class RuntimeAgentProviderContractTests
             status: WorkflowExecutionCommandDispatchStatus.Deferred,
             recordedAt: _now));
         Assert.Throws<ArgumentException>(() => new WorkflowExecutionCommandDispatchResult(
+            envelopeId: "envelope-duplicate-blank",
+            workflowExecutionId: "wfexec-1",
+            status: WorkflowExecutionCommandDispatchStatus.Duplicate,
+            recordedAt: _now,
+            reason: " "));
+        Assert.Throws<ArgumentException>(() => new WorkflowExecutionCommandDispatchResult(
             envelopeId: "envelope-4",
             workflowExecutionId: "wfexec-1",
             status: WorkflowExecutionCommandDispatchStatus.Accepted,
