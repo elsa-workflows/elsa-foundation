@@ -58,6 +58,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         CancellationToken cancellationToken)
     {
         var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
+        var activityStateChangeMetadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+        {
+            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
+            ["runtime.checkpointReason"] = payload.Reason
+        });
+
         foreach (var activityExecutionId in payload.ActivityExecutionIds)
         {
             var state = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, activityExecutionId, cancellationToken);
@@ -68,11 +74,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 StateId: activityExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: state,
-                Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
-                {
-                    ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                    ["runtime.checkpointReason"] = payload.Reason
-                })));
+                Metadata: activityStateChangeMetadata));
         }
 
         return new RuntimeCheckpointCommit(
