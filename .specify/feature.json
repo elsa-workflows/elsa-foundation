@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/031-runtime-parent-completion-evaluation"
+  "feature_directory": "specs/032-runtime-continuation-scheduling-enqueue"
 }

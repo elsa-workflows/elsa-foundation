@@ -9,6 +9,7 @@ public sealed class RuntimeCompleteActivityCommandPayload
 {
     public const string ActivityInvocationCompletedReason = "ActivityInvocationCompleted";
     public const string ParentCompletionEvaluationReason = "ParentCompletionEvaluation";
+    public const string ContinuationSchedulingReason = "ContinuationScheduling";
 
     [JsonConstructor]
     public RuntimeCompleteActivityCommandPayload(
