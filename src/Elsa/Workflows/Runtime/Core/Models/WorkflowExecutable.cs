@@ -87,7 +87,7 @@ public sealed record WorkflowExecutableIdentity(
     string ArtifactHash,
     WorkflowExecutableSourceReference? Source = null);
 
-public static class WorkflowExecutableIdentityComparer
+internal static class WorkflowExecutableIdentityComparer
 {
     public static bool MatchesPinnedSnapshot(WorkflowExecutableIdentity executable, WorkflowExecutableIdentity pinned)
     {
