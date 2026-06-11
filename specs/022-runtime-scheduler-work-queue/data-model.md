@@ -52,7 +52,7 @@ Methods:
 Rules:
 
 - Queue ordering is per workflow execution.
-- Duplicate work item IDs return the original queued item.
+- Duplicate work item IDs return the original queued item within the same workflow execution.
 - Dequeue removes one item from the workflow execution queue.
 
 ## WorkflowSchedulerCommandProcessor

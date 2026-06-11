@@ -6,12 +6,20 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionCommandProcessor
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
+    private readonly TimeProvider _timeProvider;
 
     public WorkflowSchedulerCommandProcessor(IWorkflowSchedulerWorkQueue schedulerWorkQueue)
+        : this(schedulerWorkQueue, TimeProvider.System)
+    {
+    }
+
+    public WorkflowSchedulerCommandProcessor(IWorkflowSchedulerWorkQueue schedulerWorkQueue, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _schedulerWorkQueue = schedulerWorkQueue;
+        _timeProvider = timeProvider;
     }
 
     public async ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -26,7 +34,7 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
             envelopeId: envelope.EnvelopeId,
             idempotencyKey: envelope.IdempotencyKey,
             enqueuedAt: envelope.EnqueuedAt,
-            recordedAt: DateTimeOffset.UtcNow,
+            recordedAt: _timeProvider.GetUtcNow(),
             sequence: envelope.Sequence,
             payload: envelope.Command.Payload,
             commandMetadata: envelope.Command.Metadata,

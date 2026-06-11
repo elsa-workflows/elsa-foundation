@@ -19,7 +19,7 @@
 - **FR-003**: Runtime.Core MUST provide an `IWorkflowExecutionCommandProcessor` default that converts accepted command envelopes into scheduler work items.
 - **FR-004**: Scheduler work items MUST carry workflow execution ID, command ID, command kind, envelope ID, idempotency key, enqueue time, optional sequence, payload, command metadata, and envelope metadata.
 - **FR-005**: The queue MUST preserve per-workflow insertion order for listed and dequeued work.
-- **FR-006**: The queue MUST be idempotent by scheduler work item ID.
+- **FR-006**: The queue MUST be idempotent by scheduler work item ID within each workflow execution.
 - **FR-007**: This slice MUST NOT implement activity execution, scheduler drain behavior, durable persistence, distributed queue placement, or checkpoint commits.
 - **FR-008**: Runtime.Core MUST remain free of Design-owned authored workflow model dependencies.
 

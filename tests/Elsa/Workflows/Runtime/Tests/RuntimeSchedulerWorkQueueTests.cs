@@ -66,7 +66,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
     public async Task WorkflowSchedulerCommandProcessor_RecordsEnvelopeAsSchedulerWork()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(queue);
+        var processor = new WorkflowSchedulerCommandProcessor(queue, new FixedTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
         await processor.ProcessAsync(envelope);
@@ -77,6 +77,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         Assert.Equal(envelope.Command.Kind, workItem.CommandKind);
         Assert.Equal(envelope.IdempotencyKey, workItem.IdempotencyKey);
         Assert.Equal(envelope.Sequence, workItem.Sequence);
+        Assert.Equal(_now, workItem.RecordedAt);
         Assert.Equal("work-1", workItem.Payload!.Value.GetProperty("workItemId").GetString());
         Assert.Equal("test", workItem.CommandMetadata["source"]);
         Assert.Equal("in-process", workItem.EnvelopeMetadata["transport"]);
@@ -122,7 +123,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         string workflowExecutionId = "wfexec-1",
         string? commandId = null)
     {
-        using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
+        using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
             workItemId: $"work-{index}",
             workflowExecutionId: workflowExecutionId,
@@ -151,7 +152,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
         string workflowExecutionId = "wfexec-1",
         string? idempotencyKey = null)
     {
-        using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
+        using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         var command = new WorkflowExecutionCommand(
             CommandId: $"command-{index}",
             WorkflowExecutionId: workflowExecutionId,
@@ -169,5 +170,10 @@ public sealed class RuntimeSchedulerWorkQueueTests
             enqueuedAt: _now,
             sequence: index,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

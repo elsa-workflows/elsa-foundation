@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Stores scheduler work recorded by an execution agent for one workflow execution.
+/// Stores scheduler work recorded by execution agents, isolated by workflow execution ID.
 /// </summary>
 public interface IWorkflowSchedulerWorkQueue
 {
