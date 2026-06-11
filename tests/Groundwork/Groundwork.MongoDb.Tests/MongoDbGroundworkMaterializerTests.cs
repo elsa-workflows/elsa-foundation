@@ -36,6 +36,22 @@ public sealed class MongoDbGroundworkMaterializerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MaterializeToleratesConcurrentCollectionCreation()
+    {
+        var database = CreateDatabase();
+        var manifest = MongoDbTestManifests.MetadataManifest();
+        var materializers = Enumerable
+            .Range(0, 8)
+            .Select(_ => new MongoDbGroundworkMaterializer(database));
+
+        await Task.WhenAll(materializers.Select(materializer => materializer.MaterializeAsync(manifest, MongoDbTestManifests.Provider)));
+
+        var collectionNames = await (await database.ListCollectionNamesAsync()).ToListAsync();
+        Assert.Contains(MongoDbGroundworkNames.CollectionName(manifest.StorageUnits.Single()), collectionNames);
+        Assert.Equal(1, await CountSchemaHistoryRows(database));
+    }
+
+    [Fact]
     public async Task MaterializeEncodesLongCollectionNamesDeterministically()
     {
         var database = CreateDatabase();

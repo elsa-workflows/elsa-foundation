@@ -8,6 +8,8 @@ namespace Groundwork.MongoDb.Materialization;
 
 public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
 {
+    private const int NamespaceExistsErrorCode = 48;
+
     public async Task MaterializeAsync(StorageManifest manifest, ProviderIdentity provider, CancellationToken cancellationToken = default)
     {
         var collections = await GetCollectionNamesAsync(cancellationToken);
@@ -36,7 +38,15 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
         if (collections.Contains(collectionName))
             return;
 
-        await database.CreateCollectionAsync(collectionName, cancellationToken: cancellationToken);
+        try
+        {
+            await database.CreateCollectionAsync(collectionName, cancellationToken: cancellationToken);
+        }
+        catch (MongoCommandException ex) when (ex.Code == NamespaceExistsErrorCode)
+        {
+            // NamespaceExists means another materializer created the collection after our initial snapshot.
+        }
+
         collections.Add(collectionName);
     }
 
