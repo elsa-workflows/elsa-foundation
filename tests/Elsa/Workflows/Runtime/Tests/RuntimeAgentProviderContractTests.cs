@@ -183,6 +183,11 @@ public sealed class RuntimeAgentProviderContractTests
             workflowExecutionId: "wfexec-1",
             status: WorkflowExecutionCommandDispatchStatus.Rejected,
             recordedAt: _now));
+        Assert.ThrowsAny<ArgumentException>(() => new WorkflowExecutionCommandDispatchResult(
+            envelopeId: "envelope-3b",
+            workflowExecutionId: "wfexec-1",
+            status: WorkflowExecutionCommandDispatchStatus.Deferred,
+            recordedAt: _now));
         Assert.Throws<ArgumentException>(() => new WorkflowExecutionCommandDispatchResult(
             envelopeId: "envelope-4",
             workflowExecutionId: "wfexec-1",
