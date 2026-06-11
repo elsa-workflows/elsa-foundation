@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/029-runtime-activity-invocation-boundary"
+  "feature_directory": "specs/030-runtime-activity-completion-work-enqueue"
 }

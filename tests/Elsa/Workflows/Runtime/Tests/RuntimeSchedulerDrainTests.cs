@@ -109,6 +109,26 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_DispatchesCompleteActivityWorkThroughNamedHandler()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new WorkflowCompleteActivitySchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload())));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
+        Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, item.HandlerName);
+    }
+
+    [Fact]
     public async Task DrainAsync_UsesMarkedFallbackAfterCustomHandlers()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -158,7 +178,8 @@ public sealed class RuntimeSchedulerDrainTests
     private RuntimeSchedulerWorkItem NewWorkItem(
         int index,
         string workflowExecutionId = "wfexec-1",
-        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork)
+        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork,
+        JsonElement? payload = null)
     {
         using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
@@ -171,8 +192,18 @@ public sealed class RuntimeSchedulerDrainTests
             enqueuedAt: _now,
             recordedAt: _now,
             sequence: index,
-            payload: document.RootElement.Clone());
+            payload: payload ?? document.RootElement.Clone());
     }
+
+    private static RuntimeCompleteActivityCommandPayload NewCompleteActivityPayload() =>
+        new(
+            pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            executableNodeId: "node-start",
+            activityExecutionId: "actexec-1",
+            parentActivityExecutionId: null,
+            branchId: null,
+            outcomeNames: ["Done"],
+            reason: RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
     private RuntimeSchedulerWorkItemResult CompletedResult(string workflowExecutionId) =>
         new(
