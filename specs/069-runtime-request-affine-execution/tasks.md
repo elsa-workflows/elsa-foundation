@@ -10,5 +10,5 @@
 - [x] T006 Use ambient services for Activities Runtime invocation when supplied.
 - [x] T007 Add focused request-affine execution tests.
 - [x] T008 Run validation and self-review until no actionable issues remain.
-- [ ] T009 Refresh generated maps if required.
+- [x] T009 Refresh generated maps if required.
 - [ ] T010 Commit, open PR, run PR loop, and merge when clean.
