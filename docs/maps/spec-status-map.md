@@ -84,4 +84,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Draft | - | 7 | 0 | - |
 | [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Draft | - | 7 | 0 | - |
 | [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 9 | 0 | - |
-| [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 5 | 4 | - |
+| [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 8 | 1 | - |
