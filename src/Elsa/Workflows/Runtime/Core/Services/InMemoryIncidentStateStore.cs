@@ -68,7 +68,9 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
 
         lock (_syncRoot)
         {
-            var states = ListByWorkflowExecution(workflowExecutionId)
+            var states = _states
+                .Where(item => item.Key.WorkflowExecutionId == workflowExecutionId)
+                .Select(item => item.Value)
                 .Where(state => state.IsBlocking)
                 .ToArray();
 

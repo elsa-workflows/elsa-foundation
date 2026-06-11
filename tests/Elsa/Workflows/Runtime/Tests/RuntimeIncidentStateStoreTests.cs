@@ -21,7 +21,7 @@ public sealed class RuntimeIncidentStateStoreTests
         await store.SaveAsync(resolved);
         Assert.True(await store.TryAddAsync(otherWorkflow));
 
-        Assert.Equal(blocking, await store.FindAsync("wfexec-1", "incident-1"));
+        Assert.Same(blocking, await store.FindAsync("wfexec-1", "incident-1"));
         Assert.Equal(2, (await store.ListAsync("wfexec-1")).Count);
 
         var blockingIncidents = await store.ListBlockingAsync("wfexec-1");
