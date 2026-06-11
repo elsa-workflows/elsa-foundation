@@ -70,7 +70,8 @@ public sealed class RuntimeSchedulerDrainTests
             second =>
             {
                 Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, second.Status);
-                Assert.Equal("Fault requested for work-2.", second.Error);
+                Assert.Contains(nameof(InvalidOperationException), second.Error);
+                Assert.Contains("Fault requested for work-2.", second.Error);
             });
         Assert.Collection(remaining, item => Assert.Equal("work-3", item.WorkItemId));
     }
@@ -90,6 +91,24 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(NoopWorkflowSchedulerWorkHandler.HandlerName, item.HandlerName);
         Assert.Empty(customHandler.WorkItemIds);
         Assert.Equal(1, customHandler.CanHandleCallCount);
+    }
+
+    [Fact]
+    public async Task DrainAsync_UsesMarkedFallbackAfterCustomHandlers()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var customHandler = new RecordingSchedulerWorkHandler(canHandle: false);
+        var fallbackHandler = new RecordingFallbackSchedulerWorkHandler();
+        var drainer = new WorkflowSchedulerDrainer(queue, [customHandler, fallbackHandler], new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
+        Assert.Equal(fallbackHandler.Name, item.HandlerName);
+        Assert.Equal(1, customHandler.CanHandleCallCount);
+        Assert.Equal(["work-1"], fallbackHandler.WorkItemIds);
     }
 
     [Fact]
@@ -167,6 +186,27 @@ public sealed class RuntimeSchedulerDrainTests
 
             if (workItem.WorkItemId == faultOnWorkItemId)
                 throw new InvalidOperationException($"Fault requested for {workItem.WorkItemId}.");
+
+            WorkItemIds.Add(workItem.WorkItemId);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingFallbackSchedulerWorkHandler : IFallbackWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(RecordingFallbackSchedulerWorkHandler);
+        public List<string> WorkItemIds { get; } = [];
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem)
+        {
+            ArgumentNullException.ThrowIfNull(workItem);
+
+            return true;
+        }
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
             WorkItemIds.Add(workItem.WorkItemId);
             return ValueTask.CompletedTask;

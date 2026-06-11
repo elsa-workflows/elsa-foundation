@@ -64,6 +64,7 @@ Methods:
 
 Rules:
 
-- The first handler that returns `true` handles the item.
-- The default no-op handler handles all command kinds.
+- The first ordinary handler that returns `true` handles the item.
+- Fallback handlers implement `IFallbackWorkflowSchedulerWorkHandler` and run only after ordinary handlers decline the item.
+- The default no-op fallback handler handles all command kinds.
 - Handler dispatch is not activity execution.

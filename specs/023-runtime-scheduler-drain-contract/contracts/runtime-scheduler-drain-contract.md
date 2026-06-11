@@ -8,4 +8,5 @@ Required guarantees:
 - Work is dispatched in queue order.
 - A configured maximum limits how many work items one drain call handles.
 - Handler faults are surfaced in per-item results and stop the drain.
+- Ordinary scheduler work handlers are evaluated before handlers marked as fallback handlers.
 - The default handler acknowledges work without executing activities or writing checkpoints.

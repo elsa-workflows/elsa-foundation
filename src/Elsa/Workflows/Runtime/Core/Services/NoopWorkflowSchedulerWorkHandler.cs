@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class NoopWorkflowSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class NoopWorkflowSchedulerWorkHandler : IFallbackWorkflowSchedulerWorkHandler
 {
     public const string HandlerName = nameof(NoopWorkflowSchedulerWorkHandler);
 

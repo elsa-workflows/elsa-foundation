@@ -111,8 +111,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (handlers consume drained scheduler work items).
 - **Signature:** `Name`, `CanHandle(RuntimeSchedulerWorkItem workItem)`, `HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)`.
-- **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer prefers custom handlers before the built-in no-op fallback.
+- **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer evaluates ordinary handlers before fallback handlers.
 - **Default implementation:** `NoopWorkflowSchedulerWorkHandler` *(acknowledges drained work without activity execution or checkpoint side effects)*.
+
+### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).
+- **Signature:** inherits `IWorkflowSchedulerWorkHandler`.
+- **Usage:** modules can register catch-all scheduler work handlers without becoming priority handlers. The default drainer evaluates these handlers after ordinary `IWorkflowSchedulerWorkHandler` registrations.
+- **Default implementation:** `NoopWorkflowSchedulerWorkHandler`.
 
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).

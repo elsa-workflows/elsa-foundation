@@ -28,8 +28,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
-        _customHandlers = handlerSnapshot.Where(handler => handler is not NoopWorkflowSchedulerWorkHandler).ToArray();
-        _fallbackHandlers = handlerSnapshot.Where(handler => handler is NoopWorkflowSchedulerWorkHandler).ToArray();
+        _customHandlers = handlerSnapshot.Where(handler => handler is not IFallbackWorkflowSchedulerWorkHandler).ToArray();
+        _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _timeProvider = timeProvider;
     }
 
@@ -97,7 +97,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 handlerName: handler?.Name ?? nameof(WorkflowSchedulerDrainer),
                 startedAt: startedAt,
                 completedAt: _timeProvider.GetUtcNow(),
-                error: exception.Message);
+                error: exception.ToString());
         }
     }
 

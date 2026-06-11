@@ -46,5 +46,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is NoopWorkflowSchedulerWorkHandler);
+        Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is IFallbackWorkflowSchedulerWorkHandler);
     }
 }
