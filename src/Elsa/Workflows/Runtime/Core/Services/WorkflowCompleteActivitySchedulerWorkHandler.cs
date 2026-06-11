@@ -60,7 +60,23 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     {
         ArgumentNullException.ThrowIfNull(workItem);
 
-        return workItem.CommandKind == WorkflowExecutionCommandKind.CompleteActivity;
+        if (workItem.CommandKind != WorkflowExecutionCommandKind.CompleteActivity)
+            return false;
+
+        if (workItem.Payload is not { } payload)
+            return true;
+
+        try
+        {
+            var completionPayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
+            return completionPayload?.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation;
+        }
+        catch (Exception exception) when (
+            exception is JsonException or NotSupportedException ||
+            exception is ArgumentException argumentException && IsCompletePayloadValidationException(argumentException))
+        {
+            return true;
+        }
     }
 
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
@@ -113,7 +129,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             parentActivityExecutionId,
             parentState.ParentActivityExecutionId,
             parentState.BranchId,
-            outcomeNames: [],
+            activityCompletedPayload.OutcomeNames,
             RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
             SchedulerCompletionKind.ParentCompletionEvaluation,
             completedChildActivityExecutionId);

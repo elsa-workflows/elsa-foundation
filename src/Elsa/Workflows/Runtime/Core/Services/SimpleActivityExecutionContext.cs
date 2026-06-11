@@ -3,6 +3,8 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -10,13 +12,20 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class SimpleActivityExecutionContext(
     IServiceProvider serviceProvider,
     IActivity activity,
-    CancellationToken cancellationToken)
-    : IActivityExecutionContext, IExpressionExecutionContext
+    CancellationToken cancellationToken,
+    string? workflowExecutionId = null,
+    WorkflowExecutableIdentity? pinnedExecutable = null,
+    RuntimeSchedulerWorkItem? schedulerWorkItem = null,
+    ExecutableNode? executableNode = null,
+    ActivityExecutionState? activityExecutionState = null)
+    : IRuntimeActivityExecutionContext, IExpressionExecutionContext
 {
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
     private readonly List<ActivityBookmarkRequest> _bookmarkRequests = [];
     private readonly List<RecordedActivityOutput> _recordedOutputs = [];
+    private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
+    private readonly List<string> _compositeCompletionOutcomeNames = [];
 
     public IExpressionExecutionContext ExpressionExecutionContext => this;
     public IActivity Activity { get; } = activity;
@@ -24,6 +33,13 @@ public sealed class SimpleActivityExecutionContext(
     public IMemoryRegister Memory => _memory;
     public IExpressionExecutionContext? ParentContext { get; set; }
     public CancellationToken CancellationToken { get; } = cancellationToken;
+    public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;
+    public WorkflowExecutableIdentity PinnedExecutable => pinnedExecutable ?? throw MissingRuntimeValue(nameof(PinnedExecutable));
+    public RuntimeSchedulerWorkItem SchedulerWorkItem => schedulerWorkItem ?? throw MissingRuntimeValue(nameof(SchedulerWorkItem));
+    public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));
+    public ActivityExecutionState ActivityExecutionState => activityExecutionState ?? throw MissingRuntimeValue(nameof(ActivityExecutionState));
+    public bool CompositeCompletionRequested { get; private set; }
+    public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
 
     public TService GetRequiredService<TService>() where TService : notnull =>
         (TService)GetRequiredService(typeof(TService))!;
@@ -73,6 +89,34 @@ public sealed class SimpleActivityExecutionContext(
 
     public IReadOnlyCollection<RecordedActivityOutput> GetRecordedOutputs() => _recordedOutputs.ToArray();
 
+    public void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
+            executableNodeId,
+            schedulingActivityExecutionId,
+            metadata));
+    }
+
+    public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
+        _childActivityScheduleRequests.ToArray();
+
+    public void CompleteCompositeActivity(IEnumerable<string>? outcomeNames = null)
+    {
+        var outcomeSnapshot = (outcomeNames ?? [ActivityOutcomes.Done]).ToArray();
+        if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException("Composite completion outcome names cannot contain blank values.");
+
+        if (outcomeSnapshot.Distinct(StringComparer.Ordinal).Count() != outcomeSnapshot.Length)
+            throw new InvalidOperationException("Composite completion outcome names cannot contain duplicates.");
+
+        CompositeCompletionRequested = true;
+        _compositeCompletionOutcomeNames.Clear();
+        _compositeCompletionOutcomeNames.AddRange(outcomeSnapshot);
+    }
+
     public bool IsContainedWithinCompositeActivity() => false;
     public bool TryGetActivityInput(string key, out object? value) => TryGetById(key, out value);
     public bool TryGetWorkflowInput(string key, out object? value) => TryGetById(key, out value);
@@ -104,6 +148,9 @@ public sealed class SimpleActivityExecutionContext(
     }
 
     public IEnumerable<IVariable> EnumerateVariablesInScope() => [];
+
+    private static InvalidOperationException MissingRuntimeValue(string name) =>
+        new($"Runtime activity execution context value '{name}' is unavailable for this context.");
 
     private bool TryGetById(string key, out object? value)
     {

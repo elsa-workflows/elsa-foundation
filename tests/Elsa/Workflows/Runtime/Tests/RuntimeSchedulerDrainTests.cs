@@ -427,7 +427,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal("actexec-1", parentPayload.CompletedChildActivityExecutionId);
         Assert.Equal("node-parent", parentPayload.ExecutableNodeId);
         Assert.Equal("branch-a", parentPayload.BranchId);
-        Assert.Empty(parentPayload.OutcomeNames);
+        Assert.Equal(["Done"], parentPayload.OutcomeNames);
     }
 
     [Fact]
@@ -492,7 +492,7 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
-    public async Task DrainAsync_DrainsParentEvaluationContinuationSchedulingAndCheckpointInOrder()
+    public async Task DrainAsync_LeavesParentEvaluationToFallbackWhenActivityRuntimeHandlerIsAbsent()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -520,28 +520,12 @@ public sealed class RuntimeSchedulerDrainTests
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
         var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
-        Assert.Equal(3, result.DrainedCount);
+        Assert.Equal(1, result.DrainedCount);
         Assert.Empty(remaining);
-        Assert.Collection(
-            result.Items,
-            first =>
-            {
-                Assert.Equal("work-1", first.WorkItemId);
-                Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, first.HandlerName);
-            },
-            second =>
-            {
-                Assert.Equal("work-1:continuation:actexec-parent", second.WorkItemId);
-                Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, second.HandlerName);
-            },
-            third =>
-            {
-                Assert.Equal("work-1:continuation:actexec-parent:checkpoint:WorkflowCompleted:actexec-parent", third.WorkItemId);
-                Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, third.HandlerName);
-            });
-        var write = Assert.Single(checkpointWriter.ListWrites());
-        Assert.Equal("commit:work-1:continuation:actexec-parent:checkpoint:WorkflowCompleted:actexec-parent", write.Commit.CommitId);
-        Assert.Equal(["actexec-parent"], write.Commit.Checkpoint.ActivityExecutionIds);
+        var item = Assert.Single(result.Items);
+        Assert.Equal("work-1", item.WorkItemId);
+        Assert.Equal(NoopWorkflowSchedulerWorkHandler.HandlerName, item.HandlerName);
+        Assert.Empty(checkpointWriter.ListWrites());
     }
 
     [Fact]

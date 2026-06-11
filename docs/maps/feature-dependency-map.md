@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 39
+- Feature classes: 42
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 36
+- Feature-bearing source projects: 39
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -37,6 +37,7 @@ Observed default-shell feature keys:
 - `WorkflowsDesignApi`
 - `WorkflowsDesignPersistenceEFCoreSqlite`
 - `WorkflowsPublishingApi`
+- `WorkflowsRuntimeApi`
 
 ## Duplicate Feature IDs
 
@@ -53,6 +54,7 @@ No duplicate explicit feature IDs were discovered.
 | ActivitiesDesignReconciliation | ActivitiesDesignReconciliationFeature | False | Elsa.Activities.Design.Reconciliation | ReconcilerOptions: ActivityVersionReconcilerOptions<br>StartupTaskOptions: ActivityVersionReconcilerStartupTaskOptions | - | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
 | ClrActivityReconciliation | ClrActivityReconciliationFeature | False | Elsa.Activities.Design.Reconciliation.Clr | Options: ClrReconciliationOptions | - | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
 | JsonActivityReconciliation | JsonActivityReconciliationFeature | False | Elsa.Activities.Design.Reconciliation.Json | Options: JsonReconciliationOptions | filesystem path signal<br>validation/requiredness guard in code | [JsonActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Json/JsonActivityReconciliationFeature.cs) |
+| ActivitiesFlowchart | ActivitiesFlowchartFeature | False | Elsa.Activities.Flowchart | - | - | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
 | ActivitiesPrimitives | ActivitiesPrimitivesFeature | False | Elsa.Activities.Primitives | - | - | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntime | ActivitiesRuntimeFeature | False | Elsa.Activities.Runtime | - | - | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
@@ -68,6 +70,7 @@ No duplicate explicit feature IDs were discovered.
 | HttpJavaScript | HttpJavaScriptFeature | False | Elsa.Http.JavaScript | - | - | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
 | FileSystemDistributedLocking | FileSystemLockingFeature | False | Elsa.Locking.FileSystem | LockAcquisitionTimeoutMinutes: double<br>LocksFolderPath: string | code default<br>filesystem path signal | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
 | Mediator | MediatorFeature | False | Elsa.Mediator | - | - | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
+| GroundworkPersistence | GroundworkPersistenceFeature | False | Elsa.Persistence.Groundwork | MaterializeOnStartup: bool | code default | [GroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceFeature.cs) |
 | Primitives | PrimitivesFeature | False | Elsa.Primitives.Hosting | - | - | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
 | Serialization.Newtonsoft | NewtonsoftSerializationFeature | False | Elsa.Serialization.Newtonsoft | - | - | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | Serialization | SerializationFeature | False | Elsa.Serialization.SystemText | - | - | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
@@ -79,6 +82,7 @@ No duplicate explicit feature IDs were discovered.
 | - | WorkflowsDesignReconciliationFeature | True | Elsa.Workflows.Design.Reconciliation | ReconcilerOptions: WorkflowVersionReconcilerOptions<br>Sources: virtual IEnumerable<IWorkflowReconciliationSource><br>StartupTaskOptions: WorkflowVersionReconcilerStartupTaskOptions | - | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowDesignValidations | WorkflowDesignValidationsFeature | False | Elsa.Workflows.Design.Validations | MaxRecursionDepth: int | code default | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsPublishingApi | WorkflowsPublishingApiFeature | False | Elsa.Workflows.Publishing.Api | - | - | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
+| WorkflowsRuntimeApi | WorkflowsRuntimeApiFeature | False | Elsa.Workflows.Runtime.Api | - | - | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
 | WorkflowsRuntimeHttp | WorkflowsRuntimeHttpFeature | False | Elsa.Workflows.Runtime.Http | AuthorizationHandlerType: string<br>BasePath: string<br>FaultHandlerType: string<br>RouteResolverType: string | code default<br>type-name selection signal | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptEndpoints | JavaScriptActivitiesEndpointsFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivities | JavaScriptActivitiesFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
@@ -98,6 +102,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | ActivitiesDesignReconciliation | Elsa.Activities.Design.Reconciliation | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | ClrActivityReconciliation | Elsa.Activities.Design.Reconciliation.Clr | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>System.Reflection.MetadataLoadContext 10.0.8 |
 | JsonActivityReconciliation | Elsa.Activities.Design.Reconciliation.Json | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| ActivitiesFlowchart | Elsa.Activities.Flowchart | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | ActivitiesPrimitives | Elsa.Activities.Primitives | - | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.24 |
 | ActivitiesRuntime | Elsa.Activities.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
@@ -113,6 +118,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | HttpJavaScript | Elsa.Http.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Http.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | FileSystemDistributedLocking | Elsa.Locking.FileSystem | - | Elsa.Locking.Core | CShells.Abstractions 0.0.24<br>DistributedLock.FileSystem 1.0.3 |
 | Mediator | Elsa.Mediator | - | Elsa.Mediator.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| GroundworkPersistence | Elsa.Persistence.Groundwork | - | Elsa.Tasks.Core<br>Groundwork.Core<br>Groundwork.Documents | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | Primitives | Elsa.Primitives.Hosting | - | Elsa.Primitives | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | Serialization.Newtonsoft | Elsa.Serialization.Newtonsoft | - | Elsa.Serialization.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Newtonsoft.Json 13.0.4 |
 | Serialization | Elsa.Serialization.SystemText | - | Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
@@ -121,7 +127,8 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | JavaScriptWorkflowsDesign | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsDesignPersistenceEFCoreSqlite | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Workflows.Design.Persistence.EFCore (EFCoreWorkflowsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Options 10.0.8 |
-| WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core | - |
+| WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core | - |
+| WorkflowsRuntimeApi | Elsa.Workflows.Runtime.Api | - | Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | - |
 | WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | - | Elsa.Http.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.24<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
 | JavaScriptEndpoints | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | JavaScriptActivities | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |

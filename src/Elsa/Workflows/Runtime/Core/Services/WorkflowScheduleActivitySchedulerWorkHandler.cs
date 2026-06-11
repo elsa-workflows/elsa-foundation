@@ -104,7 +104,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             "executableNodeId" or
             "activityExecutionId" or
             "reason" or
-            "schedulingActivityExecutionId";
+            "schedulingActivityExecutionId" or
+            "parentActivityExecutionId";
 
     private static void ValidatePinnedExecutable(
         RuntimeSchedulerWorkItem workItem,
@@ -141,7 +142,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             StartedAt: null,
             CompletedAt: null,
             SchedulingActivityExecutionId: schedulePayload.SchedulingActivityExecutionId,
-            ParentActivityExecutionId: null,
+            ParentActivityExecutionId: schedulePayload.ParentActivityExecutionId,
             BranchId: null,
             IterationId: null,
             CallStackDepth: null,

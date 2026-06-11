@@ -11,7 +11,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 ### `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
-- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. It does not traverse executable edges, propagate completion, write checkpoints, or load Design-owned authored workflow models.
+- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. Composite activities may request child executable-node scheduling through the runtime activity execution context; generic workflow-level edge traversal remains outside this handler. It does not load Design-owned authored workflow models.
+
+### `WorkflowParentActivityCompletionSchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
+- **Kind:** Scheduler work contributor.
+- **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
+- **Usage:** handles `ParentCompletionEvaluation` completion work by reconstructing the running parent activity and invoking `IActivityChildCompletionHandler` when implemented. The handler enqueues child `ScheduleActivity` work requested by the parent or completes the parent activity when the parent requests composite completion. It does not interpret workflow-level edges or load Design-owned authored workflow models.
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
@@ -28,6 +33,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 **Known implementations (shipped):**
 - `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.TypeInformation`; the default/primitive CLR kind)*
 - `Elsa.Activities.Composition.Runtime` — `WorkflowActivityConstructor` *(descriptor type `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; the Workflow kind)*
+
+### `IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Activity-owned continuation handler.
+- **Signature:** `ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)`.
+- **Usage:** implemented by composite activities that own child-completion routing semantics. The runtime invokes it only for parent-completion evaluation work after reconstructing the parent activity from the pinned executable artifact.
+
+**Known implementations (shipped):**
+- `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned slot metadata)*
 
 ---
 

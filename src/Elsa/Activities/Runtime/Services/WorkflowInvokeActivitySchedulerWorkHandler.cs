@@ -168,7 +168,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         activity.NodeId = executableNode.ExecutableNodeId;
         activity.Id = invokePayload.ActivityExecutionId;
 
-        var context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
+        var context = new SimpleActivityExecutionContext(
+            serviceProvider,
+            activity,
+            cancellationToken,
+            workItem.WorkflowExecutionId,
+            invokePayload.PinnedExecutable,
+            workItem,
+            executableNode,
+            state);
         RuntimeActivityInputMemory.Seed(context, inputs);
 
         ActivityExecutionState completedState;
@@ -182,9 +190,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             {
                 await activity.ExecuteAsync(context);
                 var bookmarkRequests = context.GetBookmarkRequests();
+                var childScheduleRequests = context.GetChildActivityScheduleRequests();
+                if (context.CompositeCompletionRequested && childScheduleRequests.Count > 0)
+                    throw new InvalidOperationException("Activity cannot both request composite completion and schedule child activities in the same execution.");
+
+                if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
+                    throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
+
                 if (bookmarkRequests.Count > 0)
                 {
                     await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, cancellationToken);
+                    return;
+                }
+
+                if (childScheduleRequests.Count > 0)
+                {
+                    var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
+                    await EnqueueChildActivityScheduleWorkAsync(schedulerWorkQueue, idGenerator, workItem, invokePayload, childScheduleRequests, cancellationToken);
                     return;
                 }
 
@@ -196,7 +218,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     await CaptureDurableOutputsAsync(checkpointCommitter, workItem, invokePayload, executableNode, recordedOutputs, recordedAt, cancellationToken);
                 }
 
-                completedState = CompleteActivity(workItem, invokePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true), skipped: false);
+                var outcomeNames = context.CompositeCompletionRequested
+                    ? NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
+                    : NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
+                completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
             }
         }
         catch (OperationCanceledException)
@@ -402,6 +427,56 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
                 payload: JsonSerializer.SerializeToElement(payload),
                 commandMetadata: MergeMetadata(invokeWorkItem.CommandMetadata, request),
+                envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
+
+            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+        }
+    }
+
+    private async ValueTask EnqueueChildActivityScheduleWorkAsync(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        CancellationToken cancellationToken)
+    {
+        var requests = scheduleRequests.ToArray();
+        if (requests.Select(request => request.ExecutableNodeId).Distinct(StringComparer.Ordinal).Count() != requests.Length)
+            throw new InvalidOperationException("Child activity schedule requests cannot contain duplicate executable node IDs.");
+
+        for (var index = 0; index < requests.Length; index++)
+        {
+            var request = requests[index];
+            var now = _timeProvider.GetUtcNow();
+            var childActivityExecutionId = idGenerator.NewActivityExecutionId();
+            var payload = new RuntimeScheduleActivityCommandPayload(
+                invokePayload.PinnedExecutable,
+                request.ExecutableNodeId,
+                childActivityExecutionId,
+                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
+                request.SchedulingActivityExecutionId ?? invokePayload.ActivityExecutionId,
+                invokePayload.ActivityExecutionId);
+
+            var commandMetadata = invokeWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            foreach (var item in request.Metadata)
+                commandMetadata[item.Key] = item.Value;
+
+            commandMetadata["runtime.parentActivityExecutionId"] = invokePayload.ActivityExecutionId;
+            commandMetadata["runtime.childExecutableNodeId"] = request.ExecutableNodeId;
+
+            var workItem = new RuntimeSchedulerWorkItem(
+                workItemId: $"{invokeWorkItem.WorkItemId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
+                commandId: $"{invokeWorkItem.CommandId}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
+                envelopeId: invokeWorkItem.EnvelopeId,
+                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}",
+                enqueuedAt: now,
+                recordedAt: now,
+                sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
+                payload: JsonSerializer.SerializeToElement(payload),
+                commandMetadata: commandMetadata,
                 envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
 
             await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
