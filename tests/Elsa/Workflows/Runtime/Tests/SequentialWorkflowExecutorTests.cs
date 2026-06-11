@@ -20,7 +20,7 @@ public sealed class SequentialWorkflowExecutorTests
     public SequentialWorkflowExecutorTests()
     {
         _factory = new FakeActivityFactory(_messages);
-        _executor = new SequentialWorkflowExecutor(_factory, new EmptyServiceProvider());
+        _executor = new SequentialWorkflowExecutor(_factory, new EmptyServiceProvider(), new RuntimeActivityInputMaterializer());
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class SequentialWorkflowExecutorTests
     [Fact]
     public async Task PropagatesCancellationDuringActivityExecution()
     {
-        var executor = new SequentialWorkflowExecutor(new CancelingActivityFactory(), new EmptyServiceProvider());
+        var executor = new SequentialWorkflowExecutor(new CancelingActivityFactory(), new EmptyServiceProvider(), new RuntimeActivityInputMaterializer());
         var executable = Executable([Node("write-one", "one")], [], ["write-one"]);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => executor.ExecuteAsync(executable).AsTask());
@@ -112,7 +112,7 @@ public sealed class SequentialWorkflowExecutorTests
     public async Task LiteralMemoryBlockReferenceUsesObjectConverterForTypedReads()
     {
         var converter = new RecordingObjectConverter();
-        var executor = new SequentialWorkflowExecutor(_factory, new SingleServiceProvider(converter));
+        var executor = new SequentialWorkflowExecutor(_factory, new SingleServiceProvider(converter), new RuntimeActivityInputMaterializer());
         var executable = Executable(
             [Node("write-one", "one", readFromReference: true)],
             [],

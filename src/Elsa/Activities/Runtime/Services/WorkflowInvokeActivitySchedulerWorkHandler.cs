@@ -89,7 +89,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
-        var inputs = _inputMaterializer.MaterializeInputs(executableNode);
+        IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        try
+        {
+            inputs = _inputMaterializer.MaterializeInputs(executableNode);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, invokePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
+            return;
+        }
+
         var activity = await activityFactory.Create(
             executableNode.DescriptorType,
             executableNode.DescriptorPayload,
@@ -101,18 +115,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         activity.Id = invokePayload.ActivityExecutionId;
 
         var context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
-        SequentialWorkflowExecutor.SeedInputMemory(context, inputs);
+        RuntimeActivityInputMemory.Seed(context, inputs);
 
+        ActivityExecutionState completedState;
         try
         {
             if (!await activity.CanExecuteAsync(context))
             {
-                await activityExecutionStateStore.SaveAsync(CompleteActivity(workItem, invokePayload, state, skipped: true), cancellationToken);
-                return;
+                completedState = CompleteActivity(workItem, invokePayload, state, skipped: true);
             }
-
-            await activity.ExecuteAsync(context);
-            await activityExecutionStateStore.SaveAsync(CompleteActivity(workItem, invokePayload, state, skipped: false), cancellationToken);
+            else
+            {
+                await activity.ExecuteAsync(context);
+                completedState = CompleteActivity(workItem, invokePayload, state, skipped: false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -120,8 +136,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, invokePayload, state, exception), cancellationToken);
+            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, invokePayload, state, exception, "ActivityFaulted"), cancellationToken);
+            return;
         }
+
+        await activityExecutionStateStore.SaveAsync(completedState, cancellationToken);
     }
 
     private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem)
@@ -188,7 +207,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
-        Exception exception)
+        Exception exception,
+        string subStatus)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata["runtime.invokeReason"] = invokePayload.Reason;
@@ -199,7 +219,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return state with
         {
             Status = ActivityExecutionStatus.Faulted,
-            SubStatus = "ActivityFaulted",
+            SubStatus = subStatus,
             CompletedAt = _timeProvider.GetUtcNow(),
             FaultCount = state.FaultCount + 1,
             AggregateFaultCount = state.AggregateFaultCount + 1,

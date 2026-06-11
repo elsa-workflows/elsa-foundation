@@ -85,6 +85,53 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenInputMaterializationFails()
+    {
+        await _executableStore.SaveAsync(NewExecutableWithInputBinding(new RuntimeInputBinding(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "workflow.input"))));
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var factory = new RecordingActivityFactory(new RecordingActivity());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal(0, factory.CreateCalls);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("InputMaterializationFailed", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(1, state.FaultCount);
+        Assert.Contains("not a supported literal binding", state.Metadata["runtime.faultMessage"]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PropagatesCompletionPersistenceFailureWithoutRecordingActivityFault()
+    {
+        var activity = new RecordingActivity();
+        var factory = new RecordingActivityFactory(activity);
+        var throwingStore = new ThrowingSaveActivityExecutionStateStore(
+            _activityStateStore,
+            ActivityExecutionStatus.Completed,
+            new InvalidOperationException("storage down"));
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(factory, throwingStore);
+        var handler = NewHandler(provider);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewInvokeWorkItem(NewIdentity())).AsTask());
+
+        Assert.Equal("storage down", exception.Message);
+        Assert.Equal([ActivityExecutionStatus.Completed], throwingStore.AttemptedSaveStatuses);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+    }
+
+    [Fact]
     public async Task HandleAsync_PropagatesConstructionFailureWithoutChangingRunningState()
     {
         await _executableStore.SaveAsync(NewExecutable());
@@ -174,14 +221,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
 
-    private ServiceProvider NewProvider(IActivityFactory factory)
+    private ServiceProvider NewProvider(IActivityFactory factory, IActivityExecutionStateStore? activityExecutionStateStore = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
         services.AddSingleton(_executableStore);
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
-        services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
+        services.AddSingleton<IActivityExecutionStateStore>(_ => activityExecutionStateStore ?? _activityStateStore);
         return services.BuildServiceProvider();
     }
 
@@ -243,7 +290,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private static WorkflowExecutable NewExecutable()
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var start = NewNode("node-start", document.RootElement);
+        var start = NewNode("node-start", document.RootElement, LiteralTextBinding());
         var other = NewNode("node-other", document.RootElement);
 
         return new(
@@ -257,7 +304,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
+    private static WorkflowExecutable NewExecutableWithInputBinding(RuntimeInputBinding inputBinding)
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var start = NewNode("node-start", document.RootElement, inputBinding);
+
+        return new(
+            identity: NewIdentity(),
+            nodes: [start],
+            edges: [],
+            startNodeIds: ["node-start"],
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload, RuntimeInputBinding? inputBinding = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -265,16 +328,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                ["Text"] = new(
-                    inputName: "Text",
-                    source: RuntimeInputBindingSource.Literal,
-                    literalValue: JsonSerializer.SerializeToElement("hello"),
-                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" })
-            },
+            inputBindings: inputBinding is null
+                ? new Dictionary<string, RuntimeInputBinding>()
+                : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
+
+    private static RuntimeInputBinding LiteralTextBinding() =>
+        new(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.Literal,
+            literalValue: JsonSerializer.SerializeToElement("hello"),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
@@ -311,6 +376,30 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default) =>
             throw exception;
+    }
+
+    private sealed class ThrowingSaveActivityExecutionStateStore(
+        IActivityExecutionStateStore inner,
+        ActivityExecutionStatus throwOnStatus,
+        Exception exception) : IActivityExecutionStateStore
+    {
+        public List<ActivityExecutionStatus> AttemptedSaveStatuses { get; } = [];
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
+        {
+            AttemptedSaveStatuses.Add(state.Status);
+
+            if (state.Status == throwOnStatus)
+                throw exception;
+
+            return inner.SaveAsync(state, cancellationToken);
+        }
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(workflowExecutionId, cancellationToken);
     }
 
     private sealed class RecordingActivity : ActivityBase

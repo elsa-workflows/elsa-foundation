@@ -25,7 +25,8 @@ The first implementation supports literal bindings with `typeName` metadata. Exp
 
 - Leaves non-`Running` state unchanged for replay/idempotency.
 - Records `Completed` with `CompletedAt` when the activity completes or cannot execute.
-- Records `Faulted`, increments `FaultCount`/`AggregateFaultCount`, and captures metadata when activity `CanExecuteAsync` or `ExecuteAsync` throws.
-- Propagates materialization/construction failures as scheduler faults so missing runtime activity support and incompatible executable artifacts remain runtime dependency errors.
+- Records `Faulted`, increments `FaultCount`/`AggregateFaultCount`, and captures metadata when input materialization, activity `CanExecuteAsync`, or activity `ExecuteAsync` throws.
+- Propagates construction failures as scheduler faults so missing runtime activity support remains a runtime dependency error.
+- Keeps state persistence failures outside the activity-exception catch scope so storage failures are not misclassified as activity faults.
 
 This slice does not schedule downstream executable nodes.

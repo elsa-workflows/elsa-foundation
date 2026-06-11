@@ -12,13 +12,6 @@ public sealed class SequentialWorkflowExecutor : IWorkflowExecutor
 
     public SequentialWorkflowExecutor(
         IActivityFactory activityFactory,
-        IServiceProvider serviceProvider)
-        : this(activityFactory, serviceProvider, new RuntimeActivityInputMaterializer())
-    {
-    }
-
-    public SequentialWorkflowExecutor(
-        IActivityFactory activityFactory,
         IServiceProvider serviceProvider,
         IRuntimeActivityInputMaterializer inputMaterializer)
     {
@@ -83,7 +76,7 @@ public sealed class SequentialWorkflowExecutor : IWorkflowExecutor
             activity.Id = activityExecutionId;
 
             var context = new SimpleActivityExecutionContext(_serviceProvider, activity, cancellationToken);
-            SeedInputMemory(context, inputs);
+            RuntimeActivityInputMemory.Seed(context, inputs);
 
             if (!await activity.CanExecuteAsync(context))
                 return new ActivityExecutionResult(activityExecutionId, node.ExecutableNodeId, node.ActivityType, ActivityExecutionResultStatus.Skipped, startedAt, DateTimeOffset.UtcNow, null);
@@ -123,12 +116,4 @@ public sealed class SequentialWorkflowExecutor : IWorkflowExecutor
         return executable.NodesById[outgoing[0].TargetNodeId];
     }
 
-    public static void SeedInputMemory(SimpleActivityExecutionContext context, IReadOnlyList<RuntimeMaterializedActivityInput> inputs)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(inputs);
-
-        foreach (var input in inputs)
-            context.Set(input.Argument.MemoryBlockReference(), input.Value);
-    }
 }
