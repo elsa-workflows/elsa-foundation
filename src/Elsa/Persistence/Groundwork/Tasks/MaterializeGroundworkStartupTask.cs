@@ -22,6 +22,7 @@ public sealed class MaterializeGroundworkStartupTask(
     {
         var manifestList = options.Value.Manifests.ToList();
         var providerList = providers.ToList();
+        var failures = new List<Exception>();
 
         foreach (var manifest in manifestList)
         {
@@ -44,14 +45,21 @@ public sealed class MaterializeGroundworkStartupTask(
                     await provider.MaterializeAsync(manifest, cancellationToken);
                     Record(manifest, provider, GroundworkMaterializationStatus.Succeeded, null);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Groundwork materialization failed for manifest {ManifestIdentity} on provider {ProviderName}.", manifest.Identity.Value, provider.Identity.Name);
                     Record(manifest, provider, GroundworkMaterializationStatus.Failed, ex.Message);
-                    throw;
+                    failures.Add(ex);
                 }
             }
         }
+
+        if (failures.Count > 0)
+            throw new AggregateException("One or more Groundwork startup materializations failed.", failures);
     }
 
     private void Record(StorageManifest manifest, IGroundworkPersistenceProvider? provider, GroundworkMaterializationStatus status, string? message) =>

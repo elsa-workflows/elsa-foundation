@@ -64,6 +64,33 @@ public sealed class MaterializeGroundworkStartupTaskTests
             record.Status == GroundworkMaterializationStatus.ProviderUnavailable);
     }
 
+    [Fact]
+    public async Task StartupTaskRecordsRemainingManifestsBeforeRethrowingMaterializationFailures()
+    {
+        var provider = new FailingGroundworkProvider("elsa.secrets");
+        await using var harness = GroundworkBridgeHarness.Create(options =>
+        {
+            options.Manifests.Add(SecretsGroundworkManifestFactory.Create());
+            options.Manifests.Add(SecretsGroundworkManifestFactory.Create() with
+            {
+                Identity = new StorageManifestIdentity("elsa.secrets.after-failure")
+            });
+        }, provider);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(harness.ExecuteStartupTask);
+        var snapshot = harness.Diagnostics.GetSnapshot();
+
+        Assert.Single(exception.InnerExceptions);
+        Assert.Contains(snapshot.Materializations, record =>
+            record.ManifestIdentity == "elsa.secrets" &&
+            record.ProviderName == "failing-provider" &&
+            record.Status == GroundworkMaterializationStatus.Failed);
+        Assert.Contains(snapshot.Materializations, record =>
+            record.ManifestIdentity == "elsa.secrets.after-failure" &&
+            record.ProviderName == "failing-provider" &&
+            record.Status == GroundworkMaterializationStatus.Succeeded);
+    }
+
     private sealed class GroundworkBridgeHarness : IAsyncDisposable
     {
         private readonly ServiceProvider serviceProvider;
@@ -143,6 +170,19 @@ public sealed class MaterializeGroundworkStartupTaskTests
         public Task MaterializeAsync(StorageManifest manifest, CancellationToken cancellationToken = default)
         {
             MaterializeCount++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FailingGroundworkProvider(string failingManifestIdentity) : IGroundworkPersistenceProvider
+    {
+        public ProviderIdentity Identity { get; } = new("failing-provider", "1.0.0");
+
+        public Task MaterializeAsync(StorageManifest manifest, CancellationToken cancellationToken = default)
+        {
+            if (manifest.Identity.Value == failingManifestIdentity)
+                throw new InvalidOperationException("Synthetic materialization failure.");
+
             return Task.CompletedTask;
         }
     }
