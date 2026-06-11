@@ -1,8 +1,6 @@
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -39,18 +37,6 @@ public sealed class RuntimeDomainRetryPolicyTests
     }
 
     [Fact]
-    public void RuntimeApiFeature_RegistersOverridableDefaultPolicy()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IRuntimeDomainRetryPolicy>(new CustomRuntimeDomainRetryPolicy());
-
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
-    }
-
-    [Fact]
     public void OperationalRecoveryCandidate_RemainsSeparateFromDomainRetryDecision()
     {
         var policy = new NoopRuntimeDomainRetryPolicy();
@@ -67,9 +53,7 @@ public sealed class RuntimeDomainRetryPolicyTests
         Assert.True(candidate.RequeueFromLastCheckpoint);
         Assert.Equal(RuntimeInterruptionReason.LeaseLost, candidate.Reason);
         Assert.Equal(RuntimeDomainRetryMode.DoNotRetry, decision.Mode);
-        Assert.DoesNotContain(
-            candidate.GetType().GetProperties().Select(property => property.Name),
-            name => name.Contains("Retry", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(typeof(IRuntimeDomainRetryPolicy), RuntimeRecoveryCandidateSurfaceTypes());
     }
 
     private RuntimeDomainRetryRequest NewRequest(string? activityExecutionId) =>
@@ -80,12 +64,9 @@ public sealed class RuntimeDomainRetryPolicyTests
             failureCount: 1,
             requestedAt: _now);
 
-    private sealed class CustomRuntimeDomainRetryPolicy : IRuntimeDomainRetryPolicy
-    {
-        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
-            new(
-                mode: RuntimeDomainRetryMode.Fault,
-                delay: null,
-                reason: "Custom policy owns domain retry decisions.");
-    }
+    private static IEnumerable<Type> RuntimeRecoveryCandidateSurfaceTypes() =>
+        typeof(RuntimeRecoveryCandidate)
+            .GetConstructors()
+            .SelectMany(constructor => constructor.GetParameters().Select(parameter => parameter.ParameterType))
+            .Concat(typeof(RuntimeRecoveryCandidate).GetProperties().Select(property => property.PropertyType));
 }

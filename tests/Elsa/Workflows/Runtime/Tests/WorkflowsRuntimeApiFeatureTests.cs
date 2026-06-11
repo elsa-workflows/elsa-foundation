@@ -175,6 +175,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
+    public void RegistersRuntimeDomainRetryPolicyAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new CustomRuntimeDomainRetryPolicy());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
+    }
+
+    [Fact]
     public async Task DefaultCheckpointWriterProjectsBookmarksIntoRegisteredStateStore()
     {
         var services = new ServiceCollection();
@@ -461,5 +473,14 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     {
         using var document = System.Text.Json.JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private sealed class CustomRuntimeDomainRetryPolicy : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(
+                mode: RuntimeDomainRetryMode.Fault,
+                delay: null,
+                reason: "Custom policy owns domain retry decisions.");
     }
 }
