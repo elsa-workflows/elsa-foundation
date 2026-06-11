@@ -1,19 +1,28 @@
 using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Expressions.Core.Contracts;
-using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class SequentialWorkflowExecutor(
-    IActivityFactory activityFactory,
-    IServiceProvider serviceProvider)
-    : IWorkflowExecutor
+public sealed class SequentialWorkflowExecutor : IWorkflowExecutor
 {
-    private const string InputTypeMetadataKey = "typeName";
+    private readonly IActivityFactory _activityFactory;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
+
+    public SequentialWorkflowExecutor(
+        IActivityFactory activityFactory,
+        IServiceProvider serviceProvider,
+        IRuntimeActivityInputMaterializer inputMaterializer)
+    {
+        ArgumentNullException.ThrowIfNull(activityFactory);
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(inputMaterializer);
+
+        _activityFactory = activityFactory;
+        _serviceProvider = serviceProvider;
+        _inputMaterializer = inputMaterializer;
+    }
 
     public async ValueTask<WorkflowExecutionResult> ExecuteAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -61,13 +70,13 @@ public sealed class SequentialWorkflowExecutor(
 
         try
         {
-            var inputs = CreateInputs(node);
-            var activity = await activityFactory.Create(node.DescriptorType, node.DescriptorPayload, inputs.ToDictionary(x => x.Name, x => x.Argument, StringComparer.OrdinalIgnoreCase), outputs: null, cancellationToken);
+            var inputs = _inputMaterializer.MaterializeInputs(node);
+            var activity = await _activityFactory.Create(node.DescriptorType, node.DescriptorPayload, inputs.ToDictionary(x => x.Name, x => x.Argument, StringComparer.OrdinalIgnoreCase), outputs: null, cancellationToken);
             activity.NodeId = node.ExecutableNodeId;
             activity.Id = activityExecutionId;
 
-            var context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
-            SeedInputMemory(context, inputs);
+            var context = new SimpleActivityExecutionContext(_serviceProvider, activity, cancellationToken);
+            RuntimeActivityInputMemory.Seed(context, inputs);
 
             if (!await activity.CanExecuteAsync(context))
                 return new ActivityExecutionResult(activityExecutionId, node.ExecutableNodeId, node.ActivityType, ActivityExecutionResultStatus.Skipped, startedAt, DateTimeOffset.UtcNow, null);
@@ -107,89 +116,4 @@ public sealed class SequentialWorkflowExecutor(
         return executable.NodesById[outgoing[0].TargetNodeId];
     }
 
-    private static IReadOnlyList<MaterializedInput> CreateInputs(ExecutableNode node)
-    {
-        var inputs = new List<MaterializedInput>();
-
-        foreach (var (inputName, binding) in node.InputBindings)
-        {
-            if (binding.Source != RuntimeInputBindingSource.Literal || !binding.LiteralValue.HasValue)
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported literal binding.");
-
-            if (!binding.Metadata.TryGetValue(InputTypeMetadataKey, out var typeName))
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is missing '{InputTypeMetadataKey}' metadata.");
-
-            var type = ResolveType(typeName, node.ExecutableNodeId, inputName);
-            var memoryReference = new LiteralMemoryBlockReference($"{node.ExecutableNodeId}:{inputName}");
-            var argumentType = typeof(InputArgument<>).MakeGenericType(type);
-            var argument = (InputArgument)Activator.CreateInstance(argumentType, memoryReference)!;
-            var value = JsonSerializer.Deserialize(binding.LiteralValue.Value.GetRawText(), type);
-            inputs.Add(new MaterializedInput(inputName, argument, value));
-        }
-
-        return inputs;
-    }
-
-    private static Type ResolveType(string typeName, string nodeId, string inputName)
-    {
-        var type = Type.GetType(typeName, throwOnError: false);
-        if (type is not null)
-            return type;
-
-        var delimiterIndex = typeName.IndexOf(',', StringComparison.Ordinal);
-        var fullName = delimiterIndex >= 0 ? typeName[..delimiterIndex].Trim() : typeName.Trim();
-        var assemblyName = delimiterIndex >= 0 ? typeName[(delimiterIndex + 1)..].Split(',')[0].Trim() : null;
-
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (!string.IsNullOrWhiteSpace(assemblyName) && !StringComparer.Ordinal.Equals(assembly.GetName().Name, assemblyName))
-                continue;
-
-            type = assembly.GetType(fullName, throwOnError: false);
-            if (type is not null)
-                return type;
-        }
-
-        throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' declares type '{typeName}', but that type could not be loaded.");
-    }
-
-    private static void SeedInputMemory(SimpleActivityExecutionContext context, IReadOnlyList<MaterializedInput> inputs)
-    {
-        foreach (var input in inputs)
-            context.Set(input.Argument.MemoryBlockReference(), input.Value);
-    }
-
-    private sealed record MaterializedInput(string Name, InputArgument Argument, object? Value);
-
-    private sealed class LiteralMemoryBlockReference(string id) : IMemoryBlockReference
-    {
-        public string Id { get; set; } = id;
-
-        public IMemoryBlock Declare() => new LiteralMemoryBlock();
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context)
-        {
-            var value = GetValue(memoryRegister);
-            var objectConverter = context.GetRequiredService<IObjectConverter>();
-            return objectConverter.ConvertTo<T>(value);
-        }
-
-        public object? Get(IExpressionExecutionContext context) => context.Get(this);
-
-        public T? Get<T>(IExpressionExecutionContext context) => context.Get<T>(this);
-
-        private object? GetValue(IMemoryRegister memoryRegister)
-        {
-            if (!memoryRegister.Blocks.TryGetValue(Id, out var block))
-                block = memoryRegister.Declare(this);
-
-            return block.Value;
-        }
-    }
-
-    private sealed class LiteralMemoryBlock : IMemoryBlock
-    {
-        public object? Value { get; set; }
-        public object? Metadata { get; set; }
-    }
 }

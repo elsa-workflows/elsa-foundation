@@ -78,6 +78,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** reports artifact/build diagnostics for output references that cross suspension boundaries or are ambiguous in loop/parallel scopes.
 - **Default implementation:** `RuntimeInputBindingValidator` *(intra-domain default)*.
 
+### `IRuntimeActivityInputMaterializer` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one materializer owns conversion from executable input bindings to activity runtime arguments for a composition).
+- **Signature:** `MaterializeInputs(ExecutableNode node)`.
+- **Usage:** constructs activity input arguments and memory values from runtime-owned executable node bindings. The first default supports literal bindings with `typeName` metadata only; expression, durable-value, active-output, and reference materialization remain future middleware/provider behavior.
+- **Default implementation:** `RuntimeActivityInputMaterializer`.
+
 ### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides which runtime observability payloads may be captured for a runtime composition).
 - **Signature:** `Decide(RuntimePayloadCaptureRequest request)`.
@@ -142,7 +148,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Contributor (handlers consume drained scheduler work items).
 - **Signature:** `Name`, `CanHandle(RuntimeSchedulerWorkItem workItem)`, `HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)`.
 - **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer evaluates ordinary handlers before fallback handlers.
-- **Default implementations:** `WorkflowStartSchedulerWorkHandler` *(turns `Start` work into `ScheduleActivity` work for executable start nodes)*, `WorkflowScheduleActivitySchedulerWorkHandler` *(records `Scheduled` `ActivityExecutionState` and queues `StartActivity` work for one executable node)*, `WorkflowStartActivitySchedulerWorkHandler` *(transitions scheduled activity state to `Running` without invoking activity bodies)*, and `NoopWorkflowSchedulerWorkHandler` *(fallback that acknowledges drained work without activity execution or checkpoint side effects)*.
+- **Default implementations:** `WorkflowStartSchedulerWorkHandler` *(turns `Start` work into `ScheduleActivity` work for executable start nodes)*, `WorkflowScheduleActivitySchedulerWorkHandler` *(records `Scheduled` `ActivityExecutionState` and queues `StartActivity` work for one executable node)*, `WorkflowStartActivitySchedulerWorkHandler` *(transitions scheduled activity state to `Running` and queues `InvokeActivity` work)*, `MissingActivityInvocationSchedulerWorkHandler` *(fallback that faults `InvokeActivity` when no provider is composed)*, and `NoopWorkflowSchedulerWorkHandler` *(fallback that acknowledges drained non-invocation work without activity execution or checkpoint side effects)*.
 
 ### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).

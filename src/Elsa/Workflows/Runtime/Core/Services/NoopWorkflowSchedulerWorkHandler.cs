@@ -13,7 +13,7 @@ public sealed class NoopWorkflowSchedulerWorkHandler : IFallbackWorkflowSchedule
     {
         ArgumentNullException.ThrowIfNull(workItem);
 
-        return true;
+        return workItem.CommandKind != WorkflowExecutionCommandKind.InvokeActivity;
     }
 
     public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
