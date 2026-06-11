@@ -41,3 +41,27 @@ public sealed record ActivityExecutionView(
             result.CompletedAt,
             result.Error);
 }
+
+public sealed record WorkflowExecutionStartDispatchView(
+    string WorkflowExecutionId,
+    string ArtifactId,
+    string ArtifactVersion,
+    string ArtifactHash,
+    string CommandDispatchStatus,
+    string EnvelopeId,
+    string AgentId,
+    string AgentProviderName,
+    string? Reason)
+{
+    public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result) =>
+        new(
+            result.WorkflowExecutionId,
+            result.PinnedExecutable.ArtifactId,
+            result.PinnedExecutable.ArtifactVersion,
+            result.PinnedExecutable.ArtifactHash,
+            result.CommandDispatch.Status.ToString(),
+            result.CommandDispatch.EnvelopeId,
+            result.Agent.AgentId,
+            result.Agent.ProviderName,
+            result.CommandDispatch.Reason);
+}

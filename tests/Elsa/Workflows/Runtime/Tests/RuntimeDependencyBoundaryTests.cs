@@ -19,6 +19,19 @@ public sealed class RuntimeDependencyBoundaryTests
     }
 
     [Fact]
+    public void RuntimeApiAssembly_DoesNotReferenceWorkflowDesignAssemblies()
+    {
+        var referencedAssemblies = typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature).Assembly
+            .GetReferencedAssemblies()
+            .Select(x => x.Name)
+            .OfType<string>()
+            .Where(name => name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(referencedAssemblies.Count == 0, string.Join(Environment.NewLine, referencedAssemblies));
+    }
+
+    [Fact]
     public void RuntimeCoreContractTypes_DoNotExposeWorkflowDesignNamespaces()
     {
         var designTypes = typeof(WorkflowExecutable).Assembly

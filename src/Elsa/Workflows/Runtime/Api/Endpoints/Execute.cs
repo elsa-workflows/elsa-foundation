@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
-internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, WorkflowExecutionView>
+internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
     private readonly IRequestSender _requestSender;
     private readonly ILogger<Execute> _logger;
@@ -30,7 +30,7 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         try
         {
             var result = await _requestSender.Send(req, ct);
-            var statusCode = result.Status == WorkflowExecutionResultStatus.Faulted.ToString() ? 500 : 200;
+            var statusCode = result.CommandDispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected.ToString() ? 409 : 202;
             await Send.ResponseAsync(result, statusCode, ct);
         }
         catch (ArgumentException e)
