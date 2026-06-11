@@ -38,6 +38,8 @@ executable activity ids where needed.
 - Those names are examples owned by activity modules or importers. Workflows Design Core and
   Workflows Runtime Core must carry only opaque slot names/metadata and must not define reserved
   constants for activity-specific concepts.
+- Flowchart-style port endpoint records, connection records, and executable edge records are not
+  Workflows Core concepts. They belong to the Flowchart activity module when that module is added.
 - `WorkflowExecutable.RootActivity : ExecutableNode`
 - `ExecutableNode` carries compiled activity identity, descriptor payload, and binding state only; no
   generic executable composition property.
@@ -46,8 +48,8 @@ executable activity ids where needed.
 - `WorkflowExecutable.NodesById` remains as a derived index over `RootActivity` and descendants
   discovered through opaque child slots or activity-specific adapters.
 
-Generic composition records are forbidden. Runtime behavior for interpreting
-Flowchart/Sequence/StateMachine remains owned by those activity implementations.
+Generic composition records and generic port/edge records are forbidden. Runtime behavior for
+interpreting Flowchart/Sequence/StateMachine remains owned by those activity implementations.
 
 Elsa Core alignment note: `Flowchart` is a container activity with its own `Start` and
 `Connections` properties. It schedules child activities through the Flowchart activity execution

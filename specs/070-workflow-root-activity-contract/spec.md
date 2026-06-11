@@ -24,10 +24,10 @@ children, `If` owns `Then` / `Else`, `ForEach` owns `Body`, `Composite` owns `Ro
 owns its activities, connections, start selection, and join rules.
 
 Those examples are activity contracts, not core framework constants. Core MAY carry opaque named
-child/connection slot records for persistence traversal and publishing, but it MUST NOT define
-reserved slot-name constants or metadata keys for activity-specific concepts. New custom activities
-must be able to add their own child structure without changing Workflows Design Core or Workflows
-Runtime Core.
+child slot records for persistence traversal and publishing, but it MUST NOT define reserved
+slot-name constants, metadata keys, port endpoint records, connection records, or executable edge
+records for activity-specific concepts. New custom activities must be able to add their own child
+structure without changing Workflows Design Core or Workflows Runtime Core.
 
 Elsa Core cue: `Flowchart` is a composite/container activity. It carries its own `Start` activity
 and `Connections`, then schedules child activities from the Flowchart activity execution context.
@@ -48,7 +48,7 @@ Flowchart edge interpretation to the Flowchart activity implementation.
 - **FR-003**: `ActivityNode` MUST NOT expose workflow-level `IsStart` or `IsTerminal` flags. Start/terminal semantics are owned by the relevant composite activity or runtime behavior.
 - **FR-004**: Activity-specific child activity structure MUST be expressed by the activity's own contract, such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
 - **FR-005**: Design validators, draft diffing, API projections, and layout joins MUST discover child activities through opaque child-slot records or activity-specific adapters instead of through workflow-level or `ActivityNode`-level activity collections.
-- **FR-005a**: Workflows Design Core and Workflows Runtime Core MUST NOT define activity-specific slot-name constants or metadata keys. Slot names and metadata semantics are owned by the activity module, importer, or adapter that understands that activity contract.
+- **FR-005a**: Workflows Design Core and Workflows Runtime Core MUST NOT define activity-specific slot-name constants, metadata keys, port endpoint records, connection records, or executable edge records. Slot names, metadata semantics, and graph/edge contracts are owned by the activity module, importer, or adapter that understands that activity contract.
 - **FR-006**: `WorkflowExecutable` MUST carry one compiled `RootActivity` member instead of workflow-level `Edges` and `StartNodeIds`.
 - **FR-007**: `ExecutableNode` MUST NOT expose a generic executable composition property. Executable child references, if needed, belong to the compiled form of the specific activity contract.
 - **FR-008**: Runtime lookup tables such as `NodesById` MAY exist as derived indexes over the executable root activity and activity-specific child slots, but MUST NOT be the authoritative executable shape.
@@ -57,6 +57,7 @@ Flowchart edge interpretation to the Flowchart activity implementation.
 - **FR-011**: Completion propagation MUST NOT traverse workflow-level executable edges or generic executable composition from `WorkflowExecutable`. Composite activity continuation behavior belongs to activity-specific runtime behavior.
 - **FR-012**: Flowchart-like edge traversal MUST be implemented by a Flowchart activity/runtime module that owns its child activities and connections, not by generic workflow completion scheduling.
 - **FR-013**: Superseded specs/tests that assert workflow-level start nodes, executable edges, `ActivityNode.Composition`, or `ExecutableNode.Composition` MUST be updated, removed, or marked superseded.
+- **FR-014**: Superseded specs/tests that assert `ActivityConnection`, `ActivityPortConnection`, or `ExecutableEdge` as Workflows Core concepts MUST be updated, removed, or marked superseded.
 
 ## Non-Goals
 
@@ -70,8 +71,10 @@ Flowchart edge interpretation to the Flowchart activity implementation.
 
 - Focused design tests prove `WorkflowDefinitionState` exposes `RootActivity` and no workflow-level `Activities` or `ActivityConnections` properties.
 - Focused design tests prove `ActivityNode` exposes no generic `Composition` property.
+- Focused design tests prove Workflows Design Core exposes no `ActivityConnection` or `ActivityPortConnection` model.
 - Focused runtime tests prove `WorkflowExecutable` exposes `RootActivity` and no workflow-level `Edges` or `StartNodeIds` properties.
 - Focused runtime tests prove `ExecutableNode` exposes no generic `Composition` property.
+- Focused runtime tests prove Workflows Runtime Core exposes no `ExecutableEdge` model.
 - Publishing tests prove a primitive root activity compiles into the executable root activity.
 - Runtime start scheduling tests prove only the root activity is scheduled.
 - Runtime completion scheduling tests no longer rely on `WorkflowExecutable.Edges`.

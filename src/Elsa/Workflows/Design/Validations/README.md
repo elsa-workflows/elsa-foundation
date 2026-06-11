@@ -26,7 +26,7 @@ Per framework §2.22 — this README documents what the feature registers.
 
 ## Contributor interfaces registered
 
-All five implement `IDraftValidator` and are registered via DI
+All four implement `IDraftValidator` and are registered via DI
 (`services.AddScoped<IDraftValidator, X>()`). Each **returns** its `ValidationError` set from
 `Validate(...)`; the single `ExecuteValidations : IEventHandler<OnDraftValidating>` handler
 (registered here) resolves `IEnumerable<IDraftValidator>`, runs each, and adds every returned
@@ -35,8 +35,7 @@ validation sibling in the same transaction as the Draft's state.
 
 | Validator | Scope | `(Path, Type)` emitted |
 |---|---|---|
-| `OrphanActivityValidator` | Root-level (workflow graph) | `{NodeId}` · `Graph/OrphanActivity` |
-| `StartActivityValidator` | Root-level (workflow graph) | `$workflow` · `Graph/StartActivity` |
+| `StartActivityValidator` | Root-level | `$workflow` · `RootActivity/Missing` |
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
@@ -56,6 +55,8 @@ None (no startup / recurring / scheduled tasks).
   workflow-level semantic is downstream (Unit D / E). Activity-level coverage is complete.
 - **Activity-specific validators** ship in their owning activity feature per FR-034 (e.g.
   `Elsa.Http.Activities.Design` ships HTTP validators), NOT here.
+- **Graph-specific validators** such as orphan checks belong to the activity feature that owns
+  graph semantics, such as a future Flowchart module.
 
 See [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md)
 for the `IDraftValidator` contributor interface and the `OnDraftValidating` / `OnDraftValidated` event surface (Events section).

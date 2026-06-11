@@ -22,8 +22,6 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class PublishWorkflowRequestHandlerTests
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string ConnectionsSlotName = "Connections";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
@@ -48,16 +46,14 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task PublishesCompositeRootWithActivityOwnedConnections()
+    public async Task PublishesCompositeRootWithActivityOwnedChildSlot()
     {
-        var root = FlowchartNode(
-            "flowchart",
+        var root = CompositeNode(
+            "composite",
             [
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two"))
-            ],
-            [Connection("write-one", "write-two")],
-            "write-one");
+            ]);
         var workflowVersion = WorkflowVersion(root);
         var handler = Handler(workflowVersion);
 
@@ -65,14 +61,10 @@ public sealed class PublishWorkflowRequestHandlerTests
         var executable = await _store.FindAsync(view.ArtifactId);
 
         Assert.NotNull(executable);
-        Assert.Equal("flowchart", view.RootActivityId);
+        Assert.Equal("composite", view.RootActivityId);
         Assert.Equal(3, view.NodeCount);
         var childSlot = Assert.Single(executable.RootActivity.ChildSlots);
-        Assert.Equal("write-one", childSlot.Metadata[StartActivityNodeIdMetadataKey]);
-        var connectionSlot = Assert.Single(executable.RootActivity.ConnectionSlots);
-        var edge = Assert.Single(connectionSlot.Connections);
-        Assert.Equal("write-one", edge.SourceNodeId);
-        Assert.Equal("write-two", edge.TargetNodeId);
+        Assert.Equal(["write-one", "write-two"], childSlot.Activities.Select(activity => activity.ExecutableNodeId));
     }
 
     [Fact]
@@ -113,30 +105,20 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task ComputesSameArtifactIdForEquivalentWorkflowOrdering()
     {
-        var firstWorkflowVersion = WorkflowVersion(FlowchartNode(
-            "flowchart",
+        var firstWorkflowVersion = WorkflowVersion(CompositeNode(
+            "composite",
             [
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two")),
                 Node("write-three", Text("three"))
-            ],
-            [
-                Connection("write-one", "write-two"),
-                Connection("write-two", "write-three")
-            ],
-            "write-one"));
-        var secondWorkflowVersion = WorkflowVersion(FlowchartNode(
-            "flowchart",
+            ]));
+        var secondWorkflowVersion = WorkflowVersion(CompositeNode(
+            "composite",
             [
                 Node("write-three", Text("three")),
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two"))
-            ],
-            [
-                Connection("write-two", "write-three"),
-                Connection("write-one", "write-two")
-            ],
-            "write-one"));
+            ]));
         var firstView = await Handler(firstWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var secondView = await Handler(secondWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
@@ -175,46 +157,30 @@ public sealed class PublishWorkflowRequestHandlerTests
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
-        Node(nodeId, null, null, inputs);
+        Node(nodeId, null, inputs);
 
     private static ActivityNode Node(
         string nodeId,
         IReadOnlyCollection<ActivityChildSlot>? childSlots,
-        IReadOnlyCollection<ActivityConnectionSlot>? connectionSlots,
         params WorkflowArgumentState[] inputs) =>
         new(
             nodeId,
             "activity-write-line",
             inputs,
             Outputs: [],
-            ChildSlots: childSlots,
-            ConnectionSlots: connectionSlots);
+            ChildSlots: childSlots);
 
-    private static ActivityNode FlowchartNode(
+    private static ActivityNode CompositeNode(
         string nodeId,
-        IReadOnlyCollection<ActivityNode> activities,
-        IReadOnlyCollection<ActivityConnection> connections,
-        string startActivityNodeId) =>
+        IReadOnlyCollection<ActivityNode> activities) =>
         Node(
             nodeId,
             [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    activities,
-                    new Dictionary<string, string>
-                    {
-                        [StartActivityNodeIdMetadataKey] = startActivityNodeId
-                    })
-            ],
-            [
-                new ActivityConnectionSlot(ConnectionsSlotName, connections)
+                new ActivityChildSlot(ActivitiesSlotName, activities)
             ]);
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
-
-    private static ActivityConnection Connection(string source, string target) =>
-        new(new ActivityPortConnection(source, "Done"), new ActivityPortConnection(target, "In"));
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
         new("1.0.0", "activity-definition-1")

@@ -20,9 +20,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <para>
 /// <b>Match keys (FR-023, research R2).</b> Variables/Inputs/Outputs by <c>ReferenceKey</c>;
 /// activities by <c>NodeId</c>; per-activity I/O by (<c>NodeId</c>, <c>ReferenceKey</c>);
-/// activity-owned connections by their endpoint tuple (value equality — no id, no update event,
-/// so a changed connection diffs as remove(old)+add(new), FR-013e); layout records by
-/// <c>NodeId</c>.
+/// layout records by <c>NodeId</c>.
 /// </para>
 /// <para>
 /// <b>Identity vs payload (FR-013d).</b> Same key + changed payload → a single UPDATE event;
@@ -34,7 +32,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <para>
 /// <b>Deterministic order.</b> Events are emitted grouped by dimension in this fixed order:
 /// variables, workflow inputs, workflow outputs, activities (added then removed), per-activity
-/// I/O, connections (removed then added), layout moves. Within a dimension, order follows the
+/// I/O, layout moves. Within a dimension, order follows the
 /// desired/stored enumeration order.
 /// </para>
 /// <para>
@@ -58,7 +56,6 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
         DiffWorkflowInputs(draftId, stored, desired, events);
         DiffWorkflowOutputs(draftId, stored, desired, events);
         DiffActivities(draftId, stored, desired, events);
-        DiffConnections(draftId, stored, desired, events);
         DiffLayout(draftId, storedLayout, desiredLayout, events);
 
         return events;
@@ -131,8 +128,8 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
             if (!storedByNode.ContainsKey(activity.NodeId))
                 events.Add(new OnActivityAddedToDraft(draftId, activity));
 
-        // Removed (NodeId absent from desired) — its I/O and (separately) its connections leave
-        // with it; only OnActivityRemovedFromDraft is emitted for the node itself.
+        // Removed (NodeId absent from desired) — its I/O leaves with it; only
+        // OnActivityRemovedFromDraft is emitted for the node itself.
         foreach (var activity in storedActivities)
             if (!desiredByNode.ContainsKey(activity.NodeId))
                 events.Add(new OnActivityRemovedFromDraft(draftId, activity.NodeId));
@@ -184,22 +181,6 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
                 events.Add(new OnActivityOutputRemovedFromDraft(draftId, nodeId, output.ReferenceKey));
     }
 
-    private static void DiffConnections(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
-    {
-        var storedSet = FlattenConnections(stored.RootActivity).ToList();
-        var desiredSet = FlattenConnections(desired.RootActivity).ToList();
-
-        // Removed first, then added — a changed connection (different endpoint tuple) surfaces
-        // as remove(old)+add(new) since connections carry no id and no update event (FR-013e).
-        foreach (var connection in storedSet)
-            if (!desiredSet.Contains(connection))
-                events.Add(new OnConnectionRemovedFromDraft(draftId, connection));
-
-        foreach (var connection in desiredSet)
-            if (!storedSet.Contains(connection))
-                events.Add(new OnConnectionAddedToDraft(draftId, connection));
-    }
-
     private static void DiffLayout(string draftId, IReadOnlyCollection<DesignMetadataRecord> stored, IReadOnlyCollection<DesignMetadataRecord> desired, List<IEvent> events)
     {
         var storedByNode = ByKey(stored, r => r.NodeId);
@@ -242,10 +223,4 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
         }
     }
 
-    private static IEnumerable<ActivityConnection> FlattenConnections(ActivityNode? root)
-    {
-        foreach (var node in FlattenActivities(root))
-            foreach (var connection in (node.ConnectionSlots ?? []).SelectMany(slot => slot.Connections))
-                yield return connection;
-    }
 }

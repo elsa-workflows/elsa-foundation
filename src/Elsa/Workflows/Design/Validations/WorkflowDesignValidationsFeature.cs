@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Validations;
 /// <summary>
 /// Activation unit for the workflow-design validations sub-domain (Unit C FR-032). Registers the
 /// single <see cref="ExecuteValidations"/> handler for <c>OnDraftValidating</c> plus the baseline
-/// universal validators (FR-033) — orphan-activity, missing/duplicate-start, variable-uniqueness,
+/// universal validators (FR-033) — missing root activity, variable-uniqueness,
 /// required-input/output, variable-expression-resolver — as <see cref="IDraftValidator"/>
 /// implementations. The handler resolves every <see cref="IDraftValidator"/> and aggregates their
 /// errors. Activity-specific validators ship in their activity feature (FR-034) by registering
@@ -38,7 +38,6 @@ public class WorkflowDesignValidationsFeature : IShellFeature
 
         services.AddEventHandler<OnDraftValidating, ExecuteValidations>();
 
-        services.AddScoped<IDraftValidator, OrphanActivityValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();
         services.AddScoped<IDraftValidator, RequiredInputOutputValidator>();

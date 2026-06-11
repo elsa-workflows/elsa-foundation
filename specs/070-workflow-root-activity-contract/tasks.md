@@ -6,6 +6,7 @@
 - [x] T002 Mark conflicting graph-shaped specs as superseded by this slice.
 - [x] T003 Refactor `WorkflowDefinitionState` to expose `RootActivity`.
 - [x] T004 Replace generic `ActivityNode.Composition` with opaque child-slot records/adapters, without core activity-specific slot-name constants.
+- [x] T004a Remove flowchart-specific `ActivityConnection`, `ActivityPortConnection`, `ExecutableEdge`, connection events, and generic connection traversal from Workflows Core.
 - [x] T005 Update design projections, persistence commands, validators, and diffing for root activity traversal through child slots.
 - [x] T006 Refactor `WorkflowExecutable` to expose `RootActivity` without generic `ExecutableNode.Composition` and derive `NodesById` through child slots.
 - [x] T007 Update publishing to compile the authored root activity recursively through child slots into the executable root activity.

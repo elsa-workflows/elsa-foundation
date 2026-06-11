@@ -21,7 +21,6 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 internal static class UpdateDraftTestKit
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string ConnectionsSlotName = "Connections";
     private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
 
     public static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId = "wf-1")
@@ -57,13 +56,12 @@ internal static class UpdateDraftTestKit
 
     public static WorkflowDefinitionState State(
         IEnumerable<VariableDefinition>? variables = null,
-        IEnumerable<ActivityConnection>? connections = null,
         IEnumerable<ActivityNode>? activities = null,
         IEnumerable<InputDefinition>? inputs = null,
         IEnumerable<OutputDefinition>? outputs = null) =>
         new(
             Variables: variables ?? [],
-            RootActivity: RootActivity(activities, connections),
+            RootActivity: RootActivity(activities),
             Inputs: inputs ?? [],
             Outputs: outputs ?? [],
             WorkflowActivityOptions: null,
@@ -93,24 +91,16 @@ internal static class UpdateDraftTestKit
     public static ArgumentState Arg(string referenceKey, string? value = null) =>
         new(referenceKey, new ArgumentValue(value), null, null, null, null);
 
-    public static ActivityConnection Connection(
-        string sourceNodeId,
-        string targetNodeId,
-        string sourcePort = "out",
-        string targetPort = "in") =>
-        new(new ActivityPortConnection(sourceNodeId, sourcePort), new ActivityPortConnection(targetNodeId, targetPort));
-
     public static DesignMetadataRecord LayoutRecord(string nodeId, double x, double y, double? width = null, double? height = null) =>
         new(nodeId, x, y, width, height);
 
-    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities, IEnumerable<ActivityConnection>? connections)
+    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities)
     {
         var activitySnapshot = (activities ?? []).ToArray();
         if (activitySnapshot.Length == 0)
             return null;
 
-        var connectionSnapshot = (connections ?? []).ToArray();
-        if (activitySnapshot.Length == 1 && connectionSnapshot.Length == 0)
+        if (activitySnapshot.Length == 1)
             return activitySnapshot[0];
 
         var startActivityNodeId = activitySnapshot.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId;
@@ -130,12 +120,6 @@ internal static class UpdateDraftTestKit
                         {
                             [StartActivityNodeIdMetadataKey] = startActivityNodeId
                         })
-            ],
-            ConnectionSlots: connectionSnapshot.Length == 0
-                ? null
-                :
-                [
-                    new ActivityConnectionSlot(ConnectionsSlotName, connectionSnapshot)
-                ]);
+            ]);
     }
 }

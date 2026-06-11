@@ -21,7 +21,6 @@ public sealed class WorkflowExecutable
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
 
-        ValidateChildSlots(rootActivity);
         var nodeSnapshot = Flatten(rootActivity).ToArray();
 
         Identity = identity;
@@ -42,26 +41,6 @@ public sealed class WorkflowExecutable
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? PublishedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
-
-    private static void ValidateChildSlots(ExecutableNode rootActivity)
-    {
-        foreach (var node in Flatten(rootActivity))
-        {
-            var childIds = node.ChildSlots
-                .SelectMany(slot => slot.Activities)
-                .Select(activity => activity.ExecutableNodeId)
-                .ToHashSet(StringComparer.Ordinal);
-            foreach (var edge in node.ConnectionSlots.SelectMany(slot => slot.Connections))
-            {
-                if (!childIds.Contains(edge.SourceNodeId))
-                    throw new ArgumentException($"Executable connection slot edge source node '{edge.SourceNodeId}' does not exist.");
-
-                if (!childIds.Contains(edge.TargetNodeId))
-                    throw new ArgumentException($"Executable connection slot edge target node '{edge.TargetNodeId}' does not exist.");
-            }
-
-        }
-    }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {
@@ -121,34 +100,6 @@ public sealed record WorkflowExecutableSourceReference(
     string? SourceVersion = null);
 
 /// <summary>
-/// Runtime-owned control-flow edge inside a compiled composite activity.
-/// </summary>
-public sealed class ExecutableEdge
-{
-    public ExecutableEdge(
-        string sourceNodeId,
-        string sourcePort,
-        string targetNodeId,
-        string targetPort)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePort);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetPort);
-
-        SourceNodeId = sourceNodeId;
-        SourcePort = sourcePort;
-        TargetNodeId = targetNodeId;
-        TargetPort = targetPort;
-    }
-
-    public string SourceNodeId { get; }
-    public string SourcePort { get; }
-    public string TargetNodeId { get; }
-    public string TargetPort { get; }
-}
-
-/// <summary>
 /// Compiled child activity slot owned by a specific executable activity contract.
 /// </summary>
 public sealed class ExecutableChildSlot
@@ -172,26 +123,6 @@ public sealed class ExecutableChildSlot
 }
 
 /// <summary>
-/// Compiled connection slot owned by a specific executable activity contract.
-/// </summary>
-public sealed class ExecutableConnectionSlot
-{
-    public ExecutableConnectionSlot(
-        string name,
-        IReadOnlyCollection<ExecutableEdge> connections)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(connections);
-
-        Name = name;
-        Connections = Array.AsReadOnly(connections.ToArray());
-    }
-
-    public string Name { get; }
-    public IReadOnlyCollection<ExecutableEdge> Connections { get; }
-}
-
-/// <summary>
 /// Runtime-owned node inside a workflow executable.
 /// </summary>
 public sealed class ExecutableNode
@@ -206,8 +137,7 @@ public sealed class ExecutableNode
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
         IReadOnlyDictionary<string, string> metadata,
-        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
-        IReadOnlyCollection<ExecutableConnectionSlot>? connectionSlots = null)
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -243,7 +173,6 @@ public sealed class ExecutableNode
         OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
-        ConnectionSlots = Array.AsReadOnly((connectionSlots ?? []).ToArray());
     }
 
     public string ExecutableNodeId { get; }
@@ -256,7 +185,6 @@ public sealed class ExecutableNode
     public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
-    public IReadOnlyCollection<ExecutableConnectionSlot> ConnectionSlots { get; }
 }
 
 /// <summary>

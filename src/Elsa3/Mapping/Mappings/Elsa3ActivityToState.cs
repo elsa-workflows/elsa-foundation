@@ -12,7 +12,6 @@ namespace Elsa3.Mapping.Mappings;
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string ConnectionsSlotName = "Connections";
     private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
 
     public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
@@ -24,7 +23,9 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         ExtractInputsAndOutputs(inputs, outputs, version, source.AdditionalProperties);
 
         var childActivities = (await GetChildActivities(source, cancellationToken)).ToArray();
-        var connections = source.Connections?.Select(MapConnection).ToArray() ?? [];
+        if (source.Connections?.Any() == true)
+            throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
+
         var startActivityNodeId = childActivities
             .FirstOrDefault(activity => source.Activities?.FirstOrDefault(sourceActivity => sourceActivity.NodeId == activity.NodeId)?.CustomProperties?.CanStartWorkflow == true)
             ?.NodeId;
@@ -42,20 +43,13 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
                             [StartActivityNodeIdMetadataKey] = startActivityNodeId
                         })
             };
-        var connectionSlots = connections.Length == 0
-            ? null
-            : new[]
-            {
-                new ActivityConnectionSlot(ConnectionsSlotName, connections)
-            };
 
         return new ActivityNode(
             source.NodeId,
             version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
             inputs,
             outputs,
-            childSlots,
-            connectionSlots
+            childSlots
         );
         // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
@@ -75,15 +69,6 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
 
         return result;
     }
-
-    private static ActivityConnection MapConnection(Elsa3Connection connection)
-    {
-        var source = MapPort(connection.Source);
-        var target = MapPort(connection.Target);
-        return new(source, target);
-    }
-
-    private static ActivityPortConnection MapPort(Elsa3Endpoint source) => new(source.Activity, source.Port);
 
     private static void ExtractInputsAndOutputs(
         List<ArgumentState> inputs,

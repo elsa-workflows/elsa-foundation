@@ -22,17 +22,17 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 public sealed class ValidationsFeatureRegistrationTests
 {
     [Fact]
-    public void Feature_registers_all_five_baseline_validators()
+    public void Feature_registers_all_four_baseline_validators()
     {
         using var provider = BuildProvider(_ => { });
 
         var validatorTypes = provider.GetServices<IDraftValidator>().Select(v => v.GetType()).ToList();
 
-        Assert.Contains(typeof(OrphanActivityValidator), validatorTypes);
         Assert.Contains(typeof(StartActivityValidator), validatorTypes);
         Assert.Contains(typeof(VariableUniquenessValidator), validatorTypes);
         Assert.Contains(typeof(RequiredInputOutputValidator), validatorTypes);
         Assert.Contains(typeof(VariableExpressionResolverValidator), validatorTypes);
+        Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

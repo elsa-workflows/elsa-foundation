@@ -83,13 +83,7 @@ public sealed class RuntimeContractTests
 
         Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotNames"));
         Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotMetadataKeys"));
-    }
-
-    [Fact]
-    public void ExecutableEdge_RequiresEndpointPorts()
-    {
-        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "", "target", "In"));
-        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "Done", "target", " "));
+        Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableEdge"));
     }
 
     [Fact]

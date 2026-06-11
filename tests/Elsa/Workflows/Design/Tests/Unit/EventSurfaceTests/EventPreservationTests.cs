@@ -9,7 +9,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 /// <summary>
 /// T029 (SC-004, SC-008 partial) — the collapse of the 20 granular mutation commands into the
 /// single <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/> preserves the event
-/// surface one-for-one. All 20 mutation event types still exist in
+/// surface one-for-one, minus graph connection events now owned by a future Flowchart module.
+/// All 18 core mutation event types still exist in
 /// <c>Elsa.Workflows.Design.Core/Events</c>, each is an <see cref="IEvent"/>, and none was
 /// deleted alongside its former command. The 2 lifecycle events
 /// (<see cref="OnDraftCreated"/>, <see cref="OnDraftDiscarded"/>) are NOT among the events
@@ -17,7 +18,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 /// </summary>
 public sealed class EventPreservationTests
 {
-    // The 20 per-diff mutation events re-homed onto IUpdateDraftCommand (Unit 2). Referenced by
+    // The 18 core per-diff mutation events re-homed onto IUpdateDraftCommand (Unit 2). Referenced by
     // typeof so this list fails to compile — not merely fails at runtime — if any type is deleted.
     private static readonly Type[] MutationEventTypes =
     [
@@ -33,9 +34,6 @@ public sealed class EventPreservationTests
         typeof(OnActivityOutputAddedToDraft),
         typeof(OnActivityOutputUpdatedInDraft),
         typeof(OnActivityOutputRemovedFromDraft),
-        // Connections (graph)
-        typeof(OnConnectionAddedToDraft),
-        typeof(OnConnectionRemovedFromDraft),
         // Variables (full CRUD)
         typeof(OnVariableDeclaredInDraft),
         typeof(OnVariableUpdatedInDraft),
@@ -57,9 +55,9 @@ public sealed class EventPreservationTests
     ];
 
     [Fact]
-    public void All_20_mutation_event_types_still_exist_and_are_events()
+    public void All_18_core_mutation_event_types_still_exist_and_are_events()
     {
-        Assert.Equal(20, MutationEventTypes.Length);
+        Assert.Equal(18, MutationEventTypes.Length);
 
         foreach (var type in MutationEventTypes)
             Assert.True(typeof(IEvent).IsAssignableFrom(type), $"{type.Name} must implement IEvent");

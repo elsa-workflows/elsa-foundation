@@ -1,6 +1,6 @@
 # Extension points — Workflows.Design.Validations domain
 
-The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and the five built-in baseline validators. Three sections:
+The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and the four built-in baseline validators. Three sections:
 
 - **Overridable contracts** — none in this domain.
 - **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam.
@@ -25,12 +25,12 @@ This domain exposes no swappable default-impl service. The validation *behaviour
 - **Adding one does not replace the others:** all registered validators run. This is the *extend* path, not the *override* path.
 
 **Known implementations (shipped):**
-- `Elsa.Workflows.Design.Validations` — `OrphanActivityValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `StartActivityValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `VariableUniquenessValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `RequiredInputOutputValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `VariableExpressionResolverValidator` *(intra-domain — default)*
 - Activity feature validators *(cross-domain — each activity feature ships its own `IDraftValidator` per FR-034)*
+- Graph-specific validators such as orphan checks belong to the activity feature that owns graph semantics, such as a future Flowchart module.
 
 ---
 

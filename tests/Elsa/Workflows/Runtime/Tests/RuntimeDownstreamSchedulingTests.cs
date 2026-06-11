@@ -17,9 +17,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var executable = NewExecutable(
-            ["node-source", "node-next", "node-other"],
-            [new ExecutableEdge("node-source", "Done", "node-next", "In"), new ExecutableEdge("node-source", "Other", "node-other", "In")]);
+        var executable = NewExecutable(["node-source", "node-next", "node-other"]);
         await executableStore.SaveAsync(executable);
         var handler = NewCompleteHandler(queue, executableStore);
 
@@ -42,9 +40,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
-        var executable = NewExecutable(
-            ["node-source", "node-next"],
-            [new ExecutableEdge("node-source", "Done", "node-next", "In")]);
+        var executable = NewExecutable(["node-source", "node-next"]);
         await executableStore.SaveAsync(executable);
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         await queue.EnqueueAsync(NewCompleteWorkItem(
@@ -55,7 +51,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             activityStateStore,
             queue,
             executableStore,
-            new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
         var drainer = new WorkflowSchedulerDrainer(
             queue,
@@ -81,9 +76,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var executable = NewExecutable(
-            ["node-source", "node-next"],
-            [new ExecutableEdge("node-source", "Done", "node-next", "In")]);
+        var executable = NewExecutable(["node-source", "node-next"]);
         await executableStore.SaveAsync(executable);
         var handler = NewCompleteHandler(queue, executableStore);
 
@@ -307,32 +300,6 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public void CompleteActivityHandler_RejectsHalfConfiguredDownstreamSchedulingDependencies()
-    {
-        var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var executableStore = new InMemoryWorkflowExecutableStore();
-
-        var missingIdGeneratorException = Assert.Throws<ArgumentException>(() =>
-            new WorkflowCompleteActivitySchedulerWorkHandler(
-                activityStateStore,
-                queue,
-                executableStore,
-                idGenerator: null,
-                new FixedTimeProvider(_now)));
-        Assert.Equal("idGenerator", missingIdGeneratorException.ParamName);
-
-        var missingExecutableStoreException = Assert.Throws<ArgumentException>(() =>
-            new WorkflowCompleteActivitySchedulerWorkHandler(
-                activityStateStore,
-                queue,
-                workflowExecutableStore: null,
-                new IncrementingRuntimeExecutionIdGenerator(),
-                new FixedTimeProvider(_now)));
-        Assert.Equal("workflowExecutableStore", missingExecutableStoreException.ParamName);
-    }
-
-    [Fact]
     public async Task SchedulerPostCommitIntentDispatcher_WrapsKnownSchedulerWorkValidationFailures()
     {
         var dispatcher = new RuntimeSchedulerPostCommitIntentDispatcher(new InMemoryWorkflowSchedulerWorkQueue());
@@ -362,7 +329,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             new InMemoryActivityExecutionStateStore(),
             queue,
             executableStore,
-            new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
@@ -495,19 +461,19 @@ public sealed class RuntimeDownstreamSchedulingTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<ExecutableEdge> edges) =>
+    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds) =>
         new(
             identity: NewIdentity(),
-            rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray(), edges),
+            rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes, IReadOnlyCollection<ExecutableEdge> edges)
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
     {
         var nodeSnapshot = nodes.ToArray();
-        if (nodeSnapshot.Length == 1 && edges.Count == 0)
+        if (nodeSnapshot.Length == 1)
             return nodeSnapshot[0];
 
         return new ExecutableNode(
@@ -523,10 +489,6 @@ public sealed class RuntimeDownstreamSchedulingTests
             childSlots:
             [
                 new ExecutableChildSlot("children", nodeSnapshot)
-            ],
-            connectionSlots:
-            [
-                new ExecutableConnectionSlot("connections", edges)
             ]);
     }
 

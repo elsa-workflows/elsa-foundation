@@ -14,18 +14,16 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 internal static class ValidatorTestHelpers
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string ConnectionsSlotName = "Connections";
     private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
 
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
-        IEnumerable<ActivityConnection>? connections = null,
         IEnumerable<VariableDefinition>? variables = null,
         IEnumerable<InputDefinition>? inputs = null,
         IEnumerable<OutputDefinition>? outputs = null
     ) => new(
         Variables: variables ?? [],
-        RootActivity: RootActivity(activities, connections),
+        RootActivity: RootActivity(activities),
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
         WorkflowActivityOptions: null,
@@ -67,9 +65,6 @@ internal static class ValidatorTestHelpers
             ]
     );
 
-    public static ActivityConnection Edge(string sourceNodeId, string targetNodeId) =>
-        new(new ActivityPortConnection(sourceNodeId, "out"), new ActivityPortConnection(targetNodeId, "in"));
-
     public static VariableDefinition Variable(string referenceKey, string name) => new(
         ReferenceKey: referenceKey,
         Name: name,
@@ -84,7 +79,7 @@ internal static class ValidatorTestHelpers
     public static ArgumentState LiteralInput(string referenceKey, string? literalValue) =>
         new(referenceKey, new ArgumentValue(literalValue, "Literal"), null, null, null, null);
 
-    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities, IEnumerable<ActivityConnection>? connections)
+    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities)
     {
         var activitySnapshot = (activities ?? []).ToArray();
         if (activitySnapshot.Length == 0)
@@ -107,10 +102,6 @@ internal static class ValidatorTestHelpers
                         {
                             [StartActivityNodeIdMetadataKey] = startActivityNodeId
                         })
-            ],
-            ConnectionSlots:
-            [
-                new ActivityConnectionSlot(ConnectionsSlotName, connections ?? [])
             ]);
     }
 

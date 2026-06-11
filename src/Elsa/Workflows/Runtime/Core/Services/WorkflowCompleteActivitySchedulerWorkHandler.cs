@@ -13,13 +13,12 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
-    private readonly IRuntimeExecutionIdGenerator? _idGenerator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, idGenerator: null, TimeProvider.System)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, TimeProvider.System)
     {
     }
 
@@ -27,16 +26,15 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         TimeProvider timeProvider)
-        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, idGenerator: null, timeProvider)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, timeProvider)
     {
     }
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowExecutableStore workflowExecutableStore,
-        IRuntimeExecutionIdGenerator idGenerator)
-        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore, idGenerator, TimeProvider.System)
+        IWorkflowExecutableStore workflowExecutableStore)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore, TimeProvider.System)
     {
     }
 
@@ -44,22 +42,15 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowExecutableStore? workflowExecutableStore,
-        IRuntimeExecutionIdGenerator? idGenerator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        if (workflowExecutableStore is null && idGenerator is not null)
-            throw new ArgumentException("Workflow executable store must be supplied with the runtime execution ID generator for downstream scheduling.", nameof(workflowExecutableStore));
-
-        if (workflowExecutableStore is not null && idGenerator is null)
-            throw new ArgumentException("Runtime execution ID generator must be supplied with the workflow executable store for downstream scheduling.", nameof(idGenerator));
 
         _activityExecutionStateStore = activityExecutionStateStore;
         _schedulerWorkQueue = schedulerWorkQueue;
         _workflowExecutableStore = workflowExecutableStore;
-        _idGenerator = idGenerator;
         _timeProvider = timeProvider;
     }
 
@@ -199,36 +190,6 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' references executable node '{continuationSchedulingPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
         return DownstreamSchedulingResult.Terminal();
-    }
-
-    private RuntimeSchedulerWorkItem NewDownstreamScheduleWorkItem(
-        RuntimeSchedulerWorkItem continuationSchedulingWorkItem,
-        RuntimeCompleteActivityCommandPayload continuationSchedulingPayload,
-        ExecutableEdge edge,
-        int index,
-        DateTimeOffset now)
-    {
-        var activityExecutionId = _idGenerator!.NewActivityExecutionId();
-        var payload = new RuntimeScheduleActivityCommandPayload(
-            continuationSchedulingPayload.PinnedExecutable,
-            edge.TargetNodeId,
-            activityExecutionId,
-            RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
-            continuationSchedulingPayload.ActivityExecutionId);
-
-        return new RuntimeSchedulerWorkItem(
-            workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
-            workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
-            commandId: $"{continuationSchedulingWorkItem.CommandId}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
-            commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
-            envelopeId: continuationSchedulingWorkItem.EnvelopeId,
-            idempotencyKey: $"{continuationSchedulingWorkItem.IdempotencyKey}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
-            enqueuedAt: now,
-            recordedAt: now,
-            sequence: continuationSchedulingWorkItem.Sequence is { } sequence ? sequence + 1 + index : null,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: continuationSchedulingWorkItem.CommandMetadata,
-            envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata);
     }
 
     private static void ValidatePinnedExecutable(

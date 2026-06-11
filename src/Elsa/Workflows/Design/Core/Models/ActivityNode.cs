@@ -21,8 +21,7 @@ public sealed record ActivityNode(
     string ActivityVersionId,
     IEnumerable<ArgumentState> Inputs,
     IEnumerable<ArgumentState> Outputs,
-    IEnumerable<ActivityChildSlot>? ChildSlots = null,
-    IEnumerable<ActivityConnectionSlot>? ConnectionSlots = null
+    IEnumerable<ActivityChildSlot>? ChildSlots = null
 );
 
 /// <summary>
@@ -32,13 +31,4 @@ public sealed record ActivityChildSlot(
     string Name,
     IEnumerable<ActivityNode> Activities,
     IReadOnlyDictionary<string, string>? Metadata = null
-);
-
-/// <summary>
-/// Activity-specific connection slot. Flowchart-style activities own these slots; primitive
-/// activities and list/branch composites usually do not.
-/// </summary>
-public sealed record ActivityConnectionSlot(
-    string Name,
-    IEnumerable<ActivityConnection> Connections
 );

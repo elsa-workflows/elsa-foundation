@@ -25,18 +25,16 @@ public sealed class ShellOrderingTests
         // Seed an initial state so the asserting update diffs across several dimensions.
         await Update(host, draftId, State(
             variables: [Variable("v1", "MyVar")],
-            activities: [Node("a"), Node("b")],
-            connections: [Connection("a", "b")]));
+            activities: [Node("a"), Node("b")]));
 
         var key = LockKeys.DraftKey(draftId);
         var locksBefore = host.LockProvider.AcquireCounts.GetValueOrDefault(key, 0);
         var skip = host.EventPublisher.CapturedEvents.Count;
 
-        // Desired: add activity c, drop connection a→b, rename v1 → exactly 3 mutation events.
+        // Desired: add activity c, rename v1 → exactly 2 mutation events.
         await Update(host, draftId, State(
             variables: [Variable("v1", "RenamedVar")],
-            activities: [Node("a"), Node("b"), Node("c")],
-            connections: []));
+            activities: [Node("a"), Node("b"), Node("c")]));
 
         // (1) One lock acquisition for this call.
         Assert.Equal(locksBefore + 1, host.LockProvider.AcquireCounts[key]);
@@ -51,9 +49,9 @@ public sealed class ShellOrderingTests
         // (3) Exactly one validation outcome.
         Assert.Single(window.OfType<OnDraftValidated>());
 
-        // (4) Exactly the three per-diff mutation events.
+        // (4) Exactly the two per-diff mutation events.
         var diffEvents = DiffEventsSince(host, skip);
-        Assert.Equal(3, diffEvents.Count);
+        Assert.Equal(2, diffEvents.Count);
 
         // (5) Cause-before-effect: the gate first, then every diff event, then the outcome last.
         var validatingIdx = window.FindIndex(e => e is OnDraftValidating);

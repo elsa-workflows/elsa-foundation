@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 
 /// <summary>
-/// SC-011 + Unit C FR-018 + FR-018a: all 18 events declared in <c>Elsa.Workflows.Design.Core</c>
+/// SC-011 + Unit C FR-018 + FR-018a: all core events declared in <c>Elsa.Workflows.Design.Core</c>
 /// exist with verbatim names. Plus the discipline assertion that no event uses the bare
 /// <c>Input</c>/<c>Output</c> names — the <c>WorkflowInput</c>/<c>WorkflowOutput</c> prefix
 /// is mandatory because workflow-level inputs/outputs are distinct from per-activity
@@ -29,9 +29,6 @@ public sealed class EventNamingTests
         nameof(OnActivityOutputAddedToDraft),
         nameof(OnActivityOutputUpdatedInDraft),
         nameof(OnActivityOutputRemovedFromDraft),
-        // Connections (graph)
-        nameof(OnConnectionAddedToDraft),
-        nameof(OnConnectionRemovedFromDraft),
         // Variables (definition-bag, full CRUD)
         nameof(OnVariableDeclaredInDraft),
         nameof(OnVariableUpdatedInDraft),
@@ -89,11 +86,12 @@ public sealed class EventNamingTests
     }
 
     [Fact]
-    public void Workflows_Design_Core_publishes_exactly_22_events()
+    public void Workflows_Design_Core_publishes_exactly_20_events()
     {
-        // 21 FR-018 mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
-        // 3 activity input CRUD + 3 activity output CRUD + 2 connection + 3 variable CRUD +
-        // 3 wf-input CRUD + 3 wf-output CRUD = 21) plus 1 FR-018a lifecycle (OnDraftDiscarded) = 22.
+        // 19 FR-018 core mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
+        // 3 activity input CRUD + 3 activity output CRUD + 3 variable CRUD +
+        // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 FR-018a lifecycle (OnDraftDiscarded) = 20.
+        // Graph connection events are Flowchart-module concerns, not Workflows.Design.Core events.
         // OnDraftClonedFromVersion was dropped — clone delegates to ICreateDraftCommand, so a
         // cloned Draft's origination is the single OnDraftCreated event (carrying SourceVersionId).
         // Generic OnActivityPropertyChangedInDraft was removed per Joey iteration 2026-05-28 —
@@ -101,7 +99,7 @@ public sealed class EventNamingTests
         // the whole activity for placement; CRUD on Inputs/Outputs for binding state).
         var actual = GetWorkflowDesignCoreEventNames();
 
-        Assert.Equal(22, actual.Count);
+        Assert.Equal(20, actual.Count);
     }
 
     private static IReadOnlyList<string> GetWorkflowDesignCoreEventNames()

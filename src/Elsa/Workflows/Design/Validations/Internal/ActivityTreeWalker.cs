@@ -37,10 +37,4 @@ internal static class ActivityTreeWalker
         }
     }
 
-    public static IEnumerable<ActivityConnection> WalkConnections(ActivityNode? root, int maxDepth)
-    {
-        foreach (var node in Walk(root, maxDepth))
-            foreach (var connection in (node.ConnectionSlots ?? []).SelectMany(slot => slot.Connections))
-                yield return connection;
-    }
 }

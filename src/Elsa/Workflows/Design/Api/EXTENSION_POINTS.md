@@ -72,9 +72,9 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 **Payload.** `DraftId : string`, `WorkflowDefinitionId : string`.
 **Publication site.** `IDiscardDraftCommand`.
 
-**Mutation events — emitted by `IUpdateDraftCommand`.** Every event below is a per-diff emission of the single coarse `IUpdateDraftCommand`: the command diffs the desired `WorkflowDefinitionState` (+ layout sibling) against the stored snapshot under the per-Draft lock and emits one event per detected difference, published Background after `SaveChangesAsync` + lock release. Match keys: activities by `NodeId`, I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple, variables/inputs/outputs by `ReferenceKey`, layout by `NodeId`.
+**Mutation events — emitted by `IUpdateDraftCommand`.** Every event below is a per-diff emission of the single coarse `IUpdateDraftCommand`: the command diffs the desired `WorkflowDefinitionState` (+ layout sibling) against the stored snapshot under the per-Draft lock and emits one event per detected difference, published Background after `SaveChangesAsync` + lock release. Match keys: activities by `NodeId`, I/O by (`NodeId`,`ReferenceKey`), variables/inputs/outputs by `ReferenceKey`, layout by `NodeId`. Flowchart graph connection events belong to the future Flowchart activity module, not to Workflows.Design Core.
 
-**Activities — graph.**
+**Activities.**
 
 ### OnActivityAddedToDraft
 
@@ -125,20 +125,6 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 **Payload.** `DraftId : string`, `NodeId : string`, `OutputReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored (`NodeId`,`ReferenceKey`) output absent from desired.
-
-**Connections — graph.**
-
-### OnConnectionAddedToDraft
-
-**Semantic.** An edge has been added to the activity graph.
-**Payload.** `DraftId : string`, `Connection : ActivityConnection`.
-**Publication site.** `IUpdateDraftCommand` — desired endpoint-tuple connection absent from stored.
-
-### OnConnectionRemovedFromDraft
-
-**Semantic.** An edge has been removed from the activity graph.
-**Payload.** `DraftId : string`, `Connection : ActivityConnection`.
-**Publication site.** `IUpdateDraftCommand` — stored endpoint-tuple connection absent from desired.
 
 **Variables — full CRUD.**
 
