@@ -1,6 +1,88 @@
-@Elsa.Server_HostAddress = http://localhost:5095
+### Elsa Server workflow REST loop
+###
+### Run the server first:
+###   dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
+###
+### The default CShell is mounted under /default.
 
-GET {{Elsa.Server_HostAddress}}/weatherforecast/
+@host = http://localhost:5095/default
+
+@writeLineActivityDefinitionId = {{searchWriteLineActivityDefinitions.response.body.$[0].id}}
+@writeLineActivityVersionId = {{listWriteLineActivityVersions.response.body.$[0].id}}
+@workflowDefinitionId = {{submitHelloWorldWorkflow.response.body.$.definition.id}}
+@workflowVersionId = {{submitHelloWorldWorkflow.response.body.$.version.id}}
+@workflowExecutableArtifactId = {{publishHelloWorldWorkflow.response.body.$.artifactId}}
+@workflowExecutionId = {{executeHelloWorldWorkflow.response.body.$.workflowExecutionId}}
+
+### 01. Find the WriteLine activity definition.
+# @name searchWriteLineActivityDefinitions
+GET {{host}}/design/activities/definitions?searchTerm=WriteLine
 Accept: application/json
 
-###
+### 02. Find the WriteLine activity version used by the workflow root activity.
+# @name listWriteLineActivityVersions
+GET {{host}}/design/activities/definitions/{{writeLineActivityDefinitionId}}/versions
+Accept: application/json
+
+### 03. Submit a workflow definition whose root activity writes "Hello World".
+# @name submitHelloWorldWorkflow
+POST {{host}}/design/workflows/definitions/submit
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Hello World",
+  "description": "Writes Hello World through the WriteLine activity.",
+  "state": {
+    "variables": [],
+    "rootActivity": {
+      "nodeId": "write-hello-world",
+      "activityVersionId": "{{writeLineActivityVersionId}}",
+      "inputs": [
+        {
+          "referenceKey": "Text",
+          "value": {
+            "value": "Hello World",
+            "expressionType": "Literal"
+          },
+          "autoEvaluate": null,
+          "evaluatorType": null,
+          "storageDriverType": null,
+          "isSensitive": null
+        }
+      ],
+      "outputs": [],
+      "childSlots": null
+    },
+    "inputs": [],
+    "outputs": [],
+    "workflowActivityOptions": null,
+    "strategyOptions": null
+  }
+}
+
+### 04. Publish/compile the submitted workflow definition version into a WorkflowExecutable.
+# @name publishHelloWorldWorkflow
+POST {{host}}/publishing/workflows/{{workflowVersionId}}/publish
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+### 05. Execute the published WorkflowExecutable artifact.
+### The server console should print:
+###   Hello World
+# @name executeHelloWorldWorkflow
+POST {{host}}/runtime/workflows/{{workflowExecutableArtifactId}}/execute
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+### 06. Optional: execute the same published artifact again.
+# @name executeHelloWorldWorkflowAgain
+POST {{host}}/runtime/workflows/{{workflowExecutableArtifactId}}/execute
+Content-Type: application/json
+Accept: application/json
+
+{}
