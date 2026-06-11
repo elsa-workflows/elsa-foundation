@@ -185,6 +185,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task CheckpointCommitter_RecordsPendingOutboxItemsBeforeDispatchAndMarksDelivered()
     {
         var events = new List<string>();
+        var deliveryResultRecordedAt = _now.AddSeconds(30);
         var writer = new RecordingWriter(events);
         var dispatcher = new RecordingDispatcher(events);
         var outboxStore = new RecordingOutboxStore(events);
@@ -195,7 +196,12 @@ public sealed class RuntimeCheckpointCommitTests
                 NewIntent("intent-2")
             ]);
 
-        await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit);
+        await NewCommitter(
+            RuntimeCheckpointPersistenceMode.Immediate,
+            writer,
+            dispatcher,
+            outboxStore,
+            new FixedTimeProvider(deliveryResultRecordedAt)).CommitAsync(commit);
 
         Assert.Equal(
             [
@@ -209,6 +215,8 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             events);
         Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
+        Assert.Equal([_now, _now], outboxStore.PendingItems.Select(item => item.AvailableAt));
+        Assert.Equal([deliveryResultRecordedAt, deliveryResultRecordedAt], outboxStore.Results.Select(result => result.RecordedAt));
         Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], outboxStore.Results.Select(result => result.Status));
     }
 
@@ -1472,12 +1480,14 @@ public sealed class RuntimeCheckpointCommitTests
         RuntimeCheckpointPersistenceMode mode,
         RecordingWriter writer,
         RecordingDispatcher? dispatcher = null,
-        RecordingOutboxStore? outboxStore = null) =>
+        RecordingOutboxStore? outboxStore = null,
+        TimeProvider? timeProvider = null) =>
         new(
             new FixedPolicy(mode),
             writer,
             dispatcher ?? new RecordingDispatcher(),
-            outboxStore);
+            outboxStore,
+            timeProvider ?? TimeProvider.System);
 
     private static JsonElement Json(string json)
     {
@@ -1562,6 +1572,11 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     private sealed class BlankMessageException() : Exception(string.Empty);
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
     {

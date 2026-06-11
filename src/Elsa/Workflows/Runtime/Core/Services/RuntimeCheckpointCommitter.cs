@@ -9,6 +9,7 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeCheckpointWriter _checkpointWriter;
     private readonly IRuntimePostCommitIntentDispatcher _postCommitIntentDispatcher;
     private readonly IRuntimePostCommitOutboxStore? _postCommitOutboxStore;
+    private readonly TimeProvider _timeProvider;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
@@ -23,11 +24,24 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeCheckpointWriter checkpointWriter,
         IRuntimePostCommitIntentDispatcher postCommitIntentDispatcher,
         IRuntimePostCommitOutboxStore? postCommitOutboxStore)
+        : this(persistencePolicy, checkpointWriter, postCommitIntentDispatcher, postCommitOutboxStore, TimeProvider.System)
     {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointWriter checkpointWriter,
+        IRuntimePostCommitIntentDispatcher postCommitIntentDispatcher,
+        IRuntimePostCommitOutboxStore? postCommitOutboxStore,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
         _persistencePolicy = persistencePolicy;
         _checkpointWriter = checkpointWriter;
         _postCommitIntentDispatcher = postCommitIntentDispatcher;
         _postCommitOutboxStore = postCommitOutboxStore;
+        _timeProvider = timeProvider;
     }
 
     public async ValueTask<RuntimeCheckpointPersistenceDecision> CommitAsync(
@@ -117,7 +131,7 @@ public sealed class RuntimeCheckpointCommitter
         await _postCommitOutboxStore.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: NewOutboxItemId(commit, intent),
             status: status,
-            recordedAt: commit.Checkpoint.OccurredAt,
+            recordedAt: _timeProvider.GetUtcNow(),
             failureMessage: failureMessage),
             cancellationToken);
     }
