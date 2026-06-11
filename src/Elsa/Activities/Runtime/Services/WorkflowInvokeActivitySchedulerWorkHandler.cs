@@ -13,6 +13,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 {
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
+    private const string CompletionOutcomeNamesMetadataKey = "runtime.completionOutcomeNames";
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -132,12 +133,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         {
             if (!await activity.CanExecuteAsync(context))
             {
-                completedState = CompleteActivity(workItem, invokePayload, state, skipped: true);
+                completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames: [], skipped: true);
             }
             else
             {
                 await activity.ExecuteAsync(context);
-                completedState = CompleteActivity(workItem, invokePayload, state, skipped: false);
+                completedState = CompleteActivity(workItem, invokePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true), skipped: false);
             }
         }
         catch (OperationCanceledException)
@@ -168,7 +169,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             invokePayload.ActivityExecutionId,
             completedState.ParentActivityExecutionId,
             completedState.BranchId,
-            completedState.SubStatus == SkippedSubStatus ? [] : [ActivityOutcomes.Done],
+            ReadCompletionOutcomeNames(completedState),
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         var workItem = new RuntimeSchedulerWorkItem(
@@ -230,11 +231,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
+        IReadOnlyCollection<string> outcomeNames,
         bool skipped)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata["runtime.invokeReason"] = invokePayload.Reason;
         metadata["runtime.invokeSchedulerWorkItemId"] = workItem.WorkItemId;
+        metadata[CompletionOutcomeNamesMetadataKey] = JsonSerializer.Serialize(outcomeNames);
 
         if (skipped)
             metadata["runtime.invokeSkipped"] = bool.TrueString;
@@ -246,6 +249,34 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             CompletedAt = _timeProvider.GetUtcNow(),
             Metadata = metadata
         };
+    }
+
+    private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)
+    {
+        if (completedState.Metadata.TryGetValue(CompletionOutcomeNamesMetadataKey, out var serializedOutcomeNames))
+        {
+            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
+                ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
+
+            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+        }
+
+        return completedState.SubStatus == SkippedSubStatus ? [] : [ActivityOutcomes.Done];
+    }
+
+    private static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
+    {
+        var snapshot = outcomeNames.ToArray();
+        if (snapshot.Length == 0)
+            return defaultToDone ? [ActivityOutcomes.Done] : [];
+
+        if (snapshot.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
+
+        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
+            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
+
+        return snapshot;
     }
 
     private ActivityExecutionState FaultActivity(

@@ -22,6 +22,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Validate the payload shape only. Parent evaluation and continuation scheduling
+        // are deferred to a later implementation slice.
         _ = DeserializeCompletePayload(workItem);
         return ValueTask.CompletedTask;
     }
