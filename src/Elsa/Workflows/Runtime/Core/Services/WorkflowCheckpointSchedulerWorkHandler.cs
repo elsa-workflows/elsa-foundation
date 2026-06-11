@@ -132,13 +132,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
+        var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: workItem.WorkflowExecutionId,
             PinnedExecutable: payload.PinnedExecutable,
             Status: WorkflowExecutionStatus.Running,
             SubStatus: null,
-            CreatedAt: occurredAt,
-            StartedAt: occurredAt,
+            CreatedAt: startedAt,
+            StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
             CorrelationId: null,

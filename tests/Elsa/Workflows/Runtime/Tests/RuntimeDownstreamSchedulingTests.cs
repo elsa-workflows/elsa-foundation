@@ -205,6 +205,34 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
+    public async Task CheckpointHandler_UsesWorkflowStartedAtMetadataForWorkflowStartedCheckpoint()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var startedAt = _now.AddMinutes(-5);
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
+
+        await handler.HandleAsync(NewCheckpointWorkItem(
+            [],
+            RuntimeCheckpointNames.WorkflowStarted,
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.WorkflowStartedAt] = startedAt.ToString("O", CultureInfo.InvariantCulture)
+            },
+            []));
+
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        var workflowChange = write.Commit.StateChanges.WorkflowExecution;
+        Assert.NotNull(workflowChange);
+        Assert.Equal(WorkflowExecutionStatus.Running, workflowChange.State.Status);
+        Assert.Equal(startedAt, workflowChange.State.CreatedAt);
+        Assert.Equal(startedAt, workflowChange.State.StartedAt);
+        Assert.Equal(_now, workflowChange.State.UpdatedAt);
+        Assert.Null(workflowChange.State.CompletedAt);
+    }
+
+    [Fact]
     public async Task CheckpointHandler_DispatchesSchedulerIntentAfterSuccessfulCommit()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -348,7 +376,8 @@ public sealed class RuntimeDownstreamSchedulingTests
     private RuntimeSchedulerWorkItem NewCheckpointWorkItem(
         IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents,
         string checkpointName = RuntimeCheckpointNames.ActivityCompleted,
-        IReadOnlyDictionary<string, string>? commandMetadata = null) =>
+        IReadOnlyDictionary<string, string>? commandMetadata = null,
+        IReadOnlyCollection<string>? activityExecutionIds = null) =>
         new(
             workItemId: "checkpoint-work",
             workflowExecutionId: "wfexec-1",
@@ -362,7 +391,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             payload: JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(
                 NewIdentity(),
                 checkpointName,
-                ["actexec-source"],
+                activityExecutionIds ?? ["actexec-source"],
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason,
                 postCommitIntents)),
             commandMetadata: commandMetadata ?? new Dictionary<string, string>(),
