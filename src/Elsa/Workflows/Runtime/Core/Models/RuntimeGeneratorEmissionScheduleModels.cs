@@ -35,6 +35,12 @@ public sealed class RuntimeGeneratorEmissionScheduleResult
         if (!StringComparer.Ordinal.Equals(generatedEventWorkItem.WorkflowExecutionId, schedulerWorkItem.WorkflowExecutionId))
             throw new ArgumentException("Generated-event work and scheduler work must target the same workflow execution.", nameof(schedulerWorkItem));
 
+        if (!StringComparer.Ordinal.Equals(generatedEventWorkItem.WorkItemId, schedulerWorkItem.WorkItemId))
+            throw new ArgumentException("Generated-event work and scheduler work must have the same work item ID.", nameof(schedulerWorkItem));
+
+        if (schedulerWorkItem.CommandKind != WorkflowExecutionCommandKind.GeneratedEvent)
+            throw new ArgumentException("Generated-event schedule results require generated-event scheduler work.", nameof(schedulerWorkItem));
+
         GeneratedEventWorkItem = generatedEventWorkItem;
         SchedulerWorkItem = schedulerWorkItem;
     }

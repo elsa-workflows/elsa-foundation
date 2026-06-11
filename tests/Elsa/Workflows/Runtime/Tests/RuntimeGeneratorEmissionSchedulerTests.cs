@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -77,6 +78,27 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
     }
 
     [Fact]
+    public async Task ScheduleAsync_UsesConfiguredPayloadJsonOptions()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var scheduler = new RuntimeGeneratorEmissionScheduler(
+            queue,
+            new FixedTimeProvider(_now),
+            new JsonSerializerOptions(JsonSerializerDefaults.General)
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                PropertyNameCaseInsensitive = true
+            });
+        var generatedEvent = NewGeneratedEvent(2);
+
+        var first = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(generatedEvent, "GeneratorEmitted"));
+        var duplicate = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(generatedEvent, "DuplicateEmission"));
+
+        Assert.Equal("event-2", first.SchedulerWorkItem.Payload!.Value.GetProperty("generatedEvent").GetProperty("generatedEventId").GetString());
+        Assert.Equal("GeneratorEmitted", duplicate.GeneratedEventWorkItem.Reason);
+    }
+
+    [Fact]
     public void RuntimeGeneratorEmissionScheduleModels_RejectInvalidInput()
     {
         Assert.Throws<ArgumentNullException>(() => new RuntimeGeneratorEmissionScheduleRequest(null!, "GeneratorEmitted"));
@@ -94,6 +116,36 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
                 commandKind: WorkflowExecutionCommandKind.GeneratedEvent,
                 envelopeId: "envelope-1",
                 idempotencyKey: "wfexec-2:generated-event:event-1",
+                enqueuedAt: _now,
+                recordedAt: _now)));
+        Assert.Throws<ArgumentException>(() => new RuntimeGeneratorEmissionScheduleResult(
+            new SchedulerGeneratedEventWorkItem(
+                workItemId: "generated-work-1",
+                generatedEvent: NewGeneratedEvent(1),
+                enqueuedAt: _now,
+                reason: "GeneratorEmitted"),
+            new RuntimeSchedulerWorkItem(
+                workItemId: "generated-work-2",
+                workflowExecutionId: "wfexec-1",
+                commandId: "command-1",
+                commandKind: WorkflowExecutionCommandKind.GeneratedEvent,
+                envelopeId: "envelope-1",
+                idempotencyKey: "wfexec-1:generated-event:event-1",
+                enqueuedAt: _now,
+                recordedAt: _now)));
+        Assert.Throws<ArgumentException>(() => new RuntimeGeneratorEmissionScheduleResult(
+            new SchedulerGeneratedEventWorkItem(
+                workItemId: "generated-work-1",
+                generatedEvent: NewGeneratedEvent(1),
+                enqueuedAt: _now,
+                reason: "GeneratorEmitted"),
+            new RuntimeSchedulerWorkItem(
+                workItemId: "generated-work-1",
+                workflowExecutionId: "wfexec-1",
+                commandId: "command-1",
+                commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+                envelopeId: "envelope-1",
+                idempotencyKey: "wfexec-1:generated-event:event-1",
                 enqueuedAt: _now,
                 recordedAt: _now)));
     }

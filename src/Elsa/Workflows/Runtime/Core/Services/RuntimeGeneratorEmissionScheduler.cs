@@ -8,21 +8,32 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly TimeProvider _timeProvider;
+    private readonly JsonSerializerOptions _payloadJsonSerializerOptions;
 
     public RuntimeGeneratorEmissionScheduler(IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(schedulerWorkQueue, TimeProvider.System)
+        : this(schedulerWorkQueue, TimeProvider.System, CreateDefaultPayloadJsonSerializerOptions())
     {
     }
 
     public RuntimeGeneratorEmissionScheduler(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         TimeProvider timeProvider)
+        : this(schedulerWorkQueue, timeProvider, CreateDefaultPayloadJsonSerializerOptions())
+    {
+    }
+
+    public RuntimeGeneratorEmissionScheduler(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        TimeProvider timeProvider,
+        JsonSerializerOptions payloadJsonSerializerOptions)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(payloadJsonSerializerOptions);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider;
+        _payloadJsonSerializerOptions = new JsonSerializerOptions(payloadJsonSerializerOptions);
     }
 
     public async ValueTask<RuntimeGeneratorEmissionScheduleResult> ScheduleAsync(
@@ -51,18 +62,24 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
             enqueuedAt: enqueuedAt,
             recordedAt: _timeProvider.GetUtcNow(),
             sequence: generatedEvent.Sequence,
-            payload: JsonSerializer.SerializeToElement(generatedEventWorkItem),
+            payload: JsonSerializer.SerializeToElement(generatedEventWorkItem, _payloadJsonSerializerOptions),
             commandMetadata: CreateCommandMetadata(generatedEvent),
             envelopeMetadata: request.Metadata);
 
         schedulerWorkItem = await _schedulerWorkQueue.EnqueueAsync(schedulerWorkItem, cancellationToken);
-        generatedEventWorkItem = ReadQueuedGeneratedEventWorkItem(schedulerWorkItem);
+        generatedEventWorkItem = ReadQueuedGeneratedEventWorkItem(schedulerWorkItem, _payloadJsonSerializerOptions);
 
         return new RuntimeGeneratorEmissionScheduleResult(generatedEventWorkItem, schedulerWorkItem);
     }
 
     private static string CreateScopedId(GeneratedEvent generatedEvent, string purpose) =>
         $"{generatedEvent.WorkflowExecutionId}:{purpose}:{generatedEvent.GeneratedEventId}";
+
+    private static JsonSerializerOptions CreateDefaultPayloadJsonSerializerOptions() =>
+        new(JsonSerializerDefaults.General)
+        {
+            PropertyNameCaseInsensitive = true
+        };
 
     private static IReadOnlyDictionary<string, string> CreateCommandMetadata(GeneratedEvent generatedEvent)
     {
@@ -83,7 +100,9 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         return metadata;
     }
 
-    private static SchedulerGeneratedEventWorkItem ReadQueuedGeneratedEventWorkItem(RuntimeSchedulerWorkItem schedulerWorkItem)
+    private static SchedulerGeneratedEventWorkItem ReadQueuedGeneratedEventWorkItem(
+        RuntimeSchedulerWorkItem schedulerWorkItem,
+        JsonSerializerOptions payloadJsonSerializerOptions)
     {
         if (schedulerWorkItem.CommandKind != WorkflowExecutionCommandKind.GeneratedEvent)
             throw new InvalidOperationException($"Queued scheduler work item '{schedulerWorkItem.WorkItemId}' is not generated-event work.");
@@ -93,12 +112,11 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
 
         try
         {
-            return payload.Deserialize<SchedulerGeneratedEventWorkItem>()
+            return payload.Deserialize<SchedulerGeneratedEventWorkItem>(payloadJsonSerializerOptions)
                    ?? throw new InvalidOperationException($"Queued generated-event scheduler work item '{schedulerWorkItem.WorkItemId}' payload resolved to null.");
         }
         catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException)
+            exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new InvalidOperationException($"Queued generated-event scheduler work item '{schedulerWorkItem.WorkItemId}' payload is not valid generated-event work.", exception);
         }
