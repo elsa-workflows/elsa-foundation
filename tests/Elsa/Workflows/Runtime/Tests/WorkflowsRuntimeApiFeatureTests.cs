@@ -29,6 +29,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerDrainer));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy) &&
+            descriptor.ImplementationType == typeof(ImmediateWorkflowSchedulerDrainPolicy));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
+            descriptor.ImplementationType == typeof(NoopWorkflowSchedulerDrainObserver));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(NoopWorkflowSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
@@ -45,6 +51,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<WorkflowSchedulerCommandProcessor>(provider.GetRequiredService<IWorkflowExecutionCommandProcessor>());
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
+        Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
+        Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is NoopWorkflowSchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is IFallbackWorkflowSchedulerWorkHandler);
     }

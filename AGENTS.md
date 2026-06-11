@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Scheduler Drain Contract](specs/023-runtime-scheduler-drain-contract/plan.md)
+Current Speckit plan: [Runtime Scheduler Command Drain Dispatch](specs/024-runtime-scheduler-command-drain-dispatch/plan.md)
 <!-- SPECKIT END -->
