@@ -92,7 +92,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CompleteActivityHandler_DoesNotAttachSchedulerIntentsWhenNoOutcomeEdgesMatch()
+    public async Task CompleteActivityHandler_EnqueuesWorkflowCompletedCheckpointWhenNoOutcomeEdgesMatch()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
