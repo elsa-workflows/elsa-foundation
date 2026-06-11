@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
@@ -34,6 +36,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
 
 public sealed class WorkflowExecutionStartCommandPayload
 {
+    [JsonConstructor]
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId)

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -7,6 +9,7 @@ public sealed class RuntimeScheduleActivityCommandPayload
 {
     public const string WorkflowStartReason = "WorkflowStart";
 
+    [JsonConstructor]
     public RuntimeScheduleActivityCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string executableNodeId,
