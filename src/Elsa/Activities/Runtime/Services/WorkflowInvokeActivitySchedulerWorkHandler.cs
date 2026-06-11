@@ -89,8 +89,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             return;
 
         var activityOutputRegister = scope.ServiceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
+        var durableValueStateStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
         var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
-        await InvokeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, checkpointCommitter, workItem, invokePayload, executableNode, state, cancellationToken);
+        await InvokeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, checkpointCommitter, workItem, invokePayload, executableNode, state, cancellationToken);
     }
 
     private async ValueTask InvokeActivityAsync(
@@ -99,6 +100,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeActivityOutputRegister activityOutputRegister,
+        IDurableValueStateStore durableValueStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
@@ -109,7 +111,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         try
         {
-            inputs = _inputMaterializer.MaterializeInputs(executableNode);
+            var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var resolutionContext = new RuntimeInputBindingResolutionContext(
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                activityExecutionId: invokePayload.ActivityExecutionId,
+                durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
+                activityOutputs: activityOutputRegister);
+            inputs = _inputMaterializer.MaterializeInputs(executableNode, resolutionContext);
         }
         catch (OperationCanceledException)
         {

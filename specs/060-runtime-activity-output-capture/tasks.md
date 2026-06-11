@@ -12,4 +12,4 @@
 - [x] T008 Add focused invocation/output capture tests.
 - [x] T009 Run focused runtime/activity and architecture validation.
 - [x] T010 Self-review until no actionable issues remain.
-- [ ] T011 Commit, open PR, run PR loop, and merge when clean.
+- [x] T011 Commit, open PR, run PR loop, and merge when clean.
