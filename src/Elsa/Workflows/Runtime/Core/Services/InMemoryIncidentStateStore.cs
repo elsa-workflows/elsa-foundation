@@ -1,0 +1,72 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Core.Services;
+
+public sealed class InMemoryIncidentStateStore : IIncidentStateStore
+{
+    private readonly object _syncRoot = new();
+    private readonly Dictionary<IncidentStateKey, IncidentState> _states = new();
+
+    public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new IncidentStateKey(state.WorkflowExecutionId, state.IncidentId);
+            _states[key] = state;
+            return new ValueTask<IncidentState>(state);
+        }
+    }
+
+    public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(incidentId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            _states.TryGetValue(new IncidentStateKey(workflowExecutionId, incidentId), out var state);
+            return new ValueTask<IncidentState?>(state);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return new ValueTask<IReadOnlyCollection<IncidentState>>(ListByWorkflowExecution(workflowExecutionId));
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var states = ListByWorkflowExecution(workflowExecutionId)
+                .Where(state => state.IsBlocking)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<IncidentState>>(states);
+        }
+    }
+
+    private IncidentState[] ListByWorkflowExecution(string workflowExecutionId) =>
+        _states
+            .Where(item => item.Key.WorkflowExecutionId == workflowExecutionId)
+            .Select(item => item.Value)
+            .ToArray();
+
+    private readonly record struct IncidentStateKey(string WorkflowExecutionId, string IncidentId);
+}
