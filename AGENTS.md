@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Post-Commit Outbox Store](specs/046-runtime-post-commit-outbox-store/plan.md)
+Current Speckit plan: [Runtime Post-Commit Outbox Recording](specs/047-runtime-post-commit-outbox-recording/plan.md)
 <!-- SPECKIT END -->

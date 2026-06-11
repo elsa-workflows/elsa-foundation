@@ -182,6 +182,37 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_RecordsPendingOutboxItemsBeforeDispatchAndMarksDelivered()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var outboxStore = new RecordingOutboxStore(events);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2")
+            ]);
+
+        await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit);
+
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered",
+                "dispatch:intent-2",
+                "outbox-result:commit-1:intent-2:Delivered"
+            ],
+            events);
+        Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
+        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], outboxStore.Results.Select(result => result.Status));
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenWriteFails()
     {
         var events = new List<string>();
@@ -193,6 +224,22 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Equal(["write:commit-1"], events);
         Assert.Empty(dispatcher.Intents);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotRecordOutboxItemsWhenWriteFails()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events, new InvalidOperationException("checkpoint write failed"));
+        var dispatcher = new RecordingDispatcher(events);
+        var outboxStore = new RecordingOutboxStore(events);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Equal(["write:commit-1"], events);
+        Assert.Empty(outboxStore.PendingItems);
+        Assert.Empty(outboxStore.Results);
     }
 
     [Fact]
@@ -220,6 +267,54 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_RecordsFailedOutboxResultBeforeReportingDispatchFailure()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-2", failure: new InvalidOperationException("Intent failed."));
+        var outboxStore = new RecordingOutboxStore(events);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2"),
+                NewIntent("intent-3")
+            ]);
+
+        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
+
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2",
+                "outbox-pending:commit-1:intent-3",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered",
+                "dispatch:intent-2",
+                "outbox-result:commit-1:intent-2:FailedFinal"
+            ],
+            events);
+        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal], outboxStore.Results.Select(result => result.Status));
+        Assert.Equal("Intent failed.", outboxStore.Results[1].FailureMessage);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_RecordsExceptionTypeWhenDispatchFailureMessageIsBlank()
+    {
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new BlankMessageException());
+        var outboxStore = new RecordingOutboxStore();
+
+        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        var result = Assert.Single(outboxStore.Results);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, result.Status);
+        Assert.Equal(nameof(BlankMessageException), result.FailureMessage);
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_DoesNotWrapPostCommitIntentDispatchCancellation()
     {
         var dispatcher = new RecordingDispatcher(
@@ -235,12 +330,15 @@ public sealed class RuntimeCheckpointCommitTests
     {
         var writer = new RecordingWriter();
         var dispatcher = new RecordingDispatcher();
+        var outboxStore = new RecordingOutboxStore();
 
-        var decision = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, writer, dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted));
+        var decision = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted));
 
         Assert.Equal(RuntimeCheckpointPersistenceMode.Skip, decision.Mode);
         Assert.Empty(writer.Writes);
         Assert.Empty(dispatcher.Intents);
+        Assert.Empty(outboxStore.PendingItems);
+        Assert.Empty(outboxStore.Results);
     }
 
     [Fact]
@@ -1292,11 +1390,13 @@ public sealed class RuntimeCheckpointCommitTests
     private RuntimeCheckpointCommitter NewCommitter(
         RuntimeCheckpointPersistenceMode mode,
         RecordingWriter writer,
-        RecordingDispatcher? dispatcher = null) =>
+        RecordingDispatcher? dispatcher = null,
+        RecordingOutboxStore? outboxStore = null) =>
         new(
             new FixedPolicy(mode),
             writer,
-            dispatcher ?? new RecordingDispatcher());
+            dispatcher ?? new RecordingDispatcher(),
+            outboxStore);
 
     private static JsonElement Json(string json)
     {
@@ -1344,6 +1444,31 @@ public sealed class RuntimeCheckpointCommitTests
             return ValueTask.CompletedTask;
         }
     }
+
+    private sealed class RecordingOutboxStore(List<string>? events = null) : IRuntimePostCommitOutboxStore
+    {
+        public List<RuntimePostCommitOutboxItem> PendingItems { get; } = [];
+        public List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
+
+        public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
+        {
+            PendingItems.Add(item);
+            events?.Add($"outbox-pending:{item.OutboxItemId}");
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(PendingItems);
+
+        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
+        {
+            Results.Add(result);
+            events?.Add($"outbox-result:{result.OutboxItemId}:{result.Status}");
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlankMessageException() : Exception(string.Empty);
 
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
     {
