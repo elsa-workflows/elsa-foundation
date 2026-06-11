@@ -40,7 +40,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
 - **Signature:** `Decide(RuntimeDomainRetryRequest request)`.
 - **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
-- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+- **Default implementation:** `NoopRuntimeDomainRetryPolicy` *(explicit do-not-retry baseline; workflow/activity retry policy providers replace this)*.
 
 ### `IRuntimeVolatileWaitPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides whether in-memory volatile waits are allowed in a runtime composition).

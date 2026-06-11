@@ -46,6 +46,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeRecoveryScanner) &&
             descriptor.ImplementationType == typeof(InMemoryRuntimeRecoveryScanner));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy) &&
+            descriptor.ImplementationType == typeof(NoopRuntimeDomainRetryPolicy));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
@@ -128,6 +131,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
+        Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
@@ -168,6 +172,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler));
+    }
+
+    [Fact]
+    public void RegistersRuntimeDomainRetryPolicyAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeDomainRetryPolicy>(new CustomRuntimeDomainRetryPolicy());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
     }
 
     [Fact]
@@ -457,5 +473,14 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     {
         using var document = System.Text.Json.JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    private sealed class CustomRuntimeDomainRetryPolicy : IRuntimeDomainRetryPolicy
+    {
+        public RuntimeDomainRetryDecision Decide(RuntimeDomainRetryRequest request) =>
+            new(
+                mode: RuntimeDomainRetryMode.Fault,
+                delay: null,
+                reason: "Custom policy owns domain retry decisions.");
     }
 }
