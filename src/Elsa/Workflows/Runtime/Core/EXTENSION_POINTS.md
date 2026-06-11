@@ -94,7 +94,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
 - **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
-- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work; does not drain or execute scheduler work)*.
+- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work, then applies the scheduler drain policy; activity execution remains handler/provider behavior, not command acceptance behavior)*.
 
 ### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one queue owns recorded scheduler work for a runtime composition).
@@ -107,6 +107,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.
 - **Usage:** dequeues scheduler work for one workflow execution and dispatches each work item to an `IWorkflowSchedulerWorkHandler`. The default drainer stops on the first handler fault and returns per-item drain results. It does not execute activities, write checkpoints, or implement retry.
 - **Default implementation:** `WorkflowSchedulerDrainer` *(contract-only drain boundary for the current runtime slice)*.
+
+### `IWorkflowSchedulerDrainPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides whether recorded scheduler work triggers a drain in the runtime composition).
+- **Signature:** `CreateDrainRequest(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerWorkItem workItem)`.
+- **Usage:** command processing records scheduler work first, then asks this policy whether to drain. Returning `null` defers draining.
+- **Default implementation:** `ImmediateWorkflowSchedulerDrainPolicy`.
+
+### `IWorkflowSchedulerDrainObserver` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (observers consume drain results produced by command processing).
+- **Signature:** `OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)`.
+- **Usage:** modules can project drain outcomes into diagnostics or future checkpoint/outbox behavior without making history continuation state.
+- **Default implementation:** `NoopWorkflowSchedulerDrainObserver`.
 
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (handlers consume drained scheduler work items).
