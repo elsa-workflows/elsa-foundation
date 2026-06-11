@@ -26,6 +26,12 @@ public sealed class MaterializeGroundworkStartupTask(
 
         foreach (var manifest in manifestList)
         {
+            if (!options.Value.MaterializeOnStartup)
+            {
+                RecordSkippedMaterialization(manifest, providerList);
+                continue;
+            }
+
             if (providerList.Count == 0)
             {
                 Record(manifest, null, GroundworkMaterializationStatus.ProviderUnavailable, "No Groundwork persistence providers are registered.");
@@ -34,12 +40,6 @@ public sealed class MaterializeGroundworkStartupTask(
 
             foreach (var provider in providerList)
             {
-                if (!options.Value.MaterializeOnStartup)
-                {
-                    Record(manifest, provider, GroundworkMaterializationStatus.Skipped, "Groundwork startup materialization is disabled.");
-                    continue;
-                }
-
                 try
                 {
                     await provider.MaterializeAsync(manifest, cancellationToken);
@@ -60,6 +60,18 @@ public sealed class MaterializeGroundworkStartupTask(
 
         if (failures.Count > 0)
             throw new AggregateException("One or more Groundwork startup materializations failed.", failures);
+    }
+
+    private void RecordSkippedMaterialization(StorageManifest manifest, IReadOnlyList<IGroundworkPersistenceProvider> providerList)
+    {
+        if (providerList.Count == 0)
+        {
+            Record(manifest, null, GroundworkMaterializationStatus.Skipped, "Groundwork startup materialization is disabled.");
+            return;
+        }
+
+        foreach (var provider in providerList)
+            Record(manifest, provider, GroundworkMaterializationStatus.Skipped, "Groundwork startup materialization is disabled.");
     }
 
     private void Record(StorageManifest manifest, IGroundworkPersistenceProvider? provider, GroundworkMaterializationStatus status, string? message) =>

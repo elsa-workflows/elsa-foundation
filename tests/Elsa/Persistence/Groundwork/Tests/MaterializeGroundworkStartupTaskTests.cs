@@ -50,6 +50,27 @@ public sealed class MaterializeGroundworkStartupTaskTests
     }
 
     [Fact]
+    public async Task StartupTaskRecordsSkippedMaterializationWhenDisabledAndNoProvidersAreRegistered()
+    {
+        await using var harness = GroundworkBridgeHarness.Create(options =>
+        {
+            options.Manifests.Add(SecretsGroundworkManifestFactory.Create());
+            options.MaterializeOnStartup = false;
+        }, registerSqliteProvider: false);
+
+        await harness.ExecuteStartupTask();
+
+        var snapshot = harness.GetDiagnosticsSnapshot();
+        Assert.Contains(snapshot.Materializations, record =>
+            record.ManifestIdentity == "elsa.secrets" &&
+            record.ProviderName is null &&
+            record.Status == GroundworkMaterializationStatus.Skipped);
+        Assert.DoesNotContain(snapshot.Materializations, record =>
+            record.ManifestIdentity == "elsa.secrets" &&
+            record.Status == GroundworkMaterializationStatus.ProviderUnavailable);
+    }
+
+    [Fact]
     public async Task StartupTaskRecordsUnavailableProviderWhenNoProvidersAreRegistered()
     {
         await using var harness = GroundworkBridgeHarness.Create(
