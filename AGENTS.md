@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Continuation Scheduling Enqueue](specs/032-runtime-continuation-scheduling-enqueue/plan.md)
+Current Speckit plan: [Runtime Completion Checkpoint Enqueue](specs/033-runtime-completion-checkpoint-enqueue/plan.md)
 <!-- SPECKIT END -->

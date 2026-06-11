@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -66,6 +67,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
                 return;
 
             case SchedulerCompletionKind.ContinuationScheduling:
+                await EnqueueCheckpointAsync(workItem, payload, cancellationToken);
                 return;
 
             default:
@@ -106,6 +108,37 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: activityCompletedWorkItem.CommandMetadata,
             envelopeMetadata: activityCompletedWorkItem.EnvelopeMetadata);
+
+        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
+    private async ValueTask EnqueueCheckpointAsync(
+        RuntimeSchedulerWorkItem continuationSchedulingWorkItem,
+        RuntimeCompleteActivityCommandPayload continuationSchedulingPayload,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var activityExecutionId = continuationSchedulingPayload.ActivityExecutionId;
+        var checkpointName = RuntimeCheckpointNames.ActivityCompleted;
+        var payload = new RuntimeCheckpointCommandPayload(
+            continuationSchedulingPayload.PinnedExecutable,
+            checkpointName,
+            [activityExecutionId],
+            RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
+
+        var workItem = new RuntimeSchedulerWorkItem(
+            workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:checkpoint:{checkpointName}:{activityExecutionId}",
+            workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
+            commandId: $"{continuationSchedulingWorkItem.CommandId}:checkpoint:{checkpointName}:{activityExecutionId}",
+            commandKind: WorkflowExecutionCommandKind.Checkpoint,
+            envelopeId: continuationSchedulingWorkItem.EnvelopeId,
+            idempotencyKey: $"{continuationSchedulingWorkItem.IdempotencyKey}:checkpoint:{checkpointName}:{activityExecutionId}",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: continuationSchedulingWorkItem.Sequence is { } sequence ? sequence + 1 : null,
+            payload: JsonSerializer.SerializeToElement(payload),
+            commandMetadata: continuationSchedulingWorkItem.CommandMetadata,
+            envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata);
 
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }

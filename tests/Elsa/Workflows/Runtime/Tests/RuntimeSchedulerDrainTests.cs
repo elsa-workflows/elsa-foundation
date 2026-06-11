@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -130,6 +131,48 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_DispatchesCheckpointWorkThroughNamedHandler()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.Checkpoint,
+            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload())));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
+        Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
+    }
+
+    [Fact]
+    public async Task DrainAsync_FaultsMalformedCheckpointWorkThroughNamedHandler()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        using var document = JsonDocument.Parse("""{"checkpointName":" "}""");
+        await queue.EnqueueAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.Checkpoint,
+            payload: document.RootElement.Clone()));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
+        Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
+        Assert.Contains("not a valid checkpoint payload", item.Error);
+    }
+
+    [Fact]
     public async Task CompleteActivityHandler_EnqueuesParentCompletionEvaluationWorkForCompletedChildWithParent()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -207,14 +250,14 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
-    public async Task DrainAsync_DrainsParentEvaluationThenContinuationSchedulingInOrder()
+    public async Task DrainAsync_DrainsParentEvaluationContinuationSchedulingAndCheckpointInOrder()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
             new FixedTimeProvider(_now));
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
@@ -229,7 +272,7 @@ public sealed class RuntimeSchedulerDrainTests
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
         var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
-        Assert.Equal(2, result.DrainedCount);
+        Assert.Equal(3, result.DrainedCount);
         Assert.Empty(remaining);
         Assert.Collection(
             result.Items,
@@ -242,11 +285,16 @@ public sealed class RuntimeSchedulerDrainTests
             {
                 Assert.Equal("work-1:continuation:actexec-parent", second.WorkItemId);
                 Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, second.HandlerName);
+            },
+            third =>
+            {
+                Assert.Equal("work-1:continuation:actexec-parent:checkpoint:ActivityCompleted:actexec-parent", third.WorkItemId);
+                Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, third.HandlerName);
             });
     }
 
     [Fact]
-    public async Task CompleteActivityHandler_AcceptsContinuationSchedulingWithoutSchedulingActivities()
+    public async Task CompleteActivityHandler_EnqueuesCheckpointWorkForContinuationScheduling()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
@@ -264,7 +312,14 @@ public sealed class RuntimeSchedulerDrainTests
                 outcomeNames: ["ParentDone"],
                 completionKind: SchedulerCompletionKind.ContinuationScheduling))));
 
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
+        Assert.Equal("work-1:checkpoint:ActivityCompleted:actexec-parent", checkpointWork.WorkItemId);
+        Assert.Equal(2, checkpointWork.Sequence);
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
+        Assert.Equal(RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason, checkpointPayload.Reason);
+        Assert.Equal(["actexec-parent"], checkpointPayload.ActivityExecutionIds);
     }
 
     [Fact]
@@ -367,6 +422,13 @@ public sealed class RuntimeSchedulerDrainTests
             reason: CompletionReason(completionKind),
             completionKind: completionKind,
             completedChildActivityExecutionId: completedChildActivityExecutionId);
+
+    private static RuntimeCheckpointCommandPayload NewCheckpointPayload() =>
+        new(
+            pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            checkpointName: RuntimeCheckpointNames.ActivityCompleted,
+            activityExecutionIds: ["actexec-1"],
+            reason: RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
 
     private static string CompletionReason(SchedulerCompletionKind completionKind) =>
         completionKind switch
