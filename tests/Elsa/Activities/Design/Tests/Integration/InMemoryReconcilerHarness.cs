@@ -58,6 +58,7 @@ internal static class InMemoryReconcilerHarness
 
         return new ActivityVersionReconciler(
             NullLogger<ActivityVersionReconciler>.Instance,
+            hasher,
             publisher,
             Options.Create(new ActivityVersionReconcilerOptions { DuplicateHandling = duplicateHandling }),
             definitionQueries,

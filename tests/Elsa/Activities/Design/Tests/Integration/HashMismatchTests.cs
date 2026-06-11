@@ -46,6 +46,17 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
+    public async Task SameVersionSameContentWithDifferentBuildMetadata_SkippedByDefault()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("same", "1.0.0+oldbuild"))).Reconcile(CancellationToken.None);
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("same", "1.0.0+newbuild"))).Reconcile(CancellationToken.None);
+
+        Assert.Single(store.Versions);
+    }
+
+    [Fact]
     public async Task SameVersionSameContent_ThrowsWhenDuplicateHandlingIsThrow()
     {
         var store = new InMemoryReconcilerHarness.CatalogStore();
@@ -61,10 +72,10 @@ public sealed class HashMismatchTests
     private static IActivityReconciliationSource Source(ActivityVersionReconciliationModel model) =>
         new InMemoryReconcilerHarness.InMemorySource("stub", "CLR", model);
 
-    private static ActivityVersionReconciliationModel Model(string description) =>
+    private static ActivityVersionReconciliationModel Model(string description, string version = "1.0.0") =>
         new(
             Id: null,
-            Version: "1.0.0",
+            Version: version,
             ActivityTypeKey: "Acme.Activities.Greet",
             DisplayName: null,
             Category: "Acme",
