@@ -90,6 +90,89 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_EnqueuesCreateBookmarkWorkWhenActivityRequestsDurableBookmark()
+    {
+        var activity = new BookmarkRequestingActivity(
+            new ActivityBookmarkRequest(
+                bookmarkId: "bookmark-1",
+                resumeTargetId: "resume-target:delivery",
+                stimulusType: "delivery-status",
+                stimulusHash: "sha256:delivery-status:order-123",
+                payload: Json("""{"orderId":"order-123"}"""),
+                expiresAt: _now.AddMinutes(10),
+                metadata: new Dictionary<string, string> { ["customer"] = "northwind" }));
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Null(state.CompletedAt);
+        var workItem = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, workItem.CommandKind);
+        Assert.Equal("invoke-work:create-bookmark:bookmark-1", workItem.WorkItemId);
+        Assert.Equal("command-1:create-bookmark:bookmark-1", workItem.CommandId);
+        Assert.Equal("wfexec-1:invoke:actexec-1:create-bookmark:bookmark-1", workItem.IdempotencyKey);
+        Assert.Equal(31, workItem.Sequence);
+        Assert.Equal("northwind", workItem.CommandMetadata["customer"]);
+        Assert.Equal("bookmark-1", workItem.CommandMetadata["runtime.bookmarkId"]);
+        var payload = workItem.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!;
+        Assert.Equal(NewIdentity(), payload.PinnedExecutable);
+        Assert.Equal("bookmark-1", payload.BookmarkId);
+        Assert.Equal("actexec-1", payload.ActivityExecutionId);
+        Assert.Equal("node-start", payload.ExecutableNodeId);
+        Assert.Equal("resume-target:delivery", payload.ResumeTargetId);
+        Assert.Equal("delivery-status", payload.StimulusType);
+        Assert.Equal("sha256:delivery-status:order-123", payload.StimulusHash);
+        Assert.Equal("order-123", payload.Payload!.Value.GetProperty("orderId").GetString());
+        Assert.Equal(_now.AddMinutes(10), payload.ExpiresAt);
+        Assert.Equal(RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason, payload.Reason);
+        Assert.Equal("northwind", payload.Metadata["customer"]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_EnqueuesCreateBookmarkWorkInRequestOrder()
+    {
+        var activity = new BookmarkRequestingActivity(
+            new ActivityBookmarkRequest("bookmark-1", "resume-target:first", "event", "hash-1"),
+            new ActivityBookmarkRequest("bookmark-2", "resume-target:second", "event", "hash-2"));
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var workItems = (await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).ToArray();
+        Assert.Equal(2, workItems.Length);
+        Assert.Equal(["bookmark-1", "bookmark-2"], workItems.Select(workItem => workItem.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId));
+        Assert.Equal([31L, 32L], workItems.Select(workItem => workItem.Sequence!.Value));
+    }
+
+    [Fact]
+    public async Task HandleAsync_FaultsActivityWhenDuplicateBookmarkRequestsAreRecorded()
+    {
+        var activity = new DuplicateBookmarkRequestActivity();
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityFaulted", state.SubStatus);
+        Assert.Contains("already registered", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task HandleAsync_RecordsFaultedStateWhenActivityThrows()
     {
         var activity = new RecordingActivity { Exception = new InvalidOperationException("boom") };
@@ -413,6 +496,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
+    private static JsonElement Json(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
     private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
     {
         public int CreateCalls { get; private set; }
@@ -471,7 +560,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             inner.ListAsync(workflowExecutionId, cancellationToken);
     }
 
-    private sealed class RecordingActivity : ActivityBase
+    private class RecordingActivity : ActivityBase
     {
         public InputArgument<string> Text { get; set; } = null!;
         public bool ShouldExecute { get; set; } = true;
@@ -490,6 +579,26 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             ObservedText = context.Get(Text);
             if (Outcomes is not null)
                 context.SetOutcomes(Outcomes);
+        }
+    }
+
+    private sealed class BookmarkRequestingActivity(params ActivityBookmarkRequest[] requests) : RecordingActivity
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            base.Execute(context);
+
+            foreach (var request in requests)
+                context.CreateBookmark(request);
+        }
+    }
+
+    private sealed class DuplicateBookmarkRequestActivity : ActivityBase
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            context.CreateBookmark(new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
+            context.CreateBookmark(new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
         }
     }
 

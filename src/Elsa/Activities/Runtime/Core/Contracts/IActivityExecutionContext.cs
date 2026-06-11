@@ -26,4 +26,8 @@ public interface IActivityExecutionContext
     void SetOutcomes(string[] outcomes);
 
     IEnumerable<string> GetOutcomes();
+
+    void CreateBookmark(ActivityBookmarkRequest request);
+
+    IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests();
 }

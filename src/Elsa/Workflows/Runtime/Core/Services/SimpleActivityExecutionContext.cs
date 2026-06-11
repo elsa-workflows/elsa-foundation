@@ -14,6 +14,7 @@ public sealed class SimpleActivityExecutionContext(
 {
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
+    private readonly List<ActivityBookmarkRequest> _bookmarkRequests = [];
 
     public IExpressionExecutionContext ExpressionExecutionContext => this;
     public IActivity Activity { get; } = activity;
@@ -53,6 +54,18 @@ public sealed class SimpleActivityExecutionContext(
     }
 
     public IEnumerable<string> GetOutcomes() => _outcomes;
+
+    public void CreateBookmark(ActivityBookmarkRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (_bookmarkRequests.Any(existing => StringComparer.Ordinal.Equals(existing.BookmarkId, request.BookmarkId)))
+            throw new InvalidOperationException($"Bookmark request '{request.BookmarkId}' is already registered for this activity execution.");
+
+        _bookmarkRequests.Add(request);
+    }
+
+    public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => _bookmarkRequests.ToArray();
 
     public bool IsContainedWithinCompositeActivity() => false;
     public bool TryGetActivityInput(string key, out object? value) => TryGetById(key, out value);

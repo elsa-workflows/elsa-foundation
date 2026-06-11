@@ -18,7 +18,8 @@ public sealed class RuntimeCreateBookmarkCommandPayload
         string stimulusHash,
         JsonElement? payload,
         DateTimeOffset? expiresAt,
-        string reason)
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCreateBookmarkCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -54,6 +55,7 @@ public sealed class RuntimeCreateBookmarkCommandPayload
         Payload = payload?.Clone();
         ExpiresAt = expiresAt;
         Reason = reason;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -66,6 +68,7 @@ public sealed class RuntimeCreateBookmarkCommandPayload
     public JsonElement? Payload { get; }
     public DateTimeOffset? ExpiresAt { get; }
     public string Reason { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
 internal sealed class RuntimeCreateBookmarkCommandPayloadValidationException(string message, string? paramName)

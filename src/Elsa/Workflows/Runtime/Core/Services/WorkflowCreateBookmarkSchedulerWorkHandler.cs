@@ -158,14 +158,20 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             StimulusType: payload.StimulusType,
             StimulusHash: payload.StimulusHash,
             Payload: payload.Payload,
-            Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
-            {
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                ["runtime.commandId"] = workItem.CommandId,
-                ["runtime.reason"] = payload.Reason
-            }),
+            Metadata: MergeBookmarkMetadata(workItem, payload),
             CreatedAt: _timeProvider.GetUtcNow(),
             ExpiresAt: payload.ExpiresAt);
+
+    private static IReadOnlyDictionary<string, string> MergeBookmarkMetadata(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCreateBookmarkCommandPayload payload)
+    {
+        var metadata = payload.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata["runtime.schedulerWorkItemId"] = workItem.WorkItemId;
+        metadata["runtime.commandId"] = workItem.CommandId;
+        metadata["runtime.reason"] = payload.Reason;
+        return RuntimeModelMetadata.Snapshot(metadata);
+    }
 
     private ActivityExecutionState SuspendActivity(
         RuntimeSchedulerWorkItem workItem,
