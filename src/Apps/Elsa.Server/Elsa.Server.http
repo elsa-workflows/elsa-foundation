@@ -5,24 +5,25 @@
 ###
 ### The default CShell is mounted under /default.
 
-@host = http://localhost:5095/default
-
-@writeLineActivityDefinitionId = {{searchWriteLineActivityDefinitions.response.body.$[0].id}}
-@writeLineActivityVersionId = {{listWriteLineActivityVersions.response.body.$[0].id}}
-@workflowDefinitionId = {{submitHelloWorldWorkflow.response.body.$.definition.id}}
-@workflowVersionId = {{submitHelloWorldWorkflow.response.body.$.version.id}}
-@workflowExecutableArtifactId = {{publishHelloWorldWorkflow.response.body.$.artifactId}}
-@workflowExecutionId = {{executeHelloWorldWorkflow.response.body.$.workflowExecutionId}}
+@host = https://localhost:7243/default
 
 ### 01. Find the WriteLine activity definition.
 # @name searchWriteLineActivityDefinitions
 GET {{host}}/design/activities/definitions?searchTerm=WriteLine
 Accept: application/json
 
+> {%
+    client.global.set("writeLineActivityDefinitionId", response.body[0].id);
+%}
+
 ### 02. Find the WriteLine activity version used by the workflow root activity.
 # @name listWriteLineActivityVersions
 GET {{host}}/design/activities/definitions/{{writeLineActivityDefinitionId}}/versions
 Accept: application/json
+
+> {%
+    client.global.set("writeLineActivityVersionId", response.body[0].id);
+%}
 
 ### 03. Submit a workflow definition whose root activity writes "Hello World".
 # @name submitHelloWorldWorkflow
@@ -61,6 +62,11 @@ Accept: application/json
   }
 }
 
+> {%
+    client.global.set("workflowDefinitionId", response.body.definition.id);
+    client.global.set("workflowVersionId", response.body.version.id);
+%}
+
 ### 04. Publish/compile the submitted workflow definition version into a WorkflowExecutable.
 # @name publishHelloWorldWorkflow
 POST {{host}}/publishing/workflows/{{workflowVersionId}}/publish
@@ -68,6 +74,10 @@ Content-Type: application/json
 Accept: application/json
 
 {}
+
+> {%
+    client.global.set("workflowExecutableArtifactId", response.body.artifactId);
+%}
 
 ### 05. Execute the published WorkflowExecutable artifact.
 ### The server console should print:
@@ -78,6 +88,10 @@ Content-Type: application/json
 Accept: application/json
 
 {}
+
+> {%
+    client.global.set("workflowExecutionId", response.body.workflowExecutionId);
+%}
 
 ### 06. Optional: execute the same published artifact again.
 # @name executeHelloWorldWorkflowAgain
@@ -92,10 +106,18 @@ Accept: application/json
 GET {{host}}/design/activities/definitions?searchTerm=Sequence
 Accept: application/json
 
+> {%
+    client.global.set("sequenceActivityDefinitionId", response.body[0].id);
+%}
+
 ### 08. Find the Sequence activity version used by the workflow root activity.
 # @name listSequenceActivityVersions
-GET {{host}}/design/activities/definitions/{{searchSequenceActivityDefinitions.response.body.$.[0].id}}/versions
+GET {{host}}/design/activities/definitions/{{sequenceActivityDefinitionId}}/versions
 Accept: application/json
+
+> {%
+    client.global.set("sequenceActivityVersionId", response.body[0].id);
+%}
 
 ### 09. Submit a workflow definition whose root Sequence writes two lines.
 ### Run steps 01, 02, 07, and 08 first so the WriteLine and Sequence version IDs are available.
@@ -111,7 +133,7 @@ Accept: application/json
     "variables": [],
     "rootActivity": {
       "nodeId": "sequence-root",
-      "activityVersionId": "{{listSequenceActivityVersions.response.body.$.[0].id}}",
+      "activityVersionId": "{{sequenceActivityVersionId}}",
       "inputs": [],
       "outputs": [],
       "childSlots": [
