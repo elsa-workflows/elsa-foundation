@@ -49,6 +49,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy) &&
             descriptor.ImplementationType == typeof(NoopRuntimeDomainRetryPolicy));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeVolatileWaitPolicy) &&
+            descriptor.ImplementationType == typeof(DefaultRuntimeVolatileWaitPolicy));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
@@ -132,6 +135,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
+        Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
@@ -184,6 +188,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
+    }
+
+    [Fact]
+    public void RegistersRuntimeVolatileWaitPolicyAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeVolatileWaitPolicy>(new CustomRuntimeVolatileWaitPolicy());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
     }
 
     [Fact]
@@ -482,5 +498,17 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 mode: RuntimeDomainRetryMode.Fault,
                 delay: null,
                 reason: "Custom policy owns domain retry decisions.");
+    }
+
+    private sealed class CustomRuntimeVolatileWaitPolicy : IRuntimeVolatileWaitPolicy
+    {
+        public RuntimeVolatileWaitPolicyDecision Decide(RuntimeVolatileWaitPolicyRequest request) =>
+            new(
+                isAllowed: false,
+                hostShutdownBehavior: request.RequestedHostShutdownBehavior,
+                cancellationBehavior: request.RequestedCancellationBehavior,
+                durableFallbackPolicy: request.DurableFallbackPolicy,
+                maximumDuration: request.RequestedDuration,
+                reason: "Custom policy owns volatile wait decisions.");
     }
 }
