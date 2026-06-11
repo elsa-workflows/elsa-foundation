@@ -45,6 +45,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IBookmarkResumeDispatcher) &&
             descriptor.ImplementationType == typeof(BookmarkResumeDispatcher));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IBookmarkConsumptionCheckpointService) &&
+            descriptor.ImplementationType == typeof(BookmarkConsumptionCheckpointService));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IDurableValueStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryDurableValueStateStore));
         Assert.Contains(services, descriptor =>
@@ -162,6 +165,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<BookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
         Assert.IsType<BookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
         Assert.IsType<BookmarkResumeDispatcher>(provider.GetRequiredService<IBookmarkResumeDispatcher>());
+        Assert.IsType<BookmarkConsumptionCheckpointService>(provider.GetRequiredService<IBookmarkConsumptionCheckpointService>());
         Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());

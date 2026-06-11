@@ -18,7 +18,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 17, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryBookmarkStateStore _bookmarkStateStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
+    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+
+    public WorkflowResumeBookmarkSchedulerWorkHandlerTests()
+    {
+        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+            activityExecutionStateStore: _activityStateStore,
+            bookmarkStateStore: _bookmarkStateStore);
+    }
 
     [Fact]
     public async Task HandleAsync_InvokesResumeTargetAndEnqueuesCompletionWork()
@@ -27,6 +36,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var factory = new RecordingActivityFactory(activity);
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
         await using var provider = NewProvider(factory);
         var handler = NewHandler(provider);
 
@@ -49,6 +59,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
         Assert.Equal("node-wait", completionPayload.ExecutableNodeId);
         Assert.Equal(["Resumed"], completionPayload.OutcomeNames);
+        await AssertBookmarkConsumedCheckpointAsync();
     }
 
     [Fact]
@@ -57,6 +68,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var activity = new ResumeTargetActivity();
         await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:input"));
         await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync(resumeTargetId: "resume-target:input");
         await using var provider = NewProvider(new RecordingActivityFactory(activity));
         var handler = NewHandler(provider);
 
@@ -71,6 +83,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     {
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
         await using var provider = NewProvider(new RecordingActivityFactory(new ActivityWithoutResumeTarget()));
         var handler = NewHandler(provider);
 
@@ -83,6 +96,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(1, state.FaultCount);
         Assert.Contains("does not declare resume target 'resume-target:delivery'", state.Metadata["runtime.faultMessage"]);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Empty(_checkpointWriter.ListWrites());
     }
 
     [Fact]
@@ -90,6 +105,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     {
         await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:invalid"));
         await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync(resumeTargetId: "resume-target:invalid");
         await using var provider = NewProvider(new RecordingActivityFactory(new InvalidResumeTargetActivity()));
         var handler = NewHandler(provider);
 
@@ -108,6 +124,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     {
         await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:throwing"));
         await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync(resumeTargetId: "resume-target:throwing");
         await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingResumeTargetActivity()));
         var handler = NewHandler(provider);
 
@@ -123,7 +140,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingCompletedState()
+    public async Task HandleAsync_ConsumesBookmarkAndReenqueuesCompletionWorkForExistingCompletedState()
     {
         var activity = new ResumeTargetActivity();
         var factory = new RecordingActivityFactory(activity);
@@ -133,6 +150,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             Status = ActivityExecutionStatus.Completed,
             CompletedAt = _now.AddMinutes(-1)
         });
+        await SaveBookmarkAsync();
         await using var provider = NewProvider(factory);
         var handler = NewHandler(provider);
 
@@ -142,6 +160,47 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.False(activity.ContextResumeInvoked);
         var completionPayload = await AssertCompletionWorkAsync();
         Assert.Equal([ActivityOutcomes.Done], completionPayload.OutcomeNames);
+        await AssertBookmarkConsumedCheckpointAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_DoesNotInvokeActivityForMissingBookmarkAndNonCompletedState()
+    {
+        var activity = new ResumeTargetActivity();
+        var factory = new RecordingActivityFactory(activity);
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        Assert.Equal(0, factory.CreateCalls);
+        Assert.False(activity.ContextResumeInvoked);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Suspended, state.Status);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(_checkpointWriter.ListWrites());
+    }
+
+    [Fact]
+    public async Task HandleAsync_RejectsBookmarkIdentityMismatchBeforeInvokingActivity()
+    {
+        var activity = new ResumeTargetActivity();
+        var factory = new RecordingActivityFactory(activity);
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync(stimulusHash: "sha256:delivery-status:other-order");
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewResumeWorkItem()).AsTask());
+
+        Assert.Contains("references stimulus hash 'sha256:delivery-status:order-123'", exception.Message);
+        Assert.Equal(0, factory.CreateCalls);
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Empty(_checkpointWriter.ListWrites());
     }
 
     [Fact]
@@ -195,9 +254,44 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
+        services.AddSingleton(_bookmarkStateStore);
+        services.AddSingleton<IBookmarkStateStore>(_ => _bookmarkStateStore);
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<IRuntimeCheckpointWriter>(_checkpointWriter);
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
+        services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         return services.BuildServiceProvider();
+    }
+
+    private ValueTask<BookmarkState> SaveBookmarkAsync(
+        string resumeTargetId = "resume-target:delivery",
+        string stimulusType = "delivery-status",
+        string stimulusHash = "sha256:delivery-status:order-123") =>
+        _bookmarkStateStore.SaveAsync(NewBookmark(resumeTargetId, stimulusType, stimulusHash));
+
+    private async Task AssertBookmarkConsumedCheckpointAsync()
+    {
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var write = Assert.Single(_checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
+        Assert.Equal("commit:resume-work:bookmark-consumed:bookmark-1", write.Commit.CommitId);
+        Assert.Equal("checkpoint:resume-work:bookmark-consumed:bookmark-1", write.Commit.Checkpoint.CheckpointId);
+        Assert.Equal(RuntimeCheckpointNames.BookmarkConsumed, write.Commit.Checkpoint.Name);
+        Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
+        Assert.Equal("bookmark-1", write.Commit.Checkpoint.Metadata["runtime.bookmarkId"]);
+
+        var activityChange = Assert.Single(write.Commit.StateChanges.ActivityExecutions);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, activityChange.Operation);
+        Assert.Equal(ActivityExecutionStatus.Completed, activityChange.State.Status);
+
+        var bookmarkChange = Assert.Single(write.Commit.StateChanges.Bookmarks);
+        Assert.Equal(RuntimeStateChangeOperation.Delete, bookmarkChange.Operation);
+        Assert.Equal("bookmark-1", bookmarkChange.State.BookmarkId);
+        Assert.Empty(write.Commit.PostCommitIntents);
     }
 
     private RuntimeSchedulerWorkItem NewResumeWorkItem(
@@ -254,6 +348,23 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             FaultCount: 0,
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
+
+    private static BookmarkState NewBookmark(
+        string resumeTargetId,
+        string stimulusType,
+        string stimulusHash) =>
+        new(
+            BookmarkId: "bookmark-1",
+            WorkflowExecutionId: "wfexec-1",
+            ActivityExecutionId: "actexec-1",
+            ExecutableNodeId: "node-wait",
+            ResumeTargetId: resumeTargetId,
+            StimulusType: stimulusType,
+            StimulusHash: stimulusHash,
+            Payload: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: DateTimeOffset.UtcNow.AddMinutes(-1),
+            ExpiresAt: null);
 
     private static WorkflowExecutable NewExecutable(
         bool includeResumeTarget = true,
