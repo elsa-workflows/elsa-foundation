@@ -59,8 +59,8 @@ public sealed class WorkflowExecutionCommandDispatchResult
         if (status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred)
             ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
-        if (status is not (WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred) && reason is not null)
-            throw new ArgumentException("Only rejected or deferred command dispatch results can carry a reason.", nameof(reason));
+        if (status == WorkflowExecutionCommandDispatchStatus.Accepted && reason is not null)
+            throw new ArgumentException("Accepted command dispatch results cannot carry a reason.", nameof(reason));
 
         EnvelopeId = envelopeId;
         WorkflowExecutionId = workflowExecutionId;

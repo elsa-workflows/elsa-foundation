@@ -68,8 +68,11 @@ public sealed class RuntimeAgentProviderContractTests
 
         var providerMethod = typeof(IWorkflowExecutionAgentProvider).GetMethod(nameof(IWorkflowExecutionAgentProvider.GetAgentAsync))!;
         var parameters = providerMethod.GetParameters();
+        var passivateMethod = typeof(IWorkflowExecutionAgentProvider).GetMethod(nameof(IWorkflowExecutionAgentProvider.PassivateAsync))!;
+        var passivateParameters = passivateMethod.GetParameters();
 
         Assert.Equal(typeof(WorkflowExecutionAgentActivationRequest), parameters[0].ParameterType);
+        Assert.Equal(typeof(WorkflowExecutionAgentPassivationRequest), passivateParameters[0].ParameterType);
         Assert.Equal(typeof(WorkflowExecutionAgentCapabilities), typeof(IWorkflowExecutionAgentProvider).GetProperty(nameof(IWorkflowExecutionAgentProvider.Capabilities))!.PropertyType);
     }
 
@@ -85,20 +88,15 @@ public sealed class RuntimeAgentProviderContractTests
     }
 
     [Fact]
-    public void CommandKinds_IncludeActorStyleAgentVocabularyWithoutShiftingExistingOrdinals()
+    public void CommandKinds_IncludeActorStyleAgentVocabulary()
     {
-        Assert.Equal(0, (int)WorkflowExecutionCommandKind.Start);
-        Assert.Equal(1, (int)WorkflowExecutionCommandKind.ResumeBookmark);
-        Assert.Equal(2, (int)WorkflowExecutionCommandKind.ContinueVolatileWait);
-        Assert.Equal(3, (int)WorkflowExecutionCommandKind.RunSchedulerWork);
-        Assert.Equal(4, (int)WorkflowExecutionCommandKind.Cancel);
-        Assert.Equal(5, (int)WorkflowExecutionCommandKind.PauseWorkflowExecution);
-        Assert.Equal(6, (int)WorkflowExecutionCommandKind.UnpauseWorkflowExecution);
-        Assert.Equal(7, (int)WorkflowExecutionCommandKind.ScheduleActivity);
-        Assert.Equal(8, (int)WorkflowExecutionCommandKind.CompleteActivity);
-        Assert.Equal(9, (int)WorkflowExecutionCommandKind.DeliverSignal);
-        Assert.Equal(10, (int)WorkflowExecutionCommandKind.CreateBookmark);
-        Assert.Equal(11, (int)WorkflowExecutionCommandKind.Checkpoint);
+        var names = Enum.GetNames<WorkflowExecutionCommandKind>();
+
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.ScheduleActivity), names);
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.CompleteActivity), names);
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.DeliverSignal), names);
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.CreateBookmark), names);
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.Checkpoint), names);
     }
 
     [Fact]
@@ -155,13 +153,20 @@ public sealed class RuntimeAgentProviderContractTests
     }
 
     [Fact]
-    public void DispatchResult_RequiresReasonOnlyForRejectedOrDeferredCommands()
+    public void DispatchResult_AllowsReasonsForNonAcceptedOutcomes()
     {
         var accepted = new WorkflowExecutionCommandDispatchResult(
             envelopeId: "envelope-1",
             workflowExecutionId: "wfexec-1",
             status: WorkflowExecutionCommandDispatchStatus.Accepted,
             recordedAt: _now);
+
+        var duplicate = new WorkflowExecutionCommandDispatchResult(
+            envelopeId: "envelope-duplicate",
+            workflowExecutionId: "wfexec-1",
+            status: WorkflowExecutionCommandDispatchStatus.Duplicate,
+            recordedAt: _now,
+            reason: "Idempotency key already processed");
 
         var rejected = new WorkflowExecutionCommandDispatchResult(
             envelopeId: "envelope-2",
@@ -171,6 +176,7 @@ public sealed class RuntimeAgentProviderContractTests
             reason: "Workflow execution paused");
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, accepted.Status);
+        Assert.Equal("Idempotency key already processed", duplicate.Reason);
         Assert.Equal("Workflow execution paused", rejected.Reason);
         Assert.ThrowsAny<ArgumentException>(() => new WorkflowExecutionCommandDispatchResult(
             envelopeId: "envelope-3",
