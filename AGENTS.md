@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Domain Retry Policy](specs/050-runtime-domain-retry-policy/plan.md)
+Current Speckit plan: [Runtime Volatile Wait Policy](specs/051-runtime-volatile-wait-policy/plan.md)
 <!-- SPECKIT END -->
