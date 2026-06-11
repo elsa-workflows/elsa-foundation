@@ -101,7 +101,25 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
         && StringComparer.Ordinal.Equals(existing.Intent.ActivityExecutionId, item.Intent.ActivityExecutionId)
         && StringComparer.Ordinal.Equals(existing.Intent.IdempotencyKey, item.Intent.IdempotencyKey)
         && StringComparer.Ordinal.Equals(existing.Intent.DependsOnWaitRegistrationId, item.Intent.DependsOnWaitRegistrationId)
-        && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy;
+        && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy
+        && PayloadEquals(existing.Intent.Payload, item.Intent.Payload)
+        && MetadataEquals(existing.Intent.Metadata, item.Intent.Metadata);
+
+    private static bool PayloadEquals(System.Text.Json.JsonElement? left, System.Text.Json.JsonElement? right)
+    {
+        if (left.HasValue != right.HasValue)
+            return false;
+
+        return !left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText());
+    }
+
+    private static bool MetadataEquals(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
+    }
 
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {
