@@ -19,6 +19,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowInvokeActivitySchedulerWorkHandler(
@@ -32,13 +33,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IRuntimeActivityInputMaterializer inputMaterializer,
         IServiceScopeFactory serviceScopeFactory,
         TimeProvider timeProvider)
+        : this(inputMaterializer, serviceScopeFactory, NoopWorkflowExecutionAmbientServicesAccessor.Instance, timeProvider)
+    {
+    }
+
+    public WorkflowInvokeActivitySchedulerWorkHandler(
+        IRuntimeActivityInputMaterializer inputMaterializer,
+        IServiceScopeFactory serviceScopeFactory,
+        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(inputMaterializer);
         ArgumentNullException.ThrowIfNull(serviceScopeFactory);
+        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _inputMaterializer = inputMaterializer;
         _serviceScopeFactory = serviceScopeFactory;
+        _ambientServicesAccessor = ambientServicesAccessor;
         _timeProvider = timeProvider;
     }
 
@@ -57,11 +69,26 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         cancellationToken.ThrowIfCancellationRequested();
 
         var invokePayload = DeserializeInvokePayload(workItem);
+        if (_ambientServicesAccessor.Current is { } ambientServices)
+        {
+            await HandleWithServicesAsync(workItem, invokePayload, ambientServices, cancellationToken);
+            return;
+        }
+
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
-        var workflowExecutableStore = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
-        var activityExecutionStateStore = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
-        var activityFactory = scope.ServiceProvider.GetRequiredService<IActivityFactory>();
-        var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await HandleWithServicesAsync(workItem, invokePayload, scope.ServiceProvider, cancellationToken);
+    }
+
+    private async ValueTask HandleWithServicesAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var workflowExecutableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        var activityFactory = serviceProvider.GetRequiredService<IActivityFactory>();
+        var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
         var executable = await workflowExecutableStore.FindAsync(invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -88,11 +115,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (state.Status != ActivityExecutionStatus.Running)
             return;
 
-        var activityOutputRegister = scope.ServiceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
-        var durableValueStateStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
-        var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
-        var activityFaultIncidentRecorder = scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
-        await InvokeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, workItem, invokePayload, executableNode, state, cancellationToken);
+        var activityOutputRegister = serviceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
+        var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
+        var checkpointCommitter = serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        await InvokeActivityAsync(serviceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, workItem, invokePayload, executableNode, state, cancellationToken);
     }
 
     private async ValueTask InvokeActivityAsync(

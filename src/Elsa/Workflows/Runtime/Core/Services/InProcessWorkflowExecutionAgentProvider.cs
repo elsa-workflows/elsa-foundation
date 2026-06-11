@@ -132,7 +132,16 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
 
         public async ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
+            return await EnqueueAsync(envelope, WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
+        }
+
+        public async ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            WorkflowExecutionCommandDispatchOptions options,
+            CancellationToken cancellationToken = default)
+        {
             ArgumentNullException.ThrowIfNull(envelope);
+            ArgumentNullException.ThrowIfNull(options);
 
             await _mailbox.WaitAsync(cancellationToken);
             try
@@ -146,7 +155,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
 
-                await _commandProcessor.ProcessAsync(envelope, cancellationToken);
+                await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
                 RememberProcessedIdempotencyKey(envelope.IdempotencyKey);
 
                 return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Accepted);

@@ -10,4 +10,10 @@ public interface IWorkflowExecutionAgent
     WorkflowExecutionAgentDescriptor Descriptor { get; }
 
     ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
+
+    ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        WorkflowExecutionCommandDispatchOptions options,
+        CancellationToken cancellationToken = default) =>
+        EnqueueAsync(envelope, cancellationToken);
 }

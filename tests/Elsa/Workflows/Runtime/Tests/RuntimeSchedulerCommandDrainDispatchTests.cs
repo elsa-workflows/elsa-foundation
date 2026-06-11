@@ -39,6 +39,24 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_CarriesDispatchAmbientServicesIntoDrainRequest()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new RecordingSchedulerDrainer(queue, _now);
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FixedTimeProvider(_now));
+        await using var ambientServices = new ServiceCollection().BuildServiceProvider();
+
+        await processor.ProcessAsync(NewEnvelope(1), new WorkflowExecutionCommandDispatchOptions(ambientServices));
+
+        Assert.Same(ambientServices, Assert.Single(drainer.Requests).AmbientServices);
+    }
+
+    [Fact]
     public async Task ProcessAsync_CanRecordSchedulerWorkWithoutDrainingWhenPolicyDefers()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();

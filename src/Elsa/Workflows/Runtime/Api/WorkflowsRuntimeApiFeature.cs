@@ -42,12 +42,15 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimePostCommitOutboxStore, InMemoryRuntimePostCommitOutboxStore>();
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
+        services.TryAddSingleton<IWorkflowExecutionAmbientServicesAccessor, AsyncLocalWorkflowExecutionAmbientServicesAccessor>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>
             new WorkflowSchedulerDrainer(
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
-                serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>()));
+                TimeProvider.System,
+                serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimeCheckpointWriter, InMemoryRuntimeCheckpointWriter>();

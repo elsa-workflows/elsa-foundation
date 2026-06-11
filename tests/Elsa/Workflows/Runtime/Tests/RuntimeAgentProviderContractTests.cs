@@ -99,12 +99,30 @@ public sealed class RuntimeAgentProviderContractTests
     [Fact]
     public void AgentContract_EnqueuesCommandEnvelopesAndReturnsDispatchResult()
     {
-        var method = typeof(IWorkflowExecutionAgent).GetMethod(nameof(IWorkflowExecutionAgent.EnqueueAsync))!;
-        var parameters = method.GetParameters();
+        var defaultMethod = typeof(IWorkflowExecutionAgent).GetMethod(
+            nameof(IWorkflowExecutionAgent.EnqueueAsync),
+            [typeof(WorkflowExecutionCommandEnvelope), typeof(CancellationToken)])!;
+        var optionsMethod = typeof(IWorkflowExecutionAgent).GetMethod(
+            nameof(IWorkflowExecutionAgent.EnqueueAsync),
+            [typeof(WorkflowExecutionCommandEnvelope), typeof(WorkflowExecutionCommandDispatchOptions), typeof(CancellationToken)])!;
+        var parameters = defaultMethod.GetParameters();
+        var optionsParameters = optionsMethod.GetParameters();
 
-        Assert.Equal(typeof(ValueTask<WorkflowExecutionCommandDispatchResult>), method.ReturnType);
+        Assert.Equal(typeof(ValueTask<WorkflowExecutionCommandDispatchResult>), defaultMethod.ReturnType);
+        Assert.Equal(typeof(ValueTask<WorkflowExecutionCommandDispatchResult>), optionsMethod.ReturnType);
         Assert.Equal(typeof(WorkflowExecutionCommandEnvelope), parameters[0].ParameterType);
+        Assert.Equal(typeof(WorkflowExecutionCommandEnvelope), optionsParameters[0].ParameterType);
+        Assert.Equal(typeof(WorkflowExecutionCommandDispatchOptions), optionsParameters[1].ParameterType);
         Assert.Equal(typeof(WorkflowExecutionAgentDescriptor), typeof(IWorkflowExecutionAgent).GetProperty(nameof(IWorkflowExecutionAgent.Descriptor))!.PropertyType);
+    }
+
+    [Fact]
+    public void CommandEnvelope_DoesNotCarryRequestAffineServices()
+    {
+        var envelopeProperties = typeof(WorkflowExecutionCommandEnvelope).GetProperties();
+
+        Assert.DoesNotContain(envelopeProperties, property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
+        Assert.Equal(typeof(IServiceProvider), typeof(WorkflowExecutionCommandDispatchOptions).GetProperty(nameof(WorkflowExecutionCommandDispatchOptions.AmbientServices))!.PropertyType);
     }
 
     [Fact]

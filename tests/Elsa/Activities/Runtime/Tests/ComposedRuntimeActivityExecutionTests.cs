@@ -24,6 +24,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
         services.AddSingleton<InlineExecutionProbe>();
+        services.AddScoped<RequestScopedExecutionProbe>();
         services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
@@ -63,6 +64,32 @@ public sealed class ComposedRuntimeActivityExecutionTests
             drainResult.Items.Select(item => item.CommandKind).ToArray());
         Assert.Contains(drainResult.Items, item => item.HandlerName == WorkflowInvokeActivitySchedulerWorkHandler.HandlerName);
         Assert.DoesNotContain(drainResult.Items, item => item.HandlerName == MissingActivityInvocationSchedulerWorkHandler.HandlerName);
+    }
+
+    [Fact]
+    public async Task InProcessAgent_UsesDispatchAmbientServicesForActivityExecutionContext()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<InlineExecutionProbe>();
+        services.AddScoped<RequestScopedExecutionProbe>();
+        services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var requestScope = provider.CreateAsyncScope();
+        var executable = NewExecutable(_now);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var requestProbe = requestScope.ServiceProvider.GetRequiredService<RequestScopedExecutionProbe>();
+        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+            .GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var dispatchResult = await agent.EnqueueAsync(
+            NewStartEnvelope(executable.Identity),
+            new WorkflowExecutionCommandDispatchOptions(requestScope.ServiceProvider));
+
+        var activityState = Assert.Single(await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1"));
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatchResult.Status);
+        Assert.Equal($"probe:node-start:{activityState.Execution.ActivityExecutionId}", requestProbe.Invocation);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
@@ -153,10 +180,18 @@ public sealed class ComposedRuntimeActivityExecutionTests
         {
             var probe = context.GetRequiredService<InlineExecutionProbe>();
             probe.Record($"{message}:{NodeId}:{Id}");
+            context.GetRequiredService<RequestScopedExecutionProbe>().Record($"{message}:{NodeId}:{Id}");
         }
     }
 
     private sealed class InlineExecutionProbe
+    {
+        public string? Invocation { get; private set; }
+
+        public void Record(string invocation) => Invocation = invocation;
+    }
+
+    private sealed class RequestScopedExecutionProbe
     {
         public string? Invocation { get; private set; }
 

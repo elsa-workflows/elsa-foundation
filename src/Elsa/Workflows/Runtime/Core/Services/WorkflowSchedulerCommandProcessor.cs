@@ -42,7 +42,16 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
 
     public async ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
+        await ProcessAsync(envelope, WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
+    }
+
+    public async ValueTask ProcessAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        WorkflowExecutionCommandDispatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(envelope);
+        ArgumentNullException.ThrowIfNull(options);
 
         var workItem = new RuntimeSchedulerWorkItem(
             workItemId: envelope.EnvelopeId,
@@ -66,6 +75,9 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
 
         if (!string.Equals(drainRequest.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain policy returned workflow execution ID '{drainRequest.WorkflowExecutionId}' for command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
+
+        if (options.AmbientServices is not null)
+            drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
         var drainResult = await _schedulerDrainer.DrainAsync(drainRequest, cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
