@@ -11,15 +11,18 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IBookmarkStateStore? _bookmarkStateStore;
+    private readonly IDurableValueStateStore? _durableValueStateStore;
 
     public InMemoryRuntimeCheckpointWriter(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
-        IBookmarkStateStore? bookmarkStateStore = null)
+        IBookmarkStateStore? bookmarkStateStore = null,
+        IDurableValueStateStore? durableValueStateStore = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _bookmarkStateStore = bookmarkStateStore;
+        _durableValueStateStore = durableValueStateStore;
     }
 
     public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -40,9 +43,11 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateActivityExecutionStateChanges(commit);
             ValidateBookmarkStateChanges(commit);
+            ValidateDurableValueStateChanges(commit);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
+            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
 
             lock (_syncRoot)
             {
@@ -112,6 +117,34 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         }
     }
 
+    private async ValueTask ApplyDurableValueStateChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_durableValueStateStore is null)
+            return;
+
+        foreach (var stateChange in stateChanges)
+        {
+            if (stateChange.Operation == RuntimeStateChangeOperation.Delete)
+            {
+                await _durableValueStateStore.DeleteAsync(
+                    stateChange.State.WorkflowExecutionId,
+                    stateChange.State.DurableValueId,
+                    cancellationToken);
+                continue;
+            }
+
+            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
+            {
+                await _durableValueStateStore.SaveAsync(stateChange.State, cancellationToken);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unexpected durable value state change operation '{stateChange.Operation}' reached apply phase.");
+        }
+    }
+
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
@@ -158,6 +191,25 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Bookmark state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        }
+    }
+
+    private void ValidateDurableValueStateChanges(RuntimeCheckpointCommit commit)
+    {
+        if (_durableValueStateStore is null)
+            return;
+
+        foreach (var stateChange in commit.StateChanges.DurableValues)
+        {
+            if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
+                throw new InvalidOperationException($"The in-memory checkpoint writer can only project durable value state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
+
+            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
+            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.DurableValueId))
+                throw new InvalidOperationException("Durable value state change StateId must match DurableValueState.DurableValueId.");
+
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
+                throw new InvalidOperationException("Durable value state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
     }
 }

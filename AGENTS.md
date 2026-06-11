@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Bookmark State Projection](specs/041-runtime-bookmark-state-projection/plan.md)
+Current Speckit plan: [Runtime Durable Value State Projection](specs/042-runtime-durable-value-state-projection/plan.md)
 <!-- SPECKIT END -->
