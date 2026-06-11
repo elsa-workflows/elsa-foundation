@@ -111,6 +111,25 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     [Fact]
+    public async Task HandleAsync_WrapsPayloadConstructorValidationFailuresBeforeRecordingState()
+    {
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            PinnedExecutable = NewIdentity(),
+            ExecutableNodeId = "node-start",
+            ActivityExecutionId = "",
+            Reason = RuntimeScheduleActivityCommandPayload.WorkflowStartReason
+        });
+        var handler = NewHandler();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(payload: payload)).AsTask());
+
+        Assert.Contains("not a valid schedule activity payload", exception.Message);
+        Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
     public async Task HandleAsync_RejectsPinnedExecutableMismatchBeforeRecordingState()
     {
         var executable = NewExecutable();

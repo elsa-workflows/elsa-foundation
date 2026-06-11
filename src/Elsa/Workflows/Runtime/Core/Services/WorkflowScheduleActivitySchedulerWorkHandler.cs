@@ -76,11 +76,21 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             return payload.Deserialize<RuntimeScheduleActivityCommandPayload>()
                    ?? throw new InvalidOperationException("ScheduleActivity scheduler work item payload resolved to null.");
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        catch (Exception exception) when (
+            exception is JsonException or NotSupportedException ||
+            exception is ArgumentException argumentException && IsSchedulePayloadValidationException(argumentException))
         {
             throw new InvalidOperationException("ScheduleActivity scheduler work item payload is not a valid schedule activity payload.", exception);
         }
     }
+
+    private static bool IsSchedulePayloadValidationException(ArgumentException exception) =>
+        exception.ParamName is
+            "pinnedExecutable" or
+            "executableNodeId" or
+            "activityExecutionId" or
+            "reason" or
+            "schedulingActivityExecutionId";
 
     private static void ValidatePinnedExecutable(
         RuntimeSchedulerWorkItem workItem,
