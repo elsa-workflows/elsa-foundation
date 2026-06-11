@@ -7,19 +7,35 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RuntimeCheckpointWriteRecord> _writes = new(StringComparer.Ordinal);
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
-    public ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+    public InMemoryRuntimeCheckpointWriter()
+    {
+    }
+
+    public InMemoryRuntimeCheckpointWriter(IWorkflowExecutionStateStore workflowExecutionStateStore)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+
+        _workflowExecutionStateStore = workflowExecutionStateStore;
+    }
+
+    public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
+        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+
+        var recorded = false;
         lock (_syncRoot)
         {
-            _writes.TryAdd(commit.CommitId, new RuntimeCheckpointWriteRecord(commit, decision));
+            recorded = _writes.TryAdd(commit.CommitId, new RuntimeCheckpointWriteRecord(commit, decision));
         }
 
-        return ValueTask.CompletedTask;
+        if (recorded)
+            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
     }
 
     public IReadOnlyCollection<RuntimeCheckpointWriteRecord> ListWrites()
@@ -28,6 +44,28 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         {
             return _writes.Values.ToArray();
         }
+    }
+
+    private async ValueTask ApplyWorkflowExecutionStateChangeAsync(
+        RuntimeStateChange<WorkflowExecutionState>? stateChange,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowExecutionStateStore is null || stateChange is null)
+            return;
+
+        await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
+    {
+        if (_workflowExecutionStateStore is null || stateChange is null)
+            return;
+
+        if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+            throw new InvalidOperationException($"The in-memory checkpoint writer can only project workflow execution state '{RuntimeStateChangeOperation.Upsert}' changes.");
+
+        if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
+            throw new InvalidOperationException("Workflow execution state change StateId must match WorkflowExecutionState.WorkflowExecutionId.");
     }
 }
 

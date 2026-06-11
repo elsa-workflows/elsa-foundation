@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Workflow Start Checkpoint](specs/038-runtime-workflow-start-checkpoint/plan.md)
+Current Speckit plan: [Runtime Workflow Execution State Store](specs/039-runtime-workflow-state-store/plan.md)
 <!-- SPECKIT END -->
