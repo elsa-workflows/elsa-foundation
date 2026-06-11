@@ -20,8 +20,11 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowExecutableStore) &&
             descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue) &&
+            descriptor.ImplementationType == typeof(InMemoryWorkflowSchedulerWorkQueue));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
-            descriptor.ImplementationType == typeof(NoopWorkflowExecutionCommandProcessor));
+            descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
             descriptor.ImplementationType == typeof(InProcessWorkflowExecutionAgentProvider));
@@ -33,5 +36,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<InProcessWorkflowExecutionAgentProvider>(provider.GetRequiredService<IWorkflowExecutionAgentProvider>());
+        Assert.IsType<WorkflowSchedulerCommandProcessor>(provider.GetRequiredService<IWorkflowExecutionCommandProcessor>());
+        Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
     }
 }
