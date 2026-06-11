@@ -107,6 +107,9 @@ public sealed class MongoDbDocumentStore(IMongoDatabase database, StorageManifes
         if (index.Fields.Count != 1 || !index.SupportedOperations.Contains(PortableQueryOperation.Equal))
             throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
+        if (query.Take == 0)
+            return [];
+
         var collection = GetCollection(unit);
         var physicalizedField = PhysicalizationProjection.EligibleFields(unit).SingleOrDefault(field => field.Name == query.IndexName);
         var path = physicalizedField is null

@@ -96,6 +96,23 @@ public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QueryWithZeroTakeReturnsNoDocuments()
+    {
+        await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());
+        var key = NewValue("zero-take");
+
+        await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            NewId(),
+            "1.0.0",
+            $$"""{"key":"{{key}}","category":"system"}"""));
+
+        var documents = await harness.Store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", key, take: 0));
+
+        Assert.Empty(documents);
+    }
+
+    [Fact]
     public async Task SparseUniqueIndexesAllowMissingValues()
     {
         await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());
