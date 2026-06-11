@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Models;
+
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
@@ -5,5 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutionAgentProvider
 {
-    ValueTask<IWorkflowExecutionAgent> GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+    WorkflowExecutionAgentCapabilities Capabilities { get; }
+
+    ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default);
+
+    ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default);
 }

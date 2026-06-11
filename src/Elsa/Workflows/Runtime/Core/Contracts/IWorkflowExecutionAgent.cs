@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutionAgent
 {
-    string WorkflowExecutionId { get; }
+    WorkflowExecutionAgentDescriptor Descriptor { get; }
 
-    ValueTask EnqueueAsync(WorkflowExecutionCommand command, CancellationToken cancellationToken = default);
+    ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
 }

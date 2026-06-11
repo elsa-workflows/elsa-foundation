@@ -324,5 +324,10 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Equal(4, (int)WorkflowExecutionCommandKind.Cancel);
         Assert.Equal(5, (int)WorkflowExecutionCommandKind.PauseWorkflowExecution);
         Assert.Equal(6, (int)WorkflowExecutionCommandKind.UnpauseWorkflowExecution);
+        Assert.Equal(7, (int)WorkflowExecutionCommandKind.ScheduleActivity);
+        Assert.Equal(8, (int)WorkflowExecutionCommandKind.CompleteActivity);
+        Assert.Equal(9, (int)WorkflowExecutionCommandKind.DeliverSignal);
+        Assert.Equal(10, (int)WorkflowExecutionCommandKind.CreateBookmark);
+        Assert.Equal(11, (int)WorkflowExecutionCommandKind.Checkpoint);
     }
 }
