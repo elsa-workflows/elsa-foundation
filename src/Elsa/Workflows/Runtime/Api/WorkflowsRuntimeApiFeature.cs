@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -22,6 +23,9 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
+        services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
+        services.TryAddSingleton<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
@@ -55,6 +59,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         services.TryAddSingleton<IWorkflowExecutionAgentProvider, InProcessWorkflowExecutionAgentProvider>();

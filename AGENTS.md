@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Pause Boundary Enforcement](specs/054-runtime-pause-boundary-enforcement/plan.md)
+Current Speckit plan: [Runtime Bookmark Stimulus Resume Dispatch](specs/055-runtime-bookmark-stimulus-resume/plan.md)
 <!-- SPECKIT END -->
