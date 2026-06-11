@@ -39,6 +39,10 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         {
             ThrowError(e, 400);
         }
+        catch (ArgumentException e) when (e.ParamName == "artifactId")
+        {
+            ThrowError(e, 400);
+        }
         catch (OperationCanceledException)
         {
             throw;
