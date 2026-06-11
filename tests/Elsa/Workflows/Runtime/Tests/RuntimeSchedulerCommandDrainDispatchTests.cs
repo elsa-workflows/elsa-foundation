@@ -187,7 +187,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.True(drainResult.StoppedOnFault);
         Assert.Equal(
-            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity, WorkflowExecutionCommandKind.InvokeActivity },
+            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.Checkpoint, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity, WorkflowExecutionCommandKind.InvokeActivity },
             drainResult.Items.Select(item => item.CommandKind).ToArray());
         var invokeResult = drainResult.Items.Last();
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, invokeResult.Status);

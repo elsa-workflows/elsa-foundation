@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -11,7 +12,7 @@ public sealed class RuntimeStartCommandSchedulingTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task HandleAsync_EnqueuesScheduleActivityWorkForExecutableStartNodes()
+    public async Task HandleAsync_EnqueuesWorkflowStartedCheckpointWithStartNodeSchedulingIntent()
     {
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -21,13 +22,24 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
-        var scheduled = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
-        Assert.Equal("wfexec-1", scheduled.WorkflowExecutionId);
-        Assert.Equal("start-work:schedule:node-start", scheduled.WorkItemId);
-        Assert.Equal(_now, scheduled.EnqueuedAt);
-        Assert.Equal(_now, scheduled.RecordedAt);
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
+        Assert.Equal("wfexec-1", checkpointWork.WorkflowExecutionId);
+        Assert.Equal("start-work:checkpoint:WorkflowStarted", checkpointWork.WorkItemId);
+        Assert.Equal(_now, checkpointWork.EnqueuedAt);
+        Assert.Equal(_now, checkpointWork.RecordedAt);
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, checkpointPayload.CheckpointName);
+        Assert.Equal(RuntimeCheckpointCommandPayload.WorkflowStartReason, checkpointPayload.Reason);
+        Assert.Empty(checkpointPayload.ActivityExecutionIds);
+        var intent = Assert.Single(checkpointPayload.PostCommitIntents);
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
+        Assert.Null(intent.ActivityExecutionId);
 
+        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+        Assert.Equal("start-work:schedule:node-start", scheduled.WorkItemId);
+        Assert.Equal(12, scheduled.Sequence);
         var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
         Assert.Equal("node-start", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
@@ -36,7 +48,7 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
-    public async Task HandleAsync_EnqueuesOneScheduleActivityWorkItemPerStartNode()
+    public async Task HandleAsync_AttachesOneSchedulingIntentPerStartNode()
     {
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -46,7 +58,11 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
-        var scheduled = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var scheduled = checkpointPayload.PostCommitIntents
+            .Select(intent => intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!)
+            .ToArray();
         Assert.Equal(new[] { "node-a", "node-c" }, scheduled
             .Select(item => item.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!.ExecutableNodeId)
             .ToArray());
@@ -88,8 +104,71 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         await handler.HandleAsync(NewStartWorkItem(pinned));
 
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
+    }
+
+    [Fact]
+    public async Task DrainAsync_CommitsWorkflowStartedBeforeDispatchingStartNodeScheduling()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var startHandler = NewHandler(store, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        Assert.Equal(2, result.DrainedCount);
+        Assert.Collection(
+            result.Items,
+            first => Assert.Equal("start-work", first.WorkItemId),
+            second => Assert.Equal("start-work:checkpoint:WorkflowStarted", second.WorkItemId));
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
+        var workflowChange = write.Commit.StateChanges.WorkflowExecution;
+        Assert.NotNull(workflowChange);
+        Assert.Equal("wfexec-1", workflowChange.StateId);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, workflowChange.Operation);
+        Assert.Equal(WorkflowExecutionStatus.Running, workflowChange.State.Status);
+        Assert.Equal(_now, workflowChange.State.CreatedAt);
+        Assert.Equal(_now, workflowChange.State.StartedAt);
+        Assert.Equal(_now, workflowChange.State.UpdatedAt);
+        Assert.Null(workflowChange.State.CompletedAt);
+        Assert.Equal(executable.Identity, workflowChange.State.PinnedExecutable);
         var scheduled = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+        var schedulePayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        Assert.Equal("node-start", schedulePayload.ExecutableNodeId);
+        Assert.Equal("actexec-1", schedulePayload.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task CheckpointHandler_DoesNotDispatchStartNodeSchedulingWhenWorkflowStartedWriteFails()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var startQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var dispatchQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var startHandler = NewHandler(store, startQueue);
+        await startHandler.HandleAsync(NewStartWorkItem(executable.Identity));
+        var checkpointWork = Assert.Single(await startQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointHandler = NewCheckpointHandler(
+            new InMemoryActivityExecutionStateStore(),
+            new ThrowingCheckpointWriter(),
+            dispatchQueue);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => checkpointHandler.HandleAsync(checkpointWork).AsTask());
+
+        Assert.Empty(await dispatchQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -179,6 +258,18 @@ public sealed class RuntimeStartCommandSchedulingTests
         IWorkflowSchedulerWorkQueue queue) =>
         new(store, queue, new IncrementingRuntimeExecutionIdGenerator(), new FixedTimeProvider(_now));
 
+    private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
+        IActivityExecutionStateStore activityStateStore,
+        IRuntimeCheckpointWriter checkpointWriter,
+        IWorkflowSchedulerWorkQueue queue) =>
+        new(
+            activityStateStore,
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                checkpointWriter,
+                new RuntimeSchedulerPostCommitIntentDispatcher(queue)),
+            new FixedTimeProvider(_now));
+
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(
             identity: NewIdentity(),
@@ -224,5 +315,11 @@ public sealed class RuntimeStartCommandSchedulingTests
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-unused";
 
         public string NewActivityExecutionId() => $"actexec-{++_activityExecutionIndex}";
+    }
+
+    private sealed class ThrowingCheckpointWriter : IRuntimeCheckpointWriter
+    {
+        public ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("checkpoint write failed");
     }
 }
