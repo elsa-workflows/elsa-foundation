@@ -313,13 +313,7 @@ public sealed class RuntimeScheduleActivityStateTests
             metadata: root.Metadata,
             childSlots:
             [
-                new ExecutableChildSlot(
-                    ExecutableChildSlotNames.Activities,
-                    nodeSnapshot.Skip(1).ToArray(),
-                    new Dictionary<string, string>
-                    {
-                        [ExecutableChildSlotMetadataKeys.StartActivityId] = nodeSnapshot.Skip(1).First().ExecutableNodeId
-                    })
+                new ExecutableChildSlot("children", nodeSnapshot.Skip(1).ToArray())
             ]);
     }
 

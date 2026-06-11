@@ -162,12 +162,7 @@ public sealed class PublishWorkflowRequestHandler(
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (key, value) in metadata ?? new Dictionary<string, string>())
-        {
-            var mappedKey = string.Equals(key, ActivityChildSlotMetadataKeys.StartActivityNodeId, StringComparison.Ordinal)
-                ? ExecutableChildSlotMetadataKeys.StartActivityId
-                : key;
-            result[mappedKey] = value;
-        }
+            result[key] = value;
 
         return result;
     }

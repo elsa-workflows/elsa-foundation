@@ -23,6 +23,12 @@ universal composition property. Composite behavior is activity-specific. `Sequen
 children, `If` owns `Then` / `Else`, `ForEach` owns `Body`, `Composite` owns `Root`, and `Flowchart`
 owns its activities, connections, start selection, and join rules.
 
+Those examples are activity contracts, not core framework constants. Core MAY carry opaque named
+child/connection slot records for persistence traversal and publishing, but it MUST NOT define
+reserved slot-name constants or metadata keys for activity-specific concepts. New custom activities
+must be able to add their own child structure without changing Workflows Design Core or Workflows
+Runtime Core.
+
 Elsa Core cue: `Flowchart` is a composite/container activity. It carries its own `Start` activity
 and `Connections`, then schedules child activities from the Flowchart activity execution context.
 The foundation runtime boundary should therefore schedule the workflow root activity and leave
@@ -41,7 +47,8 @@ Flowchart edge interpretation to the Flowchart activity implementation.
 - **FR-002**: `ActivityNode` MUST represent an authored activity instance only. It MUST NOT expose a generic child activity collection, generic connection list, or generic start-child member.
 - **FR-003**: `ActivityNode` MUST NOT expose workflow-level `IsStart` or `IsTerminal` flags. Start/terminal semantics are owned by the relevant composite activity or runtime behavior.
 - **FR-004**: Activity-specific child activity structure MUST be expressed by the activity's own contract, such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
-- **FR-005**: Design validators, draft diffing, API projections, and layout joins MUST discover child activities through activity-specific child-slot metadata or adapters instead of through workflow-level or `ActivityNode`-level activity collections.
+- **FR-005**: Design validators, draft diffing, API projections, and layout joins MUST discover child activities through opaque child-slot records or activity-specific adapters instead of through workflow-level or `ActivityNode`-level activity collections.
+- **FR-005a**: Workflows Design Core and Workflows Runtime Core MUST NOT define activity-specific slot-name constants or metadata keys. Slot names and metadata semantics are owned by the activity module, importer, or adapter that understands that activity contract.
 - **FR-006**: `WorkflowExecutable` MUST carry one compiled `RootActivity` member instead of workflow-level `Edges` and `StartNodeIds`.
 - **FR-007**: `ExecutableNode` MUST NOT expose a generic executable composition property. Executable child references, if needed, belong to the compiled form of the specific activity contract.
 - **FR-008**: Runtime lookup tables such as `NodesById` MAY exist as derived indexes over the executable root activity and activity-specific child slots, but MUST NOT be the authoritative executable shape.

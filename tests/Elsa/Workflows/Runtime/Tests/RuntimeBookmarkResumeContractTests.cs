@@ -282,7 +282,7 @@ public sealed class RuntimeBookmarkResumeContractTests
             metadata: root.Metadata,
             childSlots:
             [
-                new ExecutableChildSlot(ExecutableChildSlotNames.Activities, nodeSnapshot.Skip(1).ToArray())
+                new ExecutableChildSlot("children", nodeSnapshot.Skip(1).ToArray())
             ]);
     }
 

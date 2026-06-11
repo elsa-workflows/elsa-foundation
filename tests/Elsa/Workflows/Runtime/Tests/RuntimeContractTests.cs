@@ -77,6 +77,15 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void WorkflowsRuntimeCore_defines_no_activity_specific_child_slot_name_or_metadata_catalog()
+    {
+        var assembly = typeof(ExecutableNode).Assembly;
+
+        Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotNames"));
+        Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotMetadataKeys"));
+    }
+
+    [Fact]
     public void ExecutableEdge_RequiresEndpointPorts()
     {
         Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "", "target", "In"));

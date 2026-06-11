@@ -28,18 +28,11 @@ public sealed class OrphanActivityValidator : IDraftValidator
         var connections = (owner.ConnectionSlots ?? [])
             .SelectMany(slot => slot.Connections)
             .ToList();
-        var startActivityNodeIds = childSlots
-            .Select(slot => slot.Metadata?.TryGetValue(ActivityChildSlotMetadataKeys.StartActivityNodeId, out var startActivityNodeId) == true
-                ? startActivityNodeId
-                : null)
-            .Where(startActivityNodeId => startActivityNodeId is not null)
-            .ToHashSet(StringComparer.Ordinal);
-
         foreach (var node in childSlots.SelectMany(slot => slot.Activities))
         {
             var hasInbound = connections.Any(c => c.Target.ActivityNodeId == node.NodeId);
             var hasOutbound = connections.Any(c => c.Source.ActivityNodeId == node.NodeId);
-            if (connections.Count == 0 || hasInbound || hasOutbound || startActivityNodeIds.Contains(node.NodeId))
+            if (connections.Count == 0 || hasInbound || hasOutbound)
             {
                 CheckComposition(node, errors);
                 continue;

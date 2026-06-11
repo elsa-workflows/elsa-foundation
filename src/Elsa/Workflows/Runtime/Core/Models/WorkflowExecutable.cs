@@ -60,14 +60,6 @@ public sealed class WorkflowExecutable
                     throw new ArgumentException($"Executable connection slot edge target node '{edge.TargetNodeId}' does not exist.");
             }
 
-            foreach (var childSlot in node.ChildSlots)
-            {
-                if (!childSlot.Metadata.TryGetValue(ExecutableChildSlotMetadataKeys.StartActivityId, out var startActivityId))
-                    continue;
-
-                if (!childIds.Contains(startActivityId))
-                    throw new ArgumentException($"Executable child slot start activity '{startActivityId}' does not exist.");
-            }
         }
     }
 
@@ -197,21 +189,6 @@ public sealed class ExecutableConnectionSlot
 
     public string Name { get; }
     public IReadOnlyCollection<ExecutableEdge> Connections { get; }
-}
-
-public static class ExecutableChildSlotNames
-{
-    public const string Activities = nameof(Activities);
-    public const string Connections = nameof(Connections);
-    public const string Body = nameof(Body);
-    public const string Then = nameof(Then);
-    public const string Else = nameof(Else);
-    public const string Root = nameof(Root);
-}
-
-public static class ExecutableChildSlotMetadataKeys
-{
-    public const string StartActivityId = nameof(StartActivityId);
 }
 
 /// <summary>

@@ -522,17 +522,11 @@ public sealed class RuntimeDownstreamSchedulingTests
             metadata: new Dictionary<string, string>(),
             childSlots:
             [
-                new ExecutableChildSlot(
-                    ExecutableChildSlotNames.Activities,
-                    nodeSnapshot,
-                    new Dictionary<string, string>
-                    {
-                        [ExecutableChildSlotMetadataKeys.StartActivityId] = nodeSnapshot.First().ExecutableNodeId
-                    })
+                new ExecutableChildSlot("children", nodeSnapshot)
             ],
             connectionSlots:
             [
-                new ExecutableConnectionSlot(ExecutableChildSlotNames.Connections, edges)
+                new ExecutableConnectionSlot("connections", edges)
             ]);
     }
 

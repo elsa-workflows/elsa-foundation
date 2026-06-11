@@ -42,18 +42,3 @@ public sealed record ActivityConnectionSlot(
     string Name,
     IEnumerable<ActivityConnection> Connections
 );
-
-public static class ActivityChildSlotNames
-{
-    public const string Activities = nameof(Activities);
-    public const string Connections = nameof(Connections);
-    public const string Body = nameof(Body);
-    public const string Then = nameof(Then);
-    public const string Else = nameof(Else);
-    public const string Root = nameof(Root);
-}
-
-public static class ActivityChildSlotMetadataKeys
-{
-    public const string StartActivityNodeId = nameof(StartActivityNodeId);
-}

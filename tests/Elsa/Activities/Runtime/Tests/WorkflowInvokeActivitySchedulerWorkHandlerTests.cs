@@ -660,13 +660,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             metadata: root.Metadata,
             childSlots:
             [
-                new ExecutableChildSlot(
-                    ExecutableChildSlotNames.Activities,
-                    children,
-                    new Dictionary<string, string>
-                    {
-                        [ExecutableChildSlotMetadataKeys.StartActivityId] = children.First().ExecutableNodeId
-                    })
+                new ExecutableChildSlot("children", children)
             ]);
 
     private static ExecutableNode NewNode(

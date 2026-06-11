@@ -13,6 +13,10 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 internal static class ValidatorTestHelpers
 {
+    private const string ActivitiesSlotName = "Activities";
+    private const string ConnectionsSlotName = "Connections";
+    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
         IEnumerable<ActivityConnection>? connections = null,
@@ -54,11 +58,11 @@ internal static class ValidatorTestHelpers
             :
             [
                 new ActivityChildSlot(
-                    ActivityChildSlotNames.Activities,
+                    ActivitiesSlotName,
                     childActivities,
                     new Dictionary<string, string>
                     {
-                        [ActivityChildSlotMetadataKeys.StartActivityNodeId] = childActivities.FirstOrDefault()?.NodeId ?? string.Empty
+                        [StartActivityNodeIdMetadataKey] = childActivities.FirstOrDefault()?.NodeId ?? string.Empty
                     })
             ]
     );
@@ -95,18 +99,18 @@ internal static class ValidatorTestHelpers
             ChildSlots:
             [
                 new ActivityChildSlot(
-                    ActivityChildSlotNames.Activities,
+                    ActivitiesSlotName,
                     activitySnapshot,
                     startActivityNodeId is null
                         ? null
                         : new Dictionary<string, string>
                         {
-                            [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
                         })
             ],
             ConnectionSlots:
             [
-                new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connections ?? [])
+                new ActivityConnectionSlot(ConnectionsSlotName, connections ?? [])
             ]);
     }
 

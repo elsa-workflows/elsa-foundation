@@ -35,13 +35,16 @@ executable activity ids where needed.
 - Activity-specific child slots expose child activities according to the activity contract:
   `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and
   `Flowchart` activities/connections/start/join state.
+- Those names are examples owned by activity modules or importers. Workflows Design Core and
+  Workflows Runtime Core must carry only opaque slot names/metadata and must not define reserved
+  constants for activity-specific concepts.
 - `WorkflowExecutable.RootActivity : ExecutableNode`
 - `ExecutableNode` carries compiled activity identity, descriptor payload, and binding state only; no
   generic executable composition property.
 - Executable child references are compiled into the activity-specific descriptor/binding payload that
   owns them.
 - `WorkflowExecutable.NodesById` remains as a derived index over `RootActivity` and descendants
-  discovered through activity-specific child-slot metadata or adapters.
+  discovered through opaque child slots or activity-specific adapters.
 
 Generic composition records are forbidden. Runtime behavior for interpreting
 Flowchart/Sequence/StateMachine remains owned by those activity implementations.

@@ -11,6 +11,10 @@ namespace Elsa3.Mapping.Mappings;
 /// <summary>Converts an Elsa-3 activity to an Elsa-4 <see cref="ActivityNode"/>.</summary>
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
+    private const string ActivitiesSlotName = "Activities";
+    private const string ConnectionsSlotName = "Connections";
+    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+
     public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
     {
         var version = await GetVersion(source, cancellationToken);
@@ -29,20 +33,20 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
             : new[]
             {
                 new ActivityChildSlot(
-                    ActivityChildSlotNames.Activities,
+                    ActivitiesSlotName,
                     childActivities,
                     startActivityNodeId is null
                         ? null
                         : new Dictionary<string, string>
                         {
-                            [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
                         })
             };
         var connectionSlots = connections.Length == 0
             ? null
             : new[]
             {
-                new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connections)
+                new ActivityConnectionSlot(ConnectionsSlotName, connections)
             };
 
         return new ActivityNode(

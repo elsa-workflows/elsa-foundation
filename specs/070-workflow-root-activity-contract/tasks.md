@@ -5,7 +5,7 @@
 - [x] T001 Add architecture-doc corrections and Speckit slice artifacts.
 - [x] T002 Mark conflicting graph-shaped specs as superseded by this slice.
 - [x] T003 Refactor `WorkflowDefinitionState` to expose `RootActivity`.
-- [x] T004 Replace generic `ActivityNode.Composition` with activity-specific child-slot metadata/adapters.
+- [x] T004 Replace generic `ActivityNode.Composition` with opaque child-slot records/adapters, without core activity-specific slot-name constants.
 - [x] T005 Update design projections, persistence commands, validators, and diffing for root activity traversal through child slots.
 - [x] T006 Refactor `WorkflowExecutable` to expose `RootActivity` without generic `ExecutableNode.Composition` and derive `NodesById` through child slots.
 - [x] T007 Update publishing to compile the authored root activity recursively through child slots into the executable root activity.

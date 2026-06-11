@@ -52,4 +52,13 @@ public sealed class ActivityVersionIdCollapseTests
 
         Assert.DoesNotContain("Composition", members);
     }
+
+    [Fact]
+    public void WorkflowsDesignCore_defines_no_activity_specific_child_slot_name_or_metadata_catalog()
+    {
+        var assembly = typeof(ActivityNode).Assembly;
+
+        Assert.Null(assembly.GetType("Elsa.Workflows.Design.Core.Models.ActivityChildSlotNames"));
+        Assert.Null(assembly.GetType("Elsa.Workflows.Design.Core.Models.ActivityChildSlotMetadataKeys"));
+    }
 }

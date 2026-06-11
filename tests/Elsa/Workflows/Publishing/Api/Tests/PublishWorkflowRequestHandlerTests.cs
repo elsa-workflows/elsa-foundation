@@ -21,6 +21,10 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class PublishWorkflowRequestHandlerTests
 {
+    private const string ActivitiesSlotName = "Activities";
+    private const string ConnectionsSlotName = "Connections";
+    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
 
@@ -64,7 +68,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal("flowchart", view.RootActivityId);
         Assert.Equal(3, view.NodeCount);
         var childSlot = Assert.Single(executable.RootActivity.ChildSlots);
-        Assert.Equal("write-one", childSlot.Metadata[ExecutableChildSlotMetadataKeys.StartActivityId]);
+        Assert.Equal("write-one", childSlot.Metadata[StartActivityNodeIdMetadataKey]);
         var connectionSlot = Assert.Single(executable.RootActivity.ConnectionSlots);
         var edge = Assert.Single(connectionSlot.Connections);
         Assert.Equal("write-one", edge.SourceNodeId);
@@ -195,15 +199,15 @@ public sealed class PublishWorkflowRequestHandlerTests
             nodeId,
             [
                 new ActivityChildSlot(
-                    ActivityChildSlotNames.Activities,
+                    ActivitiesSlotName,
                     activities,
                     new Dictionary<string, string>
                     {
-                        [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                        [StartActivityNodeIdMetadataKey] = startActivityNodeId
                     })
             ],
             [
-                new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connections)
+                new ActivityConnectionSlot(ConnectionsSlotName, connections)
             ]);
 
     private static WorkflowArgumentState Text(string value) =>

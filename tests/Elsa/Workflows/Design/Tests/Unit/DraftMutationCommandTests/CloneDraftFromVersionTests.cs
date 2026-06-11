@@ -19,6 +19,9 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// </summary>
 public sealed class CloneDraftFromVersionTests
 {
+    private const string ActivitiesSlotName = "Activities";
+    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+
     [Fact]
     public async Task Clone_deep_copies_State_from_source_Version()
     {
@@ -172,11 +175,11 @@ public sealed class CloneDraftFromVersionTests
             ChildSlots:
             [
                 new ActivityChildSlot(
-                    ActivityChildSlotNames.Activities,
+                    ActivitiesSlotName,
                     activities,
                     new Dictionary<string, string>
                     {
-                        [ActivityChildSlotMetadataKeys.StartActivityNodeId] = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty
+                        [StartActivityNodeIdMetadataKey] = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty
                     })
             ]),
         Inputs: [],
@@ -203,7 +206,7 @@ public sealed class CloneDraftFromVersionTests
 
     private static string? StartActivityNodeId(ActivityNode? root) =>
         root?.ChildSlots?
-            .Select(slot => slot.Metadata?.TryGetValue(ActivityChildSlotMetadataKeys.StartActivityNodeId, out var startActivityNodeId) == true
+            .Select(slot => slot.Metadata?.TryGetValue(StartActivityNodeIdMetadataKey, out var startActivityNodeId) == true
                 ? startActivityNodeId
                 : null)
             .FirstOrDefault(startActivityNodeId => startActivityNodeId is not null);
