@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -138,6 +139,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             else
             {
                 await activity.ExecuteAsync(context);
+                var bookmarkRequests = context.GetBookmarkRequests();
+                if (bookmarkRequests.Count > 0)
+                {
+                    await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, cancellationToken);
+                    return;
+                }
+
                 completedState = CompleteActivity(workItem, invokePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true), skipped: false);
             }
         }
@@ -153,6 +161,67 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         await activityExecutionStateStore.SaveAsync(completedState, cancellationToken);
         await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken);
+    }
+
+    private async ValueTask EnqueueBookmarkCreationWorkAsync(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        RuntimeSchedulerWorkItem invokeWorkItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        IReadOnlyCollection<ActivityBookmarkRequest> bookmarkRequests,
+        CancellationToken cancellationToken)
+    {
+        var requests = bookmarkRequests.ToArray();
+        if (requests.Select(request => request.BookmarkId).Distinct(StringComparer.Ordinal).Count() != requests.Length)
+            throw new InvalidOperationException("Activity bookmark requests cannot contain duplicate bookmark IDs.");
+
+        for (var index = 0; index < requests.Length; index++)
+        {
+            var request = requests[index];
+            var now = _timeProvider.GetUtcNow();
+            var payload = new RuntimeCreateBookmarkCommandPayload(
+                pinnedExecutable: invokePayload.PinnedExecutable,
+                bookmarkId: request.BookmarkId,
+                activityExecutionId: invokePayload.ActivityExecutionId,
+                executableNodeId: invokePayload.ExecutableNodeId,
+                resumeTargetId: request.ResumeTargetId,
+                stimulusType: request.StimulusType,
+                stimulusHash: request.StimulusHash,
+                payload: request.Payload,
+                expiresAt: request.ExpiresAt,
+                reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+                metadata: request.Metadata);
+
+            var workItem = new RuntimeSchedulerWorkItem(
+                workItemId: $"{invokeWorkItem.WorkItemId}:create-bookmark:{request.BookmarkId}",
+                workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
+                commandId: $"{invokeWorkItem.CommandId}:create-bookmark:{request.BookmarkId}",
+                commandKind: WorkflowExecutionCommandKind.CreateBookmark,
+                envelopeId: invokeWorkItem.EnvelopeId,
+                idempotencyKey: $"{invokeWorkItem.IdempotencyKey}:create-bookmark:{request.BookmarkId}",
+                enqueuedAt: now,
+                recordedAt: now,
+                sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
+                payload: JsonSerializer.SerializeToElement(payload),
+                commandMetadata: MergeMetadata(invokeWorkItem.CommandMetadata, request),
+                envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
+
+            await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> MergeMetadata(
+        IReadOnlyDictionary<string, string> commandMetadata,
+        ActivityBookmarkRequest request)
+    {
+        var metadata = commandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var item in request.Metadata)
+            metadata[item.Key] = item.Value;
+
+        metadata["runtime.bookmarkId"] = request.BookmarkId;
+        metadata["runtime.resumeTargetId"] = request.ResumeTargetId;
+        metadata["runtime.stimulusType"] = request.StimulusType;
+        metadata["runtime.stimulusHash"] = request.StimulusHash;
+        return metadata;
     }
 
     private async ValueTask EnqueueCompletionWorkAsync(

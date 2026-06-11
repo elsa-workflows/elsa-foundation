@@ -41,6 +41,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Equal("sha256:delivery-status:order-123", bookmark.StimulusHash);
         Assert.Equal("order-123", bookmark.Payload!.Value.GetProperty("orderId").GetString());
         Assert.Equal(_now.AddMinutes(30), bookmark.ExpiresAt);
+        Assert.Equal("northwind", bookmark.Metadata["customer"]);
+        Assert.Equal(RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason, bookmark.Metadata["runtime.reason"]);
 
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
@@ -183,7 +185,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             stimulusHash: "sha256:delivery-status:order-123",
             payload: Json("""{"orderId":"order-123"}"""),
             expiresAt: _now.AddMinutes(30),
-            reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason));
+            reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+            metadata: new Dictionary<string, string> { ["customer"] = "northwind" }));
 
         return new RuntimeSchedulerWorkItem(
             workItemId: "create-bookmark-work",
