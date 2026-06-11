@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
@@ -25,6 +26,8 @@ using Elsa.Workflows.Runtime.Api;
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
+
+EndpointSecurityOptions.DisableSecurity();
 
 //builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 //{

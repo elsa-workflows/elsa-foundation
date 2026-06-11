@@ -52,6 +52,42 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         Assert.NotNull(await ctx.WorkflowDefinitionVersionLayouts.FirstOrDefaultAsync(x => x.WorkflowDefinitionVersionId == submitted.VersionId));
     }
 
+    [Fact]
+    public async Task Execute_rejects_root_activity_without_activity_version_id()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        var state = new WorkflowDefinitionState(
+            Variables: [],
+            RootActivity: new ActivityNode("root", string.Empty, [], [], null),
+            Inputs: [],
+            Outputs: [],
+            WorkflowActivityOptions: null,
+            StrategyOptions: null);
+
+        using var scope = host.Services.CreateScope();
+        var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            command.Execute("Demo", null, state));
+
+        Assert.Contains("activity version id", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Execute_rejects_missing_root_activity()
+    {
+        using var host = WorkflowsDesignTestHost.Create();
+        var state = new WorkflowDefinitionState([], null, [], [], null, null);
+
+        using var scope = host.Services.CreateScope();
+        var command = scope.ServiceProvider.GetRequiredService<ISubmitWorkflowDefinitionCommand>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            command.Execute("Demo", null, state));
+
+        Assert.Contains("root activity", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft> LoadDraft(
         WorkflowsDesignTestHost host,
         WorkflowsDesignDbContext ctx,

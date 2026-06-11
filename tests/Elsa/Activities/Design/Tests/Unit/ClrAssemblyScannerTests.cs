@@ -1,4 +1,5 @@
 using System.Reflection;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Primitives.Models;
@@ -27,6 +28,14 @@ public sealed class ClrAssemblyScannerTests
         var byKey = models.ToDictionary(m => m.ActivityTypeKey, m => m.Version);
         Assert.Equal("2.1.0", byKey[typeof(UnannotatedFixtureActivity).FullName!]);
         Assert.Equal("3.0.0", byKey[typeof(VersionedFixtureActivity).FullName!]);
+    }
+
+    [Fact]
+    public void ApplicationOutputFolder_DiscoversPrimitiveActivities()
+    {
+        var models = CreateScanner().Scan(AppContext.BaseDirectory);
+
+        Assert.Contains(models, m => m.ActivityTypeKey == typeof(WriteLine).FullName);
     }
 
     [Fact]

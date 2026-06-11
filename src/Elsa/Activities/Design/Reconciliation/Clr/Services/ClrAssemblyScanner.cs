@@ -75,8 +75,23 @@ public sealed class ClrAssemblyScanner(
                 continue;
             }
 
-            foreach (var type in types.Where(IsActivityType))
+            foreach (var type in types)
             {
+                bool isActivityType;
+
+                try
+                {
+                    isActivityType = IsActivityType(type);
+                }
+                catch (Exception ex) when (IsRecoverableReflectionException(ex))
+                {
+                    logger.LogWarning(ex, "Skipping type '{Type}' in '{Dll}': interfaces could not be resolved during activity scanning.", type.FullName, dll);
+                    continue;
+                }
+
+                if (!isActivityType)
+                    continue;
+
                 models.Add(
                     BuildModel(type, assembly)
                 );
@@ -135,6 +150,9 @@ public sealed class ClrAssemblyScanner(
         type is { IsClass: true, IsAbstract: false }
         && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
 
+    private static bool IsRecoverableReflectionException(Exception exception) =>
+        exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException;
+
     private static bool HasRequired(PropertyInfo property) =>
         property.GetCustomAttributesData().Any(a => a.AttributeType.FullName == RequiredAttributeFullName);
 
@@ -192,6 +210,10 @@ public sealed class ClrAssemblyScanner(
         var baseDirectory = AppContext.BaseDirectory;
         if (!string.IsNullOrEmpty(baseDirectory) && Directory.Exists(baseDirectory))
             foreach (var dll in Directory.EnumerateFiles(baseDirectory, "*.dll"))
+                Add(dll);
+
+        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trustedPlatformAssemblies)
+            foreach (var dll in trustedPlatformAssemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 Add(dll);
 
         foreach (var dll in Directory.EnumerateFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll"))

@@ -23,6 +23,7 @@ public sealed class SubmitWorkflowDefinition(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(state);
+        ValidateActivityTree(state.RootActivity);
 
         var definitionId = identityGenerator.Generate();
         var draftId = identityGenerator.Generate();
@@ -79,5 +80,28 @@ public sealed class SubmitWorkflowDefinition(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
+    }
+
+    private static void ValidateActivityTree(ActivityNode? rootActivity)
+    {
+        if (rootActivity is null)
+            throw new ArgumentException("Workflow definition state must specify a root activity.", nameof(rootActivity));
+
+        var stack = new Stack<ActivityNode>();
+        stack.Push(rootActivity);
+
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+
+            if (string.IsNullOrWhiteSpace(node.NodeId))
+                throw new ArgumentException("Activity node id cannot be empty.", nameof(rootActivity));
+
+            if (string.IsNullOrWhiteSpace(node.ActivityVersionId))
+                throw new ArgumentException($"Activity node '{node.NodeId}' must specify an activity version id.", nameof(rootActivity));
+
+            foreach (var child in node.ChildSlots?.SelectMany(slot => slot.Activities) ?? [])
+                stack.Push(child);
+        }
     }
 }

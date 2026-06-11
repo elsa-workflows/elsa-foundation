@@ -1,4 +1,5 @@
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,5 +20,6 @@ public class TasksFeature : IShellFeature
         services.AddScoped<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddScoped<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddScoped<ITaskManager, TaskManager>();
+        services.AddShellInitializer<RunShellTasksInitializer>(LifecyclePhase.Start, 0);
     }
 }

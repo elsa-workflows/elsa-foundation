@@ -69,6 +69,7 @@ public sealed class ActivityDefinitionLookup(
             var term = searchTerm;
             query = query.Where(x =>
                 (x.DisplayName != null && x.DisplayName.Contains(term))
+                || x.ActivityTypeKey.Contains(term)
                 || (x.Category != null && x.Category.Contains(term))
                 || (x.Description != null && x.Description.Contains(term))
                 || x.Id.Contains(term));
