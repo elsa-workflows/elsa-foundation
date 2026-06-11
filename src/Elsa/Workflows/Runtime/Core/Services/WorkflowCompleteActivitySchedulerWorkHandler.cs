@@ -8,6 +8,31 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
 {
     public const string HandlerName = nameof(WorkflowCompleteActivitySchedulerWorkHandler);
 
+    private readonly IActivityExecutionStateStore _activityExecutionStateStore;
+    private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
+    private readonly TimeProvider _timeProvider;
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue)
+        : this(activityExecutionStateStore, schedulerWorkQueue, TimeProvider.System)
+    {
+    }
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        _activityExecutionStateStore = activityExecutionStateStore;
+        _schedulerWorkQueue = schedulerWorkQueue;
+        _timeProvider = timeProvider;
+    }
+
     public string Name => HandlerName;
 
     public bool CanHandle(RuntimeSchedulerWorkItem workItem)
@@ -17,15 +42,57 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         return workItem.CommandKind == WorkflowExecutionCommandKind.CompleteActivity;
     }
 
-    public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Validate the payload shape only. Parent evaluation and continuation scheduling
-        // are deferred to a later implementation slice.
-        _ = DeserializeCompletePayload(workItem);
-        return ValueTask.CompletedTask;
+        var payload = DeserializeCompletePayload(workItem);
+        if (payload.CompletionKind != SchedulerCompletionKind.ActivityCompleted || payload.ParentActivityExecutionId is null)
+            return;
+
+        var parentState = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ParentActivityExecutionId, cancellationToken);
+        if (parentState is null)
+            throw new InvalidOperationException($"CompleteActivity scheduler work item '{workItem.WorkItemId}' references missing parent activity execution '{payload.ParentActivityExecutionId}' for workflow execution '{workItem.WorkflowExecutionId}'.");
+
+        await EnqueueParentCompletionEvaluationAsync(workItem, payload, parentState, cancellationToken);
+    }
+
+    private async ValueTask EnqueueParentCompletionEvaluationAsync(
+        RuntimeSchedulerWorkItem activityCompletedWorkItem,
+        RuntimeCompleteActivityCommandPayload activityCompletedPayload,
+        ActivityExecutionState parentState,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var parentActivityExecutionId = parentState.Execution.ActivityExecutionId;
+        var completedChildActivityExecutionId = activityCompletedPayload.ActivityExecutionId;
+        var payload = new RuntimeCompleteActivityCommandPayload(
+            activityCompletedPayload.PinnedExecutable,
+            parentState.Execution.ExecutableNodeId,
+            parentActivityExecutionId,
+            parentState.ParentActivityExecutionId,
+            parentState.BranchId,
+            outcomeNames: [],
+            RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+            SchedulerCompletionKind.ParentCompletionEvaluation,
+            completedChildActivityExecutionId);
+
+        var workItem = new RuntimeSchedulerWorkItem(
+            workItemId: $"{activityCompletedWorkItem.WorkItemId}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            workflowExecutionId: activityCompletedWorkItem.WorkflowExecutionId,
+            commandId: $"{activityCompletedWorkItem.CommandId}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            envelopeId: activityCompletedWorkItem.EnvelopeId,
+            idempotencyKey: $"{activityCompletedWorkItem.IdempotencyKey}:parent:{parentActivityExecutionId}:child:{completedChildActivityExecutionId}",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: activityCompletedWorkItem.Sequence is { } sequence ? sequence + 1 : null,
+            payload: JsonSerializer.SerializeToElement(payload),
+            commandMetadata: activityCompletedWorkItem.CommandMetadata,
+            envelopeMetadata: activityCompletedWorkItem.EnvelopeMetadata);
+
+        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
@@ -54,5 +121,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             "parentActivityExecutionId" or
             "branchId" or
             "outcomeNames" or
-            "reason";
+            "reason" or
+            "completionKind" or
+            "completedChildActivityExecutionId";
 }

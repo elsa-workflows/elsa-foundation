@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class RuntimeCompleteActivityCommandPayload
 {
     public const string ActivityInvocationCompletedReason = "ActivityInvocationCompleted";
+    public const string ParentCompletionEvaluationReason = "ParentCompletionEvaluation";
 
     [JsonConstructor]
     public RuntimeCompleteActivityCommandPayload(
@@ -17,7 +18,9 @@ public sealed class RuntimeCompleteActivityCommandPayload
         string? parentActivityExecutionId,
         string? branchId,
         IReadOnlyCollection<string>? outcomeNames,
-        string reason)
+        string reason,
+        SchedulerCompletionKind completionKind = SchedulerCompletionKind.ActivityCompleted,
+        string? completedChildActivityExecutionId = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
@@ -29,6 +32,21 @@ public sealed class RuntimeCompleteActivityCommandPayload
 
         if (branchId is not null && string.IsNullOrWhiteSpace(branchId))
             throw new ArgumentException("Branch ID cannot be blank when provided.", nameof(branchId));
+
+        if (!Enum.IsDefined(completionKind))
+            throw new ArgumentOutOfRangeException(nameof(completionKind), completionKind, "Completion kind is not defined.");
+
+        if (completedChildActivityExecutionId is not null && string.IsNullOrWhiteSpace(completedChildActivityExecutionId))
+            throw new ArgumentException("Completed child activity execution ID cannot be blank when provided.", nameof(completedChildActivityExecutionId));
+
+        if (completionKind == SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId is null)
+            throw new ArgumentException("Parent completion evaluation work requires a completed child activity execution ID.", nameof(completedChildActivityExecutionId));
+
+        if (completionKind != SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId is not null)
+            throw new ArgumentException("Completed child activity execution ID is only valid for parent completion evaluation work.", nameof(completedChildActivityExecutionId));
+
+        if (completionKind == SchedulerCompletionKind.ParentCompletionEvaluation && completedChildActivityExecutionId == activityExecutionId)
+            throw new ArgumentException("Parent completion evaluation cannot use the same activity execution as parent and completed child.", nameof(completedChildActivityExecutionId));
 
         var outcomeSnapshot = (outcomeNames ?? []).ToArray();
         if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
@@ -44,6 +62,8 @@ public sealed class RuntimeCompleteActivityCommandPayload
         BranchId = branchId;
         OutcomeNames = outcomeSnapshot;
         Reason = reason;
+        CompletionKind = completionKind;
+        CompletedChildActivityExecutionId = completedChildActivityExecutionId;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -53,4 +73,6 @@ public sealed class RuntimeCompleteActivityCommandPayload
     public string? BranchId { get; }
     public IReadOnlyCollection<string> OutcomeNames { get; }
     public string Reason { get; }
+    public SchedulerCompletionKind CompletionKind { get; }
+    public string? CompletedChildActivityExecutionId { get; }
 }
