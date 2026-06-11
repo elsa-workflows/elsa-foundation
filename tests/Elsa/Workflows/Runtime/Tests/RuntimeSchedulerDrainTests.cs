@@ -539,11 +539,11 @@ public sealed class RuntimeSchedulerDrainTests
             },
             third =>
             {
-                Assert.Equal("work-1:continuation:actexec-parent:checkpoint:ActivityCompleted:actexec-parent", third.WorkItemId);
+                Assert.Equal("work-1:continuation:actexec-parent:checkpoint:WorkflowCompleted:actexec-parent", third.WorkItemId);
                 Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, third.HandlerName);
             });
         var write = Assert.Single(checkpointWriter.ListWrites());
-        Assert.Equal("commit:work-1:continuation:actexec-parent:checkpoint:ActivityCompleted:actexec-parent", write.Commit.CommitId);
+        Assert.Equal("commit:work-1:continuation:actexec-parent:checkpoint:WorkflowCompleted:actexec-parent", write.Commit.CommitId);
         Assert.Equal(["actexec-parent"], write.Commit.Checkpoint.ActivityExecutionIds);
     }
 
@@ -574,10 +574,10 @@ public sealed class RuntimeSchedulerDrainTests
 
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
-        Assert.Equal("work-1:checkpoint:ActivityCompleted:actexec-parent", checkpointWork.WorkItemId);
+        Assert.Equal("work-1:checkpoint:WorkflowCompleted:actexec-parent", checkpointWork.WorkItemId);
         Assert.Equal(2, checkpointWork.Sequence);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Equal(RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason, checkpointPayload.Reason);
         Assert.Equal(["actexec-parent"], checkpointPayload.ActivityExecutionIds);
     }
@@ -748,13 +748,30 @@ public sealed class RuntimeSchedulerDrainTests
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<ExecutableEdge> edges) =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
-            nodes: nodeIds.Select(NewNode).ToArray(),
-            edges: edges,
-            startNodeIds: [],
+            rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray(), edges),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes, IReadOnlyCollection<ExecutableEdge> edges)
+    {
+        var nodeSnapshot = nodes.ToArray();
+        if (nodeSnapshot.Length == 1 && edges.Count == 0)
+            return nodeSnapshot[0];
+
+        return new ExecutableNode(
+            executableNodeId: "$root",
+            authoredActivityId: "$root",
+            activityType: "test/root",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "root" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            composition: new ExecutableActivityComposition(nodeSnapshot, edges, nodeSnapshot.FirstOrDefault()?.ExecutableNodeId));
+    }
 
     private static ExecutableNode NewNode(string nodeId)
     {

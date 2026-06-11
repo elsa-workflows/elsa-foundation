@@ -1,5 +1,11 @@
 # Contracts — Commands
 
+> Supersession note (2026-06-11): command effects that mutate workflow-level
+> `State.Activities` or `State.ActivityConnections` are superseded by
+> [070-workflow-root-activity-contract](../../070-workflow-root-activity-contract/spec.md).
+> Draft mutation now operates over `WorkflowDefinitionState.RootActivity` and activity-owned
+> composition state.
+
 19 commands in total. All command contracts live in `Elsa.Workflows.Design.Persistence.Core.Contracts`; implementations live in `Elsa.Workflows.Design.Persistence.EFCore` (per FR-019a). All mutation/lifecycle commands take the per-Draft distributed lock per FR-027 / FR-027a.
 
 Naming convention: `I<Verb><Subject>InDraftCommand` (mutations) / `I<Verb><Subject>Command` (lifecycle).

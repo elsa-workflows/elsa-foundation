@@ -18,33 +18,19 @@ public sealed class Elsa3WorkflowDefinitionToState(
     public async ValueTask<WorkflowDefinitionState> Map(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken)
     {
         var variables = definition.Variables.Select(MapVariable);
-        var activityConnections = definition.Root.Connections?.Select(MapConnection) ?? [];
-        var activities = await MapActivities(definition, cancellationToken);
+        var rootActivity = await activityMapper.Map(definition.Root, cancellationToken);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();
         var activityOptions = MapActivityOptions(definition);
 
         return new(
             variables,
-            activityConnections,
-            activities,
+            rootActivity,
             inputs,
             outputs,
             activityOptions,
             StrategyOptions: null
         );
-    }
-
-    private async ValueTask<IEnumerable<ActivityNode>> MapActivities(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken)
-    {
-        var result = new List<ActivityNode>(definition.Root.Activities?.Count ?? 0);
-        foreach (var activity in definition.Root.Activities ?? [])
-        {
-            result.Add(
-                await activityMapper.Map(activity, cancellationToken)
-            );
-        }
-        return result;
     }
 
     private static WorkflowActivityOptions? MapActivityOptions(Elsa3WorkflowDefinition definition)
@@ -68,12 +54,4 @@ public sealed class Elsa3WorkflowDefinitionToState(
         return new VariableDefinition(source.Id, source.Name, varType, storageDriverType, new ArgumentValue(source.Value));
     }
 
-    private static ActivityConnection MapConnection(Elsa3Connection connection)
-    {
-        var source = MapPort(connection.Source);
-        var target = MapPort(connection.Target);
-        return new(source, target);
-    }
-
-    private static ActivityPortConnection MapPort(Elsa3Endpoint source) => new(source.Activity, source.Port);
 }

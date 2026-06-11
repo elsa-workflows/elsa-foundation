@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Recurses <c>ChildActivities</c> via the iterative <see cref="ActivityTreeWalker"/> — every
+/// Recurses through activity-owned composition via the iterative <see cref="ActivityTreeWalker"/> — every
 /// activity at any depth contributes its own required-arg check. Max depth is
 /// <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
 /// </para>
@@ -42,7 +42,7 @@ public sealed class RequiredInputOutputValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
-        foreach (var node in ActivityTreeWalker.Walk(draft.State.Activities, maxDepth))
+        foreach (var node in ActivityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
             var version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
             if (version is null)

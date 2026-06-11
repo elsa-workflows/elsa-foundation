@@ -1,5 +1,10 @@
 # Feature Specification: Single Diff-Based Draft Update Command
 
+> Supersession note (2026-06-11): references to workflow-level `Activities` and
+> `ActivityConnections` are superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Draft
+> mutation now diffs a root activity tree and activity-owned composition state.
+
 **Feature Branch**: `003-single-update-command`
 **Created**: 2026-06-02
 **Status**: Draft

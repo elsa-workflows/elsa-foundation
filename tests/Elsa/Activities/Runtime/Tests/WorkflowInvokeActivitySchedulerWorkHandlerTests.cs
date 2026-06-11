@@ -598,9 +598,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         return new(
             identity: NewIdentity(),
-            nodes: [start, other],
-            edges: [],
-            startNodeIds: ["node-start"],
+            rootActivity: WithChildren(start, [other]),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
@@ -614,9 +612,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         return new(
             identity: NewIdentity(),
-            nodes: [start],
-            edges: [],
-            startNodeIds: ["node-start"],
+            rootActivity: start,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
@@ -644,14 +640,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         return new(
             identity: NewIdentity(),
-            nodes: [start],
-            edges: [],
-            startNodeIds: ["node-start"],
+            rootActivity: start,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
+
+    private static ExecutableNode WithChildren(ExecutableNode root, IReadOnlyCollection<ExecutableNode> children) =>
+        new(
+            executableNodeId: root.ExecutableNodeId,
+            authoredActivityId: root.AuthoredActivityId,
+            activityType: root.ActivityType,
+            activityTypeVersion: root.ActivityTypeVersion,
+            descriptorType: root.DescriptorType,
+            descriptorPayload: root.DescriptorPayload,
+            inputBindings: root.InputBindings,
+            outputCaptures: root.OutputCaptures,
+            metadata: root.Metadata,
+            composition: new ExecutableActivityComposition(children, [], children.FirstOrDefault()?.ExecutableNodeId));
 
     private static ExecutableNode NewNode(
         string nodeId,

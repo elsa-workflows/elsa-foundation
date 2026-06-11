@@ -49,11 +49,11 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
-    public async Task HandleAsync_AttachesOneSchedulingIntentPerStartNode()
+    public async Task HandleAsync_AttachesOneSchedulingIntentForRootActivity()
     {
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var executable = NewExecutable(["node-a", "node-b", "node-c"], ["node-a", "node-c"]);
+        var executable = NewExecutable(["node-a", "node-b", "node-c"], ["node-a"]);
         await store.SaveAsync(executable);
         var handler = NewHandler(store, queue);
 
@@ -61,16 +61,12 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
-        var scheduled = checkpointPayload.PostCommitIntents
-            .Select(intent => intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!)
-            .ToArray();
-        Assert.Equal(new[] { "node-a", "node-c" }, scheduled
-            .Select(item => item.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!.ExecutableNodeId)
-            .ToArray());
-        Assert.Equal(new[] { "actexec-1", "actexec-2" }, scheduled
-            .Select(item => item.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!.ActivityExecutionId)
-            .ToArray());
-        Assert.All(scheduled, item => Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, item.CommandKind));
+        var intent = Assert.Single(checkpointPayload.PostCommitIntents);
+        var scheduled = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        Assert.Equal("node-a", payload.ExecutableNodeId);
+        Assert.Equal("actexec-1", payload.ActivityExecutionId);
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
     }
 
     [Fact]
@@ -200,21 +196,6 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
-    public async Task HandleAsync_RejectsExecutableWithoutStartNodesBeforeScheduling()
-    {
-        var store = new InMemoryWorkflowExecutableStore();
-        var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var executable = NewExecutable(["node-a"], []);
-        await store.SaveAsync(executable);
-        var handler = NewHandler(store, queue);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(executable.Identity)).AsTask());
-
-        Assert.Contains("does not declare any start nodes", exception.Message);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    [Fact]
     public void CanHandle_AcceptsOnlyStartCommandWork()
     {
         var handler = new WorkflowStartSchedulerWorkHandler(
@@ -274,13 +255,31 @@ public sealed class RuntimeStartCommandSchedulingTests
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(
             identity: NewIdentity(),
-            nodes: nodeIds.Select(NewNode).ToArray(),
-            edges: [],
-            startNodeIds: startNodeIds,
+            rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
+    {
+        var nodeSnapshot = nodes.ToArray();
+        if (nodeSnapshot.Length == 1)
+            return nodeSnapshot[0];
+
+        var root = nodeSnapshot[0];
+        return new ExecutableNode(
+            executableNodeId: root.ExecutableNodeId,
+            authoredActivityId: root.AuthoredActivityId,
+            activityType: root.ActivityType,
+            activityTypeVersion: root.ActivityTypeVersion,
+            descriptorType: root.DescriptorType,
+            descriptorPayload: root.DescriptorPayload,
+            inputBindings: root.InputBindings,
+            outputCaptures: root.OutputCaptures,
+            metadata: root.Metadata,
+            composition: new ExecutableActivityComposition(nodeSnapshot.Skip(1).ToArray(), [], nodeSnapshot.Skip(1).FirstOrDefault()?.ExecutableNodeId));
+    }
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");

@@ -105,7 +105,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         Name: name,
         Description: null,
         Version: version,
-        State: new WorkflowDefinitionState([], [], [], [], [], null, null)
+        State: new WorkflowDefinitionState([], null, [], [], null, null)
     );
 
     private sealed class StubSource(string kind, string id, IEnumerable<WorkflowVersionReconciliationModel> entries) : IWorkflowReconciliationSource

@@ -19,17 +19,21 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         var outputs = new List<ArgumentState>();
         ExtractInputsAndOutputs(inputs, outputs, version, source.AdditionalProperties);
 
-        var childActivities = await GetChildActivities(source, cancellationToken);
+        var childActivities = (await GetChildActivities(source, cancellationToken)).ToArray();
+        var connections = source.Connections?.Select(MapConnection).ToArray() ?? [];
+        var startActivityNodeId = childActivities
+            .FirstOrDefault(activity => source.Activities?.FirstOrDefault(sourceActivity => sourceActivity.NodeId == activity.NodeId)?.CustomProperties?.CanStartWorkflow == true)
+            ?.NodeId;
+        var composition = childActivities.Length == 0 && connections.Length == 0
+            ? null
+            : new ActivityComposition(childActivities, connections, startActivityNodeId);
 
         return new ActivityNode(
             source.NodeId,
             version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
             inputs,
             outputs,
-            IsContainer: false,
-            IsStart: source.CustomProperties?.CanStartWorkflow ?? false,
-            IsTerminal: false,
-            ChildActivities: childActivities ?? []
+            composition
         );
         // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
@@ -49,6 +53,15 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
 
         return result;
     }
+
+    private static ActivityConnection MapConnection(Elsa3Connection connection)
+    {
+        var source = MapPort(connection.Source);
+        var target = MapPort(connection.Target);
+        return new(source, target);
+    }
+
+    private static ActivityPortConnection MapPort(Elsa3Endpoint source) => new(source.Activity, source.Port);
 
     private static void ExtractInputsAndOutputs(
         List<ArgumentState> inputs,

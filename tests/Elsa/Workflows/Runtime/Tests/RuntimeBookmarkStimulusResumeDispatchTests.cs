@@ -249,12 +249,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     private WorkflowExecutable NewExecutable(IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>? resumeTargets = null) =>
         new(
             identity: _identity,
-            nodes:
-            [
-                NewNode("node-wait")
-            ],
-            edges: [],
-            startNodeIds: [],
+            rootActivity: NewNode("node-wait"),
             resumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-target:delivery"] = new(

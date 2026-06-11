@@ -1,5 +1,10 @@
 # Quickstart: Runtime Start Command Scheduling
 
+> Supersession note (2026-06-11): this quickstart's start-node scheduling expectation is
+> superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Start now
+> schedules the executable root activity.
+
 Run the focused validation:
 
 ```bash

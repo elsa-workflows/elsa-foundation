@@ -34,24 +34,18 @@ public sealed class PublishWorkflowRequestHandler(
     {
         var version = await workflowVersions.GetVersionIncludingDefinition(request.VersionId, cancellationToken);
         var state = version.State;
-        var activities = state.Activities.ToArray();
+        var rootActivity = state.RootActivity
+            ?? throw new ArgumentException("Workflow version has no root activity to publish.");
 
-        ValidateGraphShape(activities, state.ActivityConnections);
+        var activities = FlattenActivities(rootActivity).ToArray();
+        ValidateActivityTree(activities);
 
         var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
         foreach (var activityVersionId in activities.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
             activityRows[activityVersionId] = await activityVersions.GetVersionInlcudingDefinition(activityVersionId, cancellationToken);
 
-        var nodes = activities.Select(activity => CompileNode(activity, activityRows[activity.ActivityVersionId])).ToArray();
-        var edges = state.ActivityConnections
-            .Select(connection => new ExecutableEdge(
-                connection.Source.ActivityNodeId,
-                connection.Source.Port,
-                connection.Target.ActivityNodeId,
-                connection.Target.Port))
-            .ToArray();
-        var startNodeIds = activities.Where(activity => activity.IsStart).Select(activity => activity.NodeId).ToArray();
-        var artifactHash = ComputeHash(version, nodes, edges, startNodeIds);
+        var compiledRoot = CompileNode(rootActivity, activityRows);
+        var artifactHash = ComputeHash(version, compiledRoot);
         var artifactId = CreateArtifactId(artifactHash);
         var now = DateTimeOffset.UtcNow;
 
@@ -63,9 +57,7 @@ public sealed class PublishWorkflowRequestHandler(
                 ArtifactVersion: version.Version,
                 ArtifactHash: artifactHash,
                 Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version)),
-            nodes: nodes,
-            edges: edges,
-            startNodeIds: startNodeIds,
+            rootActivity: compiledRoot,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
             publishedAt: now,
@@ -82,9 +74,8 @@ public sealed class PublishWorkflowRequestHandler(
             executable.Identity.DefinitionVersionId,
             executable.Identity.ArtifactVersion,
             executable.Identity.ArtifactHash,
-            executable.Nodes.Count,
-            executable.Edges.Count,
-            executable.StartNodeIds.ToArray());
+            executable.RootActivity.ExecutableNodeId,
+            executable.Nodes.Count);
     }
 
     private static string CreateArtifactId(string artifactHash)
@@ -96,13 +87,15 @@ public sealed class PublishWorkflowRequestHandler(
         return $"artifact-{artifactHash[ArtifactHashPrefix.Length..(ArtifactHashPrefix.Length + ArtifactIdHashLength)]}";
     }
 
-    private static ExecutableNode CompileNode(ActivityNode activity, ActivityDefinitionVersion activityVersion)
+    private static ExecutableNode CompileNode(
+        ActivityNode activity,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
-        if (activity.ChildActivities.Any())
-            throw new ArgumentException($"Activity node '{activity.NodeId}' contains child activities, which are not supported by this vertical slice.");
+        var activityVersion = activityRows[activity.ActivityVersionId];
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        var composition = CompileComposition(activity.Composition, activityRows);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -126,8 +119,30 @@ public sealed class PublishWorkflowRequestHandler(
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>
             {
-                ["isTerminal"] = activity.IsTerminal.ToString(CultureInfo.InvariantCulture)
-            });
+                ["authoredNodeId"] = activity.NodeId
+            },
+            composition: composition);
+    }
+
+    private static ExecutableActivityComposition? CompileComposition(
+        ActivityComposition? composition,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
+    {
+        if (composition is null)
+            return null;
+
+        var activities = composition.Activities
+            .Select(activity => CompileNode(activity, activityRows))
+            .ToArray();
+        var connections = composition.Connections
+            .Select(connection => new ExecutableEdge(
+                connection.Source.ActivityNodeId,
+                connection.Source.Port,
+                connection.Target.ActivityNodeId,
+                connection.Target.Port))
+            .ToArray();
+
+        return new ExecutableActivityComposition(activities, connections, composition.StartActivityNodeId);
     }
 
     private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
@@ -173,65 +188,31 @@ public sealed class PublishWorkflowRequestHandler(
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
     }
 
-    private static void ValidateGraphShape(IReadOnlyCollection<ActivityNode> activities, IEnumerable<ActivityConnection> connections)
+    private static void ValidateActivityTree(IReadOnlyCollection<ActivityNode> activities)
     {
         if (activities.Count == 0)
-            throw new ArgumentException("Workflow version has no activity nodes to publish.");
+            throw new ArgumentException("Workflow version has no root activity to publish.");
 
         var duplicateNodeId = activities.GroupBy(activity => activity.NodeId, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1)?.Key;
         if (duplicateNodeId is not null)
             throw new ArgumentException($"Workflow version contains duplicate activity node id '{duplicateNodeId}'.");
-
-        var startNodes = activities.Where(activity => activity.IsStart).ToArray();
-        if (startNodes.Length != 1)
-            throw new ArgumentException($"Sequential publishing requires exactly one start activity, but the workflow has {startNodes.Length}.");
-
-        var nodeIds = activities.Select(activity => activity.NodeId).ToHashSet(StringComparer.Ordinal);
-        var connectionSnapshot = connections.ToArray();
-        foreach (var connection in connectionSnapshot)
-        {
-            if (!nodeIds.Contains(connection.Source.ActivityNodeId))
-                throw new ArgumentException($"Workflow connection source activity '{connection.Source.ActivityNodeId}' does not exist.");
-
-            if (!nodeIds.Contains(connection.Target.ActivityNodeId))
-                throw new ArgumentException($"Workflow connection target activity '{connection.Target.ActivityNodeId}' does not exist.");
-        }
-
-        var fanOut = connectionSnapshot.GroupBy(connection => connection.Source.ActivityNodeId, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1);
-        if (fanOut is not null)
-            throw new ArgumentException($"Sequential publishing does not support fan-out from activity node '{fanOut.Key}'.");
-
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        string? current = startNodes[0].NodeId;
-        while (current is not null)
-        {
-            if (!visited.Add(current))
-                throw new ArgumentException($"Workflow graph contains a cycle at activity node '{current}'.");
-
-            current = connectionSnapshot.FirstOrDefault(connection => connection.Source.ActivityNodeId == current)?.Target.ActivityNodeId;
-        }
-
-        var unreachable = nodeIds.Except(visited, StringComparer.Ordinal).ToArray();
-        if (unreachable.Length > 0)
-            throw new ArgumentException($"Workflow graph contains unreachable activity nodes: {string.Join(", ", unreachable)}.");
     }
 
     private static string ComputeHash(
         WorkflowDefinitionVersion version,
-        IReadOnlyCollection<ExecutableNode> nodes,
-        IReadOnlyCollection<ExecutableEdge> edges,
-        IReadOnlyCollection<string> startNodeIds)
+        ExecutableNode rootActivity)
     {
+        var nodes = FlattenExecutableActivities(rootActivity).ToArray();
+        var connections = FlattenExecutableConnections(rootActivity).ToArray();
         var payload = string.Join(
             '\n',
             version.Id,
             version.Version,
-            string.Join('|', startNodeIds.Order(StringComparer.Ordinal)),
+            rootActivity.ExecutableNodeId,
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
-                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}")),
-            string.Join('|', edges
+                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{node.Composition?.StartActivityId}")),
+            string.Join('|', connections
                 .OrderBy(edge => edge.SourceNodeId, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourcePort, StringComparer.Ordinal)
                 .ThenBy(edge => edge.TargetNodeId, StringComparer.Ordinal)
@@ -249,5 +230,42 @@ public sealed class PublishWorkflowRequestHandler(
             .Select(item => $"{item.Key}={item.Value}"));
 
         return $"{input.Key}={input.Value.LiteralValue?.GetRawText()}[{metadata}]";
+    }
+
+    private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
+    {
+        var stack = new Stack<ActivityNode>();
+        stack.Push(rootActivity);
+
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+
+            foreach (var child in node.Composition?.Activities ?? [])
+                stack.Push(child);
+        }
+    }
+
+    private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)
+    {
+        var stack = new Stack<ExecutableNode>();
+        stack.Push(rootActivity);
+
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+
+            foreach (var child in node.Composition?.Activities ?? [])
+                stack.Push(child);
+        }
+    }
+
+    private static IEnumerable<ExecutableEdge> FlattenExecutableConnections(ExecutableNode rootActivity)
+    {
+        foreach (var node in FlattenExecutableActivities(rootActivity))
+            foreach (var connection in node.Composition?.Connections ?? [])
+                yield return connection;
     }
 }

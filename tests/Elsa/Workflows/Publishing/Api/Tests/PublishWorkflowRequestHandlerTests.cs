@@ -25,15 +25,9 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
 
     [Fact]
-    public async Task PublishesSequentialWorkflowVersionIntoExecutableArtifact()
+    public async Task PublishesRootActivityIntoExecutableArtifact()
     {
-        var workflowVersion = WorkflowVersion(
-            activities:
-            [
-                Node("write-one", isStart: true, isTerminal: false, Text("one")),
-                Node("write-two", isStart: false, isTerminal: true, Text("two"))
-            ],
-            connections: [Connection("write-one", "write-two")]);
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
         var handler = Handler(workflowVersion);
 
         var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
@@ -42,71 +36,54 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.NotNull(executable);
         Assert.Equal("definition-1", view.DefinitionId);
         Assert.Equal("version-1", view.DefinitionVersionId);
-        Assert.Equal(2, view.NodeCount);
-        Assert.Equal(1, view.EdgeCount);
-        Assert.Equal(["write-one"], view.StartNodeIds);
+        Assert.Equal("write-one", view.RootActivityId);
+        Assert.Equal(1, view.NodeCount);
+        Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
         Assert.Equal("one", executable.NodesById["write-one"].InputBindings["Text"].LiteralValue!.Value.GetString());
         Assert.Equal($"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}", executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
     }
 
     [Fact]
-    public async Task RejectsWorkflowWithoutExactlyOneStartNode()
+    public async Task PublishesCompositeRootWithActivityOwnedConnections()
     {
-        var workflowVersion = WorkflowVersion(
-            activities: [Node("write-one", isStart: false, isTerminal: true, Text("one"))],
-            connections: []);
+        var root = Node("flowchart", composition: new ActivityComposition(
+            Activities:
+            [
+                Node("write-one", Text("one")),
+                Node("write-two", Text("two"))
+            ],
+            Connections: [Connection("write-one", "write-two")],
+            StartActivityNodeId: "write-one"));
+        var workflowVersion = WorkflowVersion(root);
         var handler = Handler(workflowVersion);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+        var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var executable = await _store.FindAsync(view.ArtifactId);
 
-        Assert.Contains("exactly one start", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(executable);
+        Assert.Equal("flowchart", view.RootActivityId);
+        Assert.Equal(3, view.NodeCount);
+        Assert.Equal("write-one", executable.RootActivity.Composition!.StartActivityId);
+        var edge = Assert.Single(executable.RootActivity.Composition.Connections);
+        Assert.Equal("write-one", edge.SourceNodeId);
+        Assert.Equal("write-two", edge.TargetNodeId);
     }
 
     [Fact]
-    public async Task RejectsWorkflowWithMultipleStartNodes()
+    public async Task RejectsWorkflowWithoutRootActivity()
     {
-        var workflowVersion = WorkflowVersion(
-            activities:
-            [
-                Node("write-one", isStart: true, isTerminal: false, Text("one")),
-                Node("write-two", isStart: true, isTerminal: true, Text("two"))
-            ],
-            connections: [Connection("write-one", "write-two")]);
+        var workflowVersion = WorkflowVersion(rootActivity: null);
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Contains("exactly one start", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task RejectsFanOutGraph()
-    {
-        var workflowVersion = WorkflowVersion(
-            activities:
-            [
-                Node("write-one", isStart: true, isTerminal: false, Text("one")),
-                Node("write-two", isStart: false, isTerminal: true, Text("two")),
-                Node("write-three", isStart: false, isTerminal: true, Text("three"))
-            ],
-            connections:
-            [
-                Connection("write-one", "write-two"),
-                Connection("write-one", "write-three")
-            ]);
-        var handler = Handler(workflowVersion);
-
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
-
-        Assert.Contains("fan-out", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("root activity", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task RejectsNonLiteralInput()
     {
-        var workflowVersion = WorkflowVersion(
-            activities: [Node("write-one", isStart: true, isTerminal: true, new WorkflowArgumentState("Text", new ArgumentValue("name", "Variable"), null, null, null, null))],
-            connections: []);
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("name", "Variable"), null, null, null, null)));
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
@@ -117,9 +94,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task RejectsUnknownActivityVersionId()
     {
-        var workflowVersion = WorkflowVersion(
-            activities: [new ActivityNode("missing", "missing-activity", [Text("one")], [], false, true, true, [])],
-            connections: []);
+        var workflowVersion = WorkflowVersion(new ActivityNode("missing", "missing-activity", [Text("one")], [], null));
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
@@ -132,30 +107,32 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task ComputesSameArtifactIdForEquivalentWorkflowOrdering()
     {
-        var firstWorkflowVersion = WorkflowVersion(
-            activities:
+        var firstWorkflowVersion = WorkflowVersion(Node("flowchart", composition: new ActivityComposition(
+            Activities:
             [
-                Node("write-one", isStart: true, isTerminal: false, Text("one")),
-                Node("write-two", isStart: false, isTerminal: false, Text("two")),
-                Node("write-three", isStart: false, isTerminal: true, Text("three"))
+                Node("write-one", Text("one")),
+                Node("write-two", Text("two")),
+                Node("write-three", Text("three"))
             ],
-            connections:
+            Connections:
             [
                 Connection("write-one", "write-two"),
                 Connection("write-two", "write-three")
-            ]);
-        var secondWorkflowVersion = WorkflowVersion(
-            activities:
-            [
-                Node("write-three", isStart: false, isTerminal: true, Text("three")),
-                Node("write-one", isStart: true, isTerminal: false, Text("one")),
-                Node("write-two", isStart: false, isTerminal: false, Text("two"))
             ],
-            connections:
+            StartActivityNodeId: "write-one")));
+        var secondWorkflowVersion = WorkflowVersion(Node("flowchart", composition: new ActivityComposition(
+            Activities:
+            [
+                Node("write-three", Text("three")),
+                Node("write-one", Text("one")),
+                Node("write-two", Text("two"))
+            ],
+            Connections:
             [
                 Connection("write-two", "write-three"),
                 Connection("write-one", "write-two")
-            ]);
+            ],
+            StartActivityNodeId: "write-one")));
         var firstView = await Handler(firstWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var secondView = await Handler(secondWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
@@ -166,9 +143,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task ComputesDifferentArtifactIdWhenLiteralInputTypeMetadataChanges()
     {
-        var workflowVersion = WorkflowVersion(
-            activities: [Node("write-one", isStart: true, isTerminal: true, Text("1"))],
-            connections: []);
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("1")));
         var stringView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.String))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.Integer))
@@ -181,32 +156,30 @@ public sealed class PublishWorkflowRequestHandlerTests
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
         Handler(workflowVersion, _writeLineActivity);
 
-    private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, ActivityDefinitionVersion activityVersion) =>
+    private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activityVersions) =>
         new(
             new FakeQueries<WorkflowDefinitionVersion>([workflowVersion]),
-            new FakeQueries<ActivityDefinitionVersion>([activityVersion]),
+            new FakeQueries<ActivityDefinitionVersion>(activityVersions.ToList()),
             _store);
 
-    private static WorkflowDefinitionVersion WorkflowVersion(
-        IEnumerable<ActivityNode> activities,
-        IEnumerable<ActivityConnection> connections) =>
+    private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], connections, activities, [], [], null, null)
+            State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
         };
 
-    private static ActivityNode Node(string nodeId, bool isStart, bool isTerminal, params WorkflowArgumentState[] inputs) =>
+    private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
+        Node(nodeId, null, inputs);
+
+    private static ActivityNode Node(string nodeId, ActivityComposition? composition, params WorkflowArgumentState[] inputs) =>
         new(
             nodeId,
             "activity-write-line",
             inputs,
             Outputs: [],
-            IsContainer: false,
-            isStart,
-            isTerminal,
-            ChildActivities: []);
+            Composition: composition);
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);

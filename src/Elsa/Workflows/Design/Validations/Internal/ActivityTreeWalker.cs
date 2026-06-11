@@ -4,24 +4,25 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 
 /// <summary>
 /// Iterative depth-first walker over an <see cref="ActivityNode"/> tree (root activities +
-/// their nested <c>ChildActivities</c>). Iterative, not recursive — the .NET call stack is
+/// their nested activity-owned composition state). Iterative, not recursive — the .NET call stack is
 /// never the bottleneck; <paramref name="maxDepth"/> is a safety net against cyclic /
 /// malformed Draft data.
 /// </summary>
 internal static class ActivityTreeWalker
 {
     /// <summary>
-    /// Yields every activity reachable from <paramref name="roots"/> up to
-    /// <paramref name="maxDepth"/>. Roots are at depth 0; their <c>ChildActivities</c> are at
-    /// depth 1; etc. Nodes beyond <paramref name="maxDepth"/> are silently skipped — the
+    /// Yields every activity reachable from <paramref name="root"/> up to
+    /// <paramref name="maxDepth"/>. Root is at depth 0; composed child activities are at depth
+    /// 1; etc. Nodes beyond <paramref name="maxDepth"/> are silently skipped — the
     /// caller decides whether to surface that as a validation error.
     /// </summary>
-    public static IEnumerable<ActivityNode> Walk(IEnumerable<ActivityNode> roots, int maxDepth)
+    public static IEnumerable<ActivityNode> Walk(ActivityNode? root, int maxDepth)
     {
-        var stack = new Stack<(ActivityNode Node, int Depth)>();
+        if (root is null)
+            yield break;
 
-        foreach (var root in roots)
-            stack.Push((root, 0));
+        var stack = new Stack<(ActivityNode Node, int Depth)>();
+        stack.Push((root, 0));
 
         while (stack.Count > 0)
         {
@@ -31,8 +32,15 @@ internal static class ActivityTreeWalker
             if (depth >= maxDepth)
                 continue;
 
-            foreach (var child in node.ChildActivities)
+            foreach (var child in node.Composition?.Activities ?? [])
                 stack.Push((child, depth + 1));
         }
+    }
+
+    public static IEnumerable<ActivityConnection> WalkConnections(ActivityNode? root, int maxDepth)
+    {
+        foreach (var node in Walk(root, maxDepth))
+            foreach (var connection in node.Composition?.Connections ?? [])
+                yield return connection;
     }
 }

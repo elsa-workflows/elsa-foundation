@@ -1,5 +1,10 @@
 # Data Model: Workflow Execution Vertical Slice
 
+> Supersession note (2026-06-11): the `Edges` and `StartNodeIds` fields described here are
+> superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Composite
+> activity composition state is activity-owned.
+
 ## WorkflowExecutable
 
 Runtime-owned runnable artifact.

@@ -43,8 +43,7 @@ public sealed class CloneDraftFromVersion(
         // sharing of the elements themselves is safe.
         var copiedState = new WorkflowDefinitionState(
             Variables: [.. sourceState.Variables],
-            ActivityConnections: [.. sourceState.ActivityConnections],
-            Activities: [.. sourceState.Activities],
+            RootActivity: sourceState.RootActivity,
             Inputs: [.. sourceState.Inputs],
             Outputs: [.. sourceState.Outputs],
             WorkflowActivityOptions: sourceState.WorkflowActivityOptions,

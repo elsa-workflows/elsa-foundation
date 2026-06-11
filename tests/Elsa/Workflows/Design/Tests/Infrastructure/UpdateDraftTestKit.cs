@@ -59,8 +59,7 @@ internal static class UpdateDraftTestKit
         IEnumerable<OutputDefinition>? outputs = null) =>
         new(
             Variables: variables ?? [],
-            ActivityConnections: connections ?? [],
-            Activities: activities ?? [],
+            RootActivity: RootActivity(activities, connections),
             Inputs: inputs ?? [],
             Outputs: outputs ?? [],
             WorkflowActivityOptions: null,
@@ -77,10 +76,7 @@ internal static class UpdateDraftTestKit
             ActivityVersionId: activityVersionId,
             Inputs: inputs ?? [],
             Outputs: outputs ?? [],
-            IsContainer: false,
-            IsStart: isStart,
-            IsTerminal: false,
-            ChildActivities: []);
+            Composition: null);
 
     public static VariableDefinition Variable(string referenceKey, string name, Type? type = null) =>
         new(referenceKey, name, TypeInformation.FromType(type ?? typeof(string)), null, null);
@@ -103,4 +99,23 @@ internal static class UpdateDraftTestKit
 
     public static DesignMetadataRecord LayoutRecord(string nodeId, double x, double y, double? width = null, double? height = null) =>
         new(nodeId, x, y, width, height);
+
+    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities, IEnumerable<ActivityConnection>? connections)
+    {
+        var activitySnapshot = (activities ?? []).ToArray();
+        if (activitySnapshot.Length == 0)
+            return null;
+
+        var connectionSnapshot = (connections ?? []).ToArray();
+        if (activitySnapshot.Length == 1 && connectionSnapshot.Length == 0)
+            return activitySnapshot[0];
+
+        var startActivityNodeId = activitySnapshot.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId;
+        return new ActivityNode(
+            NodeId: "$root",
+            ActivityVersionId: "$workflow-root",
+            Inputs: [],
+            Outputs: [],
+            Composition: new ActivityComposition(activitySnapshot, connectionSnapshot, startActivityNodeId));
+    }
 }

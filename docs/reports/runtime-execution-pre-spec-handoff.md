@@ -77,11 +77,19 @@ At minimum, the spec should answer:
 - What are the failure semantics when an artifact refers to an activity descriptor whose runtime feature is not installed?
 - Is `WorkflowExecutable` the final name, or should it remain an architectural placeholder until entity design pins the concrete type?
 
-The answer should preserve the `§E2.9` triplet:
+The answer should preserve the `§E2.9` triplet and the root-activity workflow boundary:
 
-- `WorkflowDefinitionState`: authored graph and authored contract.
+- `WorkflowDefinitionState`: authored root activity and authored contract.
 - Read models/projections: listing, detail, UI, and visualisation views.
-- `WorkflowExecutable` or equivalent: runtime-owned runnable form.
+- `WorkflowExecutable` or equivalent: runtime-owned runnable form with one compiled root activity.
+
+Architecture correction: current implementation slices temporarily modeled `WorkflowDefinitionState`
+as workflow-level activities plus connections and `WorkflowExecutable` as workflow-level executable
+nodes, edges, and start nodes. That shape is now classified as drift. It encodes a flowchart at the
+workflow boundary. The corrected contract follows elsa-core: the workflow owns one root activity, and
+that root may itself be a `Flowchart`, `Sequence`, `StateMachine`, primitive, or any other activity.
+Flowchart edges, sequence ordering, state transitions, and start-child choices are activity-owned
+composition state.
 
 ## Allowed Crossing Points
 
@@ -140,21 +148,29 @@ Pre-spec question: are activity-level I/O and workflow-level I/O the same domain
 
 The next spec should avoid assuming that shape similarity is semantic identity. If the shared model remains, the spec should explicitly say why it is stable across both scopes. If it splits, it should define the adapter/translation boundary.
 
-### `ActivityNode` design ownership vs executable graph
+### Root activity vs workflow-level graph
 
-`ActivityNode` now belongs to Workflows.Design because an authored workflow graph is a design-time tree. That is consistent with `WorkflowDefinitionState` as the authored document.
+`ActivityNode` belongs to Workflows.Design because it represents an authored activity. The previous
+workflow-level graph shape promoted activity nodes and connections to `WorkflowDefinitionState`
+members, which made the workflow itself act like a flowchart. That is not the intended model.
 
-The naming risk is that "workflow graph" may also be used for the execution seam or runnable artifact. If runtime uses Design-side `ActivityNode` directly, artifact-only runtime collapses.
+The naming risk remains, but the stronger rule is now: workflow definitions and workflow executables
+carry one root activity. Runtime must compile that root into a runtime-owned activity descriptor tree.
+If the root is a Flowchart activity, that activity owns its internal graph. If the root is Sequence,
+that activity owns its ordered children. If the root is a primitive, there is no child composition.
 
-Classification: naming and ownership risk.
+Classification: corrected architecture drift.
 
-Pre-spec question: distinguish at least these concepts before coding:
+The next spec must distinguish at least these concepts before coding:
 
-- Authored workflow node: Design-owned `ActivityNode` inside `WorkflowDefinitionState`.
-- Executable graph node: Runtime-owned representation inside `WorkflowExecutable` or equivalent.
+- Authored root activity: Design-owned `ActivityNode` referenced by `WorkflowDefinitionState.RootActivity`.
+- Authored child activity: Design-owned `ActivityNode` owned by a composite activity's authored composition state.
+- Executable root activity: Runtime-owned representation referenced by `WorkflowExecutable.RootActivity`.
+- Executable child activity: Runtime-owned representation owned by a compiled composite activity.
 - Runtime activity instance: live activity object and execution state for one running workflow execution.
 
-The next spec should decide whether a runtime node model is needed, and if so, name it so it cannot be confused with Design's `ActivityNode`.
+The next spec should decide the runtime activity representation and keep any runtime lookup table
+derived from the root activity, not a separate workflow-level graph.
 
 ### Execution context through DI scopes
 
@@ -196,9 +212,9 @@ Pre-spec question: once runtime execution ownership is clarified, should workflo
 | Risk | Classification | Impact | Pre-spec action |
 |---|---|---|---|
 | `Elsa.Workflows.Runtime.Core` is stub-like | Deferred implementation | Runtime cannot execute anything yet | Start with artifact and context decisions, not method patching |
-| `WorkflowExecutable` shape is unpinned | Architecture gap | Implementation may smuggle Design models into Runtime | Define minimal runnable artifact contract |
+| `WorkflowExecutable` shape is graph-shaped in current slices | Corrected architecture drift | Runtime treats every workflow as a flowchart | Replace with one compiled root activity |
 | Runtime loads Design data at execution time | Constitution violation | Breaks `§E2.2` and `§E2.6` | Keep Design reads in compile/publish bridge only |
-| `ActivityNode` name crosses authoring/execution meanings | Naming/ownership risk | Design model may become accidental runtime model | Separate authored node, executable node, and runtime instance terms |
+| Workflow-level `ActivityNode` graph crosses activity/workflow meanings | Naming/ownership risk | Design and Runtime models accidentally force flowchart semantics | Separate root activity, child activities, compiled activity, and runtime instance terms |
 | Shared activity/workflow I/O models may be accidental | Domain-model risk | Binding and validation semantics may diverge later | Decide shared concept vs adapter boundary |
 | Execution context via DI scopes is unspecified | Lifecycle risk | Context contamination or hidden concurrency bugs | Define scope model per workflow execution context |
 | Workflow-as-activity is construct-only | Deferred behavior | Catalog entries may look executable before they are | Specify pinning, nested execution, and cycle guards |
@@ -226,15 +242,17 @@ Update after execution-layer brainstorm: the recommended starting scope below is
 
 Recommended first architect-owned Speckit unit:
 
-`Runtime execution seam and runnable artifact contract`
+`Workflow root activity contract`
 
 Likely first-unit boundaries:
 
-- Define the minimal `WorkflowExecutable` or equivalent artifact contract.
+- Replace workflow-level design graph state with a single authored root activity.
+- Replace workflow-level executable graph state with a single compiled root activity.
+- Keep flowchart edges and start-child data inside Flowchart activity state.
 - Define compile/publish bridge inputs and outputs.
 - Define runtime dependency envelope.
 - Define execution context lifetime and DI scoping.
-- Decide whether the executable graph has a runtime-owned node model.
+- Decide what runtime-owned activity descriptor model backs the compiled root activity.
 - Decide whether shared activity/workflow I/O models stay shared.
 - Identify what runtime substrate can be ported from elsa-core after boundaries are pinned.
 
@@ -249,10 +267,9 @@ Likely out of first-unit scope unless the architect chooses otherwise:
 
 ## What This Report Deliberately Does Not Decide
 
-- The final concrete `WorkflowExecutable` entity or model shape.
-- Whether the runtime graph is object-based, descriptor-based, compiled, interpreted, or staged.
+- Full composite activity behavior beyond the corrected root-activity contract.
+- Whether every composite activity uses the same child-composition representation internally.
 - Whether activity and workflow I/O models remain shared.
-- Whether `ActivityNode` gets a runtime counterpart and what it is named.
 - Whether execution context is always DI-scoped, parameter-passed, or hybrid.
 - How workflow-as-activity pinning, cycles, and nested execution are implemented.
 - How much elsa-core runtime code should be ported.

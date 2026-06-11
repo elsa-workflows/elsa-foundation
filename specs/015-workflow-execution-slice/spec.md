@@ -1,5 +1,10 @@
 # Feature Specification: Workflow Execution Vertical Slice
 
+> Supersession note (2026-06-11): graph-shaped workflow executable requirements in this slice are
+> superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). A workflow
+> executable now carries one compiled root activity, not workflow-level start nodes and edges.
+
 **Feature Branch**: `015-workflow-execution-slice`
 
 **Created**: 2026-06-10

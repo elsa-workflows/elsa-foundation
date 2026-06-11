@@ -12,8 +12,9 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Workflow design | The authoring side of workflows: definitions, drafts, versions, design-time validation, design-time persistence, and read models. |
 | Workflow runtime | The execution side of workflows: executable artifacts, instances, runtime state, bookmarks, logs, and execution integrations. |
 | Activity catalog | The persisted source of truth for activities visible to design-time consumers. Picker visibility comes from catalog rows, not live scanning. |
-| Workflow executable | The runtime-owned artifact shape produced from design-time source and consumed by runtime execution. Its exact shape is still part of open architecture work. |
-| Workflow definition state | The authored workflow document stored with drafts and versions in the design domain. It owns authored content, not runtime state. |
+| Workflow root activity | The single activity a workflow definition/executable runs. It may be a primitive activity or a composite activity such as `Sequence`, `Flowchart`, or `StateMachine`; composition details belong to that activity. |
+| Workflow executable | The runtime-owned artifact produced from design-time source and consumed by runtime execution. It carries one compiled root activity plus runtime identity, source reference, resume targets, timestamps, and compatibility metadata. |
+| Workflow definition state | The authored workflow document stored with drafts and versions in the design domain. It owns authored content, including one root activity, not runtime state. |
 | Artifact-only runtime | The rule that runtime execution must be able to load and run from the published artifact without requiring design documents. |
 | Reconciliation | A process that updates persisted design/catalog state from authoritative sources such as CLR activities, JSON import, or workflow definitions. |
 | Activity construction | The runtime-side process that turns a descriptor type, descriptor payload, and argument bags into a live `IActivity`. |

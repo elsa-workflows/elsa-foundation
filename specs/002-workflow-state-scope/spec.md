@@ -1,5 +1,11 @@
 # Feature Specification: WorkflowDefinitionState Scope Policy
 
+> Supersession note (2026-06-11): workflow-level `Activities` + `ActivityConnections`
+> requirements in this spec are superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). The corrected
+> model is one `WorkflowDefinitionState.RootActivity`; Flowchart connections and similar composition
+> details belong to the owning activity.
+
 **Feature Branch**: `002-workflow-state-scope`
 **Created**: 2026-05-28
 **Status**: Draft

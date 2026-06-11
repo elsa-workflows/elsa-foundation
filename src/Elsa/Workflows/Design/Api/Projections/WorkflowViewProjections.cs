@@ -16,8 +16,7 @@ public static class WorkflowViewProjections
     public static WorkflowDefinitionStateView ToStateView(this WorkflowDefinitionState state) =>
         new(
             state.Variables,
-            state.ActivityConnections,
-            state.Activities,
+            state.RootActivity,
             state.Inputs,
             state.Outputs,
             state.WorkflowActivityOptions,
@@ -26,8 +25,7 @@ public static class WorkflowViewProjections
     public static WorkflowDefinitionState ToState(this WorkflowDefinitionStateView view) =>
         new(
             view.Variables ?? [],
-            view.ActivityConnections ?? [],
-            view.Activities ?? [],
+            view.RootActivity,
             view.Inputs ?? [],
             view.Outputs ?? [],
             view.WorkflowActivityOptions,

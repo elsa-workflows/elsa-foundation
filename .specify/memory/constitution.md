@@ -273,11 +273,11 @@ This section codifies the rule for the activity catalog. The same shape generali
 Members of State carry **authored content** — the structured representation of what the author drew, declared, and configured:
 
 - Variables (the workflow's variable declarations).
-- The activity graph: `Activities` (placed activity nodes) + `ActivityConnections` (edges).
+- The workflow root activity: one authored `RootActivity`. The root can be any activity kind, including a primitive activity, `Sequence`, `Flowchart`, `StateMachine`, or another composite activity. Child activities, flowchart edges, state transitions, start nodes, and similar composition details belong to the owning activity's authored state; they are not workflow-level members.
 - Workflow-level input/output declarations (`Inputs`, `Outputs`).
 - Workflow-level authored options (`WorkflowActivityOptions`, `StrategyOptions`).
 
-Today's State carries exactly these members. The 2026-05-28 audit (Unit C FR-005) confirms they are clean against the policy.
+This root-activity rule supersedes the earlier provisional `Activities` + `ActivityConnections` workflow-level graph shape. That earlier shape accidentally made every workflow definition a flowchart and is corrected by the Runtime Execution Seam root-activity work unit.
 
 #### §E2.9.2 Out of scope of `WorkflowDefinitionState`
 

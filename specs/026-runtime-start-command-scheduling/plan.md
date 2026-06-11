@@ -1,5 +1,9 @@
 # Implementation Plan: Runtime Start Command Scheduling
 
+> Supersession note (2026-06-11): start-node scheduling is superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Runtime
+> start scheduling now targets the executable root activity.
+
 **Branch**: `codex/runtime-start-command-scheduling` | **Date**: 2026-06-11 | **Spec**: [spec.md](./spec.md)
 
 ## Summary

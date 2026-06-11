@@ -58,10 +58,10 @@ public sealed class EventPublisherSmokeTests
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
 
         // ExecuteValidations runs the StartActivityValidator against an empty-State Draft and
-        // contributes a "no start activity" error. If the invoker can't find the handler, Errors
-        // is empty.
+        // contributes a "missing root activity" error. If the invoker can't find the handler,
+        // Errors is empty.
         Assert.NotEmpty(evt.Errors);
-        Assert.Contains(evt.Errors, e => e.Type == "Graph/StartActivity");
+        Assert.Contains(evt.Errors, e => e.Type == "RootActivity/Missing");
     }
 
     [Fact]
@@ -137,8 +137,7 @@ public sealed class EventPublisherSmokeTests
         public string WorkflowDefinitionId => "wf-smoke";
         public WorkflowDefinitionState State { get; } = new(
             Variables: [],
-            ActivityConnections: [],
-            Activities: [],
+            RootActivity: null,
             Inputs: [],
             Outputs: [],
             WorkflowActivityOptions: null,

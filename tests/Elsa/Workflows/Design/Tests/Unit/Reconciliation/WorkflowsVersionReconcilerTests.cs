@@ -129,7 +129,7 @@ public sealed class WorkflowsVersionReconcilerTests
         Version = version,
         DefinitionId = definitionId,
         DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = "Stub" },
-        State = new WorkflowDefinitionState([], [], [], [], [], null, null),
+        State = new WorkflowDefinitionState([], null, [], [], null, null),
     };
 
     private sealed class StubIncomingDefinition : IWorkflowDefinition

@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <remarks>
 /// Variable lookup is by <see cref="Elsa.Expressions.Core.Models.VariableDefinition.ReferenceKey"/>,
 /// not <see cref="Elsa.Expressions.Core.Models.VariableDefinition.Name"/> — the id is stable
-/// across renames; the name is mutable. Recurses <c>ChildActivities</c> via
+/// across renames; the name is mutable. Recurses through activity-owned composition via
 /// <see cref="ActivityTreeWalker"/> up to
 /// <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
 /// </remarks>
@@ -36,7 +36,7 @@ public sealed class VariableExpressionResolverValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
-        foreach (var node in ActivityTreeWalker.Walk(state.Activities, maxDepth))
+        foreach (var node in ActivityTreeWalker.Walk(state.RootActivity, maxDepth))
         {
             foreach (var argument in node.Inputs)
                 CheckArgument(errors, node.NodeId, "inputs", argument, knownReferenceKeys);

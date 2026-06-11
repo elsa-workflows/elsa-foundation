@@ -20,8 +20,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <para>
 /// <b>Match keys (FR-023, research R2).</b> Variables/Inputs/Outputs by <c>ReferenceKey</c>;
 /// activities by <c>NodeId</c>; per-activity I/O by (<c>NodeId</c>, <c>ReferenceKey</c>);
-/// connections by their endpoint tuple (value equality — no id, no update event, so a changed
-/// connection diffs as remove(old)+add(new), FR-013e); layout records by <c>NodeId</c>.
+/// activity-owned connections by their endpoint tuple (value equality — no id, no update event,
+/// so a changed connection diffs as remove(old)+add(new), FR-013e); layout records by
+/// <c>NodeId</c>.
 /// </para>
 /// <para>
 /// <b>Identity vs payload (FR-013d).</b> Same key + changed payload → a single UPDATE event;
@@ -119,23 +120,25 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
 
     private static void DiffActivities(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
     {
-        var storedByNode = ByKey(stored.Activities, a => a.NodeId);
-        var desiredByNode = ByKey(desired.Activities, a => a.NodeId);
+        var storedActivities = FlattenActivities(stored.RootActivity).ToArray();
+        var desiredActivities = FlattenActivities(desired.RootActivity).ToArray();
+        var storedByNode = ByKey(storedActivities, a => a.NodeId);
+        var desiredByNode = ByKey(desiredActivities, a => a.NodeId);
 
         // Added (new NodeId) — the OnActivityAddedToDraft payload carries the whole node
         // (including its I/O), so no per-I/O events are derived for a brand-new activity.
-        foreach (var activity in desired.Activities)
+        foreach (var activity in desiredActivities)
             if (!storedByNode.ContainsKey(activity.NodeId))
                 events.Add(new OnActivityAddedToDraft(draftId, activity));
 
         // Removed (NodeId absent from desired) — its I/O and (separately) its connections leave
         // with it; only OnActivityRemovedFromDraft is emitted for the node itself.
-        foreach (var activity in stored.Activities)
+        foreach (var activity in storedActivities)
             if (!desiredByNode.ContainsKey(activity.NodeId))
                 events.Add(new OnActivityRemovedFromDraft(draftId, activity.NodeId));
 
         // Matched (same NodeId) — diff per-activity I/O.
-        foreach (var desiredActivity in desired.Activities)
+        foreach (var desiredActivity in desiredActivities)
         {
             if (!storedByNode.TryGetValue(desiredActivity.NodeId, out var storedActivity))
                 continue;
@@ -183,8 +186,8 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
 
     private static void DiffConnections(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
     {
-        var storedSet = stored.ActivityConnections.ToList();
-        var desiredSet = desired.ActivityConnections.ToList();
+        var storedSet = FlattenConnections(stored.RootActivity).ToList();
+        var desiredSet = FlattenConnections(desired.RootActivity).ToList();
 
         // Removed first, then added — a changed connection (different endpoint tuple) surfaces
         // as remove(old)+add(new) since connections carry no id and no update event (FR-013e).
@@ -219,5 +222,30 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
         foreach (var item in items)
             map[keySelector(item)] = item; // last-wins; domain guarantees unique keys
         return map;
+    }
+
+    private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode? root)
+    {
+        if (root is null)
+            yield break;
+
+        var stack = new Stack<ActivityNode>();
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+
+            foreach (var child in node.Composition?.Activities ?? [])
+                stack.Push(child);
+        }
+    }
+
+    private static IEnumerable<ActivityConnection> FlattenConnections(ActivityNode? root)
+    {
+        foreach (var node in FlattenActivities(root))
+            foreach (var connection in node.Composition?.Connections ?? [])
+                yield return connection;
     }
 }

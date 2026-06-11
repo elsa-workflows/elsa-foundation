@@ -1,5 +1,8 @@
 # Implementation Plan: Runtime Downstream Scheduling
 
+> Supersession note (2026-06-11): workflow-level executable edge traversal is superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md).
+
 **Branch**: `codex/runtime-downstream-scheduling` | **Date**: 2026-06-11 | **Spec**: [spec.md](./spec.md)
 
 ## Summary

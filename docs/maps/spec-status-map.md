@@ -10,7 +10,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 |---|---|---|---|---:|---:|---|
 | [001-activity-identity-catalog](../../specs/001-activity-identity-catalog/spec.md) | Activity Identity & Catalog as Source-of-Truth | Draft | - | 147 | 5 | deferred, out of scope |
 | [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | deferred |
-| [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | retained, out of scope |
+| [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 37 | 18 | retained, deferred, out of scope, construct-only |
@@ -27,7 +27,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [014-runtime-elsa3-migration-boundary](../../specs/014-runtime-elsa3-migration-boundary/spec.md) | Runtime Elsa 3 Migration Boundary | unknown | - | 8 | 0 | out of scope |
 | [015-groundwork-elsa-bridge](../../specs/015-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Draft | - | 18 | 0 | out of scope |
 | [015-runtime-volatile-wait-contract](../../specs/015-runtime-volatile-wait-contract/spec.md) | Runtime Volatile Wait Contract | Draft | - | 7 | 1 | - |
-| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Draft | - | 40 | 0 | out of scope |
+| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Draft | - | 40 | 0 | superseded, out of scope |
 | [016-groundwork-relational-providers](../../specs/016-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Draft | - | 21 | 0 | - |
 | [016-runtime-completion-propagation-contract](../../specs/016-runtime-completion-propagation-contract/spec.md) | Runtime Completion Propagation Contract | Draft | - | 6 | 1 | - |
 | [017-groundwork-mongodb-provider](../../specs/017-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Draft | - | 15 | 0 | - |
@@ -43,7 +43,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [023-runtime-scheduler-drain-contract](../../specs/023-runtime-scheduler-drain-contract/spec.md) | Runtime Scheduler Drain Contract | Draft | - | 0 | 0 | - |
 | [024-runtime-scheduler-command-drain-dispatch](../../specs/024-runtime-scheduler-command-drain-dispatch/spec.md) | 024-runtime-scheduler-command-drain-dispatch | unknown | - | 0 | 0 | - |
 | [025-runtime-api-agent-dispatch](../../specs/025-runtime-api-agent-dispatch/spec.md) | 025-runtime-api-agent-dispatch | unknown | - | 0 | 0 | - |
-| [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | - |
+| [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | superseded |
 | [027-runtime-schedule-activity-state](../../specs/027-runtime-schedule-activity-state/spec.md) | 027-runtime-schedule-activity-state | unknown | - | 0 | 0 | - |
 | [028-runtime-activity-start-state](../../specs/028-runtime-activity-start-state/spec.md) | 028-runtime-activity-start-state | unknown | - | 0 | 0 | - |
 | [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | 029-runtime-activity-invocation-boundary | unknown | - | 0 | 0 | - |
@@ -52,10 +52,10 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [032-runtime-continuation-scheduling-enqueue](../../specs/032-runtime-continuation-scheduling-enqueue/spec.md) | Runtime Continuation Scheduling Enqueue | Draft | - | 6 | 1 | - |
 | [033-runtime-completion-checkpoint-enqueue](../../specs/033-runtime-completion-checkpoint-enqueue/spec.md) | Runtime Completion Checkpoint Enqueue | Draft | - | 7 | 1 | - |
 | [034-runtime-checkpoint-commit-dispatch](../../specs/034-runtime-checkpoint-commit-dispatch/spec.md) | Runtime Checkpoint Commit Dispatch | Draft | - | 8 | 0 | - |
-| [035-runtime-downstream-scheduling](../../specs/035-runtime-downstream-scheduling/spec.md) | Runtime Downstream Scheduling | Draft | - | 9 | 0 | - |
+| [035-runtime-downstream-scheduling](../../specs/035-runtime-downstream-scheduling/spec.md) | Runtime Downstream Scheduling | Draft | - | 9 | 0 | superseded |
 | [036-runtime-root-continuation-scheduling](../../specs/036-runtime-root-continuation-scheduling/spec.md) | Runtime Root Continuation Scheduling | Draft | - | 7 | 0 | - |
 | [037-runtime-terminal-workflow-completion](../../specs/037-runtime-terminal-workflow-completion/spec.md) | Runtime Terminal Workflow Completion | Draft | - | 8 | 0 | - |
-| [038-runtime-workflow-start-checkpoint](../../specs/038-runtime-workflow-start-checkpoint/spec.md) | Runtime Workflow Start Checkpoint | Draft | - | 9 | 0 | - |
+| [038-runtime-workflow-start-checkpoint](../../specs/038-runtime-workflow-start-checkpoint/spec.md) | Runtime Workflow Start Checkpoint | Draft | - | 9 | 0 | superseded |
 | [039-runtime-workflow-state-store](../../specs/039-runtime-workflow-state-store/spec.md) | Runtime Workflow Execution State Store | Draft | - | 9 | 0 | - |
 | [040-runtime-activity-state-projection](../../specs/040-runtime-activity-state-projection/spec.md) | Runtime Activity Execution State Projection | Draft | - | 8 | 0 | - |
 | [041-runtime-bookmark-state-projection](../../specs/041-runtime-bookmark-state-projection/spec.md) | Runtime Bookmark State Projection | Draft | - | 10 | 0 | - |
@@ -86,4 +86,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 9 | 0 | - |
 | [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 9 | 0 | - |
 | [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Draft | - | 7 | 0 | - |
-| [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 8 | 2 | - |
+| [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 9 | 1 | - |
+| [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 11 | 2 | superseded |

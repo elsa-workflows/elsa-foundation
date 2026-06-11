@@ -1,5 +1,9 @@
 # Phase 1 Data Model — Unit C
 
+> Supersession note (2026-06-11): workflow-level `Activities` + `ActivityConnections`
+> data-model entries are superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md).
+
 Entity inventory + relationships + lifecycle for the Workflow Design substrate landed by Unit C. Cross-references spec.md FRs at the entity level; the spec is the authoritative source for behavioural detail.
 
 ---

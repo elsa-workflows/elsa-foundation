@@ -40,14 +40,14 @@ public sealed class ValidationLifecycleTests
 
         var draftId = await SeedEmptyDraft(host);
 
-        // 1. Desired state holds a single orphan activity (no connections, not IsStart) → the
-        // validator emits an error.
-        await Update(host, draftId, State(activities: [Node("orphan")]));
+        // 1. Desired state holds a single orphan child activity (no connections, no composition
+        // start) → the validator emits an error.
+        await Update(host, draftId, State(activities: [Node("orphan"), Node("start", isStart: true)]));
 
         await AssertSiblingErrors(host, draftId, expectedTypes: ["Graph/OrphanActivity"]);
 
-        // 2. Add a start activity AND wire the orphan to it → orphan condition is gone. The next
-        // validation pass rewrites the sibling wholesale.
+        // 2. Add a composition start activity AND wire the orphan to it → orphan condition is gone.
+        // The next validation pass rewrites the sibling wholesale.
         await Update(host, draftId, State(
             activities: [Node("orphan"), Node("start", isStart: true)],
             connections: [Connection("start", "orphan")]));

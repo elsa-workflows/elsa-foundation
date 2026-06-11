@@ -138,9 +138,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
 
         return new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
-            nodes: [node],
-            edges: [],
-            startNodeIds: ["node-start"],
+            rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
             publishedAt: now,

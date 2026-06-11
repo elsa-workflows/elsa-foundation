@@ -62,20 +62,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
-        if (executable.StartNodeIds.Count == 0)
-            throw new InvalidOperationException($"Workflow executable artifact '{executable.Identity.ArtifactId}' does not declare any start nodes.");
-
         var now = _timeProvider.GetUtcNow();
-        var startNodeIds = executable.StartNodeIds.ToArray();
+        var rootActivityId = executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
-        var postCommitIntents = new List<RuntimePostCommitIntent>(startNodeIds.Length);
-        for (var startNodeIndex = 0; startNodeIndex < startNodeIds.Length; startNodeIndex++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var startNodeId = startNodeIds[startNodeIndex];
-            var startNodeWorkItem = NewStartNodeWorkItem(workItem, startPayload.PinnedExecutable, startNodeId, startNodeIndex, now, commandMetadata);
-            postCommitIntents.Add(NewStartNodePostCommitIntent(workItem, startNodeWorkItem, startNodeId, startNodeIndex, now));
-        }
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, now, commandMetadata);
+        var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload.PinnedExecutable, postCommitIntents, now, commandMetadata);
         await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
@@ -110,55 +101,53 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
-    private RuntimeSchedulerWorkItem NewStartNodeWorkItem(
+    private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
         WorkflowExecutableIdentity pinnedExecutable,
-        string startNodeId,
-        int startNodeIndex,
+        string rootActivityId,
         DateTimeOffset now,
         IReadOnlyDictionary<string, string> commandMetadata)
     {
         var payload = new RuntimeScheduleActivityCommandPayload(
             pinnedExecutable,
-            startNodeId,
+            rootActivityId,
             _idGenerator.NewActivityExecutionId(),
             RuntimeScheduleActivityCommandPayload.WorkflowStartReason);
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: $"{startWorkItem.WorkItemId}:schedule:{startNodeId}",
+            workItemId: $"{startWorkItem.WorkItemId}:schedule:{rootActivityId}",
             workflowExecutionId: startWorkItem.WorkflowExecutionId,
-            commandId: $"{startWorkItem.CommandId}:schedule:{startNodeId}",
+            commandId: $"{startWorkItem.CommandId}:schedule:{rootActivityId}",
             commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
             envelopeId: startWorkItem.EnvelopeId,
-            idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{startNodeId}",
+            idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{rootActivityId}",
             enqueuedAt: now,
             recordedAt: now,
-            sequence: startWorkItem.Sequence is { } sequence ? sequence + startNodeIndex + 2 : null,
+            sequence: startWorkItem.Sequence is { } sequence ? sequence + 2 : null,
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: commandMetadata,
             envelopeMetadata: startWorkItem.EnvelopeMetadata);
     }
 
-    private RuntimePostCommitIntent NewStartNodePostCommitIntent(
+    private RuntimePostCommitIntent NewRootActivityPostCommitIntent(
         RuntimeSchedulerWorkItem startWorkItem,
-        RuntimeSchedulerWorkItem startNodeWorkItem,
-        string startNodeId,
-        int startNodeIndex,
+        RuntimeSchedulerWorkItem rootActivityWorkItem,
+        string rootActivityId,
         DateTimeOffset now)
     {
         return new RuntimePostCommitIntent(
-            intentId: $"{startWorkItem.WorkItemId}:postcommit:schedule:{startNodeIndex + 1}:{startNodeId}",
+            intentId: $"{startWorkItem.WorkItemId}:postcommit:schedule:root:{rootActivityId}",
             workflowExecutionId: startWorkItem.WorkflowExecutionId,
             kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
             recordedAt: now,
             activityExecutionId: null,
-            idempotencyKey: startNodeWorkItem.IdempotencyKey,
-            payload: JsonSerializer.SerializeToElement(startNodeWorkItem),
+            idempotencyKey: rootActivityWorkItem.IdempotencyKey,
+            payload: JsonSerializer.SerializeToElement(rootActivityWorkItem),
             metadata: new Dictionary<string, string>
             {
                 ["runtime.sourceSchedulerWorkItemId"] = startWorkItem.WorkItemId,
-                ["runtime.schedulerWorkItemId"] = startNodeWorkItem.WorkItemId,
-                ["runtime.startExecutableNodeId"] = startNodeId
+                ["runtime.schedulerWorkItemId"] = rootActivityWorkItem.WorkItemId,
+                ["runtime.rootExecutableNodeId"] = rootActivityId
             });
     }
 

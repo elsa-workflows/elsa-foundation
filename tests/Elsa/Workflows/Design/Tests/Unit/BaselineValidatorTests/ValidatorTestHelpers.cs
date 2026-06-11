@@ -21,8 +21,7 @@ internal static class ValidatorTestHelpers
         IEnumerable<OutputDefinition>? outputs = null
     ) => new(
         Variables: variables ?? [],
-        ActivityConnections: connections ?? [],
-        Activities: activities ?? [],
+        RootActivity: RootActivity(activities, connections),
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
         WorkflowActivityOptions: null,
@@ -50,10 +49,9 @@ internal static class ValidatorTestHelpers
         ActivityVersionId: activityVersionId,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        IsContainer: childActivities is not null,
-        IsStart: isStart,
-        IsTerminal: false,
-        ChildActivities: childActivities ?? []
+        Composition: childActivities is null
+            ? null
+            : new ActivityComposition(childActivities, [], childActivities.FirstOrDefault()?.NodeId)
     );
 
     public static ActivityConnection Edge(string sourceNodeId, string targetNodeId) =>
@@ -72,6 +70,21 @@ internal static class ValidatorTestHelpers
 
     public static ArgumentState LiteralInput(string referenceKey, string? literalValue) =>
         new(referenceKey, new ArgumentValue(literalValue, "Literal"), null, null, null, null);
+
+    private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities, IEnumerable<ActivityConnection>? connections)
+    {
+        var activitySnapshot = (activities ?? []).ToArray();
+        if (activitySnapshot.Length == 0)
+            return null;
+
+        var startActivityNodeId = activitySnapshot.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId;
+        return new ActivityNode(
+            NodeId: "$root",
+            ActivityVersionId: "$workflow-root",
+            Inputs: [],
+            Outputs: [],
+            Composition: new ActivityComposition(activitySnapshot, connections ?? [], startActivityNodeId));
+    }
 
     private sealed class StubDraft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft
     {

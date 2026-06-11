@@ -1,5 +1,9 @@
 # Implementation Plan: Runtime Workflow Start Checkpoint
 
+> Supersession note (2026-06-11): executable start-node scheduling in this plan is superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Start
+> checkpoint dispatch now targets the executable root activity.
+
 **Branch**: `codex/runtime-workflow-start-checkpoint` | **Date**: 2026-06-11 | **Spec**: [spec.md](./spec.md)
 
 ## Summary

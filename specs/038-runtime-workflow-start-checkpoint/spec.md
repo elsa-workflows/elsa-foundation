@@ -1,5 +1,9 @@
 # Feature Specification: Runtime Workflow Start Checkpoint
 
+> Supersession note (2026-06-11): start-node checkpoint intent requirements are superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). The
+> workflow-start checkpoint may dispatch root-activity scheduling intents only.
+
 **Feature Branch**: `codex/runtime-workflow-start-checkpoint`
 **Created**: 2026-06-11
 **Status**: Draft
