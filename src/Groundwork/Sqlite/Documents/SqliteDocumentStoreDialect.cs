@@ -13,4 +13,8 @@ internal sealed class SqliteDocumentStoreDialect : RelationalDocumentStoreDialec
     public override bool IsUniqueIndexException(DbException exception) =>
         exception is SqliteException { SqliteErrorCode: 19 } sqliteException &&
         sqliteException.Message.Contains("UNIQUE constraint failed:", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsWriteDependencyException(DbException exception) =>
+        exception is SqliteException { SqliteErrorCode: 19 } sqliteException &&
+        sqliteException.Message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
 }

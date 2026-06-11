@@ -116,6 +116,32 @@ public sealed class MongoDbDocumentStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ConcurrentUnguardedSavesForSameIdReturnStructuredResults()
+    {
+        await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());
+        var id = NewId();
+        var saves = Enumerable
+            .Range(0, 8)
+            .Select(index => harness.Store.SaveAsync(new SaveDocumentRequest(
+                "configurationDocument",
+                id,
+                "1.0.0",
+                $$"""{"key":"{{NewValue($"same-id-{index}")}}","category":"system"}""")));
+
+        var results = await Task.WhenAll(saves);
+        var expectedStatuses = new HashSet<DocumentStoreWriteStatus>
+        {
+            DocumentStoreWriteStatus.Saved,
+            DocumentStoreWriteStatus.ConcurrencyConflict
+        };
+
+        Assert.All(results, result => Assert.Contains(
+            result.Status,
+            expectedStatuses));
+        Assert.NotNull(await harness.Store.LoadAsync("configurationDocument", id));
+    }
+
+    [Fact]
     public async Task LoadedContentJsonRemainsStandardJsonForLargeNumbers()
     {
         await using var harness = await MongoDbDocumentStoreHarness.Create(container.GetConnectionString());

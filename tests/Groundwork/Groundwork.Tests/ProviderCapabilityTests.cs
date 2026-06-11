@@ -74,6 +74,17 @@ public sealed class ProviderCapabilityTests
     }
 
     [Fact]
+    public void MissingSchemaHistorySupportEmitsSingleDiagnosticWhenRequiredExplicitly()
+    {
+        var capabilities = SampleManifests.PortableCapabilities() with { SupportsSchemaHistory = false };
+
+        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+
+        Assert.False(result.IsCompatible);
+        Assert.Equal(1, result.Errors.Count(diagnostic => diagnostic.Code == "GW-CAP-001"));
+    }
+
+    [Fact]
     public void UnknownManifestRequiredCapabilityBlocksCompatibility()
     {
         var manifest = SampleManifests.MetadataManifest() with

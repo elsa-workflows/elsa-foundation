@@ -32,4 +32,7 @@ internal sealed class SqlServerDocumentStoreDialect : RelationalDocumentStoreDia
 
     public override bool IsUniqueIndexException(DbException exception) =>
         exception is SqlException { Number: 2627 or 2601 };
+
+    public override bool IsWriteDependencyException(DbException exception) =>
+        exception is SqlException { Number: 547 };
 }

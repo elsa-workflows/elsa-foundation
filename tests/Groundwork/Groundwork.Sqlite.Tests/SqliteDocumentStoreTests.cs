@@ -127,6 +127,42 @@ public sealed class SqliteDocumentStoreTests
     }
 
     [Fact]
+    public async Task MissingRowDuringUnguardedDeleteReturnsNotFound()
+    {
+        await using var harness = await SqliteDocumentStoreHarness.Create();
+        var store = new RelationalDocumentStore(harness.Connection, SqliteTestManifests.MetadataManifest(), new MissingDeleteDialect());
+
+        await harness.Store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            "doc-1",
+            "1.0.0",
+            """{"key":"alpha","category":"system"}"""));
+
+        var result = await store.DeleteAsync(new DeleteDocumentRequest("configurationDocument", "doc-1"));
+
+        Assert.Equal(DocumentStoreWriteStatus.NotFound, result.Status);
+        Assert.NotNull(await harness.Store.LoadAsync("configurationDocument", "doc-1"));
+        Assert.Single(await harness.Store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", "alpha")));
+    }
+
+    [Fact]
+    public async Task DependencyFailureDuringIndexRefreshReturnsNotFoundAndRollsBack()
+    {
+        await using var harness = await SqliteDocumentStoreHarness.Create();
+        var store = new RelationalDocumentStore(harness.Connection, SqliteTestManifests.MetadataManifest(), new DependencyFailureDialect());
+
+        var result = await store.SaveAsync(new SaveDocumentRequest(
+            "configurationDocument",
+            "doc-1",
+            "1.0.0",
+            """{"key":"alpha","category":"system"}"""));
+
+        Assert.Equal(DocumentStoreWriteStatus.NotFound, result.Status);
+        Assert.Null(await harness.Store.LoadAsync("configurationDocument", "doc-1"));
+        Assert.Empty(await harness.Store.QueryAsync(new DocumentStoreQuery("configurationDocument", "by-key", "alpha")));
+    }
+
+    [Fact]
     public async Task StaleExpectedVersionDoesNotUpdateDocumentOrIndexes()
     {
         await using var harness = await SqliteDocumentStoreHarness.Create();
@@ -224,5 +260,20 @@ public sealed class SqliteDocumentStoreTests
                 updated_utc = {{Parameter("updatedUtc")}}
             WHERE document_kind = {{Parameter("kind")}} AND id = '__missing__';
             """;
+    }
+
+    private sealed class MissingDeleteDialect : RelationalDocumentStoreDialect
+    {
+        public override string DeleteDocumentSql => $$"""
+            DELETE FROM groundwork_documents
+            WHERE document_kind = {{Parameter("kind")}} AND id = '__missing__';
+            """;
+    }
+
+    private sealed class DependencyFailureDialect : RelationalDocumentStoreDialect
+    {
+        public override string InsertIndexSql => "SELECT missing_write_dependency;";
+
+        public override bool IsWriteDependencyException(System.Data.Common.DbException exception) => exception is SqliteException;
     }
 }

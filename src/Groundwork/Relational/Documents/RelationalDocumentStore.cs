@@ -43,9 +43,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         {
             var updated = await UpdateDocumentAsync(request, version, now, transaction, cancellationToken);
             if (!updated)
-                return request.ExpectedVersion is null
-                    ? DocumentStoreWriteResult.NotFound
-                    : DocumentStoreWriteResult.ConcurrencyConflict;
+                return WriteMissResult(request.ExpectedVersion);
         }
 
         try
@@ -57,6 +55,10 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         catch (DbException exception) when (dialect.IsUniqueIndexException(exception))
         {
             return DocumentStoreWriteResult.ConcurrencyConflict;
+        }
+        catch (DbException exception) when (dialect.IsWriteDependencyException(exception))
+        {
+            return WriteMissResult(request.ExpectedVersion);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -98,8 +100,8 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             AddParameter(command, "expectedVersion", request.ExpectedVersion.Value);
 
         var deletedRows = await command.ExecuteNonQueryAsync(cancellationToken);
-        if (deletedRows == 0 && request.ExpectedVersion is not null)
-            return DocumentStoreWriteResult.ConcurrencyConflict;
+        if (deletedRows == 0)
+            return WriteMissResult(request.ExpectedVersion);
 
         await DeleteIndexesAsync(request.DocumentKind, request.Id, transaction, cancellationToken);
         await DeletePhysicalizedAsync(unit, request.Id, transaction, cancellationToken);
@@ -341,6 +343,11 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
             reader.GetString(4),
             DateTimeOffset.Parse(reader.GetString(5)),
             DateTimeOffset.Parse(reader.GetString(6)));
+
+    private static DocumentStoreWriteResult WriteMissResult(long? expectedVersion) =>
+        expectedVersion is null
+            ? DocumentStoreWriteResult.NotFound
+            : DocumentStoreWriteResult.ConcurrencyConflict;
 
     private async Task EnsureOpenAsync(CancellationToken cancellationToken)
     {

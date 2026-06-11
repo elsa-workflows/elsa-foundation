@@ -39,6 +39,18 @@ public sealed class ManifestValidationTests
     }
 
     [Fact]
+    public void MissingTenancyPolicyFails()
+    {
+        var manifest = WithSingleUnit(unit => unit with { Tenancy = null! });
+
+        var result = _validator.Validate(manifest);
+
+        Assert.Contains(result.Errors, diagnostic =>
+            diagnostic.Code == "GW-UNIT-011" &&
+            diagnostic.Target == "manifest.storageUnits[0].tenancy");
+    }
+
+    [Fact]
     public void MissingSchemaVersionFails()
     {
         var result = _validator.Validate(SampleManifests.MetadataManifest() with { Version = new StorageManifestVersion("") });

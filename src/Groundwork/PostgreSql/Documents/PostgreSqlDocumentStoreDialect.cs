@@ -11,4 +11,7 @@ internal sealed class PostgreSqlDocumentStoreDialect : RelationalDocumentStoreDi
 
     public override bool IsUniqueIndexException(DbException exception) =>
         exception is PostgresException { SqlState: "23505" };
+
+    public override bool IsWriteDependencyException(DbException exception) =>
+        exception is PostgresException { SqlState: "23503" };
 }

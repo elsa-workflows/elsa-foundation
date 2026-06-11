@@ -70,6 +70,9 @@ public sealed class StorageManifestValidator
         if (unit.IdentityPolicy is null)
             diagnostics.Add(GroundworkDiagnostic.Error("GW-UNIT-007", "Storage unit identity policy is required.", $"{target}.identityPolicy"));
 
+        if (unit.Tenancy is null)
+            diagnostics.Add(GroundworkDiagnostic.Error("GW-UNIT-011", "Storage unit tenancy policy is required.", $"{target}.tenancy"));
+
         if (unit.Concurrency is null)
             diagnostics.Add(GroundworkDiagnostic.Error("GW-UNIT-008", "Storage unit concurrency policy is required.", $"{target}.concurrency"));
 

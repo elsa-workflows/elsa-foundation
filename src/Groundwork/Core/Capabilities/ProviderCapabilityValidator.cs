@@ -33,12 +33,6 @@ public sealed class ProviderCapabilityValidator
         {
             switch (requiredCapability)
             {
-                case "schema-history" when !capabilities.SupportsSchemaHistory:
-                    diagnostics.Add(GroundworkDiagnostic.Error(
-                        "GW-CAP-001",
-                        "Provider must support schema history for materializable plans.",
-                        "requiredCapabilities.schema-history"));
-                    break;
                 case "schema-history":
                     break;
                 case "optimistic-concurrency" when !capabilities.SupportedConcurrencyModes.Contains(ConcurrencyKind.Optimistic):
