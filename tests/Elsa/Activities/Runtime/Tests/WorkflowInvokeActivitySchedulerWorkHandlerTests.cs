@@ -102,6 +102,53 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_MaterializesInputFromActiveActivityOutputBinding()
+    {
+        _activityOutputRegister.Set(new ActiveActivityOutput(
+            key: new ActiveActivityOutputKey("wfexec-1", "actexec-fetch", "status"),
+            value: JsonSerializer.SerializeToElement("delivered"),
+            type: new RuntimeValueTypeDescriptor("primitive", "string", null),
+            recordedAt: _now));
+        var activity = new RecordingActivity();
+        await _executableStore.SaveAsync(NewExecutableWithInputBinding(ActivityOutputTextBinding("actexec-fetch", "status")));
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal("delivered", activity.ObservedText);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_MaterializesInputFromDurableValueBinding()
+    {
+        await _durableValueStateStore.SaveAsync(new DurableValueState(
+            durableValueId: "durable-status",
+            workflowExecutionId: "wfexec-1",
+            valueId: "status",
+            type: new RuntimeValueTypeDescriptor("primitive", "string", null),
+            lifecycle: DurableValueLifecycle.Instance,
+            storage: DurableValueStorage.Inline,
+            inlineValue: JsonSerializer.SerializeToElement("stored"),
+            externalReference: null,
+            sourceActivityExecutionId: "actexec-fetch",
+            capturedAt: _now,
+            metadata: new Dictionary<string, string>()));
+        var activity = new RecordingActivity();
+        await _executableStore.SaveAsync(NewExecutableWithInputBinding(DurableTextBinding("status")));
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal("stored", activity.ObservedText);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
     public async Task HandleAsync_PublishesActiveOutputsAndCapturesDeclaredDurableValuesWhenActivityCompletes()
     {
         var activity = new OutputProducingActivity("""{"id":"customer-1"}""");
@@ -273,7 +320,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("InputMaterializationFailed", state.SubStatus);
         Assert.Equal(_now, state.CompletedAt);
         Assert.Equal(1, state.FaultCount);
-        Assert.Contains("not a supported literal binding", state.Metadata["runtime.faultMessage"]);
+        Assert.Contains("not a supported materialized value binding", state.Metadata["runtime.faultMessage"]);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
@@ -590,6 +637,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             inputName: "Text",
             source: RuntimeInputBindingSource.Literal,
             literalValue: JsonSerializer.SerializeToElement("hello"),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+
+    private static RuntimeInputBinding ActivityOutputTextBinding(string producerActivityExecutionId, string outputName) =>
+        new(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.ActivityOutput,
+            activityOutput: new RuntimeActivityOutputReference(producerActivityExecutionId, "node-fetch", outputName),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+
+    private static RuntimeInputBinding DurableTextBinding(string valueId) =>
+        new(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.DurableValue,
+            durableValue: new RuntimeDurableValueReference(valueId),
             metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
 
     private static WorkflowExecutableIdentity NewIdentity() =>

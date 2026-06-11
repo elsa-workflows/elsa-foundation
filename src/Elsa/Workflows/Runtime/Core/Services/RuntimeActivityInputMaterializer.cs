@@ -4,23 +4,50 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMaterializer
 {
     public const string InputTypeMetadataKey = "typeName";
+    private readonly IRuntimeInputBindingResolver _inputBindingResolver;
 
-    public IReadOnlyList<RuntimeMaterializedActivityInput> MaterializeInputs(ExecutableNode node)
+    public RuntimeActivityInputMaterializer()
+        : this(new RuntimeInputBindingResolver())
+    {
+    }
+
+    public RuntimeActivityInputMaterializer(IRuntimeInputBindingResolver inputBindingResolver)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+
+        _inputBindingResolver = inputBindingResolver;
+    }
+
+    public IReadOnlyList<RuntimeMaterializedActivityInput> MaterializeInputs(ExecutableNode node) =>
+        MaterializeInputs(
+            node,
+            new RuntimeInputBindingResolutionContext(
+                workflowExecutionId: "literal-only",
+                activityExecutionId: "literal-only",
+                durableValuesByValueId: new Dictionary<string, DurableValueState>(),
+                activityOutputs: EmptyRuntimeActivityOutputReader.Instance));
+
+    public IReadOnlyList<RuntimeMaterializedActivityInput> MaterializeInputs(
+        ExecutableNode node,
+        RuntimeInputBindingResolutionContext resolutionContext)
     {
         ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(resolutionContext);
 
         var inputs = new List<RuntimeMaterializedActivityInput>();
 
         foreach (var (inputName, binding) in node.InputBindings)
         {
-            if (binding.Source != RuntimeInputBindingSource.Literal || !binding.LiteralValue.HasValue)
-                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported literal binding.");
+            var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
+            if (!resolved.Value.HasValue)
+                throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is not a supported materialized value binding.");
 
             if (!binding.Metadata.TryGetValue(InputTypeMetadataKey, out var typeName))
                 throw new InvalidOperationException($"Input '{inputName}' on executable node '{node.ExecutableNodeId}' is missing '{InputTypeMetadataKey}' metadata.");
@@ -29,7 +56,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             var memoryReference = new LiteralMemoryBlockReference($"{node.ExecutableNodeId}:{inputName}");
             var argumentType = typeof(InputArgument<>).MakeGenericType(type);
             var argument = (InputArgument)Activator.CreateInstance(argumentType, memoryReference)!;
-            var value = JsonSerializer.Deserialize(binding.LiteralValue.Value.GetRawText(), type);
+            var value = JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
             inputs.Add(new RuntimeMaterializedActivityInput(inputName, argument, value));
         }
 
@@ -89,5 +116,18 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     {
         public object? Value { get; set; }
         public object? Metadata { get; set; }
+    }
+
+    private sealed class EmptyRuntimeActivityOutputReader : IRuntimeActivityOutputReader
+    {
+        public static readonly EmptyRuntimeActivityOutputReader Instance = new();
+
+        public bool TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)
+        {
+            output = null!;
+            return false;
+        }
+
+        public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
     }
 }
