@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -145,7 +146,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     public async Task InProcessAgent_DrainsAcceptedCommandsThroughRuntimeComposition()
     {
         var services = new ServiceCollection();
-        new Workflows.Runtime.Api.WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
