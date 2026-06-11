@@ -35,6 +35,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy) &&
             descriptor.ImplementationType == typeof(ImmediateWorkflowSchedulerDrainPolicy));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
+            descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
             descriptor.ImplementationType == typeof(NoopWorkflowSchedulerDrainObserver));
         Assert.Contains(services, descriptor =>
@@ -46,6 +49,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(WorkflowStartActivitySchedulerWorkHandler));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            descriptor.ImplementationType == typeof(MissingActivityInvocationSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(NoopWorkflowSchedulerWorkHandler));
@@ -71,6 +77,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
+        Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
         Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
         Assert.IsType<WorkflowExecutionStartDispatcher>(provider.GetRequiredService<IWorkflowExecutionStartDispatcher>());
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
@@ -78,6 +85,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler);
+        Assert.Contains(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is IFallbackWorkflowSchedulerWorkHandler);
         Assert.True(
@@ -88,6 +96,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is WorkflowStartActivitySchedulerWorkHandler) <
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler));
+        Assert.True(
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler));
     }
 }

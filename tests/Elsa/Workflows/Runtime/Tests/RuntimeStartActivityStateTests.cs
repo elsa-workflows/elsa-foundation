@@ -10,6 +10,7 @@ public sealed class RuntimeStartActivityStateTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
 
     [Fact]
     public async Task HandleAsync_TransitionsScheduledActivityExecutionStateToRunning()
@@ -29,10 +30,38 @@ public sealed class RuntimeStartActivityStateTests
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
         Assert.Equal(RuntimeStartActivityCommandPayload.ScheduledActivityReason, state.Metadata["runtime.startReason"]);
         Assert.Equal("start-work", state.Metadata["runtime.startSchedulerWorkItemId"]);
+        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
+        var invokePayload = invokeWork.Payload!.Value.Deserialize<RuntimeInvokeActivityCommandPayload>()!;
+        Assert.Equal("actexec-1", invokePayload.ActivityExecutionId);
+        Assert.Equal("node-start", invokePayload.ExecutableNodeId);
+        Assert.Equal(RuntimeInvokeActivityCommandPayload.StartedActivityReason, invokePayload.Reason);
     }
 
     [Fact]
-    public async Task HandleAsync_DoesNotOverwriteExistingLaterLifecycleState()
+    public async Task HandleAsync_ReenqueuesInvokeActivityWorkForExistingRunningState()
+    {
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewScheduledState() with
+        {
+            Status = ActivityExecutionStatus.Running,
+            StartedAt = _now.AddMinutes(-1)
+        });
+        var handler = NewHandler();
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Equal(_now.AddMinutes(-1), state.StartedAt);
+        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DoesNotOverwriteOrEnqueueForExistingLaterLifecycleState()
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
@@ -51,6 +80,7 @@ public sealed class RuntimeStartActivityStateTests
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Equal(_now.AddMinutes(-1), state.StartedAt);
         Assert.Equal(_now, state.CompletedAt);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -157,7 +187,7 @@ public sealed class RuntimeStartActivityStateTests
     }
 
     private WorkflowStartActivitySchedulerWorkHandler NewHandler() =>
-        new(_executableStore, _activityStateStore, new FixedTimeProvider(_now));
+        new(_executableStore, _activityStateStore, _schedulerWorkQueue, new FixedTimeProvider(_now));
 
     private RuntimeSchedulerWorkItem NewStartWorkItem(
         WorkflowExecutableIdentity? pinnedExecutable = null,

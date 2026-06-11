@@ -330,5 +330,6 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Equal(10, (int)WorkflowExecutionCommandKind.CreateBookmark);
         Assert.Equal(11, (int)WorkflowExecutionCommandKind.Checkpoint);
         Assert.Equal(12, (int)WorkflowExecutionCommandKind.StartActivity);
+        Assert.Equal(13, (int)WorkflowExecutionCommandKind.InvokeActivity);
     }
 }

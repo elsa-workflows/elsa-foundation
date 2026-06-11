@@ -94,6 +94,21 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_DoesNotNoopInvokeActivityWorkWhenNoProviderMatches()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new WorkflowSchedulerDrainer(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.InvokeActivity));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
+        Assert.Equal("FaultingMissingSchedulerWorkHandler", item.HandlerName);
+        Assert.Contains("No workflow scheduler work handler accepted command kind 'InvokeActivity'", item.Error);
+    }
+
+    [Fact]
     public async Task DrainAsync_UsesMarkedFallbackAfterCustomHandlers()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -140,14 +155,17 @@ public sealed class RuntimeSchedulerDrainTests
             items: [CompletedResult("wfexec-2")]));
     }
 
-    private RuntimeSchedulerWorkItem NewWorkItem(int index, string workflowExecutionId = "wfexec-1")
+    private RuntimeSchedulerWorkItem NewWorkItem(
+        int index,
+        string workflowExecutionId = "wfexec-1",
+        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork)
     {
         using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
             workItemId: $"work-{index}",
             workflowExecutionId: workflowExecutionId,
             commandId: $"command-{index}",
-            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            commandKind: commandKind,
             envelopeId: $"envelope-{index}",
             idempotencyKey: $"{workflowExecutionId}:command-{index}",
             enqueuedAt: _now,

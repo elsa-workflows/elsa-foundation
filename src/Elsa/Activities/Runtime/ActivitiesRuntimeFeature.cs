@@ -6,7 +6,10 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Runtime;
 
@@ -30,6 +33,8 @@ public class ActivitiesRuntimeFeature : IShellFeature
 
         // Dispatch factory.
         services.AddScoped<IActivityFactory, ActivityFactory>();
+        services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInvokeActivitySchedulerWorkHandler>());
 
         // Registry + StartUp Task + Domain Event (framework §2.6.1): the startup task publishes the
         // initialization event; the single aggregating handler adds every registered constructor;

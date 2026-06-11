@@ -160,7 +160,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
-    public async Task InProcessAgent_StartCommandSchedulesStartNodeWorkThroughRuntimeComposition()
+    public async Task InProcessAgent_StartCommandFaultsAtInvokeActivityWhenNoActivityInvocationProviderIsComposed()
     {
         var observer = new RecordingSchedulerDrainObserver();
         var services = new ServiceCollection();
@@ -185,9 +185,14 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var state = Assert.Single(activityStates);
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.True(drainResult.StoppedOnFault);
         Assert.Equal(
-            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity },
+            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity, WorkflowExecutionCommandKind.InvokeActivity },
             drainResult.Items.Select(item => item.CommandKind).ToArray());
+        var invokeResult = drainResult.Items.Last();
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, invokeResult.Status);
+        Assert.Equal(MissingActivityInvocationSchedulerWorkHandler.HandlerName, invokeResult.HandlerName);
+        Assert.Contains("no activity invocation provider", invokeResult.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>

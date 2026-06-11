@@ -8,6 +8,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ## Implementable contributor interfaces
 
+### `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
+- **Kind:** Scheduler work contributor.
+- **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
+- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. It does not traverse executable edges, propagate completion, write checkpoints, or load Design-owned authored workflow models.
+
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
