@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Runtime.Core.Services;
+namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
 public sealed class RuntimePostCommitOutboxProcessingException : Exception
 {
