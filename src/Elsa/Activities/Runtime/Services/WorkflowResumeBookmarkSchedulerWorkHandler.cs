@@ -53,6 +53,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
         var workflowExecutableStore = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
         var activityExecutionStateStore = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        var bookmarkStateStore = scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>();
+        var bookmarkConsumptionCheckpointService = scope.ServiceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
         var activityFactory = scope.ServiceProvider.GetRequiredService<IActivityFactory>();
         var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
@@ -78,8 +80,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, resumePayload.ExecutableNodeId))
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', but activity execution '{resumePayload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
+        var bookmark = await bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken);
+
         if (state.Status == ActivityExecutionStatus.Completed)
         {
+            if (bookmark is not null)
+            {
+                ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
+                await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, state), cancellationToken);
+            }
+
             await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, resumePayload, state, cancellationToken);
             return;
         }
@@ -87,16 +97,23 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (state.Status is ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled)
             return;
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, workItem, resumePayload, executableNode, state, cancellationToken);
+        if (bookmark is null)
+            return;
+
+        ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
+
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, bookmarkConsumptionCheckpointService, schedulerWorkQueue, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
         IServiceProvider serviceProvider,
         IActivityFactory activityFactory,
         IActivityExecutionStateStore activityExecutionStateStore,
+        IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
+        BookmarkState bookmark,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         CancellationToken cancellationToken)
@@ -145,7 +162,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         var completedState = CompleteActivity(workItem, resumePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
-        await activityExecutionStateStore.SaveAsync(completedState, cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState), cancellationToken);
         await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, resumePayload, completedState, cancellationToken);
     }
 
@@ -223,6 +240,27 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         throw new InvalidOperationException(
             $"ResumeBookmark scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
             $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
+    }
+
+    private static void ValidateBookmarkMatchesPayload(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        BookmarkState bookmark)
+    {
+        if (!StringComparer.Ordinal.Equals(bookmark.ActivityExecutionId, resumePayload.ActivityExecutionId))
+            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references activity execution '{resumePayload.ActivityExecutionId}', but bookmark '{bookmark.BookmarkId}' belongs to activity execution '{bookmark.ActivityExecutionId}'.");
+
+        if (!StringComparer.Ordinal.Equals(bookmark.ExecutableNodeId, resumePayload.ExecutableNodeId))
+            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', but bookmark '{bookmark.BookmarkId}' belongs to executable node '{bookmark.ExecutableNodeId}'.");
+
+        if (!StringComparer.Ordinal.Equals(bookmark.ResumeTargetId, resumePayload.ResumeTargetId))
+            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references resume target '{resumePayload.ResumeTargetId}', but bookmark '{bookmark.BookmarkId}' points at resume target '{bookmark.ResumeTargetId}'.");
+
+        if (!StringComparer.Ordinal.Equals(bookmark.StimulusType, resumePayload.StimulusType))
+            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references stimulus type '{resumePayload.StimulusType}', but bookmark '{bookmark.BookmarkId}' expects stimulus type '{bookmark.StimulusType}'.");
+
+        if (!StringComparer.Ordinal.Equals(bookmark.StimulusHash, resumePayload.StimulusHash))
+            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references stimulus hash '{resumePayload.StimulusHash}', but bookmark '{bookmark.BookmarkId}' expects stimulus hash '{bookmark.StimulusHash}'.");
     }
 
     private static MethodInfo ResolveResumeMethod(Type activityType, string resumeTargetId)

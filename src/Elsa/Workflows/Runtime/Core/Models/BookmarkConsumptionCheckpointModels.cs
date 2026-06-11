@@ -1,0 +1,89 @@
+using Elsa.Workflows.Runtime.Core.Constants;
+
+namespace Elsa.Workflows.Runtime.Core.Models;
+
+public sealed class BookmarkConsumptionCheckpointRequest
+{
+    public BookmarkConsumptionCheckpointRequest(
+        RuntimeSchedulerWorkItem resumeWorkItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        BookmarkState bookmark,
+        ActivityExecutionState completedActivityExecutionState)
+    {
+        ArgumentNullException.ThrowIfNull(resumeWorkItem);
+        ArgumentNullException.ThrowIfNull(resumePayload);
+        ArgumentNullException.ThrowIfNull(bookmark);
+        ArgumentNullException.ThrowIfNull(completedActivityExecutionState);
+
+        if (resumeWorkItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark)
+            throw new ArgumentException("Bookmark consumption checkpoints require ResumeBookmark scheduler work.", nameof(resumeWorkItem));
+
+        if (completedActivityExecutionState.Status != ActivityExecutionStatus.Completed)
+            throw new ArgumentException("Bookmark consumption checkpoints require completed activity execution state.", nameof(completedActivityExecutionState));
+
+        ValidateBookmarkMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, bookmark, nameof(bookmark));
+        ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, completedActivityExecutionState, nameof(completedActivityExecutionState));
+
+        ResumeWorkItem = resumeWorkItem;
+        ResumePayload = resumePayload;
+        Bookmark = bookmark;
+        CompletedActivityExecutionState = completedActivityExecutionState;
+    }
+
+    public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
+    public RuntimeResumeBookmarkCommandPayload ResumePayload { get; }
+    public BookmarkState Bookmark { get; }
+    public ActivityExecutionState CompletedActivityExecutionState { get; }
+
+    private static void ValidateBookmarkMatchesResumePayload(
+        string workflowExecutionId,
+        RuntimeResumeBookmarkCommandPayload payload,
+        BookmarkState bookmark,
+        string parameterName)
+    {
+        if (!StringComparer.Ordinal.Equals(bookmark.WorkflowExecutionId, workflowExecutionId))
+            throw new ArgumentException("Bookmark workflow execution ID must match ResumeBookmark scheduler work.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.BookmarkId, payload.BookmarkId))
+            throw new ArgumentException("Bookmark ID must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.ActivityExecutionId, payload.ActivityExecutionId))
+            throw new ArgumentException("Bookmark activity execution ID must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.ExecutableNodeId, payload.ExecutableNodeId))
+            throw new ArgumentException("Bookmark executable node ID must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.ResumeTargetId, payload.ResumeTargetId))
+            throw new ArgumentException("Bookmark resume target ID must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.StimulusType, payload.StimulusType))
+            throw new ArgumentException("Bookmark stimulus type must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(bookmark.StimulusHash, payload.StimulusHash))
+            throw new ArgumentException("Bookmark stimulus hash must match ResumeBookmark payload.", parameterName);
+    }
+
+    private static void ValidateActivityStateMatchesResumePayload(
+        string workflowExecutionId,
+        RuntimeResumeBookmarkCommandPayload payload,
+        ActivityExecutionState state,
+        string parameterName)
+    {
+        if (!StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
+            throw new ArgumentException("Activity execution state workflow execution ID must match ResumeBookmark scheduler work.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, payload.ActivityExecutionId))
+            throw new ArgumentException("Activity execution state ID must match ResumeBookmark payload.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, payload.ExecutableNodeId))
+            throw new ArgumentException("Activity execution state executable node ID must match ResumeBookmark payload.", parameterName);
+    }
+}
+
+public sealed record BookmarkConsumptionCheckpointResult(
+    string CommitId,
+    string CheckpointId,
+    RuntimeCheckpointPersistenceDecision PersistenceDecision)
+{
+    public string CheckpointName => RuntimeCheckpointNames.BookmarkConsumed;
+}
