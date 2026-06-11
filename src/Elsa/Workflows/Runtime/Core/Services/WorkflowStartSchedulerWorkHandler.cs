@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -63,13 +65,20 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         if (executable.StartNodeIds.Count == 0)
             throw new InvalidOperationException($"Workflow executable artifact '{executable.Identity.ArtifactId}' does not declare any start nodes.");
 
-        var index = 0;
-        foreach (var startNodeId in executable.StartNodeIds)
+        var now = _timeProvider.GetUtcNow();
+        var startNodeIds = executable.StartNodeIds.ToArray();
+        var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
+        var postCommitIntents = new List<RuntimePostCommitIntent>(startNodeIds.Length);
+        for (var startNodeIndex = 0; startNodeIndex < startNodeIds.Length; startNodeIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            index++;
-            await EnqueueStartNodeAsync(workItem, startPayload.PinnedExecutable, startNodeId, index, cancellationToken);
+            var startNodeId = startNodeIds[startNodeIndex];
+            var startNodeWorkItem = NewStartNodeWorkItem(workItem, startPayload.PinnedExecutable, startNodeId, startNodeIndex, now, commandMetadata);
+            postCommitIntents.Add(NewStartNodePostCommitIntent(workItem, startNodeWorkItem, startNodeId, startNodeIndex, now));
         }
+
+        var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload.PinnedExecutable, postCommitIntents, now, commandMetadata);
+        await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
     }
 
     private static WorkflowExecutionStartCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem)
@@ -101,21 +110,21 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
-    private async ValueTask EnqueueStartNodeAsync(
+    private RuntimeSchedulerWorkItem NewStartNodeWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
         WorkflowExecutableIdentity pinnedExecutable,
         string startNodeId,
-        int index,
-        CancellationToken cancellationToken)
+        int startNodeIndex,
+        DateTimeOffset now,
+        IReadOnlyDictionary<string, string> commandMetadata)
     {
-        var now = _timeProvider.GetUtcNow();
         var payload = new RuntimeScheduleActivityCommandPayload(
             pinnedExecutable,
             startNodeId,
             _idGenerator.NewActivityExecutionId(),
             RuntimeScheduleActivityCommandPayload.WorkflowStartReason);
 
-        var workItem = new RuntimeSchedulerWorkItem(
+        return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:schedule:{startNodeId}",
             workflowExecutionId: startWorkItem.WorkflowExecutionId,
             commandId: $"{startWorkItem.CommandId}:schedule:{startNodeId}",
@@ -124,11 +133,70 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             idempotencyKey: $"{startWorkItem.IdempotencyKey}:schedule:{startNodeId}",
             enqueuedAt: now,
             recordedAt: now,
-            sequence: startWorkItem.Sequence is { } sequence ? sequence + index : null,
+            sequence: startWorkItem.Sequence is { } sequence ? sequence + startNodeIndex + 2 : null,
             payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: startWorkItem.CommandMetadata,
+            commandMetadata: commandMetadata,
             envelopeMetadata: startWorkItem.EnvelopeMetadata);
+    }
 
-        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    private RuntimePostCommitIntent NewStartNodePostCommitIntent(
+        RuntimeSchedulerWorkItem startWorkItem,
+        RuntimeSchedulerWorkItem startNodeWorkItem,
+        string startNodeId,
+        int startNodeIndex,
+        DateTimeOffset now)
+    {
+        return new RuntimePostCommitIntent(
+            intentId: $"{startWorkItem.WorkItemId}:postcommit:schedule:{startNodeIndex + 1}:{startNodeId}",
+            workflowExecutionId: startWorkItem.WorkflowExecutionId,
+            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            recordedAt: now,
+            activityExecutionId: null,
+            idempotencyKey: startNodeWorkItem.IdempotencyKey,
+            payload: JsonSerializer.SerializeToElement(startNodeWorkItem),
+            metadata: new Dictionary<string, string>
+            {
+                ["runtime.sourceSchedulerWorkItemId"] = startWorkItem.WorkItemId,
+                ["runtime.schedulerWorkItemId"] = startNodeWorkItem.WorkItemId,
+                ["runtime.startExecutableNodeId"] = startNodeId
+            });
+    }
+
+    private RuntimeSchedulerWorkItem NewWorkflowStartedCheckpointWorkItem(
+        RuntimeSchedulerWorkItem startWorkItem,
+        WorkflowExecutableIdentity pinnedExecutable,
+        IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents,
+        DateTimeOffset now,
+        IReadOnlyDictionary<string, string> commandMetadata)
+    {
+        var payload = new RuntimeCheckpointCommandPayload(
+            pinnedExecutable,
+            RuntimeCheckpointNames.WorkflowStarted,
+            activityExecutionIds: [],
+            RuntimeCheckpointCommandPayload.WorkflowStartReason,
+            postCommitIntents);
+
+        return new RuntimeSchedulerWorkItem(
+            workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            workflowExecutionId: startWorkItem.WorkflowExecutionId,
+            commandId: $"{startWorkItem.CommandId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            commandKind: WorkflowExecutionCommandKind.Checkpoint,
+            envelopeId: startWorkItem.EnvelopeId,
+            idempotencyKey: $"{startWorkItem.IdempotencyKey}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
+            payload: JsonSerializer.SerializeToElement(payload),
+            commandMetadata: commandMetadata,
+            envelopeMetadata: startWorkItem.EnvelopeMetadata);
+    }
+
+    private static IReadOnlyDictionary<string, string> CreateWorkflowStartCommandMetadata(
+        IReadOnlyDictionary<string, string> commandMetadata,
+        DateTimeOffset startedAt)
+    {
+        var metadata = commandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.WorkflowStartedAt] = startedAt.ToString("O", CultureInfo.InvariantCulture);
+        return RuntimeModelMetadata.Snapshot(metadata);
     }
 }
