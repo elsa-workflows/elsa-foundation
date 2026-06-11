@@ -8,9 +8,10 @@ Fields:
 
 - `Capabilities`
 - Active agent registry keyed by `WorkflowExecutionId`
-- Lifecycle gate that serializes activation and passivation
+- Per-workflow lifecycle gates that serialize activation and passivation for each `WorkflowExecutionId`
 - Activation counter for inspectable agent IDs
 - Command processor
+- Maximum processed idempotency-key count per agent
 
 ## InProcessWorkflowExecutionAgent
 
@@ -22,14 +23,17 @@ Fields:
 - `AgentId`
 - `ActivatedAt`
 - `Status`
-- Processed idempotency keys
+- Bounded processed idempotency keys
+- Processed idempotency-key insertion order
 - Mailbox semaphore
 
 Rules:
 
 - One agent serializes command processing with a single mailbox semaphore.
 - Replacement activation waits until passivation has marked the old mailbox unavailable.
+- Passivating one workflow execution does not block activation or passivation for unrelated workflow execution IDs.
 - A duplicate idempotency key returns `Duplicate` and does not invoke the processor.
+- Processed idempotency keys are retained up to the provider-configured per-agent limit.
 - A passivated agent returns `Deferred` for later enqueue attempts.
 - A workflow ID mismatch returns `Rejected`.
 

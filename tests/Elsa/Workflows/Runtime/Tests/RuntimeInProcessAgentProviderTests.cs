@@ -71,6 +71,22 @@ public sealed class RuntimeInProcessAgentProviderTests
     }
 
     [Fact]
+    public async Task EnqueueAsync_EvictsOldProcessedIdempotencyKeysAfterConfiguredLimit()
+    {
+        var processor = new RecordingCommandProcessor();
+        var provider = new InProcessWorkflowExecutionAgentProvider(processor, maxProcessedIdempotencyKeysPerAgent: 2);
+        var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        await agent.EnqueueAsync(NewEnvelope(1, idempotencyKey: "key-1"));
+        await agent.EnqueueAsync(NewEnvelope(2, idempotencyKey: "key-2"));
+        await agent.EnqueueAsync(NewEnvelope(3, idempotencyKey: "key-3"));
+        var result = await agent.EnqueueAsync(NewEnvelope(4, idempotencyKey: "key-1"));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        Assert.Equal(4, processor.EnvelopeIds.Count);
+    }
+
+    [Fact]
     public async Task PassivateAsync_RemovesActiveAgentAndDefersOldAgentWork()
     {
         var provider = new InProcessWorkflowExecutionAgentProvider();
@@ -107,15 +123,17 @@ public sealed class RuntimeInProcessAgentProviderTests
             reason: "Host drain")).AsTask();
         await WaitUntilStatusAsync(oldAgent, WorkflowExecutionAgentStatus.Passivating);
 
+        var unrelatedAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-2", WorkflowExecutionAgentActivationReason.Recovery));
         var activationTask = provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionAgentActivationReason.Recovery)).AsTask();
-        var completedBeforeOldMailboxReleased = await Task.WhenAny(activationTask, Task.Delay(25)) == activationTask;
+
+        Assert.Equal("wfexec-2", unrelatedAgent.Descriptor.WorkflowExecutionId);
+        Assert.False(activationTask.IsCompleted);
 
         processor.Release();
         var enqueueResult = await enqueueTask;
         await passivationTask;
         var newAgent = await activationTask;
 
-        Assert.False(completedBeforeOldMailboxReleased);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, enqueueResult.Status);
         Assert.Equal(WorkflowExecutionAgentStatus.Passivated, oldAgent.Descriptor.Status);
         Assert.NotSame(oldAgent, newAgent);

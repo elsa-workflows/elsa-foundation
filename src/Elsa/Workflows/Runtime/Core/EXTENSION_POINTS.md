@@ -91,7 +91,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Default implementation:** `InProcessWorkflowExecutionAgentProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*.
 
 ### `IWorkflowExecutionCommandProcessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Contribution (processors decide what an accepted workflow-execution command does inside the active agent mailbox).
+- **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
 - **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
 - **Default implementation:** `NoopWorkflowExecutionCommandProcessor` *(placeholder until scheduler command behavior is implemented)*.
