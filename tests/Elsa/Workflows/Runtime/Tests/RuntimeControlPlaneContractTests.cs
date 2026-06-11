@@ -100,6 +100,23 @@ public sealed class RuntimeControlPlaneContractTests
     }
 
     [Fact]
+    public void ControlPlaneHold_RejectsNotPausedContinuationPolicy()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneHold(
+            holdId: "pause-1",
+            scope: ControlPlaneHoldScope.WorkflowExecution,
+            status: ControlPlaneHoldStatus.Requested,
+            requestedAt: _now,
+            requestedBy: "operator",
+            reason: "maintenance",
+            workflowExecutionId: "wfexec-1",
+            continuationPolicy: RuntimePauseContinuationPolicy.NotPaused));
+
+        Assert.Contains("pause continuation policy", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("continuationPolicy", exception.ParamName);
+    }
+
+    [Fact]
     public void ControlPlaneState_RejectsDuplicateHoldIds()
     {
         var hold1 = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
@@ -251,9 +268,27 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
             canAdvance: true,
             boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
-            continuationPolicy: RuntimePauseContinuationPolicy.DrainInFlight,
+            continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
             holdId: null,
             reason: " "));
+    }
+
+    [Fact]
+    public void SchedulerPauseDecision_RequiresMeaningfulContinuationPolicyForDecisionState()
+    {
+        Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
+            canAdvance: true,
+            boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
+            continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
+            holdId: null,
+            reason: null));
+
+        Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
+            canAdvance: false,
+            boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
+            continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
+            holdId: "pause-1",
+            reason: "Paused"));
     }
 
     [Fact]

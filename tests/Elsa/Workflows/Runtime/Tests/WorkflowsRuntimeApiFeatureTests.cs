@@ -43,6 +43,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IOperationalStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryOperationalStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IControlPlaneStateStore) &&
+            descriptor.ImplementationType == typeof(InMemoryControlPlaneStateStore));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimePauseDecisionProvider) &&
+            descriptor.ImplementationType == typeof(RuntimePauseDecisionProvider));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeRecoveryScanner) &&
             descriptor.ImplementationType == typeof(InMemoryRuntimeRecoveryScanner));
         Assert.Contains(services, descriptor =>
@@ -133,6 +139,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
+        Assert.IsType<InMemoryControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+        Assert.IsType<RuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
@@ -200,6 +208,30 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
+    }
+
+    [Fact]
+    public void RegistersRuntimePauseDecisionProviderAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimePauseDecisionProvider>(new CustomRuntimePauseDecisionProvider());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
+    }
+
+    [Fact]
+    public void RegistersControlPlaneStateStoreAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IControlPlaneStateStore>(new CustomControlPlaneStateStore());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
     }
 
     [Fact]
@@ -510,5 +542,29 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 durableFallbackPolicy: request.DurableFallbackPolicy,
                 maximumDuration: request.RequestedDuration,
                 reason: "Custom policy owns volatile wait decisions.");
+    }
+
+    private sealed class CustomRuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
+    {
+        public ValueTask<SchedulerPauseDecision> DecideAsync(RuntimePauseDecisionRequest request, CancellationToken cancellationToken = default) =>
+            new(new SchedulerPauseDecision(
+                canAdvance: true,
+                boundary: request.Boundary,
+                continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
+                holdId: null,
+                reason: null));
+    }
+
+    private sealed class CustomControlPlaneStateStore : IControlPlaneStateStore
+    {
+        public ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default) => new(state);
+
+        public ValueTask<ControlPlaneState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) => new((ControlPlaneState?)null);
+
+        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ControlPlaneState>());
+
+        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ControlPlaneState>());
     }
 }

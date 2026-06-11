@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Volatile Wait Policy](specs/051-runtime-volatile-wait-policy/plan.md)
+Current Speckit plan: [Runtime Control Plane State Store](specs/052-runtime-control-plane-state-store/plan.md)
 <!-- SPECKIT END -->
