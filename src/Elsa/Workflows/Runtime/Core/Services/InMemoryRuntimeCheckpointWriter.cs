@@ -102,7 +102,13 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
                 continue;
             }
 
-            await _bookmarkStateStore.SaveAsync(stateChange.State, cancellationToken);
+            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
+            {
+                await _bookmarkStateStore.SaveAsync(stateChange.State, cancellationToken);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unexpected bookmark state change operation '{stateChange.Operation}' reached apply phase.");
         }
     }
 
@@ -146,6 +152,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
                 throw new InvalidOperationException($"The in-memory checkpoint writer can only project bookmark state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
 
+            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.BookmarkId))
                 throw new InvalidOperationException("Bookmark state change StateId must match BookmarkState.BookmarkId.");
 
