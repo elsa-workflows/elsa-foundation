@@ -460,12 +460,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
         return new(
             identity: NewIdentity(),
-            nodes:
-            [
-                NewNode("node-wait", document.RootElement, inputBinding)
-            ],
-            edges: [],
-            startNodeIds: [],
+            rootActivity: NewNode("node-wait", document.RootElement, inputBinding),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,

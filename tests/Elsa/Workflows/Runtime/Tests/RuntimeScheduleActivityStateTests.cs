@@ -269,9 +269,9 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     private static WorkflowExecutable NewExecutable() =>
-        NewExecutable(["node-start"], ["node-start"]);
+        NewExecutable(["node-start"]);
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds)
+    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string>? startNodeIds = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var nodes = nodeIds.Select(nodeId => new ExecutableNode(
@@ -287,13 +287,31 @@ public sealed class RuntimeScheduleActivityStateTests
 
         return new(
             identity: NewIdentity(),
-            nodes: nodes,
-            edges: [],
-            startNodeIds: startNodeIds,
+            rootActivity: ToRootActivity(nodes),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
+    {
+        var nodeSnapshot = nodes.ToArray();
+        if (nodeSnapshot.Length == 1)
+            return nodeSnapshot[0];
+
+        var root = nodeSnapshot[0];
+        return new ExecutableNode(
+            executableNodeId: root.ExecutableNodeId,
+            authoredActivityId: root.AuthoredActivityId,
+            activityType: root.ActivityType,
+            activityTypeVersion: root.ActivityTypeVersion,
+            descriptorType: root.DescriptorType,
+            descriptorPayload: root.DescriptorPayload,
+            inputBindings: root.InputBindings,
+            outputCaptures: root.OutputCaptures,
+            metadata: root.Metadata,
+            composition: new ExecutableActivityComposition(nodeSnapshot.Skip(1).ToArray(), [], nodeSnapshot.Skip(1).FirstOrDefault()?.ExecutableNodeId));
     }
 
     private static WorkflowExecutableIdentity NewIdentity() =>

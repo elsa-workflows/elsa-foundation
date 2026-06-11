@@ -1,5 +1,10 @@
 # Runtime Start Command Scheduling
 
+> Supersession note (2026-06-11): requirements that schedule executable artifact start nodes are
+> superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). Runtime
+> start schedules the executable root activity only.
+
 **Feature Branch**: `codex/runtime-start-command-scheduling`
 **Created**: 2026-06-11
 **Input**: Runtime Execution Seam next slice after Runtime API start dispatch.

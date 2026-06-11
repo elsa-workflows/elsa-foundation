@@ -36,12 +36,12 @@ public sealed class CloneDraftFromVersionTests
         var serializer = host.Services.GetRequiredService<IPayloadSerializer>();
         var hydratedState = serializer.Deserialize<WorkflowDefinitionState>(newDraft.StateSource!);
 
-        var sourceActivities = sourceState.Activities.ToList();
-        var clonedActivities = hydratedState.Activities.ToList();
+        var sourceActivities = Flatten(sourceState.RootActivity).ToList();
+        var clonedActivities = Flatten(hydratedState.RootActivity).ToList();
 
         Assert.Equal(sourceActivities.Count, clonedActivities.Count);
         Assert.Equal(sourceActivities.Select(a => a.NodeId), clonedActivities.Select(a => a.NodeId));
-        Assert.Equal(sourceActivities.Select(a => a.IsStart), clonedActivities.Select(a => a.IsStart));
+        Assert.Equal(sourceState.RootActivity?.Composition?.StartActivityNodeId, hydratedState.RootActivity?.Composition?.StartActivityNodeId);
     }
 
     [Fact]
@@ -87,8 +87,8 @@ public sealed class CloneDraftFromVersionTests
         var serializer = host.Services.GetRequiredService<IPayloadSerializer>();
         var hydratedState = serializer.Deserialize<WorkflowDefinitionState>(newDraft.StateSource!);
 
-        var sourceIds = sourceState.Activities.Select(a => a.NodeId).ToHashSet();
-        var clonedIds = hydratedState.Activities.Select(a => a.NodeId).ToHashSet();
+        var sourceIds = Flatten(sourceState.RootActivity).Select(a => a.NodeId).ToHashSet();
+        var clonedIds = Flatten(hydratedState.RootActivity).Select(a => a.NodeId).ToHashSet();
         Assert.True(sourceIds.SetEquals(clonedIds));
     }
 
@@ -164,8 +164,12 @@ public sealed class CloneDraftFromVersionTests
 
     private static WorkflowDefinitionState StateWithActivities(IEnumerable<ActivityNode> activities) => new(
         Variables: [],
-        ActivityConnections: [],
-        Activities: activities,
+        RootActivity: new ActivityNode(
+            NodeId: "$root",
+            ActivityVersionId: "$workflow-root",
+            Inputs: [],
+            Outputs: [],
+            Composition: new ActivityComposition(activities, [], activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId)),
         Inputs: [],
         Outputs: [],
         WorkflowActivityOptions: null,
@@ -176,8 +180,16 @@ public sealed class CloneDraftFromVersionTests
         ActivityVersionId: "av-1",
         Inputs: [],
         Outputs: [],
-        IsContainer: false,
-        IsStart: isStart,
-        IsTerminal: false,
-        ChildActivities: []);
+        Composition: null);
+
+    private static IEnumerable<ActivityNode> Flatten(ActivityNode? root)
+    {
+        if (root is null)
+            yield break;
+
+        yield return root;
+        foreach (var child in root.Composition?.Activities ?? [])
+        foreach (var nested in Flatten(child))
+            yield return nested;
+    }
 }

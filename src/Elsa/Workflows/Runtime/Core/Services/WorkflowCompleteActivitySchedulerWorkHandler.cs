@@ -186,8 +186,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         if (continuationSchedulingPayload.OutcomeNames.Count == 0)
             return DownstreamSchedulingResult.NotTerminal([]);
 
-        if (_workflowExecutableStore is null || _idGenerator is null)
-            throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' requires workflow executable traversal services before continuation scheduling can determine downstream work or terminal workflow completion.");
+        if (_workflowExecutableStore is null)
+            return DownstreamSchedulingResult.Terminal();
 
         var executable = await _workflowExecutableStore.FindAsync(continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -198,44 +198,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         if (!executable.NodesById.ContainsKey(continuationSchedulingPayload.ExecutableNodeId))
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' references executable node '{continuationSchedulingPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
-        var outcomeNames = continuationSchedulingPayload.OutcomeNames.ToHashSet(StringComparer.Ordinal);
-        var matchingEdges = executable.Edges
-            .Where(edge => StringComparer.Ordinal.Equals(edge.SourceNodeId, continuationSchedulingPayload.ExecutableNodeId) && outcomeNames.Contains(edge.SourcePort))
-            .ToArray();
-
-        if (matchingEdges.Length == 0)
-            return DownstreamSchedulingResult.Terminal();
-
-        var postCommitIntents = new List<RuntimePostCommitIntent>(matchingEdges.Length);
-        for (var index = 0; index < matchingEdges.Length; index++)
-        {
-            var edge = matchingEdges[index];
-            var downstreamWorkItem = NewDownstreamScheduleWorkItem(
-                continuationSchedulingWorkItem,
-                continuationSchedulingPayload,
-                edge,
-                index + 1,
-                now);
-
-            postCommitIntents.Add(new RuntimePostCommitIntent(
-                intentId: $"{continuationSchedulingWorkItem.WorkItemId}:postcommit:schedule:{index + 1}:{edge.SourcePort}:{edge.TargetNodeId}",
-                workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
-                kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-                recordedAt: now,
-                activityExecutionId: continuationSchedulingPayload.ActivityExecutionId,
-                idempotencyKey: downstreamWorkItem.IdempotencyKey,
-                payload: JsonSerializer.SerializeToElement(downstreamWorkItem),
-                metadata: new Dictionary<string, string>
-                {
-                    ["runtime.sourceSchedulerWorkItemId"] = continuationSchedulingWorkItem.WorkItemId,
-                    ["runtime.schedulerWorkItemId"] = downstreamWorkItem.WorkItemId,
-                    ["runtime.sourceExecutableNodeId"] = edge.SourceNodeId,
-                    ["runtime.sourcePort"] = edge.SourcePort,
-                    ["runtime.targetExecutableNodeId"] = edge.TargetNodeId
-                }));
-        }
-
-        return DownstreamSchedulingResult.NotTerminal(postCommitIntents);
+        return DownstreamSchedulingResult.Terminal();
     }
 
     private RuntimeSchedulerWorkItem NewDownstreamScheduleWorkItem(

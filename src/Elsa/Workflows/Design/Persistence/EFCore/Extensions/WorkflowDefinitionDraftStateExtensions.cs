@@ -6,10 +6,22 @@ public static class WorkflowDefinitionDraftStateExtensions
 {
     public static WorkflowDefinitionState WithMutatedActivity(this WorkflowDefinitionState state, string nodeId, Func<ActivityNode, ActivityNode> mutate)
     {
-        var activities = state.Activities
-            .Select(a => a.NodeId == nodeId ? mutate(a) : a)
+        return state with { RootActivity = Mutate(state.RootActivity, nodeId, mutate) };
+    }
+
+    private static ActivityNode? Mutate(ActivityNode? node, string nodeId, Func<ActivityNode, ActivityNode> mutate)
+    {
+        if (node is null)
+            return null;
+
+        var updated = node.NodeId == nodeId ? mutate(node) : node;
+        if (updated.Composition is not { } composition)
+            return updated;
+
+        var activities = composition.Activities
+            .Select(activity => Mutate(activity, nodeId, mutate)!)
             .ToArray();
 
-        return state with { Activities = activities };
+        return updated with { Composition = composition with { Activities = activities } };
     }
 }

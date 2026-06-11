@@ -6,6 +6,5 @@ public sealed record PublishedWorkflowView(
     string DefinitionVersionId,
     string ArtifactVersion,
     string ArtifactHash,
-    int NodeCount,
-    int EdgeCount,
-    IReadOnlyList<string> StartNodeIds);
+    string RootActivityId,
+    int NodeCount);

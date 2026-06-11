@@ -62,13 +62,23 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     private static WorkflowExecutable NewExecutable() =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
-            nodes: [],
-            edges: [],
-            startNodeIds: [],
+            rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode NewNode(string nodeId) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
 
     private sealed class RecordingAgentProvider : IWorkflowExecutionAgentProvider
     {

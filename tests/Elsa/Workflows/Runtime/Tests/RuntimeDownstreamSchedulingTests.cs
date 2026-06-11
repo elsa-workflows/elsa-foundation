@@ -13,7 +13,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task CompleteActivityHandler_AttachesPostCommitSchedulerIntentsForMatchingOutgoingEdges()
+    public async Task CompleteActivityHandler_DoesNotTraverseWorkflowLevelEdges()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -31,24 +31,12 @@ public sealed class RuntimeDownstreamSchedulingTests
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
-        var intent = Assert.Single(checkpointPayload.PostCommitIntents);
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
-        Assert.Equal("actexec-source", intent.ActivityExecutionId);
-        var downstreamWork = intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, downstreamWork.CommandKind);
-        Assert.Equal("work-1:schedule:1:Done:node-next", downstreamWork.WorkItemId);
-        Assert.Equal(12, downstreamWork.Sequence);
-        var schedulePayload = downstreamWork.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
-        Assert.Equal("node-next", schedulePayload.ExecutableNodeId);
-        Assert.Equal("actexec-1", schedulePayload.ActivityExecutionId);
-        Assert.Equal("actexec-source", schedulePayload.SchedulingActivityExecutionId);
-        Assert.Equal(RuntimeScheduleActivityCommandPayload.ActivityCompletionReason, schedulePayload.Reason);
-        Assert.Equal(executable.Identity, schedulePayload.PinnedExecutable);
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
+        Assert.Empty(checkpointPayload.PostCommitIntents);
     }
 
     [Fact]
-    public async Task RootActivityCompletion_DrainsThroughContinuationCheckpointAndDownstreamScheduling()
+    public async Task RootActivityCompletion_DrainsThroughContinuationCheckpointAndWorkflowCompletion()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -82,14 +70,10 @@ public sealed class RuntimeDownstreamSchedulingTests
             result.Items,
             first => Assert.Equal("work-1", first.WorkItemId),
             second => Assert.Equal("work-1:continuation:actexec-source", second.WorkItemId),
-            third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:ActivityCompleted:actexec-source", third.WorkItemId));
+            third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:WorkflowCompleted:actexec-source", third.WorkItemId));
         var write = Assert.Single(checkpointWriter.ListWrites());
-        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
-        var downstreamWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, downstreamWork.CommandKind);
-        var schedulePayload = downstreamWork.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
-        Assert.Equal("node-next", schedulePayload.ExecutableNodeId);
-        Assert.Equal("actexec-source", schedulePayload.SchedulingActivityExecutionId);
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -135,7 +119,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CompleteActivityHandler_RequiresTraversalServicesForContinuationScheduling()
+    public async Task CompleteActivityHandler_TreatsOutcomeContinuationAsTerminalWithoutWorkflowTraversalServices()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
@@ -143,14 +127,15 @@ public sealed class RuntimeDownstreamSchedulingTests
             queue,
             new FixedTimeProvider(_now));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.HandleAsync(NewCompleteWorkItem(
-                NewIdentity(),
-                outcomeNames: ["Done"],
-                completionKind: SchedulerCompletionKind.ContinuationScheduling)).AsTask());
+        await handler.HandleAsync(NewCompleteWorkItem(
+            NewIdentity(),
+            outcomeNames: ["Done"],
+            completionKind: SchedulerCompletionKind.ContinuationScheduling));
 
-        Assert.Contains("requires workflow executable traversal services", exception.Message);
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
+        Assert.Empty(checkpointPayload.PostCommitIntents);
     }
 
     [Fact]
@@ -513,13 +498,30 @@ public sealed class RuntimeDownstreamSchedulingTests
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<ExecutableEdge> edges) =>
         new(
             identity: NewIdentity(),
-            nodes: nodeIds.Select(NewNode).ToArray(),
-            edges: edges,
-            startNodeIds: [],
+            rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray(), edges),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes, IReadOnlyCollection<ExecutableEdge> edges)
+    {
+        var nodeSnapshot = nodes.ToArray();
+        if (nodeSnapshot.Length == 1 && edges.Count == 0)
+            return nodeSnapshot[0];
+
+        return new ExecutableNode(
+            executableNodeId: "$root",
+            authoredActivityId: "$root",
+            activityType: "test/root",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { type = "root" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            composition: new ExecutableActivityComposition(nodeSnapshot, edges, nodeSnapshot.FirstOrDefault()?.ExecutableNodeId));
+    }
 
     private static ExecutableNode NewNode(string nodeId)
     {

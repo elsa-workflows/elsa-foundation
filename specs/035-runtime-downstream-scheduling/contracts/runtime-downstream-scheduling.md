@@ -1,5 +1,8 @@
 # Contract: Runtime Downstream Scheduling
 
+> Supersession note (2026-06-11): this contract's `WorkflowExecutable` edge traversal is superseded
+> by [070-workflow-root-activity-contract](../../070-workflow-root-activity-contract/spec.md).
+
 ## Completion Continuation
 
 `WorkflowCompleteActivitySchedulerWorkHandler` handles `SchedulerCompletionKind.ContinuationScheduling`.

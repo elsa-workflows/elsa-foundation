@@ -10,54 +10,23 @@ public sealed class WorkflowExecutable
 {
     public WorkflowExecutable(
         WorkflowExecutableIdentity identity,
-        IReadOnlyCollection<ExecutableNode> nodes,
-        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
-        DateTimeOffset createdAt,
-        DateTimeOffset? publishedAt,
-        IReadOnlyDictionary<string, string> compatibilityMetadata)
-        : this(identity, nodes, edges: [], startNodeIds: [], resumeTargets, createdAt, publishedAt, compatibilityMetadata)
-    {
-    }
-
-    public WorkflowExecutable(
-        WorkflowExecutableIdentity identity,
-        IReadOnlyCollection<ExecutableNode> nodes,
-        IReadOnlyCollection<ExecutableEdge>? edges,
-        IReadOnlyCollection<string>? startNodeIds,
+        ExecutableNode rootActivity,
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
         DateTimeOffset? publishedAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        ArgumentNullException.ThrowIfNull(nodes);
+        ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
 
-        var nodeSnapshot = nodes.ToArray();
-        var edgeSnapshot = (edges ?? []).ToArray();
-        var nodeIds = nodeSnapshot.Select(node => node.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+        ValidateComposition(rootActivity);
+        var nodeSnapshot = Flatten(rootActivity).ToArray();
 
-        foreach (var edge in edgeSnapshot)
-        {
-            if (!nodeIds.Contains(edge.SourceNodeId))
-                throw new ArgumentException($"Executable edge source node '{edge.SourceNodeId}' does not exist.", nameof(edges));
-
-            if (!nodeIds.Contains(edge.TargetNodeId))
-                throw new ArgumentException($"Executable edge target node '{edge.TargetNodeId}' does not exist.", nameof(edges));
-        }
-
-        var startSnapshot = (startNodeIds ?? []).ToArray();
-        foreach (var startNodeId in startSnapshot)
-        {
-            if (!nodeIds.Contains(startNodeId))
-                throw new ArgumentException($"Start node '{startNodeId}' does not exist.", nameof(startNodeIds));
-        }
-
-        Nodes = Array.AsReadOnly(nodeSnapshot);
-        Edges = Array.AsReadOnly(edgeSnapshot);
-        StartNodeIds = Array.AsReadOnly(startSnapshot);
         Identity = identity;
+        RootActivity = rootActivity;
+        Nodes = Array.AsReadOnly(nodeSnapshot);
         NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         CreatedAt = createdAt;
@@ -66,14 +35,50 @@ public sealed class WorkflowExecutable
     }
 
     public WorkflowExecutableIdentity Identity { get; }
+    public ExecutableNode RootActivity { get; }
     public IReadOnlyCollection<ExecutableNode> Nodes { get; }
-    public IReadOnlyCollection<ExecutableEdge> Edges { get; }
-    public IReadOnlyCollection<string> StartNodeIds { get; }
     public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? PublishedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
+
+    private static void ValidateComposition(ExecutableNode rootActivity)
+    {
+        foreach (var node in Flatten(rootActivity))
+        {
+            if (node.Composition is not { } composition)
+                continue;
+
+            var childIds = composition.Activities.Select(activity => activity.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+            foreach (var edge in composition.Connections)
+            {
+                if (!childIds.Contains(edge.SourceNodeId))
+                    throw new ArgumentException($"Executable composition edge source node '{edge.SourceNodeId}' does not exist.");
+
+                if (!childIds.Contains(edge.TargetNodeId))
+                    throw new ArgumentException($"Executable composition edge target node '{edge.TargetNodeId}' does not exist.");
+            }
+
+            if (composition.StartActivityId is not null && !childIds.Contains(composition.StartActivityId))
+                throw new ArgumentException($"Executable composition start activity '{composition.StartActivityId}' does not exist.");
+        }
+    }
+
+    private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
+    {
+        var stack = new Stack<ExecutableNode>();
+        stack.Push(rootActivity);
+
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+
+            foreach (var child in node.Composition?.Activities ?? [])
+                stack.Push(child);
+        }
+    }
 }
 
 /// <summary>
@@ -118,7 +123,7 @@ public sealed record WorkflowExecutableSourceReference(
     string? SourceVersion = null);
 
 /// <summary>
-/// Runtime-owned control-flow edge between executable nodes.
+/// Runtime-owned control-flow edge inside a compiled composite activity.
 /// </summary>
 public sealed class ExecutableEdge
 {
@@ -146,6 +151,29 @@ public sealed class ExecutableEdge
 }
 
 /// <summary>
+/// Compiled composition state owned by an executable activity.
+/// </summary>
+public sealed class ExecutableActivityComposition
+{
+    public ExecutableActivityComposition(
+        IReadOnlyCollection<ExecutableNode> activities,
+        IReadOnlyCollection<ExecutableEdge> connections,
+        string? startActivityId = null)
+    {
+        ArgumentNullException.ThrowIfNull(activities);
+        ArgumentNullException.ThrowIfNull(connections);
+
+        Activities = Array.AsReadOnly(activities.ToArray());
+        Connections = Array.AsReadOnly(connections.ToArray());
+        StartActivityId = startActivityId;
+    }
+
+    public IReadOnlyCollection<ExecutableNode> Activities { get; }
+    public IReadOnlyCollection<ExecutableEdge> Connections { get; }
+    public string? StartActivityId { get; }
+}
+
+/// <summary>
 /// Runtime-owned node inside a workflow executable.
 /// </summary>
 public sealed class ExecutableNode
@@ -159,7 +187,8 @@ public sealed class ExecutableNode
         JsonElement descriptorPayload,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
-        IReadOnlyDictionary<string, string> metadata)
+        IReadOnlyDictionary<string, string> metadata,
+        ExecutableActivityComposition? composition = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -194,6 +223,7 @@ public sealed class ExecutableNode
         InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
         OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
+        Composition = composition;
     }
 
     public string ExecutableNodeId { get; }
@@ -205,6 +235,7 @@ public sealed class ExecutableNode
     public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
     public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public ExecutableActivityComposition? Composition { get; }
 }
 
 /// <summary>

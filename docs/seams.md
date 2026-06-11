@@ -125,41 +125,43 @@ third party, the Runtime sub-domain never has to know Design exists. The §E2.2 
 
 ---
 
-## 4. Bridge 2 — Workflow compile / publish *(the future)*
+## 4. Bridge 2 — Workflow compile / publish *(root activity)*
 
-The same shape recurs one level up. A workflow definition is authored as a graph of `ActivityNode`s;
-to run it, something must turn that authored document into a runnable artifact. That something is the
-**compile/publish bridge** — `Elsa.Workflows.Publishing.Api` is its first slice.
+The same shape recurs one level up. A workflow definition is authored as one root activity; to run
+it, something must turn that authored root into one compiled root activity in a runnable artifact.
+That something is the **compile/publish bridge** — `Elsa.Workflows.Publishing.Api` is its first
+slice.
 
 ```mermaid
 flowchart LR
     subgraph WDesign["Workflows.Design seam"]
-        WDS["WorkflowDefinitionState<br/>(graph of ActivityNodes)"]
+        WDS["WorkflowDefinitionState<br/>(one RootActivity)"]
     end
     subgraph Compile["COMPILE / PUBLISH (bridge)"]
         direction TB
-        LOOP["for each ActivityNode"]
-        B1["Bridge 1:<br/>construct the node's IActivity"]
+        ROOT["compile RootActivity"]
+        B1["Bridge 1:<br/>compile activity descriptors + bindings"]
         ASM["assemble into a runnable artifact"]
-        LOOP --> B1 --> ASM
+        ROOT --> B1 --> ASM
     end
     subgraph WRuntime["Workflows.Runtime seam"]
-        EXE["WorkflowExecutable<br/>(the runnable artifact)"]
+        EXE["WorkflowExecutable<br/>(one compiled root activity)"]
         RUN["Runtime loads the artifact only"]
         EXE --> RUN
     end
-    WDS --> LOOP
+    WDS --> ROOT
     ASM --> EXE
 
     classDef seam fill:#eef,stroke:#558;
     classDef bridge fill:#efe,stroke:#585,stroke-width:2px;
     class WDS,EXE,RUN seam;
-    class LOOP,B1,ASM bridge;
+    class ROOT,B1,ASM bridge;
 ```
 
-Note the nesting: **Bridge 2 uses Bridge 1.** Compiling a workflow means constructing each placed
-activity — the inner loop *is* the activity-construction bridge. So the small `construct/{activityId}`
-endpoint we ship today is literally the kernel of tomorrow's publish domain.
+Note the nesting: **Bridge 2 uses Bridge 1.** Compiling a workflow means compiling the root activity
+and any child activities owned by composite activity state. Flowchart edges, sequence ordering, and
+state transitions are activity-owned composition details; they do not turn `WorkflowDefinitionState`
+or `WorkflowExecutable` into flowchart containers.
 
 At runtime the published `WorkflowExecutable` is the **only** thing the Workflows.Runtime seam needs;
 the design-side documents are reachable by foreign key but are never required to execute (the
@@ -176,8 +178,9 @@ Seams are where the domain will *expand*, and they tell you where:
 - **Today:** `construct/{activityId}` constructs one activity (construct-only; no value binding).
 - **Next:** map author **values** — join `ArgumentState` onto typed arguments through the expression
   system. The `MAP` box in Bridge 1 fills in.
-- **Then:** construct a whole graph — Bridge 1 inside a loop becomes Bridge 2, and the
-  `Elsa.Workflows.Publishing.*` feature grows from one endpoint into a compile-and-publish sub-domain.
+- **Then:** compile a whole root activity — Bridge 1 recurses through activity-owned composition, and
+  the `Elsa.Workflows.Publishing.*` feature grows from one endpoint into a compile-and-publish
+  sub-domain.
 
 Through all of that, **the seams do not move.** `IActivityFactory` and `IActivityDefinitionVersion`
 are the same contracts whether we construct one activity or publish ten thousand. The bridge grows

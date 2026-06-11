@@ -13,9 +13,10 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// <para>
 /// <b>Scope (Elsa constitution §E2.9).</b> State carries <b>authored content only</b>:
 /// the structured representation of what the author drew, declared, and configured.
-/// Today's members — <c>Variables</c>, <c>ActivityConnections</c>, <c>Activities</c>,
-/// <c>Inputs</c>, <c>Outputs</c>, <c>WorkflowActivityOptions</c>, <c>StrategyOptions</c>
-/// — are clean against the policy.
+/// Today's members — <c>Variables</c>, <c>RootActivity</c>, <c>Inputs</c>,
+/// <c>Outputs</c>, <c>WorkflowActivityOptions</c>, <c>StrategyOptions</c> — are clean
+/// against the policy. The root activity owns any composition details such as Flowchart
+/// connections or Sequence children.
 /// </para>
 /// <para>
 /// <b>Out of State (§E2.9.2 — never add to this record):</b>
@@ -41,8 +42,7 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// </remarks>
 public sealed record WorkflowDefinitionState(
     IEnumerable<VariableDefinition> Variables,
-    IEnumerable<ActivityConnection> ActivityConnections,
-    IEnumerable<ActivityNode> Activities,
+    ActivityNode? RootActivity,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
     WorkflowActivityOptions? WorkflowActivityOptions,

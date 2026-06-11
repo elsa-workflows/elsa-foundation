@@ -15,7 +15,7 @@ public interface IWorkflowDefinitionLayout
 
 /// <summary>
 /// One layout record per placed activity node. Keyed by <c>NodeId</c> — the join key into
-/// the parent's <c>WorkflowDefinitionState.Activities[*].NodeId</c>. Unit C FR-006 sub-shape.
+/// the parent's <c>WorkflowDefinitionState.RootActivity</c> tree. Unit C FR-006 sub-shape.
 /// </summary>
 public interface IDesignMetadataRecord
 {

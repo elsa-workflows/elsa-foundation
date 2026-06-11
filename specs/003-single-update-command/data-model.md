@@ -1,5 +1,9 @@
 # Phase 1 Data Model: Single Diff-Based Draft Update Command
 
+> Supersession note (2026-06-11): workflow-level activity/connection tables are superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). The
+> corrected model uses `WorkflowDefinitionState.RootActivity`.
+
 **Feature**: `003-single-update-command` (Unit 2) · **Date**: 2026-06-03
 **Inputs**: [research.md](./research.md) (R2/R3/R5), [spec.md](./spec.md) FR-001/001a/019/020/022/023.
 

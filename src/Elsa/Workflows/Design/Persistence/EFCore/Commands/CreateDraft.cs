@@ -61,8 +61,7 @@ public sealed class CreateDraft(
         var draftId = identityGenerator.Generate();
         var state = initialState ?? new WorkflowDefinitionState(
             Variables: [],
-            ActivityConnections: [],
-            Activities: [],
+            RootActivity: null,
             Inputs: [],
             Outputs: [],
             WorkflowActivityOptions: null,

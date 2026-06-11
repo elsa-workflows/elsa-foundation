@@ -194,7 +194,7 @@ public sealed class RuntimeBookmarkResumeContractTests
     [Fact]
     public void BookmarkResumeResolver_RejectsMissingExecutableNode()
     {
-        var executable = NewExecutable(nodes: []);
+        var executable = NewExecutable(nodes: [NewOtherNode()]);
         var request = NewRequest(executable);
         var resolver = new BookmarkResumeResolver();
 
@@ -249,7 +249,7 @@ public sealed class RuntimeBookmarkResumeContractTests
 
         return new(
             identity: identity ?? _identity,
-            nodes: executableNodes,
+            rootActivity: ToRootActivity(executableNodes),
             resumeTargets: resumeTargets ?? new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-target:delivery"] = new(
@@ -263,11 +263,43 @@ public sealed class RuntimeBookmarkResumeContractTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
+    private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
+    {
+        var nodeSnapshot = nodes.ToArray();
+        if (nodeSnapshot.Length == 1)
+            return nodeSnapshot[0];
+
+        var root = nodeSnapshot[0];
+        return new ExecutableNode(
+            executableNodeId: root.ExecutableNodeId,
+            authoredActivityId: root.AuthoredActivityId,
+            activityType: root.ActivityType,
+            activityTypeVersion: root.ActivityTypeVersion,
+            descriptorType: root.DescriptorType,
+            descriptorPayload: root.DescriptorPayload,
+            inputBindings: root.InputBindings,
+            outputCaptures: root.OutputCaptures,
+            metadata: root.Metadata,
+            composition: new ExecutableActivityComposition(nodeSnapshot.Skip(1).ToArray(), [], null));
+    }
+
     private ExecutableNode NewDeliveryNode() =>
         new(
             executableNodeId: "node-delivery",
             authoredActivityId: "activity-delivery",
             activityType: "Elsa.WaitForDeliveryStatus",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: Json("{}"),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+    private ExecutableNode NewOtherNode() =>
+        new(
+            executableNodeId: "node-other",
+            authoredActivityId: "activity-other",
+            activityType: "Elsa.Other",
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: Json("{}"),

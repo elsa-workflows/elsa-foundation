@@ -246,12 +246,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
         return new(
             identity: identity ?? NewIdentity(),
-            nodes:
-            [
-                NewNode("node-wait", document.RootElement)
-            ],
-            edges: [],
-            startNodeIds: [],
+            rootActivity: NewNode("node-wait", document.RootElement),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,

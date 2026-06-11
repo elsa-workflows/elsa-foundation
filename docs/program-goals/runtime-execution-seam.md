@@ -15,7 +15,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 ## In Scope
 
 - Runtime execution seam planning and Speckit preparation.
-- The minimal runnable artifact currently named `WorkflowExecutable` or an approved equivalent.
+- The minimal runnable artifact currently named `WorkflowExecutable` or an approved equivalent, now constrained to carry one compiled root activity instead of a workflow-level flowchart graph.
 - Compile/publish bridge inputs and outputs between Design-owned state and Runtime-owned runnable form.
 - Runtime dependency envelope and Design-free execution-time boundary.
 - Workflow execution context lifetime, DI scope, and concurrency model.
@@ -24,6 +24,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - Elsa 3 runtime import analysis, including known broken-window candidates that affect the Elsa 4 execution model.
 - Workflow-as-activity consumer/pinning questions, nested execution, and cycle guards when they become part of the runtime seam.
 - Test obligations that belong to the runtime seam, including structural dependency tests and focused unit tests.
+- Correction of the provisional design/runtime graph shape that made `WorkflowDefinitionState` and `WorkflowExecutable` model flowcharts at the workflow boundary.
 
 ## Out Of Scope
 
@@ -40,6 +41,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 3. Keep Design reads confined to compile/publish bridge planning; execution-time Runtime must remain artifact-only.
 4. Decide the runtime artifact, crossing points, context lifetime, graph terminology, and I/O boundary questions before coding.
 5. Capture any approved spec, report, or implementation follow-up here instead of stretching the Elsa Brain Operating Model bucket.
+6. Supersede graph-shaped workflow boundary specs with the root-activity contract and implement that contract before adding flowchart/sequence/state-machine behavior.
 
 ## Linked Surfaces
 
@@ -57,6 +59,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - Start with Work Unit Planner and Speckit Flow Guide from the skill catalog.
 - Use the Elsa Core runtime broken-windows brainstorm report to preserve maintainer concerns and source-derived analysis before selecting Speckit work units.
 - Do not implement `WorkflowExecutionContext`, `WorkflowDefinitionActivity.Execute`, or runtime graph behavior as a drive-by change.
+- Treat `WorkflowDefinitionState.Activities`/`ActivityConnections` and `WorkflowExecutable.Edges`/`StartNodeIds` as superseded provisional slice artifacts. The workflow boundary is a single root activity; flowchart traversal is an activity behavior.
 - Before relying on generated maps for verification, check [maps manifest](../maps/manifest.json); regenerate the relevant map if freshness matters.
 - Treat the Runtime JavaScript Design reference as known deferred architecture debt, not as the first runtime-execution fix.
 

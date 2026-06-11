@@ -1,5 +1,9 @@
 # Implementation Plan: Workflow Execution Vertical Slice
 
+> Supersession note (2026-06-11): workflow-level executable graph planning in this slice is
+> superseded by
+> [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md).
+
 **Branch**: `015-workflow-execution-slice` | **Date**: 2026-06-10 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/015-workflow-execution-slice/spec.md`
