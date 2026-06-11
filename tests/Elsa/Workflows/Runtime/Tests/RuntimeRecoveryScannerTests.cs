@@ -106,6 +106,33 @@ public sealed class RuntimeRecoveryScannerTests
     }
 
     [Fact]
+    public async Task ScanAsync_AppliesOwnerFilterToTheRecoverySource()
+    {
+        var store = new InMemoryOperationalStateStore();
+        var scanner = new InMemoryRuntimeRecoveryScanner(store);
+        await store.SaveAsync(NewOperationalState(
+            "operational-1",
+            "wfexec-1",
+            "worker-1",
+            leaseOwnerId: "lease-owner",
+            heartbeatOwnerId: "heartbeat-owner",
+            leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewOperationalState(
+            "operational-2",
+            "wfexec-2",
+            "worker-2",
+            leaseOwnerId: "lease-owner",
+            heartbeatOwnerId: "heartbeat-owner",
+            heartbeatRecordedAt: _now.AddMinutes(-2)));
+
+        var heartbeatOwnedCandidates = await scanner.ScanAsync(NewRequest(ownerId: "heartbeat-owner"));
+
+        var candidate = Assert.Single(heartbeatOwnedCandidates);
+        Assert.Equal("wfexec-2", candidate.WorkflowExecutionId);
+        Assert.Equal(RuntimeInterruptionReason.HeartbeatExpired, candidate.Reason);
+    }
+
+    [Fact]
     public async Task ScanAsync_IgnoresLiveOperationalState()
     {
         var store = new InMemoryOperationalStateStore();
@@ -127,6 +154,8 @@ public sealed class RuntimeRecoveryScannerTests
         string operationalStateId,
         string workflowExecutionId,
         string ownerId,
+        string? leaseOwnerId = null,
+        string? heartbeatOwnerId = null,
         DateTimeOffset? leaseAcquiredAt = null,
         DateTimeOffset? leaseExpiresAt = null,
         DateTimeOffset? heartbeatRecordedAt = null,
@@ -137,14 +166,14 @@ public sealed class RuntimeRecoveryScannerTests
             executionLease: new RuntimeExecutionLease(
                 leaseId: $"lease-{ownerId}",
                 workflowExecutionId: workflowExecutionId,
-                ownerId: ownerId,
+                ownerId: leaseOwnerId ?? ownerId,
                 acquiredAt: leaseAcquiredAt ?? _now.AddMinutes(-1),
                 expiresAt: leaseExpiresAt ?? _now.AddMinutes(5),
                 fencingToken: 1),
             heartbeat: new RuntimeHeartbeat(
                 heartbeatId: $"heartbeat-{ownerId}",
                 workflowExecutionId: workflowExecutionId,
-                ownerId: ownerId,
+                ownerId: heartbeatOwnerId ?? ownerId,
                 leaseId: $"lease-{ownerId}",
                 recordedAt: heartbeatRecordedAt ?? _now),
             drain: null,

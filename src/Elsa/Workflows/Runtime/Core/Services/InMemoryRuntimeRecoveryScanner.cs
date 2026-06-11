@@ -35,16 +35,13 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
 
     private static RuntimeRecoveryCandidate? TryCreateCandidate(OperationalState state, RuntimeRecoveryScanRequest request)
     {
-        if (!OwnerMatches(state, request.OwnerId))
-            return null;
-
-        if (state.InterruptedExecution is { Status: RuntimeInterruptionStatus.Detected } interruptedExecution)
+        if (state.InterruptedExecution is { Status: RuntimeInterruptionStatus.Detected } interruptedExecution && OwnerMatches(state, request.OwnerId))
             return CreateCandidate(state, request, interruptedExecution.Reason, interruptedExecution.LastCheckpointId, "InterruptedExecution");
 
-        if (state.ExecutionLease is { } lease && IsLeaseExpired(lease, request))
+        if (state.ExecutionLease is { } lease && OwnerMatches(lease.OwnerId, request.OwnerId) && IsLeaseExpired(lease, request))
             return CreateCandidate(state, request, RuntimeInterruptionReason.LeaseLost, state.InterruptedExecution?.LastCheckpointId, "ExecutionLease");
 
-        if (state.Heartbeat is { } heartbeat && heartbeat.RecordedAt.Add(request.HeartbeatTimeout) <= request.Now)
+        if (state.Heartbeat is { } heartbeat && OwnerMatches(heartbeat.OwnerId, request.OwnerId) && heartbeat.RecordedAt.Add(request.HeartbeatTimeout) <= request.Now)
             return CreateCandidate(state, request, RuntimeInterruptionReason.HeartbeatExpired, state.InterruptedExecution?.LastCheckpointId, "Heartbeat");
 
         return null;
@@ -76,6 +73,9 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
         ownerId is null
         || StringComparer.Ordinal.Equals(state.ExecutionLease?.OwnerId, ownerId)
         || StringComparer.Ordinal.Equals(state.Heartbeat?.OwnerId, ownerId);
+
+    private static bool OwnerMatches(string sourceOwnerId, string? requestedOwnerId) =>
+        requestedOwnerId is null || StringComparer.Ordinal.Equals(sourceOwnerId, requestedOwnerId);
 
     private static bool IsLeaseExpired(RuntimeExecutionLease lease, RuntimeRecoveryScanRequest request) =>
         lease.IsExpired(request.Now) || lease.AcquiredAt.Add(request.LeaseTimeout) <= request.Now;
