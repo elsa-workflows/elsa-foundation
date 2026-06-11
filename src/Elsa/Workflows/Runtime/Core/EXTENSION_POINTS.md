@@ -102,6 +102,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** stores scheduler work by `WorkflowExecutionId` after an execution agent accepts a command envelope. The queue preserves per-workflow insertion order and is idempotent by scheduler work item ID within each workflow execution. Draining and activity execution remain separate scheduler behavior.
 - **Default implementation:** `InMemoryWorkflowSchedulerWorkQueue` *(single-node in-memory default for the current runtime slice)*.
 
+### `IWorkflowSchedulerDrainer` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one drainer owns deterministic dispatch of queued scheduler work for a runtime composition).
+- **Signature:** `DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** dequeues scheduler work for one workflow execution and dispatches each work item to an `IWorkflowSchedulerWorkHandler`. The default drainer stops on the first handler fault and returns per-item drain results. It does not execute activities, write checkpoints, or implement retry.
+- **Default implementation:** `WorkflowSchedulerDrainer` *(contract-only drain boundary for the current runtime slice)*.
+
+### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (handlers consume drained scheduler work items).
+- **Signature:** `Name`, `CanHandle(RuntimeSchedulerWorkItem workItem)`, `HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)`.
+- **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer prefers custom handlers before the built-in no-op fallback.
+- **Default implementation:** `NoopWorkflowSchedulerWorkHandler` *(acknowledges drained work without activity execution or checkpoint side effects)*.
+
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
 - **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
