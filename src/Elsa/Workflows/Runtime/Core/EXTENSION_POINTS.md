@@ -28,7 +28,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one provider owns durable post-commit outbox state for a runtime composition).
 - **Signature:** `SavePendingAsync(RuntimePostCommitOutboxItem item, ...)`, `GetDeliverableAsync(RuntimePostCommitOutboxQuery query, ...)`, `RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, ...)`.
 - **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
-- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+- **Default implementation:** `InMemoryRuntimePostCommitOutboxStore` *(single-node in-memory default for the current runtime slice; durable providers replace this)*.
 
 ### `IRuntimeRecoveryScanner` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one scanner identifies interrupted workflow executions for a runtime composition).
