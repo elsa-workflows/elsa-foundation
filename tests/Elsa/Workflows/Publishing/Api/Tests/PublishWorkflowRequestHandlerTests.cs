@@ -46,6 +46,23 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task PublishedExecutableArtifactCanBeDispatchedForExecution()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var published = await Handler(workflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var dispatcher = new WorkflowExecutionStartDispatcher(
+            _store,
+            new InProcessWorkflowExecutionAgentProvider(),
+            new GuidRuntimeExecutionIdGenerator());
+
+        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(published.ArtifactId, "test"));
+
+        Assert.Equal(published.ArtifactId, result.PinnedExecutable.ArtifactId);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+        Assert.NotEmpty(result.WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task PublishesCompositeRootWithActivityOwnedChildSlot()
     {
         var root = CompositeNode(

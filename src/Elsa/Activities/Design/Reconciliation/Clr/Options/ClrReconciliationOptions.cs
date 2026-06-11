@@ -16,8 +16,13 @@ public sealed class ClrReconciliationOptions
     /// </summary>
     public string? SourceId { get; set; }
 
+    /// <summary>The effective folder path. Empty configuration means the running app base directory.</summary>
+    public string ResolvedFolderPath => string.IsNullOrWhiteSpace(FolderPath)
+        ? AppContext.BaseDirectory
+        : Path.GetFullPath(FolderPath);
+
     /// <summary>The effective source id: the explicit value, else the normalised folder path.</summary>
     public string ResolvedSourceId => string.IsNullOrWhiteSpace(SourceId)
-        ? Path.GetFullPath(FolderPath)
+        ? ResolvedFolderPath
         : SourceId;
 }

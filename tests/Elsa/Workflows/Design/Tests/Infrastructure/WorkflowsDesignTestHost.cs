@@ -148,9 +148,12 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     private static void RegisterCommands(IServiceCollection services)
     {
         services
+            .AddScoped<Persistence.Core.Contracts.IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
+            .AddScoped<Persistence.Core.Contracts.ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()
             // Lifecycle commands (NOT mutations — kept distinct, FR-003).
             .AddScoped<Persistence.Core.Contracts.ICreateDraftCommand, CreateDraft>()
             .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
+            .AddScoped<Persistence.Core.Contracts.IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
             .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraft>()
             // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
             .AddScoped<Persistence.EFCore.Contracts.IDraftStateDiffEngine, DraftStateDiffEngine>()

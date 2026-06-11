@@ -13,11 +13,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// SC-014 + Unit C FR-024. The promotion gate refuses to promote a Draft whose
-/// <c>WorkflowDefinitionDraftValidation</c> sibling carries any errors. Unit C ships the
-/// contract (<see cref="IPromoteDraftToVersionCommand"/>) + the exception type
-/// (<see cref="DraftHasValidationErrorsException"/>); Unit D ships the implementation. This
-/// test exercises a stub implementation against the same sibling state the real command will
-/// read.
+/// <c>WorkflowDefinitionDraftValidation</c> sibling carries any errors.
 /// </summary>
 public sealed class PromotionGateTests
 {
@@ -37,10 +33,9 @@ public sealed class PromotionGateTests
 
         var draftId = await CreateDraft(host);
 
-        var gate = new StubPromotionGate(host.Services);
-
-        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(
-            () => gate.Execute(draftId));
+        using var scope = host.Services.CreateScope();
+        var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
+        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(draftId));
 
         Assert.Equal(draftId, ex.DraftId);
         Assert.Equal(2, ex.ErrorCount);
@@ -51,15 +46,20 @@ public sealed class PromotionGateTests
     {
         using var host = WorkflowsDesignTestHost.Create();
 
-        // No OnSend hook — validators contribute nothing; sibling persists with empty Errors.
+        // No OnSend hook - validators contribute nothing; sibling persists with empty Errors.
         var draftId = await CreateDraft(host);
 
-        var gate = new StubPromotionGate(host.Services);
-
+        using var scope = host.Services.CreateScope();
+        var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
         var versionId = await gate.Execute(draftId);
 
         Assert.NotNull(versionId);
         Assert.NotEmpty(versionId);
+
+        await using var ctx = host.CreateContext();
+        var version = await ctx.WorkflowDefinitionVersions.FirstOrDefaultAsync(x => x.Id == versionId);
+        Assert.NotNull(version);
+        Assert.Equal("1.0.0", version.Version);
     }
 
     private static async Task<string> CreateDraft(WorkflowsDesignTestHost host)
@@ -67,28 +67,5 @@ public sealed class PromotionGateTests
         await host.EnsureDefinition("wf-1");
         using var scope = host.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ICreateDraftCommand>().Execute("wf-1");
-    }
-
-    /// <summary>
-    /// Minimal in-test promotion handler that reads the validation sibling and either throws
-    /// or returns a synthetic version id. Substantive implementation lives in Unit D.
-    /// </summary>
-    private sealed class StubPromotionGate(IServiceProvider services) : IPromoteDraftToVersionCommand
-    {
-        public async Task<string> Execute(string draftId, CancellationToken cancellationToken = default)
-        {
-            using var scope = services.CreateScope();
-            var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<WorkflowsDesignDbContext>>();
-
-            await using var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken);
-            var sibling = await dbContext.WorkflowDefinitionDraftValidations
-                .FirstOrDefaultAsync(v => v.WorkflowDefinitionDraftId == draftId, cancellationToken);
-
-            var errorCount = sibling?.Errors.Count ?? 0;
-            if (errorCount > 0)
-                throw new DraftHasValidationErrorsException(draftId, errorCount);
-
-            return $"version-of-{draftId}";
-        }
     }
 }

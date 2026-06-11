@@ -29,9 +29,11 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
         {
             services
                 .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
+                .AddScoped<ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()
                 // Lifecycle origination + cloning + discard (NOT mutations — kept distinct, FR-003)
                 .AddScoped<ICreateDraftCommand, CreateDraft>()
                 .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
+                .AddScoped<IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
                 .AddScoped<IDiscardDraftCommand, DiscardDraft>()
                 // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
                 // Supersedes the former 20 granular mutation commands.

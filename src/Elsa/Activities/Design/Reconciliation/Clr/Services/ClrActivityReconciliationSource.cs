@@ -23,5 +23,5 @@ public sealed class ClrActivityReconciliationSource(
     public string SourceKind => "CLR";
 
     public ValueTask<IEnumerable<ActivityVersionReconciliationModel>> Read(CancellationToken cancellationToken) =>
-        ValueTask.FromResult<IEnumerable<ActivityVersionReconciliationModel>>(scanner.Scan(_options.FolderPath));
+        ValueTask.FromResult<IEnumerable<ActivityVersionReconciliationModel>>(scanner.Scan(_options.ResolvedFolderPath));
 }
