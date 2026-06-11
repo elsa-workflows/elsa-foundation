@@ -7,7 +7,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, Queue<RuntimeSchedulerWorkItem>> _queuesByWorkflowExecutionId = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, RuntimeSchedulerWorkItem> _workItemsByScopedId = new(StringComparer.Ordinal);
+    private readonly Dictionary<SchedulerWorkItemKey, RuntimeSchedulerWorkItem> _workItemsByScopedId = new();
 
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
@@ -16,8 +16,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
         lock (_syncRoot)
         {
-            var scopedWorkItemId = CreateScopedWorkItemId(workItem.WorkflowExecutionId, workItem.WorkItemId);
-            if (_workItemsByScopedId.TryGetValue(scopedWorkItemId, out var existing))
+            var scopedWorkItemKey = new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId);
+            if (_workItemsByScopedId.TryGetValue(scopedWorkItemKey, out var existing))
                 return new ValueTask<RuntimeSchedulerWorkItem>(existing);
 
             if (!_queuesByWorkflowExecutionId.TryGetValue(workItem.WorkflowExecutionId, out var queue))
@@ -27,7 +27,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             }
 
             queue.Enqueue(workItem);
-            _workItemsByScopedId.Add(scopedWorkItemId, workItem);
+            _workItemsByScopedId.Add(scopedWorkItemKey, workItem);
 
             return new ValueTask<RuntimeSchedulerWorkItem>(workItem);
         }
@@ -62,7 +62,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
                 return new ValueTask<RuntimeSchedulerWorkItem?>((RuntimeSchedulerWorkItem?)null);
 
             var workItem = queue.Dequeue();
-            _workItemsByScopedId.Remove(CreateScopedWorkItemId(workItem.WorkflowExecutionId, workItem.WorkItemId));
+            _workItemsByScopedId.Remove(new SchedulerWorkItemKey(workItem.WorkflowExecutionId, workItem.WorkItemId));
 
             if (queue.Count == 0)
                 _queuesByWorkflowExecutionId.Remove(workflowExecutionId);
@@ -71,6 +71,5 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
-    private static string CreateScopedWorkItemId(string workflowExecutionId, string workItemId) =>
-        $"{workflowExecutionId}\u001F{workItemId}";
+    private readonly record struct SchedulerWorkItemKey(string WorkflowExecutionId, string WorkItemId);
 }
