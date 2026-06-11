@@ -223,6 +223,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
+    public void RegistersControlPlaneStateStoreAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IControlPlaneStateStore>(new CustomControlPlaneStateStore());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+    }
+
+    [Fact]
     public async Task DefaultCheckpointWriterProjectsBookmarksIntoRegisteredStateStore()
     {
         var services = new ServiceCollection();
@@ -538,8 +550,21 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             new(new SchedulerPauseDecision(
                 canAdvance: true,
                 boundary: request.Boundary,
-                continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
+                continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
                 holdId: null,
                 reason: null));
+    }
+
+    private sealed class CustomControlPlaneStateStore : IControlPlaneStateStore
+    {
+        public ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default) => new(state);
+
+        public ValueTask<ControlPlaneState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) => new((ControlPlaneState?)null);
+
+        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ControlPlaneState>());
+
+        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+            new(Array.Empty<ControlPlaneState>());
     }
 }

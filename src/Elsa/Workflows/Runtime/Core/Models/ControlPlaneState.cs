@@ -322,6 +322,12 @@ public sealed class SchedulerPauseDecision
         string? reason,
         IReadOnlyDictionary<string, string>? metadata = null)
     {
+        if (canAdvance && continuationPolicy != RuntimePauseContinuationPolicy.NotPaused)
+            throw new ArgumentException("Allowed scheduler pause decisions must use the NotPaused continuation policy.", nameof(continuationPolicy));
+
+        if (!canAdvance && continuationPolicy == RuntimePauseContinuationPolicy.NotPaused)
+            throw new ArgumentException("Blocked scheduler pause decisions require a pause continuation policy.", nameof(continuationPolicy));
+
         if (!canAdvance && string.IsNullOrWhiteSpace(holdId))
             throw new ArgumentException("Blocked scheduler pause decisions require a hold ID.", nameof(holdId));
 
@@ -419,7 +425,8 @@ public enum ControlPlaneHoldStatus
 public enum RuntimePauseContinuationPolicy
 {
     StrictPause,
-    DrainInFlight
+    DrainInFlight,
+    NotPaused
 }
 
 public enum RuntimePauseBoundary

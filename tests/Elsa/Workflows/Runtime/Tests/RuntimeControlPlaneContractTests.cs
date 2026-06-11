@@ -251,9 +251,27 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
             canAdvance: true,
             boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
-            continuationPolicy: RuntimePauseContinuationPolicy.DrainInFlight,
+            continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
             holdId: null,
             reason: " "));
+    }
+
+    [Fact]
+    public void SchedulerPauseDecision_RequiresMeaningfulContinuationPolicyForDecisionState()
+    {
+        Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
+            canAdvance: true,
+            boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
+            continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
+            holdId: null,
+            reason: null));
+
+        Assert.Throws<ArgumentException>(() => new SchedulerPauseDecision(
+            canAdvance: false,
+            boundary: RuntimePauseBoundary.BeforeActivityExecutionStart,
+            continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
+            holdId: "pause-1",
+            reason: "Paused"));
     }
 
     [Fact]

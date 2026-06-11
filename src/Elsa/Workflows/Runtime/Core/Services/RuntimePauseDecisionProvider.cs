@@ -21,7 +21,9 @@ public sealed class RuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var states = await _controlPlaneStateStore.ListAllAsync(cancellationToken);
+        var states = ShouldUseWorkflowScopedQuery(request)
+            ? await _controlPlaneStateStore.ListForWorkflowExecutionAsync(request.WorkflowExecutionId!, cancellationToken)
+            : await _controlPlaneStateStore.ListAllAsync(cancellationToken);
         var matchingHold = states
             .SelectMany(state => state.ActiveHolds)
             .Where(hold => hold.IsEffective)
@@ -34,7 +36,7 @@ public sealed class RuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
             return new SchedulerPauseDecision(
                 canAdvance: true,
                 boundary: request.Boundary,
-                continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
+                continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
                 holdId: null,
                 reason: null,
                 metadata: new Dictionary<string, string>
@@ -74,4 +76,10 @@ public sealed class RuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
                 StringComparer.Ordinal.Equals(hold.HostId, request.HostId),
             _ => false
         };
+
+    private static bool ShouldUseWorkflowScopedQuery(RuntimePauseDecisionRequest request) =>
+        request.WorkflowExecutionId is not null &&
+        request.IngressSourceId is null &&
+        request.WorkerId is null &&
+        request.HostId is null;
 }

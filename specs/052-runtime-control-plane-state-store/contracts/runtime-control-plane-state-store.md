@@ -23,7 +23,9 @@ The default provider:
 - Matches workflow execution, activity execution, generator, ingress source, worker, and host scopes by target ID.
 - Ignores non-matching targets.
 - Picks the oldest matching hold and then the lowest hold ID for deterministic results.
-- Returns `SchedulerPauseDecision` without mutating workflow continuation state.
+- Returns blocked `SchedulerPauseDecision` values with the matched hold continuation policy.
+- Returns allowed decisions with `RuntimePauseContinuationPolicy.NotPaused`, so callers do not need to infer that a non-blocking decision carries no pause continuation behavior.
+- Does not mutate workflow continuation state.
 
 ## Separation Rule
 

@@ -18,8 +18,9 @@
 - **FR-003**: Runtime.Core MUST expose an overridable `IRuntimePauseDecisionProvider` that evaluates pause holds at named runtime boundaries.
 - **FR-004**: The default provider MUST match effective holds by workflow execution, activity execution, generator, ingress source, worker, or host target without reading workflow continuation state.
 - **FR-005**: When multiple holds match, the default provider MUST choose deterministically by oldest request time, then hold ID.
-- **FR-006**: Runtime API composition MUST register the store and provider with `TryAddSingleton` so shells/providers can replace them.
-- **FR-007**: Runtime execution projects MUST remain free of Design-owned authored workflow model dependencies.
+- **FR-006**: Allowed decisions MUST use an explicit non-paused continuation policy.
+- **FR-007**: Runtime API composition MUST register the store and provider with `TryAddSingleton` so shells/providers can replace them.
+- **FR-008**: Runtime execution projects MUST remain free of Design-owned authored workflow model dependencies.
 
 ## Non-Goals
 
