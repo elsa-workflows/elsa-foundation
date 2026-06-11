@@ -40,6 +40,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IIncidentStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryIncidentStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IOperationalStateStore) &&
+            descriptor.ImplementationType == typeof(InMemoryOperationalStateStore));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
@@ -111,6 +114,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
+        Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
@@ -309,6 +313,69 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         Assert.NotNull(await incidentStateStore.FindAsync("wfexec-1", "incident-1"));
         Assert.Single(await incidentStateStore.ListBlockingAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task DefaultCheckpointWriterProjectsOperationalStateIntoRegisteredStateStore()
+    {
+        var services = new ServiceCollection();
+        var now = new DateTimeOffset(2026, 6, 11, 13, 0, 0, TimeSpan.Zero);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var operationalStateStore = provider.GetRequiredService<IOperationalStateStore>();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-1",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint-1",
+                Name: RuntimeCheckpointNames.PostCommitIntentRecorded,
+                WorkflowExecutionId: "wfexec-1",
+                OccurredAt: now,
+                ActivityExecutionIds: ["actexec-1"],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational:
+                [
+                    new RuntimeStateChange<OperationalState>(
+                        StateId: "operational-1",
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: new OperationalState(
+                            operationalStateId: "operational-1",
+                            workflowExecutionId: "wfexec-1",
+                            executionLease: new RuntimeExecutionLease(
+                                leaseId: "lease-1",
+                                workflowExecutionId: "wfexec-1",
+                                ownerId: "worker-1",
+                                acquiredAt: now,
+                                expiresAt: now.AddMinutes(5),
+                                fencingToken: 1),
+                            heartbeat: new RuntimeHeartbeat(
+                                heartbeatId: "heartbeat-1",
+                                workflowExecutionId: "wfexec-1",
+                                ownerId: "worker-1",
+                                leaseId: "lease-1",
+                                recordedAt: now),
+                            drain: null,
+                            interruptedExecution: null,
+                            pendingPostCommitIntentIds: ["intent-1"],
+                            metadata: new Dictionary<string, string>()),
+                        Metadata: new Dictionary<string, string>())
+                ]),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
+        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
+        Assert.NotNull(operationalState);
+        Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
     }
 
     private static System.Text.Json.JsonElement Json(string json)

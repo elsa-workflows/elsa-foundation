@@ -405,6 +405,18 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenOperationalStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, new ThrowingOperationalStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -820,6 +832,105 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsOperationalStateChanges()
+    {
+        var operationalStateStore = new InMemoryOperationalStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var recorded = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
+        var updated = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(operational:
+            [
+                NewOperationalChange("operational-1", "operational-1", ownerId: "worker-2", fencingToken: 2)
+            ])
+        };
+
+        await writer.WriteAsync(recorded, decision);
+
+        var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
+        Assert.NotNull(operationalState);
+        Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
+
+        await writer.WriteAsync(updated, decision);
+
+        operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
+        Assert.NotNull(operationalState);
+        Assert.Equal("worker-2", operationalState.ExecutionLease!.OwnerId);
+        Assert.Equal(2, operationalState.ExecutionLease.FencingToken);
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedOperationalStateProjectionBeforeRecordingWrite()
+    {
+        var operationalStateStore = new InMemoryOperationalStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            StateChanges = NewStateChanges(operational:
+            [
+                NewOperationalChange("operational-1", "operational-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await operationalStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsOperationalStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var operationalStateStore = new InMemoryOperationalStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            StateChanges = NewStateChanges(operational:
+            [
+                NewOperationalChange("operational-1", "operational-1", workflowExecutionId: "wfexec-2")
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await operationalStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await operationalStateStore.ListAsync("wfexec-2"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingOperationalReplay()
+    {
+        var operationalStateStore = new InMemoryOperationalStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            StateChanges = NewStateChanges(operational:
+            [
+                NewOperationalChange("operational-1", "operational-1", ownerId: "worker-2", fencingToken: 2)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
+        Assert.NotNull(operationalState);
+        Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.PostCommitIntentRecorded, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
@@ -1028,6 +1139,38 @@ public sealed class RuntimeCheckpointCommitTests
                 metadata: _durableValueState.Metadata),
             Metadata: new Dictionary<string, string>());
 
+    private RuntimeStateChange<OperationalState> NewOperationalChange(
+        string stateId,
+        string operationalStateId,
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert,
+        string workflowExecutionId = "wfexec-1",
+        string ownerId = "worker-1",
+        long fencingToken = 1) =>
+        new(
+            StateId: stateId,
+            Operation: operation,
+            State: new OperationalState(
+                operationalStateId: operationalStateId,
+                workflowExecutionId: workflowExecutionId,
+                executionLease: new RuntimeExecutionLease(
+                    leaseId: _operationalState.ExecutionLease!.LeaseId,
+                    workflowExecutionId: workflowExecutionId,
+                    ownerId: ownerId,
+                    acquiredAt: _operationalState.ExecutionLease.AcquiredAt,
+                    expiresAt: _operationalState.ExecutionLease.ExpiresAt,
+                    fencingToken: fencingToken),
+                heartbeat: new RuntimeHeartbeat(
+                    heartbeatId: _operationalState.Heartbeat!.HeartbeatId,
+                    workflowExecutionId: workflowExecutionId,
+                    ownerId: ownerId,
+                    leaseId: _operationalState.Heartbeat.LeaseId,
+                    recordedAt: _operationalState.Heartbeat.RecordedAt),
+                drain: _operationalState.Drain,
+                interruptedExecution: _operationalState.InterruptedExecution,
+                pendingPostCommitIntentIds: _operationalState.PendingPostCommitIntentIds,
+                metadata: _operationalState.Metadata),
+            Metadata: new Dictionary<string, string>());
+
     private RuntimeCheckpointCommitter NewCommitter(
         RuntimeCheckpointPersistenceMode mode,
         RecordingWriter writer,
@@ -1154,5 +1297,17 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<IncidentState>>([]);
+    }
+
+    private sealed class ThrowingOperationalStateStore : IOperationalStateStore
+    {
+        public ValueTask<OperationalState> SaveAsync(OperationalState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("operational state projection failed");
+
+        public ValueTask<OperationalState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<OperationalState?>(null);
+
+        public ValueTask<IReadOnlyCollection<OperationalState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<OperationalState>>([]);
     }
 }
