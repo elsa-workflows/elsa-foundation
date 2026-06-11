@@ -38,7 +38,7 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     [Fact]
-    public async Task HandleAsync_IsIdempotentForRepeatedScheduleWork()
+    public async Task HandleAsync_DoesNotOverwriteExistingActivityExecutionStateForRepeatedScheduleWork()
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
@@ -46,9 +46,29 @@ public sealed class RuntimeScheduleActivityStateTests
         var workItem = NewScheduleWorkItem(executable.Identity);
 
         await handler.HandleAsync(workItem);
+        var scheduled = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        await _activityStateStore.SaveAsync(scheduled with { Status = ActivityExecutionStatus.Running });
         await handler.HandleAsync(workItem);
 
-        Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+    }
+
+    [Fact]
+    public async Task ActivityExecutionStateStore_SaveAsync_UpdatesExistingState()
+    {
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        var handler = NewHandler();
+        await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
+        var scheduled = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+
+        var saved = await _activityStateStore.SaveAsync(scheduled with { Status = ActivityExecutionStatus.Running });
+
+        Assert.Equal(ActivityExecutionStatus.Running, saved.Status);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
     }
 
     [Fact]

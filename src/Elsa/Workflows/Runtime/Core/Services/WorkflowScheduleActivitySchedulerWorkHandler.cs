@@ -58,6 +58,10 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         if (!executable.NodesById.TryGetValue(schedulePayload.ExecutableNodeId, out var executableNode))
             throw new InvalidOperationException($"ScheduleActivity scheduler work item '{workItem.WorkItemId}' references executable node '{schedulePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
+        var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
+        if (existing is not null)
+            return;
+
         var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
         await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
     }
@@ -72,7 +76,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             return payload.Deserialize<RuntimeScheduleActivityCommandPayload>()
                    ?? throw new InvalidOperationException("ScheduleActivity scheduler work item payload resolved to null.");
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             throw new InvalidOperationException("ScheduleActivity scheduler work item payload is not a valid schedule activity payload.", exception);
         }

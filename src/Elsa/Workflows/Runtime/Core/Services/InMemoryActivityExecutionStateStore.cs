@@ -16,10 +16,7 @@ public sealed class InMemoryActivityExecutionStateStore : IActivityExecutionStat
         lock (_syncRoot)
         {
             var key = new ActivityExecutionStateKey(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
-            if (_states.TryGetValue(key, out var existing))
-                return new ValueTask<ActivityExecutionState>(existing);
-
-            _states.Add(key, state);
+            _states[key] = state;
             return new ValueTask<ActivityExecutionState>(state);
         }
     }

@@ -24,6 +24,6 @@ Existing split runtime state record. This slice creates records with:
 
 Runtime-owned state boundary for activity execution continuation state.
 
-- `SaveAsync(ActivityExecutionState state, ...)`
+- `SaveAsync(ActivityExecutionState state, ...)`: inserts or replaces state for the concrete activity execution key.
 - `FindAsync(string workflowExecutionId, string activityExecutionId, ...)`
 - `ListAsync(string workflowExecutionId, ...)`

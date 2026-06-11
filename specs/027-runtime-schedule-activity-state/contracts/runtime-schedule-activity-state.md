@@ -16,3 +16,4 @@
 - Authored activity ID is copied only as trace metadata inside `ActivityExecution`.
 - The handler does not construct or invoke activities.
 - Invalid schedule work faults before state is recorded.
+- Repeated schedule work for an existing `ActivityExecutionId` is idempotent and does not overwrite later lifecycle state.
