@@ -28,6 +28,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational)
     {
         ValidateBookmarks(bookmarks, nameof(bookmarks));
+        ValidateDurableValues(durableValues, nameof(durableValues));
         ValidateIncidents(incidents, nameof(incidents));
         ValidateOperational(operational, nameof(operational));
 
@@ -62,6 +63,14 @@ public sealed class RuntimeCheckpointStateChangeSet
     {
         if (incidents.Any(change => change.StateId != change.State.IncidentId))
             throw new ArgumentException("Incident state change StateId must match IncidentState.IncidentId.", parameterName);
+    }
+
+    private static void ValidateDurableValues(
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
+        string parameterName)
+    {
+        if (durableValues.Any(change => change.StateId != change.State.DurableValueId))
+            throw new ArgumentException("Durable value state change StateId must match DurableValueState.DurableValueId.", parameterName);
     }
 
     private static void ValidateOperational(

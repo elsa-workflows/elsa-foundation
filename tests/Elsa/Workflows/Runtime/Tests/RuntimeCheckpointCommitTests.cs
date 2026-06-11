@@ -381,6 +381,18 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenDurableValueStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, new ThrowingDurableValueStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -560,6 +572,103 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsDurableValueStateChanges()
+    {
+        var durableValueStateStore = new InMemoryDurableValueStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var captured = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
+        var deleted = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(durableValues:
+            [
+                NewDurableValueChange("durable-1", "durable-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        await writer.WriteAsync(captured, decision);
+
+        var durableValue = await durableValueStateStore.FindAsync("wfexec-1", "durable-1");
+        Assert.NotNull(durableValue);
+        Assert.Equal("customer", durableValue.ValueId);
+
+        await writer.WriteAsync(deleted, decision);
+
+        Assert.Null(await durableValueStateStore.FindAsync("wfexec-1", "durable-1"));
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedDurableValueStateProjectionBeforeRecordingWrite()
+    {
+        var durableValueStateStore = new InMemoryDurableValueStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
+        {
+            StateChanges = NewStateChanges(durableValues:
+            [
+                NewDurableValueChange("durable-1", "durable-1", RuntimeStateChangeOperation.Append)
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Contains("Delete", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsDurableValueStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var durableValueStateStore = new InMemoryDurableValueStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
+        {
+            StateChanges = NewStateChanges(durableValues:
+            [
+                NewDurableValueChange("durable-1", "durable-1", workflowExecutionId: "wfexec-2")
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await durableValueStateStore.ListAsync("wfexec-2"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingDurableValueReplay()
+    {
+        var durableValueStateStore = new InMemoryDurableValueStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
+        {
+            StateChanges = NewStateChanges(durableValues:
+            [
+                NewDurableValueChange("durable-1", "durable-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var durableValue = await durableValueStateStore.FindAsync("wfexec-1", "durable-1");
+        Assert.NotNull(durableValue);
+        Assert.Equal("customer", durableValue.ValueId);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.DurableValueCaptured, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
@@ -588,6 +697,20 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Contains("StateId", exception.Message);
         Assert.Contains("BookmarkState.BookmarkId", exception.Message);
+    }
+
+    [Fact]
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedDurableValueStateIds()
+    {
+        var invalidDurableValues = new[]
+        {
+            NewDurableValueChange("durable-state-change-id", "durable-state-id")
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(durableValues: invalidDurableValues));
+
+        Assert.Contains("StateId", exception.Message);
+        Assert.Contains("DurableValueState.DurableValueId", exception.Message);
     }
 
     [Fact]
@@ -642,6 +765,7 @@ public sealed class RuntimeCheckpointCommitTests
         ActivityExecutionState? activityState = null,
         RuntimeStateChange<ActivityExecutionState>? activityStateChange = null,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValues = null,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>>? incidents = null,
         IReadOnlyCollection<RuntimeStateChange<OperationalState>>? operational = null) =>
         new(
@@ -668,12 +792,9 @@ public sealed class RuntimeCheckpointCommitTests
                 NewBookmarkChange("bookmark-1", "bookmark-1")
             ],
             durableValues:
+            durableValues ??
             [
-                new RuntimeStateChange<DurableValueState>(
-                    StateId: _durableValueState.DurableValueId,
-                    Operation: RuntimeStateChangeOperation.Upsert,
-                    State: _durableValueState,
-                    Metadata: new Dictionary<string, string>())
+                NewDurableValueChange("durable-1", "durable-1")
             ],
             incidents: incidents ??
             [
@@ -712,6 +833,28 @@ public sealed class RuntimeCheckpointCommitTests
                 Metadata: new Dictionary<string, string>(),
                 CreatedAt: _now,
                 ExpiresAt: null),
+            Metadata: new Dictionary<string, string>());
+
+    private RuntimeStateChange<DurableValueState> NewDurableValueChange(
+        string stateId,
+        string durableValueId,
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert,
+        string workflowExecutionId = "wfexec-1") =>
+        new(
+            StateId: stateId,
+            Operation: operation,
+            State: new DurableValueState(
+                durableValueId: durableValueId,
+                workflowExecutionId: workflowExecutionId,
+                valueId: _durableValueState.ValueId,
+                type: _durableValueState.Type,
+                lifecycle: _durableValueState.Lifecycle,
+                storage: _durableValueState.Storage,
+                inlineValue: _durableValueState.InlineValue,
+                externalReference: _durableValueState.ExternalReference,
+                sourceActivityExecutionId: _durableValueState.SourceActivityExecutionId,
+                capturedAt: _durableValueState.CapturedAt,
+                metadata: _durableValueState.Metadata),
             Metadata: new Dictionary<string, string>());
 
     private RuntimeCheckpointCommitter NewCommitter(
@@ -807,5 +950,20 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<BookmarkState>>([]);
+    }
+
+    private sealed class ThrowingDurableValueStateStore : IDurableValueStateStore
+    {
+        public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("durable value state projection failed");
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("durable value state projection failed");
+
+        public ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<DurableValueState?>(null);
+
+        public ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<DurableValueState>>([]);
     }
 }

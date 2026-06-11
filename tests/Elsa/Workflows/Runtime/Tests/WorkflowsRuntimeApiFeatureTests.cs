@@ -34,6 +34,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IBookmarkStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryBookmarkStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IDurableValueStateStore) &&
+            descriptor.ImplementationType == typeof(InMemoryDurableValueStateStore));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
@@ -103,6 +106,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
@@ -193,5 +197,64 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task DefaultCheckpointWriterProjectsDurableValuesIntoRegisteredStateStore()
+    {
+        var services = new ServiceCollection();
+        var now = new DateTimeOffset(2026, 6, 11, 11, 0, 0, TimeSpan.Zero);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var durableValueStateStore = provider.GetRequiredService<IDurableValueStateStore>();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-1",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint-1",
+                Name: RuntimeCheckpointNames.DurableValueCaptured,
+                WorkflowExecutionId: "wfexec-1",
+                OccurredAt: now,
+                ActivityExecutionIds: ["actexec-1"],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues:
+                [
+                    new RuntimeStateChange<DurableValueState>(
+                        StateId: "durable-1",
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: new DurableValueState(
+                            durableValueId: "durable-1",
+                            workflowExecutionId: "wfexec-1",
+                            valueId: "customer",
+                            type: new RuntimeValueTypeDescriptor("reference", "crm.customer", null),
+                            lifecycle: DurableValueLifecycle.Instance,
+                            storage: DurableValueStorage.Inline,
+                            inlineValue: Json("""{"id":"customer-1"}"""),
+                            externalReference: null,
+                            sourceActivityExecutionId: "actexec-1",
+                            capturedAt: now,
+                            metadata: new Dictionary<string, string>()),
+                        Metadata: new Dictionary<string, string>())
+                ],
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
+        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.NotNull(await durableValueStateStore.FindAsync("wfexec-1", "durable-1"));
+    }
+
+    private static System.Text.Json.JsonElement Json(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return document.RootElement.Clone();
     }
 }
