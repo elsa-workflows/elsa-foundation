@@ -163,7 +163,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher) &&
             descriptor.ImplementationType == typeof(WorkflowExecutionStartDispatcher) &&
             descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutor));
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
         using var provider = services.BuildServiceProvider();
