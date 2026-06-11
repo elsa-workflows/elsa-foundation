@@ -40,12 +40,14 @@ public sealed class RuntimeVolatileWaitPolicyTests
         Assert.Equal(VolatileWaitDurableFallbackPolicy.AllowedWhenBookmarkDeclared, decision.DurableFallbackPolicy);
     }
 
-    [Fact]
-    public void DefaultPolicy_DoesNotEmitDurableResumeOrCallbackMetadata()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DefaultPolicy_DoesNotEmitDurableResumeOrCallbackMetadata(bool hostSupportsInMemoryContinuation)
     {
         var policy = new DefaultRuntimeVolatileWaitPolicy();
 
-        var decision = policy.Decide(NewRequest(hostSupportsInMemoryContinuation: true));
+        var decision = policy.Decide(NewRequest(hostSupportsInMemoryContinuation));
 
         Assert.DoesNotContain(decision.Metadata.Keys, key =>
             key.Contains("bookmark", StringComparison.OrdinalIgnoreCase)
