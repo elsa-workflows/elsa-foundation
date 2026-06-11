@@ -35,6 +35,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy) &&
             descriptor.ImplementationType == typeof(ImmediateWorkflowSchedulerDrainPolicy));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy) &&
+            descriptor.ImplementationType == typeof(ImmediateRuntimeCheckpointPersistencePolicy));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeCheckpointWriter) &&
+            descriptor.ImplementationType == typeof(InMemoryRuntimeCheckpointWriter));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimePostCommitIntentDispatcher) &&
+            descriptor.ImplementationType == typeof(NoopRuntimePostCommitIntentDispatcher));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(RuntimeCheckpointCommitter) &&
+            descriptor.ImplementationType == typeof(RuntimeCheckpointCommitter));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
             descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
         Assert.Contains(services, descriptor =>
@@ -83,6 +95,10 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
+        Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
+        Assert.IsType<InMemoryRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
+        Assert.IsType<NoopRuntimePostCommitIntentDispatcher>(provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>());
+        Assert.IsType<RuntimeCheckpointCommitter>(provider.GetRequiredService<RuntimeCheckpointCommitter>());
         Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
         Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
         Assert.IsType<WorkflowExecutionStartDispatcher>(provider.GetRequiredService<IWorkflowExecutionStartDispatcher>());
