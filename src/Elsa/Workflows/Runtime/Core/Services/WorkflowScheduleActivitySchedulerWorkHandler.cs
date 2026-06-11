@@ -11,26 +11,31 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
+    private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore)
-        : this(workflowExecutableStore, activityExecutionStateStore, TimeProvider.System)
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue)
+        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, TimeProvider.System)
     {
     }
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _workflowExecutableStore = workflowExecutableStore;
         _activityExecutionStateStore = activityExecutionStateStore;
+        _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider;
     }
 
@@ -60,10 +65,19 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
         var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
         if (existing is not null)
+        {
+            if (!StringComparer.Ordinal.Equals(existing.Execution.ExecutableNodeId, schedulePayload.ExecutableNodeId))
+                throw new InvalidOperationException($"ScheduleActivity scheduler work item '{workItem.WorkItemId}' references executable node '{schedulePayload.ExecutableNodeId}', but activity execution '{schedulePayload.ActivityExecutionId}' belongs to executable node '{existing.Execution.ExecutableNodeId}'.");
+
+            if (existing.Status == ActivityExecutionStatus.Scheduled)
+                await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+
             return;
+        }
 
         var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
         await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
+        await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
     }
 
     private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem)
@@ -141,5 +155,34 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
                 ["runtime.pinnedArtifactId"] = schedulePayload.PinnedExecutable.ArtifactId
             });
+    }
+
+    private async ValueTask EnqueueStartActivityAsync(
+        RuntimeSchedulerWorkItem scheduleWorkItem,
+        RuntimeScheduleActivityCommandPayload schedulePayload,
+        CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var payload = new RuntimeStartActivityCommandPayload(
+            schedulePayload.PinnedExecutable,
+            schedulePayload.ExecutableNodeId,
+            schedulePayload.ActivityExecutionId,
+            RuntimeStartActivityCommandPayload.ScheduledActivityReason);
+
+        var workItem = new RuntimeSchedulerWorkItem(
+            workItemId: $"{scheduleWorkItem.WorkItemId}:start:{schedulePayload.ActivityExecutionId}",
+            workflowExecutionId: scheduleWorkItem.WorkflowExecutionId,
+            commandId: $"{scheduleWorkItem.CommandId}:start:{schedulePayload.ActivityExecutionId}",
+            commandKind: WorkflowExecutionCommandKind.StartActivity,
+            envelopeId: scheduleWorkItem.EnvelopeId,
+            idempotencyKey: $"{scheduleWorkItem.IdempotencyKey}:start:{schedulePayload.ActivityExecutionId}",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: scheduleWorkItem.Sequence is { } sequence ? sequence + 1 : null,
+            payload: JsonSerializer.SerializeToElement(payload),
+            commandMetadata: scheduleWorkItem.CommandMetadata,
+            envelopeMetadata: scheduleWorkItem.EnvelopeMetadata);
+
+        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 }

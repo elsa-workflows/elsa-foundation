@@ -184,9 +184,9 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Empty(queuedItems);
         var state = Assert.Single(activityStates);
         Assert.Equal("node-start", state.Execution.ExecutableNodeId);
-        Assert.Equal(ActivityExecutionStatus.Scheduled, state.Status);
+        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.Equal(
-            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity },
+            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity },
             drainResult.Items.Select(item => item.CommandKind).ToArray());
     }
 

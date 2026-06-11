@@ -10,6 +10,7 @@ public sealed class RuntimeScheduleActivityStateTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
 
     [Fact]
     public async Task HandleAsync_RecordsScheduledActivityExecutionState()
@@ -35,6 +36,13 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Equal(RuntimeScheduleActivityCommandPayload.WorkflowStartReason, state.Metadata["runtime.scheduleReason"]);
         Assert.Equal("schedule-work", state.Metadata["runtime.schedulerWorkItemId"]);
         Assert.Equal("artifact-1", state.Metadata["runtime.pinnedArtifactId"]);
+
+        var startWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.StartActivity, startWork.CommandKind);
+        var startPayload = startWork.Payload!.Value.Deserialize<RuntimeStartActivityCommandPayload>()!;
+        Assert.Equal("actexec-1", startPayload.ActivityExecutionId);
+        Assert.Equal("node-start", startPayload.ExecutableNodeId);
+        Assert.Equal(RuntimeStartActivityCommandPayload.ScheduledActivityReason, startPayload.Reason);
     }
 
     [Fact]
@@ -52,6 +60,36 @@ public sealed class RuntimeScheduleActivityStateTests
 
         var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReenqueuesStartActivityWorkForExistingScheduledState()
+    {
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+        var handler = NewHandler();
+
+        await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
+
+        var state = Assert.Single(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Equal(ActivityExecutionStatus.Scheduled, state.Status);
+        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RejectsExistingActivityExecutionNodeMismatchBeforeEnqueueingStartWork()
+    {
+        var executable = NewExecutable(["node-start", "node-other"], ["node-start"]);
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+        var handler = NewHandler();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewScheduleWorkItem(executable.Identity, executableNodeId: "node-other")).AsTask());
+
+        Assert.Contains("belongs to executable node 'node-start'", exception.Message);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -96,6 +134,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Contains("requires a schedule activity payload", exception.Message);
         Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -108,6 +147,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Contains("not a valid schedule activity payload", exception.Message);
         Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -127,6 +167,7 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Contains("not a valid schedule activity payload", exception.Message);
         Assert.IsType<ArgumentException>(exception.InnerException);
         Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -142,6 +183,7 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Contains("pinned executable artifact", exception.Message);
         Assert.Contains("definition-1/version-1", exception.Message);
         Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -155,6 +197,7 @@ public sealed class RuntimeScheduleActivityStateTests
 
         Assert.Contains("node-missing", exception.Message);
         Assert.Empty(await _activityStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -167,7 +210,32 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     private WorkflowScheduleActivitySchedulerWorkHandler NewHandler() =>
-        new(_executableStore, _activityStateStore, new FixedTimeProvider(_now));
+        new(_executableStore, _activityStateStore, _schedulerWorkQueue, new FixedTimeProvider(_now));
+
+    private static ActivityExecutionState NewScheduledState() =>
+        new(
+            Execution: new ActivityExecution(
+                ActivityExecutionId: "actexec-1",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-start",
+                AuthoredActivityId: "authored-node-start",
+                ActivityType: "test/activity",
+                ActivityTypeVersion: "1.0.0"),
+            Status: ActivityExecutionStatus.Scheduled,
+            SubStatus: null,
+            ScheduledAt: DateTimeOffset.UtcNow,
+            StartedAt: null,
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string> { ["runtime.scheduleReason"] = "test" });
 
     private RuntimeSchedulerWorkItem NewScheduleWorkItem(
         WorkflowExecutableIdentity? pinnedExecutable = null,
@@ -200,25 +268,28 @@ public sealed class RuntimeScheduleActivityStateTests
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable() =>
+        NewExecutable(["node-start"], ["node-start"]);
+
+    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var node = new ExecutableNode(
-            executableNodeId: "node-start",
-            authoredActivityId: "authored-node-start",
+        var nodes = nodeIds.Select(nodeId => new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>())).ToArray();
 
         return new(
             identity: NewIdentity(),
-            nodes: [node],
+            nodes: nodes,
             edges: [],
-            startNodeIds: ["node-start"],
+            startNodeIds: startNodeIds,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,

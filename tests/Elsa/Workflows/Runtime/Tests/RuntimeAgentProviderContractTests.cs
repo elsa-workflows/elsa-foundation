@@ -93,6 +93,7 @@ public sealed class RuntimeAgentProviderContractTests
         var names = Enum.GetNames<WorkflowExecutionCommandKind>();
 
         Assert.Contains(nameof(WorkflowExecutionCommandKind.ScheduleActivity), names);
+        Assert.Contains(nameof(WorkflowExecutionCommandKind.StartActivity), names);
         Assert.Contains(nameof(WorkflowExecutionCommandKind.CompleteActivity), names);
         Assert.Contains(nameof(WorkflowExecutionCommandKind.DeliverSignal), names);
         Assert.Contains(nameof(WorkflowExecutionCommandKind.CreateBookmark), names);
