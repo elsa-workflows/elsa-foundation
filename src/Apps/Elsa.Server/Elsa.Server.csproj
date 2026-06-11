@@ -28,6 +28,7 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

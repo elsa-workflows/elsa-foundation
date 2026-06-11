@@ -10,6 +10,7 @@ using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
+using Elsa.Activities.Sequence;
 using Elsa.Caching.Memory;
 using Elsa.Events;
 using Elsa.Expressions;
@@ -65,6 +66,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // Workflow kind. These populate the constructor registry the bridge dispatches through.
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
+            typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesCompositionRuntimeFeature).Assembly,
 
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which

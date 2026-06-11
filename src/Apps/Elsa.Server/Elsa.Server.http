@@ -86,3 +86,84 @@ Content-Type: application/json
 Accept: application/json
 
 {}
+
+### 07. Find the Sequence activity definition.
+# @name searchSequenceActivityDefinitions
+GET {{host}}/design/activities/definitions?searchTerm=Sequence
+Accept: application/json
+
+### 08. Find the Sequence activity version used by the workflow root activity.
+# @name listSequenceActivityVersions
+GET {{host}}/design/activities/definitions/{{searchSequenceActivityDefinitions.response.body.$.[0].id}}/versions
+Accept: application/json
+
+### 09. Submit a workflow definition whose root Sequence writes two lines.
+### Run steps 01, 02, 07, and 08 first so the WriteLine and Sequence version IDs are available.
+# @name submitSequenceWriteLinesWorkflow
+POST {{host}}/design/workflows/definitions/submit
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Sequence Write Lines",
+  "description": "Runs two WriteLine activities inside a Sequence root activity.",
+  "state": {
+    "variables": [],
+    "rootActivity": {
+      "nodeId": "sequence-root",
+      "activityVersionId": "{{listSequenceActivityVersions.response.body.$.[0].id}}",
+      "inputs": [],
+      "outputs": [],
+      "childSlots": [
+        {
+          "name": "Sequence.Activities",
+          "activities": [
+            {
+              "nodeId": "write-sequence-line-one",
+              "activityVersionId": "{{writeLineActivityVersionId}}",
+              "inputs": [
+                {
+                  "referenceKey": "Text",
+                  "value": {
+                    "value": "Sequence line 1",
+                    "expressionType": "Literal"
+                  },
+                  "autoEvaluate": null,
+                  "evaluatorType": null,
+                  "storageDriverType": null,
+                  "isSensitive": null
+                }
+              ],
+              "outputs": [],
+              "childSlots": null
+            },
+            {
+              "nodeId": "write-sequence-line-two",
+              "activityVersionId": "{{writeLineActivityVersionId}}",
+              "inputs": [
+                {
+                  "referenceKey": "Text",
+                  "value": {
+                    "value": "Sequence line 2",
+                    "expressionType": "Literal"
+                  },
+                  "autoEvaluate": null,
+                  "evaluatorType": null,
+                  "storageDriverType": null,
+                  "isSensitive": null
+                }
+              ],
+              "outputs": [],
+              "childSlots": null
+            }
+          ],
+          "metadata": null
+        }
+      ]
+    },
+    "inputs": [],
+    "outputs": [],
+    "workflowActivityOptions": null,
+    "strategyOptions": null
+  }
+}
