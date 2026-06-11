@@ -112,9 +112,10 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DispatchesCompleteActivityWorkThroughNamedHandler()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
         var drainer = new WorkflowSchedulerDrainer(
             queue,
-            [new WorkflowCompleteActivitySchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            [new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FixedTimeProvider(_now)), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
@@ -126,6 +127,84 @@ public sealed class RuntimeSchedulerDrainTests
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
         Assert.Equal(WorkflowCompleteActivitySchedulerWorkHandler.HandlerName, item.HandlerName);
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_EnqueuesParentCompletionEvaluationWorkForCompletedChildWithParent()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        await activityStateStore.SaveAsync(NewParentActivityState());
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-parent"))));
+
+        var parentWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, parentWork.CommandKind);
+        Assert.Equal("work-1:parent:actexec-parent:child:actexec-1", parentWork.WorkItemId);
+        Assert.Equal(2, parentWork.Sequence);
+        var parentPayload = parentWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, parentPayload.CompletionKind);
+        Assert.Equal("actexec-parent", parentPayload.ActivityExecutionId);
+        Assert.Equal("actexec-1", parentPayload.CompletedChildActivityExecutionId);
+        Assert.Equal("node-parent", parentPayload.ExecutableNodeId);
+        Assert.Equal(["Done"], parentPayload.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_DoesNotEnqueueParentEvaluationForRootCompletion()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: null))));
+
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_AcceptsParentCompletionEvaluationWithoutSchedulingContinuation()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(
+                activityExecutionId: "actexec-parent",
+                completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
+                completedChildActivityExecutionId: "actexec-1"))));
+
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_FaultsWhenParentActivityStateIsMissing()
+    {
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
+            payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: "actexec-missing")))).AsTask());
+
+        Assert.Contains("missing parent activity execution 'actexec-missing'", exception.Message);
     }
 
     [Fact]
@@ -195,15 +274,48 @@ public sealed class RuntimeSchedulerDrainTests
             payload: payload ?? document.RootElement.Clone());
     }
 
-    private static RuntimeCompleteActivityCommandPayload NewCompleteActivityPayload() =>
+    private static RuntimeCompleteActivityCommandPayload NewCompleteActivityPayload(
+        string activityExecutionId = "actexec-1",
+        string? parentActivityExecutionId = null,
+        SchedulerCompletionKind completionKind = SchedulerCompletionKind.ActivityCompleted,
+        string? completedChildActivityExecutionId = null) =>
         new(
             pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             executableNodeId: "node-start",
-            activityExecutionId: "actexec-1",
-            parentActivityExecutionId: null,
+            activityExecutionId: activityExecutionId,
+            parentActivityExecutionId: parentActivityExecutionId,
             branchId: null,
             outcomeNames: ["Done"],
-            reason: RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
+            reason: completionKind == SchedulerCompletionKind.ParentCompletionEvaluation
+                ? RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason
+                : RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason,
+            completionKind: completionKind,
+            completedChildActivityExecutionId: completedChildActivityExecutionId);
+
+    private static ActivityExecutionState NewParentActivityState() =>
+        new(
+            Execution: new ActivityExecution(
+                ActivityExecutionId: "actexec-parent",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-parent",
+                AuthoredActivityId: "authored-node-parent",
+                ActivityType: "test/parent",
+                ActivityTypeVersion: "1.0.0"),
+            Status: ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-3),
+            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-2),
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: "branch-a",
+            IterationId: null,
+            CallStackDepth: 0,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
 
     private RuntimeSchedulerWorkItemResult CompletedResult(string workflowExecutionId) =>
         new(
