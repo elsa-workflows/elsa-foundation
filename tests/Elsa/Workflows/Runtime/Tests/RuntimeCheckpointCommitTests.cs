@@ -1687,5 +1687,8 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<OperationalState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<OperationalState>>([]);
+
+        public ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<OperationalState>>([]);
     }
 }

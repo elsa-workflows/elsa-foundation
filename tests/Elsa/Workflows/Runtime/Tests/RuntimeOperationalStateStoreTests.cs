@@ -22,6 +22,7 @@ public sealed class RuntimeOperationalStateStoreTests
 
         Assert.Same(first, await store.FindAsync("wfexec-1", "operational-1"));
         Assert.Equal(2, (await store.ListAsync("wfexec-1")).Count);
+        Assert.Equal(3, (await store.ListAllAsync()).Count);
         Assert.Single(await store.ListAsync("wfexec-2"));
         Assert.Null(await store.FindAsync("wfexec-1", "missing"));
     }
