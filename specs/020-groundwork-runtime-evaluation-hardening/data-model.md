@@ -22,7 +22,7 @@ Fields:
 
 - `Candidate`: The evaluated candidate.
 - `Recommendation`: Groundwork candidate category.
-- `Decision`: Go, conditional go, benchmark gate, or no-go.
+- `Decision`: Go, benchmark gate, or no-go.
 - `Reason`: Explanation for the recommendation.
 - `EvidenceGates`: Required evidence before implementation or migration.
 
