@@ -9,11 +9,20 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowSchedulerPauseGate? _pauseGate;
 
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers)
-        : this(schedulerWorkQueue, handlers, TimeProvider.System)
+        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate: null)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        IWorkflowSchedulerPauseGate pauseGate)
+        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate)
     {
     }
 
@@ -21,6 +30,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
         TimeProvider timeProvider)
+        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate: null)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        TimeProvider timeProvider,
+        IWorkflowSchedulerPauseGate? pauseGate)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -31,6 +49,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _customHandlers = handlerSnapshot.Where(handler => handler is not IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _timeProvider = timeProvider;
+        _pauseGate = pauseGate;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -44,6 +63,17 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            var nextWorkItem = await PeekAsync(request.WorkflowExecutionId, cancellationToken);
+            if (nextWorkItem is null)
+                break;
+
+            var pauseDecision = await EvaluatePauseAsync(nextWorkItem, cancellationToken);
+            if (pauseDecision is { CanAdvance: false })
+            {
+                results.Add(CreatePausedResult(nextWorkItem, pauseDecision));
+                break;
+            }
 
             var workItem = await _schedulerWorkQueue.DequeueAsync(request.WorkflowExecutionId, cancellationToken);
             if (workItem is null)
@@ -99,6 +129,34 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 completedAt: _timeProvider.GetUtcNow(),
                 error: exception.ToString());
         }
+    }
+
+    private async ValueTask<RuntimeSchedulerWorkItem?> PeekAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var items = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
+        return items.FirstOrDefault();
+    }
+
+    private async ValueTask<SchedulerPauseDecision?> EvaluatePauseAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
+    {
+        if (_pauseGate is null)
+            return null;
+
+        return await _pauseGate.EvaluateAsync(workItem, cancellationToken);
+    }
+
+    private RuntimeSchedulerWorkItemResult CreatePausedResult(RuntimeSchedulerWorkItem workItem, SchedulerPauseDecision decision)
+    {
+        var now = _timeProvider.GetUtcNow();
+        return new RuntimeSchedulerWorkItemResult(
+            workItemId: workItem.WorkItemId,
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            commandKind: workItem.CommandKind,
+            status: RuntimeSchedulerWorkItemResultStatus.Paused,
+            handlerName: nameof(WorkflowSchedulerPauseGate),
+            startedAt: now,
+            completedAt: now,
+            error: $"Scheduler work is paused at boundary '{decision.Boundary}' by hold '{decision.HoldId}': {decision.Reason}");
     }
 
     private IWorkflowSchedulerWorkHandler FindHandler(RuntimeSchedulerWorkItem workItem)

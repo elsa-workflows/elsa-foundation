@@ -78,6 +78,159 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_StopsBeforeDequeuingPauseBlockedWork()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new RecordingSchedulerWorkHandler();
+        var pauseGate = new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeActivityExecutionStart));
+        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        await queue.EnqueueAsync(NewStartActivityWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.Equal(0, result.DrainedCount);
+        Assert.False(result.StoppedOnFault);
+        Assert.True(result.StoppedOnPause);
+        Assert.Empty(handler.WorkItemIds);
+        Assert.Collection(pauseGate.WorkItemIds, id => Assert.Equal("work-1", id));
+        Assert.Collection(remaining, item => Assert.Equal("work-1", item.WorkItemId));
+        var itemResult = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Paused, itemResult.Status);
+        Assert.Equal(nameof(WorkflowSchedulerPauseGate), itemResult.HandlerName);
+        Assert.Contains("pause-1", itemResult.Error);
+        Assert.Contains(nameof(RuntimePauseBoundary.BeforeActivityExecutionStart), itemResult.Error);
+    }
+
+    [Fact]
+    public async Task DrainAsync_DispatchesQueuedWorkAfterPauseHoldIsReleased()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var store = new InMemoryControlPlaneStateStore();
+        var handler = new RecordingSchedulerWorkHandler();
+        var pauseGate = new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(store), new FixedTimeProvider(_now));
+        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        await store.SaveAsync(new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            activeHolds: [ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "Paused for maintenance.")]));
+        await queue.EnqueueAsync(NewStartActivityWorkItem(1));
+
+        var pausedResult = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        await store.SaveAsync(new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            releasedHolds:
+            [
+                new ControlPlaneHold(
+                    holdId: "pause-1",
+                    scope: ControlPlaneHoldScope.WorkflowExecution,
+                    status: ControlPlaneHoldStatus.Released,
+                    requestedAt: _now,
+                    requestedBy: "operator",
+                    reason: "Paused for maintenance.",
+                    workflowExecutionId: "wfexec-1",
+                    releasedAt: _now.AddMinutes(1),
+                    releasedBy: "operator")
+            ]));
+        var resumedResult = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.True(pausedResult.StoppedOnPause);
+        Assert.False(resumedResult.StoppedOnPause);
+        Assert.Equal(1, resumedResult.DrainedCount);
+        Assert.Collection(handler.WorkItemIds, id => Assert.Equal("work-1", id));
+        Assert.Empty(remaining);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, Assert.Single(resumedResult.Items).Status);
+    }
+
+    [Fact]
+    public async Task DrainAsync_EvaluatesGeneratedEventBoundaryBeforeDequeue()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var pauseGate = new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeGeneratorEmission));
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            pauseGate);
+        await queue.EnqueueAsync(NewGeneratedEventWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.True(result.StoppedOnPause);
+        Assert.Equal(0, result.DrainedCount);
+        Assert.Collection(remaining, item => Assert.Equal("work-1", item.WorkItemId));
+        Assert.Collection(pauseGate.WorkItemIds, id => Assert.Equal("work-1", id));
+        var itemResult = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Paused, itemResult.Status);
+        Assert.Equal(WorkflowExecutionCommandKind.GeneratedEvent, itemResult.CommandKind);
+    }
+
+    [Fact]
+    public async Task WorkflowSchedulerPauseGate_MapsSchedulerWorkToPauseDecisionRequests()
+    {
+        var provider = new RecordingRuntimePauseDecisionProvider();
+        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FixedTimeProvider(_now));
+
+        await pauseGate.EvaluateAsync(NewStartActivityWorkItem(1));
+        await pauseGate.EvaluateAsync(NewInvokeActivityWorkItem(2));
+        await pauseGate.EvaluateAsync(NewGeneratedEventWorkItem(3));
+        var ignoredDecision = await pauseGate.EvaluateAsync(NewWorkItem(4));
+
+        Assert.Null(ignoredDecision);
+        Assert.Collection(
+            provider.Requests,
+            startRequest =>
+            {
+                Assert.Equal(RuntimePauseBoundary.BeforeActivityExecutionStart, startRequest.Boundary);
+                Assert.Equal(_now, startRequest.EvaluatedAt);
+                Assert.Equal("wfexec-1", startRequest.WorkflowExecutionId);
+                Assert.Equal("actexec-1", startRequest.ActivityExecutionId);
+                Assert.Null(startRequest.GeneratorId);
+                Assert.Equal("work-1", startRequest.Metadata["runtime.schedulerWorkItemId"]);
+                Assert.Equal(nameof(WorkflowExecutionCommandKind.StartActivity), startRequest.Metadata["runtime.schedulerCommandKind"]);
+            },
+            invokeRequest =>
+            {
+                Assert.Equal(RuntimePauseBoundary.BeforeActivityExecutionStart, invokeRequest.Boundary);
+                Assert.Equal("wfexec-1", invokeRequest.WorkflowExecutionId);
+                Assert.Equal("actexec-2", invokeRequest.ActivityExecutionId);
+                Assert.Null(invokeRequest.GeneratorId);
+                Assert.Equal("work-2", invokeRequest.Metadata["runtime.schedulerWorkItemId"]);
+                Assert.Equal(nameof(WorkflowExecutionCommandKind.InvokeActivity), invokeRequest.Metadata["runtime.schedulerCommandKind"]);
+            },
+            generatedEventRequest =>
+            {
+                Assert.Equal(RuntimePauseBoundary.BeforeGeneratorEmission, generatedEventRequest.Boundary);
+                Assert.Equal("wfexec-1", generatedEventRequest.WorkflowExecutionId);
+                Assert.Equal("actexec-generator", generatedEventRequest.ActivityExecutionId);
+                Assert.Equal("generator-3", generatedEventRequest.GeneratorId);
+                Assert.Equal("work-3", generatedEventRequest.Metadata["runtime.schedulerWorkItemId"]);
+                Assert.Equal(nameof(WorkflowExecutionCommandKind.GeneratedEvent), generatedEventRequest.Metadata["runtime.schedulerCommandKind"]);
+            });
+    }
+
+    [Fact]
+    public async Task WorkflowSchedulerPauseGate_ReadsCaseInsensitiveSchedulerPayloads()
+    {
+        var provider = new RecordingRuntimePauseDecisionProvider();
+        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FixedTimeProvider(_now));
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        await pauseGate.EvaluateAsync(NewStartActivityWorkItem(7, jsonOptions));
+
+        var request = Assert.Single(provider.Requests);
+        Assert.Equal(RuntimePauseBoundary.BeforeActivityExecutionStart, request.Boundary);
+        Assert.Equal("wfexec-1", request.WorkflowExecutionId);
+        Assert.Equal("actexec-7", request.ActivityExecutionId);
+    }
+
+    [Fact]
     public async Task DrainAsync_UsesNoopFallbackWhenNoCustomHandlerMatches()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -467,6 +620,14 @@ public sealed class RuntimeSchedulerDrainTests
             startedAt: _now,
             completedAt: _now,
             error: "No error expected."));
+        Assert.Throws<ArgumentNullException>(() => new RuntimeSchedulerWorkItemResult(
+            workItemId: "work-1",
+            workflowExecutionId: "wfexec-1",
+            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            status: RuntimeSchedulerWorkItemResultStatus.Paused,
+            handlerName: "handler",
+            startedAt: _now,
+            completedAt: _now));
         Assert.Throws<ArgumentException>(() => new RuntimeSchedulerDrainResult(
             workflowExecutionId: "wfexec-1",
             startedAt: _now,
@@ -478,7 +639,8 @@ public sealed class RuntimeSchedulerDrainTests
         int index,
         string workflowExecutionId = "wfexec-1",
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork,
-        JsonElement? payload = null)
+        JsonElement? payload = null,
+        IReadOnlyDictionary<string, string>? commandMetadata = null)
     {
         using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
@@ -491,8 +653,51 @@ public sealed class RuntimeSchedulerDrainTests
             enqueuedAt: _now,
             recordedAt: _now,
             sequence: index,
-            payload: payload ?? document.RootElement.Clone());
+            payload: payload ?? document.RootElement.Clone(),
+            commandMetadata: commandMetadata);
     }
+
+    private RuntimeSchedulerWorkItem NewStartActivityWorkItem(int index, JsonSerializerOptions? jsonSerializerOptions = null) =>
+        NewWorkItem(
+            index,
+            commandKind: WorkflowExecutionCommandKind.StartActivity,
+            payload: JsonSerializer.SerializeToElement(new RuntimeStartActivityCommandPayload(
+                NewPinnedExecutable(),
+                "node-start",
+                $"actexec-{index}",
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), jsonSerializerOptions));
+
+    private RuntimeSchedulerWorkItem NewInvokeActivityWorkItem(int index) =>
+        NewWorkItem(
+            index,
+            commandKind: WorkflowExecutionCommandKind.InvokeActivity,
+            payload: JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
+                NewPinnedExecutable(),
+                "node-start",
+                $"actexec-{index}",
+                RuntimeInvokeActivityCommandPayload.StartedActivityReason)));
+
+    private RuntimeSchedulerWorkItem NewGeneratedEventWorkItem(int index) =>
+        NewWorkItem(
+            index,
+            commandKind: WorkflowExecutionCommandKind.GeneratedEvent,
+            payload: JsonSerializer.SerializeToElement(new SchedulerGeneratedEventWorkItem(
+                workItemId: $"generated-work-{index}",
+                generatedEvent: new GeneratedEvent(
+                    generatedEventId: $"event-{index}",
+                    workflowExecutionId: "wfexec-1",
+                    generatorActivityExecutionId: "actexec-generator",
+                    branchId: "branch-1",
+                    name: "Tick",
+                    sequence: index,
+                    occurredAt: _now,
+                    durability: GeneratedEventDurability.PolicyControlled),
+                enqueuedAt: _now,
+                reason: "GeneratorEmitted")),
+            commandMetadata: new Dictionary<string, string>
+            {
+                ["GeneratorId"] = $"generator-{index}"
+            });
 
     private static RuntimeCompleteActivityCommandPayload NewCompleteActivityPayload(
         string activityExecutionId = "actexec-1",
@@ -512,9 +717,12 @@ public sealed class RuntimeSchedulerDrainTests
             completionKind: completionKind,
             completedChildActivityExecutionId: completedChildActivityExecutionId);
 
+    private static WorkflowExecutableIdentity NewPinnedExecutable() =>
+        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
     private static RuntimeCheckpointCommandPayload NewCheckpointPayload() =>
         new(
-            pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            pinnedExecutable: NewPinnedExecutable(),
             checkpointName: RuntimeCheckpointNames.ActivityCompleted,
             activityExecutionIds: ["actexec-1"],
             reason: RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
@@ -605,6 +813,14 @@ public sealed class RuntimeSchedulerDrainTests
             startedAt: _now,
             completedAt: _now);
 
+    private static SchedulerPauseDecision BlockedDecision(RuntimePauseBoundary boundary) =>
+        new(
+            canAdvance: false,
+            boundary: boundary,
+            continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
+            holdId: "pause-1",
+            reason: "Paused by test.");
+
     private sealed class RecordingSchedulerWorkHandler(string? faultOnWorkItemId = null, bool canHandle = true) : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(RecordingSchedulerWorkHandler);
@@ -628,6 +844,39 @@ public sealed class RuntimeSchedulerDrainTests
 
             WorkItemIds.Add(workItem.WorkItemId);
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingWorkflowSchedulerPauseGate(SchedulerPauseDecision? decision) : IWorkflowSchedulerPauseGate
+    {
+        public List<string> WorkItemIds { get; } = [];
+
+        public ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(workItem);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            WorkItemIds.Add(workItem.WorkItemId);
+            return new ValueTask<SchedulerPauseDecision?>(decision);
+        }
+    }
+
+    private sealed class RecordingRuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
+    {
+        public List<RuntimePauseDecisionRequest> Requests { get; } = [];
+
+        public ValueTask<SchedulerPauseDecision> DecideAsync(RuntimePauseDecisionRequest request, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            Requests.Add(request);
+            return new(new SchedulerPauseDecision(
+                canAdvance: true,
+                boundary: request.Boundary,
+                continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
+                holdId: null,
+                reason: null));
         }
     }
 

@@ -42,8 +42,9 @@ public sealed class RuntimeSchedulerDrainResult
     public string WorkflowExecutionId { get; }
     public DateTimeOffset StartedAt { get; }
     public DateTimeOffset CompletedAt { get; }
-    public int DrainedCount => Items.Count;
+    public int DrainedCount => Items.Count(item => item.Status is RuntimeSchedulerWorkItemResultStatus.Completed or RuntimeSchedulerWorkItemResultStatus.Faulted);
     public bool StoppedOnFault => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Faulted);
+    public bool StoppedOnPause => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Paused);
     public IReadOnlyCollection<RuntimeSchedulerWorkItemResult> Items { get; }
 }
 
@@ -63,7 +64,7 @@ public sealed class RuntimeSchedulerWorkItemResult
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(handlerName);
 
-        if (status == RuntimeSchedulerWorkItemResultStatus.Faulted)
+        if (status is RuntimeSchedulerWorkItemResultStatus.Faulted or RuntimeSchedulerWorkItemResultStatus.Paused)
             ArgumentException.ThrowIfNullOrWhiteSpace(error);
 
         if (status == RuntimeSchedulerWorkItemResultStatus.Completed && error is not null)
@@ -92,5 +93,6 @@ public sealed class RuntimeSchedulerWorkItemResult
 public enum RuntimeSchedulerWorkItemResultStatus
 {
     Completed,
-    Faulted
+    Faulted,
+    Paused
 }
