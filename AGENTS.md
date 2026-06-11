@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Parent Completion Evaluation Enqueue](specs/031-runtime-parent-completion-evaluation/plan.md)
+Current Speckit plan: [Runtime Continuation Scheduling Enqueue](specs/032-runtime-continuation-scheduling-enqueue/plan.md)
 <!-- SPECKIT END -->
