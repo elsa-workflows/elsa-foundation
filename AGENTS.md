@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Storage Driver Boundary](specs/066-runtime-storage-driver-boundary/plan.md)
+Current Speckit plan: [Runtime Remove Direct Executor](specs/067-runtime-remove-direct-executor/plan.md)
 <!-- SPECKIT END -->
