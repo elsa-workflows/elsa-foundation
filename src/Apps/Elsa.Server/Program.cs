@@ -2,6 +2,7 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Server;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
@@ -22,6 +23,9 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Nuplane;
+using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Sources.Directory.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -29,19 +33,18 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
 
-//builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
-//{
-//    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
-//    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-//});
-//builder.Services.AddNuplaneAdmin();
-//builder.Services.AddSingleton<NuplaneFeatureAssemblyProvider>();
+builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
+{
+    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
+    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
+});
+builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
         .WithHostAssemblies()
-        //.WithAssemblyProvider<NuplaneFeatureAssemblyProvider>()
+        .WithAssemblyProvider<NuplaneAssemblyProvider>()
 
         .WithAssemblies(
             typeof(PrimitivesFeature).Assembly,
