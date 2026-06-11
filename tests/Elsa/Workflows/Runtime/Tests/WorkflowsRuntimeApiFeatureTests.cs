@@ -49,6 +49,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore) &&
             descriptor.ImplementationType == typeof(InMemoryRuntimePostCommitOutboxStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimePostCommitOutboxProcessor) &&
+            descriptor.ImplementationType == typeof(RuntimePostCommitOutboxProcessor));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
@@ -123,6 +126,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
