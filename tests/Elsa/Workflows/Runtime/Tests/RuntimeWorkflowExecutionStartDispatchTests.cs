@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -65,9 +66,10 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("missing-artifact", "runtime-test")).AsTask());
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("missing-artifact", "runtime-test")).AsTask());
 
         Assert.Contains("missing-artifact", exception.Message);
+        Assert.Equal("missing-artifact", exception.ArtifactId);
         Assert.Empty(agentProvider.ActivationRequests);
         Assert.Empty(agentProvider.Agent.Envelopes);
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -43,7 +44,7 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
         ArgumentNullException.ThrowIfNull(request);
 
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
-            ?? throw new ArgumentException($"Workflow executable artifact '{request.ArtifactId}' does not exist.");
+            ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();

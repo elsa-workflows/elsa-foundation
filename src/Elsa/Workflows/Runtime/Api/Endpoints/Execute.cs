@@ -3,6 +3,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +35,7 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
             var statusCode = dispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected ? 409 : 202;
             await Send.ResponseAsync(result, statusCode, ct);
         }
-        catch (ArgumentException e)
+        catch (WorkflowExecutableNotFoundException e)
         {
             ThrowError(e, 400);
         }

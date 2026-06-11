@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -14,9 +15,10 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     {
         var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(new InMemoryWorkflowExecutableStore()));
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => handler.Handle(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
 
         Assert.Contains("missing-artifact", exception.Message);
+        Assert.Equal("missing-artifact", exception.ArtifactId);
     }
 
     [Fact]
