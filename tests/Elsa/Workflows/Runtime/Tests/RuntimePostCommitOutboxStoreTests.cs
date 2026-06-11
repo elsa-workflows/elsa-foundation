@@ -125,6 +125,54 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
+    public async Task InMemoryRuntimePostCommitOutboxStore_RetryableFailureWithoutRemainingAttemptsBecomesTerminal()
+    {
+        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var item = NewOutboxItem(
+            "outbox-1",
+            "intent-1",
+            "wfexec-1",
+            retryPolicy: RuntimePostCommitRetryPolicy.None);
+
+        await store.SavePendingAsync(item);
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId: "outbox-1",
+            status: RuntimePostCommitOutboxStatus.FailedRetryable,
+            recordedAt: _now.AddSeconds(1),
+            failureMessage: "dispatch failed"));
+
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), limit: 10)));
+
+        var terminalException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId: "outbox-1",
+            status: RuntimePostCommitOutboxStatus.Cancelled,
+            recordedAt: _now.AddSeconds(2))).AsTask());
+        Assert.Contains("terminal", terminalException.Message);
+    }
+
+    [Fact]
+    public async Task InMemoryRuntimePostCommitOutboxStore_FailedFinalResultIsTerminalAndNotDeliverable()
+    {
+        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
+
+        await store.SavePendingAsync(item);
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId: "outbox-1",
+            status: RuntimePostCommitOutboxStatus.FailedFinal,
+            recordedAt: _now.AddSeconds(1),
+            failureMessage: "dispatch failed"));
+
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), limit: 10)));
+
+        var terminalException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId: "outbox-1",
+            status: RuntimePostCommitOutboxStatus.Cancelled,
+            recordedAt: _now.AddSeconds(2))).AsTask());
+        Assert.Contains("terminal", terminalException.Message);
+    }
+
+    [Fact]
     public async Task InMemoryRuntimePostCommitOutboxStore_RejectsDeliveryResultForMissingOrTerminalItem()
     {
         var store = new InMemoryRuntimePostCommitOutboxStore();
@@ -157,6 +205,7 @@ public sealed class RuntimePostCommitOutboxStoreTests
         RuntimePostCommitOutboxStatus status = RuntimePostCommitOutboxStatus.Pending,
         DateTimeOffset? availableAt = null,
         DateTimeOffset? deliveredAt = null,
+        RuntimePostCommitRetryPolicy? retryPolicy = null,
         string? dependsOnWaitRegistrationId = null,
         RuntimeWaitDependentIntentFailurePolicy? failurePolicy = null) =>
         new(
@@ -165,7 +214,7 @@ public sealed class RuntimePostCommitOutboxStoreTests
             status: status,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
-            retryPolicy: new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)),
+            retryPolicy: retryPolicy ?? new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)),
             deliveredAt: deliveredAt);
 
     private RuntimePostCommitIntent NewIntent(

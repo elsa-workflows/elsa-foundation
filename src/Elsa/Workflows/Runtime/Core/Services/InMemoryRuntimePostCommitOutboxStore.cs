@@ -70,21 +70,22 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
 
             var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
-            DateTimeOffset? availableAt = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable
+            var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);
+            DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? NextRetryAvailableAt(existing, result.RecordedAt)
                 : null;
 
             _items[result.OutboxItemId] = new RuntimePostCommitOutboxItem(
                 outboxItemId: existing.OutboxItemId,
                 intent: existing.Intent,
-                status: result.Status,
+                status: status,
                 recordedAt: existing.RecordedAt,
                 availableAt: availableAt,
                 retryPolicy: existing.RetryPolicy,
                 deliveryAttemptCount: deliveryAttemptCount,
                 deliveringOwnerId: null,
                 deliveryStartedAt: null,
-                deliveredAt: result.Status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
+                deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
                 lastFailureMessage: result.FailureMessage,
                 metadata: existing.Metadata);
         }
@@ -117,6 +118,19 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
             return item.RetryPolicy.MaxAttempts > 0 && item.DeliveryAttemptCount < item.RetryPolicy.MaxAttempts;
 
         return false;
+    }
+
+    private static RuntimePostCommitOutboxStatus NormalizeDeliveryStatus(
+        RuntimePostCommitOutboxItem existing,
+        RuntimePostCommitOutboxStatus status,
+        int deliveryAttemptCount)
+    {
+        if (status != RuntimePostCommitOutboxStatus.FailedRetryable)
+            return status;
+
+        return deliveryAttemptCount >= existing.RetryPolicy.MaxAttempts
+            ? RuntimePostCommitOutboxStatus.FailedFinal
+            : RuntimePostCommitOutboxStatus.FailedRetryable;
     }
 
     private static DateTimeOffset NextRetryAvailableAt(RuntimePostCommitOutboxItem existing, DateTimeOffset recordedAt) =>
