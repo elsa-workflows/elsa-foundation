@@ -15,3 +15,72 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 37 | 18 | retained, deferred, out of scope, construct-only |
 | [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Draft | - | 18 | 0 | deferred, out of scope |
+| [008-checkpoint-commit-envelope](../../specs/008-checkpoint-commit-envelope/spec.md) | Checkpoint Commit Envelope And Post-Commit Intent Boundary | Draft | - | 6 | 0 | deferred, out of scope |
+| [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Draft | - | 7 | 0 | out of scope |
+| [010-runtime-bookmark-resume-contract](../../specs/010-runtime-bookmark-resume-contract/spec.md) | Runtime Bookmark Resume Contract | Draft | - | 8 | 0 | out of scope |
+| [011-runtime-value-binding-contract](../../specs/011-runtime-value-binding-contract/spec.md) | Runtime Value Binding Contract | unknown | - | 9 | 0 | out of scope |
+| [012-groundwork-persistence-foundation](../../specs/012-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
+| [012-runtime-diagnostics-history-incidents](../../specs/012-runtime-diagnostics-history-incidents/spec.md) | Runtime Diagnostics History And Incidents | unknown | - | 9 | 0 | out of scope |
+| [013-groundwork-core-manifest-planner](../../specs/013-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Draft | - | 38 | 0 | - |
+| [013-runtime-operational-recovery-outbox](../../specs/013-runtime-operational-recovery-outbox/spec.md) | Runtime Operational Recovery And Post-Commit Outbox | unknown | - | 10 | 0 | out of scope |
+| [014-groundwork-sqlite-document-store](../../specs/014-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Draft | - | 17 | 0 | - |
+| [014-runtime-elsa3-migration-boundary](../../specs/014-runtime-elsa3-migration-boundary/spec.md) | Runtime Elsa 3 Migration Boundary | unknown | - | 8 | 0 | out of scope |
+| [015-groundwork-elsa-bridge](../../specs/015-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Draft | - | 18 | 0 | out of scope |
+| [015-runtime-volatile-wait-contract](../../specs/015-runtime-volatile-wait-contract/spec.md) | Runtime Volatile Wait Contract | Draft | - | 7 | 1 | - |
+| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Draft | - | 40 | 0 | out of scope |
+| [016-groundwork-relational-providers](../../specs/016-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Draft | - | 21 | 0 | - |
+| [016-runtime-completion-propagation-contract](../../specs/016-runtime-completion-propagation-contract/spec.md) | Runtime Completion Propagation Contract | Draft | - | 6 | 1 | - |
+| [017-groundwork-mongodb-provider](../../specs/017-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Draft | - | 15 | 0 | - |
+| [017-runtime-generator-contract](../../specs/017-runtime-generator-contract/spec.md) | Runtime Generator Contract | Draft | - | 0 | 0 | - |
+| [018-groundwork-runtime-entities](../../specs/018-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Draft | - | 9 | 0 | deferred |
+| [018-runtime-control-plane-contract](../../specs/018-runtime-control-plane-contract/spec.md) | Runtime Control Plane Contract | Draft | - | 0 | 0 | - |
+| [019-groundwork-physicalization-performance](../../specs/019-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Draft | - | 17 | 0 | deferred |
+| [019-runtime-wait-intent-contract](../../specs/019-runtime-wait-intent-contract/spec.md) | Runtime Wait Registration And Post-Commit Intent Contract | Draft | - | 0 | 0 | - |
+| [020-groundwork-runtime-evaluation-hardening](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Draft | - | 9 | 0 | - |
+| [020-runtime-agent-provider-contract](../../specs/020-runtime-agent-provider-contract/spec.md) | Runtime Execution Agent Provider Contract | Draft | - | 0 | 0 | - |
+| [021-runtime-inprocess-agent-provider](../../specs/021-runtime-inprocess-agent-provider/spec.md) | Runtime In-Process Execution Agent Provider | Draft | - | 0 | 0 | - |
+| [022-runtime-scheduler-work-queue](../../specs/022-runtime-scheduler-work-queue/spec.md) | Runtime Scheduler Work Queue | Draft | - | 0 | 0 | - |
+| [023-runtime-scheduler-drain-contract](../../specs/023-runtime-scheduler-drain-contract/spec.md) | Runtime Scheduler Drain Contract | Draft | - | 0 | 0 | - |
+| [024-runtime-scheduler-command-drain-dispatch](../../specs/024-runtime-scheduler-command-drain-dispatch/spec.md) | 024-runtime-scheduler-command-drain-dispatch | unknown | - | 0 | 0 | - |
+| [025-runtime-api-agent-dispatch](../../specs/025-runtime-api-agent-dispatch/spec.md) | 025-runtime-api-agent-dispatch | unknown | - | 0 | 0 | - |
+| [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | - |
+| [027-runtime-schedule-activity-state](../../specs/027-runtime-schedule-activity-state/spec.md) | 027-runtime-schedule-activity-state | unknown | - | 0 | 0 | - |
+| [028-runtime-activity-start-state](../../specs/028-runtime-activity-start-state/spec.md) | 028-runtime-activity-start-state | unknown | - | 0 | 0 | - |
+| [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | 029-runtime-activity-invocation-boundary | unknown | - | 0 | 0 | - |
+| [030-runtime-activity-completion-work-enqueue](../../specs/030-runtime-activity-completion-work-enqueue/spec.md) | Runtime Activity Completion Work Enqueue | Draft | - | 7 | 1 | - |
+| [031-runtime-parent-completion-evaluation](../../specs/031-runtime-parent-completion-evaluation/spec.md) | Runtime Parent Completion Evaluation Enqueue | Draft | - | 6 | 1 | - |
+| [032-runtime-continuation-scheduling-enqueue](../../specs/032-runtime-continuation-scheduling-enqueue/spec.md) | Runtime Continuation Scheduling Enqueue | Draft | - | 6 | 1 | - |
+| [033-runtime-completion-checkpoint-enqueue](../../specs/033-runtime-completion-checkpoint-enqueue/spec.md) | Runtime Completion Checkpoint Enqueue | Draft | - | 7 | 1 | - |
+| [034-runtime-checkpoint-commit-dispatch](../../specs/034-runtime-checkpoint-commit-dispatch/spec.md) | Runtime Checkpoint Commit Dispatch | Draft | - | 8 | 0 | - |
+| [035-runtime-downstream-scheduling](../../specs/035-runtime-downstream-scheduling/spec.md) | Runtime Downstream Scheduling | Draft | - | 9 | 0 | - |
+| [036-runtime-root-continuation-scheduling](../../specs/036-runtime-root-continuation-scheduling/spec.md) | Runtime Root Continuation Scheduling | Draft | - | 7 | 0 | - |
+| [037-runtime-terminal-workflow-completion](../../specs/037-runtime-terminal-workflow-completion/spec.md) | Runtime Terminal Workflow Completion | Draft | - | 8 | 0 | - |
+| [038-runtime-workflow-start-checkpoint](../../specs/038-runtime-workflow-start-checkpoint/spec.md) | Runtime Workflow Start Checkpoint | Draft | - | 9 | 0 | - |
+| [039-runtime-workflow-state-store](../../specs/039-runtime-workflow-state-store/spec.md) | Runtime Workflow Execution State Store | Draft | - | 9 | 0 | - |
+| [040-runtime-activity-state-projection](../../specs/040-runtime-activity-state-projection/spec.md) | Runtime Activity Execution State Projection | Draft | - | 8 | 0 | - |
+| [041-runtime-bookmark-state-projection](../../specs/041-runtime-bookmark-state-projection/spec.md) | Runtime Bookmark State Projection | Draft | - | 10 | 0 | - |
+| [042-runtime-durable-value-state-projection](../../specs/042-runtime-durable-value-state-projection/spec.md) | Runtime Durable Value State Projection | Draft | - | 10 | 0 | - |
+| [043-runtime-incident-state-projection](../../specs/043-runtime-incident-state-projection/spec.md) | Runtime Incident State Projection | Draft | - | 10 | 0 | - |
+| [044-runtime-operational-state-projection](../../specs/044-runtime-operational-state-projection/spec.md) | Runtime Operational State Projection | Draft | - | 10 | 0 | - |
+| [045-runtime-scheduler-state-projection](../../specs/045-runtime-scheduler-state-projection/spec.md) | Runtime Scheduler State Projection | Draft | - | 10 | 0 | - |
+| [046-runtime-post-commit-outbox-store](../../specs/046-runtime-post-commit-outbox-store/spec.md) | Runtime Post-Commit Outbox Store | Draft | - | 9 | 0 | - |
+| [047-runtime-post-commit-outbox-recording](../../specs/047-runtime-post-commit-outbox-recording/spec.md) | Runtime Post-Commit Outbox Recording | Draft | - | 9 | 0 | - |
+| [048-runtime-post-commit-outbox-processor](../../specs/048-runtime-post-commit-outbox-processor/spec.md) | Runtime Post-Commit Outbox Processor | Draft | - | 9 | 0 | - |
+| [049-runtime-recovery-scanner](../../specs/049-runtime-recovery-scanner/spec.md) | Runtime Recovery Scanner | Draft | - | 9 | 0 | - |
+| [050-runtime-domain-retry-policy](../../specs/050-runtime-domain-retry-policy/spec.md) | Runtime Domain Retry Policy | Draft | - | 9 | 0 | - |
+| [051-runtime-volatile-wait-policy](../../specs/051-runtime-volatile-wait-policy/spec.md) | Runtime Volatile Wait Policy | Draft | - | 9 | 0 | - |
+| [052-runtime-control-plane-state-store](../../specs/052-runtime-control-plane-state-store/spec.md) | Runtime Control Plane State Store | Draft | - | 10 | 0 | - |
+| [053-runtime-generator-emission-scheduler](../../specs/053-runtime-generator-emission-scheduler/spec.md) | Runtime Generator Emission Scheduler | Draft | - | 10 | 0 | - |
+| [054-runtime-pause-boundary-enforcement](../../specs/054-runtime-pause-boundary-enforcement/spec.md) | Runtime Pause Boundary Enforcement | Draft | - | 11 | 0 | - |
+| [055-runtime-bookmark-stimulus-resume](../../specs/055-runtime-bookmark-stimulus-resume/spec.md) | Runtime Bookmark Stimulus Resume Dispatch | Draft | - | 12 | 0 | - |
+| [056-runtime-bookmark-resume-handler-boundary](../../specs/056-runtime-bookmark-resume-handler-boundary/spec.md) | Runtime Bookmark Resume Handler Boundary | Draft | - | 11 | 0 | - |
+| [057-runtime-bookmark-consumption-checkpoint](../../specs/057-runtime-bookmark-consumption-checkpoint/spec.md) | Runtime Bookmark Consumption Checkpoint | Draft | - | 10 | 0 | - |
+| [058-runtime-bookmark-creation-checkpoint](../../specs/058-runtime-bookmark-creation-checkpoint/spec.md) | Runtime Bookmark Creation Checkpoint | Draft | - | 11 | 0 | - |
+| [059-runtime-activity-bookmark-request](../../specs/059-runtime-activity-bookmark-request/spec.md) | Runtime Activity Bookmark Request | Draft | - | 10 | 0 | - |
+| [060-runtime-activity-output-capture](../../specs/060-runtime-activity-output-capture/spec.md) | Runtime Activity Output Capture | Draft | - | 11 | 0 | - |
+| [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Draft | - | 10 | 0 | - |
+| [062-runtime-activity-fault-incidents](../../specs/062-runtime-activity-fault-incidents/spec.md) | Runtime Activity Fault Incidents | Draft | - | 9 | 0 | - |
+| [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Draft | - | 9 | 0 | - |
+| [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Draft | - | 7 | 0 | - |
+| [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Draft | - | 7 | 0 | - |
+| [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 8 | 1 | - |

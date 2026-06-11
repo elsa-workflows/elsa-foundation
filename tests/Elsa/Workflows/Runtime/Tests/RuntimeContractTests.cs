@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Reflection;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -150,6 +151,17 @@ public sealed class RuntimeContractTests
         Assert.Equal(DurableValueStorage.Inline, state.Storage);
         Assert.Equal("actexec-fetch-customer", state.SourceActivityExecutionId);
         Assert.Equal("cust-123", state.InlineValue!.Value.GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public void DurableValueContracts_ReplaceLegacyRuntimeStorageDrivers()
+    {
+        var runtimeCoreAssembly = typeof(IDurableValueStateStore).Assembly;
+
+        Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IStorageDriver"));
+        Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IStorageDriverContext"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IDurableValueStateStore"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Models.DurableValueState"));
     }
 
     [Theory]

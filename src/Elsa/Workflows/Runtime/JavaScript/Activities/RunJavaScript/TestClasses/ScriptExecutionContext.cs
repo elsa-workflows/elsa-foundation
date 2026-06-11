@@ -10,6 +10,7 @@ internal sealed class ScriptExecutionContext(IServiceProvider serviceProvider)
     : IActivityExecutionContext
 {
     private OutputArgument<object?>? activityOutput;
+    private readonly List<ActivityBookmarkRequest> bookmarkRequests = [];
     private string[] outcomes = [];
 
     public IExpressionExecutionContext ExpressionExecutionContext { get; } = new ScriptExpressionContext(serviceProvider);
@@ -54,4 +55,16 @@ internal sealed class ScriptExecutionContext(IServiceProvider serviceProvider)
     {
         this.outcomes = outcomes;
     }
+
+    public void CreateBookmark(ActivityBookmarkRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (bookmarkRequests.Any(existing => StringComparer.Ordinal.Equals(existing.BookmarkId, request.BookmarkId)))
+            throw new InvalidOperationException($"Bookmark request '{request.BookmarkId}' is already registered for this activity execution.");
+
+        bookmarkRequests.Add(request);
+    }
+
+    public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => bookmarkRequests.ToArray();
 }

@@ -8,7 +8,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 
 | Package | Versions | Projects |
 |---|---|---|
-| CShells.Abstractions | 0.0.24 | Elsa.Activities.Composition.Runtime (0.0.24)<br>Elsa.Activities.Design.Reconciliation (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.24)<br>Elsa.Activities.Primitives (0.0.24)<br>Elsa.Activities.Runtime (0.0.24)<br>Elsa.Caching.Memory (0.0.24)<br>Elsa.Events (0.0.24)<br>Elsa.Expressions (0.0.24)<br>Elsa.Expressions.JavaScript (0.0.24)<br>Elsa.Expressions.JavaScript.Jint (0.0.24)<br>Elsa.Expressions.JavaScript.Libraries (0.0.24)<br>Elsa.Expressions.JavaScript.Rendering (0.0.24)<br>Elsa.Expressions.Liquid (0.0.24)<br>Elsa.Http (0.0.24)<br>Elsa.Http.JavaScript (0.0.24)<br>Elsa.Locking.FileSystem (0.0.24)<br>Elsa.Mediator (0.0.24)<br>Elsa.Persistence.EFCore (0.0.24)<br>Elsa.Primitives.Hosting (0.0.24)<br>Elsa.Serialization.Newtonsoft (0.0.24)<br>Elsa.Serialization.SystemText (0.0.24)<br>Elsa.Tasks (0.0.24)<br>Elsa.Workflows.Design.JavaScript (0.0.24)<br>Elsa.Workflows.Design.Reconciliation (0.0.24)<br>Elsa.Workflows.Design.Validations (0.0.24)<br>Elsa.Workflows.Runtime.Http (0.0.24)<br>Elsa.Workflows.Runtime.JavaScript (0.0.24)<br>Elsa3.Activities.Design.Import (0.0.24)<br>Elsa3.Mapping (0.0.24) |
+| CShells.Abstractions | 0.0.24 | Elsa.Activities.Composition.Runtime (0.0.24)<br>Elsa.Activities.Design.Reconciliation (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.24)<br>Elsa.Activities.Primitives (0.0.24)<br>Elsa.Activities.Runtime (0.0.24)<br>Elsa.Caching.Memory (0.0.24)<br>Elsa.Events (0.0.24)<br>Elsa.Expressions (0.0.24)<br>Elsa.Expressions.JavaScript (0.0.24)<br>Elsa.Expressions.JavaScript.Jint (0.0.24)<br>Elsa.Expressions.JavaScript.Libraries (0.0.24)<br>Elsa.Expressions.JavaScript.Rendering (0.0.24)<br>Elsa.Expressions.Liquid (0.0.24)<br>Elsa.Http (0.0.24)<br>Elsa.Http.JavaScript (0.0.24)<br>Elsa.Locking.FileSystem (0.0.24)<br>Elsa.Mediator (0.0.24)<br>Elsa.Persistence.EFCore (0.0.24)<br>Elsa.Persistence.Groundwork (0.0.24)<br>Elsa.Primitives.Hosting (0.0.24)<br>Elsa.Serialization.Newtonsoft (0.0.24)<br>Elsa.Serialization.SystemText (0.0.24)<br>Elsa.Tasks (0.0.24)<br>Elsa.Workflows.Design.JavaScript (0.0.24)<br>Elsa.Workflows.Design.Reconciliation (0.0.24)<br>Elsa.Workflows.Design.Validations (0.0.24)<br>Elsa.Workflows.Runtime.Http (0.0.24)<br>Elsa.Workflows.Runtime.JavaScript (0.0.24)<br>Elsa3.Activities.Design.Import (0.0.24)<br>Elsa3.Mapping (0.0.24) |
 | CShells.FastEndpoints | 0.0.24 | Elsa.Server (0.0.24) |
 | CShells.FastEndpoints.Abstractions | 0.0.24 | Elsa.Api.FastEndpoints (0.0.24) |
 | Cronos | 0.13.0 | Elsa.Tasks.Schedules (0.13.0) |
@@ -23,6 +23,8 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
+| Microsoft.Data.SqlClient | 7.0.1 | Groundwork.RelationalProviders.Tests (7.0.1)<br>Groundwork.SqlServer (7.0.1) |
+| Microsoft.Data.Sqlite | 10.0.8 | Elsa.Persistence.Groundwork.Tests (10.0.8)<br>Groundwork.Sqlite (10.0.8) |
 | Microsoft.EntityFrameworkCore | 10.0.8 | Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Persistence.EFCore (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
 | Microsoft.EntityFrameworkCore.Design | 10.0.8 | Elsa.Activities.Design.Persistence.EFCore.Sqlite (10.0.8)<br>Elsa.Server (10.0.8)<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite (10.0.8) |
 | Microsoft.EntityFrameworkCore.Relational | 10.0.8 | Elsa.Persistence.EFCore (10.0.8) |
@@ -30,14 +32,17 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.Extensions.Caching.Abstractions | 10.0.8 | Elsa.Caching.Core (10.0.8)<br>Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Expressions.Liquid (10.0.8)<br>Elsa.Http.JavaScript (10.0.8) |
 | Microsoft.Extensions.Caching.Memory | 10.0.8 | Elsa.Caching.Memory (10.0.8) |
 | Microsoft.Extensions.Configuration.Abstractions | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http.JavaScript (10.0.8) |
-| Microsoft.Extensions.DependencyInjection | 10.0.8 | Elsa.Activities.Composition.Tests (10.0.8)<br>Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Activities.Runtime.Tests (10.0.8)<br>Elsa.Architecture.Tests (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
-| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events.Core (10.0.8)<br>Elsa.Events.Strategies (10.0.8)<br>Elsa.Expressions.JavaScript (10.0.8)<br>Elsa.Mediator.Core (10.0.8)<br>Elsa.Pipelines.Core (10.0.8)<br>Elsa.Primitives.Hosting (10.0.8)<br>Elsa.Serialization.Newtonsoft (10.0.8)<br>Elsa.Serialization.SystemText (10.0.8)<br>Elsa.Tasks.Core (10.0.8) |
+| Microsoft.Extensions.DependencyInjection | 10.0.8 | Elsa.Activities.Composition.Tests (10.0.8)<br>Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Activities.Runtime.Tests (10.0.8)<br>Elsa.Architecture.Tests (10.0.8)<br>Elsa.Persistence.Groundwork.Tests (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
+| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events.Core (10.0.8)<br>Elsa.Events.Strategies (10.0.8)<br>Elsa.Expressions.JavaScript (10.0.8)<br>Elsa.Mediator.Core (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Pipelines.Core (10.0.8)<br>Elsa.Primitives.Hosting (10.0.8)<br>Elsa.Serialization.Newtonsoft (10.0.8)<br>Elsa.Serialization.SystemText (10.0.8)<br>Elsa.Tasks.Core (10.0.8) |
 | Microsoft.Extensions.Http | 10.0.8 | Elsa.Http (10.0.8) |
-| Microsoft.Extensions.Logging.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events (10.0.8)<br>Elsa.Expressions (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Mediator (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Tasks.Schedules (10.0.8)<br>Elsa.Workflows.Design.Reconciliation (10.0.8)<br>Elsa3.Activities.Design.Import (10.0.8) |
-| Microsoft.Extensions.Options | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Http.JavaScript (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Workflows.Design.JavaScript (10.0.8)<br>Elsa.Workflows.Design.Validations (10.0.8) |
+| Microsoft.Extensions.Logging | 10.0.8 | Elsa.Persistence.Groundwork.Tests (10.0.8) |
+| Microsoft.Extensions.Logging.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events (10.0.8)<br>Elsa.Expressions (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Mediator (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Tasks.Schedules (10.0.8)<br>Elsa.Workflows.Design.Reconciliation (10.0.8)<br>Elsa3.Activities.Design.Import (10.0.8) |
+| Microsoft.Extensions.Options | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Http.JavaScript (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Workflows.Design.JavaScript (10.0.8)<br>Elsa.Workflows.Design.Validations (10.0.8) |
 | Microsoft.Extensions.Primitives | 10.0.8 | Elsa.Caching.Core (10.0.8) |
-| Microsoft.NET.Test.Sdk | 17.11.1 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1)<br>Elsa.Workflows.Runtime.Tests (17.11.1) |
+| Microsoft.NET.Test.Sdk | 17.11.1 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Persistence.Groundwork.Tests (17.11.1)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1)<br>Elsa.Workflows.Runtime.Tests (17.11.1)<br>Groundwork.MongoDb.Tests (17.11.1)<br>Groundwork.RelationalProviders.Tests (17.11.1)<br>Groundwork.Sqlite.Tests (17.11.1)<br>Groundwork.Tests (17.11.1) |
+| MongoDB.Driver | 3.9.0 | Groundwork.MongoDb (3.9.0)<br>Groundwork.MongoDb.Tests (3.9.0) |
 | Newtonsoft.Json | 13.0.4 | Elsa.Serialization.Newtonsoft (13.0.4) |
+| Npgsql | 10.0.3 | Groundwork.PostgreSql (10.0.3)<br>Groundwork.RelationalProviders.Tests (10.0.3) |
 | Nuplane | 0.0.8 | Elsa.Server (0.0.8) |
 | Nuplane.Admin | 0.0.8 | Elsa.Server (0.0.8) |
 | Nuplane.Loading | 0.0.8 | Elsa.Server (0.0.8) |
@@ -45,10 +50,13 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Open.Linq.AsyncExtensions | 1.2.0 | Elsa.Persistence.EFCore (1.2.0) |
 | System.CommandLine | 2.0.8 | Elsa.Persistence.EFCore (2.0.8) |
 | System.Reflection.MetadataLoadContext | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8) |
+| Testcontainers.MongoDb | 4.12.0 | Groundwork.MongoDb.Tests (4.12.0) |
+| Testcontainers.MsSql | 4.12.0 | Groundwork.RelationalProviders.Tests (4.12.0) |
+| Testcontainers.PostgreSql | 4.12.0 | Groundwork.RelationalProviders.Tests (4.12.0) |
 | Ulid | 1.4.1 | Elsa.Persistence.EFCore (1.4.1) |
-| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2)<br>Elsa.Workflows.Runtime.Tests (6.0.2) |
-| xunit | 2.9.0 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0)<br>Elsa.Workflows.Runtime.Tests (2.9.0) |
-| xunit.runner.visualstudio | 2.8.2 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2)<br>Elsa.Workflows.Runtime.Tests (2.8.2) |
+| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Persistence.Groundwork.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2)<br>Elsa.Workflows.Runtime.Tests (6.0.2)<br>Groundwork.MongoDb.Tests (6.0.2)<br>Groundwork.RelationalProviders.Tests (6.0.2)<br>Groundwork.Sqlite.Tests (6.0.2)<br>Groundwork.Tests (6.0.2) |
+| xunit | 2.9.0 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Persistence.Groundwork.Tests (2.9.0)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0)<br>Elsa.Workflows.Runtime.Tests (2.9.0)<br>Groundwork.MongoDb.Tests (2.9.0)<br>Groundwork.RelationalProviders.Tests (2.9.0)<br>Groundwork.Sqlite.Tests (2.9.0)<br>Groundwork.Tests (2.9.0) |
+| xunit.runner.visualstudio | 2.8.2 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Persistence.Groundwork.Tests (2.8.2)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2)<br>Elsa.Workflows.Runtime.Tests (2.8.2)<br>Groundwork.MongoDb.Tests (2.8.2)<br>Groundwork.RelationalProviders.Tests (2.8.2)<br>Groundwork.Sqlite.Tests (2.8.2)<br>Groundwork.Tests (2.8.2) |
 
 ## Direct Package References
 
@@ -141,6 +149,17 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | System.CommandLine | 2.0.8 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Ulid | 1.4.1 |
 | [Elsa.Persistence.EFCore.Sqlite](../../src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj) | source | Microsoft.EntityFrameworkCore.Sqlite | 10.0.8 |
+| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | CShells.Abstractions | 0.0.24 |
+| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
+| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
+| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Data.Sqlite | 10.0.8 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Extensions.Logging | 10.0.8 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | xunit | 2.9.0 |
+| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
@@ -191,3 +210,29 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | CShells.Abstractions | 0.0.24 |
+| [Groundwork.MongoDb](../../src/Groundwork/MongoDb/Groundwork.MongoDb.csproj) | source | MongoDB.Driver | 3.9.0 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | MongoDB.Driver | 3.9.0 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | Testcontainers.MongoDb | 4.12.0 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | xunit | 2.9.0 |
+| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Groundwork.PostgreSql](../../src/Groundwork/PostgreSql/Groundwork.PostgreSql.csproj) | source | Npgsql | 10.0.3 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Microsoft.Data.SqlClient | 7.0.1 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Npgsql | 10.0.3 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Testcontainers.MsSql | 4.12.0 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Testcontainers.PostgreSql | 4.12.0 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | xunit | 2.9.0 |
+| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Groundwork.SqlServer](../../src/Groundwork/SqlServer/Groundwork.SqlServer.csproj) | source | Microsoft.Data.SqlClient | 7.0.1 |
+| [Groundwork.Sqlite](../../src/Groundwork/Sqlite/Groundwork.Sqlite.csproj) | source | Microsoft.Data.Sqlite | 10.0.8 |
+| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | xunit | 2.9.0 |
+| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | xunit | 2.9.0 |
+| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
