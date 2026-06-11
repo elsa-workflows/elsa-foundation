@@ -133,6 +133,9 @@ public sealed class ControlPlaneHold
         if (status != ControlPlaneHoldStatus.Released && releasedBy is not null)
             throw new ArgumentException("Only released control-plane holds can have a released-by value.", nameof(releasedBy));
 
+        if (continuationPolicy == RuntimePauseContinuationPolicy.NotPaused)
+            throw new ArgumentException("Control-plane holds require a pause continuation policy.", nameof(continuationPolicy));
+
         ValidateOptionalId(workflowExecutionId, nameof(workflowExecutionId), "Workflow execution ID");
         ValidateOptionalId(activityExecutionId, nameof(activityExecutionId), "Activity execution ID");
         ValidateOptionalId(generatorId, nameof(generatorId), "Generator ID");

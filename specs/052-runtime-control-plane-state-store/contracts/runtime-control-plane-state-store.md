@@ -25,6 +25,7 @@ The default provider:
 - Picks the oldest matching hold and then the lowest hold ID for deterministic results.
 - Returns blocked `SchedulerPauseDecision` values with the matched hold continuation policy.
 - Returns allowed decisions with `RuntimePauseContinuationPolicy.NotPaused`, so callers do not need to infer that a non-blocking decision carries no pause continuation behavior.
+- Rejects `NotPaused` on stored control-plane holds because holds must represent an actual pause/drain behavior.
 - Does not mutate workflow continuation state.
 
 ## Separation Rule
