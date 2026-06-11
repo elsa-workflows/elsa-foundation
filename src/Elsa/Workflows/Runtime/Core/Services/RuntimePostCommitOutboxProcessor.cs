@@ -103,6 +103,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             await RecordDeliveryResultAsync(item, status, failureMessage, cancellationToken);
             return null;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             return exception;

@@ -113,6 +113,19 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
+    public async Task Processor_PropagatesCancellationWhenFailedResultRecordingIsCanceled()
+    {
+        var dispatchFailure = new InvalidOperationException("Dispatch failed.");
+        var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
+        var store = new ThrowingResultStore(item, new OperationCanceledException());
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: dispatchFailure);
+        var processor = NewProcessor(store, dispatcher, _now);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10)));
+    }
+
+    [Fact]
     public async Task Processor_SurfacesDeliveredResultRecordingFailureAfterSuccessfulDispatch()
     {
         var resultRecordingFailure = new InvalidOperationException("Result recording failed.");
