@@ -7,8 +7,18 @@ public sealed class RuntimePostCommitIntentDispatchException : Exception
         string failedIntentId,
         IReadOnlyCollection<string> dispatchedIntentIds,
         IReadOnlyCollection<string> undispatchedIntentIds,
+        Exception innerException)
+        : this(commitId, failedIntentId, dispatchedIntentIds, undispatchedIntentIds, innerException, null)
+    {
+    }
+
+    public RuntimePostCommitIntentDispatchException(
+        string commitId,
+        string failedIntentId,
+        IReadOnlyCollection<string> dispatchedIntentIds,
+        IReadOnlyCollection<string> undispatchedIntentIds,
         Exception innerException,
-        Exception? deliveryResultRecordingException = null)
+        Exception? deliveryResultRecordingException)
         : base($"Post-commit intent '{failedIntentId}' failed after checkpoint commit '{commitId}' was written.", innerException)
     {
         CommitId = commitId;
