@@ -50,16 +50,17 @@ public sealed class ProviderCapabilityTests
     [Fact]
     public void SupportedFallbackEmitsWarningWithoutChangingManifestIntent()
     {
+        var manifest = SampleManifests.MetadataManifest();
         var capabilities = SampleManifests.PortableCapabilities() with
         {
             Warnings = ["Provider will materialize indexes lazily."]
         };
 
-        var result = _validator.Validate(SampleManifests.MetadataManifest(), capabilities);
+        var result = _validator.Validate(manifest, capabilities);
 
         Assert.True(result.IsCompatible);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "GW-CAP-002");
-        Assert.Equal(ConcurrencyKind.Optimistic, SampleManifests.MetadataManifest().StorageUnits.Single().Concurrency.Kind);
+        Assert.Equal(ConcurrencyKind.Optimistic, manifest.StorageUnits.Single().Concurrency.Kind);
     }
 
     [Fact]
