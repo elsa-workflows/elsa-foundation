@@ -48,6 +48,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** evaluates host support, requested duration, requested host-shutdown behavior, requested cancellation behavior, and durable fallback posture. Volatile waits remain scheduler continuation state and are not durable bookmark resume state.
 - **Default implementation:** `DefaultRuntimeVolatileWaitPolicy` *(allows only when the host explicitly supports in-memory continuation; host-specific providers can replace this)*.
 
+### `IRuntimeGeneratorEmissionScheduler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one scheduler adapter turns in-workflow generator emissions into ordered runtime scheduler work).
+- **Signature:** `ScheduleAsync(RuntimeGeneratorEmissionScheduleRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** enqueues `WorkflowExecutionCommandKind.GeneratedEvent` work through `IWorkflowSchedulerWorkQueue` using deterministic IDs derived from workflow execution and generated event identity. Generator registrations and generated-event lanes remain scheduler state; this is not a trigger provider, generator execution loop, or separate generator-state store.
+- **Default implementation:** `RuntimeGeneratorEmissionScheduler` *(single-node scheduler queue adapter for the current runtime slice)*.
+
 ### `IControlPlaneStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns administrative control-plane state for a runtime composition).
 - **Signature:** `SaveAsync(ControlPlaneState state, ...)`, `FindAsync(string controlPlaneStateId, ...)`, `ListForWorkflowExecutionAsync(string workflowExecutionId, ...)`, `ListAllAsync(...)`.

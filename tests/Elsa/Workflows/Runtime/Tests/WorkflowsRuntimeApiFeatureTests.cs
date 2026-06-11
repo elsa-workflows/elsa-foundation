@@ -58,6 +58,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeVolatileWaitPolicy) &&
             descriptor.ImplementationType == typeof(DefaultRuntimeVolatileWaitPolicy));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeGeneratorEmissionScheduler) &&
+            descriptor.ImplementationType == typeof(RuntimeGeneratorEmissionScheduler));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
@@ -144,6 +147,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
+        Assert.IsType<RuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
@@ -220,6 +224,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomRuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
+    }
+
+    [Fact]
+    public void RegistersRuntimeGeneratorEmissionSchedulerAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeGeneratorEmissionScheduler>(new CustomRuntimeGeneratorEmissionScheduler());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
     }
 
     [Fact]
@@ -553,6 +569,31 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 continuationPolicy: RuntimePauseContinuationPolicy.NotPaused,
                 holdId: null,
                 reason: null));
+    }
+
+    private sealed class CustomRuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissionScheduler
+    {
+        public ValueTask<RuntimeGeneratorEmissionScheduleResult> ScheduleAsync(
+            RuntimeGeneratorEmissionScheduleRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var generatedEventWorkItem = new SchedulerGeneratedEventWorkItem(
+                workItemId: "custom-generated-work",
+                generatedEvent: request.GeneratedEvent,
+                enqueuedAt: request.EnqueuedAt ?? DateTimeOffset.UnixEpoch,
+                reason: request.Reason);
+            var schedulerWorkItem = new RuntimeSchedulerWorkItem(
+                workItemId: generatedEventWorkItem.WorkItemId,
+                workflowExecutionId: request.GeneratedEvent.WorkflowExecutionId,
+                commandId: "custom-command",
+                commandKind: WorkflowExecutionCommandKind.GeneratedEvent,
+                envelopeId: "custom-envelope",
+                idempotencyKey: "custom-idempotency",
+                enqueuedAt: generatedEventWorkItem.EnqueuedAt,
+                recordedAt: generatedEventWorkItem.EnqueuedAt);
+
+            return new(new RuntimeGeneratorEmissionScheduleResult(generatedEventWorkItem, schedulerWorkItem));
+        }
     }
 
     private sealed class CustomControlPlaneStateStore : IControlPlaneStateStore
