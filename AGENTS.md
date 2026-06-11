@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Bookmark Consumption Checkpoint](specs/057-runtime-bookmark-consumption-checkpoint/plan.md)
+Current Speckit plan: [Runtime Bookmark Creation Checkpoint](specs/058-runtime-bookmark-creation-checkpoint/plan.md)
 <!-- SPECKIT END -->
