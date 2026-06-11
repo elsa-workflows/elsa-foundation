@@ -150,6 +150,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** stores `OperationalState` keyed by `WorkflowExecutionId` and `OperationalStateId`. The in-memory checkpoint writer projects operational state upserts from accepted checkpoint commits into this store. Recovery scanning, outbox delivery processing, domain retry, and actor-provider lease enforcement remain separate runtime surfaces.
 - **Default implementation:** `InMemoryOperationalStateStore` *(single-node in-memory default for the current runtime slice)*.
 
+### `ISchedulerStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns the split scheduler continuation-state snapshot in a runtime composition).
+- **Signature:** `SaveAsync(SchedulerState state, ...)`, `FindAsync(string workflowExecutionId, ...)`, `ListAsync(...)`.
+- **Usage:** stores `SchedulerState` keyed by `WorkflowExecutionId`. The in-memory checkpoint writer projects scheduler state upserts from accepted checkpoint commits into this store. This is distinct from `IWorkflowSchedulerWorkQueue`, which records accepted scheduler work commands before/driving drains.
+- **Default implementation:** `InMemorySchedulerStateStore` *(single-node in-memory default for the current runtime slice)*.
+
 ### `IWorkflowSchedulerDrainer` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one drainer owns deterministic dispatch of queued scheduler work for a runtime composition).
 - **Signature:** `DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.

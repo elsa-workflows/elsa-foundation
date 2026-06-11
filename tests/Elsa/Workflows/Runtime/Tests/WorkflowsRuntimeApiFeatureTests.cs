@@ -43,6 +43,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IOperationalStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryOperationalStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(ISchedulerStateStore) &&
+            descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
@@ -115,6 +118,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
+        Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
@@ -205,6 +209,65 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task DefaultCheckpointWriterProjectsSchedulerStateIntoRegisteredStateStore()
+    {
+        var services = new ServiceCollection();
+        var now = new DateTimeOffset(2026, 6, 11, 14, 0, 0, TimeSpan.Zero);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var schedulerStateStore = provider.GetRequiredService<ISchedulerStateStore>();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-1",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint-1",
+                Name: RuntimeCheckpointNames.ActivityScheduled,
+                WorkflowExecutionId: "wfexec-1",
+                OccurredAt: now,
+                ActivityExecutionIds: ["actexec-1"],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: new RuntimeStateChange<SchedulerState>(
+                    StateId: "wfexec-1",
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: new SchedulerState(
+                        workflowExecutionId: "wfexec-1",
+                        version: 2,
+                        pendingWork:
+                        [
+                            new ScheduledActivityWorkItem(
+                                WorkItemId: "work-1",
+                                WorkflowExecutionId: "wfexec-1",
+                                ExecutableNodeId: "node-1",
+                                ActivityExecutionId: null,
+                                SchedulingActivityExecutionId: "actexec-1",
+                                BranchId: "branch-1",
+                                IterationId: null,
+                                EnqueuedAt: now,
+                                Reason: "test")
+                        ],
+                        pendingContinuations: [],
+                        volatileWaits: []),
+                    Metadata: new Dictionary<string, string>()),
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
+        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var schedulerState = await schedulerStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(schedulerState);
+        Assert.Equal(2, schedulerState.Version);
+        Assert.Equal("node-1", Assert.Single(schedulerState.PendingWork).ExecutableNodeId);
     }
 
     [Fact]
