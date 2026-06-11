@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Activity Invocation Boundary](specs/029-runtime-activity-invocation-boundary/plan.md)
+Current Speckit plan: [Runtime Activity Completion Work Enqueue](specs/030-runtime-activity-completion-work-enqueue/plan.md)
 <!-- SPECKIT END -->

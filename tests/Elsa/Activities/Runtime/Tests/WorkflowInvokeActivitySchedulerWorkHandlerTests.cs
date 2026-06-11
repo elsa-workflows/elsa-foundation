@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -16,6 +17,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
 
     [Fact]
     public async Task HandleAsync_InvokesRunningActivityAndRecordsCompletedState()
@@ -41,6 +43,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(_now, state.CompletedAt);
         Assert.Equal(RuntimeInvokeActivityCommandPayload.StartedActivityReason, state.Metadata["runtime.invokeReason"]);
         Assert.Equal("invoke-work", state.Metadata["runtime.invokeSchedulerWorkItemId"]);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
+        Assert.Equal("node-start", completionPayload.ExecutableNodeId);
+        Assert.Equal([ActivityOutcomes.Done], completionPayload.OutcomeNames);
+        Assert.Equal(RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason, completionPayload.Reason);
     }
 
     [Fact]
@@ -60,6 +67,26 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Equal("Skipped", state.SubStatus);
         Assert.Equal(bool.TrueString, state.Metadata["runtime.invokeSkipped"]);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Empty(completionPayload.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task HandleAsync_EnqueuesCompletionWorkWithActivityOutcomes()
+    {
+        var activity = new RecordingActivity { Outcomes = ["Approved", "Escalated"] };
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Equal(["Approved", "Escalated"], completionPayload.OutcomeNames);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Contains("Approved", state.Metadata["runtime.completionOutcomeNames"]);
     }
 
     [Fact]
@@ -82,6 +109,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(1, state.AggregateFaultCount);
         Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
         Assert.Equal("boom", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -106,6 +134,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(_now, state.CompletedAt);
         Assert.Equal(1, state.FaultCount);
         Assert.Contains("not a supported literal binding", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -129,6 +158,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
@@ -147,10 +177,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.Null(state.CompletedAt);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
     [Fact]
-    public async Task HandleAsync_DoesNotOverwriteExistingLaterLifecycleState()
+    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingCompletedState()
     {
         var activity = new RecordingActivity();
         await _executableStore.SaveAsync(NewExecutable());
@@ -170,6 +201,30 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Equal(_now.AddMinutes(-1), state.CompletedAt);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingSkippedCompletedState()
+    {
+        var activity = new RecordingActivity();
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState() with
+        {
+            Status = ActivityExecutionStatus.Completed,
+            SubStatus = "Skipped",
+            CompletedAt = _now.AddMinutes(-1)
+        });
+        var factory = new RecordingActivityFactory(activity);
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal(0, factory.CreateCalls);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Empty(completionPayload.OutcomeNames);
     }
 
     [Fact]
@@ -221,6 +276,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
 
+    private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
+    {
+        var completionWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
+        Assert.Equal("invoke-work:complete:actexec-1", completionWork.WorkItemId);
+        Assert.Equal("command-1:complete:actexec-1", completionWork.CommandId);
+        Assert.Equal("wfexec-1:invoke:actexec-1:complete:actexec-1", completionWork.IdempotencyKey);
+        Assert.Equal(31, completionWork.Sequence);
+        Assert.NotNull(completionWork.Payload);
+        return completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+    }
+
     private ServiceProvider NewProvider(IActivityFactory factory, IActivityExecutionStateStore? activityExecutionStateStore = null)
     {
         var services = new ServiceCollection();
@@ -229,6 +296,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => activityExecutionStateStore ?? _activityStateStore);
+        services.AddSingleton(_schedulerWorkQueue);
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
         return services.BuildServiceProvider();
     }
 
@@ -407,6 +476,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         public InputArgument<string> Text { get; set; } = null!;
         public bool ShouldExecute { get; set; } = true;
         public Exception? Exception { get; set; }
+        public string[]? Outcomes { get; set; }
         public string? ObservedText { get; private set; }
 
         protected override ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) =>
@@ -418,6 +488,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 throw Exception;
 
             ObservedText = context.Get(Text);
+            if (Outcomes is not null)
+                context.SetOutcomes(Outcomes);
         }
     }
 
