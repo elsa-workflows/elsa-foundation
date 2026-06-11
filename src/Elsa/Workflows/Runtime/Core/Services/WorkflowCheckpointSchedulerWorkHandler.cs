@@ -125,8 +125,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             PinnedExecutable: payload.PinnedExecutable,
             Status: WorkflowExecutionStatus.Completed,
             SubStatus: null,
-            CreatedAt: workItem.EnqueuedAt,
-            StartedAt: workItem.EnqueuedAt,
+            // This slice has no workflow execution state store yet, so only terminal timestamps are authoritative.
+            CreatedAt: occurredAt,
+            StartedAt: null,
             UpdatedAt: occurredAt,
             CompletedAt: occurredAt,
             CorrelationId: null,

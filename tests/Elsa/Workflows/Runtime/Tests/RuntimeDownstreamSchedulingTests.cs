@@ -114,6 +114,45 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
+    public async Task CompleteActivityHandler_KeepsEmptyOutcomeContinuationNonTerminal()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewCompleteWorkItem(
+            NewIdentity(),
+            outcomeNames: [],
+            completionKind: SchedulerCompletionKind.ContinuationScheduling));
+
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
+        Assert.Empty(checkpointPayload.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_RequiresTraversalServicesForContinuationScheduling()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(NewCompleteWorkItem(
+                NewIdentity(),
+                outcomeNames: ["Done"],
+                completionKind: SchedulerCompletionKind.ContinuationScheduling)).AsTask());
+
+        Assert.Contains("requires workflow executable traversal services", exception.Message);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task CheckpointHandler_CommitsWorkflowExecutionStateForWorkflowCompletedCheckpoint()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -131,6 +170,8 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Equal("wfexec-1", workflowChange.StateId);
         Assert.Equal(RuntimeStateChangeOperation.Upsert, workflowChange.Operation);
         Assert.Equal(WorkflowExecutionStatus.Completed, workflowChange.State.Status);
+        Assert.Equal(_now, workflowChange.State.CreatedAt);
+        Assert.Null(workflowChange.State.StartedAt);
         Assert.Equal(_now, workflowChange.State.UpdatedAt);
         Assert.Equal(_now, workflowChange.State.CompletedAt);
         Assert.Equal(NewIdentity(), workflowChange.State.PinnedExecutable);

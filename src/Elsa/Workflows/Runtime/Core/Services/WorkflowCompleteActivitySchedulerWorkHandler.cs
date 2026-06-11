@@ -183,8 +183,11 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (_workflowExecutableStore is null || _idGenerator is null)
+        if (continuationSchedulingPayload.OutcomeNames.Count == 0)
             return DownstreamSchedulingResult.NotTerminal([]);
+
+        if (_workflowExecutableStore is null || _idGenerator is null)
+            throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' requires workflow executable traversal services before continuation scheduling can determine downstream work or terminal workflow completion.");
 
         var executable = await _workflowExecutableStore.FindAsync(continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)

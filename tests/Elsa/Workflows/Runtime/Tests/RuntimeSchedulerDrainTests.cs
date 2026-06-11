@@ -308,10 +308,16 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(NewExecutable(
+            ["node-start", "node-next"],
+            [new ExecutableEdge("node-start", "ParentDone", "node-next", "In")]));
         await activityStateStore.SaveAsync(NewActivityState("actexec-parent", ActivityExecutionStatus.Completed));
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             activityStateStore,
             queue,
+            executableStore,
+            new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
         var drainer = new WorkflowSchedulerDrainer(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
@@ -356,9 +362,15 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task CompleteActivityHandler_EnqueuesCheckpointWorkForContinuationScheduling()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(NewExecutable(
+            ["node-start", "node-next"],
+            [new ExecutableEdge("node-start", "ParentDone", "node-next", "In")]));
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
+            executableStore,
+            new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
         await handler.HandleAsync(NewWorkItem(
@@ -489,6 +501,32 @@ public sealed class RuntimeSchedulerDrainTests
             activityExecutionIds: ["actexec-1"],
             reason: RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
 
+    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<ExecutableEdge> edges) =>
+        new(
+            identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            nodes: nodeIds.Select(NewNode).ToArray(),
+            edges: edges,
+            startNodeIds: [],
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode NewNode(string nodeId)
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        return new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: document.RootElement.Clone(),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+    }
+
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
         IRuntimeCheckpointWriter checkpointWriter) =>
@@ -599,5 +637,18 @@ public sealed class RuntimeSchedulerDrainTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator
+    {
+        private int _activityExecutionIndex;
+
+        public string NewWorkflowExecutionId() => "wfexec-unused";
+
+        public string NewWorkflowExecutionCommandId() => "command-unused";
+
+        public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-unused";
+
+        public string NewActivityExecutionId() => $"actexec-{++_activityExecutionIndex}";
     }
 }
