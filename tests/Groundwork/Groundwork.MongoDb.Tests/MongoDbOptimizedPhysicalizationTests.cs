@@ -75,6 +75,21 @@ public sealed class MongoDbOptimizedPhysicalizationTests : IAsyncLifetime
         Assert.Equal((key, "system", 1L), await harness.LoadPhysicalizedAsync(id));
     }
 
+    [Fact]
+    public void PhysicalizedFieldNamesAreLengthCapped()
+    {
+        var field = new PhysicalizedFieldPlan(
+            "Runtime.Entity/Customer.Profile#Segment:With:Symbols.And.An.Intentionally.Long.Identity.That.Expands.When.Encoded",
+            "customer.profile.segment",
+            Groundwork.Core.Indexing.IndexValueKind.String,
+            false,
+            true);
+
+        var fieldName = MongoDbGroundworkNames.PhysicalizedFieldName(field);
+
+        Assert.True(fieldName.Length <= MongoDbGroundworkNames.MaxPhysicalizedFieldNameLength);
+    }
+
     private sealed class MongoDbOptimizedHarness : IAsyncDisposable
     {
         private MongoDbOptimizedHarness(IMongoClient client, IMongoDatabase database, MongoDbDocumentStore store, StorageUnit unit)
