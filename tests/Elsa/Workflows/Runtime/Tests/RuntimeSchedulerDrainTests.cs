@@ -151,7 +151,8 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal("actexec-parent", parentPayload.ActivityExecutionId);
         Assert.Equal("actexec-1", parentPayload.CompletedChildActivityExecutionId);
         Assert.Equal("node-parent", parentPayload.ExecutableNodeId);
-        Assert.Equal(["Done"], parentPayload.OutcomeNames);
+        Assert.Equal("branch-a", parentPayload.BranchId);
+        Assert.Empty(parentPayload.OutcomeNames);
     }
 
     [Fact]
@@ -292,7 +293,7 @@ public sealed class RuntimeSchedulerDrainTests
             completionKind: completionKind,
             completedChildActivityExecutionId: completedChildActivityExecutionId);
 
-    private static ActivityExecutionState NewParentActivityState() =>
+    private ActivityExecutionState NewParentActivityState() =>
         new(
             Execution: new ActivityExecution(
                 ActivityExecutionId: "actexec-parent",
@@ -303,8 +304,8 @@ public sealed class RuntimeSchedulerDrainTests
                 ActivityTypeVersion: "1.0.0"),
             Status: ActivityExecutionStatus.Running,
             SubStatus: null,
-            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-3),
-            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-2),
+            ScheduledAt: _now.AddMinutes(-3),
+            StartedAt: _now.AddMinutes(-2),
             CompletedAt: null,
             SchedulingActivityExecutionId: null,
             ParentActivityExecutionId: null,

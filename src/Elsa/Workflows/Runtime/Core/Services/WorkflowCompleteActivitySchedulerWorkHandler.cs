@@ -72,8 +72,8 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             parentState.Execution.ExecutableNodeId,
             parentActivityExecutionId,
             parentState.ParentActivityExecutionId,
-            activityCompletedPayload.BranchId,
-            activityCompletedPayload.OutcomeNames,
+            parentState.BranchId,
+            outcomeNames: [],
             RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
             SchedulerCompletionKind.ParentCompletionEvaluation,
             completedChildActivityExecutionId);
