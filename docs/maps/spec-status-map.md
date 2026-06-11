@@ -83,4 +83,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Draft | - | 9 | 0 | - |
 | [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Draft | - | 7 | 0 | - |
 | [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Draft | - | 7 | 0 | - |
-| [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 5 | 4 | - |
+| [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 8 | 1 | - |
