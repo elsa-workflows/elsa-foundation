@@ -134,9 +134,12 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DispatchesCheckpointWorkThroughNamedHandler()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var drainer = new WorkflowSchedulerDrainer(
             queue,
-            [new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            [NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
@@ -148,6 +151,23 @@ public sealed class RuntimeSchedulerDrainTests
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
         Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
+        Assert.Equal("commit:work-1", write.Commit.CommitId);
+        Assert.Equal("checkpoint:work-1", write.Commit.Checkpoint.CheckpointId);
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
+        Assert.Equal(_now, write.Commit.Checkpoint.OccurredAt);
+        Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
+        var activityChange = Assert.Single(write.Commit.StateChanges.ActivityExecutions);
+        Assert.Equal("actexec-1", activityChange.StateId);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, activityChange.Operation);
+        Assert.Equal(ActivityExecutionStatus.Completed, activityChange.State.Status);
+        Assert.Null(write.Commit.StateChanges.WorkflowExecution);
+        Assert.Null(write.Commit.StateChanges.Scheduler);
+        Assert.Empty(write.Commit.StateChanges.Bookmarks);
+        Assert.Empty(write.Commit.StateChanges.DurableValues);
+        Assert.Empty(write.Commit.StateChanges.Incidents);
+        Assert.Empty(write.Commit.StateChanges.Operational);
     }
 
     [Fact]
@@ -156,7 +176,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new WorkflowSchedulerDrainer(
             queue,
-            [new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointWriter()), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
         using var document = JsonDocument.Parse("""{"checkpointName":" "}""");
         await queue.EnqueueAsync(NewWorkItem(
@@ -170,6 +190,29 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
         Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
         Assert.Contains("not a valid checkpoint payload", item.Error);
+    }
+
+    [Fact]
+    public async Task DrainAsync_FaultsCheckpointWorkWhenReferencedActivityStateIsMissing()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(
+            1,
+            commandKind: WorkflowExecutionCommandKind.Checkpoint,
+            payload: JsonSerializer.SerializeToElement(NewCheckpointPayload())));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
+        Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
+        Assert.Contains("missing activity execution 'actexec-1'", item.Error);
+        Assert.Empty(checkpointWriter.ListWrites());
     }
 
     [Fact]
@@ -253,11 +296,14 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DrainsParentEvaluationContinuationSchedulingAndCheckpointInOrder()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        await activityStateStore.SaveAsync(NewActivityState("actexec-parent", ActivityExecutionStatus.Completed));
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
-            new InMemoryActivityExecutionStateStore(),
+            activityStateStore,
             queue,
             new FixedTimeProvider(_now));
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new WorkflowCheckpointSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = new WorkflowSchedulerDrainer(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
@@ -291,6 +337,9 @@ public sealed class RuntimeSchedulerDrainTests
                 Assert.Equal("work-1:continuation:actexec-parent:checkpoint:ActivityCompleted:actexec-parent", third.WorkItemId);
                 Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, third.HandlerName);
             });
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal("commit:work-1:continuation:actexec-parent:checkpoint:ActivityCompleted:actexec-parent", write.Commit.CommitId);
+        Assert.Equal(["actexec-parent"], write.Commit.Checkpoint.ActivityExecutionIds);
     }
 
     [Fact]
@@ -430,6 +479,17 @@ public sealed class RuntimeSchedulerDrainTests
             activityExecutionIds: ["actexec-1"],
             reason: RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
 
+    private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
+        IActivityExecutionStateStore activityStateStore,
+        IRuntimeCheckpointWriter checkpointWriter) =>
+        new(
+            activityStateStore,
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                checkpointWriter,
+                new NoopRuntimePostCommitIntentDispatcher()),
+            new FixedTimeProvider(_now));
+
     private static string CompletionReason(SchedulerCompletionKind completionKind) =>
         completionKind switch
         {
@@ -440,19 +500,24 @@ public sealed class RuntimeSchedulerDrainTests
         };
 
     private ActivityExecutionState NewParentActivityState() =>
+        NewActivityState("actexec-parent", ActivityExecutionStatus.Running);
+
+    private ActivityExecutionState NewActivityState(
+        string activityExecutionId,
+        ActivityExecutionStatus status) =>
         new(
             Execution: new ActivityExecution(
-                ActivityExecutionId: "actexec-parent",
+                ActivityExecutionId: activityExecutionId,
                 WorkflowExecutionId: "wfexec-1",
                 ExecutableNodeId: "node-parent",
                 AuthoredActivityId: "authored-node-parent",
                 ActivityType: "test/parent",
                 ActivityTypeVersion: "1.0.0"),
-            Status: ActivityExecutionStatus.Running,
+            Status: status,
             SubStatus: null,
             ScheduledAt: _now.AddMinutes(-3),
             StartedAt: _now.AddMinutes(-2),
-            CompletedAt: null,
+            CompletedAt: status == ActivityExecutionStatus.Completed ? _now : null,
             SchedulingActivityExecutionId: null,
             ParentActivityExecutionId: null,
             BranchId: "branch-a",

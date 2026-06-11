@@ -244,6 +244,22 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_IsIdempotentByCommitId()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
+        var replay = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(replay, decision);
+
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal("commit-1", write.Commit.CommitId);
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
