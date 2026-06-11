@@ -94,7 +94,13 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
 - **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
-- **Default implementation:** `NoopWorkflowExecutionCommandProcessor` *(placeholder until scheduler command behavior is implemented)*.
+- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work; does not drain or execute scheduler work)*.
+
+### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one queue owns recorded scheduler work for a runtime composition).
+- **Signature:** `EnqueueAsync(RuntimeSchedulerWorkItem workItem, ...)`, `ListAsync(RuntimeSchedulerWorkQuery query, ...)`, `DequeueAsync(string workflowExecutionId, ...)`.
+- **Usage:** stores scheduler work by `WorkflowExecutionId` after an execution agent accepts a command envelope. The queue preserves per-workflow insertion order and is idempotent by scheduler work item ID. Draining and activity execution remain separate scheduler behavior.
+- **Default implementation:** `InMemoryWorkflowSchedulerWorkQueue` *(single-node in-memory default for the current runtime slice)*.
 
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
