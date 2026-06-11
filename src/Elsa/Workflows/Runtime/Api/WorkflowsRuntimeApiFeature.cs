@@ -25,6 +25,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
+        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();

@@ -48,6 +48,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** evaluates host support, requested duration, requested host-shutdown behavior, requested cancellation behavior, and durable fallback posture. Volatile waits remain scheduler continuation state and are not durable bookmark resume state.
 - **Default implementation:** `DefaultRuntimeVolatileWaitPolicy` *(allows only when the host explicitly supports in-memory continuation; host-specific providers can replace this)*.
 
+### `IControlPlaneStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns administrative control-plane state for a runtime composition).
+- **Signature:** `SaveAsync(ControlPlaneState state, ...)`, `FindAsync(string controlPlaneStateId, ...)`, `ListForWorkflowExecutionAsync(string workflowExecutionId, ...)`, `ListAllAsync(...)`.
+- **Usage:** stores pause/unpause administrative holds outside workflow continuation state. Durable or distributed control-plane providers can replace the default without changing workflow execution state contracts.
+- **Default implementation:** `InMemoryControlPlaneStateStore` *(single-node in-memory default for the current runtime slice)*.
+
+### `IRuntimePauseDecisionProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider decides whether runtime scheduler work may advance through named pause boundaries).
+- **Signature:** `DecideAsync(RuntimePauseDecisionRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** evaluates active control-plane holds at safe runtime boundaries and returns `SchedulerPauseDecision`. Pause/unpause remain control-plane operations and are not durable suspend/resume or volatile continue semantics.
+- **Default implementation:** `RuntimePauseDecisionProvider` *(matches effective holds by workflow/activity/generator/ingress/worker/host target and picks oldest hold then hold ID deterministically)*.
+
 ### `IBookmarkResumeResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one resolver owns durable bookmark-to-artifact resume resolution for a runtime composition).
 - **Signature:** `Resolve(BookmarkResumeRequest request)`.
