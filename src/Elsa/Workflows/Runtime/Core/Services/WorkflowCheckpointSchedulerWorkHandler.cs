@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -157,14 +158,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
+        var startedAt = ReadWorkflowStartedAt(workItem);
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: workItem.WorkflowExecutionId,
             PinnedExecutable: payload.PinnedExecutable,
             Status: WorkflowExecutionStatus.Completed,
             SubStatus: null,
-            // This slice has no workflow execution state store yet, so only terminal timestamps are authoritative.
-            CreatedAt: occurredAt,
-            StartedAt: null,
+            CreatedAt: startedAt ?? occurredAt,
+            StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: occurredAt,
             CorrelationId: null,
@@ -177,6 +178,20 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             }));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
+    }
+
+    private static DateTimeOffset? ReadWorkflowStartedAt(RuntimeSchedulerWorkItem workItem)
+    {
+        if (!workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowStartedAt, out var value))
+            return null;
+
+        return DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out var startedAt)
+            ? startedAt
+            : null;
     }
 
     private static RuntimeStateChange<WorkflowExecutionState> NewWorkflowExecutionStateChange(

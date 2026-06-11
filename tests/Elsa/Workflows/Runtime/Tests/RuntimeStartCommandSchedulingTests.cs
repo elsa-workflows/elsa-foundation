@@ -40,6 +40,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
         Assert.Equal("start-work:schedule:node-start", scheduled.WorkItemId);
         Assert.Equal(12, scheduled.Sequence);
+        Assert.Equal(_now.ToString("O"), scheduled.CommandMetadata[RuntimeMetadataKeys.WorkflowStartedAt]);
         var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
         Assert.Equal("node-start", payload.ExecutableNodeId);
         Assert.Equal("actexec-1", payload.ActivityExecutionId);
