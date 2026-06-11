@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -11,12 +12,14 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
 
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
+    private readonly IWorkflowExecutableStore? _workflowExecutableStore;
+    private readonly IRuntimeExecutionIdGenerator? _idGenerator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(activityExecutionStateStore, schedulerWorkQueue, TimeProvider.System)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, idGenerator: null, TimeProvider.System)
     {
     }
 
@@ -24,13 +27,39 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         TimeProvider timeProvider)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, idGenerator: null, timeProvider)
+    {
+    }
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IWorkflowExecutableStore workflowExecutableStore,
+        IRuntimeExecutionIdGenerator idGenerator)
+        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore, idGenerator, TimeProvider.System)
+    {
+    }
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IWorkflowExecutableStore? workflowExecutableStore,
+        IRuntimeExecutionIdGenerator? idGenerator,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        if (workflowExecutableStore is null && idGenerator is not null)
+            throw new ArgumentException("Workflow executable store must be supplied with the runtime execution ID generator for downstream scheduling.", nameof(workflowExecutableStore));
+
+        if (workflowExecutableStore is not null && idGenerator is null)
+            throw new ArgumentException("Runtime execution ID generator must be supplied with the workflow executable store for downstream scheduling.", nameof(idGenerator));
 
         _activityExecutionStateStore = activityExecutionStateStore;
         _schedulerWorkQueue = schedulerWorkQueue;
+        _workflowExecutableStore = workflowExecutableStore;
+        _idGenerator = idGenerator;
         _timeProvider = timeProvider;
     }
 
@@ -120,11 +149,13 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         var now = _timeProvider.GetUtcNow();
         var activityExecutionId = continuationSchedulingPayload.ActivityExecutionId;
         var checkpointName = RuntimeCheckpointNames.ActivityCompleted;
+        var postCommitIntents = await CreateDownstreamSchedulerIntentsAsync(continuationSchedulingWorkItem, continuationSchedulingPayload, now, cancellationToken);
         var payload = new RuntimeCheckpointCommandPayload(
             continuationSchedulingPayload.PinnedExecutable,
             checkpointName,
             [activityExecutionId],
-            RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason);
+            RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason,
+            postCommitIntents);
 
         var workItem = new RuntimeSchedulerWorkItem(
             workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:checkpoint:{checkpointName}:{activityExecutionId}",
@@ -141,6 +172,107 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata);
 
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyCollection<RuntimePostCommitIntent>> CreateDownstreamSchedulerIntentsAsync(
+        RuntimeSchedulerWorkItem continuationSchedulingWorkItem,
+        RuntimeCompleteActivityCommandPayload continuationSchedulingPayload,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowExecutableStore is null || _idGenerator is null || continuationSchedulingPayload.OutcomeNames.Count == 0)
+            return [];
+
+        var executable = await _workflowExecutableStore.FindAsync(continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
+        if (executable is null)
+            throw new WorkflowExecutableNotFoundException(continuationSchedulingPayload.PinnedExecutable.ArtifactId);
+
+        ValidatePinnedExecutable(continuationSchedulingWorkItem, continuationSchedulingPayload.PinnedExecutable, executable.Identity);
+
+        if (!executable.NodesById.ContainsKey(continuationSchedulingPayload.ExecutableNodeId))
+            throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' references executable node '{continuationSchedulingPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+
+        var outcomeNames = continuationSchedulingPayload.OutcomeNames.ToHashSet(StringComparer.Ordinal);
+        var matchingEdges = executable.Edges
+            .Where(edge => StringComparer.Ordinal.Equals(edge.SourceNodeId, continuationSchedulingPayload.ExecutableNodeId) && outcomeNames.Contains(edge.SourcePort))
+            .ToArray();
+
+        if (matchingEdges.Length == 0)
+            return [];
+
+        var postCommitIntents = new List<RuntimePostCommitIntent>(matchingEdges.Length);
+        for (var index = 0; index < matchingEdges.Length; index++)
+        {
+            var edge = matchingEdges[index];
+            var downstreamWorkItem = NewDownstreamScheduleWorkItem(
+                continuationSchedulingWorkItem,
+                continuationSchedulingPayload,
+                edge,
+                index + 1,
+                now);
+
+            postCommitIntents.Add(new RuntimePostCommitIntent(
+                intentId: $"{continuationSchedulingWorkItem.WorkItemId}:postcommit:schedule:{index + 1}:{edge.SourcePort}:{edge.TargetNodeId}",
+                workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
+                kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+                recordedAt: now,
+                activityExecutionId: continuationSchedulingPayload.ActivityExecutionId,
+                idempotencyKey: downstreamWorkItem.IdempotencyKey,
+                payload: JsonSerializer.SerializeToElement(downstreamWorkItem),
+                metadata: new Dictionary<string, string>
+                {
+                    ["runtime.sourceSchedulerWorkItemId"] = continuationSchedulingWorkItem.WorkItemId,
+                    ["runtime.schedulerWorkItemId"] = downstreamWorkItem.WorkItemId,
+                    ["runtime.sourceExecutableNodeId"] = edge.SourceNodeId,
+                    ["runtime.sourcePort"] = edge.SourcePort,
+                    ["runtime.targetExecutableNodeId"] = edge.TargetNodeId
+                }));
+        }
+
+        return postCommitIntents;
+    }
+
+    private RuntimeSchedulerWorkItem NewDownstreamScheduleWorkItem(
+        RuntimeSchedulerWorkItem continuationSchedulingWorkItem,
+        RuntimeCompleteActivityCommandPayload continuationSchedulingPayload,
+        ExecutableEdge edge,
+        int index,
+        DateTimeOffset now)
+    {
+        var activityExecutionId = _idGenerator!.NewActivityExecutionId();
+        var payload = new RuntimeScheduleActivityCommandPayload(
+            continuationSchedulingPayload.PinnedExecutable,
+            edge.TargetNodeId,
+            activityExecutionId,
+            RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
+            continuationSchedulingPayload.ActivityExecutionId);
+
+        return new RuntimeSchedulerWorkItem(
+            workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
+            workflowExecutionId: continuationSchedulingWorkItem.WorkflowExecutionId,
+            commandId: $"{continuationSchedulingWorkItem.CommandId}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
+            commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
+            envelopeId: continuationSchedulingWorkItem.EnvelopeId,
+            idempotencyKey: $"{continuationSchedulingWorkItem.IdempotencyKey}:schedule:{index}:{edge.SourcePort}:{edge.TargetNodeId}",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: continuationSchedulingWorkItem.Sequence is { } sequence ? sequence + 1 + index : null,
+            payload: JsonSerializer.SerializeToElement(payload),
+            commandMetadata: continuationSchedulingWorkItem.CommandMetadata,
+            envelopeMetadata: continuationSchedulingWorkItem.EnvelopeMetadata);
+    }
+
+    private static void ValidatePinnedExecutable(
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutableIdentity pinnedExecutable,
+        WorkflowExecutableIdentity loadedExecutable)
+    {
+        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
+            return;
+
+        throw new InvalidOperationException(
+            $"CompleteActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
+            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
     private async ValueTask EnqueueContinuationSchedulingAsync(

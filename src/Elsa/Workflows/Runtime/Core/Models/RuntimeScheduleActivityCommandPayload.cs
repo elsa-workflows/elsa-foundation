@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed class RuntimeScheduleActivityCommandPayload
 {
     public const string WorkflowStartReason = "WorkflowStart";
+    public const string ActivityCompletionReason = "ActivityCompletion";
 
     [JsonConstructor]
     public RuntimeScheduleActivityCommandPayload(

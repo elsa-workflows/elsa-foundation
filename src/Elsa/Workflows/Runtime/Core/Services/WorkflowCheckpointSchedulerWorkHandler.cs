@@ -102,7 +102,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 durableValues: [],
                 incidents: [],
                 operational: []),
-            PostCommitIntents: [],
+            PostCommitIntents: payload.PostCommitIntents.ToArray(),
             Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
                 ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,

@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Checkpoint Commit Dispatch](specs/034-runtime-checkpoint-commit-dispatch/plan.md)
+Current Speckit plan: [Runtime Downstream Scheduling](specs/035-runtime-downstream-scheduling/plan.md)
 <!-- SPECKIT END -->
