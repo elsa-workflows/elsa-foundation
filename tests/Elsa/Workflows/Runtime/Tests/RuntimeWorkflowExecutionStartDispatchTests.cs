@@ -179,6 +179,8 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         public string NewWorkflowExecutionCommandId() => $"command-{++_commandIndex}";
 
         public string NewWorkflowExecutionCommandEnvelopeId() => $"envelope-{++_envelopeIndex}";
+
+        public string NewActivityExecutionId() => throw new NotSupportedException("Start dispatch does not schedule activities.");
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

@@ -168,6 +168,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();
+        var activityStateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
         var executable = NewExecutable();
         await store.SaveAsync(executable);
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
@@ -176,10 +177,14 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
 
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
         var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var activityStates = await activityStateStore.ListAsync("wfexec-1");
         var drainResult = Assert.Single(observer.ObservedResults);
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
         Assert.Empty(queuedItems);
+        var state = Assert.Single(activityStates);
+        Assert.Equal("node-start", state.Execution.ExecutableNodeId);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, state.Status);
         Assert.Equal(
             new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity },
             drainResult.Items.Select(item => item.CommandKind).ToArray());

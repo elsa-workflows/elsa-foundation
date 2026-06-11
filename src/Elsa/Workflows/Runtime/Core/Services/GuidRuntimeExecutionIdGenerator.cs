@@ -9,4 +9,6 @@ public sealed class GuidRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerat
     public string NewWorkflowExecutionCommandId() => $"wfecmd-{Guid.NewGuid():N}";
 
     public string NewWorkflowExecutionCommandEnvelopeId() => $"wfeenv-{Guid.NewGuid():N}";
+
+    public string NewActivityExecutionId() => $"actexec-{Guid.NewGuid():N}";
 }

@@ -11,26 +11,31 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
+    private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(workflowExecutableStore, schedulerWorkQueue, TimeProvider.System)
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator)
+        : this(workflowExecutableStore, schedulerWorkQueue, idGenerator, TimeProvider.System)
     {
     }
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
+        ArgumentNullException.ThrowIfNull(idGenerator);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _workflowExecutableStore = workflowExecutableStore;
         _schedulerWorkQueue = schedulerWorkQueue;
+        _idGenerator = idGenerator;
         _timeProvider = timeProvider;
     }
 
@@ -107,6 +112,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         var payload = new RuntimeScheduleActivityCommandPayload(
             pinnedExecutable,
             startNodeId,
+            _idGenerator.NewActivityExecutionId(),
             RuntimeScheduleActivityCommandPayload.WorkflowStartReason);
 
         var workItem = new RuntimeSchedulerWorkItem(

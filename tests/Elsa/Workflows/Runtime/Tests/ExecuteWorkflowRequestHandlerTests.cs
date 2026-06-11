@@ -104,6 +104,8 @@ public sealed class ExecuteWorkflowRequestHandlerTests
         public string NewWorkflowExecutionCommandId() => "command-fixed";
 
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-fixed";
+
+        public string NewActivityExecutionId() => throw new NotSupportedException("HTTP start dispatch does not schedule activities.");
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

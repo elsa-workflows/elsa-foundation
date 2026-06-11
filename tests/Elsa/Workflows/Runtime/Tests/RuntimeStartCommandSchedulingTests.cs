@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -16,7 +17,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var executable = NewExecutable(["node-start", "node-other"], ["node-start"]);
         await store.SaveAsync(executable);
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
@@ -29,6 +30,7 @@ public sealed class RuntimeStartCommandSchedulingTests
 
         var payload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
         Assert.Equal("node-start", payload.ExecutableNodeId);
+        Assert.Equal("actexec-1", payload.ActivityExecutionId);
         Assert.Equal(RuntimeScheduleActivityCommandPayload.WorkflowStartReason, payload.Reason);
         Assert.Equal(executable.Identity, payload.PinnedExecutable);
     }
@@ -40,13 +42,16 @@ public sealed class RuntimeStartCommandSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var executable = NewExecutable(["node-a", "node-b", "node-c"], ["node-a", "node-c"]);
         await store.SaveAsync(executable);
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
         var scheduled = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         Assert.Equal(new[] { "node-a", "node-c" }, scheduled
             .Select(item => item.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!.ExecutableNodeId)
+            .ToArray());
+        Assert.Equal(new[] { "actexec-1", "actexec-2" }, scheduled
+            .Select(item => item.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!.ActivityExecutionId)
             .ToArray());
         Assert.All(scheduled, item => Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, item.CommandKind));
     }
@@ -59,7 +64,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
         var pinned = executable.Identity with { ArtifactHash = "sha256:pinned" };
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(pinned)).AsTask());
 
@@ -79,7 +84,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         {
             Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", "1.0.0")
         };
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         await handler.HandleAsync(NewStartWorkItem(pinned));
 
@@ -92,7 +97,7 @@ public sealed class RuntimeStartCommandSchedulingTests
     {
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(includePayload: false)).AsTask());
 
@@ -106,7 +111,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         using var document = JsonDocument.Parse("[]");
         var store = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(payload: document.RootElement.Clone())).AsTask());
 
@@ -121,7 +126,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var executable = NewExecutable(["node-a"], []);
         await store.SaveAsync(executable);
-        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+        var handler = NewHandler(store, queue);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(executable.Identity)).AsTask());
 
@@ -135,6 +140,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var handler = new WorkflowStartSchedulerWorkHandler(
             new InMemoryWorkflowExecutableStore(),
             new InMemoryWorkflowSchedulerWorkQueue(),
+            new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
         Assert.True(handler.CanHandle(NewStartWorkItem(NewIdentity())));
@@ -168,6 +174,11 @@ public sealed class RuntimeStartCommandSchedulingTests
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
+    private WorkflowStartSchedulerWorkHandler NewHandler(
+        IWorkflowExecutableStore store,
+        IWorkflowSchedulerWorkQueue queue) =>
+        new(store, queue, new IncrementingRuntimeExecutionIdGenerator(), new FixedTimeProvider(_now));
+
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(
             identity: NewIdentity(),
@@ -200,5 +211,18 @@ public sealed class RuntimeStartCommandSchedulingTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator
+    {
+        private int _activityExecutionIndex;
+
+        public string NewWorkflowExecutionId() => "wfexec-unused";
+
+        public string NewWorkflowExecutionCommandId() => "command-unused";
+
+        public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-unused";
+
+        public string NewActivityExecutionId() => $"actexec-{++_activityExecutionIndex}";
     }
 }

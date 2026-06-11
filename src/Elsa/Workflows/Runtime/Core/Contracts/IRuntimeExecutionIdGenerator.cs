@@ -10,4 +10,6 @@ public interface IRuntimeExecutionIdGenerator
     string NewWorkflowExecutionCommandId();
 
     string NewWorkflowExecutionCommandEnvelopeId();
+
+    string NewActivityExecutionId();
 }
