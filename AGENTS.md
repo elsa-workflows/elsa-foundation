@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Incident State Projection](specs/043-runtime-incident-state-projection/plan.md)
+Current Speckit plan: [Runtime Operational State Projection](specs/044-runtime-operational-state-projection/plan.md)
 <!-- SPECKIT END -->
