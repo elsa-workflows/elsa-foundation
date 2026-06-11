@@ -42,7 +42,7 @@ public sealed class AddDefinitionCommandHandler(
             command.SourceId,
             command.Inputs ?? [],
             command.Outputs ?? [],
-            command.Ports ?? [],
+            command.DesignFacets ?? [],
             command.ExecutionType ?? ActivityExecutionType.Action);
 
         await addCommand.Execute(ActivityDefinition.From(definition), ActivityDefinitionVersion.From(version), cancellationToken);

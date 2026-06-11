@@ -40,11 +40,11 @@ classDiagram
         +[Immutable] ActivityKind Kind
         +[Immutable] string? InputsSource
         +[Immutable] string? OutputsSource
-        +[Immutable] string? PortsSource
+        +[Immutable] string? DesignFacetsSource
         +[NotMapped] IImplementationDescriptor ImplementationDescriptor
         +[NotMapped] IEnumerable~InputDefinition~ Inputs
         +[NotMapped] IEnumerable~OutputDefinition~ Outputs
-        +[NotMapped] IEnumerable~ActivityPortDefinition~ Ports
+        +[NotMapped] IEnumerable~ActivityDesignFacet~ DesignFacets
         +shadow~string~ ImplementationDescriptor
     }
 
@@ -148,10 +148,10 @@ A `TenantId` index is registered centrally in `ElsaDbContextBase.OnModelCreating
 | `ActivityTypeKey` | `string` | `[Immutable]`. Denormalised from parent for `(ActivityTypeKey, Version)` lookups without join. Set on insert; never updated. |
 | `ImplementationKind` | `string` | `[Immutable]`. Registry lookup key — drives kind-→-type resolution in the loading handler. Must match `ImplementationDescriptor.Kind` at write time. Core does not enumerate legal values. |
 | `Kind` | `ActivityKind` | `[Immutable]`. Existing closed enum (Action / Trigger / Job / Task) — unchanged. |
-| `InputsSource`, `OutputsSource`, `PortsSource` | `string?` | `[Immutable]`. CLR string properties — existing JSON shadow-string pattern preserved (these stay as `*Source` properties; the descriptor uses a different pattern). |
+| `InputsSource`, `OutputsSource`, `DesignFacetsSource` | `string?` | `[Immutable]`. CLR string properties — existing JSON shadow-string pattern preserved (these stay as `*Source` properties; the descriptor uses a different pattern). |
 | `ImplementationDescriptor` *(CLR property)* | `IImplementationDescriptor` | `[NotMapped]`. The rich projection. Hydrated by the loading handler from the EF shadow column `ImplementationDescriptor` + `ImplementationKind`; serialised back by the saving handler. |
 | `ImplementationDescriptor` *(EF shadow column)* | `string?` | Immutable — declared `PropertySaveBehavior.Throw` in the EF Core configuration (no `[Immutable]` attribute since the shadow has no CLR property to decorate). Persisted JSON payload of the descriptor; accessed only via `EntityEntry.Property("ImplementationDescriptor").CurrentValue`. The shadow column shares the name of the `[NotMapped]` CLR property — EF treats `[NotMapped]` as invisible, so the shadow name does not collide. |
-| `Inputs` / `Outputs` / `Ports` | `IEnumerable<InputDefinition>` / `OutputDefinition` / `ActivityPortDefinition` | `[NotMapped]`. Hydrated from `*Source` columns. The record types are sealed structurally-immutable records (`IArgumentDefinition` interface retired). |
+| `Inputs` / `Outputs` / `DesignFacets` | `IEnumerable<InputDefinition>` / `OutputDefinition` / `ActivityDesignFacet` | `[NotMapped]`. Hydrated from `*Source` columns. The record types are sealed structurally-immutable records (`IArgumentDefinition` interface retired). |
 | `Definition` | `ActivityDefinition?` | EF navigation. |
 
 **Removed:** `TypeInfo` (was `TypeInformation`-typed property as primary identity binding; replaced by the descriptor mechanism).
@@ -219,7 +219,7 @@ At save time the entity-saving handler reads `descriptor.Kind` and writes it to 
 ```csharp
 public sealed record InputDefinition(...);        // existing fields preserved; converted to record
 public sealed record OutputDefinition(...);
-public sealed record ActivityPortDefinition(...);
+public sealed record ActivityDesignFacet(...);
 public sealed record ArgumentDefinition(...);      // base definition; InputDefinition / OutputDefinition may derive
 ```
 
@@ -247,7 +247,7 @@ Enforced centrally via `[Immutable]` attribute + `ElsaDbContextBase.PreventImmut
 |---|---|
 | `Entity` (base) | `RowNumber`, `CreatedAt` |
 | `ActivityDefinition` | `ActivityTypeKey`, `SourceKind`, `SourceId`, `ProvisionedAt`, `ProvisionedBy` |
-| `ActivityDefinitionVersion` | `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `Kind`, `InputsSource`, `OutputsSource`, `PortsSource` (all via `[Immutable]` attribute); shadow column `ImplementationDescriptor` via explicit `PropertySaveBehavior.Throw` declaration in the EF Core configuration. |
+| `ActivityDefinitionVersion` | `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `Kind`, `InputsSource`, `OutputsSource`, `DesignFacetsSource` (all via `[Immutable]` attribute); shadow column `ImplementationDescriptor` via explicit `PropertySaveBehavior.Throw` declaration in the EF Core configuration. |
 | `ActivityDefinitionReconciliationState` | *(none — reconciliation state is mutable by design; rewritten each pass)* |
 
 ## Storage shapes — JSON columns
@@ -255,7 +255,7 @@ Enforced centrally via `[Immutable]` attribute + `ElsaDbContextBase.PreventImmut
 | Column | Shape | Hydration |
 |---|---|---|
 | `ImplementationDescriptor` *(EF shadow)* | JSON payload of the concrete descriptor type — no `$type` discriminator inside the JSON; the column-level `ImplementationKind` selects the deserialisation target. | Loading handler reads `ImplementationKind`; calls `IImplementationDescriptorRegistry.Resolve(kind)` (the explicit registry per §2.6.1 Registry + StartUp Task sub-pattern — see `contracts/IImplementationDescriptorRegistry.md`); reads the shadow string; calls `IPayloadSerializer.Deserialize(json, type)` (reflection-driven if API is generic-only); assigns the result to the `[NotMapped] ImplementationDescriptor` property. Saving handler does the inverse. |
-| `InputsSource` / `OutputsSource` / `PortsSource` | JSON array of `InputDefinition` / `OutputDefinition` / `ActivityPortDefinition` records. | Existing pattern preserved (CLR `*Source` property + `[NotMapped]` rich projection — different from the new descriptor's shadow-column approach because these are existing). |
+| `InputsSource` / `OutputsSource` / `DesignFacetsSource` | JSON array of `InputDefinition` / `OutputDefinition` / `ActivityDesignFacet` records. | Existing pattern preserved (CLR `*Source` property + `[NotMapped]` rich projection — different from the new descriptor's shadow-column approach because these are existing). |
 
 ## Relationships
 

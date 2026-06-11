@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Elsa.Activities.Design.Persistence.Core.Entities;
 
-public sealed class ActivityDefinitionVersion(string version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? portsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
+public sealed class ActivityDefinitionVersion(string version, string definitionId, string? inputsSource = null, string? outputsSource = null, string? designFacetsSource = null, ActivityExecutionType executionType = ActivityExecutionType.Action)
     : TenantEntity, IActivityDefinitionVersion
 {
     /// <summary>
@@ -58,7 +58,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
 
     public string? OutputsSource { get; set; } = outputsSource;
 
-    public string? PortsSource { get; set; } = portsSource;
+    public string? DesignFacetsSource { get; set; } = designFacetsSource;
 
     public ActivityExecutionType ExecutionType { get; init; } = executionType;
 
@@ -69,7 +69,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     public IEnumerable<OutputDefinition> Outputs { get; set; } = [];
 
     [NotMapped]
-    public IEnumerable<ActivityPortDefinition> Ports { get; set; } = [];
+    public IEnumerable<ActivityDesignFacet> DesignFacets { get; set; } = [];
 
     /// <summary>
     /// Provenance source identifier — free-form string owned by the source module
@@ -90,7 +90,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     /// </summary>
     public string? Hash { get; set; }
 
-    IEnumerable<ActivityPortDefinition> IActivityDefinitionVersion.Ports => Ports;
+    IEnumerable<ActivityDesignFacet> IActivityDefinitionVersion.DesignFacets => DesignFacets;
 
     IActivityDefinition IActivityDefinitionVersion.Definition => Definition ?? throw new ArgumentNullException(nameof(Definition));
 
@@ -110,7 +110,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
             DescriptorPayload = source.DescriptorPayload,
             Inputs = source.Inputs,
             Outputs = source.Outputs,
-            Ports = source.Ports,
+            DesignFacets = source.DesignFacets,
             SourceKind = source.SourceKind,
             SourceId = source.SourceId,
             Hash = source.Hash,

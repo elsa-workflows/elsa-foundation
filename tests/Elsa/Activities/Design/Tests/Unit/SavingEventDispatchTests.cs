@@ -10,6 +10,8 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
@@ -44,6 +46,36 @@ public sealed class SavingEventDispatchTests
         Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
         Assert.False(string.IsNullOrWhiteSpace(version.DescriptorPayloadSource));
         Assert.Contains("Acme", version.DescriptorPayloadSource);
+        Assert.False(string.IsNullOrWhiteSpace(version.DesignFacetsSource));
+        Assert.Contains("elsa.test.visual", version.DesignFacetsSource);
+    }
+
+    [Fact]
+    public async Task LoadingHandler_RehydratesDesignFacets()
+    {
+        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var savingHandler = new ActivityDefinitionVersionSavingHandler(serializer);
+        var loadingHandler = new ActivityDefinitionVersionLoadingHandler(serializer, NullLogger<ActivityDefinitionVersionLoadingHandler>.Instance);
+
+        using var host = ActivitiesDesignTestHost.Create();
+        await using var ctx = host.CreateContext();
+        var saved = NewVersion();
+        await savingHandler.Handle(ctx, saved, CancellationToken.None);
+
+        var loaded = new ActivityDefinitionVersion("1.0.0", saved.DefinitionId)
+        {
+            Id = saved.Id,
+            DescriptorType = saved.DescriptorType,
+            DescriptorPayloadSource = saved.DescriptorPayloadSource,
+            DesignFacetsSource = saved.DesignFacetsSource,
+        };
+
+        await loadingHandler.Handle(ctx, loaded, CancellationToken.None);
+
+        var facet = Assert.Single(loaded.DesignFacets);
+        Assert.Equal("elsa.test.visual", facet.Kind);
+        Assert.Equal("1.0.0", facet.SchemaVersion);
+        Assert.Equal("left", facet.Payload.GetProperty("lane").GetString());
     }
 
     [Fact]
@@ -129,8 +161,18 @@ public sealed class SavingEventDispatchTests
         {
             Id = Guid.NewGuid().ToString("N"),
             DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0"))
+            DescriptorPayload = JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0")),
+            DesignFacets =
+            [
+                Facet("elsa.test.visual", """{ "lane": "left" }""")
+            ]
         };
+    }
+
+    private static ActivityDesignFacet Facet(string kind, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new ActivityDesignFacet(kind, "1.0.0", document.RootElement);
     }
 
     private sealed class ProbeSavingHandler : IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>

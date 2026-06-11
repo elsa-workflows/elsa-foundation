@@ -51,6 +51,24 @@ public sealed class HasherTests
     }
 
     [Fact]
+    public void Hash_Changes_WhenDesignFacetPayloadChanges()
+    {
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (def, _) = MakeFixture();
+
+        var verA = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "A" }""")
+        ]);
+        var verB = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "B" }""")
+        ]);
+
+        Assert.NotEqual(hasher.Hash(def, verA), hasher.Hash(def, verB));
+    }
+
+    [Fact]
     public void Hash_IsStable_AcrossVersionId()
     {
         // The version Id is generated random per pass; including it in the hash would
@@ -83,7 +101,8 @@ public sealed class HasherTests
         IActivityDefinition def,
         string id = "ver-id",
         string sourceKind = "Json",
-        string sourceId = "Acme.Pkg") =>
+        string sourceId = "Acme.Pkg",
+        IEnumerable<ActivityDesignFacet>? designFacets = null) =>
         new FakeVersion(
             Id: id,
             Version: "1.0.0",
@@ -96,8 +115,14 @@ public sealed class HasherTests
             ExecutionType: ActivityExecutionType.Action,
             Inputs: [],
             Outputs: [],
-            Ports: [],
+            DesignFacets: designFacets ?? [],
             Definition: def);
+
+    private static ActivityDesignFacet Facet(string kind, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new ActivityDesignFacet(kind, "1.0.0", document.RootElement);
+    }
 
     private sealed record FakeDefinition(
         string Id, string ActivityTypeKey, string SourceKind, string SourceId,
@@ -108,7 +133,7 @@ public sealed class HasherTests
         string Id, string Version, string DefinitionId, string ActivityTypeKey,
         string DescriptorType, JsonElement DescriptorPayload, string SourceKind, string SourceId,
         ActivityExecutionType ExecutionType, IEnumerable<InputDefinition> Inputs, IEnumerable<OutputDefinition> Outputs,
-        IEnumerable<ActivityPortDefinition> Ports, IActivityDefinition Definition,
+        IEnumerable<ActivityDesignFacet> DesignFacets, IActivityDefinition Definition,
         string Hash = ""
     ) : IActivityDefinitionVersion;
 }

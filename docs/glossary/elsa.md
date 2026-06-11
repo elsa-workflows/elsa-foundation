@@ -15,6 +15,7 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Workflow root activity | The single activity a workflow definition/executable runs. It may be a primitive activity or a composite activity such as `Sequence`, `Flowchart`, or `StateMachine`; composition details belong to that activity. |
 | Workflow executable | The runtime-owned artifact produced from design-time source and consumed by runtime execution. It carries one compiled root activity plus runtime identity, source reference, resume targets, timestamps, and compatibility metadata. |
 | Workflow definition state | The authored workflow document stored with drafts and versions in the design domain. It owns authored content, including one root activity, not runtime state. |
+| Facet | A module-owned, kinded, schema-versioned design metadata fragment attached to a broader model. Core stores, hashes, validates generic shape, and round-trips facets without owning their payload semantics. |
 | Artifact-only runtime | The rule that runtime execution must be able to load and run from the published artifact without requiring design documents. |
 | Reconciliation | A process that updates persisted design/catalog state from authoritative sources such as CLR activities, JSON import, or workflow definitions. |
 | Activity construction | The runtime-side process that turns a descriptor type, descriptor payload, and argument bags into a live `IActivity`. |

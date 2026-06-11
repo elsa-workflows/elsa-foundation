@@ -17,7 +17,7 @@ public interface IActivityDefinitionHasher
 }
 ```
 
-Plan-stage decision: take both the definition AND the most recent version as inputs, since the hash needs to capture both identity-level fields (display metadata) and version-level fields (descriptor, inputs/outputs/ports). Default impl combines a stable hash (e.g. SHA-256) over the canonicalised JSON of both inputs.
+Plan-stage decision: take both the definition AND the most recent version as inputs, since the hash needs to capture both identity-level fields (display metadata) and version-level fields (descriptor, inputs/outputs/design facets). Default impl combines a stable hash (e.g. SHA-256) over the canonicalised JSON of both inputs.
 
 ## Default implementation contract
 

@@ -21,7 +21,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 This feature ships two `IEntitySavingHandler` + `IEntityLoadingHandler` implementations for the activity catalog entities. These contributor interfaces are defined in `Elsa.Persistence.EFCore` — see [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md) for the interface contracts and aggregating handlers.
 
-- **`ActivityDefinitionVersionSavingHandler`** — serialises `Inputs`/`Outputs`/`Ports` + the implementation descriptor; derives `ImplementationKind`. Registered via `AddEntitySavingHandlersFrom(assembly)` in `EFCoreActivitiesPersistenceFeatureBase`.
+- **`ActivityDefinitionVersionSavingHandler`** — serialises `Inputs`/`Outputs`/`DesignFacets` + the implementation descriptor; derives `ImplementationKind`. Registered via `AddEntitySavingHandlersFrom(assembly)` in `EFCoreActivitiesPersistenceFeatureBase`.
 - **`ActivityDefinitionVersionLoadingHandler`** — deserialises `*Source` columns + the `ImplementationDescriptorPayload` back into rich projections. Failures throw `ActivityDescriptorDeserialisationException` (with version id + kind context).
 
 ---

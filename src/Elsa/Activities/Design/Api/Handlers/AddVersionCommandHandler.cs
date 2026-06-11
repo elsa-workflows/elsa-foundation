@@ -33,7 +33,7 @@ public sealed class AddVersionCommandHandler(
             sourceId: definition.ActivityTypeKey,
             command.Inputs ?? [],
             command.Outputs ?? [],
-            command.Ports ?? [],
+            command.DesignFacets ?? [],
             command.ExecutionType ?? ActivityExecutionType.Action);
 
         await addCommand.Add(ActivityDefinitionVersion.From(version), cancellationToken);

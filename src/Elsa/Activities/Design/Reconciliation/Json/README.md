@@ -112,7 +112,7 @@ shell.AddFeature(new JsonActivityReconciliationFeature
     },
     "inputs": [],
     "outputs": [],
-    "ports": []
+    "designFacets": []
   }
 ]
 ```

@@ -23,7 +23,7 @@ public interface IActivityDefinitionVersionFactory
         string sourceId,
         IEnumerable<InputDefinition> inputs,
         IEnumerable<OutputDefinition> outputs,
-        IEnumerable<ActivityPortDefinition> ports,
+        IEnumerable<ActivityDesignFacet> designFacets,
         ActivityExecutionType executionType = ActivityExecutionType.Action,
         string? id = null);
 }

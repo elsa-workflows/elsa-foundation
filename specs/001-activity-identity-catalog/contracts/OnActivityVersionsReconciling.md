@@ -68,7 +68,7 @@ new ActivityDefinitionVersion
     Kind = entry.Kind,
     Inputs = entry.Inputs,
     Outputs = entry.Outputs,
-    Ports = entry.Ports
+    DesignFacets = entry.DesignFacets
 };
 ```
 

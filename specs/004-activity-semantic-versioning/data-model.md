@@ -21,7 +21,7 @@ The unit's core data change is `int → string` (SemVer 2.0.0) for the activity 
 - `Version`: `int → string`.
 
 ### `ActivityVersionReconciliationModel` (contribution model — moves to `.Reconciliation.Core`, FR-021)
-- `Version`: `int → string`. All other members unchanged (`ActivityTypeKey`, `DisplayName`, `Category`, `Description`, `ImplementationKind`, `ImplementationDescriptor`, `Inputs`, `Outputs`, `Ports`, `ExecutionType`).
+- `Version`: `int → string`. All other members unchanged (`ActivityTypeKey`, `DisplayName`, `Category`, `Description`, `ImplementationKind`, `ImplementationDescriptor`, `Inputs`, `Outputs`, `DesignFacets`, `ExecutionType`).
 
 ### `ActivityVersionOrderDefinition` (`Elsa.Activities.Design.Persistence.Core`)
 - Before: `OrderDefinition<ActivityDefinitionVersion, int>(v => v.Version, …)`.

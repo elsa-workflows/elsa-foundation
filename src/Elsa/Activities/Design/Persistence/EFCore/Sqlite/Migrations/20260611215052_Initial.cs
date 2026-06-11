@@ -45,7 +45,7 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                     DescriptorPayloadSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     InputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     OutputsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
-                    PortsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
+                    DesignFacetsSource = table.Column<string>(type: "TEXT", maxLength: -1, nullable: true),
                     ExecutionType = table.Column<int>(type: "INTEGER", nullable: false),
                     SourceKind = table.Column<string>(type: "TEXT", nullable: false),
                     SourceId = table.Column<string>(type: "TEXT", nullable: false),

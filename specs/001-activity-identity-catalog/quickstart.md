@@ -111,7 +111,7 @@ Returns the version detail with `implementationKind` and the polymorphic descrip
   "kind": "Action",
   "inputs": [ ... ],
   "outputs": [ ... ],
-  "ports": [ ... ]
+  "designFacets": [ ... ]
 }
 ```
 

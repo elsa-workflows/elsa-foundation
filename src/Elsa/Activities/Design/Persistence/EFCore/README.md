@@ -8,7 +8,7 @@ Provider-agnostic EF Core persistence layer for the activity catalog. Inherits t
 - **EF Core configurations** for each entity (composite unique indexes, foreign keys, max-length conventions).
 - **`IAddActivityDefinitionCommand`** → `AddActivityDefinitionCommand` (transactional parent+version insert).
 - **`IActivityDefinitionLookup`** → `ActivityDefinitionLookup` — the picker query (Model X: catalog membership only; no removal filter).
-- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`Ports` + the implementation descriptor; derives `ImplementationKind` from `descriptor.Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
+- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`DesignFacets` + the implementation descriptor; derives `ImplementationKind` from `descriptor.Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
 - **`ActivityDefinitionVersionLoadingHandler`** — a typed `IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor. Deserialises `*Source` columns + the `ImplementationDescriptorPayload` (using the descriptor registry's kind→type lookup) back into rich projections. Dispatched by the single `ApplyEntityLoadingHandlers` aggregator on `OnEntityLoading`. Failures throw `ActivityDescriptorDeserialisationException` with version id + kind context.
 
 ## Cross-domain contributions
@@ -29,7 +29,7 @@ See [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/E
 | Entity | Notes |
 |---|---|
 | `ActivityDefinition` | Identity layer. Immutable: `ActivityTypeKey`, `SourceKind`, `SourceId`, `ReconciledAt`, `ReconciledBy`. Unique composite index `(SourceKind, SourceId, ActivityTypeKey)`. |
-| `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `ImplementationDescriptorPayload`, `ExecutionType`, `Inputs/Outputs/Ports*Source`, `ProvisioningHash`. `ImplementationDescriptor` is `[NotMapped]` — hydrated by the loading handler from the payload. |
+| `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `ImplementationDescriptorPayload`, `ExecutionType`, `Inputs/Outputs/DesignFacetsSource`, `ProvisioningHash`. `ImplementationDescriptor` is `[NotMapped]` — hydrated by the loading handler from the payload. |
 
 ## Persistence invariants
 

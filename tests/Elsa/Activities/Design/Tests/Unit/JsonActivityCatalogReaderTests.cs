@@ -45,7 +45,7 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
                 },
                 "inputs": [],
                 "outputs": [],
-                "ports": []
+                "designFacets": []
               }
             ]
             """);

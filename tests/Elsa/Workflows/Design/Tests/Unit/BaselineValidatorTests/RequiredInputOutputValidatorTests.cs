@@ -155,7 +155,7 @@ public sealed class RequiredInputOutputValidatorTests
         public IActivityDefinition Definition => null!;
         public IEnumerable<InputDefinition> Inputs { get; } = inputs;
         public IEnumerable<OutputDefinition> Outputs { get; } = outputs;
-        public IEnumerable<ActivityPortDefinition> Ports => [];
+        public IEnumerable<ActivityDesignFacet> DesignFacets => [];
         public ActivityExecutionType ExecutionType => default;
         public string Hash => "";
     }

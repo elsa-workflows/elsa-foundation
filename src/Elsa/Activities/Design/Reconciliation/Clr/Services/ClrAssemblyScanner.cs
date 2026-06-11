@@ -128,7 +128,7 @@ public sealed class ClrAssemblyScanner(
             Descriptor: TypeInformation.FromType(type),
             Inputs: inputs,
             Outputs: outputs,
-            Ports: []);
+            DesignFacets: []);
     }
 
     private static bool IsActivityType(Type type) =>

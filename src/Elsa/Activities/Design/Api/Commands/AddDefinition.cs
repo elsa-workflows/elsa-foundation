@@ -17,7 +17,7 @@ public sealed record AddDefinition(
     ActivityExecutionType? ExecutionType = null,
     IEnumerable<InputDefinition>? Inputs = null,
     IEnumerable<OutputDefinition>? Outputs = null,
-    IEnumerable<ActivityPortDefinition>? Ports = null
+    IEnumerable<ActivityDesignFacet>? DesignFacets = null
 )
 
 : ICommand<ActivityDefinitionVersionDetailsView>;

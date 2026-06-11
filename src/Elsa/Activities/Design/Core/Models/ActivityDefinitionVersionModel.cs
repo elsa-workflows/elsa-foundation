@@ -19,7 +19,7 @@ public sealed record ActivityDefinitionVersionModel(
     IActivityDefinition Definition,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
-    IEnumerable<ActivityPortDefinition> Ports,
+    IEnumerable<ActivityDesignFacet> DesignFacets,
     ActivityExecutionType ExecutionType,
     string Hash
 ) : IActivityDefinitionVersion;

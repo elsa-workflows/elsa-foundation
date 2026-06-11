@@ -23,7 +23,7 @@ public sealed class ActivityDefinitionVersionFactory(
         string sourceId,
         IEnumerable<InputDefinition> inputs,
         IEnumerable<OutputDefinition> outputs,
-        IEnumerable<ActivityPortDefinition> ports,
+        IEnumerable<ActivityDesignFacet> designFacets,
         ActivityExecutionType executionType = ActivityExecutionType.Action,
         string? id = null)
     {
@@ -38,7 +38,7 @@ public sealed class ActivityDefinitionVersionFactory(
             Definition: definition,
             Inputs: inputs,
             Outputs: outputs,
-            Ports: ports,
+            DesignFacets: designFacets,
             ExecutionType: executionType,
             Hash: string.Empty);
 

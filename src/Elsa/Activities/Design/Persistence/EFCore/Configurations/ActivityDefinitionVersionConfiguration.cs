@@ -11,7 +11,7 @@ public sealed class ActivityDefinitionVersionConfiguration : IEntityTypeConfigur
     {
         builder.Ignore(x => x.Inputs);
         builder.Ignore(x => x.Outputs);
-        builder.Ignore(x => x.Ports);
+        builder.Ignore(x => x.DesignFacets);
 
         builder.HasKey(x => x.Id);
 
@@ -22,7 +22,7 @@ public sealed class ActivityDefinitionVersionConfiguration : IEntityTypeConfigur
         builder.Property(x => x.DescriptorPayloadSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.InputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.OutputsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
-        builder.Property(x => x.PortsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(x => x.DesignFacetsSource).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.ExecutionType).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.SourceKind).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.Property(x => x.SourceId).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
@@ -30,7 +30,7 @@ public sealed class ActivityDefinitionVersionConfiguration : IEntityTypeConfigur
 
         builder.Property(x => x.OutputsSource).HasMaxLength(-1);
         builder.Property(x => x.InputsSource).HasMaxLength(-1);
-        builder.Property(x => x.PortsSource).HasMaxLength(-1);
+        builder.Property(x => x.DesignFacetsSource).HasMaxLength(-1);
         builder.Property(x => x.DescriptorPayloadSource).HasMaxLength(-1);
 
         builder

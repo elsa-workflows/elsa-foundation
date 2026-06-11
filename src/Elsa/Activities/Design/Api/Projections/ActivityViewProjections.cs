@@ -22,6 +22,6 @@ public static class ActivityViewProjections
             version.Definition.ToView(),
             version.Inputs,
             version.Outputs,
-            version.Ports,
+            version.DesignFacets,
             version.ExecutionType);
 }

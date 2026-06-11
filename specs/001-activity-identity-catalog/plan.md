@@ -116,7 +116,7 @@ src/
 # --- Activities Design (the heart of Unit B) ---
 ├── Elsa.Activities.Design.Core/
 │   ├── Contracts/IActivityDefinition.cs                # RESHAPED — identity + creation provenance + display
-│   ├── Contracts/IActivityDefinitionVersion.cs         # RESHAPED — version + kind + descriptor + inputs/outputs/ports
+│   ├── Contracts/IActivityDefinitionVersion.cs         # RESHAPED — version + kind + descriptor + inputs/outputs/design facets
 │   ├── Contracts/IActivityDefinitionReconciliationState.cs  # NEW — read contract for reconciliation sibling
 │   ├── Contracts/IImplementationDescriptor.cs          # NEW — marker interface
 │   ├── Models/ImplementationKind.cs                    # NEW — smart-enum value-record
@@ -129,7 +129,7 @@ src/
 │   ├── Models/ArgumentDefinition.cs                    # SEALED RECORD
 │   ├── Models/InputDefinition.cs                       # SEALED RECORD
 │   ├── Models/OutputDefinition.cs                      # SEALED RECORD
-│   ├── Models/ActivityPortDefinition.cs                # SEALED RECORD
+│   ├── Models/ActivityDesignFacet.cs                # SEALED RECORD
 │   ├── Models/ArgumentValue.cs                         # NEW — sealed record { object? Value, ExpressionType ExpressionType }
 │   ├── Models/ExpressionType.cs                        # NEW — smart-enum value-record
 │   ├── Models/ArgumentState.cs                         # NEW — base record (ReferenceKey + Value)

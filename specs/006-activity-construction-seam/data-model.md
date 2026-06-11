@@ -57,7 +57,7 @@ Entities and contracts, with their fields, relationships, invariants, and the be
 - `ActivitiesCompositionRuntimeFeature` (public, not sealed). Refs `Runtime.Core` + `Elsa.Workflows.Primitives` (+ `Elsa.Workflows.Runtime.Core` only if the construct-only type needs it). **No `Design.*` ref.**
 
 ### `Elsa.Activities.Composition.Design`
-- `WorkflowActivityReconciliationSource : IActivityReconciliationSource` (public sealed) — one model per usable-as-activity workflow version; `DescriptorType="Elsa.Workflows.Primitives.Models.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O/ports mirrored (005 FR-005/006).
+- `WorkflowActivityReconciliationSource : IActivityReconciliationSource` (public sealed) — one model per usable-as-activity workflow version; `DescriptorType="Elsa.Workflows.Primitives.Models.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O mirrored (005 FR-005/006). Outcome/port visualization belongs to future module-owned design facets.
 - `ActivitiesCompositionDesignFeature` (public, not sealed). Refs `Design.Reconciliation.Core` + `Design.Core` + `Elsa.Workflows.Primitives`.
 
 ## 6. Persistence reshape (`Elsa.Activities.Design.Persistence.*`)

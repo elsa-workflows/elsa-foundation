@@ -44,7 +44,7 @@ public interface IActivityDefinitionVersion
 
     IEnumerable<OutputDefinition> Outputs { get; }
 
-    IEnumerable<ActivityPortDefinition> Ports { get; }
+    IEnumerable<ActivityDesignFacet> DesignFacets { get; }
 
     ActivityExecutionType ExecutionType { get; }
 

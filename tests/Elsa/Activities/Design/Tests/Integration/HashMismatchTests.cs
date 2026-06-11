@@ -73,5 +73,5 @@ public sealed class HashMismatchTests
             Descriptor: TypeInformation.Object,
             Inputs: [],
             Outputs: [],
-            Ports: []);
+            DesignFacets: []);
 }

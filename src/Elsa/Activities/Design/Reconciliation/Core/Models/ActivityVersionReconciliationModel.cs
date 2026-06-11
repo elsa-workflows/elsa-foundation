@@ -13,6 +13,6 @@ public sealed record ActivityVersionReconciliationModel(
     object Descriptor,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
-    IEnumerable<ActivityPortDefinition> Ports,
+    IEnumerable<ActivityDesignFacet> DesignFacets,
     ActivityExecutionType ExecutionType = ActivityExecutionType.Action
 );

@@ -69,7 +69,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         v.ExecutionType,
         v.Inputs,
         v.Outputs,
-        v.Ports,
+        v.DesignFacets,
     };
 
     private static string Canonicalise(string json)

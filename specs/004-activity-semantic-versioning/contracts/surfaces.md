@@ -15,7 +15,7 @@ public interface IActivityDefinitionVersion
     IActivityDefinition Definition { get; }
     IEnumerable<InputDefinition> Inputs { get; }
     IEnumerable<OutputDefinition> Outputs { get; }
-    IEnumerable<ActivityPortDefinition> Ports { get; }
+    IEnumerable<ActivityDesignFacet> DesignFacets { get; }
     ActivityExecutionType ExecutionType { get; }
     string? ReconcilliationHash { get; }
     // SemVerSortKey is NOT here — persistence-only, §2.9.1.
@@ -44,7 +44,7 @@ public sealed record ActivityVersionReconciliationModel(
     object ImplementationDescriptor,
     IEnumerable<InputDefinition> Inputs,
     IEnumerable<OutputDefinition> Outputs,
-    IEnumerable<ActivityPortDefinition> Ports,
+    IEnumerable<ActivityDesignFacet> DesignFacets,
     ActivityExecutionType ExecutionType = ActivityExecutionType.Action);
 ```
 

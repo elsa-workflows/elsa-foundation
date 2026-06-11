@@ -30,12 +30,12 @@ public sealed class ActivityDefinitionVersionLoadingHandler(
                 entity.Inputs = payloadSerializer.Deserialize<IEnumerable<InputDefinition>>(entity.InputsSource);
             if (!string.IsNullOrWhiteSpace(entity.OutputsSource))
                 entity.Outputs = payloadSerializer.Deserialize<IEnumerable<OutputDefinition>>(entity.OutputsSource);
-            if (!string.IsNullOrWhiteSpace(entity.PortsSource))
-                entity.Ports = payloadSerializer.Deserialize<IEnumerable<ActivityPortDefinition>>(entity.PortsSource);
+            if (!string.IsNullOrWhiteSpace(entity.DesignFacetsSource))
+                entity.DesignFacets = payloadSerializer.Deserialize<IEnumerable<ActivityDesignFacet>>(entity.DesignFacetsSource);
         }
         catch (Exception exp)
         {
-            logger.LogError(exp, "Could not deserialize activity version inputs/outputs/ports: {VersionId}. Reverting to default state", entity.Id);
+            logger.LogError(exp, "Could not deserialize activity version inputs/outputs/design facets: {VersionId}. Reverting to default state", entity.Id);
         }
 
         if (!string.IsNullOrWhiteSpace(entity.DescriptorPayloadSource))

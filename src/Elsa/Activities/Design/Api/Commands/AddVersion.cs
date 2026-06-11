@@ -12,7 +12,7 @@ public sealed record AddVersion(
     JsonElement DescriptorPayload,
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,
-    IEnumerable<ActivityPortDefinition>? Ports,
+    IEnumerable<ActivityDesignFacet>? DesignFacets,
     ActivityExecutionType? ExecutionType
 )
 : ICommand<ActivityDefinitionVersionDetailsView>;

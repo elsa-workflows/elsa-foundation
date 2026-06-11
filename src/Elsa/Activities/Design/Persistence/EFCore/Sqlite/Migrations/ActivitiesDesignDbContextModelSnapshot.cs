@@ -75,15 +75,22 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("ExecutionType")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("DescriptorPayloadSource")
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("DescriptorType")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DesignFacetsSource")
+                        .HasMaxLength(-1)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ExecutionType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Hash")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("InputsSource")
@@ -96,13 +103,6 @@ namespace Elsa.Activities.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.Property<string>("OutputsSource")
                         .HasMaxLength(-1)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PortsSource")
-                        .HasMaxLength(-1)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Hash")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SemVerSortKey")

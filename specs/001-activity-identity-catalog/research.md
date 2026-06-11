@@ -79,7 +79,7 @@ The registry is populated at startup by `ImplementationDescriptorRegistryStartup
 
 **Why no custom `JsonConverter`.** A `JsonConverter` would couple the descriptor type's serialisation contract to System.Text.Json conventions and create framework-coupling at the `IImplementationDescriptor` declaration site. Since `IPayloadSerializer` is the existing Elsa serialisation seam (provider-agnostic; can be Newtonsoft or System.Text.Json), driving deserialisation through it via type-resolution-then-deserialise is simpler, less coupling, and works with any future payload serializer implementation.
 
-**Why no `*Source` CLR property.** The `*Source` suffix pattern (used today for `InputsSource` / `OutputsSource` / `PortsSource`) exposes the persistence form at the entity surface. For the new descriptor we use a shadow column instead — the entity surface carries one name (`ImplementationDescriptor`, the rich projection); the persisted form is invisible at the CLR level. Same EF Core mechanism as any other shadow property; cleaner surface.
+**Why no `*Source` CLR property.** The `*Source` suffix pattern (used today for `InputsSource` / `OutputsSource` / `DesignFacetsSource`) exposes the persistence form at the entity surface. For the new descriptor we use a shadow column instead — the entity surface carries one name (`ImplementationDescriptor`, the rich projection); the persisted form is invisible at the CLR level. Same EF Core mechanism as any other shadow property; cleaner surface.
 
 **Alternatives considered.**
 - `JsonPolymorphic` + `JsonDerivedType` attributes on the interface declaration. **Rejected** — closes the open-discriminator door (every kind must be declared at the interface's source location).
@@ -159,7 +159,7 @@ Matches the canonical Elsa §E3.3 worked example.
 
 ## R8 — Existing `JsonCatalogEntry` shape ([`elsa-core-activities.json`](../../elsa-core-activities.json))
 
-**Decision.** Map the existing JSON shape to the new entity model. Each catalog entry currently carries `typeInfo`, `version`, `kind`, `definition.uniqueName`, `definition.category`, `definition.displayName`, `definition.description`, `definition.isBrowsable`, `inputs`, `outputs`, `ports`.
+**Decision.** Map the existing JSON shape to the new entity model. Each catalog entry currently carries `typeInfo`, `version`, `kind`, `definition.uniqueName`, `definition.category`, `definition.displayName`, `definition.description`, `definition.isBrowsable`, `inputs`, `outputs`, `designFacets`.
 
 **Mapping**:
 
@@ -171,7 +171,7 @@ Matches the canonical Elsa §E3.3 worked example.
 | `typeInfo` | `ActivityDefinitionVersion.ImplementationDescriptor` (`[NotMapped]`) ← `new ClrImplementationDescriptor(TypeInformation)`; persisted to the EF shadow column `ImplementationDescriptor` (string JSON) by the saving handler. `ImplementationKind = ImplementationKind.Clr`. |
 | `version` | `ActivityDefinitionVersion.Version` |
 | `kind` | `ActivityDefinitionVersion.Kind` (existing `ActivityKind` enum unchanged) |
-| `inputs` / `outputs` / `ports` | `InputsSource` / `OutputsSource` / `PortsSource` (unchanged shadow-JSON pattern) |
+| `inputs` / `outputs` / `designFacets` | `InputsSource` / `OutputsSource` / `DesignFacetsSource` (unchanged shadow-JSON pattern) |
 | *(provenance fields — supplied by the JSON-file source itself)* | `SourceKind = SourceKind.Json`; `SourceId = <assembly name from `typeInfo.assemblyName`>`; `ProvisionedAt = DateTimeOffset.UtcNow`; `ProvisionedBy = Environment.MachineName` |
 
 The seed JSON file (`elsa-core-activities.json` at the repo root) doubles as the bootstrap dataset for the integration test in `Elsa.Activities.Design.Tests`.

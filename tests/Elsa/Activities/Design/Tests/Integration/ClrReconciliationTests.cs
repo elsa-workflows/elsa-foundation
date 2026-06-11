@@ -91,7 +91,7 @@ public sealed class ClrReconciliationTests
                 Descriptor: TypeInformation.FromType(typeof(VersionedFixtureActivity)),
                 Inputs: [],
                 Outputs: [],
-                Ports: []));
+                DesignFacets: []));
 
     private sealed class TempAssemblyFolder : IDisposable
     {

@@ -66,7 +66,7 @@ Resolves the five items the spec deferred to plan stage. Each is settled within 
 - **`ActivityTypeKey`** = the CLR type's **full name** (namespace + type name, e.g. `Elsa.Http.SendRequest`) — FR-022. Not from the mutable `IActivity.Type` instance property; not assembly-qualified.
 - **Display name / description / category** = from activity-metadata attributes if present, else conventional defaults derived from the type (documented).
 - **Inputs / outputs** = from the activity's input/output property declarations (the existing convention used by the activity model).
-- **Ports** = from the activity's declared port metadata.
+- **DesignFacets** = from the activity's declared port metadata.
 - **Version** = `ActivityVersionResolver`: `[Version]` attribute if present (validated SemVer 2.0.0), else the declaring assembly's version resolved per R5/FR-020.
 
 Each discovered activity becomes one `ActivityVersionReconciliationModel` with `ImplementationKind = "CLR"` and a `ClrImplementationDescriptor`.

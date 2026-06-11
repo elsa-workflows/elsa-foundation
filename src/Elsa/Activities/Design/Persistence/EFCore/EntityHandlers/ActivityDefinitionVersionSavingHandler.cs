@@ -20,7 +20,7 @@ public sealed class ActivityDefinitionVersionSavingHandler(IPayloadSerializer pa
     {
         entity.InputsSource = payloadSerializer.Serialize(entity.Inputs);
         entity.OutputsSource = payloadSerializer.Serialize(entity.Outputs);
-        entity.PortsSource = payloadSerializer.Serialize(entity.Ports);
+        entity.DesignFacetsSource = payloadSerializer.Serialize(entity.DesignFacets);
 
         // Persist the descriptor as opaque JSON. No type knowledge, no Kind derivation.
         entity.DescriptorPayloadSource = entity.DescriptorPayload.ValueKind == JsonValueKind.Undefined

@@ -11,6 +11,6 @@ public sealed record ActivityDefinitionVersionDetailsView(
     ActivityDefinitionView Definition,
     IEnumerable<InputDefinition>? Inputs,
     IEnumerable<OutputDefinition>? Outputs,
-    IEnumerable<ActivityPortDefinition>? Ports,
+    IEnumerable<ActivityDesignFacet>? DesignFacets,
     ActivityExecutionType ExecutionType
 );

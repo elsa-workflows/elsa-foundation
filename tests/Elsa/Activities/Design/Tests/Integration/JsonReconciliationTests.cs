@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Elsa.Activities.Design.Reconciliation.Json.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -33,7 +34,12 @@ public sealed class JsonReconciliationTests : IDisposable
         var sendEmail = store.Definitions.Single(d => d.ActivityTypeKey == "Acme.Activities.SendEmail");
         Assert.Equal("Send Email", sendEmail.DisplayName);
         Assert.Equal("Communication", sendEmail.Category);
-        Assert.Equal("1.2.3", store.Versions.Single(v => v.DefinitionId == sendEmail.Id).Version);
+        var sendEmailVersion = store.Versions.Single(v => v.DefinitionId == sendEmail.Id);
+        Assert.Equal("1.2.3", sendEmailVersion.Version);
+        var facet = Assert.Single(sendEmailVersion.DesignFacets);
+        Assert.Equal("elsa.test.visual", facet.Kind);
+        Assert.Equal("1.0.0", facet.SchemaVersion);
+        Assert.Equal("left", facet.Payload.GetProperty("lane").GetString());
 
         var writeLine = store.Definitions.Single(d => d.ActivityTypeKey == "Acme.Activities.WriteLine");
         Assert.Equal("2.0.0", store.Versions.Single(v => v.DefinitionId == writeLine.Id).Version);
@@ -134,7 +140,15 @@ public sealed class JsonReconciliationTests : IDisposable
           },
           "inputs": [],
           "outputs": [],
-          "ports": []
+          "designFacets": [
+            {
+              "kind": "elsa.test.visual",
+              "schemaVersion": "1.0.0",
+              "payload": {
+                "lane": "left"
+              }
+            }
+          ]
         }
         """;
 
@@ -156,7 +170,7 @@ public sealed class JsonReconciliationTests : IDisposable
           },
           "inputs": [],
           "outputs": [],
-          "ports": []
+          "designFacets": []
         }
         """;
 

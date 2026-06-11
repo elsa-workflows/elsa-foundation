@@ -51,7 +51,7 @@ public sealed class ActivityDefinitionVersionSavingHandler : IDomainEventHandler
     {
         if (e.Entry.Entity is ActivityDefinitionVersion version)
         {
-            // serialise descriptor + inputs/outputs/ports to *Source columns
+            // serialise descriptor + inputs/outputs/design facets to *Source columns
             version.InputsSource = JsonSerializer.Serialize(version.Inputs);
             // ...
         }

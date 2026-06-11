@@ -51,7 +51,7 @@ public interface IActivityDefinitionVersion
 
     IEnumerable<InputDefinition> Inputs { get; }
     IEnumerable<OutputDefinition> Outputs { get; }
-    IEnumerable<ActivityPortDefinition> Ports { get; }
+    IEnumerable<ActivityDesignFacet> DesignFacets { get; }
 
     IActivityDefinition Definition { get; }
 }

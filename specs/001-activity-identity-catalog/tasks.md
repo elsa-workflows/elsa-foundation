@@ -64,7 +64,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 
 - [X] T016 [P] Convert `src/Elsa.Activities.Design.Core/Models/InputDefinition.cs` to `public sealed record`. Preserve existing fields.
 - [X] T017 [P] Convert `src/Elsa.Activities.Design.Core/Models/OutputDefinition.cs` to `public sealed record`.
-- [X] T018 [P] Convert `src/Elsa.Activities.Design.Core/Models/ActivityPortDefinition.cs` to `public sealed record`.
+- [X] T018 [P] Convert `src/Elsa.Activities.Design.Core/Models/ActivityDesignFacet.cs` to `public sealed record`.
 - [X] T019 [P] Convert `src/Elsa.Activities.Design.Core/Models/ArgumentDefinition.cs` to `public sealed record`.
 - [X] T020 Delete `src/Elsa.Activities.Design.Core/Contracts/IArgumentDefinition.cs`; update all consumers to reference the `ArgumentDefinition` record directly.
 
@@ -175,7 +175,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 
 ### Implementation for US3 — entity handlers
 
-- [X] T065 [US3] Update `src/Elsa.Activities.Design.Persistence.EFCore/EntityHandlers/ActivityDefinitionVersionSavingHandler.cs`: serialise `entity.ImplementationDescriptor` via `IPayloadSerializer.Serialize(...)`; write the resulting string to `entry.Property("ImplementationDescriptor").CurrentValue`. Continue to serialise `Inputs/Outputs/Ports` via the existing `*Source` properties. **Stays registered as a typed `IEntitySavingHandler<,>` for now**; US5 migrates it to the domain-event mechanism.
+- [X] T065 [US3] Update `src/Elsa.Activities.Design.Persistence.EFCore/EntityHandlers/ActivityDefinitionVersionSavingHandler.cs`: serialise `entity.ImplementationDescriptor` via `IPayloadSerializer.Serialize(...)`; write the resulting string to `entry.Property("ImplementationDescriptor").CurrentValue`. Continue to serialise `Inputs/Outputs/DesignFacets` via the existing `*Source` properties. **Stays registered as a typed `IEntitySavingHandler<,>` for now**; US5 migrates it to the domain-event mechanism.
 - [X] T066 [US3] Update `src/Elsa.Activities.Design.Persistence.EFCore/EntityHandlers/ActivityDefinitionVersionLoadingHandler.cs`: inject `IImplementationDescriptorRegistry`; read `entity.ImplementationKind`; call `registry.Resolve(kind)` to obtain the CLR descriptor type; read shadow column via `entry.Property("ImplementationDescriptor").CurrentValue` as `string`; call `IPayloadSerializer.Deserialize(json, type)` (reflection-construct the generic method if the API is generic-only: `typeof(IPayloadSerializer).GetMethod(nameof(IPayloadSerializer.Deserialize)).MakeGenericMethod(type).Invoke(serializer, [json])`); assign result to `entity.ImplementationDescriptor`. If `registry.Resolve(kind)` returns null (unknown kind), throw with a clear diagnostic.
 
 ### Implementation for US3 — API DTOs
@@ -262,7 +262,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 
 - [X] T110 [P] [US4] Create new project `src/Elsa.Activities.Design.Reconciliation.Json/Elsa.Activities.Design.Reconciliation.Json.csproj`; add to `Elsa.Server.slnx`. Project references: `Elsa.Activities.Design.Reconciliation.Core`, `Elsa.Activities.Design.Core`, `Elsa.Primitives`, `Elsa.Mediator.Core`. NO heavy dependencies (G3).
 - [X] T111 [P] [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Options/JsonReconciliationOptions.cs` — `string FilePath`.
-- [X] T112 [P] [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Models/JsonCatalogEntry.cs` — record mirroring `elsa-core-activities.json` entry shape (`TypeInformation TypeInfo`, `int Version`, `ActivityKind Kind`, nested `Definition`, `Inputs/Outputs/Ports`).
+- [X] T112 [P] [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Models/JsonCatalogEntry.cs` — record mirroring `elsa-core-activities.json` entry shape (`TypeInformation TypeInfo`, `int Version`, `ActivityKind Kind`, nested `Definition`, `Inputs/Outputs/DesignFacets`).
 - [X] T113 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Services/JsonActivityCatalogReader.cs` — reads + deserialises the file path from options; exposes `IReadOnlyList<JsonCatalogEntry>` (or fails gracefully if file missing — log warning, return empty).
 - [X] T114 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Handlers/JsonActivityVersionsReconcilingHandler.cs` — implements `IDomainEventHandler<OnActivityVersionsReconciling>`; reads entries via the catalog reader; constructs an `IActivityDefinitionVersion` per entry with `Definition.SourceKind = SourceKind.Json`, `Definition.SourceId = entry.TypeInfo.AssemblyName`, `Definition.ProvisionedAt = clock.UtcNow`, `Definition.ProvisionedBy = Environment.MachineName`, descriptor = `new ClrImplementationDescriptor(entry.TypeInfo)`, kind = `ImplementationKind.Clr`.
 - [X] T115 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/ActivitiesDesignReconciliationJsonFeature.cs` — registers the handler, the reader service, the options binding.
@@ -421,7 +421,7 @@ Task: "Add IImplementationDescriptor marker interface in src/Elsa.Activities.Des
 Task: "Add ClrImplementationDescriptor record in src/Elsa.Activities.Design.Core/Models/ClrImplementationDescriptor.cs"
 Task: "Convert InputDefinition to sealed record in src/Elsa.Activities.Design.Core/Models/InputDefinition.cs"
 Task: "Convert OutputDefinition to sealed record in src/Elsa.Activities.Design.Core/Models/OutputDefinition.cs"
-Task: "Convert ActivityPortDefinition to sealed record in src/Elsa.Activities.Design.Core/Models/ActivityPortDefinition.cs"
+Task: "Convert ActivityDesignFacet to sealed record in src/Elsa.Activities.Design.Core/Models/ActivityDesignFacet.cs"
 Task: "Convert ArgumentDefinition to sealed record in src/Elsa.Activities.Design.Core/Models/ArgumentDefinition.cs"
 Task: "Add ArgumentValue sealed record in src/Elsa.Activities.Design.Core/Models/ArgumentValue.cs"
 Task: "Add ArgumentState base record in src/Elsa.Activities.Design.Core/Models/ArgumentState.cs"

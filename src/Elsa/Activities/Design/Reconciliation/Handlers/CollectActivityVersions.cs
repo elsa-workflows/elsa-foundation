@@ -52,7 +52,7 @@ public sealed class CollectActivityVersions(
                     source.SourceId,
                     entry.Inputs,
                     entry.Outputs,
-                    entry.Ports,
+                    entry.DesignFacets,
                     entry.ExecutionType);
 
                 domainEvent.Versions.Add(version);
