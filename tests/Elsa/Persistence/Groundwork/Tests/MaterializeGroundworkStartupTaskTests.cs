@@ -22,7 +22,7 @@ public sealed class MaterializeGroundworkStartupTaskTests
 
         await harness.ExecuteStartupTask();
 
-        var snapshot = harness.Diagnostics.GetSnapshot();
+        var snapshot = harness.GetDiagnosticsSnapshot();
         Assert.Contains(snapshot.Materializations, record =>
             record.ManifestIdentity == "elsa.secrets" &&
             record.ProviderName == "groundwork-sqlite" &&
@@ -42,7 +42,7 @@ public sealed class MaterializeGroundworkStartupTaskTests
 
         await harness.ExecuteStartupTask();
 
-        var snapshot = harness.Diagnostics.GetSnapshot();
+        var snapshot = harness.GetDiagnosticsSnapshot();
         Assert.Equal(0, provider.MaterializeCount);
         Assert.Contains(snapshot.Materializations, record =>
             record.ManifestIdentity == "elsa.secrets" &&
@@ -58,7 +58,7 @@ public sealed class MaterializeGroundworkStartupTaskTests
 
         await harness.ExecuteStartupTask();
 
-        var snapshot = harness.Diagnostics.GetSnapshot();
+        var snapshot = harness.GetDiagnosticsSnapshot();
         Assert.Contains(snapshot.Materializations, record =>
             record.ManifestIdentity == "elsa.secrets" &&
             record.Status == GroundworkMaterializationStatus.ProviderUnavailable);
@@ -78,7 +78,7 @@ public sealed class MaterializeGroundworkStartupTaskTests
         }, provider);
 
         var exception = await Assert.ThrowsAsync<AggregateException>(harness.ExecuteStartupTask);
-        var snapshot = harness.Diagnostics.GetSnapshot();
+        var snapshot = harness.GetDiagnosticsSnapshot();
 
         Assert.Single(exception.InnerExceptions);
         Assert.Contains(snapshot.Materializations, record =>
@@ -99,11 +99,9 @@ public sealed class MaterializeGroundworkStartupTaskTests
         {
             this.serviceProvider = serviceProvider;
             Connection = connection;
-            Diagnostics = serviceProvider.GetRequiredService<GroundworkPersistenceDiagnostics>();
         }
 
         private SqliteConnection Connection { get; }
-        public GroundworkPersistenceDiagnostics Diagnostics { get; }
 
         public static GroundworkBridgeHarness Create(
             Action<Elsa.Persistence.Groundwork.Options.GroundworkPersistenceOptions> configure,
@@ -121,7 +119,13 @@ public sealed class MaterializeGroundworkStartupTaskTests
             else if (registerSqliteProvider)
                 services.AddSingleton<IGroundworkPersistenceProvider, SqliteGroundworkProvider>();
 
-            return new GroundworkBridgeHarness(services.BuildServiceProvider(), connection);
+            return new GroundworkBridgeHarness(services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }), connection);
+        }
+
+        public GroundworkPersistenceDiagnosticSnapshot GetDiagnosticsSnapshot()
+        {
+            using var scope = serviceProvider.CreateScope();
+            return scope.ServiceProvider.GetRequiredService<GroundworkPersistenceDiagnostics>().GetSnapshot();
         }
 
         public async Task ExecuteStartupTask()

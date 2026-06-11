@@ -25,9 +25,10 @@ public sealed class GroundworkPersistenceFeatureTests
             descriptor.ServiceType == typeof(IStartupTask) &&
             descriptor.ImplementationType == typeof(MaterializeGroundworkStartupTask));
 
-        using var provider = services.BuildServiceProvider();
-        var options = provider.GetRequiredService<IOptions<GroundworkPersistenceOptions>>().Value;
-        var diagnostics = provider.GetRequiredService<GroundworkPersistenceDiagnostics>();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var options = scope.ServiceProvider.GetRequiredService<IOptions<GroundworkPersistenceOptions>>().Value;
+        var diagnostics = scope.ServiceProvider.GetRequiredService<GroundworkPersistenceDiagnostics>();
         var snapshot = diagnostics.GetSnapshot();
 
         Assert.False(options.MaterializeOnStartup);
