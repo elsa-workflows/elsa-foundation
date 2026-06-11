@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -34,6 +35,15 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IBookmarkStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryBookmarkStateStore));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IBookmarkStimulusLookup) &&
+            descriptor.ImplementationType == typeof(BookmarkStimulusLookup));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IBookmarkResumeResolver) &&
+            descriptor.ImplementationType == typeof(BookmarkResumeResolver));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IBookmarkResumeDispatcher) &&
+            descriptor.ImplementationType == typeof(BookmarkResumeDispatcher));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IDurableValueStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryDurableValueStateStore));
@@ -120,6 +130,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(MissingActivityInvocationSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            descriptor.ImplementationType == typeof(MissingBookmarkResumeSchedulerWorkHandler));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(MissingGeneratedEventSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
@@ -146,6 +159,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<BookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
+        Assert.IsType<BookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
+        Assert.IsType<BookmarkResumeDispatcher>(provider.GetRequiredService<IBookmarkResumeDispatcher>());
         Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
@@ -176,6 +192,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCheckpointSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler);
+        Assert.Contains(schedulerWorkHandlers, handler => handler is MissingBookmarkResumeSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is IFallbackWorkflowSchedulerWorkHandler);
@@ -196,6 +213,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler) <
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingBookmarkResumeSchedulerWorkHandler));
+        Assert.True(
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingBookmarkResumeSchedulerWorkHandler) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler) <
@@ -272,6 +292,42 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+    }
+
+    [Fact]
+    public void RegistersBookmarkStimulusLookupAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IBookmarkStimulusLookup>(new CustomBookmarkStimulusLookup());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomBookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
+    }
+
+    [Fact]
+    public void RegistersBookmarkResumeResolverAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IBookmarkResumeResolver>(new CustomBookmarkResumeResolver());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomBookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
+    }
+
+    [Fact]
+    public void RegistersBookmarkResumeDispatcherAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IBookmarkResumeDispatcher>(new CustomBookmarkResumeDispatcher());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomBookmarkResumeDispatcher>(provider.GetRequiredService<IBookmarkResumeDispatcher>());
     }
 
     [Fact]
@@ -677,5 +733,26 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default) =>
             new(Array.Empty<ControlPlaneState>());
+    }
+
+    private sealed class CustomBookmarkStimulusLookup : IBookmarkStimulusLookup
+    {
+        public ValueTask<BookmarkStimulusLookupResult> FindAsync(BookmarkStimulusLookupRequest request, CancellationToken cancellationToken = default) =>
+            new(new BookmarkStimulusLookupResult(BookmarkStimulusLookupStatus.NotFound, reason: "custom"));
+    }
+
+    private sealed class CustomBookmarkResumeResolver : IBookmarkResumeResolver
+    {
+        public BookmarkResumeResolution Resolve(BookmarkResumeRequest request) =>
+            throw new NotSupportedException("Custom resolver test double.");
+    }
+
+    private sealed class CustomBookmarkResumeDispatcher : IBookmarkResumeDispatcher
+    {
+        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default) =>
+            new(new BookmarkResumeDispatchResult(
+                BookmarkResumeDispatchStatus.NotFound,
+                request.WorkflowExecutionId,
+                reason: "custom"));
     }
 }

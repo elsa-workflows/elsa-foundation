@@ -72,6 +72,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** maps `BookmarkState.ResumeTargetId` through the pinned `WorkflowExecutable.ResumeTargets` table and returns the executable node plus runtime resume target. It does not load artifacts, invoke activity handlers, or implement the bookmark store.
 - **Default implementation:** `BookmarkResumeResolver` *(intra-domain default)*.
 
+### `IBookmarkStimulusLookup` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one lookup surface finds bookmark continuation state for a workflow execution and stimulus identity).
+- **Signature:** `FindAsync(BookmarkStimulusLookupRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** matches non-expired `BookmarkState` records by workflow execution ID, stimulus type, and stimulus hash. Ambiguous matches are rejected instead of guessed. Durable providers can replace the default with indexed lookup.
+- **Default implementation:** `BookmarkStimulusLookup` *(list-based default over `IBookmarkStateStore` for the current in-memory slice)*.
+
+### `IBookmarkResumeDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one dispatcher turns matched bookmark stimuli into workflow execution mailbox commands).
+- **Signature:** `DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** uses `IBookmarkStimulusLookup`, workflow execution state, the pinned executable artifact, and `IBookmarkResumeResolver` to enqueue a `ResumeBookmark` command through `IWorkflowExecutionAgentProvider`. The command payload carries `ResumeTargetId`, not C# callback method names. It does not consume bookmarks or invoke activity resume handlers.
+- **Default implementation:** `BookmarkResumeDispatcher`.
+
 ### `IRuntimeActivityOutputReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Query surface (read-only active-scope output lookup used by resolvers and resolution contexts).
 - **Signature:** `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`.
@@ -202,7 +214,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Contributor (handlers consume drained scheduler work items).
 - **Signature:** `Name`, `CanHandle(RuntimeSchedulerWorkItem workItem)`, `HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)`.
 - **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer evaluates ordinary handlers before fallback handlers.
-- **Default implementations:** `WorkflowStartSchedulerWorkHandler` *(turns `Start` work into `ScheduleActivity` work for executable start nodes)*, `WorkflowScheduleActivitySchedulerWorkHandler` *(records `Scheduled` `ActivityExecutionState` and queues `StartActivity` work for one executable node)*, `WorkflowStartActivitySchedulerWorkHandler` *(transitions scheduled activity state to `Running` and queues `InvokeActivity` work)*, `WorkflowCompleteActivitySchedulerWorkHandler` *(drains deterministic activity completion work)*, `WorkflowCheckpointSchedulerWorkHandler` *(commits named checkpoint scheduler work through `RuntimeCheckpointCommitter`)*, `MissingActivityInvocationSchedulerWorkHandler` *(fallback that faults `InvokeActivity` when no provider is composed)*, `MissingGeneratedEventSchedulerWorkHandler` *(fallback that faults `GeneratedEvent` when no generated-event provider is composed)*, and `NoopWorkflowSchedulerWorkHandler` *(fallback that acknowledges drained work that has no required provider-specific handler)*.
+- **Default implementations:** `WorkflowStartSchedulerWorkHandler` *(turns `Start` work into `ScheduleActivity` work for executable start nodes)*, `WorkflowScheduleActivitySchedulerWorkHandler` *(records `Scheduled` `ActivityExecutionState` and queues `StartActivity` work for one executable node)*, `WorkflowStartActivitySchedulerWorkHandler` *(transitions scheduled activity state to `Running` and queues `InvokeActivity` work)*, `WorkflowCompleteActivitySchedulerWorkHandler` *(drains deterministic activity completion work)*, `WorkflowCheckpointSchedulerWorkHandler` *(commits named checkpoint scheduler work through `RuntimeCheckpointCommitter`)*, `MissingActivityInvocationSchedulerWorkHandler` *(fallback that faults `InvokeActivity` when no provider is composed)*, `MissingBookmarkResumeSchedulerWorkHandler` *(fallback that faults `ResumeBookmark` when no bookmark resume provider is composed)*, `MissingGeneratedEventSchedulerWorkHandler` *(fallback that faults `GeneratedEvent` when no generated-event provider is composed)*, and `NoopWorkflowSchedulerWorkHandler` *(fallback that acknowledges drained work that has no required provider-specific handler)*.
 
 ### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).
