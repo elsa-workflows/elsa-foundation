@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Control Plane State Store](specs/052-runtime-control-plane-state-store/plan.md)
+Current Speckit plan: [Runtime Generator Emission Scheduler](specs/053-runtime-generator-emission-scheduler/plan.md)
 <!-- SPECKIT END -->

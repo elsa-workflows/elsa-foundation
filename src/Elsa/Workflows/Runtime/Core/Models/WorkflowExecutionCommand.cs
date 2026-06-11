@@ -28,5 +28,6 @@ public enum WorkflowExecutionCommandKind
     CreateBookmark = 10,
     Checkpoint = 11,
     StartActivity = 12,
-    InvokeActivity = 13
+    InvokeActivity = 13,
+    GeneratedEvent = 14
 }

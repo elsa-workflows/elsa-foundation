@@ -110,6 +110,24 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_DoesNotNoopGeneratedEventWorkWhenNoProviderMatches()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.GeneratedEvent));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
+        Assert.Equal(MissingGeneratedEventSchedulerWorkHandler.HandlerName, item.HandlerName);
+        Assert.Contains("no generated-event provider", item.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task DrainAsync_DispatchesCompleteActivityWorkThroughNamedHandler()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
