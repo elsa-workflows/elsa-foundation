@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/samples/Elsa.Samples.Nuplane.Activities/">
+    <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
+  </Folder>
   <Folder Name="/src/Apps/Elsa.Server/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
@@ -168,6 +171,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Samples/Nuplane/Activities/">
+    <Project Path="tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />

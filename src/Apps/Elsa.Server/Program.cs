@@ -3,6 +3,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
+using Elsa.Server.ShellManagement;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
@@ -91,4 +92,5 @@ builder.Services.AddCShellsAspNetCore(shells =>
 var app = builder.Build();
 
 app.MapShells();
+app.MapShellManagementApi("/_admin/shells");
 app.Run();

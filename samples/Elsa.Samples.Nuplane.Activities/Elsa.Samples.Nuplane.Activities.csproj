@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>Elsa.Samples.Nuplane.Activities</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Elsa Workflows</Authors>
+    <Description>Sample Nuplane-loaded Elsa shell feature that contributes a custom activity.</Description>
+    <PackageTags>elsa;cshells;nuplane;sample;activities</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" Version="0.0.24" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <ProjectReference Include="..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
