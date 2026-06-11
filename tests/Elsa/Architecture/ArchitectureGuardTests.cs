@@ -102,7 +102,9 @@ public sealed class ArchitectureGuardTests
         var violations = ProjectFiles()
             .Where(IsRuntimeProject)
             .SelectMany(project => ProjectReferences(project)
-                .Where(reference => reference.Name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal))
+                .Where(reference =>
+                    reference.Name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal) ||
+                    reference.Name.StartsWith("Elsa.Activities.Design.", StringComparison.Ordinal))
                 .Where(reference => !DeferredRuntimeDesignReferences.Contains((project.Name, reference.Name)))
                 .Select(reference => $"{project.Name} -> {reference.Name}"))
             .ToList();

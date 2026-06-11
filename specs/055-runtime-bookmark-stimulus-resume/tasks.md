@@ -13,4 +13,4 @@
 - [x] T009 Add focused lookup, dispatch, DI, and separation tests.
 - [x] T010 Run focused runtime and architecture validation.
 - [x] T011 Self-review until no actionable issues remain.
-- [ ] T012 Commit, open PR, run PR loop, and merge when clean.
+- [x] T012 Commit, open PR, run PR loop, and merge when clean.
