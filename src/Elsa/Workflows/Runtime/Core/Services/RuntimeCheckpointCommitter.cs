@@ -35,6 +35,9 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimePostCommitOutboxStore? postCommitOutboxStore,
         TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(persistencePolicy);
+        ArgumentNullException.ThrowIfNull(checkpointWriter);
+        ArgumentNullException.ThrowIfNull(postCommitIntentDispatcher);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _persistencePolicy = persistencePolicy;
