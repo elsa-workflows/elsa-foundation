@@ -128,7 +128,6 @@
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
-    <Project Path="src/Elsa/Workflows/Runtime/StorageDrivers/Elsa.Workflows.Runtime.StorageDrivers.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />

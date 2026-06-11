@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 39
+- Discovered feature classes: 41
 
 ## Features
 
@@ -26,6 +26,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
+| GroundworkPersistenceFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceFeature.cs) |
 | HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/Elsa/Http/HttpFeature.cs) |
 | HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
@@ -51,3 +52,4 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | JavaScriptRenderingEndpointsFeature | FastEndpoints feature | Elsa.Expressions.JavaScript.Rendering | FastEndpointsFeatureBase | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
 | WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
+| WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
