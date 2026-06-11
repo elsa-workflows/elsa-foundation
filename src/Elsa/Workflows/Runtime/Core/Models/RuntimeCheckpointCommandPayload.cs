@@ -16,16 +16,21 @@ public sealed class RuntimeCheckpointCommandPayload
         IReadOnlyCollection<string>? activityExecutionIds,
         string reason)
     {
-        ArgumentNullException.ThrowIfNull(pinnedExecutable);
-        ArgumentException.ThrowIfNullOrWhiteSpace(checkpointName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        if (pinnedExecutable is null)
+            throw new ArgumentNullException(nameof(PinnedExecutable));
+
+        if (string.IsNullOrWhiteSpace(checkpointName))
+            throw new ArgumentException("Checkpoint name cannot be blank.", nameof(CheckpointName));
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Reason cannot be blank.", nameof(Reason));
 
         var activityExecutionIdSnapshot = (activityExecutionIds ?? []).ToArray();
         if (activityExecutionIdSnapshot.Any(string.IsNullOrWhiteSpace))
-            throw new ArgumentException("Activity execution IDs cannot contain blank values.", nameof(activityExecutionIds));
+            throw new ArgumentException("Activity execution IDs cannot contain blank values.", nameof(ActivityExecutionIds));
 
         if (activityExecutionIdSnapshot.Distinct(StringComparer.Ordinal).Count() != activityExecutionIdSnapshot.Length)
-            throw new ArgumentException("Activity execution IDs cannot contain duplicates.", nameof(activityExecutionIds));
+            throw new ArgumentException("Activity execution IDs cannot contain duplicates.", nameof(ActivityExecutionIds));
 
         PinnedExecutable = pinnedExecutable;
         CheckpointName = checkpointName;

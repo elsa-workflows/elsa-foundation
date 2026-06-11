@@ -45,5 +45,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     }
 
     private static bool IsCheckpointPayloadValidationException(ArgumentException exception) =>
-        exception.ParamName is "pinnedExecutable" or "checkpointName" or "activityExecutionIds" or "reason";
+        exception.ParamName is
+            nameof(RuntimeCheckpointCommandPayload.PinnedExecutable) or
+            nameof(RuntimeCheckpointCommandPayload.CheckpointName) or
+            nameof(RuntimeCheckpointCommandPayload.ActivityExecutionIds) or
+            nameof(RuntimeCheckpointCommandPayload.Reason);
 }
