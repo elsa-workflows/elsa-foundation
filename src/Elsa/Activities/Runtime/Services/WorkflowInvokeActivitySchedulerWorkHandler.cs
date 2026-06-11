@@ -125,7 +125,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, invokePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
+            await CommitFaultIncidentAsync(checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", cancellationToken);
             return;
         }
 
@@ -176,7 +176,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, invokePayload, state, exception, "ActivityFaulted"), cancellationToken);
+            await CommitFaultIncidentAsync(checkpointCommitter, workItem, invokePayload, state, exception, "ActivityFaulted", cancellationToken);
             return;
         }
 
@@ -306,6 +306,103 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         value is JsonElement json
             ? json.Clone()
             : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
+
+    private async ValueTask CommitFaultIncidentAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState state,
+        Exception exception,
+        string subStatus,
+        CancellationToken cancellationToken)
+    {
+        var occurredAt = _timeProvider.GetUtcNow();
+        var incidentId = NewIncidentId(workItem, invokePayload, subStatus);
+        var faultedState = FaultActivity(workItem, invokePayload, state, exception, subStatus, incidentId, occurredAt);
+        var incident = NewIncident(workItem, invokePayload, exception, subStatus, incidentId, occurredAt);
+        var metadata = new Dictionary<string, string>
+        {
+            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
+            ["runtime.commandId"] = workItem.CommandId,
+            ["runtime.activityExecutionId"] = invokePayload.ActivityExecutionId,
+            ["runtime.executableNodeId"] = invokePayload.ExecutableNodeId,
+            ["runtime.incidentId"] = incidentId,
+            ["runtime.faultSubStatus"] = subStatus
+        };
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{workItem.WorkItemId}:incident-recorded:{incidentId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: $"checkpoint:{workItem.WorkItemId}:incident-recorded:{incidentId}",
+                Name: RuntimeCheckpointNames.IncidentRecorded,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [invokePayload.ActivityExecutionId],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: invokePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: faultedState,
+                        Metadata: metadata)
+                ],
+                bookmarks: [],
+                durableValues: [],
+                incidents:
+                [
+                    new RuntimeStateChange<IncidentState>(
+                        StateId: incidentId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: incident,
+                        Metadata: metadata)
+                ],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    private static IncidentState NewIncident(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        Exception exception,
+        string subStatus,
+        string incidentId,
+        DateTimeOffset occurredAt)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
+            ["runtime.commandId"] = workItem.CommandId,
+            ["runtime.faultSubStatus"] = subStatus,
+            ["runtime.activityExecutionId"] = invokePayload.ActivityExecutionId,
+            ["runtime.executableNodeId"] = invokePayload.ExecutableNodeId
+        };
+
+        return new IncidentState(
+            incidentId: incidentId,
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            activityExecutionId: invokePayload.ActivityExecutionId,
+            executableNodeId: invokePayload.ExecutableNodeId,
+            severity: IncidentSeverity.Error,
+            status: IncidentStatus.Blocking,
+            resolutionAction: IncidentResolutionAction.WaitForIntervention,
+            failureType: subStatus,
+            message: exception.Message,
+            createdAt: occurredAt,
+            resolvedAt: null,
+            metadata: metadata);
+    }
+
+    private static string NewIncidentId(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        string subStatus) =>
+        $"incident:{workItem.WorkItemId}:{invokePayload.ActivityExecutionId}:{subStatus}";
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -497,19 +594,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
         Exception exception,
-        string subStatus)
+        string subStatus,
+        string incidentId,
+        DateTimeOffset completedAt)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata["runtime.invokeReason"] = invokePayload.Reason;
         metadata["runtime.invokeSchedulerWorkItemId"] = workItem.WorkItemId;
         metadata["runtime.faultType"] = exception.GetType().FullName ?? exception.GetType().Name;
         metadata["runtime.faultMessage"] = exception.Message;
+        metadata["runtime.incidentId"] = incidentId;
 
         return state with
         {
             Status = ActivityExecutionStatus.Faulted,
             SubStatus = subStatus,
-            CompletedAt = _timeProvider.GetUtcNow(),
+            CompletedAt = completedAt,
+            IncidentIds = state.IncidentIds.Append(incidentId).Distinct(StringComparer.Ordinal).ToArray(),
             FaultCount = state.FaultCount + 1,
             AggregateFaultCount = state.AggregateFaultCount + 1,
             Metadata = metadata

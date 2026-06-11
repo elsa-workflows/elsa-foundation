@@ -20,6 +20,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryRuntimeActivityOutputRegister _activityOutputRegister = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
+    private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
 
     public WorkflowInvokeActivitySchedulerWorkHandlerTests()
@@ -28,7 +29,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             workflowExecutionStateStore: null,
             activityExecutionStateStore: _activityStateStore,
             bookmarkStateStore: null,
-            durableValueStateStore: _durableValueStateStore);
+            durableValueStateStore: _durableValueStateStore,
+            incidentStateStore: _incidentStateStore);
     }
 
     [Fact]
@@ -273,6 +275,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
         Assert.Equal("ActivityFaulted", state.SubStatus);
         Assert.Contains("already registered", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityFaulted", message => Assert.Contains("already registered", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
@@ -296,6 +299,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(1, state.AggregateFaultCount);
         Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
         Assert.Equal("boom", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityFaulted", message => Assert.Equal("boom", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
@@ -321,6 +325,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(_now, state.CompletedAt);
         Assert.Equal(1, state.FaultCount);
         Assert.Contains("not a supported materialized value binding", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("not a supported materialized value binding", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
@@ -475,6 +480,36 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         return completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
     }
 
+    private async Task AssertIncidentRecordedAsync(string failureType, Action<string> assertMessage)
+    {
+        var incidentId = $"incident:invoke-work:actexec-1:{failureType}";
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal([incidentId], state.IncidentIds);
+        Assert.Equal(incidentId, state.Metadata["runtime.incidentId"]);
+
+        var incident = await _incidentStateStore.FindAsync("wfexec-1", incidentId);
+        Assert.NotNull(incident);
+        Assert.Equal("wfexec-1", incident.WorkflowExecutionId);
+        Assert.Equal("actexec-1", incident.ActivityExecutionId);
+        Assert.Equal("node-start", incident.ExecutableNodeId);
+        Assert.Equal(IncidentSeverity.Error, incident.Severity);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionAction.WaitForIntervention, incident.ResolutionAction);
+        Assert.Equal(failureType, incident.FailureType);
+        Assert.Equal(_now, incident.CreatedAt);
+        Assert.Null(incident.ResolvedAt);
+        Assert.Equal("invoke-work", incident.Metadata["runtime.schedulerWorkItemId"]);
+        Assert.Equal("command-1", incident.Metadata["runtime.commandId"]);
+        Assert.Equal(failureType, incident.Metadata["runtime.faultSubStatus"]);
+        assertMessage(incident.Message);
+
+        var write = Assert.Single(_checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
+        Assert.Equal(incidentId, write.Commit.Checkpoint.Metadata["runtime.incidentId"]);
+        Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
+    }
+
     private ServiceProvider NewProvider(IActivityFactory factory, IActivityExecutionStateStore? activityExecutionStateStore = null)
     {
         var services = new ServiceCollection();
@@ -489,6 +524,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeActivityOutputRegister>(_ => _activityOutputRegister);
         services.AddSingleton(_durableValueStateStore);
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
+        services.AddSingleton(_incidentStateStore);
+        services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
         services.AddSingleton<IRuntimeCheckpointWriter>(_ => _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
