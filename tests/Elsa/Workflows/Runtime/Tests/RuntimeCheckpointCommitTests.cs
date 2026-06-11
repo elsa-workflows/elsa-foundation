@@ -369,6 +369,18 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenBookmarkStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: new ThrowingBookmarkStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -448,6 +460,103 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Null(state.CompletedAt);
         var write = Assert.Single(writer.ListWrites());
         Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsBookmarkStateChanges()
+    {
+        var bookmarkStateStore = new InMemoryBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var created = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
+        var consumed = NewCommit(RuntimeCheckpointNames.BookmarkConsumed) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(bookmarks:
+            [
+                NewBookmarkChange("bookmark-1", "bookmark-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        await writer.WriteAsync(created, decision);
+
+        var bookmark = await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+        Assert.Equal("node-resume-1", bookmark.ResumeTargetId);
+
+        await writer.WriteAsync(consumed, decision);
+
+        Assert.Null(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedBookmarkStateProjectionBeforeRecordingWrite()
+    {
+        var bookmarkStateStore = new InMemoryBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
+        {
+            StateChanges = NewStateChanges(bookmarks:
+            [
+                NewBookmarkChange("bookmark-1", "bookmark-1", RuntimeStateChangeOperation.Append)
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Contains("Delete", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsBookmarkStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var bookmarkStateStore = new InMemoryBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
+        {
+            StateChanges = NewStateChanges(bookmarks:
+            [
+                NewBookmarkChange("bookmark-1", "bookmark-1", workflowExecutionId: "wfexec-2")
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-2"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingBookmarkReplay()
+    {
+        var bookmarkStateStore = new InMemoryBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.BookmarkConsumed) with
+        {
+            StateChanges = NewStateChanges(bookmarks:
+            [
+                NewBookmarkChange("bookmark-1", "bookmark-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var bookmark = await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+        Assert.Equal("node-resume-1", bookmark.ResumeTargetId);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
@@ -583,13 +692,17 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>())
             ]);
 
-    private RuntimeStateChange<BookmarkState> NewBookmarkChange(string stateId, string bookmarkId) =>
+    private RuntimeStateChange<BookmarkState> NewBookmarkChange(
+        string stateId,
+        string bookmarkId,
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert,
+        string workflowExecutionId = "wfexec-1") =>
         new(
             StateId: stateId,
-            Operation: RuntimeStateChangeOperation.Upsert,
+            Operation: operation,
             State: new BookmarkState(
                 BookmarkId: bookmarkId,
-                WorkflowExecutionId: "wfexec-1",
+                WorkflowExecutionId: workflowExecutionId,
                 ActivityExecutionId: "actexec-1",
                 ExecutableNodeId: "node-1",
                 ResumeTargetId: "node-resume-1",
@@ -679,5 +792,20 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<ActivityExecutionState>>([]);
+    }
+
+    private sealed class ThrowingBookmarkStateStore : IBookmarkStateStore
+    {
+        public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("bookmark state projection failed");
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("bookmark state projection failed");
+
+        public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<BookmarkState?>(null);
+
+        public ValueTask<IReadOnlyCollection<BookmarkState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<BookmarkState>>([]);
     }
 }

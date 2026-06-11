@@ -21,6 +21,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
+        services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerDrainer, WorkflowSchedulerDrainer>();

@@ -126,6 +126,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** stores `ActivityExecutionState` keyed by `WorkflowExecutionId` and durable `ActivityExecutionId`. `SaveAsync` is an upsert for future lifecycle transitions. The default scheduler uses it to record `Scheduled` state when `ScheduleActivity` work is drained, but it does not overwrite an existing activity execution state when replaying the same schedule work. It does not invoke activities, store authored workflow documents, or project diagnostics/history.
 - **Default implementation:** `InMemoryActivityExecutionStateStore` *(single-node in-memory default for the current runtime slice)*.
 
+### `IBookmarkStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns split continuation state for durable bookmark resume handles in a runtime composition).
+- **Signature:** `SaveAsync(BookmarkState state, ...)`, `DeleteAsync(string workflowExecutionId, string bookmarkId, ...)`, `FindAsync(string workflowExecutionId, string bookmarkId, ...)`, `ListAsync(string workflowExecutionId, ...)`.
+- **Usage:** stores `BookmarkState` keyed by `WorkflowExecutionId` and `BookmarkId`. The in-memory checkpoint writer projects bookmark upserts and deletes from accepted checkpoint commits into this store. Stimulus lookup indexes and resume dispatch behavior are separate runtime surfaces and are not part of this store boundary.
+- **Default implementation:** `InMemoryBookmarkStateStore` *(single-node in-memory default for the current runtime slice)*.
+
 ### `IWorkflowSchedulerDrainer` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one drainer owns deterministic dispatch of queued scheduler work for a runtime composition).
 - **Signature:** `DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.

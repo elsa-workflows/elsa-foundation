@@ -10,13 +10,16 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly Dictionary<string, RuntimeCheckpointWriteRecord> _writes = new(StringComparer.Ordinal);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
+    private readonly IBookmarkStateStore? _bookmarkStateStore;
 
     public InMemoryRuntimeCheckpointWriter(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
-        IActivityExecutionStateStore? activityExecutionStateStore = null)
+        IActivityExecutionStateStore? activityExecutionStateStore = null,
+        IBookmarkStateStore? bookmarkStateStore = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
+        _bookmarkStateStore = bookmarkStateStore;
     }
 
     public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -36,8 +39,10 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateActivityExecutionStateChanges(commit);
+            ValidateBookmarkStateChanges(commit);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
+            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
 
             lock (_syncRoot)
             {
@@ -79,6 +84,28 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             await _activityExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
+    private async ValueTask ApplyBookmarkStateChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_bookmarkStateStore is null)
+            return;
+
+        foreach (var stateChange in stateChanges)
+        {
+            if (stateChange.Operation == RuntimeStateChangeOperation.Delete)
+            {
+                await _bookmarkStateStore.DeleteAsync(
+                    stateChange.State.WorkflowExecutionId,
+                    stateChange.State.BookmarkId,
+                    cancellationToken);
+                continue;
+            }
+
+            await _bookmarkStateStore.SaveAsync(stateChange.State, cancellationToken);
+        }
+    }
+
     private void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
     {
         if (_workflowExecutionStateStore is null || stateChange is null)
@@ -106,6 +133,24 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        }
+    }
+
+    private void ValidateBookmarkStateChanges(RuntimeCheckpointCommit commit)
+    {
+        if (_bookmarkStateStore is null)
+            return;
+
+        foreach (var stateChange in commit.StateChanges.Bookmarks)
+        {
+            if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
+                throw new InvalidOperationException($"The in-memory checkpoint writer can only project bookmark state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
+
+            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.BookmarkId))
+                throw new InvalidOperationException("Bookmark state change StateId must match BookmarkState.BookmarkId.");
+
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
+                throw new InvalidOperationException("Bookmark state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
     }
 }

@@ -1,6 +1,8 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -28,6 +30,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IActivityExecutionStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryActivityExecutionStateStore));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IBookmarkStateStore) &&
+            descriptor.ImplementationType == typeof(InMemoryBookmarkStateStore));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
@@ -97,6 +102,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
+        Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
@@ -134,5 +140,58 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler));
+    }
+
+    [Fact]
+    public async Task DefaultCheckpointWriterProjectsBookmarksIntoRegisteredStateStore()
+    {
+        var services = new ServiceCollection();
+        var now = new DateTimeOffset(2026, 6, 11, 10, 0, 0, TimeSpan.Zero);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var bookmarkStateStore = provider.GetRequiredService<IBookmarkStateStore>();
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: "commit-1",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint-1",
+                Name: RuntimeCheckpointNames.BookmarkCreated,
+                WorkflowExecutionId: "wfexec-1",
+                OccurredAt: now,
+                ActivityExecutionIds: ["actexec-1"],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks:
+                [
+                    new RuntimeStateChange<BookmarkState>(
+                        StateId: "bookmark-1",
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: new BookmarkState(
+                            BookmarkId: "bookmark-1",
+                            WorkflowExecutionId: "wfexec-1",
+                            ActivityExecutionId: "actexec-1",
+                            ExecutableNodeId: "node-1",
+                            ResumeTargetId: "node-resume-1",
+                            StimulusType: "delivery-status",
+                            StimulusHash: "sha256:delivery-status:order-123",
+                            Payload: null,
+                            Metadata: new Dictionary<string, string>(),
+                            CreatedAt: now,
+                            ExpiresAt: null),
+                        Metadata: new Dictionary<string, string>())
+                ],
+                durableValues: [],
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
+        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+        Assert.NotNull(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }
 }

@@ -9,4 +9,4 @@
 - [x] T005 Add focused writer tests for activity projection and rejection.
 - [x] T006 Run focused runtime and architecture validation.
 - [x] T007 Self-review until no actionable issues remain.
-- [ ] T008 Commit, open PR, run PR loop, and merge when clean.
+- [x] T008 Commit, open PR, run PR loop, and merge when clean.
