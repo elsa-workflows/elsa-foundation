@@ -10,7 +10,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 |---|---|---|
 | CShells.Abstractions | 0.0.24 | Elsa.Activities.Composition.Runtime (0.0.24)<br>Elsa.Activities.Design.Reconciliation (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.24)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.24)<br>Elsa.Activities.Primitives (0.0.24)<br>Elsa.Activities.Runtime (0.0.24)<br>Elsa.Caching.Memory (0.0.24)<br>Elsa.Events (0.0.24)<br>Elsa.Expressions (0.0.24)<br>Elsa.Expressions.JavaScript (0.0.24)<br>Elsa.Expressions.JavaScript.Jint (0.0.24)<br>Elsa.Expressions.JavaScript.Libraries (0.0.24)<br>Elsa.Expressions.JavaScript.Rendering (0.0.24)<br>Elsa.Expressions.Liquid (0.0.24)<br>Elsa.Http (0.0.24)<br>Elsa.Http.JavaScript (0.0.24)<br>Elsa.Locking.FileSystem (0.0.24)<br>Elsa.Mediator (0.0.24)<br>Elsa.Persistence.EFCore (0.0.24)<br>Elsa.Persistence.Groundwork (0.0.24)<br>Elsa.Primitives.Hosting (0.0.24)<br>Elsa.Serialization.Newtonsoft (0.0.24)<br>Elsa.Serialization.SystemText (0.0.24)<br>Elsa.Tasks (0.0.24)<br>Elsa.Workflows.Design.JavaScript (0.0.24)<br>Elsa.Workflows.Design.Reconciliation (0.0.24)<br>Elsa.Workflows.Design.Validations (0.0.24)<br>Elsa.Workflows.Runtime.Http (0.0.24)<br>Elsa.Workflows.Runtime.JavaScript (0.0.24)<br>Elsa3.Activities.Design.Import (0.0.24)<br>Elsa3.Mapping (0.0.24) |
 | CShells.FastEndpoints | 0.0.24 | Elsa.Server (0.0.24) |
-| CShells.FastEndpoints.Abstractions | 0.0.24 | Elsa.Activities.Runtime.Tests (0.0.24)<br>Elsa.Api.FastEndpoints (0.0.24) |
+| CShells.FastEndpoints.Abstractions | 0.0.24 | Elsa.Api.FastEndpoints (0.0.24) |
 | Cronos | 0.13.0 | Elsa.Tasks.Schedules (0.13.0) |
 | DistributedLock.FileSystem | 1.0.3 | Elsa.Locking.FileSystem (1.0.3) |
 | Fluid.Core | 2.31.0 | Elsa.Expressions.Liquid (2.31.0) |
@@ -87,7 +87,6 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
 | [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | CShells.Abstractions | 0.0.24 |
 | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | CShells.Abstractions | 0.0.24 |
-| [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | CShells.FastEndpoints.Abstractions | 0.0.24 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | coverlet.collector | 6.0.2 |
