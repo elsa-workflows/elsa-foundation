@@ -45,7 +45,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(GuidRuntimeExecutionIdGenerator));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher) &&
-            descriptor.ImplementationType == typeof(WorkflowExecutionStartDispatcher));
+            descriptor.ImplementationType == typeof(WorkflowExecutionStartDispatcher) &&
+            descriptor.Lifetime == ServiceLifetime.Singleton);
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutor));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 

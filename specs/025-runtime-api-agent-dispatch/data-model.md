@@ -7,7 +7,7 @@ Runtime request to start one workflow execution from a runtime-owned executable 
 - `ArtifactId`: executable artifact ID requested by the caller.
 - `WorkflowExecutionId`: optional caller-provided workflow execution ID; generated when absent.
 - `IdempotencyKey`: optional command idempotency key; generated from the workflow execution and artifact when absent.
-- `RequestedBy`: logical runtime caller name for agent activation metadata.
+- `RequestedBy`: required logical runtime caller name for agent activation metadata.
 - `Metadata`: command/envelope metadata copied into the runtime command path.
 
 ## `WorkflowExecutionStartCommandPayload`

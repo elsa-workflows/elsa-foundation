@@ -10,9 +10,11 @@ public sealed class ExecuteWorkflowRequestHandler(
     IWorkflowExecutionStartDispatcher startDispatcher)
     : IRequestHandler<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
+    private const string RequestedBy = "runtime-api";
+
     public async Task<WorkflowExecutionStartDispatchView> Handle(ExecuteWorkflow request, CancellationToken cancellationToken)
     {
-        var result = await startDispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(request.ArtifactId), cancellationToken);
+        var result = await startDispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy), cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }
 }

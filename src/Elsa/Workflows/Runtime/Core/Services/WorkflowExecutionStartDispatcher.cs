@@ -96,7 +96,7 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
-        return metadata;
+        return RuntimeModelMetadata.Snapshot(metadata);
     }
 
     private static string CreateDefaultIdempotencyKey(string workflowExecutionId, string artifactId) =>

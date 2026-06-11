@@ -19,14 +19,14 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
-        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1"));
+        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         var activation = Assert.Single(agentProvider.ActivationRequests);
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
         Assert.Equal("wfexec-1", result.WorkflowExecutionId);
         Assert.Equal("wfexec-1", activation.WorkflowExecutionId);
         Assert.Equal(WorkflowExecutionAgentActivationReason.Start, activation.Reason);
-        Assert.Equal("runtime-api", activation.RequestedBy);
+        Assert.Equal("runtime-test", activation.RequestedBy);
         Assert.Equal("wfexec-1", envelope.WorkflowExecutionId);
         Assert.Equal("command-1", envelope.Command.CommandId);
         Assert.Equal("envelope-1", envelope.EnvelopeId);
@@ -46,7 +46,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
-        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1"));
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
         var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
@@ -65,7 +65,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("missing-artifact")).AsTask());
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("missing-artifact", "runtime-test")).AsTask());
 
         Assert.Contains("missing-artifact", exception.Message);
         Assert.Empty(agentProvider.ActivationRequests);
@@ -82,9 +82,9 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
 
         await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
             artifactId: "artifact-1",
+            requestedBy: "test",
             workflowExecutionId: "wfexec-provided",
             idempotencyKey: "caller-key",
-            requestedBy: "test",
             metadata: new Dictionary<string, string> { ["caller"] = "unit-test" }));
 
         var activation = Assert.Single(agentProvider.ActivationRequests);

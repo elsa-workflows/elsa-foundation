@@ -30,7 +30,8 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         try
         {
             var result = await _requestSender.Send(req, ct);
-            var statusCode = result.CommandDispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected.ToString() ? 409 : 202;
+            var dispatchStatus = Enum.Parse<WorkflowExecutionCommandDispatchStatus>(result.CommandDispatchStatus);
+            var statusCode = dispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected ? 409 : 202;
             await Send.ResponseAsync(result, statusCode, ct);
         }
         catch (ArgumentException e)

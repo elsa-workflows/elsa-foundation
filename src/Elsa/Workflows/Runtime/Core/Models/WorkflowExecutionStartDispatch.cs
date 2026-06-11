@@ -4,9 +4,9 @@ public sealed class WorkflowExecutionStartDispatchRequest
 {
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
+        string requestedBy,
         string? workflowExecutionId = null,
         string? idempotencyKey = null,
-        string requestedBy = "runtime-api",
         IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
