@@ -57,6 +57,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var bookmarkConsumptionCheckpointService = scope.ServiceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
         var activityFactory = scope.ServiceProvider.GetRequiredService<IActivityFactory>();
         var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var activityFaultIncidentRecorder = scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
 
         var executable = await workflowExecutableStore.FindAsync(resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -102,13 +104,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, bookmarkConsumptionCheckpointService, schedulerWorkQueue, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
         IServiceProvider serviceProvider,
         IActivityFactory activityFactory,
-        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeSchedulerWorkItem workItem,
@@ -129,7 +132,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, resumePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
+            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
             return;
         }
 
@@ -157,7 +160,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityExecutionStateStore.SaveAsync(FaultActivity(workItem, resumePayload, state, exception, "ActivityResumeFaulted"), cancellationToken);
+            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted"), cancellationToken);
             return;
         }
 
@@ -386,29 +389,38 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         return snapshot;
     }
 
-    private ActivityExecutionState FaultActivity(
+    private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
+        RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
         Exception exception,
         string subStatus)
     {
-        var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.resumeReason"] = resumePayload.Reason;
-        metadata["runtime.resumeSchedulerWorkItemId"] = workItem.WorkItemId;
-        metadata["runtime.bookmarkId"] = resumePayload.BookmarkId;
-        metadata["runtime.resumeTargetId"] = resumePayload.ResumeTargetId;
-        metadata["runtime.faultType"] = exception.GetType().FullName ?? exception.GetType().Name;
-        metadata["runtime.faultMessage"] = exception.Message;
-
-        return state with
+        var activityMetadata = new Dictionary<string, string>
         {
-            Status = ActivityExecutionStatus.Faulted,
-            SubStatus = subStatus,
-            CompletedAt = _timeProvider.GetUtcNow(),
-            FaultCount = state.FaultCount + 1,
-            AggregateFaultCount = state.AggregateFaultCount + 1,
-            Metadata = metadata
+            ["runtime.resumeReason"] = resumePayload.Reason,
+            ["runtime.resumeSchedulerWorkItemId"] = workItem.WorkItemId,
+            ["runtime.bookmarkId"] = resumePayload.BookmarkId,
+            ["runtime.resumeTargetId"] = resumePayload.ResumeTargetId
         };
+        var incidentMetadata = new Dictionary<string, string>
+        {
+            ["runtime.bookmarkId"] = resumePayload.BookmarkId,
+            ["runtime.resumeTargetId"] = resumePayload.ResumeTargetId,
+            ["runtime.stimulusType"] = resumePayload.StimulusType,
+            ["runtime.stimulusHash"] = resumePayload.StimulusHash
+        };
+
+        return new ActivityFaultIncidentRecordRequest(
+            CheckpointCommitter: checkpointCommitter,
+            WorkItem: workItem,
+            ActivityExecutionId: resumePayload.ActivityExecutionId,
+            ExecutableNodeId: resumePayload.ExecutableNodeId,
+            State: state,
+            Exception: exception,
+            SubStatus: subStatus,
+            ActivityMetadata: activityMetadata,
+            IncidentMetadata: incidentMetadata);
     }
 }
