@@ -261,6 +261,102 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsWorkflowExecutionStateChanges()
+    {
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var running = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
+        var completed = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(workflowState: _workflowState with
+            {
+                Status = WorkflowExecutionStatus.Completed,
+                UpdatedAt = _now.AddMinutes(5),
+                CompletedAt = _now.AddMinutes(5)
+            })
+        };
+
+        await writer.WriteAsync(running, decision);
+        await writer.WriteAsync(completed, decision);
+
+        var state = await workflowStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
+        Assert.Equal(_now.AddMinutes(5), state.CompletedAt);
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingReplay()
+    {
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
+        {
+            StateChanges = NewStateChanges(
+                workflowStateChange: new RuntimeStateChange<WorkflowExecutionState>(
+                    StateId: _workflowState.WorkflowExecutionId,
+                    Operation: RuntimeStateChangeOperation.Delete,
+                    State: _workflowState with
+                    {
+                        Status = WorkflowExecutionStatus.Completed,
+                        UpdatedAt = _now.AddMinutes(5),
+                        CompletedAt = _now.AddMinutes(5)
+                    },
+                    Metadata: new Dictionary<string, string>()))
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var state = await workflowStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(WorkflowExecutionStatus.Running, state.Status);
+        Assert.Null(state.CompletedAt);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedWorkflowStateProjectionBeforeRecordingWrite()
+    {
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
+        {
+            StateChanges = NewStateChanges(
+                workflowStateChange: new RuntimeStateChange<WorkflowExecutionState>(
+                    StateId: _workflowState.WorkflowExecutionId,
+                    Operation: RuntimeStateChangeOperation.Delete,
+                    State: _workflowState,
+                    Metadata: new Dictionary<string, string>()))
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await workflowStateStore.ListAsync());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenWorkflowStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(new ThrowingWorkflowExecutionStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
@@ -338,14 +434,16 @@ public sealed class RuntimeCheckpointCommitTests
             waitFailurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow);
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
+        WorkflowExecutionState? workflowState = null,
+        RuntimeStateChange<WorkflowExecutionState>? workflowStateChange = null,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>>? incidents = null,
         IReadOnlyCollection<RuntimeStateChange<OperationalState>>? operational = null) =>
         new(
-            workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
-                StateId: _workflowState.WorkflowExecutionId,
+            workflowExecution: workflowStateChange ?? new RuntimeStateChange<WorkflowExecutionState>(
+                StateId: (workflowState ?? _workflowState).WorkflowExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
-                State: _workflowState,
+                State: workflowState ?? _workflowState,
                 Metadata: new Dictionary<string, string>()),
             scheduler: new RuntimeStateChange<SchedulerState>(
                 StateId: _schedulerState.WorkflowExecutionId,
@@ -461,5 +559,17 @@ public sealed class RuntimeCheckpointCommitTests
             Intents.Add(intent);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("workflow state projection failed");
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutionState?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutionState>>([]);
     }
 }

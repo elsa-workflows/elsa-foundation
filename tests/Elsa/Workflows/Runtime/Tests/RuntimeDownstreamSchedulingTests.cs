@@ -233,6 +233,60 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
+    public async Task CheckpointHandler_ProjectsWorkflowStartedStateToWorkflowExecutionStore()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var startedAt = _now.AddMinutes(-5);
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
+
+        await handler.HandleAsync(NewCheckpointWorkItem(
+            [],
+            RuntimeCheckpointNames.WorkflowStarted,
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.WorkflowStartedAt] = startedAt.ToString("O", CultureInfo.InvariantCulture)
+            },
+            []));
+
+        var state = await workflowStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(WorkflowExecutionStatus.Running, state.Status);
+        Assert.Equal(startedAt, state.CreatedAt);
+        Assert.Equal(startedAt, state.StartedAt);
+        Assert.Equal(_now, state.UpdatedAt);
+        Assert.Null(state.CompletedAt);
+    }
+
+    [Fact]
+    public async Task CheckpointHandler_ProjectsWorkflowCompletedStateToWorkflowExecutionStore()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var startedAt = _now.AddMinutes(-5);
+        await activityStateStore.SaveAsync(NewCompletedActivityState());
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
+
+        await handler.HandleAsync(NewCheckpointWorkItem(
+            [],
+            RuntimeCheckpointNames.WorkflowCompleted,
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.WorkflowStartedAt] = startedAt.ToString("O", CultureInfo.InvariantCulture)
+            }));
+
+        var state = await workflowStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
+        Assert.Equal(startedAt, state.StartedAt);
+        Assert.Equal(_now, state.CompletedAt);
+    }
+
+    [Fact]
     public async Task CheckpointHandler_DispatchesSchedulerIntentAfterSuccessfulCommit()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
