@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Remove Direct Executor](specs/067-runtime-remove-direct-executor/plan.md)
+Current Speckit plan: [Runtime Composed Activity Execution](specs/068-runtime-composed-activity-execution/plan.md)
 <!-- SPECKIT END -->
