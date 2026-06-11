@@ -46,6 +46,51 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
+    public async Task RootActivityCompletion_DrainsThroughContinuationCheckpointAndDownstreamScheduling()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var executable = NewExecutable(
+            ["node-source", "node-next"],
+            [new ExecutableEdge("node-source", "Done", "node-next", "In")]);
+        await executableStore.SaveAsync(executable);
+        await activityStateStore.SaveAsync(NewCompletedActivityState());
+        await queue.EnqueueAsync(NewCompleteWorkItem(
+            executable.Identity,
+            outcomeNames: ["Done"],
+            completionKind: SchedulerCompletionKind.ActivityCompleted));
+        var completeHandler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            activityStateStore,
+            queue,
+            executableStore,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(_now));
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [completeHandler, NewCheckpointHandler(activityStateStore, checkpointWriter, queue)],
+            new FixedTimeProvider(_now));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 3));
+
+        Assert.Equal(3, result.DrainedCount);
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        Assert.Collection(
+            result.Items,
+            first => Assert.Equal("work-1", first.WorkItemId),
+            second => Assert.Equal("work-1:continuation:actexec-source", second.WorkItemId),
+            third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:ActivityCompleted:actexec-source", third.WorkItemId));
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
+        var downstreamWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, downstreamWork.CommandKind);
+        var schedulePayload = downstreamWork.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        Assert.Equal("node-next", schedulePayload.ExecutableNodeId);
+        Assert.Equal("actexec-source", schedulePayload.SchedulingActivityExecutionId);
+    }
+
+    [Fact]
     public async Task CompleteActivityHandler_DoesNotAttachSchedulerIntentsWhenNoOutcomeEdgesMatch()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
@@ -193,10 +238,19 @@ public sealed class RuntimeDownstreamSchedulingTests
                 parentActivityExecutionId: null,
                 branchId: "branch-a",
                 outcomeNames: outcomeNames,
-                reason: RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
+                reason: CompletionReason(completionKind),
                 completionKind: completionKind)),
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+
+    private static string CompletionReason(SchedulerCompletionKind completionKind) =>
+        completionKind switch
+        {
+            SchedulerCompletionKind.ActivityCompleted => RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason,
+            SchedulerCompletionKind.ParentCompletionEvaluation => RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+            SchedulerCompletionKind.ContinuationScheduling => RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
+            _ => completionKind.ToString()
+        };
 
     private RuntimeSchedulerWorkItem NewCheckpointWorkItem(IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents) =>
         new(
