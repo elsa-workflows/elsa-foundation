@@ -82,7 +82,10 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         {
             case SchedulerCompletionKind.ActivityCompleted:
                 if (payload.ParentActivityExecutionId is null)
+                {
+                    await EnqueueContinuationSchedulingAsync(workItem, payload, cancellationToken);
                     return;
+                }
 
                 var parentState = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ParentActivityExecutionId, cancellationToken);
                 if (parentState is null)

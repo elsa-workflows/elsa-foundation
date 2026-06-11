@@ -123,7 +123,7 @@ public sealed class RuntimeSchedulerDrainTests
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload())));
 
-        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
 
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
@@ -242,7 +242,7 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
-    public async Task CompleteActivityHandler_DoesNotEnqueueParentEvaluationForRootCompletion()
+    public async Task CompleteActivityHandler_EnqueuesContinuationSchedulingForRootCompletion()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
@@ -255,7 +255,17 @@ public sealed class RuntimeSchedulerDrainTests
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
             payload: JsonSerializer.SerializeToElement(NewCompleteActivityPayload(parentActivityExecutionId: null))));
 
-        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var continuationWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
+        Assert.Equal("work-1:continuation:actexec-1", continuationWork.WorkItemId);
+        Assert.Equal(2, continuationWork.Sequence);
+        var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        Assert.Equal(SchedulerCompletionKind.ContinuationScheduling, continuationPayload.CompletionKind);
+        Assert.Equal(RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason, continuationPayload.Reason);
+        Assert.Equal("actexec-1", continuationPayload.ActivityExecutionId);
+        Assert.Null(continuationPayload.ParentActivityExecutionId);
+        Assert.Equal(["Done"], continuationPayload.OutcomeNames);
+        Assert.Null(continuationPayload.CompletedChildActivityExecutionId);
     }
 
     [Fact]
