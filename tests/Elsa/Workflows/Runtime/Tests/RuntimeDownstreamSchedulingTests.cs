@@ -101,6 +101,30 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
+    [Fact]
+    public void CompleteActivityHandler_RejectsHalfConfiguredDownstreamSchedulingDependencies()
+    {
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowCompleteActivitySchedulerWorkHandler(
+                activityStateStore,
+                queue,
+                executableStore,
+                idGenerator: null,
+                new FixedTimeProvider(_now)));
+
+        Assert.Throws<ArgumentException>(() =>
+            new WorkflowCompleteActivitySchedulerWorkHandler(
+                activityStateStore,
+                queue,
+                workflowExecutableStore: null,
+                new IncrementingRuntimeExecutionIdGenerator(),
+                new FixedTimeProvider(_now)));
+    }
+
     private WorkflowCompleteActivitySchedulerWorkHandler NewCompleteHandler(
         IWorkflowSchedulerWorkQueue queue,
         IWorkflowExecutableStore executableStore) =>
