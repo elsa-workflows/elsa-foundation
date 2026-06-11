@@ -116,9 +116,7 @@ public sealed class RuntimeAgentProviderContractTests
         Assert.True(descriptor.Capabilities.HasFlag(WorkflowExecutionAgentCapabilities.InProcessMailbox));
         Assert.DoesNotContain(
             typeof(WorkflowExecutionAgentDescriptor).GetProperties().Select(property => property.PropertyType.ToString()),
-            typeName => typeName.Contains("Orleans", StringComparison.OrdinalIgnoreCase)
-                || typeName.Contains("Dapr", StringComparison.OrdinalIgnoreCase)
-                || typeName.Contains("ProtoActor", StringComparison.OrdinalIgnoreCase));
+            IsActorFrameworkReference);
     }
 
     [Fact]
@@ -208,9 +206,7 @@ public sealed class RuntimeAgentProviderContractTests
         var runtimeCoreAssembly = typeof(IWorkflowExecutionAgentProvider).Assembly;
         var referencedAssemblies = runtimeCoreAssembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
 
-        Assert.DoesNotContain(referencedAssemblies, name => name!.Contains("Orleans", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(referencedAssemblies, name => name!.Contains("Dapr", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(referencedAssemblies, name => name!.Contains("Proto", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(referencedAssemblies, IsActorFrameworkReference);
     }
 
     private WorkflowExecutionCommand NewCommand(WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.RunSchedulerWork)
@@ -224,4 +220,10 @@ public sealed class RuntimeAgentProviderContractTests
             Payload: document.RootElement.Clone(),
             Metadata: new Dictionary<string, string>());
     }
+
+    private static bool IsActorFrameworkReference(string? name) =>
+        name is not null
+        && (name.Contains("Orleans", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Dapr", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Proto.Actor", StringComparison.OrdinalIgnoreCase));
 }

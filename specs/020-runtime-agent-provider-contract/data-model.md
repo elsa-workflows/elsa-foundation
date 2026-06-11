@@ -28,7 +28,7 @@ Provider-neutral request to activate or resolve the mailbox for one workflow exe
 Fields:
 
 - `WorkflowExecutionId`
-- `ActivationReason`
+- `Reason`
 - `RequestedAt`
 - `RequestedBy`
 - `RequiredCapabilities`

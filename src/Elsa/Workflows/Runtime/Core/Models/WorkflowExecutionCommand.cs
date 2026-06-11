@@ -15,16 +15,16 @@ public sealed record WorkflowExecutionCommand(
 
 public enum WorkflowExecutionCommandKind
 {
-    Start,
-    ResumeBookmark,
-    ContinueVolatileWait,
-    RunSchedulerWork,
-    Cancel,
-    PauseWorkflowExecution,
-    UnpauseWorkflowExecution,
-    ScheduleActivity,
-    CompleteActivity,
-    DeliverSignal,
-    CreateBookmark,
-    Checkpoint
+    Start = 0,
+    ResumeBookmark = 1,
+    ContinueVolatileWait = 2,
+    RunSchedulerWork = 3,
+    Cancel = 4,
+    PauseWorkflowExecution = 5,
+    UnpauseWorkflowExecution = 6,
+    ScheduleActivity = 7,
+    CompleteActivity = 8,
+    DeliverSignal = 9,
+    CreateBookmark = 10,
+    Checkpoint = 11
 }
