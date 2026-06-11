@@ -11,4 +11,4 @@
 
 ## Dispatch
 
-`WorkflowCompleteActivitySchedulerWorkHandler` enqueues `WorkflowExecutionCommandKind.Checkpoint` when it handles `ContinuationScheduling` completion work. `WorkflowCheckpointSchedulerWorkHandler` validates checkpoint work and accepts it only. `RuntimeCheckpointCommitter` use remains a later slice.
+`WorkflowCompleteActivitySchedulerWorkHandler` enqueues `WorkflowExecutionCommandKind.Checkpoint` when it handles `ContinuationScheduling` completion work. `WorkflowCheckpointSchedulerWorkHandler` validates checkpoint work and accepts it only. Invoking `RuntimeCheckpointCommitter` is out of scope for this slice.
