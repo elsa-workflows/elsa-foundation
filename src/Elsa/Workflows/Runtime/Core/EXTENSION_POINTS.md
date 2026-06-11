@@ -138,6 +138,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** stores `DurableValueState` keyed by `WorkflowExecutionId` and `DurableValueId`. The in-memory checkpoint writer projects durable value upserts and deletes from accepted checkpoint commits into this store. Storage drivers, capture middleware, and history snapshots are separate runtime surfaces.
 - **Default implementation:** `InMemoryDurableValueStateStore` *(single-node in-memory default for the current runtime slice)*.
 
+### `IIncidentStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns split continuation state for execution-affecting incidents in a runtime composition).
+- **Signature:** `TryAddAsync(IncidentState state, ...)`, `SaveAsync(IncidentState state, ...)`, `FindAsync(string workflowExecutionId, string incidentId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListBlockingAsync(string workflowExecutionId, ...)`.
+- **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
+- **Default implementation:** `InMemoryIncidentStateStore` *(single-node in-memory default for the current runtime slice)*.
+
 ### `IWorkflowSchedulerDrainer` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one drainer owns deterministic dispatch of queued scheduler work for a runtime composition).
 - **Signature:** `DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.

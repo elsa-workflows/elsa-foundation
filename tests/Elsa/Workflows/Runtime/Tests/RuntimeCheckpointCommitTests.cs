@@ -393,6 +393,18 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenIncidentStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, new ThrowingIncidentStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -669,6 +681,145 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsIncidentStateChanges()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var recorded = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
+        var resolved = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange(
+                    "incident-1",
+                    "incident-1",
+                    RuntimeStateChangeOperation.Upsert,
+                    status: IncidentStatus.Resolved)
+            ])
+        };
+
+        await writer.WriteAsync(recorded, decision);
+
+        var incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
+        Assert.NotNull(incident);
+        Assert.True(incident.IsBlocking);
+        Assert.Single(await incidentStateStore.ListBlockingAsync("wfexec-1"));
+
+        await writer.WriteAsync(resolved, decision);
+
+        incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
+        Assert.NotNull(incident);
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+        Assert.Empty(await incidentStateStore.ListBlockingAsync("wfexec-1"));
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedIncidentStateProjectionBeforeRecordingWrite()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange("incident-1", "incident-1", RuntimeStateChangeOperation.Delete)
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Append", exception.Message);
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await incidentStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsIncidentStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange("incident-1", "incident-1", workflowExecutionId: "wfexec-2")
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await incidentStateStore.ListAsync("wfexec-1"));
+        Assert.Empty(await incidentStateStore.ListAsync("wfexec-2"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingIncidentReplay()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange(
+                    "incident-1",
+                    "incident-1",
+                    RuntimeStateChangeOperation.Upsert,
+                    status: IncidentStatus.Resolved)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
+        Assert.NotNull(incident);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsDuplicateIncidentAppendBeforeRecordingSecondWrite()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
+        var duplicateAppend = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange(
+                    "incident-1",
+                    "incident-1",
+                    RuntimeStateChangeOperation.Append,
+                    status: IncidentStatus.Blocking)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(duplicateAppend, decision).AsTask());
+
+        Assert.Contains("already exists", exception.Message);
+        Assert.Equal(IncidentStatus.Blocking, (await incidentStateStore.FindAsync("wfexec-1", "incident-1"))!.Status);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
@@ -798,11 +949,7 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             incidents: incidents ??
             [
-                new RuntimeStateChange<IncidentState>(
-                    StateId: _incidentState.IncidentId,
-                    Operation: RuntimeStateChangeOperation.Append,
-                    State: _incidentState,
-                    Metadata: new Dictionary<string, string>())
+                NewIncidentChange("incident-1", "incident-1")
             ],
             operational: operational ??
             [
@@ -833,6 +980,30 @@ public sealed class RuntimeCheckpointCommitTests
                 Metadata: new Dictionary<string, string>(),
                 CreatedAt: _now,
                 ExpiresAt: null),
+            Metadata: new Dictionary<string, string>());
+
+    private RuntimeStateChange<IncidentState> NewIncidentChange(
+        string stateId,
+        string incidentId,
+        RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Append,
+        string workflowExecutionId = "wfexec-1",
+        IncidentStatus status = IncidentStatus.Blocking) =>
+        new(
+            StateId: stateId,
+            Operation: operation,
+            State: new IncidentState(
+                incidentId: incidentId,
+                workflowExecutionId: workflowExecutionId,
+                activityExecutionId: _incidentState.ActivityExecutionId,
+                executableNodeId: _incidentState.ExecutableNodeId,
+                severity: _incidentState.Severity,
+                status: status,
+                resolutionAction: _incidentState.ResolutionAction,
+                failureType: _incidentState.FailureType,
+                message: _incidentState.Message,
+                createdAt: _incidentState.CreatedAt,
+                resolvedAt: status is IncidentStatus.Resolved or IncidentStatus.Suppressed ? _incidentState.CreatedAt.AddMinutes(1) : null,
+                metadata: _incidentState.Metadata),
             Metadata: new Dictionary<string, string>());
 
     private RuntimeStateChange<DurableValueState> NewDurableValueChange(
@@ -965,5 +1136,23 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<DurableValueState>>([]);
+    }
+
+    private sealed class ThrowingIncidentStateStore : IIncidentStateStore
+    {
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("incident state projection failed");
+
+        public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("incident state projection failed");
+
+        public ValueTask<IncidentState?> FindAsync(string workflowExecutionId, string incidentId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IncidentState?>(null);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<IncidentState>>([]);
+
+        public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<IncidentState>>([]);
     }
 }
