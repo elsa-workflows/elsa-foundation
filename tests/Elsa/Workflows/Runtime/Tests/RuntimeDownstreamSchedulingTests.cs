@@ -108,21 +108,46 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var executableStore = new InMemoryWorkflowExecutableStore();
 
-        Assert.Throws<ArgumentException>(() =>
+        var missingIdGeneratorException = Assert.Throws<ArgumentException>(() =>
             new WorkflowCompleteActivitySchedulerWorkHandler(
                 activityStateStore,
                 queue,
                 executableStore,
                 idGenerator: null,
                 new FixedTimeProvider(_now)));
+        Assert.Equal("idGenerator", missingIdGeneratorException.ParamName);
 
-        Assert.Throws<ArgumentException>(() =>
+        var missingExecutableStoreException = Assert.Throws<ArgumentException>(() =>
             new WorkflowCompleteActivitySchedulerWorkHandler(
                 activityStateStore,
                 queue,
                 workflowExecutableStore: null,
                 new IncrementingRuntimeExecutionIdGenerator(),
                 new FixedTimeProvider(_now)));
+        Assert.Equal("workflowExecutableStore", missingExecutableStoreException.ParamName);
+    }
+
+    [Fact]
+    public async Task SchedulerPostCommitIntentDispatcher_WrapsKnownSchedulerWorkValidationFailures()
+    {
+        var dispatcher = new RuntimeSchedulerPostCommitIntentDispatcher(new InMemoryWorkflowSchedulerWorkQueue());
+        using var document = JsonDocument.Parse("""
+        {
+            "workflowExecutionId": "wfexec-1",
+            "commandId": "command-1",
+            "commandKind": "ScheduleActivity",
+            "envelopeId": "envelope-1",
+            "idempotencyKey": "idem-1",
+            "enqueuedAt": "2026-06-11T12:00:00Z",
+            "recordedAt": "2026-06-11T12:00:00Z"
+        }
+        """);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            dispatcher.DispatchAsync(NewSchedulerIntent(document.RootElement.Clone(), "idem-1")).AsTask());
+
+        Assert.Contains("payload is not valid scheduler work", exception.Message);
+        Assert.IsAssignableFrom<ArgumentException>(exception.InnerException);
     }
 
     private WorkflowCompleteActivitySchedulerWorkHandler NewCompleteHandler(
@@ -194,14 +219,17 @@ public sealed class RuntimeDownstreamSchedulingTests
             envelopeMetadata: new Dictionary<string, string>());
 
     private RuntimePostCommitIntent NewSchedulerIntent(RuntimeSchedulerWorkItem workItem) =>
+        NewSchedulerIntent(JsonSerializer.SerializeToElement(workItem), workItem.IdempotencyKey);
+
+    private RuntimePostCommitIntent NewSchedulerIntent(JsonElement payload, string idempotencyKey) =>
         new(
             intentId: "intent-schedule-1",
             workflowExecutionId: "wfexec-1",
             kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
             recordedAt: _now,
             activityExecutionId: "actexec-source",
-            idempotencyKey: workItem.IdempotencyKey,
-            payload: JsonSerializer.SerializeToElement(workItem),
+            idempotencyKey: idempotencyKey,
+            payload: payload,
             metadata: new Dictionary<string, string>());
 
     private RuntimeSchedulerWorkItem NewScheduleWorkItem() =>

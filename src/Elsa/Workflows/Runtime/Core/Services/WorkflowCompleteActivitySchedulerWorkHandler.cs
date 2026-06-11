@@ -50,8 +50,11 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        if ((workflowExecutableStore is null) != (idGenerator is null))
-            throw new ArgumentException("Workflow executable store and runtime execution ID generator must be supplied together for downstream scheduling.");
+        if (workflowExecutableStore is null && idGenerator is not null)
+            throw new ArgumentException("Workflow executable store must be supplied with the runtime execution ID generator for downstream scheduling.", nameof(workflowExecutableStore));
+
+        if (workflowExecutableStore is not null && idGenerator is null)
+            throw new ArgumentException("Runtime execution ID generator must be supplied with the workflow executable store for downstream scheduling.", nameof(idGenerator));
 
         _activityExecutionStateStore = activityExecutionStateStore;
         _schedulerWorkQueue = schedulerWorkQueue;

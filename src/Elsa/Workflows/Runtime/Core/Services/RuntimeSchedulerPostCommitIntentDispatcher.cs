@@ -26,7 +26,9 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
             workItem = payload.Deserialize<RuntimeSchedulerWorkItem>()
                        ?? throw new InvalidOperationException("Scheduler work post-commit intent payload resolved to null.");
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        catch (Exception exception) when (
+            exception is JsonException or NotSupportedException ||
+            exception is ArgumentException argumentException && IsSchedulerWorkItemValidationException(argumentException))
         {
             throw new InvalidOperationException($"Scheduler work post-commit intent '{intent.IntentId}' payload is not valid scheduler work.", exception);
         }
@@ -36,4 +38,13 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
 
         await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
+
+    private static bool IsSchedulerWorkItemValidationException(ArgumentException exception) =>
+        exception.ParamName is
+            "workItemId" or
+            "workflowExecutionId" or
+            "commandId" or
+            "envelopeId" or
+            "idempotencyKey" or
+            "sequence";
 }
