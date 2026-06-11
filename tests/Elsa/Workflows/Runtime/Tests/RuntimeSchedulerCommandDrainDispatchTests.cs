@@ -159,6 +159,32 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Empty(queuedItems);
     }
 
+    [Fact]
+    public async Task InProcessAgent_StartCommandSchedulesStartNodeWorkThroughRuntimeComposition()
+    {
+        var observer = new RecordingSchedulerDrainObserver();
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IWorkflowExecutableStore>();
+        var executable = NewExecutable();
+        await store.SaveAsync(executable);
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
+        var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var drainResult = Assert.Single(observer.ObservedResults);
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        Assert.Empty(queuedItems);
+        Assert.Equal(
+            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.ScheduleActivity },
+            drainResult.Items.Select(item => item.CommandKind).ToArray());
+    }
+
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
@@ -187,6 +213,53 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             enqueuedAt: _now,
             sequence: index,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
+    {
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-start",
+            WorkflowExecutionId: "wfexec-1",
+            Kind: WorkflowExecutionCommandKind.Start,
+            EnqueuedAt: _now,
+            Payload: JsonSerializer.SerializeToElement(payload),
+            Metadata: new Dictionary<string, string> { ["source"] = "test" });
+
+        return new(
+            envelopeId: "envelope-start",
+            workflowExecutionId: "wfexec-1",
+            command: command,
+            idempotencyKey: "wfexec-1:start:artifact-1",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: _now,
+            sequence: 1,
+            metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private static WorkflowExecutable NewExecutable()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var node = new ExecutableNode(
+            executableNodeId: "node-start",
+            authoredActivityId: "authored-node-start",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: document.RootElement.Clone(),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+        return new(
+            identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            nodes: [node],
+            edges: [],
+            startNodeIds: ["node-start"],
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
     }
 
     private RuntimeSchedulerDrainResult EmptyDrainResult(string workflowExecutionId) =>
