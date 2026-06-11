@@ -52,6 +52,22 @@ public sealed class MongoDbGroundworkMaterializerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MaterializeRecordsAdvisoryWhenExistingIndexOptionsConflict()
+    {
+        var database = CreateDatabase();
+        var manifest = MongoDbTestManifests.MetadataManifest();
+        var advisories = new List<string>();
+
+        await new MongoDbGroundworkMaterializer(database).MaterializeAsync(manifest, MongoDbTestManifests.Provider);
+
+        var changedManifest = WithUniqueCategoryIndex(manifest);
+        await new MongoDbGroundworkMaterializer(database, advisories.Add).MaterializeAsync(changedManifest, MongoDbTestManifests.Provider);
+
+        Assert.Contains(advisories, advisory => advisory.Contains("by-category", StringComparison.Ordinal));
+        Assert.Equal(1, await CountSchemaHistoryRows(database));
+    }
+
+    [Fact]
     public async Task MaterializeEncodesLongCollectionNamesDeterministically()
     {
         var database = CreateDatabase();
@@ -73,6 +89,23 @@ public sealed class MongoDbGroundworkMaterializerTests : IAsyncLifetime
 
     private IMongoDatabase CreateDatabase() =>
         new MongoClient(container.GetConnectionString()).GetDatabase($"groundwork_{Guid.NewGuid():N}");
+
+    private static StorageManifest WithUniqueCategoryIndex(StorageManifest manifest)
+    {
+        var unit = manifest.StorageUnits.Single();
+        return manifest with
+        {
+            StorageUnits =
+            [
+                unit with
+                {
+                    Indexes = unit.Indexes
+                        .Select(index => index.Identity == "by-category" ? index with { IsUnique = true } : index)
+                        .ToList()
+                }
+            ]
+        };
+    }
 
     private static async Task<long> CountSchemaHistoryRows(IMongoDatabase database)
     {

@@ -113,6 +113,7 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
     public async Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default)
     {
         var unit = GetUnit(query.DocumentKind);
+        var (skip, take) = NormalizePaging(query);
         var index = unit.Indexes.SingleOrDefault(index => index.Identity == query.IndexName)
             ?? throw new UndeclaredDocumentIndexException(query.DocumentKind, query.IndexName);
 
@@ -127,8 +128,8 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         AddParameter(command, "kind", query.DocumentKind);
         AddParameter(command, "index", query.IndexName);
         AddParameter(command, "value", query.Value);
-        AddParameter(command, "take", query.Take ?? 100);
-        AddParameter(command, "skip", query.Skip ?? 0);
+        AddParameter(command, "take", take);
+        AddParameter(command, "skip", skip);
 
         var documents = new List<DocumentEnvelope>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -348,6 +349,20 @@ public class RelationalDocumentStore(DbConnection connection, StorageManifest ma
         expectedVersion is null
             ? DocumentStoreWriteResult.NotFound
             : DocumentStoreWriteResult.ConcurrencyConflict;
+
+    private static (int Skip, int Take) NormalizePaging(DocumentStoreQuery query)
+    {
+        var skip = query.Skip ?? 0;
+        var take = query.Take ?? 100;
+
+        if (skip < 0)
+            throw new ArgumentOutOfRangeException(nameof(DocumentStoreQuery.Skip), skip, "Skip must be greater than or equal to 0.");
+
+        if (take < 0)
+            throw new ArgumentOutOfRangeException(nameof(DocumentStoreQuery.Take), take, "Take must be greater than or equal to 0.");
+
+        return (skip, take);
+    }
 
     private async Task EnsureOpenAsync(CancellationToken cancellationToken)
     {

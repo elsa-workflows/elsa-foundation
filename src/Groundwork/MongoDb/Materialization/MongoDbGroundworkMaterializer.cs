@@ -6,8 +6,10 @@ using MongoDB.Driver;
 
 namespace Groundwork.MongoDb.Materialization;
 
-public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
+public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database, Action<string>? recordAdvisory = null)
 {
+    private const int IndexOptionsConflictErrorCode = 85;
+    private const int IndexKeySpecsConflictErrorCode = 86;
     private const int NamespaceExistsErrorCode = 48;
 
     public async Task MaterializeAsync(StorageManifest manifest, ProviderIdentity provider, CancellationToken cancellationToken = default)
@@ -66,7 +68,7 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
         await collection.Indexes.CreateOneAsync(model, cancellationToken: cancellationToken);
     }
 
-    private static async Task EnsureDeclaredIndexesAsync(IMongoCollection<BsonDocument> collection, StorageUnit unit, CancellationToken cancellationToken)
+    private async Task EnsureDeclaredIndexesAsync(IMongoCollection<BsonDocument> collection, StorageUnit unit, CancellationToken cancellationToken)
     {
         var physicalizedFields = PhysicalizationProjection.EligibleFields(unit)
             .ToDictionary(field => field.Name, StringComparer.Ordinal);
@@ -83,9 +85,20 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database)
                 Unique = index.IsUnique,
                 Sparse = index.MissingValueBehavior == Groundwork.Core.Indexing.MissingValueBehavior.Excluded
             };
-            await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(keys, options), cancellationToken: cancellationToken);
+            try
+            {
+                await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(keys, options), cancellationToken: cancellationToken);
+            }
+            catch (MongoCommandException ex) when (IsIndexConflictException(ex))
+            {
+                recordAdvisory?.Invoke(
+                    $"MongoDB index '{index.Identity}' on collection '{collection.CollectionNamespace.CollectionName}' conflicts with the declared Groundwork index. Drop or rebuild the existing index to apply changed index keys or options.");
+            }
         }
     }
+
+    private static bool IsIndexConflictException(MongoCommandException exception) =>
+        exception.Code is IndexOptionsConflictErrorCode or IndexKeySpecsConflictErrorCode;
 
     private async Task RecordSchemaHistoryAsync(StorageManifest manifest, ProviderIdentity provider, CancellationToken cancellationToken)
     {
