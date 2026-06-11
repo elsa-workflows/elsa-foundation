@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Bookmark Resume Fault Incidents](specs/063-runtime-bookmark-resume-fault-incidents/plan.md)
+Current Speckit plan: [Runtime Workflow Execution Context](specs/064-runtime-workflow-execution-context/plan.md)
 <!-- SPECKIT END -->
