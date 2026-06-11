@@ -116,6 +116,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(MissingActivityInvocationSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            descriptor.ImplementationType == typeof(MissingGeneratedEventSchedulerWorkHandler));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(NoopWorkflowSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
@@ -168,6 +171,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCompleteActivitySchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowCheckpointSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler);
+        Assert.Contains(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is IFallbackWorkflowSchedulerWorkHandler);
         Assert.True(
@@ -187,6 +191,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler));
         Assert.True(
             Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingActivityInvocationSchedulerWorkHandler) <
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler));
+        Assert.True(
+            Array.FindIndex(schedulerWorkHandlers, handler => handler is MissingGeneratedEventSchedulerWorkHandler) <
             Array.FindIndex(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler));
     }
 
