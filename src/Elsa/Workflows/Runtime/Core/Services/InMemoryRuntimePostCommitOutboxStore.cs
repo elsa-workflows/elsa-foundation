@@ -6,6 +6,8 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxStore
 {
     private readonly object _syncRoot = new();
+
+    // Terminal items stay resident so duplicate delivery results can be rejected; durable providers own retention policy.
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _items = new(StringComparer.Ordinal);
 
     public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
@@ -37,6 +39,9 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (query.OwnerId is not null)
+            throw new NotSupportedException("The in-memory post-commit outbox store does not implement delivery ownership filtering.");
+
         lock (_syncRoot)
         {
             var items = _items.Values
@@ -65,7 +70,7 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
 
             var deliveryAttemptCount = existing.DeliveryAttemptCount + 1;
-            var availableAt = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable
+            DateTimeOffset? availableAt = result.Status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? NextRetryAvailableAt(existing, result.RecordedAt)
                 : null;
 
@@ -114,6 +119,6 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
         return false;
     }
 
-    private static DateTimeOffset? NextRetryAvailableAt(RuntimePostCommitOutboxItem existing, DateTimeOffset recordedAt) =>
+    private static DateTimeOffset NextRetryAvailableAt(RuntimePostCommitOutboxItem existing, DateTimeOffset recordedAt) =>
         existing.RetryPolicy.Delay is { } delay ? recordedAt.Add(delay) : recordedAt;
 }

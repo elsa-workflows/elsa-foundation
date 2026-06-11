@@ -14,19 +14,35 @@ public sealed class RuntimePostCommitOutboxStoreTests
     {
         var store = new InMemoryRuntimePostCommitOutboxStore();
         var available = NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-1));
+        var duplicateAvailable = NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-1));
         var unavailable = NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddMinutes(1));
         var otherWorkflow = NewOutboxItem("outbox-3", "intent-3", "wfexec-2", availableAt: _now.AddSeconds(-1));
 
         await store.SavePendingAsync(unavailable);
         await store.SavePendingAsync(otherWorkflow);
         await store.SavePendingAsync(available);
-        await store.SavePendingAsync(available);
+        await store.SavePendingAsync(duplicateAvailable);
 
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1"));
 
         var item = Assert.Single(deliverable);
+        Assert.NotSame(available, duplicateAvailable);
         Assert.Equal(available.OutboxItemId, item.OutboxItemId);
         Assert.Equal("intent-1", item.Intent.IntentId);
+    }
+
+    [Fact]
+    public async Task InMemoryRuntimePostCommitOutboxStore_RejectsOwnerFilteredQueriesBecauseClaimingIsOutOfScope()
+    {
+        var store = new InMemoryRuntimePostCommitOutboxStore();
+        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+            now: _now,
+            limit: 10,
+            ownerId: "dispatcher-1")).AsTask());
+
+        Assert.Contains("ownership filtering", exception.Message);
     }
 
     [Fact]
