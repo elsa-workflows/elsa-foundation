@@ -76,6 +76,34 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_AttemptsAllObserversBeforeReportingObserverFailures()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var recordingObserver = new RecordingSchedulerDrainObserver();
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            new RecordingSchedulerDrainer(queue, _now),
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [new ThrowingSchedulerDrainObserver(), recordingObserver],
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+
+        Assert.Contains("scheduler drain observers failed", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(recordingObserver.ObservedResults);
+    }
+
+    [Fact]
+    public async Task NoopObserver_DoesNotThrowWhenCancellationIsAlreadyRequested()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var observer = new NoopWorkflowSchedulerDrainObserver();
+
+        await observer.OnDrainedAsync(NewEnvelope(1), EmptyDrainResult("wfexec-1"), cancellation.Token);
+    }
+
+    [Fact]
     public async Task InProcessAgent_DrainsAcceptedCommandsThroughRuntimeComposition()
     {
         var services = new ServiceCollection();
@@ -121,6 +149,13 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             sequence: index,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
+
+    private RuntimeSchedulerDrainResult EmptyDrainResult(string workflowExecutionId) =>
+        new(
+            workflowExecutionId: workflowExecutionId,
+            startedAt: _now,
+            completedAt: _now,
+            items: []);
 
     private sealed class RecordingSchedulerDrainer(
         IWorkflowSchedulerWorkQueue queue,
@@ -182,6 +217,15 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             ObservedResults.Add(result);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class ThrowingSchedulerDrainObserver : IWorkflowSchedulerDrainObserver
+    {
+        public ValueTask OnDrainedAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeSchedulerDrainResult result,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Observer failed for test.");
     }
 
     private sealed class DeferredSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy

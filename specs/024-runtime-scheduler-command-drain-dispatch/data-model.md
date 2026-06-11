@@ -27,3 +27,4 @@ Rules:
 - Observers are contributor extensions.
 - Observers are projections/notifications, not continuation state.
 - Observer failures are command-processing failures because they run inside the mailbox command path.
+- Command processing attempts every observer before aggregating non-cancellation observer failures.

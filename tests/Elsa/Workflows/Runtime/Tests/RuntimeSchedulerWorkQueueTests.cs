@@ -66,7 +66,12 @@ public sealed class RuntimeSchedulerWorkQueueTests
     public async Task WorkflowSchedulerCommandProcessor_RecordsEnvelopeAsSchedulerWork()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(queue, new FixedTimeProvider(_now));
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            ThrowingSchedulerDrainer.Instance,
+            DeferredSchedulerDrainPolicy.Instance,
+            [],
+            new FixedTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
         await processor.ProcessAsync(envelope);
@@ -87,7 +92,11 @@ public sealed class RuntimeSchedulerWorkQueueTests
     public async Task InProcessAgent_QueuesAcceptedCommandsThroughDefaultProcessor()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(queue);
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            ThrowingSchedulerDrainer.Instance,
+            DeferredSchedulerDrainPolicy.Instance,
+            []);
         var provider = new InProcessWorkflowExecutionAgentProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1);
@@ -175,5 +184,30 @@ public sealed class RuntimeSchedulerWorkQueueTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class DeferredSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
+    {
+        public static readonly DeferredSchedulerDrainPolicy Instance = new();
+
+        private DeferredSchedulerDrainPolicy()
+        {
+        }
+
+        public RuntimeSchedulerDrainRequest? CreateDrainRequest(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeSchedulerWorkItem workItem) => null;
+    }
+
+    private sealed class ThrowingSchedulerDrainer : IWorkflowSchedulerDrainer
+    {
+        public static readonly ThrowingSchedulerDrainer Instance = new();
+
+        private ThrowingSchedulerDrainer()
+        {
+        }
+
+        public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Deferred scheduler drain policy should not invoke the drainer.");
     }
 }

@@ -10,7 +10,7 @@ Connect the actor-style command acceptance path to the scheduler drain seam. The
 
 - Add scheduler drain policy and observer contracts.
 - Add default immediate drain policy and no-op observer.
-- Update `WorkflowSchedulerCommandProcessor` to support the drain-capable path while preserving focused enqueue-only constructors for tests.
+- Update `WorkflowSchedulerCommandProcessor` to require the drain-capable path in runtime composition; focused tests can defer draining through a replacement policy.
 - Register the default policy and observer in `WorkflowsRuntimeApiFeature`.
 - Add focused tests covering enqueue-before-drain, policy deferral, observer notification, and in-process agent integration.
 

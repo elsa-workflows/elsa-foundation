@@ -12,7 +12,6 @@ public sealed class NoopWorkflowSchedulerDrainObserver : IWorkflowSchedulerDrain
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(result);
-        cancellationToken.ThrowIfCancellationRequested();
 
         return ValueTask.CompletedTask;
     }

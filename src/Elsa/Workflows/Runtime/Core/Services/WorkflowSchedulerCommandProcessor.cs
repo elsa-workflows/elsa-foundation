@@ -6,20 +6,10 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionCommandProcessor
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
-    private readonly IWorkflowSchedulerDrainer? _schedulerDrainer;
+    private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IWorkflowSchedulerDrainPolicy _schedulerDrainPolicy;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
     private readonly TimeProvider _timeProvider;
-
-    public WorkflowSchedulerCommandProcessor(IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(schedulerWorkQueue, schedulerDrainer: null, EnqueueOnlySchedulerDrainPolicy.Instance, [], TimeProvider.System)
-    {
-    }
-
-    public WorkflowSchedulerCommandProcessor(IWorkflowSchedulerWorkQueue schedulerWorkQueue, TimeProvider timeProvider)
-        : this(schedulerWorkQueue, schedulerDrainer: null, EnqueueOnlySchedulerDrainPolicy.Instance, [], timeProvider)
-    {
-    }
 
     public WorkflowSchedulerCommandProcessor(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -32,12 +22,13 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
 
     public WorkflowSchedulerCommandProcessor(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowSchedulerDrainer? schedulerDrainer,
+        IWorkflowSchedulerDrainer schedulerDrainer,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
+        ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
         ArgumentNullException.ThrowIfNull(schedulerDrainObservers);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -69,28 +60,39 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
 
         workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
 
-        if (_schedulerDrainer is null)
-            return;
-
         var drainRequest = _schedulerDrainPolicy.CreateDrainRequest(envelope, workItem);
         if (drainRequest is null)
             return;
 
         var drainResult = await _schedulerDrainer.DrainAsync(drainRequest, cancellationToken);
-        foreach (var observer in _schedulerDrainObservers)
-            await observer.OnDrainedAsync(envelope, drainResult, cancellationToken);
+        await NotifyObserversAsync(envelope, drainResult, cancellationToken);
     }
 
-    private sealed class EnqueueOnlySchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
+    private async ValueTask NotifyObserversAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        RuntimeSchedulerDrainResult drainResult,
+        CancellationToken cancellationToken)
     {
-        public static readonly EnqueueOnlySchedulerDrainPolicy Instance = new();
+        List<Exception>? observerExceptions = null;
 
-        private EnqueueOnlySchedulerDrainPolicy()
+        foreach (var observer in _schedulerDrainObservers)
         {
+            try
+            {
+                await observer.OnDrainedAsync(envelope, drainResult, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                observerExceptions ??= [];
+                observerExceptions.Add(exception);
+            }
         }
 
-        public RuntimeSchedulerDrainRequest? CreateDrainRequest(
-            WorkflowExecutionCommandEnvelope envelope,
-            RuntimeSchedulerWorkItem workItem) => null;
+        if (observerExceptions is not null)
+            throw new AggregateException("One or more scheduler drain observers failed.", observerExceptions);
     }
 }
