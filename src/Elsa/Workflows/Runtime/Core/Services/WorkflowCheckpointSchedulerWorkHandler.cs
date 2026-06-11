@@ -97,7 +97,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
-                activityExecutions: activityStateChanges,
+                activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
                 durableValues: [],
                 incidents: [],
