@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\TestInfrastructure\RepositoryRootLocator.cs" Link="TestInfrastructure\RepositoryRootLocator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Groundwork\Core\Groundwork.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Groundwork\Documents\Groundwork.Documents.csproj" />
+    <ProjectReference Include="..\..\..\src\Groundwork\Relational\Groundwork.Relational.csproj" />
+  </ItemGroup>
+
+</Project>

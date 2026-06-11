@@ -72,6 +72,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">
     <Project Path="src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/EFCore/">
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
@@ -136,6 +137,15 @@
   <Folder Name="/src/Elsa3/Activities/Design/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
+  <Folder Name="/src/Groundwork/">
+    <Project Path="src/Groundwork/Core/Groundwork.Core.csproj" />
+    <Project Path="src/Groundwork/Documents/Groundwork.Documents.csproj" />
+    <Project Path="src/Groundwork/MongoDb/Groundwork.MongoDb.csproj" />
+    <Project Path="src/Groundwork/PostgreSql/Groundwork.PostgreSql.csproj" />
+    <Project Path="src/Groundwork/Relational/Groundwork.Relational.csproj" />
+    <Project Path="src/Groundwork/SqlServer/Groundwork.SqlServer.csproj" />
+    <Project Path="src/Groundwork/Sqlite/Groundwork.Sqlite.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
   </Folder>
@@ -149,6 +159,9 @@
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
@@ -157,5 +170,17 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.Sqlite.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.MongoDb.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Groundwork/Groundwork.RelationalProviders.Tests/">
+    <Project Path="tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj" />
   </Folder>
 </Solution>
