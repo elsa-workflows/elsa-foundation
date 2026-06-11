@@ -179,6 +179,13 @@ public sealed class RuntimePauseDecisionProviderTests
         Assert.Equal("host-drain", (await _provider.DecideAsync(NewRequest(hostId: "host-1"))).HoldId);
     }
 
+    [Fact]
+    public void RuntimePauseDecisionRequest_RequiresWorkflowExecutionForActivityAndGeneratorTargets()
+    {
+        Assert.Throws<ArgumentException>(() => NewRequest(activityExecutionId: "actexec-1"));
+        Assert.Throws<ArgumentException>(() => NewRequest(generatorId: "generator-1"));
+    }
+
     private RuntimePauseDecisionRequest NewRequest(
         string? workflowExecutionId = null,
         string? activityExecutionId = null,

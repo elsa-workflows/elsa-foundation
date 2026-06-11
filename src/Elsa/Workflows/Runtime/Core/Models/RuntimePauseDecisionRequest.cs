@@ -20,6 +20,12 @@ public sealed class RuntimePauseDecisionRequest
         ValidateOptionalId(workerId, nameof(workerId), "Worker ID");
         ValidateOptionalId(hostId, nameof(hostId), "Host ID");
 
+        if (activityExecutionId is not null && workflowExecutionId is null)
+            throw new ArgumentException("Activity execution pause decisions require a workflow execution ID.", nameof(workflowExecutionId));
+
+        if (generatorId is not null && workflowExecutionId is null)
+            throw new ArgumentException("Generator pause decisions require a workflow execution ID.", nameof(workflowExecutionId));
+
         Boundary = boundary;
         EvaluatedAt = evaluatedAt;
         WorkflowExecutionId = workflowExecutionId;
