@@ -84,8 +84,14 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
             {
                 await observer.OnDrainedAsync(envelope, drainResult, cancellationToken);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
             {
+                if (observerExceptions is not null)
+                {
+                    observerExceptions.Add(exception);
+                    throw new AggregateException("One or more scheduler drain observers failed before cancellation.", observerExceptions);
+                }
+
                 throw;
             }
             catch (Exception exception)

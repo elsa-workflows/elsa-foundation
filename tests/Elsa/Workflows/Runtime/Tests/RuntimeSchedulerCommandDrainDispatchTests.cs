@@ -113,6 +113,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_PreservesPriorObserverFailuresWhenLaterObserverCancels()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            new RecordingSchedulerDrainer(queue, _now),
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [new ThrowingSchedulerDrainObserver(), new CancelingSchedulerDrainObserver(cancellation)],
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => processor.ProcessAsync(NewEnvelope(1), cancellation.Token).AsTask());
+
+        Assert.Equal(2, exception.InnerExceptions.Count);
+        Assert.Contains(exception.InnerExceptions, inner => inner is InvalidOperationException);
+        Assert.Contains(exception.InnerExceptions, inner => inner is OperationCanceledException);
+    }
+
+    [Fact]
     public async Task NoopObserver_DoesNotThrowWhenCancellationIsAlreadyRequested()
     {
         using var cancellation = new CancellationTokenSource();
@@ -245,6 +264,19 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             RuntimeSchedulerDrainResult result,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Observer failed for test.");
+    }
+
+    private sealed class CancelingSchedulerDrainObserver(CancellationTokenSource cancellation) : IWorkflowSchedulerDrainObserver
+    {
+        public ValueTask OnDrainedAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeSchedulerDrainResult result,
+            CancellationToken cancellationToken = default)
+        {
+            cancellation.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class DeferredSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
