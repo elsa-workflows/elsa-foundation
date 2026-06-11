@@ -6,6 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 {
     private readonly object _syncRoot = new();
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly Dictionary<string, RuntimeCheckpointWriteRecord> _writes = new(StringComparer.Ordinal);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
@@ -26,16 +27,27 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         ArgumentNullException.ThrowIfNull(decision);
         cancellationToken.ThrowIfCancellationRequested();
 
-        ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
-
-        var recorded = false;
-        lock (_syncRoot)
+        await _writeGate.WaitAsync(cancellationToken);
+        try
         {
-            recorded = _writes.TryAdd(commit.CommitId, new RuntimeCheckpointWriteRecord(commit, decision));
-        }
+            lock (_syncRoot)
+            {
+                if (_writes.ContainsKey(commit.CommitId))
+                    return;
+            }
 
-        if (recorded)
+            ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
+
+            lock (_syncRoot)
+            {
+                _writes.Add(commit.CommitId, new RuntimeCheckpointWriteRecord(commit, decision));
+            }
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     public IReadOnlyCollection<RuntimeCheckpointWriteRecord> ListWrites()

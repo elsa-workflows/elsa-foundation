@@ -12,7 +12,13 @@ public interface IWorkflowExecutionStateStore
     /// </summary>
     ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns the state for the given workflow execution ID, or <see langword="null"/> if not found.
+    /// </summary>
     ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Returns all workflow execution states currently held by the store.
+    /// </summary>
     ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default);
 }
