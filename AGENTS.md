@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Activity Bookmark Request](specs/059-runtime-activity-bookmark-request/plan.md)
+Current Speckit plan: [Runtime Activity Output Capture](specs/060-runtime-activity-output-capture/plan.md)
 <!-- SPECKIT END -->

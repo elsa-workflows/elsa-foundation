@@ -28,6 +28,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
         services.TryAddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
+        services.TryAddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
         services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();

@@ -18,6 +18,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
+    private readonly InMemoryRuntimeActivityOutputRegister _activityOutputRegister = new();
+    private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
+    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+
+    public WorkflowInvokeActivitySchedulerWorkHandlerTests()
+    {
+        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+            workflowExecutionStateStore: null,
+            activityExecutionStateStore: _activityStateStore,
+            bookmarkStateStore: null,
+            durableValueStateStore: _durableValueStateStore);
+    }
 
     [Fact]
     public async Task HandleAsync_InvokesRunningActivityAndRecordsCompletedState()
@@ -90,6 +102,32 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PublishesActiveOutputsAndCapturesDeclaredDurableValuesWhenActivityCompletes()
+    {
+        var activity = new OutputProducingActivity("""{"id":"customer-1"}""");
+        var factory = new RecordingActivityFactory(activity);
+        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.True(factory.LastOutputs.ContainsKey("customer"));
+        var outputKey = new ActiveActivityOutputKey("wfexec-1", "actexec-1", "customer");
+        Assert.True(_activityOutputRegister.TryGet(outputKey, out var activeOutput));
+        Assert.Equal("customer-1", activeOutput.Value.GetProperty("id").GetString());
+        Assert.Equal("node-start", activeOutput.Metadata["runtime.executableNodeId"]);
+        var durableValue = await _durableValueStateStore.FindAsync("wfexec-1", "durable-customer");
+        Assert.NotNull(durableValue);
+        Assert.Equal("customer", durableValue.ValueId);
+        Assert.Equal("actexec-1", durableValue.SourceActivityExecutionId);
+        Assert.Equal("customer-1", durableValue.InlineValue!.Value.GetProperty("id").GetString());
+        Assert.Equal(RuntimeCheckpointNames.DurableValueCaptured, Assert.Single(_checkpointWriter.ListWrites()).Commit.Checkpoint.Name);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
     public async Task HandleAsync_EnqueuesCreateBookmarkWorkWhenActivityRequestsDurableBookmark()
     {
         var activity = new BookmarkRequestingActivity(
@@ -132,6 +170,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(_now.AddMinutes(10), payload.ExpiresAt);
         Assert.Equal(RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason, payload.Reason);
         Assert.Equal("northwind", payload.Metadata["customer"]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DoesNotPublishOrCaptureOutputsWhenActivityRequestsDurableBookmark()
+    {
+        var activity = new OutputBookmarkRequestingActivity(
+            """{"id":"customer-1"}""",
+            new ActivityBookmarkRequest("bookmark-1", "resume-target:delivery", "event", "hash"));
+        await _executableStore.SaveAsync(NewExecutableWithOutputCapture());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.False(_activityOutputRegister.TryGet(new ActiveActivityOutputKey("wfexec-1", "actexec-1", "customer"), out _));
+        Assert.Null(await _durableValueStateStore.FindAsync("wfexec-1", "durable-customer"));
+        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).CommandKind);
     }
 
     [Fact]
@@ -381,6 +438,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IActivityExecutionStateStore>(_ => activityExecutionStateStore ?? _activityStateStore);
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
+        services.AddSingleton(_activityOutputRegister);
+        services.AddSingleton<IRuntimeActivityOutputRegister>(_ => _activityOutputRegister);
+        services.AddSingleton(_durableValueStateStore);
+        services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
+        services.AddSingleton<IRuntimeCheckpointWriter>(_ => _checkpointWriter);
+        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
+        services.AddSingleton<RuntimeCheckpointCommitter>();
         return services.BuildServiceProvider();
     }
 
@@ -472,7 +537,41 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload, RuntimeInputBinding? inputBinding = null) =>
+    private static WorkflowExecutable NewExecutableWithOutputCapture()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var start = NewNode(
+            "node-start",
+            document.RootElement,
+            LiteralTextBinding(),
+            new Dictionary<string, RuntimeOutputCapture>
+            {
+                ["customer"] = new(
+                    outputName: "customer",
+                    valueId: "customer",
+                    type: new RuntimeValueTypeDescriptor("reference", "crm.customer", null),
+                    lifecycle: DurableValueLifecycle.Instance,
+                    storage: DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true,
+                    metadata: new Dictionary<string, string> { ["source"] = "activity" })
+            });
+
+        return new(
+            identity: NewIdentity(),
+            nodes: [start],
+            edges: [],
+            startNodeIds: ["node-start"],
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static ExecutableNode NewNode(
+        string nodeId,
+        JsonElement descriptorPayload,
+        RuntimeInputBinding? inputBinding = null,
+        IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -483,7 +582,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             inputBindings: inputBinding is null
                 ? new Dictionary<string, RuntimeInputBinding>()
                 : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            outputCaptures: outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
     private static RuntimeInputBinding LiteralTextBinding() =>
@@ -507,6 +606,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         public int CreateCalls { get; private set; }
         public string? LastDescriptorType { get; private set; }
         public IDictionary<string, InputArgument> LastInputs { get; private set; } = new Dictionary<string, InputArgument>();
+        public IDictionary<string, OutputArgument> LastOutputs { get; private set; } = new Dictionary<string, OutputArgument>();
 
         public ValueTask<IActivity> Create(
             string descriptorType,
@@ -518,8 +618,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             CreateCalls++;
             LastDescriptorType = descriptorType;
             LastInputs = inputs ?? new Dictionary<string, InputArgument>();
+            LastOutputs = outputs ?? new Dictionary<string, OutputArgument>();
             if (activity is RecordingActivity recordingActivity && LastInputs.TryGetValue("Text", out var text))
                 recordingActivity.Text = (InputArgument<string>)text;
+            if (activity is OutputProducingActivity outputProducingActivity && LastOutputs.TryGetValue("customer", out var customer))
+                outputProducingActivity.Customer = (OutputArgument<object?>)customer;
 
             return ValueTask.FromResult(activity);
         }
@@ -583,6 +686,28 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     private sealed class BookmarkRequestingActivity(params ActivityBookmarkRequest[] requests) : RecordingActivity
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            base.Execute(context);
+
+            foreach (var request in requests)
+                context.CreateBookmark(request);
+        }
+    }
+
+    private class OutputProducingActivity(string customerJson) : RecordingActivity
+    {
+        public OutputArgument<object?> Customer { get; set; } = null!;
+
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            base.Execute(context);
+            context.Set(Customer, Json(customerJson));
+        }
+    }
+
+    private sealed class OutputBookmarkRequestingActivity(string customerJson, params ActivityBookmarkRequest[] requests) : OutputProducingActivity(customerJson)
     {
         protected override void Execute(IActivityExecutionContext context)
         {

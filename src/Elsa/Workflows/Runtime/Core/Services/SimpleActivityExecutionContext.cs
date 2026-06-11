@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -15,6 +16,7 @@ public sealed class SimpleActivityExecutionContext(
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
     private readonly List<ActivityBookmarkRequest> _bookmarkRequests = [];
+    private readonly List<RecordedActivityOutput> _recordedOutputs = [];
 
     public IExpressionExecutionContext ExpressionExecutionContext => this;
     public IActivity Activity { get; } = activity;
@@ -42,7 +44,9 @@ public sealed class SimpleActivityExecutionContext(
         if (output is null)
             return;
 
-        Set(output.MemoryBlockReference(), value);
+        var blockReference = output.MemoryBlockReference();
+        Set(blockReference, value);
+        RecordOutput(ResolveOutputName(outputName, blockReference.Id), value);
     }
 
     public IAsyncEnumerable<ActivityOutputs> GetActivityOutputs() => AsyncEnumerable.Empty<ActivityOutputs>();
@@ -66,6 +70,8 @@ public sealed class SimpleActivityExecutionContext(
     }
 
     public IReadOnlyCollection<ActivityBookmarkRequest> GetBookmarkRequests() => _bookmarkRequests.ToArray();
+
+    public IReadOnlyCollection<RecordedActivityOutput> GetRecordedOutputs() => _recordedOutputs.ToArray();
 
     public bool IsContainedWithinCompositeActivity() => false;
     public bool TryGetActivityInput(string key, out object? value) => TryGetById(key, out value);
@@ -109,6 +115,21 @@ public sealed class SimpleActivityExecutionContext(
 
         value = null;
         return false;
+    }
+
+    private void RecordOutput(string outputName, object? value)
+    {
+        _recordedOutputs.RemoveAll(existing => StringComparer.Ordinal.Equals(existing.OutputName, outputName));
+        _recordedOutputs.Add(new RecordedActivityOutput(outputName, value));
+    }
+
+    private static string ResolveOutputName(string? outputName, string memoryBlockId)
+    {
+        var resolved = string.IsNullOrWhiteSpace(memoryBlockId) ? outputName?.Trim() ?? string.Empty : memoryBlockId.Trim();
+        var lastMemberSeparator = resolved.LastIndexOf('.');
+        return lastMemberSeparator >= 0 && lastMemberSeparator < resolved.Length - 1
+            ? resolved[(lastMemberSeparator + 1)..]
+            : resolved;
     }
 
     private static T? ConvertValue<T>(object? value)
