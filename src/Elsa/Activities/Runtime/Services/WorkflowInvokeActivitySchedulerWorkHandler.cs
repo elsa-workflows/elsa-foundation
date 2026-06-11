@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -87,7 +88,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (state.Status != ActivityExecutionStatus.Running)
             return;
 
-        await InvokeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, workItem, invokePayload, executableNode, state, cancellationToken);
+        var activityOutputRegister = scope.ServiceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
+        var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        await InvokeActivityAsync(scope.ServiceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, checkpointCommitter, workItem, invokePayload, executableNode, state, cancellationToken);
     }
 
     private async ValueTask InvokeActivityAsync(
@@ -95,6 +98,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IActivityFactory activityFactory,
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeActivityOutputRegister activityOutputRegister,
+        RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ExecutableNode executableNode,
@@ -120,7 +125,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             executableNode.DescriptorType,
             executableNode.DescriptorPayload,
             inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            outputs: null,
+            BuildOutputArguments(executableNode),
             cancellationToken);
 
         activity.NodeId = executableNode.ExecutableNodeId;
@@ -146,6 +151,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     return;
                 }
 
+                var recordedOutputs = context.GetRecordedOutputs();
+                if (recordedOutputs.Count > 0)
+                {
+                    var recordedAt = _timeProvider.GetUtcNow();
+                    PublishActivityOutputs(activityOutputRegister, workItem, invokePayload, executableNode, recordedOutputs, recordedAt);
+                    await CaptureDurableOutputsAsync(checkpointCommitter, workItem, invokePayload, executableNode, recordedOutputs, recordedAt, cancellationToken);
+                }
+
                 completedState = CompleteActivity(workItem, invokePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true), skipped: false);
             }
         }
@@ -162,6 +175,129 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         await activityExecutionStateStore.SaveAsync(completedState, cancellationToken);
         await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken);
     }
+
+    private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>
+        executableNode.OutputCaptures.ToDictionary(
+            item => item.Key,
+            item => (OutputArgument)new OutputArgument<object?>(new RuntimeOutputMemoryBlockReference(item.Key)),
+            StringComparer.Ordinal);
+
+    private static void PublishActivityOutputs(
+        IRuntimeActivityOutputRegister activityOutputRegister,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ExecutableNode executableNode,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
+        DateTimeOffset recordedAt)
+    {
+        foreach (var output in outputs)
+        {
+            executableNode.OutputCaptures.TryGetValue(output.OutputName, out var capture);
+            var metadata = new Dictionary<string, string>
+            {
+                ["runtime.executableNodeId"] = invokePayload.ExecutableNodeId,
+                ["runtime.invokeSchedulerWorkItemId"] = workItem.WorkItemId
+            };
+
+            activityOutputRegister.Set(new ActiveActivityOutput(
+                key: new ActiveActivityOutputKey(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, output.OutputName),
+                value: SerializeOutputValue(output.Value),
+                type: capture?.Type,
+                recordedAt: recordedAt,
+                metadata: metadata));
+        }
+    }
+
+    private async ValueTask CaptureDurableOutputsAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ExecutableNode executableNode,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken)
+    {
+        var outputByName = outputs.ToDictionary(output => output.OutputName, StringComparer.Ordinal);
+        var capturedValues = executableNode.OutputCaptures.Values
+            .Where(capture => capture.CaptureOnSuccessfulCompletion)
+            .Where(capture => outputByName.ContainsKey(capture.OutputName))
+            .Select(capture => NewDurableValueChange(workItem, invokePayload, capture, outputByName[capture.OutputName], capturedAt))
+            .ToArray();
+
+        if (capturedValues.Length == 0)
+            return;
+
+        var metadata = new Dictionary<string, string>
+        {
+            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
+            ["runtime.commandId"] = workItem.CommandId,
+            ["runtime.activityExecutionId"] = invokePayload.ActivityExecutionId,
+            ["runtime.executableNodeId"] = invokePayload.ExecutableNodeId
+        };
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{workItem.WorkItemId}:durable-values-captured:{invokePayload.ActivityExecutionId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: $"checkpoint:{workItem.WorkItemId}:durable-values-captured:{invokePayload.ActivityExecutionId}",
+                Name: RuntimeCheckpointNames.DurableValueCaptured,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: capturedAt,
+                ActivityExecutionIds: [invokePayload.ActivityExecutionId],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: capturedValues,
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    private static RuntimeStateChange<DurableValueState> NewDurableValueChange(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        RuntimeOutputCapture capture,
+        RecordedActivityOutput output,
+        DateTimeOffset capturedAt)
+    {
+        if (capture.Storage == DurableValueStorage.External)
+            throw new InvalidOperationException($"Output capture '{capture.OutputName}' targets external durable value storage, which is not implemented by the runtime invocation handler.");
+
+        var metadata = capture.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata["runtime.schedulerWorkItemId"] = workItem.WorkItemId;
+        metadata["runtime.commandId"] = workItem.CommandId;
+        metadata["runtime.outputName"] = capture.OutputName;
+        metadata["runtime.activityExecutionId"] = invokePayload.ActivityExecutionId;
+        metadata["runtime.executableNodeId"] = invokePayload.ExecutableNodeId;
+        var durableValueId = $"durable-{capture.ValueId}";
+        var state = new DurableValueState(
+            durableValueId: durableValueId,
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            valueId: capture.ValueId,
+            type: capture.Type,
+            lifecycle: capture.Lifecycle,
+            storage: capture.Storage,
+            inlineValue: capture.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom ? SerializeOutputValue(output.Value) : null,
+            externalReference: null,
+            sourceActivityExecutionId: invokePayload.ActivityExecutionId,
+            capturedAt: capturedAt,
+            metadata: metadata);
+
+        return new RuntimeStateChange<DurableValueState>(
+            StateId: durableValueId,
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: state,
+            Metadata: metadata);
+    }
+
+    private static JsonElement SerializeOutputValue(object? value) =>
+        value is JsonElement json
+            ? json.Clone()
+            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -370,5 +506,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             AggregateFaultCount = state.AggregateFaultCount + 1,
             Metadata = metadata
         };
+    }
+
+    private sealed class RuntimeOutputMemoryBlockReference(string id) : IMemoryBlockReference
+    {
+        public string Id { get; set; } = id;
+
+        public IMemoryBlock Declare() => new RuntimeOutputMemoryBlock();
+
+        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
+            context.Get<T>(this);
+
+        public T? Get<T>(IExpressionExecutionContext context) =>
+            context.Get<T>(this);
+    }
+
+    private sealed class RuntimeOutputMemoryBlock : IMemoryBlock
+    {
+        public object? Value { get; set; }
+        public object? Metadata { get; set; }
     }
 }

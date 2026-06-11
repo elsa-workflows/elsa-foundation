@@ -11,4 +11,4 @@
 - [x] T007 Add focused activity invocation tests.
 - [x] T008 Run focused runtime/activity and architecture validation.
 - [x] T009 Self-review until no actionable issues remain.
-- [ ] T010 Commit, open PR, run PR loop, and merge when clean.
+- [x] T010 Commit, open PR, run PR loop, and merge when clean.
