@@ -14,7 +14,7 @@
 ## Requirements
 
 - **FR-001**: A composed runtime service provider MUST support starting a pinned `WorkflowExecutable` through `IWorkflowExecutionAgentProvider`.
-- **FR-002**: The scheduler MUST drain `Start -> Checkpoint -> ScheduleActivity -> StartActivity -> InvokeActivity -> CompleteActivity -> Checkpoint` without requiring the removed direct executor.
+- **FR-002**: The scheduler MUST drain `Start -> Checkpoint -> ScheduleActivity -> StartActivity -> InvokeActivity -> CompleteActivity -> CompleteActivity -> Checkpoint` without requiring the removed direct executor.
 - **FR-003**: Activities Runtime MUST supply the provider-specific activity invocation handler for `InvokeActivity` work.
 - **FR-004**: The missing activity invocation fallback MUST NOT handle `InvokeActivity` when Activities Runtime is composed.
 - **FR-005**: A successfully invoked one-node executable with no outgoing edges MUST checkpoint the workflow as completed.

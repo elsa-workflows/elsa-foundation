@@ -28,7 +28,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
-        var executable = NewExecutable();
+        var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -95,7 +95,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable(DateTimeOffset now)
     {
         var descriptor = new ProbeActivityDescriptor("probe");
         var node = new ExecutableNode(
@@ -115,8 +115,8 @@ public sealed class ComposedRuntimeActivityExecutionTests
             edges: [],
             startNodeIds: ["node-start"],
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
+            createdAt: now,
+            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
