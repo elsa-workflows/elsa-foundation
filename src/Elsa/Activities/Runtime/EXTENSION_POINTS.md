@@ -41,6 +41,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 **Known implementations (shipped):**
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned slot metadata)*
+- `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 
 ---
 

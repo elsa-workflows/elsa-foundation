@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 42
+- Feature classes: 43
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 39
+- Feature-bearing source projects: 40
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -57,6 +57,7 @@ No duplicate explicit feature IDs were discovered.
 | ActivitiesFlowchart | ActivitiesFlowchartFeature | False | Elsa.Activities.Flowchart | - | - | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
 | ActivitiesPrimitives | ActivitiesPrimitivesFeature | False | Elsa.Activities.Primitives | - | - | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntime | ActivitiesRuntimeFeature | False | Elsa.Activities.Runtime | - | - | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
+| ActivitiesSequence | ActivitiesSequenceFeature | False | Elsa.Activities.Sequence | - | - | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
@@ -105,6 +106,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | ActivitiesFlowchart | Elsa.Activities.Flowchart | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | ActivitiesPrimitives | Elsa.Activities.Primitives | - | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.24 |
 | ActivitiesRuntime | Elsa.Activities.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
+| ActivitiesSequence | Elsa.Activities.Sequence | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.24 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
 | Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.24<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |

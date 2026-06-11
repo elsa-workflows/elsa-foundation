@@ -87,6 +87,7 @@ not automatic constitution violations.
 |---|---|
 | Activities flowchart (runtime composite activity contracts) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
+| Activities sequence (runtime composite activity contracts) | [`src/Elsa/Activities/Sequence/EXTENSION_POINTS.md`](src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) |
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |

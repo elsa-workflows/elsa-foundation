@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 28
-- Source catalogs discovered: 27
-- Source catalogs indexed from root: 27
+- Catalog files discovered: 29
+- Source catalogs discovered: 28
+- Source catalogs indexed from root: 28
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 
@@ -23,6 +23,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md](../../src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) | Elsa.Activities.Design.Reconciliation.Json | Elsa.Activities | Contributions to other domains<br>Replaceable services (per §2.6.2)<br>Options<br>Events | `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Reconciliation.Core`)* | 0 | yes |  |
 | [src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md](../../src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) | Elsa.Activities.Flowchart | Elsa.Activities | 0 | yes | - |  |  |
 | [src/Elsa/Activities/Runtime/EXTENSION_POINTS.md](../../src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) | Elsa.Activities.Runtime | Elsa.Activities | Implementable contributor interfaces<br>Events | `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*<br>`WorkflowParentActivityCompletionSchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*<br>`ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*<br>`IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*<br>`IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*<br>OnActivityConstructorsInitializing | Scheduler work contributor.<br>Scheduler work contributor.<br>Declaration surface (activity author contract).<br>Contribution (one constructor per descriptor type).<br>Activity-owned continuation handler. | 2 | yes |
+| [src/Elsa/Activities/Sequence/EXTENSION_POINTS.md](../../src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) | Elsa.Activities.Sequence | Elsa.Activities | 0 | yes | - |  |  |
 | [src/Elsa/Caching/Memory/EXTENSION_POINTS.md](../../src/Elsa/Caching/Memory/EXTENSION_POINTS.md) | Elsa.Caching.Memory | Elsa.Caching | Overridable contracts | `ICacheManager` *(Core — `Elsa.Caching.Core`)*<br>`IChangeTokenSignaler` *(Core — `Elsa.Caching.Core`)*<br>`IChangeTokenSignalInvoker` *(Core — `Elsa.Caching.Core`)* | 0 | yes |  |
 | [src/Elsa/Events/EXTENSION_POINTS.md](../../src/Elsa/Events/EXTENSION_POINTS.md) | Elsa.Events | Elsa.Events | Implementable contributor interfaces<br>Publishing strategies | `IEventHandler<T>` *(Core — `Elsa.Events.Core`)* where `T : IEvent`<br>`IEvent` *(Core — `Elsa.Events.Core`)*<br>`IEventMiddleware` *(Core — `Elsa.Events.Core`)* | Contributor (event subscriber — handles a specific event type).<br>Marker interface — implement to define an event type. Typically a `sealed record`.<br>Contributor (event pipeline middleware). Composes the event dispatch pipeline. | 1 | yes |
 | [src/Elsa/Expressions/EXTENSION_POINTS.md](../../src/Elsa/Expressions/EXTENSION_POINTS.md) | Elsa.Expressions | Elsa.Expressions | Implementable contributor interfaces | `IExpressionHandler` *(Core — `Elsa.Expressions.Core`)*<br>`IExpressionDescriptorProvider` *(Core — `Elsa.Expressions.Core`)* | Contributor (handles evaluation for a specific expression type).<br>Source (returns a set of expression descriptors — pull pattern). | 2 | yes |
