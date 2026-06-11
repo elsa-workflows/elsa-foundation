@@ -68,6 +68,24 @@ public sealed class MongoDbGroundworkMaterializerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MaterializeRecordsAdvisoryWhenSchemaHistoryIndexConflicts()
+    {
+        var database = CreateDatabase();
+        var advisories = new List<string>();
+        await database.CreateCollectionAsync(MongoDbGroundworkNames.SchemaHistoryCollection);
+        var schemaHistory = database.GetCollection<BsonDocument>(MongoDbGroundworkNames.SchemaHistoryCollection);
+        await schemaHistory.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(
+            Builders<BsonDocument>.IndexKeys.Ascending("manifest_id"),
+            new CreateIndexOptions { Name = "ux_groundwork_schema_history_identity" }));
+
+        await new MongoDbGroundworkMaterializer(database, advisories.Add)
+            .MaterializeAsync(MongoDbTestManifests.MetadataManifest(), MongoDbTestManifests.Provider);
+
+        Assert.Contains(advisories, advisory => advisory.Contains("ux_groundwork_schema_history_identity", StringComparison.Ordinal));
+        Assert.Equal(1, await CountSchemaHistoryRows(database));
+    }
+
+    [Fact]
     public async Task MaterializeEncodesLongCollectionNamesDeterministically()
     {
         var database = CreateDatabase();

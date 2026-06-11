@@ -65,7 +65,7 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database, Actio
             Name = "ux_groundwork_schema_history_identity",
             Unique = true
         });
-        await collection.Indexes.CreateOneAsync(model, cancellationToken: cancellationToken);
+        await CreateIndexWithAdvisoryAsync(collection, model, model.Options.Name, cancellationToken);
     }
 
     private async Task EnsureDeclaredIndexesAsync(IMongoCollection<BsonDocument> collection, StorageUnit unit, CancellationToken cancellationToken)
@@ -85,15 +85,24 @@ public sealed class MongoDbGroundworkMaterializer(IMongoDatabase database, Actio
                 Unique = index.IsUnique,
                 Sparse = index.MissingValueBehavior == Groundwork.Core.Indexing.MissingValueBehavior.Excluded
             };
-            try
-            {
-                await collection.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(keys, options), cancellationToken: cancellationToken);
-            }
-            catch (MongoCommandException ex) when (IsIndexConflictException(ex))
-            {
-                recordAdvisory?.Invoke(
-                    $"MongoDB index '{index.Identity}' on collection '{collection.CollectionNamespace.CollectionName}' conflicts with the declared Groundwork index. Drop or rebuild the existing index to apply changed index keys or options.");
-            }
+            await CreateIndexWithAdvisoryAsync(collection, new CreateIndexModel<BsonDocument>(keys, options), index.Identity, cancellationToken);
+        }
+    }
+
+    private async Task CreateIndexWithAdvisoryAsync(
+        IMongoCollection<BsonDocument> collection,
+        CreateIndexModel<BsonDocument> model,
+        string indexName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await collection.Indexes.CreateOneAsync(model, cancellationToken: cancellationToken);
+        }
+        catch (MongoCommandException ex) when (IsIndexConflictException(ex))
+        {
+            recordAdvisory?.Invoke(
+                $"MongoDB index '{indexName}' on collection '{collection.CollectionNamespace.CollectionName}' conflicts with the declared Groundwork index. Drop or rebuild the existing index to apply changed index keys or options.");
         }
     }
 

@@ -90,6 +90,44 @@ public sealed class GroundworkRuntimeEntityStoreTests
         Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, duplicate.Status);
     }
 
+    [Fact]
+    public async Task QueryInstancesDoesNotSilentlyCapDefaultResults()
+    {
+        await using var harness = await RuntimeEntityHarness.Create();
+        var definition = harness.Definition;
+
+        for (var index = 0; index < 105; index++)
+        {
+            await harness.Store.SaveInstanceAsync(
+                definition,
+                $"customer-{index}",
+                $$"""{"email":"customer-{{index}}@example.com","segment":"bulk"}""");
+        }
+
+        var results = await harness.Store.QueryInstancesAsync(definition, "by-segment", "bulk");
+
+        Assert.Equal(105, results.Count);
+    }
+
+    [Fact]
+    public async Task QueryInstancesSupportsExplicitPaging()
+    {
+        await using var harness = await RuntimeEntityHarness.Create();
+        var definition = harness.Definition;
+
+        for (var index = 0; index < 5; index++)
+        {
+            await harness.Store.SaveInstanceAsync(
+                definition,
+                $"customer-{index}",
+                $$"""{"email":"paged-{{index}}@example.com","segment":"paged"}""");
+        }
+
+        var results = await harness.Store.QueryInstancesAsync(definition, "by-segment", "paged", skip: 1, take: 2);
+
+        Assert.Equal(2, results.Count);
+    }
+
     private sealed class RuntimeEntityHarness : IAsyncDisposable
     {
         private RuntimeEntityHarness(SqliteConnection connection, RuntimeEntityDefinition definition, GroundworkRuntimeEntityStore store)

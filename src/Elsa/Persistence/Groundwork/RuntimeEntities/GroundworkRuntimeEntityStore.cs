@@ -6,6 +6,7 @@ namespace Elsa.Persistence.Groundwork.RuntimeEntities;
 public sealed class GroundworkRuntimeEntityStore(IDocumentStore documentStore)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const int UnboundedQueryTake = int.MaxValue;
 
     public Task<DocumentStoreWriteResult> SaveDefinitionAsync(RuntimeEntityDefinition definition, long? expectedVersion = null, CancellationToken cancellationToken = default) =>
         documentStore.SaveAsync(new SaveDocumentRequest(
@@ -46,7 +47,16 @@ public sealed class GroundworkRuntimeEntityStore(IDocumentStore documentStore)
         string indexName,
         string value,
         CancellationToken cancellationToken = default) =>
-        documentStore.QueryAsync(new DocumentStoreQuery(RuntimeEntityManifestFactory.InstanceDocumentKind(definition), indexName, value), cancellationToken);
+        QueryInstancesAsync(definition, indexName, value, skip: null, take: UnboundedQueryTake, cancellationToken);
+
+    public Task<IReadOnlyList<DocumentEnvelope>> QueryInstancesAsync(
+        RuntimeEntityDefinition definition,
+        string indexName,
+        string value,
+        int? skip,
+        int? take,
+        CancellationToken cancellationToken = default) =>
+        documentStore.QueryAsync(new DocumentStoreQuery(RuntimeEntityManifestFactory.InstanceDocumentKind(definition), indexName, value, skip, take), cancellationToken);
 
     public Task<DocumentStoreWriteResult> DeleteInstanceAsync(
         RuntimeEntityDefinition definition,
