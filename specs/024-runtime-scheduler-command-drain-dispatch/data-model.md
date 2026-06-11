@@ -13,6 +13,7 @@ Rules:
 - Returning a `RuntimeSchedulerDrainRequest` triggers a drain.
 - Returning `null` records scheduler work without draining.
 - The default policy drains immediately for the work item's `WorkflowExecutionId`.
+- Command processing rejects a drain request whose `WorkflowExecutionId` differs from the accepted command envelope.
 
 ## IWorkflowSchedulerDrainObserver
 

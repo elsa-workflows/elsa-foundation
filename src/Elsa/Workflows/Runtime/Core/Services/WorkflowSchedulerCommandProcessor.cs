@@ -64,6 +64,9 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
         if (drainRequest is null)
             return;
 
+        if (!string.Equals(drainRequest.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Scheduler drain policy returned workflow execution ID '{drainRequest.WorkflowExecutionId}' for command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
+
         var drainResult = await _schedulerDrainer.DrainAsync(drainRequest, cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
     }

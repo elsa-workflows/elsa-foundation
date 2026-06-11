@@ -56,6 +56,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_RejectsDrainRequestForDifferentWorkflowExecution()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new RecordingSchedulerDrainer(queue, _now);
+        var processor = new WorkflowSchedulerCommandProcessor(
+            queue,
+            drainer,
+            MismatchedSchedulerDrainPolicy.Instance,
+            [],
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+
+        Assert.Contains("wfexec-other", exception.Message);
+        Assert.Contains("wfexec-1", exception.Message);
+        Assert.Empty(drainer.Requests);
+    }
+
+    [Fact]
     public async Task ProcessAsync_ReportsFaultedDrainResultToObserversWithoutThrowing()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -239,6 +258,20 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         public RuntimeSchedulerDrainRequest? CreateDrainRequest(
             WorkflowExecutionCommandEnvelope envelope,
             RuntimeSchedulerWorkItem workItem) => null;
+    }
+
+    private sealed class MismatchedSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
+    {
+        public static readonly MismatchedSchedulerDrainPolicy Instance = new();
+
+        private MismatchedSchedulerDrainPolicy()
+        {
+        }
+
+        public RuntimeSchedulerDrainRequest? CreateDrainRequest(
+            WorkflowExecutionCommandEnvelope envelope,
+            RuntimeSchedulerWorkItem workItem) =>
+            new("wfexec-other");
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
