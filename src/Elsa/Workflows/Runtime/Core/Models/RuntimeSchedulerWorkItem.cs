@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class RuntimeSchedulerWorkItem
 {
+    [JsonConstructor]
     public RuntimeSchedulerWorkItem(
         string workItemId,
         string workflowExecutionId,

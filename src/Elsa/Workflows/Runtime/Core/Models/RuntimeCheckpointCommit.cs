@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -80,6 +81,7 @@ public sealed record RuntimeStateChange<TState>(
 
 public sealed class RuntimePostCommitIntent
 {
+    [JsonConstructor]
     public RuntimePostCommitIntent(
         string intentId,
         string workflowExecutionId,
