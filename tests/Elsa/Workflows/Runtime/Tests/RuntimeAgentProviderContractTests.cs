@@ -77,6 +77,15 @@ public sealed class RuntimeAgentProviderContractTests
     }
 
     [Fact]
+    public void RuntimeCore_DoesNotExposeLegacyWorkflowExecutionPool()
+    {
+        var runtimeCoreAssembly = typeof(IWorkflowExecutionAgentProvider).Assembly;
+
+        Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionPool"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionAgentProvider"));
+    }
+
+    [Fact]
     public void AgentContract_EnqueuesCommandEnvelopesAndReturnsDispatchResult()
     {
         var method = typeof(IWorkflowExecutionAgent).GetMethod(nameof(IWorkflowExecutionAgent.EnqueueAsync))!;

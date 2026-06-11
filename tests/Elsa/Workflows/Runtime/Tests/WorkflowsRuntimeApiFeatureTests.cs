@@ -149,6 +149,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
             descriptor.ImplementationType == typeof(InProcessWorkflowExecutionAgentProvider));
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionPool");
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeExecutionIdGenerator) &&
             descriptor.ImplementationType == typeof(GuidRuntimeExecutionIdGenerator) &&
