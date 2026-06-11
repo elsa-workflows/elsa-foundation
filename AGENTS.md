@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Generator Emission Scheduler](specs/053-runtime-generator-emission-scheduler/plan.md)
+Current Speckit plan: [Runtime Pause Boundary Enforcement](specs/054-runtime-pause-boundary-enforcement/plan.md)
 <!-- SPECKIT END -->

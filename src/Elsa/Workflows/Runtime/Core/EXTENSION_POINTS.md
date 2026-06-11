@@ -180,6 +180,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** dequeues scheduler work for one workflow execution and dispatches each work item to an `IWorkflowSchedulerWorkHandler`. The default drainer stops on the first handler fault and returns per-item drain results. It does not execute activities, write checkpoints, or implement retry.
 - **Default implementation:** `WorkflowSchedulerDrainer` *(contract-only drain boundary for the current runtime slice)*.
 
+### `IWorkflowSchedulerPauseGate` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one gate evaluates whether queued scheduler work may cross named pause boundaries).
+- **Signature:** `EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)`.
+- **Usage:** maps supported scheduler command kinds to `RuntimePauseDecisionRequest` values and delegates to `IRuntimePauseDecisionProvider`. The default drainer peeks the next queued item, consults this gate, and stops without dequeuing when the decision blocks advancement.
+- **Default implementation:** `WorkflowSchedulerPauseGate` *(maps `StartActivity`/`InvokeActivity` to `BeforeActivityExecutionStart` and `GeneratedEvent` to `BeforeGeneratorEmission`)*.
+
 ### `IWorkflowSchedulerDrainPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides whether recorded scheduler work triggers a drain in the runtime composition).
 - **Signature:** `CreateDrainRequest(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerWorkItem workItem)`.

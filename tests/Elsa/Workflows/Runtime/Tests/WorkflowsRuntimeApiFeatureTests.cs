@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -61,6 +62,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeGeneratorEmissionScheduler) &&
             descriptor.ImplementationType == typeof(RuntimeGeneratorEmissionScheduler));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerPauseGate) &&
+            descriptor.ImplementationType == typeof(WorkflowSchedulerPauseGate));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
@@ -74,7 +78,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer) &&
-            descriptor.ImplementationType == typeof(WorkflowSchedulerDrainer));
+            descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy) &&
             descriptor.ImplementationType == typeof(ImmediateWorkflowSchedulerDrainPolicy));
@@ -151,6 +155,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
         Assert.IsType<RuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
+        Assert.IsType<WorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
@@ -246,6 +251,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
+    public void RegistersWorkflowSchedulerPauseGateAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerPauseGate>(new CustomWorkflowSchedulerPauseGate());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomWorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
+    }
+
+    [Fact]
     public void RegistersControlPlaneStateStoreAsOverridableDefault()
     {
         var services = new ServiceCollection();
@@ -255,6 +272,46 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+    }
+
+    [Fact]
+    public async Task DefaultSchedulerDrainerStopsBeforeDequeuingPausedWorkflowWork()
+    {
+        var services = new ServiceCollection();
+        var now = new DateTimeOffset(2026, 6, 11, 15, 0, 0, TimeSpan.Zero);
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IControlPlaneStateStore>();
+        var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var drainer = provider.GetRequiredService<IWorkflowSchedulerDrainer>();
+        await store.SaveAsync(new ControlPlaneState(
+            controlPlaneStateId: "control-1",
+            workflowExecutionId: "wfexec-1",
+            activeHolds: [ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", now, "operator", "Paused for maintenance.")]));
+        await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
+            workItemId: "work-1",
+            workflowExecutionId: "wfexec-1",
+            commandId: "command-1",
+            commandKind: WorkflowExecutionCommandKind.StartActivity,
+            envelopeId: "envelope-1",
+            idempotencyKey: "wfexec-1:command-1",
+            enqueuedAt: now,
+            recordedAt: now,
+            sequence: 1,
+            payload: JsonSerializer.SerializeToElement(new RuntimeStartActivityCommandPayload(
+                new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+                "node-start",
+                "actexec-1",
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason))));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.True(result.StoppedOnPause);
+        Assert.Equal(0, result.DrainedCount);
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Paused, Assert.Single(result.Items).Status);
+        Assert.Collection(remaining, item => Assert.Equal("work-1", item.WorkItemId));
     }
 
     [Fact]
@@ -601,6 +658,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
             return new(new RuntimeGeneratorEmissionScheduleResult(generatedEventWorkItem, schedulerWorkItem));
         }
+    }
+
+    private sealed class CustomWorkflowSchedulerPauseGate : IWorkflowSchedulerPauseGate
+    {
+        public ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            new((SchedulerPauseDecision?)null);
     }
 
     private sealed class CustomControlPlaneStateStore : IControlPlaneStateStore
