@@ -52,5 +52,15 @@ public sealed class InMemoryOperationalStateStore : IOperationalStateStore
         }
     }
 
+    public ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return new ValueTask<IReadOnlyCollection<OperationalState>>(_states.Values.ToArray());
+        }
+    }
+
     private readonly record struct OperationalStateKey(string WorkflowExecutionId, string OperationalStateId);
 }

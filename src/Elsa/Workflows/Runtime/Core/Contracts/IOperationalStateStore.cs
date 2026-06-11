@@ -21,4 +21,9 @@ public interface IOperationalStateStore
     /// Returns all operational states for the given workflow execution ID.
     /// </summary>
     ValueTask<IReadOnlyCollection<OperationalState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns all operational states visible to this store.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default);
 }
