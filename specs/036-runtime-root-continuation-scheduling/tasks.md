@@ -8,4 +8,4 @@
 - [x] T004 Add focused runtime tests for root continuation and downstream scheduling.
 - [x] T005 Run focused runtime and architecture validation.
 - [x] T006 Self-review until no actionable issues remain.
-- [ ] T007 Commit, open PR, run PR loop, and merge when clean.
+- [x] T007 Commit, open PR, run PR loop, and merge when clean.

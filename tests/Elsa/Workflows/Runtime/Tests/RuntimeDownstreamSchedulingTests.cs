@@ -30,6 +30,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
         var intent = Assert.Single(checkpointPayload.PostCommitIntents);
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
         Assert.Equal("actexec-source", intent.ActivityExecutionId);
@@ -91,7 +92,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CompleteActivityHandler_DoesNotAttachSchedulerIntentsWhenNoOutcomeEdgesMatch()
+    public async Task CompleteActivityHandler_EnqueuesWorkflowCompletedCheckpointWhenNoOutcomeEdgesMatch()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -108,7 +109,72 @@ public sealed class RuntimeDownstreamSchedulingTests
 
         var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Empty(checkpointPayload.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_KeepsEmptyOutcomeContinuationNonTerminal()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewCompleteWorkItem(
+            NewIdentity(),
+            outcomeNames: [],
+            completionKind: SchedulerCompletionKind.ContinuationScheduling));
+
+        var checkpointWork = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, checkpointPayload.CheckpointName);
+        Assert.Empty(checkpointPayload.PostCommitIntents);
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_RequiresTraversalServicesForContinuationScheduling()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
+            new InMemoryActivityExecutionStateStore(),
+            queue,
+            new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(NewCompleteWorkItem(
+                NewIdentity(),
+                outcomeNames: ["Done"],
+                completionKind: SchedulerCompletionKind.ContinuationScheduling)).AsTask());
+
+        Assert.Contains("requires workflow executable traversal services", exception.Message);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task CheckpointHandler_CommitsWorkflowExecutionStateForWorkflowCompletedCheckpoint()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        await activityStateStore.SaveAsync(NewCompletedActivityState());
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
+
+        await handler.HandleAsync(NewCheckpointWorkItem([], RuntimeCheckpointNames.WorkflowCompleted));
+
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
+        var workflowChange = write.Commit.StateChanges.WorkflowExecution;
+        Assert.NotNull(workflowChange);
+        Assert.Equal("wfexec-1", workflowChange.StateId);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, workflowChange.Operation);
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflowChange.State.Status);
+        Assert.Equal(_now, workflowChange.State.CreatedAt);
+        Assert.Null(workflowChange.State.StartedAt);
+        Assert.Equal(_now, workflowChange.State.UpdatedAt);
+        Assert.Equal(_now, workflowChange.State.CompletedAt);
+        Assert.Equal(NewIdentity(), workflowChange.State.PinnedExecutable);
     }
 
     [Fact]
@@ -252,7 +318,9 @@ public sealed class RuntimeDownstreamSchedulingTests
             _ => completionKind.ToString()
         };
 
-    private RuntimeSchedulerWorkItem NewCheckpointWorkItem(IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents) =>
+    private RuntimeSchedulerWorkItem NewCheckpointWorkItem(
+        IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents,
+        string checkpointName = RuntimeCheckpointNames.ActivityCompleted) =>
         new(
             workItemId: "checkpoint-work",
             workflowExecutionId: "wfexec-1",
@@ -265,7 +333,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             sequence: 10,
             payload: JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(
                 NewIdentity(),
-                RuntimeCheckpointNames.ActivityCompleted,
+                checkpointName,
                 ["actexec-source"],
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason,
                 postCommitIntents)),
