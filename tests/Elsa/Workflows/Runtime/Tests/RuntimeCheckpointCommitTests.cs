@@ -182,6 +182,45 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_RecordsPendingOutboxItemsBeforeDispatchAndMarksDelivered()
+    {
+        var events = new List<string>();
+        var deliveryResultRecordedAt = _now.AddSeconds(30);
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var outboxStore = new RecordingOutboxStore(events);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2")
+            ]);
+
+        await NewCommitter(
+            RuntimeCheckpointPersistenceMode.Immediate,
+            writer,
+            dispatcher,
+            outboxStore,
+            new FixedTimeProvider(deliveryResultRecordedAt)).CommitAsync(commit);
+
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered",
+                "dispatch:intent-2",
+                "outbox-result:commit-1:intent-2:Delivered"
+            ],
+            events);
+        Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
+        Assert.Equal([_now, _now], outboxStore.PendingItems.Select(item => item.AvailableAt));
+        Assert.Equal([deliveryResultRecordedAt, deliveryResultRecordedAt], outboxStore.Results.Select(result => result.RecordedAt));
+        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], outboxStore.Results.Select(result => result.Status));
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenWriteFails()
     {
         var events = new List<string>();
@@ -193,6 +232,53 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Equal(["write:commit-1"], events);
         Assert.Empty(dispatcher.Intents);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotRecordOutboxItemsWhenWriteFails()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events, new InvalidOperationException("checkpoint write failed"));
+        var dispatcher = new RecordingDispatcher(events);
+        var outboxStore = new RecordingOutboxStore(events);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Equal(["write:commit-1"], events);
+        Assert.Empty(outboxStore.PendingItems);
+        Assert.Empty(outboxStore.Results);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenPendingOutboxRecordFails()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var failure = new InvalidOperationException("pending outbox failed");
+        var outboxStore = new RecordingOutboxStore(events, failOnPendingItemId: "commit-1:intent-2", failure: failure);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2")
+            ]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2"
+            ],
+            events);
+        Assert.Equal(["commit-1:intent-1"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
+        Assert.Empty(dispatcher.Intents);
+        Assert.Empty(outboxStore.Results);
     }
 
     [Fact]
@@ -220,6 +306,119 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_RecordsFailedOutboxResultBeforeReportingDispatchFailure()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-2", failure: new InvalidOperationException("Intent failed."));
+        var outboxStore = new RecordingOutboxStore(events);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2"),
+                NewIntent("intent-3")
+            ]);
+
+        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
+
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2",
+                "outbox-pending:commit-1:intent-3",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered",
+                "dispatch:intent-2",
+                "outbox-result:commit-1:intent-2:FailedFinal"
+            ],
+            events);
+        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal], outboxStore.Results.Select(result => result.Status));
+        Assert.Equal("Intent failed.", outboxStore.Results[1].FailureMessage);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_PreservesDispatchFailureWhenFailedOutboxResultRecordingFails()
+    {
+        var events = new List<string>();
+        var dispatchFailure = new InvalidOperationException("Intent failed.");
+        var outboxFailure = new InvalidOperationException("failed-final outbox failed");
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-1", failure: dispatchFailure);
+        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.FailedFinal, failure: outboxFailure);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Same(dispatchFailure, exception.InnerException);
+        Assert.Same(outboxFailure, exception.DeliveryResultRecordingException);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:FailedFinal"
+            ],
+            events);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_PreservesDispatchFailureWhenFailedOutboxResultRecordingIsCanceled()
+    {
+        var dispatchFailure = new InvalidOperationException("Intent failed.");
+        var outboxFailure = new OperationCanceledException();
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: dispatchFailure);
+        var outboxStore = new RecordingOutboxStore(failOnResultStatus: RuntimePostCommitOutboxStatus.FailedFinal, failure: outboxFailure);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Same(dispatchFailure, exception.InnerException);
+        Assert.Same(outboxFailure, exception.DeliveryResultRecordingException);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotMisclassifyDeliveredOutboxRecordFailureAsDispatchFailure()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var failure = new InvalidOperationException("delivered outbox failed");
+        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.Delivered, failure: failure);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered"
+            ],
+            events);
+        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
+        Assert.Empty(outboxStore.Results);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_RecordsExceptionTypeWhenDispatchFailureMessageIsBlank()
+    {
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new BlankMessageException());
+        var outboxStore = new RecordingOutboxStore();
+
+        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        var result = Assert.Single(outboxStore.Results);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, result.Status);
+        Assert.Equal(nameof(BlankMessageException), result.FailureMessage);
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_DoesNotWrapPostCommitIntentDispatchCancellation()
     {
         var dispatcher = new RecordingDispatcher(
@@ -235,12 +434,15 @@ public sealed class RuntimeCheckpointCommitTests
     {
         var writer = new RecordingWriter();
         var dispatcher = new RecordingDispatcher();
+        var outboxStore = new RecordingOutboxStore();
 
-        var decision = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, writer, dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted));
+        var decision = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted));
 
         Assert.Equal(RuntimeCheckpointPersistenceMode.Skip, decision.Mode);
         Assert.Empty(writer.Writes);
         Assert.Empty(dispatcher.Intents);
+        Assert.Empty(outboxStore.PendingItems);
+        Assert.Empty(outboxStore.Results);
     }
 
     [Fact]
@@ -1292,11 +1494,15 @@ public sealed class RuntimeCheckpointCommitTests
     private RuntimeCheckpointCommitter NewCommitter(
         RuntimeCheckpointPersistenceMode mode,
         RecordingWriter writer,
-        RecordingDispatcher? dispatcher = null) =>
+        RecordingDispatcher? dispatcher = null,
+        RecordingOutboxStore? outboxStore = null,
+        TimeProvider? timeProvider = null) =>
         new(
             new FixedPolicy(mode),
             writer,
-            dispatcher ?? new RecordingDispatcher());
+            dispatcher ?? new RecordingDispatcher(),
+            outboxStore,
+            timeProvider ?? TimeProvider.System);
 
     private static JsonElement Json(string json)
     {
@@ -1343,6 +1549,48 @@ public sealed class RuntimeCheckpointCommitTests
             Intents.Add(intent);
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class RecordingOutboxStore(
+        List<string>? events = null,
+        string? failOnPendingItemId = null,
+        RuntimePostCommitOutboxStatus? failOnResultStatus = null,
+        Exception? failure = null) : IRuntimePostCommitOutboxStore
+    {
+        public List<RuntimePostCommitOutboxItem> PendingItems { get; } = [];
+        public List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
+
+        public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
+        {
+            events?.Add($"outbox-pending:{item.OutboxItemId}");
+
+            if (item.OutboxItemId == failOnPendingItemId)
+                throw failure ?? new InvalidOperationException($"Pending outbox item {item.OutboxItemId} failed.");
+
+            PendingItems.Add(item);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(PendingItems);
+
+        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
+        {
+            events?.Add($"outbox-result:{result.OutboxItemId}:{result.Status}");
+
+            if (result.Status == failOnResultStatus)
+                throw failure ?? new InvalidOperationException($"Outbox result {result.OutboxItemId} failed.");
+
+            Results.Add(result);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlankMessageException() : Exception(string.Empty);
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
