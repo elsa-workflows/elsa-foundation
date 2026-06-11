@@ -383,7 +383,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointWriter_DoesNotRecordWhenDurableValueStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(durableValueStateStore: new ThrowingDurableValueStateStore());
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, new ThrowingDurableValueStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
 
@@ -575,7 +575,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_ProjectsDurableValueStateChanges()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(durableValueStateStore: durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var captured = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
         var deleted = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -603,7 +603,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_RejectsUnsupportedDurableValueStateProjectionBeforeRecordingWrite()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(durableValueStateStore: durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
         {
@@ -625,7 +625,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_RejectsDurableValueStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(durableValueStateStore: durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
         {
@@ -647,7 +647,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingDurableValueReplay()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(durableValueStateStore: durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with

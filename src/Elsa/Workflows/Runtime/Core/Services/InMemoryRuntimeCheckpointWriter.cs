@@ -16,8 +16,16 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     public InMemoryRuntimeCheckpointWriter(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
-        IBookmarkStateStore? bookmarkStateStore = null,
-        IDurableValueStateStore? durableValueStateStore = null)
+        IBookmarkStateStore? bookmarkStateStore = null)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, null)
+    {
+    }
+
+    public InMemoryRuntimeCheckpointWriter(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
