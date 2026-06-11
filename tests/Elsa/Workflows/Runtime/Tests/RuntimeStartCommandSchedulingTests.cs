@@ -64,7 +64,27 @@ public sealed class RuntimeStartCommandSchedulingTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewStartWorkItem(pinned)).AsTask());
 
         Assert.Contains("pinned executable artifact", exception.Message);
+        Assert.Contains("definition-1/version-1", exception.Message);
         Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_IgnoresSourceReferenceWhenCheckingPinnedExecutableSnapshot()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var pinned = executable.Identity with
+        {
+            Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", "1.0.0")
+        };
+        var handler = new WorkflowStartSchedulerWorkHandler(store, queue, new FixedTimeProvider(_now));
+
+        await handler.HandleAsync(NewStartWorkItem(pinned));
+
+        var scheduled = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
     }
 
     [Fact]

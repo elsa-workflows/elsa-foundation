@@ -88,13 +88,12 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         WorkflowExecutableIdentity pinnedExecutable,
         WorkflowExecutableIdentity loadedExecutable)
     {
-        if (pinnedExecutable == loadedExecutable)
+        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
             return;
 
         throw new InvalidOperationException(
-            $"Start scheduler work item '{workItem.WorkItemId}' pinned executable artifact '{pinnedExecutable.ArtifactId}' " +
-            $"with version '{pinnedExecutable.ArtifactVersion}' and hash '{pinnedExecutable.ArtifactHash}', but loaded artifact " +
-            $"'{loadedExecutable.ArtifactId}' has version '{loadedExecutable.ArtifactVersion}' and hash '{loadedExecutable.ArtifactHash}'.");
+            $"Start scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
+            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
     private async ValueTask EnqueueStartNodeAsync(
