@@ -357,6 +357,18 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenActivityStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: new ThrowingActivityExecutionStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -655,5 +667,17 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutionState>>([]);
+    }
+
+    private sealed class ThrowingActivityExecutionStateStore : IActivityExecutionStateStore
+    {
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("activity state projection failed");
+
+        public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ActivityExecutionState?>(null);
+
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<ActivityExecutionState>>([]);
     }
 }
