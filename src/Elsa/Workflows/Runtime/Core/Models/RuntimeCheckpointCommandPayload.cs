@@ -17,20 +17,20 @@ public sealed class RuntimeCheckpointCommandPayload
         string reason)
     {
         if (pinnedExecutable is null)
-            throw new ArgumentNullException(nameof(PinnedExecutable));
+            throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
 
         if (string.IsNullOrWhiteSpace(checkpointName))
-            throw new ArgumentException("Checkpoint name cannot be blank.", nameof(CheckpointName));
+            throw new RuntimeCheckpointCommandPayloadValidationException("Checkpoint name cannot be blank.", nameof(checkpointName));
 
         if (string.IsNullOrWhiteSpace(reason))
-            throw new ArgumentException("Reason cannot be blank.", nameof(Reason));
+            throw new RuntimeCheckpointCommandPayloadValidationException("Reason cannot be blank.", nameof(reason));
 
         var activityExecutionIdSnapshot = (activityExecutionIds ?? []).ToArray();
         if (activityExecutionIdSnapshot.Any(string.IsNullOrWhiteSpace))
-            throw new ArgumentException("Activity execution IDs cannot contain blank values.", nameof(ActivityExecutionIds));
+            throw new RuntimeCheckpointCommandPayloadValidationException("Activity execution IDs cannot contain blank values.", nameof(activityExecutionIds));
 
         if (activityExecutionIdSnapshot.Distinct(StringComparer.Ordinal).Count() != activityExecutionIdSnapshot.Length)
-            throw new ArgumentException("Activity execution IDs cannot contain duplicates.", nameof(ActivityExecutionIds));
+            throw new RuntimeCheckpointCommandPayloadValidationException("Activity execution IDs cannot contain duplicates.", nameof(activityExecutionIds));
 
         PinnedExecutable = pinnedExecutable;
         CheckpointName = checkpointName;
@@ -43,3 +43,6 @@ public sealed class RuntimeCheckpointCommandPayload
     public IReadOnlyCollection<string> ActivityExecutionIds { get; }
     public string Reason { get; }
 }
+
+internal sealed class RuntimeCheckpointCommandPayloadValidationException(string message, string? paramName)
+    : ArgumentException(message, paramName);

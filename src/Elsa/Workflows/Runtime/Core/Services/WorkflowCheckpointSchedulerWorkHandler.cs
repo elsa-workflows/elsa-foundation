@@ -38,16 +38,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         }
         catch (Exception exception) when (
             exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsCheckpointPayloadValidationException(argumentException))
+            exception is RuntimeCheckpointCommandPayloadValidationException)
         {
             throw new InvalidOperationException("Checkpoint scheduler work item payload is not a valid checkpoint payload.", exception);
         }
     }
-
-    private static bool IsCheckpointPayloadValidationException(ArgumentException exception) =>
-        exception.ParamName is
-            nameof(RuntimeCheckpointCommandPayload.PinnedExecutable) or
-            nameof(RuntimeCheckpointCommandPayload.CheckpointName) or
-            nameof(RuntimeCheckpointCommandPayload.ActivityExecutionIds) or
-            nameof(RuntimeCheckpointCommandPayload.Reason);
 }
