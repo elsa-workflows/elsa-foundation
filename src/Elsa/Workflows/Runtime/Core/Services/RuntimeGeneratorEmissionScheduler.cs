@@ -98,21 +98,9 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         }
         catch (Exception exception) when (
             exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsGeneratedEventWorkItemValidationException(argumentException))
+            exception is ArgumentException)
         {
             throw new InvalidOperationException($"Queued generated-event scheduler work item '{schedulerWorkItem.WorkItemId}' payload is not valid generated-event work.", exception);
         }
     }
-
-    private static bool IsGeneratedEventWorkItemValidationException(ArgumentException exception) =>
-        exception.ParamName is
-            "workItemId" or
-            "generatedEvent" or
-            "reason" or
-            "generatedEventId" or
-            "workflowExecutionId" or
-            "generatorActivityExecutionId" or
-            "branchId" or
-            "name" or
-            "sequence";
 }

@@ -22,7 +22,8 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
             metadata: new Dictionary<string, string> { ["Source"] = "generator-test" }));
 
         var workItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Same(workItem, result.SchedulerWorkItem);
+        Assert.Equal(workItem.WorkItemId, result.SchedulerWorkItem.WorkItemId);
+        Assert.Equal(workItem.IdempotencyKey, result.SchedulerWorkItem.IdempotencyKey);
         Assert.Equal("wfexec-1:generated-event:event-5", workItem.WorkItemId);
         Assert.Equal("wfexec-1:generated-event-command:event-5", workItem.CommandId);
         Assert.Equal("wfexec-1:generated-event-envelope:event-5", workItem.EnvelopeId);
@@ -54,7 +55,8 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         var first = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(generatedEvent, "GeneratorEmitted"));
         var duplicate = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(generatedEvent, "DuplicateEmission"));
 
-        Assert.Same(first.SchedulerWorkItem, duplicate.SchedulerWorkItem);
+        Assert.Equal(first.SchedulerWorkItem.WorkItemId, duplicate.SchedulerWorkItem.WorkItemId);
+        Assert.Equal(first.SchedulerWorkItem.IdempotencyKey, duplicate.SchedulerWorkItem.IdempotencyKey);
         Assert.Equal("GeneratorEmitted", duplicate.GeneratedEventWorkItem.Reason);
         Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.Equal("GeneratorEmitted", first.SchedulerWorkItem.Payload!.Value.GetProperty("Reason").GetString());
