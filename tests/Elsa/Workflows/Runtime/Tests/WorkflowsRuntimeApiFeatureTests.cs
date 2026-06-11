@@ -41,8 +41,14 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
             descriptor.ImplementationType == typeof(InProcessWorkflowExecutionAgentProvider));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutor) &&
-            descriptor.ImplementationType == typeof(SequentialWorkflowExecutor));
+            descriptor.ServiceType == typeof(IRuntimeExecutionIdGenerator) &&
+            descriptor.ImplementationType == typeof(GuidRuntimeExecutionIdGenerator) &&
+            descriptor.Lifetime == ServiceLifetime.Singleton);
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher) &&
+            descriptor.ImplementationType == typeof(WorkflowExecutionStartDispatcher) &&
+            descriptor.Lifetime == ServiceLifetime.Singleton);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutor));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
         using var provider = services.BuildServiceProvider();
@@ -52,6 +58,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
+        Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
+        Assert.IsType<WorkflowExecutionStartDispatcher>(provider.GetRequiredService<IWorkflowExecutionStartDispatcher>());
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is NoopWorkflowSchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is IFallbackWorkflowSchedulerWorkHandler);

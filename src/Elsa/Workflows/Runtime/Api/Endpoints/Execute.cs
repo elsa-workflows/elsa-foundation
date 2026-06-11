@@ -3,12 +3,13 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
-internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, WorkflowExecutionView>
+internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {
     private readonly IRequestSender _requestSender;
     private readonly ILogger<Execute> _logger;
@@ -30,10 +31,15 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         try
         {
             var result = await _requestSender.Send(req, ct);
-            var statusCode = result.Status == WorkflowExecutionResultStatus.Faulted.ToString() ? 500 : 200;
+            var dispatchStatus = Enum.Parse<WorkflowExecutionCommandDispatchStatus>(result.CommandDispatchStatus);
+            var statusCode = dispatchStatus == WorkflowExecutionCommandDispatchStatus.Rejected ? 409 : 202;
             await Send.ResponseAsync(result, statusCode, ct);
         }
-        catch (ArgumentException e)
+        catch (WorkflowExecutableNotFoundException e)
+        {
+            ThrowError(e, 400);
+        }
+        catch (ArgumentException e) when (e.ParamName == "artifactId")
         {
             ThrowError(e, 400);
         }

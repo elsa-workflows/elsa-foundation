@@ -3,4 +3,4 @@ using Elsa.Workflows.Runtime.Api.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Requests;
 
-public sealed record ExecuteWorkflow(string ArtifactId) : IRequest<WorkflowExecutionView>;
+public sealed record ExecuteWorkflow(string ArtifactId) : IRequest<WorkflowExecutionStartDispatchView>;

@@ -99,7 +99,7 @@ not automatic constitution violations.
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
-| Workflows runtime (checkpoint policy/writer, post-commit dispatcher/outbox, recovery scanner, domain retry policy, bookmark resume resolver, value binding resolver/register/validator, payload capture policy, execution agent provider, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
+| Workflows runtime (checkpoint policy/writer, post-commit dispatcher/outbox, recovery scanner, domain retry policy, bookmark resume resolver, value binding resolver/register/validator, payload capture policy, execution agent provider, start dispatcher, scheduler queue/drain, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 
 ### Legacy

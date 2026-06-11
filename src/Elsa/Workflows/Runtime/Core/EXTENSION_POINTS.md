@@ -90,6 +90,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Default implementation:** `InProcessWorkflowExecutionAgentProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*.
 
+### `IRuntimeExecutionIdGenerator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one generator owns runtime command-dispatch IDs for a runtime composition).
+- **Signature:** `NewWorkflowExecutionId()`, `NewWorkflowExecutionCommandId()`, `NewWorkflowExecutionCommandEnvelopeId()`.
+- **Usage:** provides runtime-owned identifiers for workflow execution start dispatch without leaking API, persistence, or provider-specific identity generation into command construction.
+- **Default implementation:** `GuidRuntimeExecutionIdGenerator`.
+
+### `IWorkflowExecutionStartDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one dispatcher owns conversion from executable artifact start requests into workflow execution agent commands).
+- **Signature:** `DispatchAsync(WorkflowExecutionStartDispatchRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** loads the runtime-owned executable artifact, pins its exact identity in a `WorkflowExecutionCommandKind.Start` payload, activates the workflow execution agent, and enqueues the command envelope. It does not execute activities inline.
+- **Default implementation:** `WorkflowExecutionStartDispatcher`.
+
 ### `IWorkflowExecutionCommandProcessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.

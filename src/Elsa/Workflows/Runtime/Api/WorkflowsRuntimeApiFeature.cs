@@ -26,7 +26,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
         services.TryAddSingleton<IWorkflowExecutionAgentProvider, InProcessWorkflowExecutionAgentProvider>();
-        services.TryAddScoped<IWorkflowExecutor, SequentialWorkflowExecutor>();
+        services.TryAddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.TryAddSingleton<IWorkflowExecutionStartDispatcher, WorkflowExecutionStartDispatcher>();
         services.AddRequestHandlersFrom(GetType().Assembly);
     }
 }
