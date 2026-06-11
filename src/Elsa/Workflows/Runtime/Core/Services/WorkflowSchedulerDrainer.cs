@@ -6,7 +6,8 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
-    private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _handlers;
+    private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
+    private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowSchedulerDrainer(
@@ -26,7 +27,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _schedulerWorkQueue = schedulerWorkQueue;
-        _handlers = handlers.ToArray();
+        var handlerSnapshot = handlers.ToArray();
+        _customHandlers = handlerSnapshot.Where(handler => handler is not NoopWorkflowSchedulerWorkHandler).ToArray();
+        _fallbackHandlers = handlerSnapshot.Where(handler => handler is NoopWorkflowSchedulerWorkHandler).ToArray();
         _timeProvider = timeProvider;
     }
 
@@ -100,13 +103,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private IWorkflowSchedulerWorkHandler FindHandler(RuntimeSchedulerWorkItem workItem)
     {
-        foreach (var handler in _handlers.Where(handler => handler is not NoopWorkflowSchedulerWorkHandler))
+        foreach (var handler in _customHandlers)
         {
             if (handler.CanHandle(workItem))
                 return handler;
         }
 
-        foreach (var handler in _handlers)
+        foreach (var handler in _fallbackHandlers)
         {
             if (handler.CanHandle(workItem))
                 return handler;

@@ -89,6 +89,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
         Assert.Equal(NoopWorkflowSchedulerWorkHandler.HandlerName, item.HandlerName);
         Assert.Empty(customHandler.WorkItemIds);
+        Assert.Equal(1, customHandler.CanHandleCallCount);
     }
 
     [Fact]
@@ -150,11 +151,13 @@ public sealed class RuntimeSchedulerDrainTests
     {
         public string Name => nameof(RecordingSchedulerWorkHandler);
         public List<string> WorkItemIds { get; } = [];
+        public int CanHandleCallCount { get; private set; }
 
         public bool CanHandle(RuntimeSchedulerWorkItem workItem)
         {
             ArgumentNullException.ThrowIfNull(workItem);
 
+            CanHandleCallCount++;
             return canHandle;
         }
 
