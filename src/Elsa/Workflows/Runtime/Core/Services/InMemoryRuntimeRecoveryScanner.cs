@@ -35,7 +35,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
 
     private static RuntimeRecoveryCandidate? TryCreateCandidate(OperationalState state, RuntimeRecoveryScanRequest request)
     {
-        if (state.InterruptedExecution is { Status: RuntimeInterruptionStatus.Detected } interruptedExecution && OwnerMatches(state, request.OwnerId))
+        if (state.InterruptedExecution is { Status: RuntimeInterruptionStatus.Detected } interruptedExecution && DetectedInterruptionOwnerMatches(state, request.OwnerId))
             return CreateCandidate(state, request, interruptedExecution.Reason, interruptedExecution.LastCheckpointId, "InterruptedExecution");
 
         if (state.ExecutionLease is { } lease && OwnerMatches(lease.OwnerId, request.OwnerId) && IsLeaseExpired(lease, request))
@@ -69,10 +69,14 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
             });
     }
 
-    private static bool OwnerMatches(OperationalState state, string? ownerId) =>
+    private static bool DetectedInterruptionOwnerMatches(OperationalState state, string? ownerId) =>
         ownerId is null
+        || HasNoOperationalOwner(state)
         || StringComparer.Ordinal.Equals(state.ExecutionLease?.OwnerId, ownerId)
         || StringComparer.Ordinal.Equals(state.Heartbeat?.OwnerId, ownerId);
+
+    private static bool HasNoOperationalOwner(OperationalState state) =>
+        state.ExecutionLease is null && state.Heartbeat is null;
 
     private static bool OwnerMatches(string sourceOwnerId, string? requestedOwnerId) =>
         requestedOwnerId is null || StringComparer.Ordinal.Equals(sourceOwnerId, requestedOwnerId);

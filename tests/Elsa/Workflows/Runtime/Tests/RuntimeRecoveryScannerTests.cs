@@ -90,6 +90,58 @@ public sealed class RuntimeRecoveryScannerTests
     }
 
     [Fact]
+    public async Task ScanAsync_ReturnsOwnerFilteredDetectedInterruptedExecutionWhenOperationalOwnerIsUnknown()
+    {
+        var store = new InMemoryOperationalStateStore();
+        var scanner = new InMemoryRuntimeRecoveryScanner(store);
+        await store.SaveAsync(NewOperationalState(
+            "operational-1",
+            "wfexec-1",
+            "worker-1",
+            includeLease: false,
+            includeHeartbeat: false,
+            interruptedExecution: new InterruptedExecutionState(
+                interruptionId: "interruption-1",
+                workflowExecutionId: "wfexec-1",
+                leaseId: null,
+                lastCheckpointId: "checkpoint-1",
+                reason: RuntimeInterruptionReason.HostStopped,
+                status: RuntimeInterruptionStatus.Detected,
+                interruptedAt: _now.AddSeconds(-30))));
+
+        var candidate = Assert.Single(await scanner.ScanAsync(NewRequest(ownerId: "worker-1")));
+
+        Assert.Equal(RuntimeInterruptionReason.HostStopped, candidate.Reason);
+        Assert.Equal("InterruptedExecution", candidate.Metadata["runtime.recovery.source"]);
+    }
+
+    [Fact]
+    public async Task ScanAsync_FallsThroughToExpiredLeaseWhenInterruptedExecutionWasAlreadyHandled()
+    {
+        var store = new InMemoryOperationalStateStore();
+        var scanner = new InMemoryRuntimeRecoveryScanner(store);
+        await store.SaveAsync(NewOperationalState(
+            "operational-1",
+            "wfexec-1",
+            "worker-1",
+            leaseExpiresAt: _now.AddSeconds(-1),
+            interruptedExecution: new InterruptedExecutionState(
+                interruptionId: "interruption-1",
+                workflowExecutionId: "wfexec-1",
+                leaseId: "lease-worker-1",
+                lastCheckpointId: "checkpoint-1",
+                reason: RuntimeInterruptionReason.HostStopped,
+                status: RuntimeInterruptionStatus.Requeued,
+                interruptedAt: _now.AddSeconds(-30))));
+
+        var candidate = Assert.Single(await scanner.ScanAsync(NewRequest()));
+
+        Assert.Equal(RuntimeInterruptionReason.LeaseLost, candidate.Reason);
+        Assert.Equal("checkpoint-1", candidate.LastCheckpointId);
+        Assert.Equal("ExecutionLease", candidate.Metadata["runtime.recovery.source"]);
+    }
+
+    [Fact]
     public async Task ScanAsync_HonorsOwnerFilterAndLimitDeterministically()
     {
         var store = new InMemoryOperationalStateStore();
@@ -159,23 +211,29 @@ public sealed class RuntimeRecoveryScannerTests
         DateTimeOffset? leaseAcquiredAt = null,
         DateTimeOffset? leaseExpiresAt = null,
         DateTimeOffset? heartbeatRecordedAt = null,
+        bool includeLease = true,
+        bool includeHeartbeat = true,
         InterruptedExecutionState? interruptedExecution = null) =>
         new(
             operationalStateId: operationalStateId,
             workflowExecutionId: workflowExecutionId,
-            executionLease: new RuntimeExecutionLease(
+            executionLease: includeLease
+                ? new RuntimeExecutionLease(
                 leaseId: $"lease-{ownerId}",
                 workflowExecutionId: workflowExecutionId,
                 ownerId: leaseOwnerId ?? ownerId,
                 acquiredAt: leaseAcquiredAt ?? _now.AddMinutes(-1),
                 expiresAt: leaseExpiresAt ?? _now.AddMinutes(5),
-                fencingToken: 1),
-            heartbeat: new RuntimeHeartbeat(
+                fencingToken: 1)
+                : null,
+            heartbeat: includeHeartbeat
+                ? new RuntimeHeartbeat(
                 heartbeatId: $"heartbeat-{ownerId}",
                 workflowExecutionId: workflowExecutionId,
                 ownerId: heartbeatOwnerId ?? ownerId,
                 leaseId: $"lease-{ownerId}",
-                recordedAt: heartbeatRecordedAt ?? _now),
+                recordedAt: heartbeatRecordedAt ?? _now)
+                : null,
             drain: null,
             interruptedExecution: interruptedExecution);
 }
