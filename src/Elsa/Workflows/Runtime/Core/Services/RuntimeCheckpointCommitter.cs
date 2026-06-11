@@ -150,10 +150,6 @@ public sealed class RuntimeCheckpointCommitter
             await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.FailedFinal, FailureMessage(dispatchException), cancellationToken);
             return null;
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
         catch (Exception exception)
         {
             return exception;
