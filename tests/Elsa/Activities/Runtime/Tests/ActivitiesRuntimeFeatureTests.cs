@@ -20,6 +20,9 @@ public sealed class ActivitiesRuntimeFeatureTests
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(WorkflowInvokeActivitySchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            descriptor.ImplementationType == typeof(WorkflowResumeBookmarkSchedulerWorkHandler));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
             descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
 
@@ -28,5 +31,6 @@ public sealed class ActivitiesRuntimeFeatureTests
         Assert.IsType<ActivityFactory>(provider.GetRequiredService<IActivityFactory>());
         Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowInvokeActivitySchedulerWorkHandler);
+        Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowResumeBookmarkSchedulerWorkHandler);
     }
 }

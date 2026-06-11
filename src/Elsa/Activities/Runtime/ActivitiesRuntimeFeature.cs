@@ -32,9 +32,11 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.AddSingleton<IActivityConstructorRegistry, ActivityConstructorRegistry>();
 
         // Dispatch factory.
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IActivityFactory, ActivityFactory>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInvokeActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());
 
         // Registry + StartUp Task + Domain Event (framework §2.6.1): the startup task publishes the
         // initialization event; the single aggregating handler adds every registered constructor;

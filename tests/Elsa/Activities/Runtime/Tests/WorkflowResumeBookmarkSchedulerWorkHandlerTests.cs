@@ -1,0 +1,368 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa.Activities.Runtime.Tests;
+
+public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
+{
+    private readonly DateTimeOffset _now = new(2026, 6, 11, 17, 0, 0, TimeSpan.Zero);
+    private readonly InMemoryWorkflowExecutableStore _executableStore = new();
+    private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
+
+    [Fact]
+    public async Task HandleAsync_InvokesResumeTargetAndEnqueuesCompletionWork()
+    {
+        var activity = new ResumeTargetActivity { Outcomes = ["Resumed"] };
+        var factory = new RecordingActivityFactory(activity);
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        Assert.True(activity.ContextResumeInvoked);
+        Assert.Equal("actexec-1", activity.Id);
+        Assert.Equal("node-wait", activity.NodeId);
+        Assert.Equal("test", factory.LastDescriptorType);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
+        Assert.Null(state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason, state.Metadata["runtime.resumeReason"]);
+        Assert.Equal("resume-work", state.Metadata["runtime.resumeSchedulerWorkItemId"]);
+        Assert.Equal("bookmark-1", state.Metadata["runtime.bookmarkId"]);
+        Assert.Equal("resume-target:delivery", state.Metadata["runtime.resumeTargetId"]);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Equal("actexec-1", completionPayload.ActivityExecutionId);
+        Assert.Equal("node-wait", completionPayload.ExecutableNodeId);
+        Assert.Equal(["Resumed"], completionPayload.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PassesJsonInputToResumeTarget()
+    {
+        var activity = new ResumeTargetActivity();
+        await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:input"));
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem(resumeTargetId: "resume-target:input"));
+
+        Assert.Equal("order-123", activity.ObservedOrderId);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_FaultsActivityWhenResumeTargetIsMissingOnActivityType()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(new RecordingActivityFactory(new ActivityWithoutResumeTarget()));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeFaulted", state.SubStatus);
+        Assert.Equal(1, state.FaultCount);
+        Assert.Contains("does not declare resume target 'resume-target:delivery'", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_FaultsActivityWhenResumeTargetSignatureIsInvalid()
+    {
+        await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:invalid"));
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(new RecordingActivityFactory(new InvalidResumeTargetActivity()));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem(resumeTargetId: "resume-target:invalid"));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeFaulted", state.SubStatus);
+        Assert.Contains("unsupported signature", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_FaultsActivityWithInnerExceptionWhenResumeTargetThrows()
+    {
+        await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:throwing"));
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingResumeTargetActivity()));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem(resumeTargetId: "resume-target:throwing"));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeFaulted", state.SubStatus);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
+        Assert.Equal("resume failed", state.Metadata["runtime.faultMessage"]);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReenqueuesCompletionWorkForExistingCompletedState()
+    {
+        var activity = new ResumeTargetActivity();
+        var factory = new RecordingActivityFactory(activity);
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState() with
+        {
+            Status = ActivityExecutionStatus.Completed,
+            CompletedAt = _now.AddMinutes(-1)
+        });
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        Assert.Equal(0, factory.CreateCalls);
+        Assert.False(activity.ContextResumeInvoked);
+        var completionPayload = await AssertCompletionWorkAsync();
+        Assert.Equal([ActivityOutcomes.Done], completionPayload.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RejectsMissingArtifactResumeTargetBeforeInvokingActivity()
+    {
+        await _executableStore.SaveAsync(NewExecutable(includeResumeTarget: false));
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        var factory = new RecordingActivityFactory(new ResumeTargetActivity());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewResumeWorkItem()).AsTask());
+
+        Assert.Contains("references resume target 'resume-target:delivery'", exception.Message);
+        Assert.Equal(0, factory.CreateCalls);
+    }
+
+    [Fact]
+    public void CanHandle_AcceptsOnlyResumeBookmarkWork()
+    {
+        using var provider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity()));
+        var handler = NewHandler(provider);
+
+        Assert.True(handler.CanHandle(NewResumeWorkItem()));
+        Assert.False(handler.CanHandle(NewResumeWorkItem(commandKind: WorkflowExecutionCommandKind.InvokeActivity)));
+    }
+
+    private WorkflowResumeBookmarkSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
+        new(
+            new RuntimeActivityInputMaterializer(),
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FixedTimeProvider(_now));
+
+    private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
+    {
+        var completionWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
+        Assert.Equal("resume-work:complete:actexec-1", completionWork.WorkItemId);
+        Assert.Equal("command-1:complete:actexec-1", completionWork.CommandId);
+        Assert.Equal("wfexec-1:resume:bookmark-1:complete:actexec-1", completionWork.IdempotencyKey);
+        Assert.Equal(41, completionWork.Sequence);
+        Assert.NotNull(completionWork.Payload);
+        return completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+    }
+
+    private ServiceProvider NewProvider(IActivityFactory factory)
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(_ => factory);
+        services.AddSingleton(_executableStore);
+        services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
+        services.AddSingleton(_activityStateStore);
+        services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
+        services.AddSingleton(_schedulerWorkQueue);
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
+        return services.BuildServiceProvider();
+    }
+
+    private RuntimeSchedulerWorkItem NewResumeWorkItem(
+        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.ResumeBookmark,
+        string resumeTargetId = "resume-target:delivery")
+    {
+        var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
+            pinnedExecutable: NewIdentity(),
+            bookmarkId: "bookmark-1",
+            activityExecutionId: "actexec-1",
+            executableNodeId: "node-wait",
+            resumeTargetId: resumeTargetId,
+            stimulusType: "delivery-status",
+            stimulusHash: "sha256:delivery-status:order-123",
+            input: Json("""{"orderId":"order-123"}"""),
+            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason));
+
+        return new RuntimeSchedulerWorkItem(
+            workItemId: "resume-work",
+            workflowExecutionId: "wfexec-1",
+            commandId: "command-1",
+            commandKind: commandKind,
+            envelopeId: "envelope-1",
+            idempotencyKey: "wfexec-1:resume:bookmark-1",
+            enqueuedAt: _now,
+            recordedAt: _now,
+            sequence: 40,
+            payload: payload,
+            commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
+            envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private static ActivityExecutionState NewSuspendedState() =>
+        new(
+            Execution: new ActivityExecution(
+                ActivityExecutionId: "actexec-1",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-wait",
+                AuthoredActivityId: "authored-node-wait",
+                ActivityType: "test/activity",
+                ActivityTypeVersion: "1.0.0"),
+            Status: ActivityExecutionStatus.Suspended,
+            SubStatus: "BookmarkWaiting",
+            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-3),
+            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-2),
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: ["bookmark-1"],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutable NewExecutable(
+        bool includeResumeTarget = true,
+        string resumeTargetId = "resume-target:delivery")
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var resumeTargets = includeResumeTarget
+            ? new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                [resumeTargetId] = new(
+                    ResumeTargetId: resumeTargetId,
+                    ExecutableNodeId: "node-wait",
+                    HandlerKey: "test-handler",
+                    Metadata: new Dictionary<string, string>())
+            }
+            : new Dictionary<string, WorkflowExecutableResumeTarget>();
+
+        return new(
+            identity: NewIdentity(),
+            nodes:
+            [
+                NewNode("node-wait", document.RootElement)
+            ],
+            edges: [],
+            startNodeIds: [],
+            resumeTargets: resumeTargets,
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: descriptorPayload.Clone(),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutableIdentity NewIdentity() =>
+        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    private static JsonElement Json(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
+    private sealed class RecordingActivityFactory(IActivity activity) : IActivityFactory
+    {
+        public int CreateCalls { get; private set; }
+        public string? LastDescriptorType { get; private set; }
+
+        public ValueTask<IActivity> Create(
+            string descriptorType,
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken = default)
+        {
+            CreateCalls++;
+            LastDescriptorType = descriptorType;
+            return ValueTask.FromResult(activity);
+        }
+    }
+
+    private sealed class ResumeTargetActivity : ActivityBase
+    {
+        public string[]? Outcomes { get; set; }
+        public bool ContextResumeInvoked { get; private set; }
+        public string? ObservedOrderId { get; private set; }
+
+        [ResumeTarget("resume-target:delivery")]
+        private ValueTask ResumeAsync(IActivityExecutionContext context)
+        {
+            ContextResumeInvoked = true;
+            if (Outcomes is not null)
+                context.SetOutcomes(Outcomes);
+
+            return ValueTask.CompletedTask;
+        }
+
+        [ResumeTarget("resume-target:input")]
+        public void ResumeWithInput(JsonElement input)
+        {
+            ObservedOrderId = input.GetProperty("orderId").GetString();
+        }
+    }
+
+    private sealed class ActivityWithoutResumeTarget : ActivityBase;
+
+    private sealed class InvalidResumeTargetActivity : ActivityBase
+    {
+        [ResumeTarget("resume-target:invalid")]
+        public string Resume() => "invalid";
+    }
+
+    private sealed class ThrowingResumeTargetActivity : ActivityBase
+    {
+        [ResumeTarget("resume-target:throwing")]
+        public void Resume() => throw new InvalidOperationException("resume failed");
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+}
