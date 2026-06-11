@@ -33,12 +33,12 @@ public sealed class RuntimePostCommitOutboxProcessResult
 
     public IReadOnlyCollection<RuntimePostCommitOutboxProcessedItem> Items { get; }
     public int AttemptedCount => Items.Count;
-    public int DeliveredCount => Items.Count(item => item.DeliveryResultStatus == RuntimePostCommitOutboxStatus.Delivered);
-    public int FailedCount => Items.Count(item => item.DeliveryResultStatus is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal);
+    public int DeliveredCount => Items.Count(item => item.RequestedDeliveryResultStatus == RuntimePostCommitOutboxStatus.Delivered);
+    public int FailedCount => Items.Count(item => item.RequestedDeliveryResultStatus is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal);
 }
 
 public sealed record RuntimePostCommitOutboxProcessedItem(
     string OutboxItemId,
     string IntentId,
-    RuntimePostCommitOutboxStatus DeliveryResultStatus,
+    RuntimePostCommitOutboxStatus RequestedDeliveryResultStatus,
     string? FailureMessage);

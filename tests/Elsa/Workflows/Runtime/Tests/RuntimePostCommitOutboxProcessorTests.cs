@@ -27,7 +27,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Equal(2, result.DeliveredCount);
         Assert.Equal(0, result.FailedCount);
         Assert.Equal(["intent-1", "intent-2"], dispatcher.Intents.Select(intent => intent.IntentId));
-        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], result.Items.Select(item => item.DeliveryResultStatus));
+        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], result.Items.Select(item => item.RequestedDeliveryResultStatus));
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), limit: 10)));
     }
 
@@ -43,7 +43,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
         var item = Assert.Single(result.Items);
-        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, item.DeliveryResultStatus);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, item.RequestedDeliveryResultStatus);
         Assert.Equal("Dispatch failed.", item.FailureMessage);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(5), limit: 10)));
 
@@ -52,6 +52,23 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, retryableItem.Status);
         Assert.Equal(1, retryableItem.DeliveryAttemptCount);
         Assert.Equal("Dispatch failed.", retryableItem.LastFailureMessage);
+    }
+
+    [Fact]
+    public async Task Processor_ResultReportsRequestedFailedStatusWhenStoreNormalizesToFinal()
+    {
+        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new InvalidOperationException("Dispatch failed."));
+        var processor = NewProcessor(store, dispatcher, _now);
+
+        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", retryPolicy: new RuntimePostCommitRetryPolicy(1, TimeSpan.FromSeconds(10))));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, processed.RequestedDeliveryResultStatus);
+        Assert.Equal(1, result.FailedCount);
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(11), limit: 10)));
     }
 
     [Fact]
@@ -159,14 +176,15 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         string outboxItemId,
         string intentId,
         string workflowExecutionId,
-        DateTimeOffset? availableAt = null) =>
+        DateTimeOffset? availableAt = null,
+        RuntimePostCommitRetryPolicy? retryPolicy = null) =>
         new(
             outboxItemId: outboxItemId,
             intent: NewIntent(intentId, workflowExecutionId),
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
-            retryPolicy: new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)));
+            retryPolicy: retryPolicy ?? new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)));
 
     private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId)
     {

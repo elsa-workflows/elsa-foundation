@@ -9,6 +9,7 @@
 3. On successful dispatch, record `RuntimePostCommitOutboxStatus.Delivered`.
 4. On failed dispatch, record `RuntimePostCommitOutboxStatus.FailedRetryable`; store implementations normalize exhausted retry policies.
 5. If failure-result recording also fails, report a processor exception that keeps dispatch failure primary and exposes the recording failure separately.
+6. Processor results report the requested delivery result status; the store remains authoritative for the final persisted outbox item status.
 
 ## Non-Scope
 
