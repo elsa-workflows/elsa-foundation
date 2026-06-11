@@ -16,9 +16,10 @@ public sealed class RuntimeIncidentStateStoreTests
         var resolved = NewIncident("incident-2", "wfexec-1", IncidentStatus.Resolved);
         var otherWorkflow = NewIncident("incident-1", "wfexec-2", IncidentStatus.Blocking);
 
-        await store.SaveAsync(blocking);
+        Assert.True(await store.TryAddAsync(blocking));
+        Assert.False(await store.TryAddAsync(NewIncident(blocking, IncidentStatus.Resolved)));
         await store.SaveAsync(resolved);
-        await store.SaveAsync(otherWorkflow);
+        Assert.True(await store.TryAddAsync(otherWorkflow));
 
         Assert.Equal(blocking, await store.FindAsync("wfexec-1", "incident-1"));
         Assert.Equal(2, (await store.ListAsync("wfexec-1")).Count);
@@ -29,6 +30,9 @@ public sealed class RuntimeIncidentStateStoreTests
         Assert.Equal("incident-1", incident.IncidentId);
         Assert.Single(await store.ListBlockingAsync("wfexec-2"));
     }
+
+    private IncidentState NewIncident(IncidentState state, IncidentStatus withStatus) =>
+        NewIncident(state.IncidentId, state.WorkflowExecutionId, withStatus);
 
     private IncidentState NewIncident(string incidentId, string workflowExecutionId, IncidentStatus status) =>
         new(

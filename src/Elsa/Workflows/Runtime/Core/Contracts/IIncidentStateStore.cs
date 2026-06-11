@@ -8,6 +8,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public interface IIncidentStateStore
 {
     /// <summary>
+    /// Inserts state for a newly observed incident. Returns <see langword="false"/> when the incident key already exists.
+    /// </summary>
+    ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Inserts or replaces state for the incident key.
     /// </summary>
     ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default);

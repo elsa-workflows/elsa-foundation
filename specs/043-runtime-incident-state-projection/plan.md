@@ -11,7 +11,7 @@ Extend checkpoint-state projection to incident state. Add `IIncidentStateStore`,
 - `IncidentState` already models minimal runtime continuation state.
 - `IncidentHistoryProjection` already separates richer diagnostics from continuation state.
 - `RuntimeCheckpointCommit.StateChanges.Incidents` already carries typed incident state changes.
-- Existing commits use `RuntimeStateChangeOperation.Append` for incident recording; this slice also allows `Upsert` for later terminal-state updates.
+- Existing commits use `RuntimeStateChangeOperation.Append` for incident recording; this slice keeps append insert-only and also allows `Upsert` for later terminal-state updates.
 
 ## Constitution Check
 
@@ -28,7 +28,7 @@ Extend checkpoint-state projection to incident state. Add `IIncidentStateStore`,
 2. Register the in-memory incident store in the runtime API feature.
 3. Extend the in-memory checkpoint writer to accept an optional incident state store.
 4. Validate incident projection operations and identities before recording writes.
-5. Project incident appends/upserts under the writer gate.
+5. Project incident appends/upserts under the writer gate, with appends rejecting duplicate incident keys.
 6. Add focused store, writer, DI, and architecture validation tests.
 7. Update active Speckit pointers and run validation.
 

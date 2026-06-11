@@ -790,6 +790,36 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsDuplicateIncidentAppendBeforeRecordingSecondWrite()
+    {
+        var incidentStateStore = new InMemoryIncidentStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
+        var duplicateAppend = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(incidents:
+            [
+                NewIncidentChange(
+                    "incident-1",
+                    "incident-1",
+                    RuntimeStateChangeOperation.Append,
+                    status: IncidentStatus.Blocking)
+            ])
+        };
+
+        await writer.WriteAsync(first, decision);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(duplicateAppend, decision).AsTask());
+
+        Assert.Contains("already exists", exception.Message);
+        Assert.Equal(IncidentStatus.Blocking, (await incidentStateStore.FindAsync("wfexec-1", "incident-1"))!.Status);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
@@ -1110,6 +1140,9 @@ public sealed class RuntimeCheckpointCommitTests
 
     private sealed class ThrowingIncidentStateStore : IIncidentStateStore
     {
+        public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("incident state projection failed");
+
         public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("incident state projection failed");
 

@@ -176,7 +176,16 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
         foreach (var stateChange in stateChanges)
         {
-            if (stateChange.Operation is RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert)
+            if (stateChange.Operation == RuntimeStateChangeOperation.Append)
+            {
+                var added = await _incidentStateStore.TryAddAsync(stateChange.State, cancellationToken);
+                if (!added)
+                    throw new InvalidOperationException($"Incident state '{stateChange.State.IncidentId}' already exists for workflow execution '{stateChange.State.WorkflowExecutionId}'.");
+
+                continue;
+            }
+
+            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
             {
                 await _incidentStateStore.SaveAsync(stateChange.State, cancellationToken);
                 continue;

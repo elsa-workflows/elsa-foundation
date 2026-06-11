@@ -8,6 +8,20 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
     private readonly object _syncRoot = new();
     private readonly Dictionary<IncidentStateKey, IncidentState> _states = new();
 
+    public ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var key = new IncidentStateKey(state.WorkflowExecutionId, state.IncidentId);
+            return new ValueTask<bool>(_states.TryAdd(key, state));
+        }
+    }
+
     public ValueTask<IncidentState> SaveAsync(IncidentState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
