@@ -238,10 +238,19 @@ public sealed class RuntimeDownstreamSchedulingTests
                 parentActivityExecutionId: null,
                 branchId: "branch-a",
                 outcomeNames: outcomeNames,
-                reason: RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
+                reason: CompletionReason(completionKind),
                 completionKind: completionKind)),
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+
+    private static string CompletionReason(SchedulerCompletionKind completionKind) =>
+        completionKind switch
+        {
+            SchedulerCompletionKind.ActivityCompleted => RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason,
+            SchedulerCompletionKind.ParentCompletionEvaluation => RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+            SchedulerCompletionKind.ContinuationScheduling => RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason,
+            _ => completionKind.ToString()
+        };
 
     private RuntimeSchedulerWorkItem NewCheckpointWorkItem(IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents) =>
         new(
