@@ -124,6 +124,7 @@
     <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
+    <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />

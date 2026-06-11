@@ -1,7 +1,10 @@
 using CShells.Features;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -24,6 +27,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddRequestHandlersFrom(assembly);
     }
 }

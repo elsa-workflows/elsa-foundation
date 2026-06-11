@@ -15,6 +15,19 @@ public sealed class WorkflowExecutable
         DateTimeOffset createdAt,
         DateTimeOffset? publishedAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata)
+        : this(identity, nodes, edges: [], startNodeIds: [], resumeTargets, createdAt, publishedAt, compatibilityMetadata)
+    {
+    }
+
+    public WorkflowExecutable(
+        WorkflowExecutableIdentity identity,
+        IReadOnlyCollection<ExecutableNode> nodes,
+        IReadOnlyCollection<ExecutableEdge>? edges,
+        IReadOnlyCollection<string>? startNodeIds,
+        IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
+        DateTimeOffset createdAt,
+        DateTimeOffset? publishedAt,
+        IReadOnlyDictionary<string, string> compatibilityMetadata)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(nodes);
@@ -22,8 +35,28 @@ public sealed class WorkflowExecutable
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
 
         var nodeSnapshot = nodes.ToArray();
+        var edgeSnapshot = (edges ?? []).ToArray();
+        var nodeIds = nodeSnapshot.Select(node => node.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var edge in edgeSnapshot)
+        {
+            if (!nodeIds.Contains(edge.SourceNodeId))
+                throw new ArgumentException($"Executable edge source node '{edge.SourceNodeId}' does not exist.", nameof(edges));
+
+            if (!nodeIds.Contains(edge.TargetNodeId))
+                throw new ArgumentException($"Executable edge target node '{edge.TargetNodeId}' does not exist.", nameof(edges));
+        }
+
+        var startSnapshot = (startNodeIds ?? []).ToArray();
+        foreach (var startNodeId in startSnapshot)
+        {
+            if (!nodeIds.Contains(startNodeId))
+                throw new ArgumentException($"Start node '{startNodeId}' does not exist.", nameof(startNodeIds));
+        }
 
         Nodes = Array.AsReadOnly(nodeSnapshot);
+        Edges = Array.AsReadOnly(edgeSnapshot);
+        StartNodeIds = Array.AsReadOnly(startSnapshot);
         Identity = identity;
         NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
@@ -34,6 +67,8 @@ public sealed class WorkflowExecutable
 
     public WorkflowExecutableIdentity Identity { get; }
     public IReadOnlyCollection<ExecutableNode> Nodes { get; }
+    public IReadOnlyCollection<ExecutableEdge> Edges { get; }
+    public IReadOnlyCollection<string> StartNodeIds { get; }
     public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public DateTimeOffset CreatedAt { get; }
@@ -59,6 +94,34 @@ public sealed record WorkflowExecutableSourceReference(
     string SourceKind,
     string SourceId,
     string? SourceVersion = null);
+
+/// <summary>
+/// Runtime-owned control-flow edge between executable nodes.
+/// </summary>
+public sealed class ExecutableEdge
+{
+    public ExecutableEdge(
+        string sourceNodeId,
+        string sourcePort,
+        string targetNodeId,
+        string targetPort)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePort);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPort);
+
+        SourceNodeId = sourceNodeId;
+        SourcePort = sourcePort;
+        TargetNodeId = targetNodeId;
+        TargetPort = targetPort;
+    }
+
+    public string SourceNodeId { get; }
+    public string SourcePort { get; }
+    public string TargetNodeId { get; }
+    public string TargetPort { get; }
+}
 
 /// <summary>
 /// Runtime-owned node inside a workflow executable.

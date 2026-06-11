@@ -4,6 +4,9 @@ using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.Newtonsoft.Services;
+using Elsa3.Mapping;
+using Elsa3.Mapping.Contracts;
+using Elsa3.Mapping.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -33,5 +36,19 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<NewtonsoftJsonIslandTypeHandler>(provider.GetRequiredService<IJsonIslandTypeHandler>());
+    }
+
+    [Fact]
+    public void Elsa3_mapping_feature_registers_workflow_definition_importer_boundary()
+    {
+        var services = new ServiceCollection();
+        var feature = new Elsa3MappingFeature();
+
+        feature.ConfigureServices(services);
+
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IElsa3WorkflowDefinitionImporter) &&
+            descriptor.ImplementationType == typeof(Elsa3WorkflowDefinitionImporter) &&
+            descriptor.Lifetime == ServiceLifetime.Scoped);
     }
 }

@@ -15,6 +15,8 @@ public sealed class RuntimeCheckpointCommitTests
     private readonly ActivityExecutionState _activityState;
     private readonly SchedulerState _schedulerState;
     private readonly DurableValueState _durableValueState;
+    private readonly IncidentState _incidentState;
+    private readonly OperationalState _operationalState;
 
     public RuntimeCheckpointCommitTests()
     {
@@ -62,10 +64,11 @@ public sealed class RuntimeCheckpointCommitTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
         _schedulerState = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 1,
-            PendingWork: [],
-            VolatileWaits: []);
+            workflowExecutionId: "wfexec-1",
+            version: 1,
+            pendingWork: [],
+            pendingContinuations: [],
+            volatileWaits: []);
         _durableValueState = new DurableValueState(
             durableValueId: "durable-1",
             workflowExecutionId: "wfexec-1",
@@ -77,6 +80,39 @@ public sealed class RuntimeCheckpointCommitTests
             externalReference: null,
             sourceActivityExecutionId: "actexec-1",
             capturedAt: _now,
+            metadata: new Dictionary<string, string>());
+        _incidentState = new IncidentState(
+            incidentId: "incident-1",
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "actexec-1",
+            executableNodeId: "node-1",
+            severity: IncidentSeverity.Error,
+            status: IncidentStatus.Blocking,
+            resolutionAction: IncidentResolutionAction.FaultWorkflow,
+            failureType: "ActivityFaulted",
+            message: "Activity failed.",
+            createdAt: _now,
+            resolvedAt: null,
+            metadata: new Dictionary<string, string>());
+        _operationalState = new OperationalState(
+            operationalStateId: "operational-1",
+            workflowExecutionId: "wfexec-1",
+            executionLease: new RuntimeExecutionLease(
+                leaseId: "lease-1",
+                workflowExecutionId: "wfexec-1",
+                ownerId: "worker-1",
+                acquiredAt: _now,
+                expiresAt: _now.AddMinutes(5),
+                fencingToken: 1),
+            heartbeat: new RuntimeHeartbeat(
+                heartbeatId: "heartbeat-1",
+                workflowExecutionId: "wfexec-1",
+                ownerId: "worker-1",
+                leaseId: "lease-1",
+                recordedAt: _now),
+            drain: null,
+            interruptedExecution: null,
+            pendingPostCommitIntentIds: ["intent-1"],
             metadata: new Dictionary<string, string>());
     }
 
@@ -99,8 +135,8 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Single(commit.StateChanges.ActivityExecutions);
         Assert.Single(commit.StateChanges.DurableValues);
         Assert.Equal("node-resume-1", Assert.Single(commit.StateChanges.Bookmarks).State.ResumeTargetId);
-        Assert.Equal(RuntimeStateCategory.Incident, Assert.Single(commit.StateChanges.Incidents).Category);
-        Assert.Equal(RuntimeStateCategory.Operational, Assert.Single(commit.StateChanges.Operational).Category);
+        Assert.True(Assert.Single(commit.StateChanges.Incidents).State.IsBlocking);
+        Assert.Equal("lease-1", Assert.Single(commit.StateChanges.Operational).State.ExecutionLease!.LeaseId);
     }
 
     [Fact]
@@ -208,21 +244,20 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
-    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentReferenceCategories()
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedIncidentStateIds()
     {
         var invalidIncidents = new[]
         {
-            new RuntimeStateChangeReference(
+            new RuntimeStateChange<IncidentState>(
                 StateId: "bookmark-1",
-                Category: RuntimeStateCategory.Bookmark,
                 Operation: RuntimeStateChangeOperation.Append,
-                WorkflowExecutionId: "wfexec-1",
-                ActivityExecutionId: "actexec-1",
-                ResumeTargetId: null,
+                State: _incidentState,
                 Metadata: new Dictionary<string, string>())
         };
 
-        Assert.Throws<ArgumentException>(() => NewStateChanges(incidents: invalidIncidents));
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(incidents: invalidIncidents));
+
+        Assert.Contains("IncidentState.IncidentId", exception.Message);
     }
 
     [Fact]
@@ -237,6 +272,23 @@ public sealed class RuntimeCheckpointCommitTests
 
         Assert.Contains("StateId", exception.Message);
         Assert.Contains("BookmarkState.BookmarkId", exception.Message);
+    }
+
+    [Fact]
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedOperationalStateIds()
+    {
+        var invalidOperational = new[]
+        {
+            new RuntimeStateChange<OperationalState>(
+                StateId: "lease-1",
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: _operationalState,
+                Metadata: new Dictionary<string, string>())
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(operational: invalidOperational));
+
+        Assert.Contains("OperationalState.OperationalStateId", exception.Message);
     }
 
     private RuntimeCheckpointCommit NewCommit(
@@ -257,18 +309,21 @@ public sealed class RuntimeCheckpointCommitTests
 
     private RuntimePostCommitIntent NewIntent(string intentId) =>
         new(
-            IntentId: intentId,
-            WorkflowExecutionId: "wfexec-1",
-            Kind: "DispatchBookmarkRegistration",
-            RecordedAt: _now,
-            ActivityExecutionId: "actexec-1",
-            IdempotencyKey: $"checkpoint-1:{intentId}",
-            Payload: Json("""{"bookmarkId":"bookmark-1"}"""),
-            Metadata: new Dictionary<string, string>());
+            intentId: intentId,
+            workflowExecutionId: "wfexec-1",
+            kind: "DispatchBookmarkRegistration",
+            recordedAt: _now,
+            activityExecutionId: "actexec-1",
+            idempotencyKey: $"checkpoint-1:{intentId}",
+            payload: Json("""{"bookmarkId":"bookmark-1"}"""),
+            metadata: new Dictionary<string, string>(),
+            dependsOnWaitRegistrationId: "wait-1",
+            waitFailurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow);
 
     private RuntimeCheckpointStateChangeSet NewStateChanges(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
-        IReadOnlyCollection<RuntimeStateChangeReference>? incidents = null) =>
+        IReadOnlyCollection<RuntimeStateChange<IncidentState>>? incidents = null,
+        IReadOnlyCollection<RuntimeStateChange<OperationalState>>? operational = null) =>
         new(
             workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
                 StateId: _workflowState.WorkflowExecutionId,
@@ -302,24 +357,18 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             incidents: incidents ??
             [
-                new RuntimeStateChangeReference(
-                    StateId: "incident-1",
-                    Category: RuntimeStateCategory.Incident,
+                new RuntimeStateChange<IncidentState>(
+                    StateId: _incidentState.IncidentId,
                     Operation: RuntimeStateChangeOperation.Append,
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: "actexec-1",
-                    ResumeTargetId: null,
+                    State: _incidentState,
                     Metadata: new Dictionary<string, string>())
             ],
-            operational:
+            operational: operational ??
             [
-                new RuntimeStateChangeReference(
-                    StateId: "lease-1",
-                    Category: RuntimeStateCategory.Operational,
+                new RuntimeStateChange<OperationalState>(
+                    StateId: _operationalState.OperationalStateId,
                     Operation: RuntimeStateChangeOperation.Upsert,
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: null,
-                    ResumeTargetId: null,
+                    State: _operationalState,
                     Metadata: new Dictionary<string, string>())
             ]);
 

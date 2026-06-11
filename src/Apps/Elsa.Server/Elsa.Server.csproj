@@ -27,6 +27,7 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />

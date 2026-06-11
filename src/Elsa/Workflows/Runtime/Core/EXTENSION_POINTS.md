@@ -24,6 +24,30 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** dispatches post-commit intents in the order provided by the committed `RuntimeCheckpointCommit` only after `IRuntimeCheckpointWriter` completes successfully. This is a placeholder contract, not a full outbox processor.
 - **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
 
+### `IRuntimePostCommitOutboxStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns durable post-commit outbox state for a runtime composition).
+- **Signature:** `SavePendingAsync(RuntimePostCommitOutboxItem item, ...)`, `GetDeliverableAsync(RuntimePostCommitOutboxQuery query, ...)`, `RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, ...)`.
+- **Usage:** stores delivery state for post-commit intents so providers can preserve record, commit, deliver, and mark-delivered ordering.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimeRecoveryScanner` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one scanner identifies interrupted workflow executions for a runtime composition).
+- **Signature:** `ScanAsync(RuntimeRecoveryScanRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** provider implementations inspect operational state such as leases and heartbeats and return recovery candidates that requeue from the last checkpoint without invoking domain retry policy.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
+- **Signature:** `Decide(RuntimeDomainRetryRequest request)`.
+- **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
+### `IRuntimeVolatileWaitPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides whether in-memory volatile waits are allowed in a runtime composition).
+- **Signature:** `Decide(RuntimeVolatileWaitPolicyRequest request)`.
+- **Usage:** evaluates host support, requested duration, requested host-shutdown behavior, requested cancellation behavior, and durable fallback posture. Volatile waits remain scheduler continuation state and are not durable bookmark resume state.
+- **Known implementations (shipped):** none yet; this runtime execution slice defines the contract only.
+
 ### `IBookmarkResumeResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one resolver owns durable bookmark-to-artifact resume resolution for a runtime composition).
 - **Signature:** `Resolve(BookmarkResumeRequest request)`.
@@ -54,11 +78,29 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** reports artifact/build diagnostics for output references that cross suspension boundaries or are ambiguous in loop/parallel scopes.
 - **Default implementation:** `RuntimeInputBindingValidator` *(intra-domain default)*.
 
+### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides which runtime observability payloads may be captured for a runtime composition).
+- **Signature:** `Decide(RuntimePayloadCaptureRequest request)`.
+- **Usage:** controls whether history, diagnostics, incidents, values, and input/output observations capture no payload, metadata only, or full payload. Continuation state does not read these observability payloads. The default excludes sensitive values and omits workflow/activity input and output snapshots.
+- **Default implementation:** `DefaultRuntimePayloadCapturePolicy` *(intra-domain default)*.
+
 ### `IWorkflowExecutionAgentProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Replacement (one provider owns workflow-execution mailbox resolution for a runtime composition).
-- **Signature:** `GetAgentAsync(string workflowExecutionId, CancellationToken cancellationToken = default)`.
-- **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Actor frameworks are provider choices; checkpoint state remains the source of truth.
+- **Kind:** Replacement (one provider owns workflow-execution mailbox activation, routing, and passivation for a runtime composition).
+- **Signature:** `Capabilities`, `GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)`, `PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
+
+### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
+- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
+- **Usage:** stores and retrieves runtime-owned `WorkflowExecutable` artifacts. Publishing writes artifacts through this contract; Runtime execution reads artifacts through this contract and does not load Design-owned workflow state.
+- **Default implementation:** `InMemoryWorkflowExecutableStore` *(intra-domain demo default for the vertical slice; durable persistence remains future provider work)*.
+
+### `IWorkflowExecutor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one executor owns direct workflow artifact execution semantics for a runtime composition).
+- **Signature:** `ExecuteAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)`.
+- **Usage:** executes a runtime-owned artifact. The first implementation is deliberately sequential/literal-only and rejects unsupported shapes through deterministic diagnostics.
+- **Default implementation:** `SequentialWorkflowExecutor` *(intra-domain vertical-slice default)*.
 
 ## Implementable contributor interfaces
 

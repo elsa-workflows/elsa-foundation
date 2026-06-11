@@ -66,6 +66,13 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void ExecutableEdge_RequiresEndpointPorts()
+    {
+        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "", "target", "In"));
+        Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "Done", "target", " "));
+    }
+
+    [Fact]
     public void ActivityExecution_IdentifiesConcreteRunsOfTheSameExecutableNode()
     {
         var first = new ActivityExecution(
@@ -86,9 +93,9 @@ public sealed class RuntimeContractTests
     public void SchedulerState_ReferencesExecutableNodesAndActivityExecutions()
     {
         var scheduler = new SchedulerState(
-            WorkflowExecutionId: "wfexec-1",
-            Version: 3,
-            PendingWork:
+            workflowExecutionId: "wfexec-1",
+            version: 3,
+            pendingWork:
             [
                 new ScheduledActivityWorkItem(
                     WorkItemId: "work-1",
@@ -101,16 +108,20 @@ public sealed class RuntimeContractTests
                     EnqueuedAt: DateTimeOffset.UtcNow,
                     Reason: "ActivityScheduled")
             ],
-            VolatileWaits:
+            pendingContinuations: [],
+            volatileWaits:
             [
                 new VolatileWaitRegistration(
-                    WaitId: "wait-1",
-                    WorkflowExecutionId: "wfexec-1",
-                    ActivityExecutionId: "actexec-1",
-                    BranchId: "branch-a",
-                    RegisteredAt: DateTimeOffset.UtcNow,
-                    ExpiresAt: DateTimeOffset.UtcNow.AddSeconds(5),
-                    AwaitableKind: "timer")
+                    waitId: "wait-1",
+                    workflowExecutionId: "wfexec-1",
+                    activityExecutionId: "actexec-1",
+                    branchId: "branch-a",
+                    registeredAt: DateTimeOffset.UtcNow,
+                    expiresAt: DateTimeOffset.UtcNow.AddSeconds(5),
+                    awaitableKind: "timer",
+                    status: VolatileWaitStatus.Registered,
+                    hostShutdownBehavior: VolatileWaitHostShutdownBehavior.CancelWait,
+                    cancellationBehavior: VolatileWaitCancellationBehavior.CancelWait)
             ]);
 
         var workItem = Assert.Single(scheduler.PendingWork);
