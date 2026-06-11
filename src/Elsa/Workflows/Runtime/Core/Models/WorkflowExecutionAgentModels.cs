@@ -81,6 +81,22 @@ public sealed class WorkflowExecutionCommandDispatchResult
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
+public sealed class WorkflowExecutionCommandDispatchOptions
+{
+    public static readonly WorkflowExecutionCommandDispatchOptions Default = new();
+
+    public WorkflowExecutionCommandDispatchOptions(
+        IServiceProvider? ambientServices = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        AmbientServices = ambientServices;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
+    }
+
+    public IServiceProvider? AmbientServices { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+}
+
 public sealed class WorkflowExecutionAgentActivationRequest
 {
     public WorkflowExecutionAgentActivationRequest(

@@ -17,4 +17,15 @@ public sealed class NoopWorkflowExecutionCommandProcessor : IWorkflowExecutionCo
 
         return ValueTask.CompletedTask;
     }
+
+    public ValueTask ProcessAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        WorkflowExecutionCommandDispatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        ArgumentNullException.ThrowIfNull(options);
+
+        return ValueTask.CompletedTask;
+    }
 }

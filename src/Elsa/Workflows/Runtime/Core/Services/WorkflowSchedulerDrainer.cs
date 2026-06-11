@@ -10,6 +10,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
+    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
 
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -39,10 +40,21 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
         TimeProvider timeProvider,
         IWorkflowSchedulerPauseGate? pauseGate)
+        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, NoopWorkflowExecutionAmbientServicesAccessor.Instance)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        TimeProvider timeProvider,
+        IWorkflowSchedulerPauseGate? pauseGate,
+        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
@@ -50,12 +62,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _timeProvider = timeProvider;
         _pauseGate = pauseGate;
+        _ambientServicesAccessor = ambientServicesAccessor;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        using var ambientServices = _ambientServicesAccessor.Push(request.AmbientServices);
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
         var remaining = request.MaxWorkItems ?? int.MaxValue;

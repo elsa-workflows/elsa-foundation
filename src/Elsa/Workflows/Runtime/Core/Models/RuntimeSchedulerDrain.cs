@@ -2,7 +2,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class RuntimeSchedulerDrainRequest
 {
-    public RuntimeSchedulerDrainRequest(string workflowExecutionId, int? maxWorkItems = null)
+    public RuntimeSchedulerDrainRequest(
+        string workflowExecutionId,
+        int? maxWorkItems = null,
+        IServiceProvider? ambientServices = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -11,10 +14,15 @@ public sealed class RuntimeSchedulerDrainRequest
 
         WorkflowExecutionId = workflowExecutionId;
         MaxWorkItems = maxWorkItems;
+        AmbientServices = ambientServices;
     }
 
     public string WorkflowExecutionId { get; }
     public int? MaxWorkItems { get; }
+    public IServiceProvider? AmbientServices { get; }
+
+    public RuntimeSchedulerDrainRequest WithAmbientServices(IServiceProvider? ambientServices) =>
+        new(WorkflowExecutionId, MaxWorkItems, ambientServices);
 }
 
 public sealed class RuntimeSchedulerDrainResult
