@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -57,6 +58,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         CancellationToken cancellationToken)
     {
+        var occurredAt = _timeProvider.GetUtcNow();
         var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
         var activityStateChangeMetadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
@@ -83,7 +85,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 CheckpointId: $"checkpoint:{workItem.WorkItemId}",
                 Name: payload.CheckpointName,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
-                OccurredAt: _timeProvider.GetUtcNow(),
+                OccurredAt: occurredAt,
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
                 {
@@ -95,7 +97,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                     ["runtime.executableArtifactHash"] = payload.PinnedExecutable.ArtifactHash
                 })),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -107,6 +109,43 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             {
                 ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
                 ["runtime.commandKind"] = workItem.CommandKind.ToString()
+            }));
+    }
+
+    private static RuntimeStateChange<WorkflowExecutionState>? BuildWorkflowExecutionStateChange(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCheckpointCommandPayload payload,
+        DateTimeOffset occurredAt)
+    {
+        if (!StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
+            return null;
+
+        var state = new WorkflowExecutionState(
+            WorkflowExecutionId: workItem.WorkflowExecutionId,
+            PinnedExecutable: payload.PinnedExecutable,
+            Status: WorkflowExecutionStatus.Completed,
+            SubStatus: null,
+            CreatedAt: workItem.EnqueuedAt,
+            StartedAt: workItem.EnqueuedAt,
+            UpdatedAt: occurredAt,
+            CompletedAt: occurredAt,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+            {
+                ["runtime.checkpointReason"] = payload.Reason,
+                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId
+            }));
+
+        return new RuntimeStateChange<WorkflowExecutionState>(
+            StateId: workItem.WorkflowExecutionId,
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: state,
+            Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+            {
+                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
+                ["runtime.checkpointReason"] = payload.Reason
             }));
     }
 

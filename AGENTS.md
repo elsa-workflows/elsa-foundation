@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Root Continuation Scheduling](specs/036-runtime-root-continuation-scheduling/plan.md)
+Current Speckit plan: [Runtime Terminal Workflow Completion](specs/037-runtime-terminal-workflow-completion/plan.md)
 <!-- SPECKIT END -->

@@ -151,14 +151,14 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     {
         var now = _timeProvider.GetUtcNow();
         var activityExecutionId = continuationSchedulingPayload.ActivityExecutionId;
-        var checkpointName = RuntimeCheckpointNames.ActivityCompleted;
-        var postCommitIntents = await CreateDownstreamSchedulerIntentsAsync(continuationSchedulingWorkItem, continuationSchedulingPayload, now, cancellationToken);
+        var downstreamScheduling = await CreateDownstreamSchedulingAsync(continuationSchedulingWorkItem, continuationSchedulingPayload, now, cancellationToken);
+        var checkpointName = downstreamScheduling.IsTerminal ? RuntimeCheckpointNames.WorkflowCompleted : RuntimeCheckpointNames.ActivityCompleted;
         var payload = new RuntimeCheckpointCommandPayload(
             continuationSchedulingPayload.PinnedExecutable,
             checkpointName,
             [activityExecutionId],
             RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason,
-            postCommitIntents);
+            downstreamScheduling.PostCommitIntents);
 
         var workItem = new RuntimeSchedulerWorkItem(
             workItemId: $"{continuationSchedulingWorkItem.WorkItemId}:checkpoint:{checkpointName}:{activityExecutionId}",
@@ -177,14 +177,14 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
-    private async ValueTask<IReadOnlyCollection<RuntimePostCommitIntent>> CreateDownstreamSchedulerIntentsAsync(
+    private async ValueTask<DownstreamSchedulingResult> CreateDownstreamSchedulingAsync(
         RuntimeSchedulerWorkItem continuationSchedulingWorkItem,
         RuntimeCompleteActivityCommandPayload continuationSchedulingPayload,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (_workflowExecutableStore is null || _idGenerator is null || continuationSchedulingPayload.OutcomeNames.Count == 0)
-            return [];
+        if (_workflowExecutableStore is null || _idGenerator is null)
+            return DownstreamSchedulingResult.NotTerminal([]);
 
         var executable = await _workflowExecutableStore.FindAsync(continuationSchedulingPayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -201,7 +201,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             .ToArray();
 
         if (matchingEdges.Length == 0)
-            return [];
+            return DownstreamSchedulingResult.Terminal();
 
         var postCommitIntents = new List<RuntimePostCommitIntent>(matchingEdges.Length);
         for (var index = 0; index < matchingEdges.Length; index++)
@@ -232,7 +232,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
                 }));
         }
 
-        return postCommitIntents;
+        return DownstreamSchedulingResult.NotTerminal(postCommitIntents);
     }
 
     private RuntimeSchedulerWorkItem NewDownstreamScheduleWorkItem(
@@ -341,4 +341,14 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             "reason" or
             "completionKind" or
             "completedChildActivityExecutionId";
+
+    private sealed record DownstreamSchedulingResult(
+        bool IsTerminal,
+        IReadOnlyCollection<RuntimePostCommitIntent> PostCommitIntents)
+    {
+        public static DownstreamSchedulingResult Terminal() => new(true, []);
+
+        public static DownstreamSchedulingResult NotTerminal(IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents) =>
+            new(false, postCommitIntents);
+    }
 }
