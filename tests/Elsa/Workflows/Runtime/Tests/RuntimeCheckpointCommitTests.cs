@@ -417,6 +417,122 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenSchedulerStateProjectionFails()
+    {
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, new ThrowingSchedulerStateStore());
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Empty(writer.ListWrites());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_ProjectsSchedulerStateChanges()
+    {
+        var schedulerStateStore = new InMemorySchedulerStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var initial = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
+        var updatedSchedulerState = _schedulerState with
+        {
+            Version = 2,
+            PendingWork =
+            [
+                new ScheduledActivityWorkItem(
+                    WorkItemId: "work-2",
+                    WorkflowExecutionId: "wfexec-1",
+                    ExecutableNodeId: "node-2",
+                    ActivityExecutionId: null,
+                    SchedulingActivityExecutionId: "actexec-1",
+                    BranchId: "branch-1",
+                    IterationId: null,
+                    EnqueuedAt: _now.AddMinutes(1),
+                    Reason: "test")
+            ]
+        };
+        var updated = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
+        {
+            CommitId = "commit-2",
+            StateChanges = NewStateChanges(schedulerState: updatedSchedulerState)
+        };
+
+        await writer.WriteAsync(initial, decision);
+        await writer.WriteAsync(updated, decision);
+
+        var state = await schedulerStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(2, state.Version);
+        Assert.Equal("node-2", Assert.Single(state.PendingWork).ExecutableNodeId);
+        Assert.Equal(2, writer.ListWrites().Count);
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsUnsupportedSchedulerStateProjectionBeforeRecordingWrite()
+    {
+        var schedulerStateStore = new InMemorySchedulerStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
+        {
+            StateChanges = NewStateChanges(
+                schedulerStateChange: new RuntimeStateChange<SchedulerState>(
+                    StateId: _schedulerState.WorkflowExecutionId,
+                    Operation: RuntimeStateChangeOperation.Delete,
+                    State: _schedulerState,
+                    Metadata: new Dictionary<string, string>()))
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("Upsert", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await schedulerStateStore.ListAsync());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_RejectsSchedulerStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var schedulerStateStore = new InMemorySchedulerStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var schedulerState = _schedulerState with { WorkflowExecutionId = "wfexec-2" };
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
+        {
+            StateChanges = NewStateChanges(schedulerState: schedulerState)
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListWrites());
+        Assert.Empty(await schedulerStateStore.ListAsync());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingSchedulerReplay()
+    {
+        var schedulerStateStore = new InMemorySchedulerStateStore();
+        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var first = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
+        var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
+        {
+            StateChanges = NewStateChanges(schedulerState: _schedulerState with { Version = 2 })
+        };
+
+        await writer.WriteAsync(first, decision);
+        await writer.WriteAsync(conflictingReplay, decision);
+
+        var state = await schedulerStateStore.FindAsync("wfexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(1, state.Version);
+        var write = Assert.Single(writer.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.ActivityScheduled, write.Commit.Checkpoint.Name);
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -1024,6 +1140,8 @@ public sealed class RuntimeCheckpointCommitTests
     private RuntimeCheckpointStateChangeSet NewStateChanges(
         WorkflowExecutionState? workflowState = null,
         RuntimeStateChange<WorkflowExecutionState>? workflowStateChange = null,
+        SchedulerState? schedulerState = null,
+        RuntimeStateChange<SchedulerState>? schedulerStateChange = null,
         ActivityExecutionState? activityState = null,
         RuntimeStateChange<ActivityExecutionState>? activityStateChange = null,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
@@ -1036,10 +1154,10 @@ public sealed class RuntimeCheckpointCommitTests
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: workflowState ?? _workflowState,
                 Metadata: new Dictionary<string, string>()),
-            scheduler: new RuntimeStateChange<SchedulerState>(
-                StateId: _schedulerState.WorkflowExecutionId,
+            scheduler: schedulerStateChange ?? new RuntimeStateChange<SchedulerState>(
+                StateId: (schedulerState ?? _schedulerState).WorkflowExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
-                State: _schedulerState,
+                State: schedulerState ?? _schedulerState,
                 Metadata: new Dictionary<string, string>()),
             activityExecutions:
             [
@@ -1249,6 +1367,18 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<ActivityExecutionState>>([]);
+    }
+
+    private sealed class ThrowingSchedulerStateStore : ISchedulerStateStore
+    {
+        public ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("scheduler state projection failed");
+
+        public ValueTask<SchedulerState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<SchedulerState?>(null);
+
+        public ValueTask<IReadOnlyCollection<SchedulerState>> ListAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<SchedulerState>>([]);
     }
 
     private sealed class ThrowingBookmarkStateStore : IBookmarkStateStore

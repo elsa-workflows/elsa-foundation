@@ -14,6 +14,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IOperationalStateStore? _operationalStateStore;
+    private readonly ISchedulerStateStore? _schedulerStateStore;
 
     public InMemoryRuntimeCheckpointWriter(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
@@ -49,6 +50,18 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IDurableValueStateStore? durableValueStateStore,
         IIncidentStateStore? incidentStateStore,
         IOperationalStateStore? operationalStateStore)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, operationalStateStore, null)
+    {
+    }
+
+    public InMemoryRuntimeCheckpointWriter(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IOperationalStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
@@ -56,6 +69,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         _durableValueStateStore = durableValueStateStore;
         _incidentStateStore = incidentStateStore;
         _operationalStateStore = operationalStateStore;
+        _schedulerStateStore = schedulerStateStore;
     }
 
     public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -74,12 +88,14 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             }
 
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
+            ValidateSchedulerStateChange(commit);
             ValidateActivityExecutionStateChanges(commit);
             ValidateBookmarkStateChanges(commit);
             ValidateDurableValueStateChanges(commit);
             ValidateIncidentStateChanges(commit);
             ValidateOperationalStateChanges(commit);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
+            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
@@ -113,6 +129,16 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             return;
 
         await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private async ValueTask ApplySchedulerStateChangeAsync(
+        RuntimeStateChange<SchedulerState>? stateChange,
+        CancellationToken cancellationToken)
+    {
+        if (_schedulerStateStore is null || stateChange is null)
+            return;
+
+        await _schedulerStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
     private async ValueTask ApplyActivityExecutionStateChangesAsync(
@@ -239,6 +265,23 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
         if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
             throw new InvalidOperationException("Workflow execution state change StateId must match WorkflowExecutionState.WorkflowExecutionId.");
+    }
+
+    private void ValidateSchedulerStateChange(RuntimeCheckpointCommit commit)
+    {
+        if (_schedulerStateStore is null || commit.StateChanges.Scheduler is null)
+            return;
+
+        var stateChange = commit.StateChanges.Scheduler;
+
+        if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+            throw new InvalidOperationException($"The in-memory checkpoint writer can only project scheduler state '{RuntimeStateChangeOperation.Upsert}' changes.");
+
+        if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
+            throw new InvalidOperationException("Scheduler state change StateId must match SchedulerState.WorkflowExecutionId.");
+
+        if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
+            throw new InvalidOperationException("Scheduler state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
     }
 
     private void ValidateActivityExecutionStateChanges(RuntimeCheckpointCommit commit)
