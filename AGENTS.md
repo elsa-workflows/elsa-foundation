@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Execution Agent Provider Contract](specs/020-runtime-agent-provider-contract/plan.md)
+Current Speckit plan: [Runtime In-Process Execution Agent Provider](specs/021-runtime-inprocess-agent-provider/plan.md)
 <!-- SPECKIT END -->

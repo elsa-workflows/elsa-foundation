@@ -19,6 +19,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         base.ConfigureServices(services);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IWorkflowExecutionCommandProcessor, NoopWorkflowExecutionCommandProcessor>();
+        services.TryAddSingleton<IWorkflowExecutionAgentProvider, InProcessWorkflowExecutionAgentProvider>();
         services.TryAddScoped<IWorkflowExecutor, SequentialWorkflowExecutor>();
         services.AddRequestHandlersFrom(GetType().Assembly);
     }

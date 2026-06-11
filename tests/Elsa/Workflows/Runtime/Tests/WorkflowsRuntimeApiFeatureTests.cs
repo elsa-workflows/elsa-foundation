@@ -20,8 +20,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowExecutableStore) &&
             descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
+            descriptor.ImplementationType == typeof(NoopWorkflowExecutionCommandProcessor));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
+            descriptor.ImplementationType == typeof(InProcessWorkflowExecutionAgentProvider));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowExecutor) &&
             descriptor.ImplementationType == typeof(SequentialWorkflowExecutor));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<InProcessWorkflowExecutionAgentProvider>(provider.GetRequiredService<IWorkflowExecutionAgentProvider>());
     }
 }

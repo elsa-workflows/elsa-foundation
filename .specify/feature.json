@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/020-runtime-agent-provider-contract"
+  "feature_directory": "specs/021-runtime-inprocess-agent-provider"
 }
