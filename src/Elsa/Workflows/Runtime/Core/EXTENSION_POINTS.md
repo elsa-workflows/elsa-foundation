@@ -88,7 +88,13 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one provider owns workflow-execution mailbox activation, routing, and passivation for a runtime composition).
 - **Signature:** `Capabilities`, `GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)`, `PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default)`.
 - **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Actor frameworks are provider choices; checkpoint state remains the source of truth.
-- **Known implementations (shipped):** none yet; this first runtime execution slice defines the contract only.
+- **Default implementation:** `InProcessWorkflowExecutionAgentProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*.
+
+### `IWorkflowExecutionCommandProcessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contribution (processors decide what an accepted workflow-execution command does inside the active agent mailbox).
+- **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
+- **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
+- **Default implementation:** `NoopWorkflowExecutionCommandProcessor` *(placeholder until scheduler command behavior is implemented)*.
 
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
