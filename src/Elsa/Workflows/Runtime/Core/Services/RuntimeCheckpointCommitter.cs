@@ -160,5 +160,5 @@ public sealed class RuntimeCheckpointCommitter
         $"{commit.CommitId}:{intent.IntentId}";
 
     private static string FailureMessage(Exception exception) =>
-        string.IsNullOrWhiteSpace(exception.Message) ? exception.GetType().Name : exception.Message;
+        RuntimeFailureMessages.For(exception);
 }
