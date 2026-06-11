@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [Runtime Recovery Scanner](specs/049-runtime-recovery-scanner/plan.md)
+Current Speckit plan: [Runtime Domain Retry Policy](specs/050-runtime-domain-retry-policy/plan.md)
 <!-- SPECKIT END -->

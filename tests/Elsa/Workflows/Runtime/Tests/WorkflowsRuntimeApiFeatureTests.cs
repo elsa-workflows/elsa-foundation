@@ -46,6 +46,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeRecoveryScanner) &&
             descriptor.ImplementationType == typeof(InMemoryRuntimeRecoveryScanner));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy) &&
+            descriptor.ImplementationType == typeof(NoopRuntimeDomainRetryPolicy));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
@@ -128,6 +131,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
+        Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
         Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
