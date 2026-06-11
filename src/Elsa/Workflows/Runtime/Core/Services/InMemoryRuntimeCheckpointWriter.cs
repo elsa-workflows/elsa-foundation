@@ -11,31 +11,10 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
 
-    public InMemoryRuntimeCheckpointWriter()
-    {
-    }
-
-    public InMemoryRuntimeCheckpointWriter(IWorkflowExecutionStateStore workflowExecutionStateStore)
-    {
-        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
-
-        _workflowExecutionStateStore = workflowExecutionStateStore;
-    }
-
-    public InMemoryRuntimeCheckpointWriter(IActivityExecutionStateStore activityExecutionStateStore)
-    {
-        ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
-
-        _activityExecutionStateStore = activityExecutionStateStore;
-    }
-
     public InMemoryRuntimeCheckpointWriter(
-        IWorkflowExecutionStateStore workflowExecutionStateStore,
-        IActivityExecutionStateStore activityExecutionStateStore)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IActivityExecutionStateStore? activityExecutionStateStore = null)
     {
-        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
-        ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
-
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
     }

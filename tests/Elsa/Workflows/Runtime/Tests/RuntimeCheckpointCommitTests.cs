@@ -360,7 +360,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var running = NewCommit(RuntimeCheckpointNames.ActivityStarted);
         var completed = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
@@ -387,7 +387,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_RejectsUnsupportedActivityStateProjectionBeforeRecordingWrite()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
         {
@@ -410,7 +410,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingActivityReplay()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
