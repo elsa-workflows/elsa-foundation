@@ -10,4 +10,4 @@
 - [x] T006 Add focused invocation fault incident tests.
 - [x] T007 Run focused runtime/activity and architecture validation.
 - [x] T008 Self-review until no actionable issues remain.
-- [ ] T009 Commit, open PR, run PR loop, and merge when clean.
+- [x] T009 Commit, open PR, run PR loop, and merge when clean.

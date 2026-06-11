@@ -20,13 +20,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
     private readonly InMemoryBookmarkStateStore _bookmarkStateStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
+    private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
 
     public WorkflowResumeBookmarkSchedulerWorkHandlerTests()
     {
         _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+            workflowExecutionStateStore: null,
             activityExecutionStateStore: _activityStateStore,
-            bookmarkStateStore: _bookmarkStateStore);
+            bookmarkStateStore: _bookmarkStateStore,
+            durableValueStateStore: null,
+            incidentStateStore: _incidentStateStore);
     }
 
     [Fact]
@@ -95,9 +99,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal("ActivityResumeFaulted", state.SubStatus);
         Assert.Equal(1, state.FaultCount);
         Assert.Contains("does not declare resume target 'resume-target:delivery'", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityResumeFaulted", message => Assert.Contains("does not declare resume target 'resume-target:delivery'", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Empty(_checkpointWriter.ListWrites());
     }
 
     [Fact]
@@ -116,7 +120,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
         Assert.Equal("ActivityResumeFaulted", state.SubStatus);
         Assert.Contains("unsupported signature", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityResumeFaulted", message => Assert.Contains("unsupported signature", message), resumeTargetId: "resume-target:invalid");
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }
 
     [Fact]
@@ -136,7 +142,36 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal("ActivityResumeFaulted", state.SubStatus);
         Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
         Assert.Equal("resume failed", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityResumeFaulted", message => Assert.Equal("resume failed", message), resumeTargetId: "resume-target:throwing");
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RecordsIncidentWhenInputMaterializationFails()
+    {
+        await _executableStore.SaveAsync(NewExecutable(inputBinding: new RuntimeInputBinding(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "workflow.input"))));
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        var factory = new RecordingActivityFactory(new ResumeTargetActivity());
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        Assert.Equal(0, factory.CreateCalls);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("InputMaterializationFailed", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Contains("not a supported materialized value binding", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("not a supported materialized value binding", message));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }
 
     [Fact]
@@ -258,11 +293,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IBookmarkStateStore>(_ => _bookmarkStateStore);
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimeCheckpointWriter>(_checkpointWriter);
+        services.AddSingleton(_incidentStateStore);
+        services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<ActivityFaultIncidentRecorder>();
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         return services.BuildServiceProvider();
     }
@@ -292,6 +330,43 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(RuntimeStateChangeOperation.Delete, bookmarkChange.Operation);
         Assert.Equal("bookmark-1", bookmarkChange.State.BookmarkId);
         Assert.Empty(write.Commit.PostCommitIntents);
+    }
+
+    private async Task AssertIncidentRecordedAsync(string failureType, Action<string> assertMessage, string resumeTargetId = "resume-target:delivery")
+    {
+        var incidentId = $"incident:resume-work:actexec-1:{failureType}";
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal([incidentId], state.IncidentIds);
+        Assert.Equal(incidentId, state.Metadata["runtime.incidentId"]);
+        Assert.Equal("bookmark-1", state.Metadata["runtime.bookmarkId"]);
+        Assert.Equal(resumeTargetId, state.Metadata["runtime.resumeTargetId"]);
+
+        var incident = await _incidentStateStore.FindAsync("wfexec-1", incidentId);
+        Assert.NotNull(incident);
+        Assert.Equal("wfexec-1", incident.WorkflowExecutionId);
+        Assert.Equal("actexec-1", incident.ActivityExecutionId);
+        Assert.Equal("node-wait", incident.ExecutableNodeId);
+        Assert.Equal(IncidentSeverity.Error, incident.Severity);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionAction.WaitForIntervention, incident.ResolutionAction);
+        Assert.Equal(failureType, incident.FailureType);
+        Assert.Equal(_now, incident.CreatedAt);
+        Assert.Null(incident.ResolvedAt);
+        Assert.Equal("resume-work", incident.Metadata["runtime.schedulerWorkItemId"]);
+        Assert.Equal("command-1", incident.Metadata["runtime.commandId"]);
+        Assert.Equal(failureType, incident.Metadata["runtime.faultSubStatus"]);
+        Assert.Equal("bookmark-1", incident.Metadata["runtime.bookmarkId"]);
+        Assert.Equal(resumeTargetId, incident.Metadata["runtime.resumeTargetId"]);
+        assertMessage(incident.Message);
+
+        var write = Assert.Single(_checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
+        Assert.Equal(incidentId, write.Commit.Checkpoint.Metadata["runtime.incidentId"]);
+        Assert.Equal("bookmark-1", write.Commit.Checkpoint.Metadata["runtime.bookmarkId"]);
+        Assert.Equal(resumeTargetId, write.Commit.Checkpoint.Metadata["runtime.resumeTargetId"]);
+        Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
+        Assert.Empty(write.Commit.StateChanges.Bookmarks);
     }
 
     private RuntimeSchedulerWorkItem NewResumeWorkItem(
@@ -368,7 +443,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
     private static WorkflowExecutable NewExecutable(
         bool includeResumeTarget = true,
-        string resumeTargetId = "resume-target:delivery")
+        string resumeTargetId = "resume-target:delivery",
+        RuntimeInputBinding? inputBinding = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var resumeTargets = includeResumeTarget
@@ -386,7 +462,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             identity: NewIdentity(),
             nodes:
             [
-                NewNode("node-wait", document.RootElement)
+                NewNode("node-wait", document.RootElement, inputBinding)
             ],
             edges: [],
             startNodeIds: [],
@@ -396,7 +472,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
+    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload, RuntimeInputBinding? inputBinding = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -404,7 +480,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: descriptorPayload.Clone(),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            inputBindings: inputBinding is null
+                ? new Dictionary<string, RuntimeInputBinding>()
+                : new Dictionary<string, RuntimeInputBinding> { ["Text"] = inputBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 

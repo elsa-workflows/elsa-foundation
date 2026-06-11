@@ -520,6 +520,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IActivityExecutionStateStore>(_ => activityExecutionStateStore ?? _activityStateStore);
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
+        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton(_activityOutputRegister);
         services.AddSingleton<IRuntimeActivityOutputRegister>(_ => _activityOutputRegister);
         services.AddSingleton(_durableValueStateStore);
@@ -530,6 +531,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<ActivityFaultIncidentRecorder>();
         return services.BuildServiceProvider();
     }
 
