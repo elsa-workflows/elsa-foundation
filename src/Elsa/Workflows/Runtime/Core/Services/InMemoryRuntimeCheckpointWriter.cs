@@ -16,7 +16,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
         lock (_syncRoot)
         {
-            _writes[commit.CommitId] = new RuntimeCheckpointWriteRecord(commit, decision);
+            _writes.TryAdd(commit.CommitId, new RuntimeCheckpointWriteRecord(commit, decision));
         }
 
         return ValueTask.CompletedTask;
