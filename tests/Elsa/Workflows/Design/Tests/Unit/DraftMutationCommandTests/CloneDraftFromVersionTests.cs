@@ -41,7 +41,7 @@ public sealed class CloneDraftFromVersionTests
 
         Assert.Equal(sourceActivities.Count, clonedActivities.Count);
         Assert.Equal(sourceActivities.Select(a => a.NodeId), clonedActivities.Select(a => a.NodeId));
-        Assert.Equal(sourceState.RootActivity?.Composition?.StartActivityNodeId, hydratedState.RootActivity?.Composition?.StartActivityNodeId);
+        Assert.Equal(StartActivityNodeId(sourceState.RootActivity), StartActivityNodeId(hydratedState.RootActivity));
     }
 
     [Fact]
@@ -169,7 +169,16 @@ public sealed class CloneDraftFromVersionTests
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            Composition: new ActivityComposition(activities, [], activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId)),
+            ChildSlots:
+            [
+                new ActivityChildSlot(
+                    ActivityChildSlotNames.Activities,
+                    activities,
+                    new Dictionary<string, string>
+                    {
+                        [ActivityChildSlotMetadataKeys.StartActivityNodeId] = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty
+                    })
+            ]),
         Inputs: [],
         Outputs: [],
         WorkflowActivityOptions: null,
@@ -179,8 +188,7 @@ public sealed class CloneDraftFromVersionTests
         NodeId: nodeId,
         ActivityVersionId: "av-1",
         Inputs: [],
-        Outputs: [],
-        Composition: null);
+        Outputs: []);
 
     private static IEnumerable<ActivityNode> Flatten(ActivityNode? root)
     {
@@ -188,8 +196,15 @@ public sealed class CloneDraftFromVersionTests
             yield break;
 
         yield return root;
-        foreach (var child in root.Composition?.Activities ?? [])
+        foreach (var child in (root.ChildSlots ?? []).SelectMany(slot => slot.Activities))
         foreach (var nested in Flatten(child))
             yield return nested;
     }
+
+    private static string? StartActivityNodeId(ActivityNode? root) =>
+        root?.ChildSlots?
+            .Select(slot => slot.Metadata?.TryGetValue(ActivityChildSlotMetadataKeys.StartActivityNodeId, out var startActivityNodeId) == true
+                ? startActivityNodeId
+                : null)
+            .FirstOrDefault(startActivityNodeId => startActivityNodeId is not null);
 }

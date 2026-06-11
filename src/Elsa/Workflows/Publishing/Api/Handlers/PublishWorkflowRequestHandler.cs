@@ -95,7 +95,8 @@ public sealed class PublishWorkflowRequestHandler(
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var composition = CompileComposition(activity.Composition, activityRows);
+        var childSlots = CompileChildSlots(activity.ChildSlots, activityRows);
+        var connectionSlots = CompileConnectionSlots(activity.ConnectionSlots);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -121,28 +122,54 @@ public sealed class PublishWorkflowRequestHandler(
             {
                 ["authoredNodeId"] = activity.NodeId
             },
-            composition: composition);
+            childSlots: childSlots,
+            connectionSlots: connectionSlots);
     }
 
-    private static ExecutableActivityComposition? CompileComposition(
-        ActivityComposition? composition,
+    private static IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
+        IEnumerable<ActivityChildSlot>? childSlots,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
-        if (composition is null)
-            return null;
-
-        var activities = composition.Activities
-            .Select(activity => CompileNode(activity, activityRows))
+        return (childSlots ?? [])
+            .Select(slot => new ExecutableChildSlot(
+                MapSlotName(slot.Name),
+                slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray(),
+                MapSlotMetadata(slot.Metadata)))
             .ToArray();
-        var connections = composition.Connections
-            .Select(connection => new ExecutableEdge(
-                connection.Source.ActivityNodeId,
-                connection.Source.Port,
-                connection.Target.ActivityNodeId,
-                connection.Target.Port))
-            .ToArray();
+    }
 
-        return new ExecutableActivityComposition(activities, connections, composition.StartActivityNodeId);
+    private static IReadOnlyCollection<ExecutableConnectionSlot> CompileConnectionSlots(IEnumerable<ActivityConnectionSlot>? connectionSlots)
+    {
+        return (connectionSlots ?? [])
+            .Select(slot => new ExecutableConnectionSlot(
+                MapSlotName(slot.Name),
+                slot.Connections
+                    .Select(connection => new ExecutableEdge(
+                        connection.Source.ActivityNodeId,
+                        connection.Source.Port,
+                        connection.Target.ActivityNodeId,
+                        connection.Target.Port))
+                    .ToArray()))
+            .ToArray();
+    }
+
+    private static string MapSlotName(string name)
+    {
+        return name;
+    }
+
+    private static IReadOnlyDictionary<string, string> MapSlotMetadata(IReadOnlyDictionary<string, string>? metadata)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in metadata ?? new Dictionary<string, string>())
+        {
+            var mappedKey = string.Equals(key, ActivityChildSlotMetadataKeys.StartActivityNodeId, StringComparison.Ordinal)
+                ? ExecutableChildSlotMetadataKeys.StartActivityId
+                : key;
+            result[mappedKey] = value;
+        }
+
+        return result;
     }
 
     private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
@@ -211,7 +238,7 @@ public sealed class PublishWorkflowRequestHandler(
             version.Version,
             rootActivity.ExecutableNodeId,
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
-                .Select(node => $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{node.Composition?.StartActivityId}")),
+                .Select(FormatNode)),
             string.Join('|', connections
                 .OrderBy(edge => edge.SourceNodeId, StringComparer.Ordinal)
                 .ThenBy(edge => edge.SourcePort, StringComparer.Ordinal)
@@ -232,6 +259,25 @@ public sealed class PublishWorkflowRequestHandler(
         return $"{input.Key}={input.Value.LiteralValue?.GetRawText()}[{metadata}]";
     }
 
+    private static string FormatNode(ExecutableNode node)
+    {
+        var childSlots = string.Join(',', node.ChildSlots
+            .OrderBy(slot => slot.Name, StringComparer.Ordinal)
+            .Select(slot =>
+            {
+                var metadata = string.Join(';', slot.Metadata
+                    .OrderBy(item => item.Key, StringComparer.Ordinal)
+                    .Select(item => $"{item.Key}={item.Value}"));
+                var activities = string.Join(';', slot.Activities.Select(activity => activity.ExecutableNodeId).Order(StringComparer.Ordinal));
+                return $"{slot.Name}[{metadata}]({activities})";
+            }));
+        var connectionSlots = string.Join(',', node.ConnectionSlots
+            .OrderBy(slot => slot.Name, StringComparer.Ordinal)
+            .Select(slot => $"{slot.Name}({slot.Connections.Count})"));
+
+        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}:{connectionSlots}";
+    }
+
     private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
     {
         var stack = new Stack<ActivityNode>();
@@ -242,7 +288,7 @@ public sealed class PublishWorkflowRequestHandler(
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in node.Composition?.Activities ?? [])
+            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }
@@ -257,7 +303,7 @@ public sealed class PublishWorkflowRequestHandler(
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in node.Composition?.Activities ?? [])
+            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }
@@ -265,7 +311,7 @@ public sealed class PublishWorkflowRequestHandler(
     private static IEnumerable<ExecutableEdge> FlattenExecutableConnections(ExecutableNode rootActivity)
     {
         foreach (var node in FlattenExecutableActivities(rootActivity))
-            foreach (var connection in node.Composition?.Connections ?? [])
+            foreach (var connection in node.ConnectionSlots.SelectMany(slot => slot.Connections))
                 yield return connection;
     }
 }

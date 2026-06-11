@@ -21,7 +21,7 @@ public sealed class WorkflowExecutable
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
 
-        ValidateComposition(rootActivity);
+        ValidateChildSlots(rootActivity);
         var nodeSnapshot = Flatten(rootActivity).ToArray();
 
         Identity = identity;
@@ -43,25 +43,31 @@ public sealed class WorkflowExecutable
     public DateTimeOffset? PublishedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
 
-    private static void ValidateComposition(ExecutableNode rootActivity)
+    private static void ValidateChildSlots(ExecutableNode rootActivity)
     {
         foreach (var node in Flatten(rootActivity))
         {
-            if (node.Composition is not { } composition)
-                continue;
-
-            var childIds = composition.Activities.Select(activity => activity.ExecutableNodeId).ToHashSet(StringComparer.Ordinal);
-            foreach (var edge in composition.Connections)
+            var childIds = node.ChildSlots
+                .SelectMany(slot => slot.Activities)
+                .Select(activity => activity.ExecutableNodeId)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var edge in node.ConnectionSlots.SelectMany(slot => slot.Connections))
             {
                 if (!childIds.Contains(edge.SourceNodeId))
-                    throw new ArgumentException($"Executable composition edge source node '{edge.SourceNodeId}' does not exist.");
+                    throw new ArgumentException($"Executable connection slot edge source node '{edge.SourceNodeId}' does not exist.");
 
                 if (!childIds.Contains(edge.TargetNodeId))
-                    throw new ArgumentException($"Executable composition edge target node '{edge.TargetNodeId}' does not exist.");
+                    throw new ArgumentException($"Executable connection slot edge target node '{edge.TargetNodeId}' does not exist.");
             }
 
-            if (composition.StartActivityId is not null && !childIds.Contains(composition.StartActivityId))
-                throw new ArgumentException($"Executable composition start activity '{composition.StartActivityId}' does not exist.");
+            foreach (var childSlot in node.ChildSlots)
+            {
+                if (!childSlot.Metadata.TryGetValue(ExecutableChildSlotMetadataKeys.StartActivityId, out var startActivityId))
+                    continue;
+
+                if (!childIds.Contains(startActivityId))
+                    throw new ArgumentException($"Executable child slot start activity '{startActivityId}' does not exist.");
+            }
         }
     }
 
@@ -75,7 +81,7 @@ public sealed class WorkflowExecutable
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in node.Composition?.Activities ?? [])
+            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }
@@ -151,26 +157,61 @@ public sealed class ExecutableEdge
 }
 
 /// <summary>
-/// Compiled composition state owned by an executable activity.
+/// Compiled child activity slot owned by a specific executable activity contract.
 /// </summary>
-public sealed class ExecutableActivityComposition
+public sealed class ExecutableChildSlot
 {
-    public ExecutableActivityComposition(
+    public ExecutableChildSlot(
+        string name,
         IReadOnlyCollection<ExecutableNode> activities,
-        IReadOnlyCollection<ExecutableEdge> connections,
-        string? startActivityId = null)
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(activities);
-        ArgumentNullException.ThrowIfNull(connections);
 
+        Name = name;
         Activities = Array.AsReadOnly(activities.ToArray());
-        Connections = Array.AsReadOnly(connections.ToArray());
-        StartActivityId = startActivityId;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata ?? new Dictionary<string, string>());
     }
 
+    public string Name { get; }
     public IReadOnlyCollection<ExecutableNode> Activities { get; }
+    public IReadOnlyDictionary<string, string> Metadata { get; }
+}
+
+/// <summary>
+/// Compiled connection slot owned by a specific executable activity contract.
+/// </summary>
+public sealed class ExecutableConnectionSlot
+{
+    public ExecutableConnectionSlot(
+        string name,
+        IReadOnlyCollection<ExecutableEdge> connections)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(connections);
+
+        Name = name;
+        Connections = Array.AsReadOnly(connections.ToArray());
+    }
+
+    public string Name { get; }
     public IReadOnlyCollection<ExecutableEdge> Connections { get; }
-    public string? StartActivityId { get; }
+}
+
+public static class ExecutableChildSlotNames
+{
+    public const string Activities = nameof(Activities);
+    public const string Connections = nameof(Connections);
+    public const string Body = nameof(Body);
+    public const string Then = nameof(Then);
+    public const string Else = nameof(Else);
+    public const string Root = nameof(Root);
+}
+
+public static class ExecutableChildSlotMetadataKeys
+{
+    public const string StartActivityId = nameof(StartActivityId);
 }
 
 /// <summary>
@@ -188,7 +229,8 @@ public sealed class ExecutableNode
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
         IReadOnlyDictionary<string, string> metadata,
-        ExecutableActivityComposition? composition = null)
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        IReadOnlyCollection<ExecutableConnectionSlot>? connectionSlots = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -223,7 +265,8 @@ public sealed class ExecutableNode
         InputBindings = new ReadOnlyDictionary<string, RuntimeInputBinding>(inputBindingSnapshot);
         OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
-        Composition = composition;
+        ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
+        ConnectionSlots = Array.AsReadOnly((connectionSlots ?? []).ToArray());
     }
 
     public string ExecutableNodeId { get; }
@@ -235,7 +278,8 @@ public sealed class ExecutableNode
     public IReadOnlyDictionary<string, RuntimeInputBinding> InputBindings { get; }
     public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
-    public ExecutableActivityComposition? Composition { get; }
+    public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
+    public IReadOnlyCollection<ExecutableConnectionSlot> ConnectionSlots { get; }
 }
 
 /// <summary>

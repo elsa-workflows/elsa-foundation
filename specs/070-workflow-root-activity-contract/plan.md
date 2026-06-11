@@ -31,18 +31,19 @@ executable activity ids where needed.
 ## Data Model Direction
 
 - `WorkflowDefinitionState.RootActivity : ActivityNode?`
-- `ActivityNode.Composition : ActivityComposition?`
-- `ActivityComposition.Activities : IReadOnlyCollection<ActivityNode>`
-- `ActivityComposition.Connections : IReadOnlyCollection<ActivityConnection>`
-- `ActivityComposition.StartActivityNodeId : string?`
+- `ActivityNode` carries identity and argument state only; no generic composition property.
+- Activity-specific child slots expose child activities according to the activity contract:
+  `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and
+  `Flowchart` activities/connections/start/join state.
 - `WorkflowExecutable.RootActivity : ExecutableNode`
-- `ExecutableNode.Composition : ExecutableActivityComposition?`
-- `ExecutableActivityComposition.Activities : IReadOnlyCollection<ExecutableNode>`
-- `ExecutableActivityComposition.Connections : IReadOnlyCollection<ExecutableEdge>`
-- `ExecutableActivityComposition.StartActivityNodeId : string?`
-- `WorkflowExecutable.NodesById` remains as a derived index over `RootActivity` and descendants.
+- `ExecutableNode` carries compiled activity identity, descriptor payload, and binding state only; no
+  generic executable composition property.
+- Executable child references are compiled into the activity-specific descriptor/binding payload that
+  owns them.
+- `WorkflowExecutable.NodesById` remains as a derived index over `RootActivity` and descendants
+  discovered through activity-specific child-slot metadata or adapters.
 
-The generic composition records are carrier state only. Runtime behavior for interpreting a
+Generic composition records are forbidden. Runtime behavior for interpreting
 Flowchart/Sequence/StateMachine remains owned by those activity implementations.
 
 Elsa Core alignment note: `Flowchart` is a container activity with its own `Start` and
@@ -56,13 +57,14 @@ scheduling.
 1. Add/update architecture docs and superseding Speckit artifacts.
 2. Update design model records and XML documentation.
 3. Update design API projections, draft creation/clone, diffing, validators, and test helpers.
-4. Update publishing to compile one root activity recursively.
-5. Update runtime executable model to own one root activity and derive lookup tables.
-6. Update runtime start scheduling to schedule the root activity only.
-7. Remove workflow-level executable edge traversal from completion scheduling.
-8. Rewrite focused tests and delete/mark graph-shaped assertions as superseded.
-9. Run targeted design, publishing, runtime, and architecture tests.
-10. Refresh generated maps if source inputs changed and commit the completed work unit.
+4. Add activity-specific child-slot traversal so design validation and publishing can find children without a generic composition carrier.
+5. Update publishing to compile one root activity recursively through child slots.
+6. Update runtime executable model to own one root activity and derive lookup tables through child slots.
+7. Update runtime start scheduling to schedule the root activity only.
+8. Remove workflow-level/generic executable edge traversal from completion scheduling.
+9. Rewrite focused tests and delete/mark graph-shaped/generic-composition assertions as superseded.
+10. Run targeted design, publishing, runtime, and architecture tests.
+11. Refresh generated maps if source inputs changed and commit the completed work unit.
 
 ## Risks
 

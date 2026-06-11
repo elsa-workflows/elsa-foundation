@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 
 /// <summary>
 /// Iterative depth-first walker over an <see cref="ActivityNode"/> tree (root activities +
-/// their nested activity-owned composition state). Iterative, not recursive — the .NET call stack is
+/// their nested activity-specific child slots). Iterative, not recursive — the .NET call stack is
 /// never the bottleneck; <paramref name="maxDepth"/> is a safety net against cyclic /
 /// malformed Draft data.
 /// </summary>
@@ -32,7 +32,7 @@ internal static class ActivityTreeWalker
             if (depth >= maxDepth)
                 continue;
 
-            foreach (var child in node.Composition?.Activities ?? [])
+            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
                 stack.Push((child, depth + 1));
         }
     }
@@ -40,7 +40,7 @@ internal static class ActivityTreeWalker
     public static IEnumerable<ActivityConnection> WalkConnections(ActivityNode? root, int maxDepth)
     {
         foreach (var node in Walk(root, maxDepth))
-            foreach (var connection in node.Composition?.Connections ?? [])
+            foreach (var connection in (node.ConnectionSlots ?? []).SelectMany(slot => slot.Connections))
                 yield return connection;
     }
 }

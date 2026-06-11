@@ -270,7 +270,16 @@ public sealed class RuntimeStartActivityStateTests
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
-            composition: new ExecutableActivityComposition(children, [], children.FirstOrDefault()?.ExecutableNodeId));
+            childSlots:
+            [
+                new ExecutableChildSlot(
+                    ExecutableChildSlotNames.Activities,
+                    children,
+                    new Dictionary<string, string>
+                    {
+                        [ExecutableChildSlotMetadataKeys.StartActivityId] = children.First().ExecutableNodeId
+                    })
+            ]);
 
     private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
         new(

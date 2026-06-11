@@ -42,4 +42,14 @@ public sealed class ActivityVersionIdCollapseTests
         Assert.NotNull(property);
         Assert.Equal(typeof(string), property!.PropertyType);
     }
+
+    [Fact]
+    public void ActivityNode_has_no_generic_Composition_property()
+    {
+        var members = typeof(ActivityNode)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(p => p.Name);
+
+        Assert.DoesNotContain("Composition", members);
+    }
 }

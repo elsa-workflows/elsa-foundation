@@ -273,11 +273,13 @@ This section codifies the rule for the activity catalog. The same shape generali
 Members of State carry **authored content** — the structured representation of what the author drew, declared, and configured:
 
 - Variables (the workflow's variable declarations).
-- The workflow root activity: one authored `RootActivity`. The root can be any activity kind, including a primitive activity, `Sequence`, `Flowchart`, `StateMachine`, or another composite activity. Child activities, flowchart edges, state transitions, start nodes, and similar composition details belong to the owning activity's authored state; they are not workflow-level members.
+- The workflow root activity: one authored `RootActivity`. The root can be any activity kind, including a primitive activity, `Sequence`, `Flowchart`, `StateMachine`, or another composite activity. Child activities, flowchart edges, state transitions, start nodes, and similar composition details belong to the owning activity's authored contract; they are not workflow-level members.
 - Workflow-level input/output declarations (`Inputs`, `Outputs`).
 - Workflow-level authored options (`WorkflowActivityOptions`, `StrategyOptions`).
 
 This root-activity rule supersedes the earlier provisional `Activities` + `ActivityConnections` workflow-level graph shape. That earlier shape accidentally made every workflow definition a flowchart and is corrected by the Runtime Execution Seam root-activity work unit.
+
+`ActivityNode` itself is not a universal composition carrier. It MUST NOT expose a generic child collection, generic connection list, generic start-child member, or generic executable composition mirror. Activity-specific child ownership is expressed through the activity's own contract: for example `Sequence` owns ordered child activity slots, `If` owns `Then` / `Else`, `ForEach` owns `Body`, `Composite` owns `Root`, and `Flowchart` owns its activities, connections, start selection, and join rules. Design validation, publishing, and runtime lookup tables may discover those children through explicit child-slot metadata or activity-specific adapters, but they must not make every activity look like a flowchart-shaped container.
 
 #### §E2.9.2 Out of scope of `WorkflowDefinitionState`
 

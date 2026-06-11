@@ -280,7 +280,10 @@ public sealed class RuntimeBookmarkResumeContractTests
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
-            composition: new ExecutableActivityComposition(nodeSnapshot.Skip(1).ToArray(), [], null));
+            childSlots:
+            [
+                new ExecutableChildSlot(ExecutableChildSlotNames.Activities, nodeSnapshot.Skip(1).ToArray())
+            ]);
     }
 
     private ExecutableNode NewDeliveryNode() =>

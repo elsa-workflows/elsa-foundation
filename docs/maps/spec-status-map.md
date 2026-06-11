@@ -87,4 +87,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 9 | 0 | - |
 | [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Draft | - | 7 | 0 | - |
 | [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 9 | 1 | - |
-| [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 11 | 2 | superseded |
+| [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 13 | 0 | superseded |

@@ -15,13 +15,18 @@ public static class WorkflowDefinitionDraftStateExtensions
             return null;
 
         var updated = node.NodeId == nodeId ? mutate(node) : node;
-        if (updated.Composition is not { } composition)
+        if (updated.ChildSlots is null)
             return updated;
 
-        var activities = composition.Activities
-            .Select(activity => Mutate(activity, nodeId, mutate)!)
+        var childSlots = updated.ChildSlots
+            .Select(slot => slot with
+            {
+                Activities = slot.Activities
+                    .Select(activity => Mutate(activity, nodeId, mutate)!)
+                    .ToArray()
+            })
             .ToArray();
 
-        return updated with { Composition = composition with { Activities = activities } };
+        return updated with { ChildSlots = childSlots };
     }
 }

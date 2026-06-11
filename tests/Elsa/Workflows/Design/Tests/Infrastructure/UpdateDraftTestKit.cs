@@ -75,8 +75,7 @@ internal static class UpdateDraftTestKit
             NodeId: nodeId,
             ActivityVersionId: activityVersionId,
             Inputs: inputs ?? [],
-            Outputs: outputs ?? [],
-            Composition: null);
+            Outputs: outputs ?? []);
 
     public static VariableDefinition Variable(string referenceKey, string name, Type? type = null) =>
         new(referenceKey, name, TypeInformation.FromType(type ?? typeof(string)), null, null);
@@ -116,6 +115,23 @@ internal static class UpdateDraftTestKit
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            Composition: new ActivityComposition(activitySnapshot, connectionSnapshot, startActivityNodeId));
+            ChildSlots:
+            [
+                new ActivityChildSlot(
+                    ActivityChildSlotNames.Activities,
+                    activitySnapshot,
+                    startActivityNodeId is null
+                        ? null
+                        : new Dictionary<string, string>
+                        {
+                            [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                        })
+            ],
+            ConnectionSlots: connectionSnapshot.Length == 0
+                ? null
+                :
+                [
+                    new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connectionSnapshot)
+                ]);
     }
 }

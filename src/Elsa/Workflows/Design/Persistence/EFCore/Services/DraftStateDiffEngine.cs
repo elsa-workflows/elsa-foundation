@@ -237,7 +237,7 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in node.Composition?.Activities ?? [])
+            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }
@@ -245,7 +245,7 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
     private static IEnumerable<ActivityConnection> FlattenConnections(ActivityNode? root)
     {
         foreach (var node in FlattenActivities(root))
-            foreach (var connection in node.Composition?.Connections ?? [])
+            foreach (var connection in (node.ConnectionSlots ?? []).SelectMany(slot => slot.Connections))
                 yield return connection;
     }
 }

@@ -67,6 +67,16 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void ExecutableNode_has_no_generic_Composition_property()
+    {
+        var members = typeof(ExecutableNode)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(p => p.Name);
+
+        Assert.DoesNotContain("Composition", members);
+    }
+
+    [Fact]
     public void ExecutableEdge_RequiresEndpointPorts()
     {
         Assert.Throws<ArgumentException>(() => new ExecutableEdge("source", "", "target", "In"));

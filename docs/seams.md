@@ -159,9 +159,10 @@ flowchart LR
 ```
 
 Note the nesting: **Bridge 2 uses Bridge 1.** Compiling a workflow means compiling the root activity
-and any child activities owned by composite activity state. Flowchart edges, sequence ordering, and
-state transitions are activity-owned composition details; they do not turn `WorkflowDefinitionState`
-or `WorkflowExecutable` into flowchart containers.
+and any child activities exposed by activity-specific child slots. Flowchart edges, sequence
+ordering, branch slots, loop bodies, and state transitions are activity-owned contract details; they
+do not turn `WorkflowDefinitionState`, `ActivityNode`, `WorkflowExecutable`, or `ExecutableNode`
+into generic composition containers.
 
 At runtime the published `WorkflowExecutable` is the **only** thing the Workflows.Runtime seam needs;
 the design-side documents are reachable by foreign key but are never required to execute (the
@@ -178,7 +179,7 @@ Seams are where the domain will *expand*, and they tell you where:
 - **Today:** `construct/{activityId}` constructs one activity (construct-only; no value binding).
 - **Next:** map author **values** — join `ArgumentState` onto typed arguments through the expression
   system. The `MAP` box in Bridge 1 fills in.
-- **Then:** compile a whole root activity — Bridge 1 recurses through activity-owned composition, and
+- **Then:** compile a whole root activity — Bridge 1 recurses through activity-specific child slots, and
   the `Elsa.Workflows.Publishing.*` feature grows from one endpoint into a compile-and-publish
   sub-domain.
 

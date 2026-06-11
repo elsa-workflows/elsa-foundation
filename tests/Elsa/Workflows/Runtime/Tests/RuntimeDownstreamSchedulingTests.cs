@@ -520,7 +520,20 @@ public sealed class RuntimeDownstreamSchedulingTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            composition: new ExecutableActivityComposition(nodeSnapshot, edges, nodeSnapshot.FirstOrDefault()?.ExecutableNodeId));
+            childSlots:
+            [
+                new ExecutableChildSlot(
+                    ExecutableChildSlotNames.Activities,
+                    nodeSnapshot,
+                    new Dictionary<string, string>
+                    {
+                        [ExecutableChildSlotMetadataKeys.StartActivityId] = nodeSnapshot.First().ExecutableNodeId
+                    })
+            ],
+            connectionSlots:
+            [
+                new ExecutableConnectionSlot(ExecutableChildSlotNames.Connections, edges)
+            ]);
     }
 
     private static ExecutableNode NewNode(string nodeId)

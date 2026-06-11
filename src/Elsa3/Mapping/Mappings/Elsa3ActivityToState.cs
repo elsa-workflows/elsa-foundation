@@ -24,16 +24,34 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         var startActivityNodeId = childActivities
             .FirstOrDefault(activity => source.Activities?.FirstOrDefault(sourceActivity => sourceActivity.NodeId == activity.NodeId)?.CustomProperties?.CanStartWorkflow == true)
             ?.NodeId;
-        var composition = childActivities.Length == 0 && connections.Length == 0
+        var childSlots = childActivities.Length == 0
             ? null
-            : new ActivityComposition(childActivities, connections, startActivityNodeId);
+            : new[]
+            {
+                new ActivityChildSlot(
+                    ActivityChildSlotNames.Activities,
+                    childActivities,
+                    startActivityNodeId is null
+                        ? null
+                        : new Dictionary<string, string>
+                        {
+                            [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                        })
+            };
+        var connectionSlots = connections.Length == 0
+            ? null
+            : new[]
+            {
+                new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connections)
+            };
 
         return new ActivityNode(
             source.NodeId,
             version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
             inputs,
             outputs,
-            composition
+            childSlots,
+            connectionSlots
         );
         // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata

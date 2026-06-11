@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Baseline validator. Detects orphaned child activities inside activity-owned composition
+/// Baseline validator. Detects orphaned child activities inside activity-owned graph slots
 /// state. The workflow root activity itself is never an orphan.
 /// </summary>
 public sealed class OrphanActivityValidator : IDraftValidator
@@ -21,17 +21,25 @@ public sealed class OrphanActivityValidator : IDraftValidator
 
     private static void CheckComposition(ActivityNode? owner, ICollection<ValidationError> errors)
     {
-        if (owner?.Composition is not { } composition)
+        if (owner?.ChildSlots is null)
             return;
 
-        var connections = composition.Connections.ToList();
-        var startActivityNodeId = composition.StartActivityNodeId;
+        var childSlots = owner.ChildSlots.ToArray();
+        var connections = (owner.ConnectionSlots ?? [])
+            .SelectMany(slot => slot.Connections)
+            .ToList();
+        var startActivityNodeIds = childSlots
+            .Select(slot => slot.Metadata?.TryGetValue(ActivityChildSlotMetadataKeys.StartActivityNodeId, out var startActivityNodeId) == true
+                ? startActivityNodeId
+                : null)
+            .Where(startActivityNodeId => startActivityNodeId is not null)
+            .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var node in composition.Activities)
+        foreach (var node in childSlots.SelectMany(slot => slot.Activities))
         {
             var hasInbound = connections.Any(c => c.Target.ActivityNodeId == node.NodeId);
             var hasOutbound = connections.Any(c => c.Source.ActivityNodeId == node.NodeId);
-            if (hasInbound || hasOutbound || string.Equals(startActivityNodeId, node.NodeId, StringComparison.Ordinal))
+            if (connections.Count == 0 || hasInbound || hasOutbound || startActivityNodeIds.Contains(node.NodeId))
             {
                 CheckComposition(node, errors);
                 continue;

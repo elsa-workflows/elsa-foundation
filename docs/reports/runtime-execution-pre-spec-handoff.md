@@ -157,16 +157,18 @@ members, which made the workflow itself act like a flowchart. That is not the in
 The naming risk remains, but the stronger rule is now: workflow definitions and workflow executables
 carry one root activity. Runtime must compile that root into a runtime-owned activity descriptor tree.
 If the root is a Flowchart activity, that activity owns its internal graph. If the root is Sequence,
-that activity owns its ordered children. If the root is a primitive, there is no child composition.
+that activity owns its ordered children. If the root is `If`, it owns `Then` / `Else`. If the root is
+`ForEach`, it owns `Body`. If the root is a primitive, there is no child composition. `ActivityNode`
+is not itself a generic composition carrier.
 
 Classification: corrected architecture drift.
 
 The next spec must distinguish at least these concepts before coding:
 
 - Authored root activity: Design-owned `ActivityNode` referenced by `WorkflowDefinitionState.RootActivity`.
-- Authored child activity: Design-owned `ActivityNode` owned by a composite activity's authored composition state.
+- Authored child activity: Design-owned `ActivityNode` reached through an activity-specific child slot or graph member.
 - Executable root activity: Runtime-owned representation referenced by `WorkflowExecutable.RootActivity`.
-- Executable child activity: Runtime-owned representation owned by a compiled composite activity.
+- Executable child activity: Runtime-owned representation reached through an activity-specific executable child slot or graph member.
 - Runtime activity instance: live activity object and execution state for one running workflow execution.
 
 The next spec should decide the runtime activity representation and keep any runtime lookup table

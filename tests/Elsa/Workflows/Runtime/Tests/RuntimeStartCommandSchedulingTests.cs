@@ -278,7 +278,16 @@ public sealed class RuntimeStartCommandSchedulingTests
             inputBindings: root.InputBindings,
             outputCaptures: root.OutputCaptures,
             metadata: root.Metadata,
-            composition: new ExecutableActivityComposition(nodeSnapshot.Skip(1).ToArray(), [], nodeSnapshot.Skip(1).FirstOrDefault()?.ExecutableNodeId));
+            childSlots:
+            [
+                new ExecutableChildSlot(
+                    ExecutableChildSlotNames.Activities,
+                    nodeSnapshot.Skip(1).ToArray(),
+                    new Dictionary<string, string>
+                    {
+                        [ExecutableChildSlotMetadataKeys.StartActivityId] = nodeSnapshot.Skip(1).First().ExecutableNodeId
+                    })
+            ]);
     }
 
     private static WorkflowExecutableIdentity NewIdentity() =>

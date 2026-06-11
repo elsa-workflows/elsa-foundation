@@ -14,7 +14,9 @@ public sealed class OrphanActivityValidatorTests
     [Fact]
     public async Task Orphan_activity_emits_error()
     {
-        var state = State(activities: [Node("orphan")]);
+        var state = State(
+            activities: [Node("start", isStart: true), Node("connected"), Node("orphan")],
+            connections: [Edge("start", "connected")]);
         var errors = await Validate(Validator(), state);
 
         var error = Assert.Single(errors);

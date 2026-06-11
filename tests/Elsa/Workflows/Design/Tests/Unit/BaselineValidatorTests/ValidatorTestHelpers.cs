@@ -49,9 +49,18 @@ internal static class ValidatorTestHelpers
         ActivityVersionId: activityVersionId,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        Composition: childActivities is null
+        ChildSlots: childActivities is null
             ? null
-            : new ActivityComposition(childActivities, [], childActivities.FirstOrDefault()?.NodeId)
+            :
+            [
+                new ActivityChildSlot(
+                    ActivityChildSlotNames.Activities,
+                    childActivities,
+                    new Dictionary<string, string>
+                    {
+                        [ActivityChildSlotMetadataKeys.StartActivityNodeId] = childActivities.FirstOrDefault()?.NodeId ?? string.Empty
+                    })
+            ]
     );
 
     public static ActivityConnection Edge(string sourceNodeId, string targetNodeId) =>
@@ -83,7 +92,22 @@ internal static class ValidatorTestHelpers
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            Composition: new ActivityComposition(activitySnapshot, connections ?? [], startActivityNodeId));
+            ChildSlots:
+            [
+                new ActivityChildSlot(
+                    ActivityChildSlotNames.Activities,
+                    activitySnapshot,
+                    startActivityNodeId is null
+                        ? null
+                        : new Dictionary<string, string>
+                        {
+                            [ActivityChildSlotMetadataKeys.StartActivityNodeId] = startActivityNodeId
+                        })
+            ],
+            ConnectionSlots:
+            [
+                new ActivityConnectionSlot(ActivityChildSlotNames.Connections, connections ?? [])
+            ]);
     }
 
     private sealed class StubDraft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft
