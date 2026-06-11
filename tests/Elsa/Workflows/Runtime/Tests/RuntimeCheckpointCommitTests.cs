@@ -243,6 +243,37 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenPendingOutboxRecordFails()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var failure = new InvalidOperationException("pending outbox failed");
+        var outboxStore = new RecordingOutboxStore(events, failOnPendingItemId: "commit-1:intent-2", failure: failure);
+        var commit = NewCommit(
+            RuntimeCheckpointNames.PostCommitIntentRecorded,
+            [
+                NewIntent("intent-1"),
+                NewIntent("intent-2")
+            ]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "outbox-pending:commit-1:intent-2"
+            ],
+            events);
+        Assert.Equal(["commit-1:intent-1"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
+        Assert.Empty(dispatcher.Intents);
+        Assert.Empty(outboxStore.Results);
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_ReportsPartialPostCommitIntentDispatchFailures()
     {
         var events = new List<string>();
@@ -298,6 +329,31 @@ public sealed class RuntimeCheckpointCommitTests
             events);
         Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal], outboxStore.Results.Select(result => result.Status));
         Assert.Equal("Intent failed.", outboxStore.Results[1].FailureMessage);
+    }
+
+    [Fact]
+    public async Task CheckpointCommitter_DoesNotMisclassifyDeliveredOutboxRecordFailureAsDispatchFailure()
+    {
+        var events = new List<string>();
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events);
+        var failure = new InvalidOperationException("delivered outbox failed");
+        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.Delivered, failure: failure);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:Delivered"
+            ],
+            events);
+        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
+        Assert.Empty(outboxStore.Results);
     }
 
     [Fact]
@@ -1445,15 +1501,23 @@ public sealed class RuntimeCheckpointCommitTests
         }
     }
 
-    private sealed class RecordingOutboxStore(List<string>? events = null) : IRuntimePostCommitOutboxStore
+    private sealed class RecordingOutboxStore(
+        List<string>? events = null,
+        string? failOnPendingItemId = null,
+        RuntimePostCommitOutboxStatus? failOnResultStatus = null,
+        Exception? failure = null) : IRuntimePostCommitOutboxStore
     {
         public List<RuntimePostCommitOutboxItem> PendingItems { get; } = [];
         public List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
 
         public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
         {
-            PendingItems.Add(item);
             events?.Add($"outbox-pending:{item.OutboxItemId}");
+
+            if (item.OutboxItemId == failOnPendingItemId)
+                throw failure ?? new InvalidOperationException($"Pending outbox item {item.OutboxItemId} failed.");
+
+            PendingItems.Add(item);
             return ValueTask.CompletedTask;
         }
 
@@ -1462,8 +1526,12 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
         {
-            Results.Add(result);
             events?.Add($"outbox-result:{result.OutboxItemId}:{result.Status}");
+
+            if (result.Status == failOnResultStatus)
+                throw failure ?? new InvalidOperationException($"Outbox result {result.OutboxItemId} failed.");
+
+            Results.Add(result);
             return ValueTask.CompletedTask;
         }
     }

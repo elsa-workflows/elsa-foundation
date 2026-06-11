@@ -12,6 +12,8 @@ When a checkpoint commit is persisted:
 4. Each successful dispatch records `RuntimePostCommitOutboxStatus.Delivered`.
 5. A failed dispatch records `RuntimePostCommitOutboxStatus.FailedFinal` for the failed item, then preserves existing dispatch exception behavior.
 
+If pending outbox recording fails after the checkpoint write succeeds, immediate dispatch does not start. Dispatching without a pending outbox record is not treated as equivalent to the no-store composition because recovery would no longer know that the post-commit intent exists.
+
 ## Item Identity
 
 The default outbox item ID is deterministic:

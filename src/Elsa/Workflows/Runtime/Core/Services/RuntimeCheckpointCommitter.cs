@@ -53,8 +53,6 @@ public sealed class RuntimeCheckpointCommitter
             try
             {
                 await _postCommitIntentDispatcher.DispatchAsync(intent, cancellationToken);
-                await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.Delivered, null, cancellationToken);
-                dispatchedIntentIds.Add(intent.IntentId);
             }
             catch (OperationCanceledException)
             {
@@ -76,6 +74,9 @@ public sealed class RuntimeCheckpointCommitter
                     undispatchedIntentIds,
                     exception);
             }
+
+            dispatchedIntentIds.Add(intent.IntentId);
+            await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.Delivered, null, cancellationToken);
         }
 
         return decision;

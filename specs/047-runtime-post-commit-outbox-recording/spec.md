@@ -11,6 +11,7 @@
 2. Given post-commit dispatch succeeds, then the outbox item records a delivered result after delivery.
 3. Given post-commit dispatch fails, then the failed item records a final failure before the committer reports the dispatch exception.
 4. Given checkpoint persistence is skipped or fails, then no outbox item is recorded and no post-commit delivery is attempted.
+5. Given pending outbox recording fails after checkpoint persistence succeeds, then immediate dispatch does not start because the recovery record boundary was not established.
 
 ## Requirements
 
@@ -34,4 +35,5 @@
 - Tests prove record-commit-deliver-mark-delivered ordering.
 - Tests prove failed dispatch records failed-final delivery state.
 - Tests prove skipped or failed checkpoint persistence does not record outbox items.
+- Tests prove pending outbox recording failure prevents immediate dispatch.
 - Focused runtime and architecture tests pass.

@@ -33,4 +33,5 @@ Extend `RuntimeCheckpointCommitter` so successful checkpoint writes record post-
 ## Risks
 
 - Immediate dispatch remains best-effort in-process behavior. Durable delivery processors will need ownership, retry policy, and redelivery semantics in later slices.
+- If pending outbox recording fails after a checkpoint write succeeds, immediate dispatch is intentionally aborted because dispatching without the recovery record would weaken the outbox boundary. Durable providers will need transactional checkpoint/outbox storage to close this gap.
 - Outbox result recording after an already successful external side effect can still fail in an in-memory/default composition; durable providers need transactional semantics.
