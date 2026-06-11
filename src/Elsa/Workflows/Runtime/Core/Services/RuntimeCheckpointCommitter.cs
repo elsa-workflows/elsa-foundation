@@ -60,19 +60,19 @@ public sealed class RuntimeCheckpointCommitter
             }
             catch (Exception exception)
             {
-                await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.FailedFinal, FailureMessage(exception), cancellationToken);
-
                 var undispatchedIntentIds = postCommitIntents
                     .Skip(index + 1)
                     .Select(undispatchedIntent => undispatchedIntent.IntentId)
                     .ToArray();
+                var deliveryResultRecordingException = await TryRecordFailedOutboxDeliveryResultAsync(commit, intent, exception, cancellationToken);
 
                 throw new RuntimePostCommitIntentDispatchException(
                     commit.CommitId,
                     intent.IntentId,
                     dispatchedIntentIds.ToArray(),
                     undispatchedIntentIds,
-                    exception);
+                    exception,
+                    deliveryResultRecordingException);
             }
 
             dispatchedIntentIds.Add(intent.IntentId);
@@ -120,6 +120,27 @@ public sealed class RuntimeCheckpointCommitter
             recordedAt: commit.Checkpoint.OccurredAt,
             failureMessage: failureMessage),
             cancellationToken);
+    }
+
+    private async ValueTask<Exception?> TryRecordFailedOutboxDeliveryResultAsync(
+        RuntimeCheckpointCommit commit,
+        RuntimePostCommitIntent intent,
+        Exception dispatchException,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.FailedFinal, FailureMessage(dispatchException), cancellationToken);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
     }
 
     private static string NewOutboxItemId(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>

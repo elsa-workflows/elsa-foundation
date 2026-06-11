@@ -332,6 +332,31 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task CheckpointCommitter_PreservesDispatchFailureWhenFailedOutboxResultRecordingFails()
+    {
+        var events = new List<string>();
+        var dispatchFailure = new InvalidOperationException("Intent failed.");
+        var outboxFailure = new InvalidOperationException("failed-final outbox failed");
+        var writer = new RecordingWriter(events);
+        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-1", failure: dispatchFailure);
+        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.FailedFinal, failure: outboxFailure);
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+
+        Assert.Same(dispatchFailure, exception.InnerException);
+        Assert.Same(outboxFailure, exception.DeliveryResultRecordingException);
+        Assert.Equal(
+            [
+                "write:commit-1",
+                "outbox-pending:commit-1:intent-1",
+                "dispatch:intent-1",
+                "outbox-result:commit-1:intent-1:FailedFinal"
+            ],
+            events);
+    }
+
+    [Fact]
     public async Task CheckpointCommitter_DoesNotMisclassifyDeliveredOutboxRecordFailureAsDispatchFailure()
     {
         var events = new List<string>();
