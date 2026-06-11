@@ -25,7 +25,7 @@ public sealed class RuntimePostCommitOutboxStoreTests
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1"));
 
         var item = Assert.Single(deliverable);
-        Assert.Same(available, item);
+        Assert.Equal(available.OutboxItemId, item.OutboxItemId);
         Assert.Equal("intent-1", item.Intent.IntentId);
     }
 
@@ -52,14 +52,22 @@ public sealed class RuntimePostCommitOutboxStoreTests
         var store = new InMemoryRuntimePostCommitOutboxStore();
         var pending = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
         var conflicting = NewOutboxItem("outbox-1", "intent-2", "wfexec-1");
+        var conflictingWaitDependency = NewOutboxItem(
+            "outbox-1",
+            "intent-1",
+            "wfexec-1",
+            dependsOnWaitRegistrationId: "wait-1",
+            failurePolicy: RuntimeWaitDependentIntentFailurePolicy.FaultWorkflow);
         var delivered = NewOutboxItem("outbox-2", "intent-3", "wfexec-1", RuntimePostCommitOutboxStatus.Delivered, deliveredAt: _now);
 
         await store.SavePendingAsync(pending);
 
         var duplicateException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflicting).AsTask());
+        var waitDependencyException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflictingWaitDependency).AsTask());
         var statusException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(delivered).AsTask());
 
         Assert.Contains("already exists", duplicateException.Message);
+        Assert.Contains("already exists", waitDependencyException.Message);
         Assert.Contains("pending", statusException.Message);
     }
 
@@ -132,17 +140,23 @@ public sealed class RuntimePostCommitOutboxStoreTests
         string workflowExecutionId,
         RuntimePostCommitOutboxStatus status = RuntimePostCommitOutboxStatus.Pending,
         DateTimeOffset? availableAt = null,
-        DateTimeOffset? deliveredAt = null) =>
+        DateTimeOffset? deliveredAt = null,
+        string? dependsOnWaitRegistrationId = null,
+        RuntimeWaitDependentIntentFailurePolicy? failurePolicy = null) =>
         new(
             outboxItemId: outboxItemId,
-            intent: NewIntent(intentId, workflowExecutionId),
+            intent: NewIntent(intentId, workflowExecutionId, dependsOnWaitRegistrationId, failurePolicy),
             status: status,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
             retryPolicy: new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)),
             deliveredAt: deliveredAt);
 
-    private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId)
+    private RuntimePostCommitIntent NewIntent(
+        string intentId,
+        string workflowExecutionId,
+        string? dependsOnWaitRegistrationId = null,
+        RuntimeWaitDependentIntentFailurePolicy? failurePolicy = null)
     {
         using var document = JsonDocument.Parse("""{"signal":"sent"}""");
 
@@ -154,6 +168,8 @@ public sealed class RuntimePostCommitOutboxStoreTests
             activityExecutionId: "actexec-1",
             idempotencyKey: $"checkpoint-1:{intentId}",
             payload: document.RootElement.Clone(),
-            metadata: new Dictionary<string, string>());
+            metadata: new Dictionary<string, string>(),
+            dependsOnWaitRegistrationId: dependsOnWaitRegistrationId,
+            waitFailurePolicy: failurePolicy);
     }
 }

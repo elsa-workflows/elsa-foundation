@@ -93,7 +93,9 @@ public sealed class InMemoryRuntimePostCommitOutboxStore : IRuntimePostCommitOut
         && StringComparer.Ordinal.Equals(existing.Intent.WorkflowExecutionId, item.Intent.WorkflowExecutionId)
         && StringComparer.Ordinal.Equals(existing.Intent.Kind, item.Intent.Kind)
         && StringComparer.Ordinal.Equals(existing.Intent.ActivityExecutionId, item.Intent.ActivityExecutionId)
-        && StringComparer.Ordinal.Equals(existing.Intent.IdempotencyKey, item.Intent.IdempotencyKey);
+        && StringComparer.Ordinal.Equals(existing.Intent.IdempotencyKey, item.Intent.IdempotencyKey)
+        && StringComparer.Ordinal.Equals(existing.Intent.DependsOnWaitRegistrationId, item.Intent.DependsOnWaitRegistrationId)
+        && existing.Intent.WaitFailurePolicy == item.Intent.WaitFailurePolicy;
 
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {
