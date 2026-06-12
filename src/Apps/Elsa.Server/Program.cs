@@ -1,9 +1,9 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Management.Api;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
-using Elsa.Server.ShellManagement;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;

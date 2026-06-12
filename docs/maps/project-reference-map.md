@@ -7,14 +7,14 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 78
-- Test projects: 15
-- Direct project references: 324
+- Test projects: 16
+- Direct project references: 329
 
 ## Projects
 
 | Project | Kind | Domain | Target | Packable | Direct project references |
 |---|---|---|---|---|---|
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | net10.0 | default | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | net10.0 | default | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Events.Core<br>Elsa.Primitives |
@@ -100,6 +100,7 @@ Records direct project references only.
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | net10.0 | false | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Groundwork.Relational<br>Groundwork.Sqlite |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
@@ -124,6 +125,7 @@ Records direct project references only.
 | Elsa.Persistence | 4 | 1 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 0 |
+| Elsa.Samples | 0 | 1 |
 | Elsa.Serialization | 3 | 0 |
 | Elsa.Server | 1 | 0 |
 | Elsa.Tasks | 3 | 0 |

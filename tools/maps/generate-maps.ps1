@@ -35,6 +35,48 @@ function Get-ChildText {
     return ""
 }
 
+$centralPackageVersionsPath = Join-Path $repoRoot "Directory.Packages.props"
+
+function Read-CentralPackageVersions {
+    if (-not (Test-Path -LiteralPath $centralPackageVersionsPath)) { return @() }
+    [xml]$xml = Get-Content -LiteralPath $centralPackageVersionsPath -Raw
+    $versions = @()
+    foreach ($package in @($xml.Project.SelectNodes("ItemGroup/PackageVersion"))) {
+        if ($null -eq $package) { continue }
+        $versions += [pscustomobject]@{
+            Id = $package.GetAttribute("Include")
+            Version = $package.GetAttribute("Version")
+            Condition = $package.GetAttribute("Condition")
+        }
+    }
+    return @($versions)
+}
+
+$centralPackageVersions = @(Read-CentralPackageVersions)
+
+function Test-CentralPackageVersionCondition {
+    param([string]$Condition, [string]$ProjectName)
+    if ([string]::IsNullOrWhiteSpace($Condition)) { return $true }
+    $equals = "'`$(MSBuildProjectName)' == '$ProjectName'"
+    $notEquals = "'`$(MSBuildProjectName)' != '$ProjectName'"
+    if ($Condition -eq $equals) { return $true }
+    if ($Condition -eq $notEquals) { return $false }
+    if ($Condition -match "^'\$\(MSBuildProjectName\)' != '(.+)'$") { return $Matches[1] -ne $ProjectName }
+    return $false
+}
+
+function Get-CentralPackageVersion {
+    param([string]$Id, [string]$ProjectName)
+    $selected = ""
+    foreach ($package in $centralPackageVersions) {
+        if ($package.Id -ne $Id) { continue }
+        if (Test-CentralPackageVersionCondition -Condition $package.Condition -ProjectName $ProjectName) {
+            $selected = $package.Version
+        }
+    }
+    return $selected
+}
+
 function Get-DomainGroup {
     param([string]$ProjectName)
     if ($ProjectName -eq "Server") { return "Server" }
@@ -75,6 +117,7 @@ function Read-Projects {
         $isPackable = ($propertyGroups | ForEach-Object { Get-ChildText -Node $_ -Name "IsPackable" } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
         if ([string]::IsNullOrWhiteSpace($isPackable)) { $isPackable = "default" }
 
+        $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $projectReferences = @()
         $packageReferences = @()
         foreach ($itemGroup in @($xml.Project.SelectNodes("ItemGroup"))) {
@@ -93,6 +136,7 @@ function Read-Projects {
                 if ($null -eq $package) { continue }
                 $include = Get-XmlValue -Node $package -Name "Include"
                 $version = Get-XmlValue -Node $package -Name "Version"
+                if ([string]::IsNullOrWhiteSpace($version)) { $version = Get-CentralPackageVersion -Id $include -ProjectName $projectName }
                 if (-not [string]::IsNullOrWhiteSpace($include)) {
                     $packageReferences += [pscustomobject]@{
                         Id = $include
@@ -102,7 +146,6 @@ function Read-Projects {
             }
         }
 
-        $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $projects += [pscustomobject]@{
             Name = $projectName
             Path = To-RepoPath $file.FullName
@@ -234,6 +277,11 @@ function Get-InputFiles {
         $files += Get-ChildItem -LiteralPath $specsRoot -Recurse -File -Filter "*.md"
     }
 
+    $directoryPackagesProps = Join-Path $repoRoot "Directory.Packages.props"
+    if (Test-Path -LiteralPath $directoryPackagesProps) {
+        $files += Get-Item -LiteralPath $directoryPackagesProps
+    }
+
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-maps.ps1")
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-maps.sh")
     $files += Get-Item -LiteralPath (Join-Path $repoRoot "tools\maps\generate-domain-map.ps1")
@@ -269,7 +317,7 @@ function Get-GitHead {
 
 function Get-RelevantGitDirty {
     try {
-        $status = & git -C $repoRoot status --porcelain -- src tests specs tools/maps 2>$null
+        $status = & git -C $repoRoot status --porcelain -- src tests specs tools/maps Directory.Packages.props 2>$null
         if ($LASTEXITCODE -eq 0) { return @($status).Count -gt 0 }
     } catch {}
     return $null
