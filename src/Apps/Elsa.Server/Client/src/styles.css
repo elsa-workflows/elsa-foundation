@@ -764,7 +764,7 @@ p {
   padding: 2px 0;
 }
 
-.console-line span {
+.console-line > span {
   color: #7f9298;
 }
 
@@ -779,6 +779,112 @@ p {
 
 .console-line.stdout code {
   color: #bde7d3;
+}
+
+.console-ansi-bold {
+  font-weight: 760;
+}
+
+.console-ansi-dim {
+  opacity: 0.72;
+}
+
+.console-ansi-fg-black,
+.console-ansi-fg-bright-black {
+  color: #7f9298;
+}
+
+.console-ansi-fg-red {
+  color: #ff8f8a;
+}
+
+.console-ansi-fg-green {
+  color: #64d99c;
+}
+
+.console-ansi-fg-yellow {
+  color: #e9c46a;
+}
+
+.console-ansi-fg-blue {
+  color: #8dbbff;
+}
+
+.console-ansi-fg-magenta {
+  color: #d7a6ff;
+}
+
+.console-ansi-fg-cyan {
+  color: #72d7df;
+}
+
+.console-ansi-fg-white,
+.console-ansi-fg-bright-white {
+  color: #f2f7f8;
+}
+
+.console-ansi-fg-bright-red {
+  color: #ffb8b5;
+}
+
+.console-ansi-fg-bright-green {
+  color: #bde7d3;
+}
+
+.console-ansi-fg-bright-yellow {
+  color: #ffe08a;
+}
+
+.console-ansi-fg-bright-blue {
+  color: #b7d3ff;
+}
+
+.console-ansi-fg-bright-magenta {
+  color: #eccbff;
+}
+
+.console-ansi-fg-bright-cyan {
+  color: #a3edf0;
+}
+
+.console-ansi-bg-black,
+.console-ansi-bg-bright-black {
+  background: #1e2a2e;
+}
+
+.console-ansi-bg-red,
+.console-ansi-bg-bright-red {
+  background: rgba(255, 123, 117, 0.18);
+}
+
+.console-ansi-bg-green,
+.console-ansi-bg-bright-green {
+  background: rgba(71, 201, 139, 0.18);
+}
+
+.console-ansi-bg-yellow,
+.console-ansi-bg-bright-yellow {
+  background: rgba(224, 164, 77, 0.2);
+}
+
+.console-ansi-bg-blue,
+.console-ansi-bg-bright-blue {
+  background: rgba(141, 187, 255, 0.18);
+}
+
+.console-ansi-bg-magenta,
+.console-ansi-bg-bright-magenta {
+  background: rgba(215, 166, 255, 0.18);
+}
+
+.console-ansi-bg-cyan,
+.console-ansi-bg-bright-cyan {
+  background: rgba(114, 215, 223, 0.18);
+}
+
+.console-ansi-bg-white,
+.console-ansi-bg-bright-white {
+  background: rgba(242, 247, 248, 0.18);
 }
 
 .console-resizing,

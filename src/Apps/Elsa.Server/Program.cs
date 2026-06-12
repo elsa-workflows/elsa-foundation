@@ -45,6 +45,7 @@ builder.Services.AddConsoleLogStreamingHost(options =>
     options.SourceDisplayName = "Elsa.Server";
     options.RecentCapacity = 2_000;
     options.MaxRecentQuerySize = 500;
+    options.PreserveAnsi = true;
 });
 builder.Services.AddConsoleLogStreamingAspNetCore(options =>
 {

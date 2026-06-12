@@ -187,6 +187,43 @@ const defaultConsoleHeight = 232;
 const minConsoleHeight = 140;
 const maxConsoleHeight = 560;
 const minWorkspaceHeight = 260;
+const ansiEscapePattern = /\x1b\[([0-9;]*)m/g;
+const ansiForegroundClasses = {
+  30: "console-ansi-fg-black",
+  31: "console-ansi-fg-red",
+  32: "console-ansi-fg-green",
+  33: "console-ansi-fg-yellow",
+  34: "console-ansi-fg-blue",
+  35: "console-ansi-fg-magenta",
+  36: "console-ansi-fg-cyan",
+  37: "console-ansi-fg-white",
+  90: "console-ansi-fg-bright-black",
+  91: "console-ansi-fg-bright-red",
+  92: "console-ansi-fg-bright-green",
+  93: "console-ansi-fg-bright-yellow",
+  94: "console-ansi-fg-bright-blue",
+  95: "console-ansi-fg-bright-magenta",
+  96: "console-ansi-fg-bright-cyan",
+  97: "console-ansi-fg-bright-white"
+};
+const ansiBackgroundClasses = {
+  40: "console-ansi-bg-black",
+  41: "console-ansi-bg-red",
+  42: "console-ansi-bg-green",
+  43: "console-ansi-bg-yellow",
+  44: "console-ansi-bg-blue",
+  45: "console-ansi-bg-magenta",
+  46: "console-ansi-bg-cyan",
+  47: "console-ansi-bg-white",
+  100: "console-ansi-bg-bright-black",
+  101: "console-ansi-bg-bright-red",
+  102: "console-ansi-bg-bright-green",
+  103: "console-ansi-bg-bright-yellow",
+  104: "console-ansi-bg-bright-blue",
+  105: "console-ansi-bg-bright-magenta",
+  106: "console-ansi-bg-bright-cyan",
+  107: "console-ansi-bg-bright-white"
+};
 
 function getInitialTheme() {
   if (typeof window === "undefined")
@@ -226,6 +263,76 @@ function getInitialConsoleAutoScroll() {
     return true;
 
   return window.localStorage.getItem(consoleAutoScrollStorageKey) !== "false";
+}
+
+function createAnsiState() {
+  return {
+    bold: false,
+    dim: false,
+    foreground: "",
+    background: ""
+  };
+}
+
+function updateAnsiState(state, codes) {
+  for (const code of codes) {
+    if (code === 0) {
+      Object.assign(state, createAnsiState());
+    } else if (code === 1) {
+      state.bold = true;
+      state.dim = false;
+    } else if (code === 2) {
+      state.dim = true;
+      state.bold = false;
+    } else if (code === 22) {
+      state.bold = false;
+      state.dim = false;
+    } else if (code === 39) {
+      state.foreground = "";
+    } else if (code === 49) {
+      state.background = "";
+    } else if (ansiForegroundClasses[code]) {
+      state.foreground = ansiForegroundClasses[code];
+    } else if (ansiBackgroundClasses[code]) {
+      state.background = ansiBackgroundClasses[code];
+    }
+  }
+}
+
+function getAnsiClassName(state) {
+  return [
+    state.bold ? "console-ansi-bold" : "",
+    state.dim ? "console-ansi-dim" : "",
+    state.foreground,
+    state.background
+  ].filter(Boolean).join(" ");
+}
+
+function renderConsoleText(text) {
+  if (!text.includes("\x1b["))
+    return text;
+
+  const segments = [];
+  const state = createAnsiState();
+  let lastIndex = 0;
+  let match;
+
+  ansiEscapePattern.lastIndex = 0;
+  while ((match = ansiEscapePattern.exec(text)) !== null) {
+    if (match.index > lastIndex)
+      segments.push({ text: text.slice(lastIndex, match.index), className: getAnsiClassName(state) });
+
+    const codes = match[1] === "" ? [0] : match[1].split(";").map((value) => Number(value || 0));
+    updateAnsiState(state, codes);
+    lastIndex = ansiEscapePattern.lastIndex;
+  }
+
+  if (lastIndex < text.length)
+    segments.push({ text: text.slice(lastIndex), className: getAnsiClassName(state) });
+
+  return segments.map((segment, index) => segment.className
+    ? <span className={segment.className} key={index}>{segment.text}</span>
+    : segment.text);
 }
 
 export function App() {
@@ -970,7 +1077,7 @@ function ConsolePanel({
         {lines.map((line) => (
           <div className={`console-line ${line.stream}`} key={line.id}>
             <span>{new Date(line.timestamp).toLocaleTimeString()}</span>
-            <code>{line.text}</code>
+            <code>{renderConsoleText(line.text)}</code>
           </div>
         ))}
       </div>
