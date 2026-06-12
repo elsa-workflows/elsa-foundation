@@ -16,7 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CShells.Abstractions" Version="0.0.24" PrivateAssets="all" />
+    <PackageReference Include="CShells.Abstractions" Version="0.0.26" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

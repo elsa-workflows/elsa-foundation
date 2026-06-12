@@ -189,3 +189,31 @@ Accept: application/json
     "strategyOptions": null
   }
 }
+
+> {%
+    client.global.set("sequenceWorkflowVersionId", response.body.version.id);
+%}
+
+### 10. Publish/compile the "Sequence Write Lines" workflow definition version into a WorkflowExecutable.
+# @name publishSequenceWriteLinesWorkflow
+POST {{host}}/publishing/workflows/{{sequenceWorkflowVersionId}}/publish
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+> {%
+    client.global.set("sequenceWorkflowExecutableArtifactId", response.body.artifactId);
+%}
+
+### 11. Execute the published WorkflowExecutable artifact for "Sequence Write Lines".
+### The server console should print:
+###   Sequence line 1
+###   Sequence line 2
+# @name executeSequenceWriteLinesWorkflow
+POST {{host}}/runtime/workflows/{{sequenceWorkflowExecutableArtifactId}}/execute
+Content-Type: application/json
+Accept: application/json
+
+{}
+

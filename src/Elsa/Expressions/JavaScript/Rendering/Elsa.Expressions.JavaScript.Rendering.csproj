@@ -15,7 +15,7 @@
   </ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CShells.Abstractions" Version="0.0.24" />
+		<PackageReference Include="CShells.Abstractions" Version="0.0.26" />
 	</ItemGroup>
 
 

@@ -1,10 +1,17 @@
 <Solution>
+  <Folder Name="/samples/" />
   <Folder Name="/samples/Elsa.Samples.Nuplane.Activities/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
   </Folder>
+  <Folder Name="/solution/">
+    <File Path="NuGet.config" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Apps/" />
   <Folder Name="/src/Apps/Elsa.Server/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/" />
   <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
@@ -86,6 +93,7 @@
   <Folder Name="/src/Elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Primitives/" />
   <Folder Name="/src/Elsa/Primitives/Hosting/">
     <Project Path="src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
   </Folder>
@@ -138,6 +146,7 @@
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
     <Project Path="src/Elsa3/Models/Elsa3.Models.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa3/Activities/" />
   <Folder Name="/src/Elsa3/Activities/Design/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
@@ -150,6 +159,9 @@
     <Project Path="src/Groundwork/SqlServer/Groundwork.SqlServer.csproj" />
     <Project Path="src/Groundwork/Sqlite/Groundwork.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Elsa/" />
+  <Folder Name="/tests/Elsa/Activities/" />
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
   </Folder>
@@ -159,6 +171,7 @@
   <Folder Name="/tests/Elsa/Activities/Sequence/">
     <Project Path="tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Activities/Design/" />
   <Folder Name="/tests/Elsa/Activities/Design/Tests/">
     <Project Path="tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
     <Project Path="tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj" />
@@ -169,15 +182,20 @@
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Samples/" />
+  <Folder Name="/tests/Elsa/Samples/Nuplane/" />
   <Folder Name="/tests/Elsa/Samples/Nuplane/Activities/">
     <Project Path="tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Publishing/" />
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
     <Project Path="tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
@@ -190,6 +208,7 @@
   <Folder Name="/tests/Groundwork/Groundwork.Sqlite.Tests/">
     <Project Path="tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Groundwork/" />
   <Folder Name="/tests/Groundwork/Groundwork.MongoDb.Tests/">
     <Project Path="tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj" />
   </Folder>
