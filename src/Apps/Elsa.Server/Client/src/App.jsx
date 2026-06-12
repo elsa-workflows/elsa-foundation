@@ -698,14 +698,14 @@ export function App() {
 
   async function reloadShells() {
     await runAction("reload", "Reloading all shells...", async () => {
-      await request("/_admin/shells/reload-all", {
+      const response = await request("/_demo/shells/reload", {
         method: "POST",
         body: "{}"
       });
       setPackageAlert(false);
       activityVersionCache.current.clear();
       await refreshState();
-      addConsoleLine("stdout", "Shells reloaded.");
+      addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
   }
 

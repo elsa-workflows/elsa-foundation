@@ -1,5 +1,8 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CShells.Lifecycle;
+using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
 
 namespace Elsa.Server;
@@ -24,6 +27,7 @@ internal static class ElsaDemoApi
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
         group.MapGet("/shells/default", GetDefaultShellAsync);
+        group.MapPost("/shells/reload", ReloadShellsAsync);
         group.MapPut("/shells/default", SaveShellDocumentAsync);
         group.MapPut("/shells/default/features/{featureName}", UpdateFeatureAsync);
 
@@ -52,6 +56,45 @@ internal static class ElsaDemoApi
 
     private static IResult GetPackageEvents(DemoPackageEventStore events, long? afterSequence) =>
         Results.Ok(events.GetEvents(afterSequence));
+
+    private static async Task<IResult> ReloadShellsAsync(IServiceProvider serviceProvider, IShellRegistry shellRegistry, CancellationToken cancellationToken)
+    {
+        var featureDescriptorCount = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
+        var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
+        Console.WriteLine($"Demo shells reloaded after refreshing {featureDescriptorCount} feature descriptor(s) and reloading {reloadResults.Count} active shell(s).");
+
+        return Results.Ok(new DemoReloadShellsResponse(featureDescriptorCount, reloadResults.Count));
+    }
+
+    private static async Task<int> RefreshFeatureCatalogAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        // CShells does not currently expose feature-catalog refresh through a public contract.
+        // The demo reload endpoint needs newly loaded Nuplane feature assemblies to be discoverable before shell reload.
+        var catalogType = AppDomain.CurrentDomain
+            .GetAssemblies()
+            .Select(assembly => assembly.GetType("CShells.Features.RuntimeFeatureCatalog", throwOnError: false))
+            .FirstOrDefault(type => type is not null);
+
+        if (catalogType is null)
+            throw new InvalidOperationException("Could not find the CShells runtime feature catalog type.");
+
+        var catalog = serviceProvider.GetRequiredService(catalogType);
+        var refreshMethod = catalogType.GetMethod("RefreshAsync", BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("Could not find RuntimeFeatureCatalog.RefreshAsync.");
+
+        var refreshTask = refreshMethod.Invoke(catalog, [cancellationToken]) as Task
+            ?? throw new InvalidOperationException("RuntimeFeatureCatalog.RefreshAsync did not return a task.");
+
+        await refreshTask.ConfigureAwait(false);
+
+        var snapshot = refreshTask.GetType().GetProperty("Result")?.GetValue(refreshTask)
+            ?? throw new InvalidOperationException("RuntimeFeatureCatalog.RefreshAsync did not return a snapshot.");
+
+        var featureDescriptors = snapshot.GetType().GetProperty("FeatureDescriptors")?.GetValue(snapshot)
+            ?? throw new InvalidOperationException("The runtime feature catalog snapshot did not expose feature descriptors.");
+
+        return Convert.ToInt32(featureDescriptors.GetType().GetProperty("Count")?.GetValue(featureDescriptors));
+    }
 
     private static async Task<IResult> TriggerPackageReconcileAsync(INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
     {
@@ -237,6 +280,8 @@ internal sealed record DemoReconcileResponse(
 internal sealed record DemoUploadPackageResponse(string FileName, string Path, long Length);
 
 internal sealed record DemoClearPackageDropFolderResponse(string Path, int DeletedFiles, int DeletedDirectories);
+
+internal sealed record DemoReloadShellsResponse(int FeatureDescriptorCount, int ReloadedShellCount);
 
 internal sealed record DemoShellResponse(
     string Path,
