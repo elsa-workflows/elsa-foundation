@@ -28,6 +28,13 @@ export default defineConfig({
   },
   build: {
     outDir: "../wwwroot",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: "assets/[name].js",
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name].[ext]"
+      }
+    }
   }
 });

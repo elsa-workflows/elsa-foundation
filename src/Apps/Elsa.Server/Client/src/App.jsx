@@ -7,8 +7,8 @@ import {
   ChevronRight,
   Circle,
   CloudUpload,
-  Code2,
   FileJson,
+  Moon,
   PackagePlus,
   Play,
   PlugZap,
@@ -17,8 +17,8 @@ import {
   Rocket,
   Save,
   Server,
+  Sun,
   Terminal,
-  Upload
 } from "lucide-react";
 
 const sampleWorkflows = {
@@ -177,8 +177,21 @@ const steps = [
 ];
 
 const initialWorkflow = JSON.stringify(sampleWorkflows.hello.value, null, 2);
+const themeStorageKey = "elsa-demo-theme";
+
+function getInitialTheme() {
+  if (typeof window === "undefined")
+    return "light";
+
+  const storedTheme = window.localStorage.getItem(themeStorageKey);
+  if (storedTheme === "light" || storedTheme === "dark")
+    return storedTheme;
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 export function App() {
+  const [theme, setTheme] = useState(getInitialTheme);
   const [selectedSample, setSelectedSample] = useState("hello");
   const [workflowJson, setWorkflowJson] = useState(initialWorkflow);
   const [workflowVersionId, setWorkflowVersionId] = useState("");
@@ -199,6 +212,11 @@ export function App() {
   const [dropFolder, setDropFolder] = useState("");
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(themeStorageKey, theme);
+  }, [theme]);
 
   const currentStep = useMemo(() => {
     const firstOpen = steps.find((step) => !completed.has(step.key));
@@ -502,6 +520,10 @@ export function App() {
     });
   }
 
+  function toggleTheme() {
+    setTheme((current) => current === "dark" ? "light" : "dark");
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -512,12 +534,24 @@ export function App() {
             <p>{status}</p>
           </div>
         </div>
-        <div className="backend-status">
-          <span className={consoleConnected ? "status-dot online" : "status-dot"} />
-          <span>{consoleConnected ? "Console connected" : "Console offline"}</span>
-          <span className="divider" />
-          <Server size={16} />
-          <span>/default</span>
+        <div className="topbar-actions">
+          <div className="backend-status">
+            <span className={consoleConnected ? "status-dot online" : "status-dot"} />
+            <span>{consoleConnected ? "Console connected" : "Console offline"}</span>
+            <span className="divider" />
+            <Server size={16} />
+            <span>/default</span>
+          </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            <span>{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
         </div>
       </header>
 

@@ -3,13 +3,25 @@
   --bg: #eef2f4;
   --surface: #ffffff;
   --surface-2: #f7f9fa;
+  --surface-3: #f4faf7;
   --ink: #152024;
   --muted: #607078;
   --line: #d8e0e4;
   --line-strong: #c2cdd3;
+  --line-accent: #a7d8d4;
+  --line-dashed: #9fb7bd;
   --accent: #0f8a83;
   --accent-strong: #08736d;
   --accent-soft: #e3f5f2;
+  --control-bg: #ffffff;
+  --control-hover: #f4fbfa;
+  --code-bg: #ffffff;
+  --code-gutter: #f5f8f9;
+  --code-ink: #1d3134;
+  --upload-bg: #f6fbfa;
+  --alert-bg: #fff8ed;
+  --alert-line: #efd2a6;
+  --alert-muted: #7a5a2e;
   --green: #1b9a63;
   --amber: #b56b14;
   --red: #c13e3a;
@@ -17,6 +29,38 @@
   --console-line: #273236;
   --shadow: 0 16px 40px rgba(24, 36, 42, 0.08);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101719;
+  --surface: #172124;
+  --surface-2: #1d292d;
+  --surface-3: #173028;
+  --ink: #eef7f8;
+  --muted: #9fb1b7;
+  --line: #2c3b40;
+  --line-strong: #405157;
+  --line-accent: #1d6e68;
+  --line-dashed: #3b7a7a;
+  --accent: #20b9ad;
+  --accent-strong: #6fe2d8;
+  --accent-soft: #123936;
+  --control-bg: #121b1e;
+  --control-hover: #1b302f;
+  --code-bg: #101719;
+  --code-gutter: #142023;
+  --code-ink: #d7eff0;
+  --upload-bg: #132527;
+  --alert-bg: #342716;
+  --alert-line: #7a5523;
+  --alert-muted: #e0bf86;
+  --green: #47c98b;
+  --amber: #e0a44d;
+  --red: #ff7b75;
+  --console: #080d0f;
+  --console-line: #223036;
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -58,7 +102,7 @@ button:disabled {
   justify-content: space-between;
   padding: 14px 24px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.86);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: blur(16px);
 }
 
@@ -101,14 +145,43 @@ p {
   line-height: 1.35;
 }
 
+.topbar-actions,
 .backend-status,
 .console-tools {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.topbar-actions {
+  justify-content: flex-end;
+}
+
+.backend-status,
+.console-tools {
   color: var(--muted);
   font-size: 12px;
   font-weight: 650;
+}
+
+.theme-toggle {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--accent-strong);
 }
 
 .divider {
@@ -170,13 +243,13 @@ p {
 
 .step.current {
   color: var(--ink);
-  border-color: #a7d8d4;
+  border-color: var(--line-accent);
   background: var(--accent-soft);
 }
 
 .step.complete {
   color: var(--ink);
-  background: #f4faf7;
+  background: var(--surface-3);
 }
 
 .step-icon {
@@ -186,7 +259,7 @@ p {
   place-items: center;
   border-radius: 6px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--control-bg);
 }
 
 .step.current .step-icon {
@@ -196,7 +269,7 @@ p {
 
 .step.complete .step-icon {
   border-color: rgba(27, 154, 99, 0.25);
-  background: #e9f7ef;
+  background: var(--surface-3);
   color: var(--green);
 }
 
@@ -253,7 +326,7 @@ p {
   height: 34px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: white;
+  background: var(--control-bg);
   color: var(--ink);
   padding: 0 10px;
   font-size: 12px;
@@ -275,7 +348,7 @@ p {
 .reload-alert button {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: white;
+  background: var(--control-bg);
   color: var(--ink);
   font-size: 12px;
   font-weight: 720;
@@ -300,7 +373,8 @@ p {
 .small-button:hover,
 .icon-button:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  background: var(--control-hover);
+  color: var(--accent-strong);
 }
 
 .code-editor {
@@ -311,10 +385,10 @@ p {
   resize: none;
   outline: none;
   padding: 18px 20px;
-  color: #1d3134;
+  color: var(--code-ink);
   background:
-    linear-gradient(to right, #f5f8f9 44px, transparent 44px),
-    #ffffff;
+    linear-gradient(to right, var(--code-gutter) 44px, transparent 44px),
+    var(--code-bg);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12.5px;
   line-height: 1.58;
@@ -368,9 +442,9 @@ p {
   gap: 10px;
   padding: 12px;
   margin-bottom: 12px;
-  border: 1px solid #efd2a6;
+  border: 1px solid var(--alert-line);
   border-radius: 6px;
-  background: #fff8ed;
+  background: var(--alert-bg);
   color: var(--amber);
 }
 
@@ -382,7 +456,7 @@ p {
 }
 
 .reload-alert span {
-  color: #7a5a2e;
+  color: var(--alert-muted);
 }
 
 .reload-alert button {
@@ -394,7 +468,7 @@ p {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: white;
+  background: var(--surface);
   margin-bottom: 12px;
 }
 
@@ -425,10 +499,10 @@ p {
   display: grid;
   place-items: center;
   gap: 4px;
-  border: 1px dashed #9fb7bd;
+  border: 1px dashed var(--line-dashed);
   border-radius: 6px;
   color: var(--accent);
-  background: #f6fbfa;
+  background: var(--upload-bg);
   text-align: center;
 }
 
@@ -504,6 +578,8 @@ p {
   height: 34px;
   padding: 0 10px;
   margin-bottom: 8px;
+  background: var(--control-bg);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 650;
 }
@@ -513,8 +589,8 @@ p {
   resize: vertical;
   min-height: 74px;
   padding: 10px;
-  color: #1d3134;
-  background: #fbfcfd;
+  color: var(--code-ink);
+  background: var(--code-bg);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.45;
@@ -660,6 +736,10 @@ p {
   .backend-status {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
   }
 
   .workspace {
