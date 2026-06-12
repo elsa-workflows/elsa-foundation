@@ -2,6 +2,9 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
+using Elsa.Activities.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
 
@@ -26,6 +29,7 @@ internal static class ElsaDemoApi
         group.MapPost("/packages/upload", UploadPackageAsync)
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
+        group.MapPost("/reset", ResetDemoAsync);
         group.MapGet("/shells/default", GetDefaultShellAsync);
         group.MapPost("/shells/reload", ReloadShellsAsync);
         group.MapPut("/shells/default", SaveShellDocumentAsync);
@@ -136,7 +140,68 @@ internal static class ElsaDemoApi
         return Results.Ok(new DemoUploadPackageResponse(fileName, destination, file.Length));
     }
 
-    private static IResult ClearPackageDropFolderAsync(IWebHostEnvironment environment)
+    private static IResult ClearPackageDropFolderAsync(IWebHostEnvironment environment) =>
+        Results.Ok(ClearPackageDropFolder(environment));
+
+    private static async Task<IResult> ResetDemoAsync(
+        IShellRegistry shellRegistry,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        CancellationToken cancellationToken)
+    {
+        var shell = await shellRegistry.GetOrActivateAsync("default", cancellationToken);
+        await using var shellScope = shell.BeginScope();
+
+        var workflows = await ClearWorkflowsAsync(shellScope.ServiceProvider, cancellationToken);
+        var activities = await ClearActivitiesAsync(shellScope.ServiceProvider, cancellationToken);
+        var packages = ClearPackageDropFolder(environment);
+        var reconcile = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
+
+        Console.WriteLine(
+            $"Demo reset completed: {workflows.TotalDeleted} workflow row(s), {activities.TotalDeleted} activity row(s), " +
+            $"{packages.DeletedFiles} package file(s), {packages.DeletedDirectories} package folder(s) deleted, " +
+            $"Nuplane reconcile {reconcile.OutcomeCode} ({reconcile.CorrelationId}).");
+
+        return Results.Ok(new DemoResetResponse(
+            workflows,
+            activities,
+            packages,
+            new DemoResetReconcileResponse(reconcile.OutcomeCode.ToString(), reconcile.CorrelationId, reconcile.ReasonCode)));
+    }
+
+    private static async Task<DemoResetWorkflowCounts> ClearWorkflowsAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var factory = serviceProvider.GetRequiredService<IDbContextFactory<WorkflowsDesignDbContext>>();
+        await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var draftValidations = await dbContext.WorkflowDefinitionDraftValidations.ExecuteDeleteAsync(cancellationToken);
+        var draftLayouts = await dbContext.WorkflowDefinitionDraftLayouts.ExecuteDeleteAsync(cancellationToken);
+        var versionLayouts = await dbContext.WorkflowDefinitionVersionLayouts.ExecuteDeleteAsync(cancellationToken);
+        var drafts = await dbContext.WorkflowDefinitionDrafts.ExecuteDeleteAsync(cancellationToken);
+        var versions = await dbContext.WorkflowDefinitionVersions.ExecuteDeleteAsync(cancellationToken);
+        var definitions = await dbContext.WorkflowDefinitions.ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new DemoResetWorkflowCounts(definitions, versions, drafts, versionLayouts, draftLayouts, draftValidations);
+    }
+
+    private static async Task<DemoResetActivityCounts> ClearActivitiesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    {
+        var factory = serviceProvider.GetRequiredService<IDbContextFactory<ActivitiesDesignDbContext>>();
+        await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var versions = await dbContext.ActivityDefinitionVersions.ExecuteDeleteAsync(cancellationToken);
+        var definitions = await dbContext.ActivityDefinitions.ExecuteDeleteAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return new DemoResetActivityCounts(definitions, versions);
+    }
+
+    private static DemoClearPackageDropFolderResponse ClearPackageDropFolder(IWebHostEnvironment environment)
     {
         var dropFolder = GetPackageDropFolder(environment);
         Directory.CreateDirectory(dropFolder);
@@ -157,7 +222,7 @@ internal static class ElsaDemoApi
         }
 
         Console.WriteLine($"Demo package drop folder cleared: {deletedFiles} file(s), {deletedDirectories} folder(s) deleted from '{dropFolder}'.");
-        return Results.Ok(new DemoClearPackageDropFolderResponse(dropFolder, deletedFiles, deletedDirectories));
+        return new DemoClearPackageDropFolderResponse(dropFolder, deletedFiles, deletedDirectories);
     }
 
     private static async Task<IResult> GetDefaultShellAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
@@ -280,6 +345,30 @@ internal sealed record DemoReconcileResponse(
 internal sealed record DemoUploadPackageResponse(string FileName, string Path, long Length);
 
 internal sealed record DemoClearPackageDropFolderResponse(string Path, int DeletedFiles, int DeletedDirectories);
+
+internal sealed record DemoResetResponse(
+    DemoResetWorkflowCounts Workflows,
+    DemoResetActivityCounts Activities,
+    DemoClearPackageDropFolderResponse Packages,
+    DemoResetReconcileResponse Reconcile);
+
+internal sealed record DemoResetReconcileResponse(string Outcome, string CorrelationId, string? ReasonCode);
+
+internal sealed record DemoResetWorkflowCounts(
+    int Definitions,
+    int Versions,
+    int Drafts,
+    int VersionLayouts,
+    int DraftLayouts,
+    int DraftValidations)
+{
+    public int TotalDeleted => Definitions + Versions + Drafts + VersionLayouts + DraftLayouts + DraftValidations;
+}
+
+internal sealed record DemoResetActivityCounts(int Definitions, int Versions)
+{
+    public int TotalDeleted => Definitions + Versions;
+}
 
 internal sealed record DemoReloadShellsResponse(int FeatureDescriptorCount, int ReloadedShellCount);
 

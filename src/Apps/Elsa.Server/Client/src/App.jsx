@@ -16,6 +16,7 @@ import {
   PlugZap,
   Radio,
   RefreshCw,
+  RotateCcw,
   Rocket,
   Save,
   Search,
@@ -758,23 +759,33 @@ export function App() {
     });
   }
 
-  async function clearPackageFolder() {
-    await runAction("clearPackages", "Clearing package drop folder...", async () => {
-      const response = await request("/_demo/packages/drop-folder", {
-        method: "DELETE"
-      });
-      addConsoleLine("stdout", `Package drop folder cleared: ${response.deletedFiles} file(s), ${response.deletedDirectories} folder(s).`);
-
-      const reconcile = await request("/_demo/packages/reconcile", {
+  async function resetDemo() {
+    await runAction("reset", "Resetting demo database and package drop folder...", async () => {
+      const response = await request("/_demo/reset", {
         method: "POST",
         body: "{}"
       });
+      const workflowRows = response.workflows?.totalDeleted ?? 0;
+      const activityRows = response.activities?.totalDeleted ?? 0;
+      const packageFiles = response.packages?.deletedFiles ?? 0;
+      const packageDirectories = response.packages?.deletedDirectories ?? 0;
+
+      setWorkflowVersionId("");
+      setArtifactId("");
+      setExecutionId("");
       setPackageNotification(null);
       activityVersionCache.current.clear();
-      addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
+      addConsoleLine(
+        "stdout",
+        `Reset complete: ${workflowRows} workflow row(s), ${activityRows} activity row(s), ${packageFiles} package file(s), ${packageDirectories} package folder(s).`
+      );
+      if (response.reconcile?.outcome) {
+        addConsoleLine("stdout", `Reconcile ${response.reconcile.outcome}: ${response.reconcile.correlationId}`);
+      }
       await refreshState();
       await refreshActivities();
     });
+    setCompleted(new Set());
   }
 
   async function enableFeature() {
@@ -1024,7 +1035,7 @@ export function App() {
             </label>
             <p className="path-hint">{dropFolder || "packages"}</p>
             <div className="split-actions package-actions">
-              <ActionButton icon={Trash2} busy={busy === "clearPackages"} onClick={clearPackageFolder}>Clear folder</ActionButton>
+              <ActionButton icon={RotateCcw} busy={busy === "reset"} onClick={resetDemo}>Reset</ActionButton>
               <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
             </div>
           </section>
