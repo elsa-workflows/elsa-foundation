@@ -67,9 +67,16 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 1120px;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
 }
@@ -91,7 +98,9 @@ button:disabled {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-rows: 74px minmax(0, 1fr) var(--console-height, 232px);
 }
@@ -210,6 +219,7 @@ p {
   grid-template-columns: 242px minmax(520px, 1fr) 388px;
   gap: 16px;
   padding: 16px;
+  overflow: auto;
 }
 
 .step-rail,
