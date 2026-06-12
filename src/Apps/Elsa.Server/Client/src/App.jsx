@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Rocket,
   Save,
+  Search,
   Server,
   Sun,
   Terminal,
@@ -395,6 +396,10 @@ export function App() {
   const [pausedConsoleLines, setPausedConsoleLines] = useState(null);
   const [pausedConsoleLineCount, setPausedConsoleLineCount] = useState(0);
   const [dropFolder, setDropFolder] = useState("");
+  const [mainView, setMainView] = useState("workflow");
+  const [activities, setActivities] = useState([]);
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
   const seenConsoleLineIds = useRef(new Set());
@@ -422,6 +427,20 @@ export function App() {
     const firstOpen = steps.find((step) => !completed.has(step.key));
     return firstOpen?.key ?? "newActivity";
   }, [completed]);
+
+  const filteredActivities = useMemo(() => {
+    const query = activitySearch.trim().toLowerCase();
+    if (!query)
+      return activities;
+
+    return activities.filter((activity) => [
+      activity.displayName,
+      activity.activityTypeKey,
+      activity.category,
+      activity.description,
+      activity.id
+    ].some((value) => value?.toLowerCase().includes(query)));
+  }, [activities, activitySearch]);
 
   const visibleConsoleLines = consolePaused ? pausedConsoleLines ?? consoleLines : consoleLines;
   const queuedConsoleLineCount = consolePaused
@@ -500,6 +519,22 @@ export function App() {
   useEffect(() => {
     refreshState().catch((error) => addConsoleLine("stderr", `State refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshState]);
+
+  const refreshActivities = useCallback(async () => {
+    setActivitiesLoading(true);
+    try {
+      const definitions = await request("/default/design/activities/definitions");
+      const ordered = [...(definitions ?? [])].sort((left, right) =>
+        (left.displayName ?? left.activityTypeKey).localeCompare(right.displayName ?? right.activityTypeKey));
+      setActivities(ordered);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshActivities]);
 
   const loadRecentConsoleLines = useCallback(async () => {
     const result = await request(`/diagnostics/console-logs/recent?limit=${consoleReplayLimit}`);
@@ -703,6 +738,7 @@ export function App() {
       });
       addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
       await refreshState();
+      await refreshActivities();
     });
   }
 
@@ -721,6 +757,7 @@ export function App() {
       activityVersionCache.current.clear();
       addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
       await refreshState();
+      await refreshActivities();
     });
   }
 
@@ -759,6 +796,7 @@ export function App() {
       setPackageAlert(false);
       activityVersionCache.current.clear();
       await refreshState();
+      await refreshActivities();
       addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
   }
@@ -876,34 +914,70 @@ export function App() {
         <section className="editor-surface">
           <div className="panel-titlebar">
             <div>
-              <h2><FileJson size={18} /> Workflow Definition</h2>
-              <p>Submit, publish, and execute against the mounted default shell.</p>
+              <h2>
+                {mainView === "workflow" ? <FileJson size={18} /> : <Activity size={18} />}
+                {mainView === "workflow" ? "Workflow Definition" : "Activity Catalog"}
+              </h2>
+              <p>{mainView === "workflow"
+                ? "Submit, publish, and execute against the mounted default shell."
+                : `${activities.length} activit${activities.length === 1 ? "y" : "ies"} available in /default.`}</p>
             </div>
-            <select value={selectedSample} onChange={(event) => selectSample(event.target.value)}>
-              {Object.entries(sampleWorkflows).map(([key, sample]) => (
-                <option key={key} value={key}>{sample.label}</option>
-              ))}
-            </select>
+            {mainView === "workflow" ? (
+              <select value={selectedSample} onChange={(event) => selectSample(event.target.value)}>
+                {Object.entries(sampleWorkflows).map(([key, sample]) => (
+                  <option key={key} value={key}>{sample.label}</option>
+                ))}
+              </select>
+            ) : (
+              <button type="button" className="small-button" onClick={refreshActivities} disabled={activitiesLoading}>
+                {activitiesLoading ? "Refreshing" : "Refresh"}
+              </button>
+            )}
           </div>
 
           <div className="toolbar">
-            <ActionButton icon={Save} busy={busy === "save"} onClick={saveWorkflow}>Save</ActionButton>
-            <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
-            <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
+            <div className="view-tabs">
+              <button type="button" className={mainView === "workflow" ? "active" : ""} onClick={() => setMainView("workflow")}>
+                <FileJson size={15} />
+                Workflow
+              </button>
+              <button type="button" className={mainView === "activities" ? "active" : ""} onClick={() => setMainView("activities")}>
+                <Activity size={15} />
+                Activities
+              </button>
+            </div>
+            {mainView === "workflow" ? (
+              <>
+                <ActionButton icon={Save} busy={busy === "save"} onClick={saveWorkflow}>Save</ActionButton>
+                <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
+                <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
+              </>
+            ) : (
+              <div className="activity-search">
+                <Search size={15} />
+                <input value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} placeholder="Filter activities" />
+              </div>
+            )}
           </div>
 
-          <textarea
-            className="code-editor"
-            value={workflowJson}
-            spellCheck={false}
-            onChange={(event) => setWorkflowJson(event.target.value)}
-          />
+          {mainView === "workflow" ? (
+            <>
+              <textarea
+                className="code-editor"
+                value={workflowJson}
+                spellCheck={false}
+                onChange={(event) => setWorkflowJson(event.target.value)}
+              />
 
-          <div className="artifact-strip">
-            <Artifact label="Version" value={workflowVersionId || "Not saved"} />
-            <Artifact label="Artifact" value={artifactId || "Not published"} />
-            <Artifact label="Execution" value={executionId || "Not executed"} />
-          </div>
+              <div className="artifact-strip">
+                <Artifact label="Version" value={workflowVersionId || "Not saved"} />
+                <Artifact label="Artifact" value={artifactId || "Not published"} />
+                <Artifact label="Execution" value={executionId || "Not executed"} />
+              </div>
+            </>
+          ) : (
+            <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
+          )}
         </section>
 
         <aside className="ops-panel">
@@ -1037,6 +1111,35 @@ function Artifact({ label, value }) {
     <div className="artifact">
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ActivityCatalog({ activities, totalCount, loading }) {
+  return (
+    <div className="activity-catalog">
+      <div className="activity-summary">
+        <strong>{activities.length}</strong>
+        <span>{activities.length === totalCount ? "shown" : `shown of ${totalCount}`}</span>
+      </div>
+      <div className="activity-list">
+        {loading && activities.length === 0 && <p className="muted">Loading activity catalog...</p>}
+        {!loading && activities.length === 0 && <p className="muted">No activities match the current filter.</p>}
+        {activities.map((activity) => (
+          <div className="activity-row" key={activity.id}>
+            <div className="activity-row-icon"><Activity size={15} /></div>
+            <div className="activity-row-main">
+              <strong>{activity.displayName || activity.activityTypeKey}</strong>
+              <span>{activity.activityTypeKey}</span>
+              {activity.description && <p>{activity.description}</p>}
+            </div>
+            <div className="activity-row-meta">
+              <span>{activity.category || "Uncategorized"}</span>
+              <code>{activity.id}</code>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
