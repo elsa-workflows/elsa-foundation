@@ -18,6 +18,7 @@ internal static class ElsaDemoApi
         group.MapGet("/state", GetStateAsync);
         group.MapGet("/packages", GetPackagesAsync);
         group.MapGet("/packages/events", GetPackageEvents);
+        group.MapDelete("/packages/drop-folder", ClearPackageDropFolderAsync);
         group.MapPost("/packages/reconcile", TriggerPackageReconcileAsync);
         group.MapPost("/packages/upload", UploadPackageAsync)
             .Accepts<IFormFile>("multipart/form-data")
@@ -90,6 +91,30 @@ internal static class ElsaDemoApi
 
         Console.WriteLine($"Demo package uploaded to '{destination}'.");
         return Results.Ok(new DemoUploadPackageResponse(fileName, destination, file.Length));
+    }
+
+    private static IResult ClearPackageDropFolderAsync(IWebHostEnvironment environment)
+    {
+        var dropFolder = GetPackageDropFolder(environment);
+        Directory.CreateDirectory(dropFolder);
+
+        var deletedFiles = 0;
+        var deletedDirectories = 0;
+
+        foreach (var file in Directory.EnumerateFiles(dropFolder))
+        {
+            File.Delete(file);
+            deletedFiles++;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(dropFolder))
+        {
+            Directory.Delete(directory, recursive: true);
+            deletedDirectories++;
+        }
+
+        Console.WriteLine($"Demo package drop folder cleared: {deletedFiles} file(s), {deletedDirectories} folder(s) deleted from '{dropFolder}'.");
+        return Results.Ok(new DemoClearPackageDropFolderResponse(dropFolder, deletedFiles, deletedDirectories));
     }
 
     private static async Task<IResult> GetDefaultShellAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
@@ -210,6 +235,8 @@ internal sealed record DemoReconcileResponse(
     IReadOnlyList<string> Removed);
 
 internal sealed record DemoUploadPackageResponse(string FileName, string Path, long Length);
+
+internal sealed record DemoClearPackageDropFolderResponse(string Path, int DeletedFiles, int DeletedDirectories);
 
 internal sealed record DemoShellResponse(
     string Path,

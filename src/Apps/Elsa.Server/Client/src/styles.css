@@ -602,6 +602,22 @@ p {
   margin-top: 8px;
 }
 
+.package-actions {
+  margin-top: 10px;
+}
+
+.package-actions .action-button:first-child {
+  border-color: rgba(193, 62, 58, 0.45);
+  background: transparent;
+  color: var(--red);
+}
+
+.package-actions .action-button:first-child:not(:disabled):hover {
+  border-color: var(--red);
+  background: rgba(193, 62, 58, 0.1);
+  color: var(--red);
+}
+
 .shell-json textarea {
   height: 152px;
   resize: none;

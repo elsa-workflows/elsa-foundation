@@ -545,6 +545,24 @@ export function App() {
     });
   }
 
+  async function clearPackageFolder() {
+    await runAction("clearPackages", "Clearing package drop folder...", async () => {
+      const response = await request("/_demo/packages/drop-folder", {
+        method: "DELETE"
+      });
+      addConsoleLine("stdout", `Package drop folder cleared: ${response.deletedFiles} file(s), ${response.deletedDirectories} folder(s).`);
+
+      const reconcile = await request("/_demo/packages/reconcile", {
+        method: "POST",
+        body: "{}"
+      });
+      setPackageAlert(false);
+      activityVersionCache.current.clear();
+      addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
+      await refreshState();
+    });
+  }
+
   async function enableFeature() {
     await runAction("feature", `Enabling feature ${featureName}...`, async () => {
       const configuration = JSON.parse(featureConfig || "{}");
@@ -754,6 +772,10 @@ export function App() {
               <input type="file" accept=".nupkg" onChange={uploadPackage} />
             </label>
             <p className="path-hint">{dropFolder || "packages"}</p>
+            <div className="split-actions package-actions">
+              <ActionButton icon={Trash2} busy={busy === "clearPackages"} onClick={clearPackageFolder}>Clear folder</ActionButton>
+              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
+            </div>
           </section>
 
           <section className="ops-section compact">
