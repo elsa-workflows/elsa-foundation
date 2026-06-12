@@ -187,6 +187,8 @@ const defaultConsoleHeight = 232;
 const minConsoleHeight = 140;
 const maxConsoleHeight = 560;
 const minWorkspaceHeight = 260;
+const consoleReplayLimit = 2_000;
+const maxConsoleLines = 2_000;
 const ansiEscapePattern = /\x1b\[([0-9;]*)m/g;
 const ansiForegroundClasses = {
   30: "console-ansi-fg-black",
@@ -335,6 +337,38 @@ function renderConsoleText(text) {
     : segment.text);
 }
 
+function getConsoleStreamName(stream) {
+  return stream === 1 || stream === "stderr" || stream === "Stderr" ? "stderr" : "stdout";
+}
+
+function compareConsoleEntries(left, right) {
+  const timestampDelta = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+  if (timestampDelta !== 0)
+    return timestampDelta;
+
+  return (left.sequence ?? 0) - (right.sequence ?? 0);
+}
+
+function createConsoleEntry(stream, text) {
+  return {
+    id: `${Date.now()}-${Math.random()}`,
+    timestamp: new Date().toISOString(),
+    sequence: null,
+    stream,
+    text
+  };
+}
+
+function createConsoleEntryFromLine(line) {
+  return {
+    id: line.id ?? `${line.sequence ?? Date.now()}-${Math.random()}`,
+    timestamp: line.timestamp ?? line.receivedAt ?? new Date().toISOString(),
+    sequence: line.sequence ?? null,
+    stream: getConsoleStreamName(line.stream),
+    text: line.text ?? ""
+  };
+}
+
 export function App() {
   const [theme, setTheme] = useState(getInitialTheme);
   const [consoleHeight, setConsoleHeight] = useState(getInitialConsoleHeight);
@@ -363,6 +397,7 @@ export function App() {
   const [dropFolder, setDropFolder] = useState("");
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
+  const seenConsoleLineIds = useRef(new Set());
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -393,18 +428,28 @@ export function App() {
     ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
     : 0;
 
-  const addConsoleLine = useCallback((stream, text) => {
-    setConsoleLineCount((current) => current + 1);
-    setConsoleLines((current) => [
-      ...current.slice(-249),
-      {
-        id: `${Date.now()}-${Math.random()}`,
-        timestamp: new Date().toISOString(),
-        stream,
-        text
-      }
-    ]);
+  const addConsoleEntries = useCallback((entries) => {
+    if (entries.length === 0)
+      return;
+
+    const uniqueEntries = entries.filter((entry) => {
+      if (seenConsoleLineIds.current.has(entry.id))
+        return false;
+
+      seenConsoleLineIds.current.add(entry.id);
+      return true;
+    });
+
+    if (uniqueEntries.length === 0)
+      return;
+
+    setConsoleLineCount((current) => current + uniqueEntries.length);
+    setConsoleLines((current) => [...current, ...uniqueEntries].sort(compareConsoleEntries).slice(-maxConsoleLines));
   }, []);
+
+  const addConsoleLine = useCallback((stream, text) => {
+    addConsoleEntries([createConsoleEntry(stream, text)]);
+  }, [addConsoleEntries]);
 
   const markComplete = useCallback((key) => {
     setCompleted((current) => new Set([...current, key]));
@@ -456,6 +501,12 @@ export function App() {
     refreshState().catch((error) => addConsoleLine("stderr", `State refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshState]);
 
+  const loadRecentConsoleLines = useCallback(async () => {
+    const result = await request(`/diagnostics/console-logs/recent?limit=${consoleReplayLimit}`);
+    const lines = result.items ?? result.lines ?? [];
+    addConsoleEntries(lines.map(createConsoleEntryFromLine));
+  }, [addConsoleEntries, request]);
+
   useEffect(() => {
     const interval = window.setInterval(async () => {
       try {
@@ -501,18 +552,21 @@ export function App() {
           return;
 
         setConsoleConnected(true);
-        const stream = connection.stream("StreamAsync", { limit: 200 });
+        const stream = connection.stream("StreamAsync", { limit: consoleReplayLimit });
         stream.subscribe({
           next: (item) => {
             if (item?.line) {
-              addConsoleLine(item.line.stream === 1 ? "stderr" : "stdout", item.line.text);
-            } else if (item?.droppedLines) {
-              addConsoleLine("stderr", `${item.droppedLines.count} console lines were dropped.`);
+              addConsoleEntries([createConsoleEntryFromLine(item.line)]);
+            } else if (item?.droppedLines || item?.dropped) {
+              const dropped = item.droppedLines ?? item.dropped;
+              addConsoleLine("stderr", `${dropped.count} console lines were dropped.`);
             }
           },
           error: (error) => addConsoleLine("stderr", `Console stream failed: ${error.message}`),
           complete: () => addConsoleLine("stdout", "Console stream completed.")
         });
+
+        await loadRecentConsoleLines();
       } catch (error) {
         setConsoleConnected(false);
         addConsoleLine("stderr", `Console stream connection failed: ${error.message}`);
@@ -524,7 +578,7 @@ export function App() {
       cancelled = true;
       connection.stop();
     };
-  }, [addConsoleLine]);
+  }, [addConsoleEntries, addConsoleLine, loadRecentConsoleLines]);
 
   function selectSample(key) {
     setSelectedSample(key);
