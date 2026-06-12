@@ -7,10 +7,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="ConsoleLogStreaming.AspNetCore" />
 		<PackageReference Include="CShells.FastEndpoints" />
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Nuplane" />
+		<PackageReference Include="Nuplane.Admin" />
 		<PackageReference Include="Nuplane.Loading" />
 		<PackageReference Include="Nuplane.Sources.Directory" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
@@ -19,6 +21,17 @@
 	<ItemGroup>
 		<Folder Include="packages\" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<Content Update="shells.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('Client/package.json')">
+		<Exec WorkingDirectory="Client" Command="npm ci" />
+		<Exec WorkingDirectory="Client" Command="npm run build" />
+	</Target>
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

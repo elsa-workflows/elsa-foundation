@@ -1,0 +1,44 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "Primitives": {},
+          "FileSystemDistributedLocking": {},
+          "Serialization": {},
+          "Tasks": {},
+          "MemoryCache": {},
+          "Mediator": {},
+          "Events": {},
+          "Expressions": {},
+          "WorkflowsDesignPersistenceEFCoreSqlite": {},
+          "WorkflowsDesignApi": {},
+          "ActivitiesDesignPersistenceEFCoreSqlite": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesCompositionRuntime": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": ""
+            }
+          },
+          "WorkflowsPublishingApi": {},
+          "WorkflowsRuntimeApi": {},
+          "FastEndpoints": {
+            "EndpointRoutePrefix": ""
+          },
+          "SampleNuplaneActivities": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": "default"
+          }
+        }
+      }
+    }
+  }
+}

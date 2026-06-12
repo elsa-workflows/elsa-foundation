@@ -6,6 +6,12 @@
 ### The default CShell is mounted under /default.
 
 @host = https://localhost:7243/default
+@adminHost = https://localhost:7243
+
+### Reload all CShells.
+# @name reloadAllShells
+POST {{adminHost}}/_admin/shells/reload-all
+Accept: application/json
 
 ### 01. Find the WriteLine activity definition.
 # @name searchWriteLineActivityDefinitions
@@ -194,7 +200,89 @@ Accept: application/json
     client.global.set("sequenceWorkflowVersionId", response.body.version.id);
 %}
 
-### 10. Publish/compile the "Sequence Write Lines" workflow definition version into a WorkflowExecutable.
+### 10. Find the SayHelloFromNuplane activity definition.
+# @name searchSayHelloFromNuplaneActivityDefinitions
+GET {{host}}/design/activities/definitions?searchTerm=SayHelloFromNuplane
+Accept: application/json
+
+> {%
+    client.global.set("sayHelloFromNuplaneActivityDefinitionId", response.body[0].id);
+%}
+
+### 11. Find the SayHelloFromNuplane activity version.
+# @name listSayHelloFromNuplaneActivityVersions
+GET {{host}}/design/activities/definitions/{{sayHelloFromNuplaneActivityDefinitionId}}/versions
+Accept: application/json
+
+> {%
+    client.global.set("sayHelloFromNuplaneActivityVersionId", response.body[0].id);
+%}
+
+### 12. Submit a workflow definition whose root activity is SayHelloFromNuplane.
+### Run steps 10 and 11 first so the activity version ID is available.
+# @name submitSayHelloFromNuplaneWorkflow
+POST {{host}}/design/workflows/definitions/submit
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Say Hello From Nuplane",
+  "description": "Runs the SayHelloFromNuplane activity loaded from a Nuplane package.",
+  "state": {
+    "variables": [],
+    "rootActivity": {
+      "nodeId": "say-hello-from-nuplane",
+      "activityVersionId": "{{sayHelloFromNuplaneActivityVersionId}}",
+      "inputs": [
+        {
+          "referenceKey": "Recipient",
+          "value": {
+            "value": "World",
+            "expressionType": "Literal"
+          },
+          "autoEvaluate": null,
+          "evaluatorType": null,
+          "storageDriverType": null,
+          "isSensitive": null
+        }
+      ],
+      "outputs": [],
+      "childSlots": null
+    },
+    "inputs": [],
+    "outputs": [],
+    "workflowActivityOptions": null,
+    "strategyOptions": null
+  }
+}
+
+> {%
+    client.global.set("sayHelloWorkflowVersionId", response.body.version.id);
+%}
+
+### 13. Publish/compile the "Say Hello From Nuplane" workflow.
+# @name publishSayHelloFromNuplaneWorkflow
+POST {{host}}/publishing/workflows/{{sayHelloWorkflowVersionId}}/publish
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+> {%
+    client.global.set("sayHelloWorkflowExecutableArtifactId", response.body.artifactId);
+%}
+
+### 14. Execute the published "Say Hello From Nuplane" workflow.
+### The server console should print:
+###   Hello World from a Nuplane-loaded activity.
+# @name executeSayHelloFromNuplaneWorkflow
+POST {{host}}/runtime/workflows/{{sayHelloWorkflowExecutableArtifactId}}/execute
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+### 15. Publish/compile the "Sequence Write Lines" workflow definition version into a WorkflowExecutable.
 # @name publishSequenceWriteLinesWorkflow
 POST {{host}}/publishing/workflows/{{sequenceWorkflowVersionId}}/publish
 Content-Type: application/json
@@ -206,7 +294,7 @@ Accept: application/json
     client.global.set("sequenceWorkflowExecutableArtifactId", response.body.artifactId);
 %}
 
-### 11. Execute the published WorkflowExecutable artifact for "Sequence Write Lines".
+### 16. Execute the published WorkflowExecutable artifact for "Sequence Write Lines".
 ### The server console should print:
 ###   Sequence line 1
 ###   Sequence line 2

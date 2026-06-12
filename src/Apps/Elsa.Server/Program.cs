@@ -2,6 +2,8 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
+using ConsoleLogStreaming.AspNetCore.DependencyInjection;
+using ConsoleLogStreaming.Core.DependencyInjection;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
 using Elsa.Activities.Composition.Runtime;
@@ -26,19 +28,39 @@ using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Nuplane;
+using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
 
+builder.Services.AddConsoleLogStreamingHost(options =>
+{
+    options.ServiceName = "elsa-server";
+    options.SourceDisplayName = "Elsa.Server";
+    options.RecentCapacity = 2_000;
+    options.MaxRecentQuerySize = 500;
+});
+builder.Services.AddConsoleLogStreamingAspNetCore(options =>
+{
+    options.RecentPath = "/diagnostics/console-logs/recent";
+    options.SourcesPath = "/diagnostics/console-logs/sources";
+    options.HubPath = "/diagnostics/console-logs/hub";
+});
+builder.Services.AddNuplaneAdmin();
+builder.Services.AddSingleton<DemoPackageEventStore>();
+builder.Services.AddSingleton<DemoNuplaneObserver>();
+
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
+    nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 
@@ -91,6 +113,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
 var app = builder.Build();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+app.MapConsoleLogStreaming();
+app.MapElsaDemoApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
+app.MapFallbackToFile("index.html");
 app.Run();
