@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import {
   Activity,
+  ArrowDownToLine,
   Boxes,
   Check,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
   FileJson,
   Moon,
   PackagePlus,
+  Pause,
   Play,
   PlugZap,
   Radio,
@@ -19,6 +21,7 @@ import {
   Server,
   Sun,
   Terminal,
+  Trash2,
 } from "lucide-react";
 
 const sampleWorkflows = {
@@ -179,6 +182,7 @@ const steps = [
 const initialWorkflow = JSON.stringify(sampleWorkflows.hello.value, null, 2);
 const themeStorageKey = "elsa-demo-theme";
 const consoleHeightStorageKey = "elsa-demo-console-height";
+const consoleAutoScrollStorageKey = "elsa-demo-console-autoscroll";
 const defaultConsoleHeight = 232;
 const minConsoleHeight = 140;
 const maxConsoleHeight = 560;
@@ -217,6 +221,13 @@ function getInitialConsoleHeight() {
   return clampConsoleHeight(window.localStorage.getItem(consoleHeightStorageKey) ?? defaultConsoleHeight);
 }
 
+function getInitialConsoleAutoScroll() {
+  if (typeof window === "undefined")
+    return true;
+
+  return window.localStorage.getItem(consoleAutoScrollStorageKey) !== "false";
+}
+
 export function App() {
   const [theme, setTheme] = useState(getInitialTheme);
   const [consoleHeight, setConsoleHeight] = useState(getInitialConsoleHeight);
@@ -236,7 +247,12 @@ export function App() {
   const [featureConfig, setFeatureConfig] = useState("{}");
   const [packageAlert, setPackageAlert] = useState(false);
   const [consoleLines, setConsoleLines] = useState([]);
+  const [consoleLineCount, setConsoleLineCount] = useState(0);
   const [consoleConnected, setConsoleConnected] = useState(false);
+  const [consolePaused, setConsolePaused] = useState(false);
+  const [consoleAutoScroll, setConsoleAutoScroll] = useState(getInitialConsoleAutoScroll);
+  const [pausedConsoleLines, setPausedConsoleLines] = useState(null);
+  const [pausedConsoleLineCount, setPausedConsoleLineCount] = useState(0);
   const [dropFolder, setDropFolder] = useState("");
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
@@ -251,6 +267,10 @@ export function App() {
   }, [consoleHeight]);
 
   useEffect(() => {
+    window.localStorage.setItem(consoleAutoScrollStorageKey, String(consoleAutoScroll));
+  }, [consoleAutoScroll]);
+
+  useEffect(() => {
     const handleResize = () => setConsoleHeight((current) => clampConsoleHeight(current));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -261,7 +281,13 @@ export function App() {
     return firstOpen?.key ?? "newActivity";
   }, [completed]);
 
+  const visibleConsoleLines = consolePaused ? pausedConsoleLines ?? consoleLines : consoleLines;
+  const queuedConsoleLineCount = consolePaused
+    ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
+    : 0;
+
   const addConsoleLine = useCallback((stream, text) => {
+    setConsoleLineCount((current) => current + 1);
     setConsoleLines((current) => [
       ...current.slice(-249),
       {
@@ -562,6 +588,25 @@ export function App() {
     setTheme((current) => current === "dark" ? "light" : "dark");
   }
 
+  function toggleConsolePaused() {
+    if (consolePaused) {
+      setConsolePaused(false);
+      setPausedConsoleLines(null);
+      return;
+    }
+
+    setPausedConsoleLines(consoleLines);
+    setPausedConsoleLineCount(consoleLineCount);
+    setConsolePaused(true);
+  }
+
+  function clearConsole() {
+    setConsoleLines([]);
+    setConsoleLineCount(0);
+    setPausedConsoleLines(consolePaused ? [] : null);
+    setPausedConsoleLineCount(0);
+  }
+
   function resizeConsole(delta) {
     setConsoleHeight((current) => clampConsoleHeight(current + delta));
   }
@@ -756,9 +801,15 @@ export function App() {
       </main>
 
       <ConsolePanel
-        lines={consoleLines}
+        lines={visibleConsoleLines}
         connected={consoleConnected}
+        paused={consolePaused}
+        autoScroll={consoleAutoScroll}
+        queuedLineCount={queuedConsoleLineCount}
         height={consoleHeight}
+        onTogglePause={toggleConsolePaused}
+        onToggleAutoScroll={() => setConsoleAutoScroll((current) => !current)}
+        onClear={clearConsole}
         onResizeStart={startConsoleResize}
         onResizeKeyDown={handleConsoleResizeKeyDown}
       />
@@ -807,7 +858,30 @@ function Artifact({ label, value }) {
   );
 }
 
-function ConsolePanel({ lines, connected, height, onResizeStart, onResizeKeyDown }) {
+function ConsolePanel({
+  lines,
+  connected,
+  paused,
+  autoScroll,
+  queuedLineCount,
+  height,
+  onTogglePause,
+  onToggleAutoScroll,
+  onClear,
+  onResizeStart,
+  onResizeKeyDown
+}) {
+  const linesRef = useRef(null);
+
+  useEffect(() => {
+    if (!autoScroll || paused)
+      return;
+
+    const container = linesRef.current;
+    if (container)
+      container.scrollTop = container.scrollHeight;
+  }, [autoScroll, lines, paused]);
+
   return (
     <section className="console-panel">
       <div
@@ -824,15 +898,47 @@ function ConsolePanel({ lines, connected, height, onResizeStart, onResizeKeyDown
         onKeyDown={onResizeKeyDown}
       />
       <div className="console-header">
-        <h2><Terminal size={17} /> Backend console</h2>
+        <div>
+          <h2><Terminal size={17} /> Backend console</h2>
+          {queuedLineCount > 0 && <p>{queuedLineCount} buffered while paused</p>}
+        </div>
         <div className="console-tools">
           <span className={connected ? "status-dot online" : "status-dot"} />
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>
           <span>stderr</span>
+          <button
+            type="button"
+            className={paused ? "console-tool-button active" : "console-tool-button"}
+            onClick={onTogglePause}
+            aria-pressed={paused}
+            title={paused ? "Resume console stream" : "Pause console stream"}
+          >
+            {paused ? <Play size={14} /> : <Pause size={14} />}
+            <span>{paused ? "Resume" : "Pause"}</span>
+          </button>
+          <button
+            type="button"
+            className={autoScroll ? "console-tool-button active" : "console-tool-button"}
+            onClick={onToggleAutoScroll}
+            aria-pressed={autoScroll}
+            title={autoScroll ? "Disable autoscroll" : "Enable autoscroll"}
+          >
+            <ArrowDownToLine size={14} />
+            <span>Autoscroll</span>
+          </button>
+          <button
+            type="button"
+            className="console-tool-button"
+            onClick={onClear}
+            title="Clear console"
+          >
+            <Trash2 size={14} />
+            <span>Clear</span>
+          </button>
         </div>
       </div>
-      <div className="console-lines">
+      <div className="console-lines" ref={linesRef}>
         {lines.length === 0 && (
           <div className="console-line stdout">
             <span>{new Date().toLocaleTimeString()}</span>
