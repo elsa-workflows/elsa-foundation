@@ -178,6 +178,11 @@ const steps = [
 
 const initialWorkflow = JSON.stringify(sampleWorkflows.hello.value, null, 2);
 const themeStorageKey = "elsa-demo-theme";
+const consoleHeightStorageKey = "elsa-demo-console-height";
+const defaultConsoleHeight = 232;
+const minConsoleHeight = 140;
+const maxConsoleHeight = 560;
+const minWorkspaceHeight = 260;
 
 function getInitialTheme() {
   if (typeof window === "undefined")
@@ -190,8 +195,31 @@ function getInitialTheme() {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function getMaxConsoleHeight() {
+  if (typeof window === "undefined")
+    return maxConsoleHeight;
+
+  return Math.max(minConsoleHeight, Math.min(maxConsoleHeight, window.innerHeight - minWorkspaceHeight));
+}
+
+function clampConsoleHeight(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number))
+    return defaultConsoleHeight;
+
+  return Math.min(getMaxConsoleHeight(), Math.max(minConsoleHeight, Math.round(number)));
+}
+
+function getInitialConsoleHeight() {
+  if (typeof window === "undefined")
+    return defaultConsoleHeight;
+
+  return clampConsoleHeight(window.localStorage.getItem(consoleHeightStorageKey) ?? defaultConsoleHeight);
+}
+
 export function App() {
   const [theme, setTheme] = useState(getInitialTheme);
+  const [consoleHeight, setConsoleHeight] = useState(getInitialConsoleHeight);
   const [selectedSample, setSelectedSample] = useState("hello");
   const [workflowJson, setWorkflowJson] = useState(initialWorkflow);
   const [workflowVersionId, setWorkflowVersionId] = useState("");
@@ -217,6 +245,16 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(themeStorageKey, theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem(consoleHeightStorageKey, String(consoleHeight));
+  }, [consoleHeight]);
+
+  useEffect(() => {
+    const handleResize = () => setConsoleHeight((current) => clampConsoleHeight(current));
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const currentStep = useMemo(() => {
     const firstOpen = steps.find((step) => !completed.has(step.key));
@@ -524,8 +562,61 @@ export function App() {
     setTheme((current) => current === "dark" ? "light" : "dark");
   }
 
+  function resizeConsole(delta) {
+    setConsoleHeight((current) => clampConsoleHeight(current + delta));
+  }
+
+  function startConsoleResize(event) {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = consoleHeight;
+
+    function handlePointerMove(moveEvent) {
+      setConsoleHeight(clampConsoleHeight(startHeight + startY - moveEvent.clientY));
+    }
+
+    function stopResize() {
+      document.body.classList.remove("console-resizing");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    }
+
+    document.body.classList.add("console-resizing");
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+  }
+
+  function handleConsoleResizeKeyDown(event) {
+    const keyDeltas = {
+      ArrowUp: 24,
+      ArrowDown: -24,
+      PageUp: 80,
+      PageDown: -80
+    };
+
+    if (event.key in keyDeltas) {
+      event.preventDefault();
+      resizeConsole(keyDeltas[event.key]);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      setConsoleHeight(minConsoleHeight);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      setConsoleHeight(getMaxConsoleHeight());
+    }
+  }
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ "--console-height": `${consoleHeight}px` }}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark"><Boxes size={19} /></div>
@@ -664,7 +755,13 @@ export function App() {
         </aside>
       </main>
 
-      <ConsolePanel lines={consoleLines} connected={consoleConnected} />
+      <ConsolePanel
+        lines={consoleLines}
+        connected={consoleConnected}
+        height={consoleHeight}
+        onResizeStart={startConsoleResize}
+        onResizeKeyDown={handleConsoleResizeKeyDown}
+      />
     </div>
   );
 }
@@ -710,9 +807,22 @@ function Artifact({ label, value }) {
   );
 }
 
-function ConsolePanel({ lines, connected }) {
+function ConsolePanel({ lines, connected, height, onResizeStart, onResizeKeyDown }) {
   return (
     <section className="console-panel">
+      <div
+        className="console-resize-handle"
+        role="separator"
+        aria-label="Resize console panel"
+        aria-orientation="horizontal"
+        aria-valuemin={minConsoleHeight}
+        aria-valuemax={getMaxConsoleHeight()}
+        aria-valuenow={height}
+        tabIndex={0}
+        title="Drag to resize console"
+        onPointerDown={onResizeStart}
+        onKeyDown={onResizeKeyDown}
+      />
       <div className="console-header">
         <h2><Terminal size={17} /> Backend console</h2>
         <div className="console-tools">

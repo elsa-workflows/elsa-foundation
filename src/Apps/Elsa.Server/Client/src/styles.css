@@ -93,7 +93,7 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: 74px minmax(0, 1fr) 232px;
+  grid-template-rows: 74px minmax(0, 1fr) var(--console-height, 232px);
 }
 
 .topbar {
@@ -633,9 +633,40 @@ p {
   border-bottom: 0;
   border-radius: 0;
   display: grid;
-  grid-template-rows: 42px minmax(0, 1fr);
+  grid-template-rows: 10px 42px minmax(0, 1fr);
   background: var(--console);
   color: #d9e5e8;
+}
+
+.console-resize-handle {
+  width: 100%;
+  height: 10px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--console-line);
+  border-bottom: 1px solid var(--console-line);
+  outline: none;
+  background: var(--console);
+  cursor: ns-resize;
+}
+
+.console-resize-handle::before {
+  content: "";
+  width: 42px;
+  height: 3px;
+  border-radius: 999px;
+  background: #62757b;
+}
+
+.console-resize-handle:hover::before,
+.console-resize-handle:focus-visible::before {
+  background: #bde7d3;
+}
+
+.console-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(111, 226, 216, 0.55);
 }
 
 .console-header {
@@ -686,6 +717,12 @@ p {
   color: #bde7d3;
 }
 
+.console-resizing,
+.console-resizing * {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
 }
@@ -702,7 +739,7 @@ p {
   }
 
   .app-shell {
-    grid-template-rows: auto auto 232px;
+    grid-template-rows: auto auto var(--console-height, 232px);
   }
 
   .workspace {
