@@ -355,7 +355,7 @@ p {
 .action-button,
 .small-button,
 .icon-button,
-.reload-alert button {
+.package-notification button {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--control-bg);
@@ -374,7 +374,7 @@ p {
 
 .action-button:first-child,
 .toolbar > .action-button:first-of-type,
-.reload-alert button {
+.package-notification button {
   border-color: var(--accent);
   background: var(--accent);
   color: white;
@@ -622,33 +622,44 @@ p {
   padding: 12px;
 }
 
-.reload-alert {
+.package-notification {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 20;
+  width: min(460px, calc(100vw - 48px));
   display: grid;
   grid-template-columns: 22px 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 12px;
-  margin-bottom: 12px;
   border: 1px solid var(--alert-line);
   border-radius: 6px;
   background: var(--alert-bg);
   color: var(--amber);
+  box-shadow: var(--shadow);
 }
 
-.reload-alert strong,
-.reload-alert span {
+.package-notification strong,
+.package-notification span {
   display: block;
   font-size: 12px;
   line-height: 1.35;
 }
 
-.reload-alert span {
-  color: var(--alert-muted);
+.package-notification strong {
+  color: var(--ink);
 }
 
-.reload-alert button {
+.package-notification span {
+  color: var(--alert-muted);
+  overflow-wrap: anywhere;
+}
+
+.package-notification button {
   height: 30px;
   padding: 0 10px;
+  white-space: nowrap;
 }
 
 .ops-section {
@@ -1105,8 +1116,7 @@ p {
     gap: 12px;
   }
 
-  .ops-section,
-  .reload-alert {
+  .ops-section {
     margin-bottom: 0;
   }
 }

@@ -23,7 +23,7 @@ internal sealed class DemoPackageEventStore
         Add("changing", "Package reconciliation started.", changeSet, []);
 
     public void RecordChanged(PackageChangeSet changeSet) =>
-        Add("changed", "New package available. Reload shells?", changeSet, []);
+        Add("changed", "New package detected. Reload shells?", changeSet, []);
 
     public void RecordFailed(string packageId, Exception exception) =>
         Add(

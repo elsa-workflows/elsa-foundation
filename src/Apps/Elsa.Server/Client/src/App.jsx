@@ -387,7 +387,7 @@ export function App() {
   const [features, setFeatures] = useState([]);
   const [featureName, setFeatureName] = useState("SampleNuplaneActivities");
   const [featureConfig, setFeatureConfig] = useState("{}");
-  const [packageAlert, setPackageAlert] = useState(false);
+  const [packageNotification, setPackageNotification] = useState(null);
   const [consoleLines, setConsoleLines] = useState([]);
   const [consoleLineCount, setConsoleLineCount] = useState(0);
   const [consoleConnected, setConsoleConnected] = useState(false);
@@ -536,6 +536,20 @@ export function App() {
     refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshActivities]);
 
+  const showPackageNotification = useCallback((events) => {
+    const changedPackages = events
+      .flatMap((event) => [...(event.added ?? []), ...(event.updated ?? [])])
+      .map((pkg) => `${pkg.id} ${pkg.version}`.trim());
+    const packageText = changedPackages.length > 0
+      ? changedPackages.join(", ")
+      : "A package change was reconciled.";
+
+    setPackageNotification({
+      title: "New package detected",
+      message: `${packageText} is ready. Enable its feature if needed, then reload shells.`
+    });
+  }, []);
+
   const loadRecentConsoleLines = useCallback(async () => {
     const result = await request(`/diagnostics/console-logs/recent?limit=${consoleReplayLimit}`);
     const lines = result.items ?? result.lines ?? [];
@@ -552,8 +566,10 @@ export function App() {
         setEvents((current) => [...current, ...newEvents].slice(-80));
         lastEventSequence.current = Math.max(...newEvents.map((event) => event.sequence));
 
-        if (newEvents.some((event) => event.kind === "changed" && event.hasPackageChanges)) {
-          setPackageAlert(true);
+        const packageChangeEvents = newEvents.filter((event) =>
+          event.kind === "changed" && ((event.added?.length ?? 0) > 0 || (event.updated?.length ?? 0) > 0));
+        if (packageChangeEvents.length > 0) {
+          showPackageNotification(packageChangeEvents);
           markComplete("upload");
         }
 
@@ -567,7 +583,7 @@ export function App() {
     }, 2500);
 
     return () => window.clearInterval(interval);
-  }, [addConsoleLine, markComplete, request]);
+  }, [addConsoleLine, markComplete, request, showPackageNotification]);
 
   useEffect(() => {
     let cancelled = false;
@@ -753,7 +769,7 @@ export function App() {
         method: "POST",
         body: "{}"
       });
-      setPackageAlert(false);
+      setPackageNotification(null);
       activityVersionCache.current.clear();
       addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
       await refreshState();
@@ -793,7 +809,7 @@ export function App() {
         method: "POST",
         body: "{}"
       });
-      setPackageAlert(false);
+      setPackageNotification(null);
       activityVersionCache.current.clear();
       await refreshState();
       await refreshActivities();
@@ -908,6 +924,17 @@ export function App() {
         </div>
       </header>
 
+      {packageNotification && (
+        <div className="package-notification" role="alert">
+          <Radio size={18} />
+          <div>
+            <strong>{packageNotification.title}</strong>
+            <span>{packageNotification.message}</span>
+          </div>
+          <button type="button" onClick={reloadShells}>Reload shells</button>
+        </div>
+      )}
+
       <main className="workspace">
         <StepRail completed={completed} currentStep={currentStep} />
 
@@ -981,17 +1008,6 @@ export function App() {
         </section>
 
         <aside className="ops-panel">
-          {packageAlert && (
-            <div className="reload-alert">
-              <Radio size={18} />
-              <div>
-                <strong>New package available.</strong>
-                <span>Reload shells after enabling its feature.</span>
-              </div>
-              <button type="button" onClick={reloadShells}>Reload shells</button>
-            </div>
-          )}
-
           <section className="ops-section">
             <div className="section-heading">
               <h2><PackagePlus size={17} /> Package & Shell</h2>
