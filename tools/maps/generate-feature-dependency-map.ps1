@@ -16,6 +16,48 @@ function Escape-Cell {
     return (($Value -replace '\|', '\|') -replace "`r?`n", "<br>")
 }
 
+$centralPackageVersionsPath = Join-Path $repoRoot "Directory.Packages.props"
+
+function Read-CentralPackageVersions {
+    if (-not (Test-Path -LiteralPath $centralPackageVersionsPath)) { return @() }
+    [xml]$xml = Get-Content -LiteralPath $centralPackageVersionsPath -Raw
+    $versions = @()
+    foreach ($package in @($xml.Project.SelectNodes("ItemGroup/PackageVersion"))) {
+        if ($null -eq $package) { continue }
+        $versions += [pscustomobject]@{
+            Id = $package.GetAttribute("Include")
+            Version = $package.GetAttribute("Version")
+            Condition = $package.GetAttribute("Condition")
+        }
+    }
+    return @($versions)
+}
+
+$centralPackageVersions = @(Read-CentralPackageVersions)
+
+function Test-CentralPackageVersionCondition {
+    param([string]$Condition, [string]$ProjectName)
+    if ([string]::IsNullOrWhiteSpace($Condition)) { return $true }
+    $equals = "'`$(MSBuildProjectName)' == '$ProjectName'"
+    $notEquals = "'`$(MSBuildProjectName)' != '$ProjectName'"
+    if ($Condition -eq $equals) { return $true }
+    if ($Condition -eq $notEquals) { return $false }
+    if ($Condition -match "^'\$\(MSBuildProjectName\)' != '(.+)'$") { return $Matches[1] -ne $ProjectName }
+    return $false
+}
+
+function Get-CentralPackageVersion {
+    param([string]$Id, [string]$ProjectName)
+    $selected = ""
+    foreach ($package in $centralPackageVersions) {
+        if ($package.Id -ne $Id) { continue }
+        if (Test-CentralPackageVersionCondition -Condition $package.Condition -ProjectName $ProjectName) {
+            $selected = $package.Version
+        }
+    }
+    return $selected
+}
+
 function Get-DomainGroup {
     param([string]$ProjectName)
     if ($ProjectName -eq "Server") { return "Elsa.Server" }
@@ -42,6 +84,7 @@ function Read-Projects {
     $projects = @()
     foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot "src") -Recurse -Filter "*.csproj" | Sort-Object FullName) {
         [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
+        $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $refs = @()
         $packages = @()
         foreach ($reference in @($xml.Project.SelectNodes("ItemGroup/ProjectReference"))) {
@@ -54,11 +97,11 @@ function Read-Projects {
             $id = $package.GetAttribute("Include")
             if ([string]::IsNullOrWhiteSpace($id)) { continue }
             $version = $package.GetAttribute("Version")
+            if ([string]::IsNullOrWhiteSpace($version)) { $version = Get-CentralPackageVersion -Id $id -ProjectName $projectName }
             if ([string]::IsNullOrWhiteSpace($version)) { $version = "(unspecified)" }
             $packages += "$id $version"
         }
 
-        $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $projects += [pscustomobject]@{
             Name = $projectName
             Path = To-RepoPath $file.FullName

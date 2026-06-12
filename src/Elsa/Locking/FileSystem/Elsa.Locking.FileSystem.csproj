@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CShells.Abstractions" Version="0.0.26" />
-    <PackageReference Include="DistributedLock.FileSystem" Version="1.0.3" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="DistributedLock.FileSystem" />
   </ItemGroup>
 
   <ItemGroup>

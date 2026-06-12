@@ -7,13 +7,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CShells.FastEndpoints" Version="0.0.26" />
-		<PackageReference Include="CShells.Management.Api" Version="0.0.26" />
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
-		<PackageReference Include="Nuplane" Version="0.0.8" />
-		<PackageReference Include="Nuplane.Loading" Version="0.0.8" />
-		<PackageReference Include="Nuplane.Sources.Directory" Version="0.0.8" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" Version="10.0.8" />
+		<PackageReference Include="CShells.FastEndpoints" />
+		<PackageReference Include="CShells.Management.Api" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+		<PackageReference Include="Nuplane" />
+		<PackageReference Include="Nuplane.Loading" />
+		<PackageReference Include="Nuplane.Sources.Directory" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>

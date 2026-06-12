@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" Version="10.0.8" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.10" />
-	  <PackageReference Include="CShells.Abstractions" Version="0.0.26" />
+    <PackageReference Include="Microsoft.AspNetCore.Authorization" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+	  <PackageReference Include="CShells.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

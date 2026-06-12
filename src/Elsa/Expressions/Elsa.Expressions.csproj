@@ -8,8 +8,8 @@
   </PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CShells.Abstractions" Version="0.0.26" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+		<PackageReference Include="CShells.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 	</ItemGroup>
 
 	<ItemGroup>

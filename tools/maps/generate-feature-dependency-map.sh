@@ -53,13 +53,59 @@ project_refs() {
     | sort -u
 }
 
+
+central_package_version() {
+  local id="$1"
+  local project_name="$2"
+  local central_file="$repo_root/Directory.Packages.props"
+  [ -f "$central_file" ] || return 0
+
+  awk -v id="$id" -v project_name="$project_name" '
+    function attr(line, name, pattern, value) {
+      pattern = name "=\"[^\"]+\""
+      if (match(line, pattern)) {
+        value = substr(line, RSTART + length(name) + 2, RLENGTH - length(name) - 3)
+        return value
+      }
+      return ""
+    }
+    function condition_matches(condition, compared_project) {
+      if (condition == "") return 1
+      if (condition ~ /^\047\$\(MSBuildProjectName\)\047 == \047/) {
+        compared_project = condition
+        sub(/^\047\$\(MSBuildProjectName\)\047 == \047/, "", compared_project)
+        sub(/\047$/, "", compared_project)
+        return compared_project == project_name
+      }
+      if (condition ~ /^\047\$\(MSBuildProjectName\)\047 != \047/) {
+        compared_project = condition
+        sub(/^\047\$\(MSBuildProjectName\)\047 != \047/, "", compared_project)
+        sub(/\047$/, "", compared_project)
+        return compared_project != project_name
+      }
+      return 0
+    }
+    /<PackageVersion[[:space:]]/ {
+      include = attr($0, "Include")
+      if (include != id) next
+      version = attr($0, "Version")
+      condition = attr($0, "Condition")
+      if (condition_matches(condition)) selected = version
+    }
+    END { if (selected != "") print selected }
+  ' "$central_file" | tail -n 1
+}
+
 package_refs() {
   local file="$1"
+  local project_name
+  project_name="$(basename "$file" .csproj)"
   { grep -oE '<PackageReference[^>]+' "$file" 2>/dev/null || true; } \
     | while IFS= read -r line; do
       local id version
       id="$(printf '%s\n' "$line" | sed -nE 's/.*Include="([^"]+)".*/\1/p')"
       version="$(printf '%s\n' "$line" | sed -nE 's/.*Version="([^"]+)".*/\1/p')"
+      [ -z "$version" ] && version="$(central_package_version "$id" "$project_name")"
       [ -z "$version" ] && version="(unspecified)"
       [ -n "$id" ] && printf '%s %s\n' "$id" "$version"
     done \

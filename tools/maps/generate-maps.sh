@@ -143,13 +143,59 @@ project_refs() {
     | sort
 }
 
+
+central_package_version() {
+  local id="$1"
+  local project_name="$2"
+  local central_file="$repo_root/Directory.Packages.props"
+  [ -f "$central_file" ] || return 0
+
+  awk -v id="$id" -v project_name="$project_name" '
+    function attr(line, name, pattern, value) {
+      pattern = name "=\"[^\"]+\""
+      if (match(line, pattern)) {
+        value = substr(line, RSTART + length(name) + 2, RLENGTH - length(name) - 3)
+        return value
+      }
+      return ""
+    }
+    function condition_matches(condition, compared_project) {
+      if (condition == "") return 1
+      if (condition ~ /^\047\$\(MSBuildProjectName\)\047 == \047/) {
+        compared_project = condition
+        sub(/^\047\$\(MSBuildProjectName\)\047 == \047/, "", compared_project)
+        sub(/\047$/, "", compared_project)
+        return compared_project == project_name
+      }
+      if (condition ~ /^\047\$\(MSBuildProjectName\)\047 != \047/) {
+        compared_project = condition
+        sub(/^\047\$\(MSBuildProjectName\)\047 != \047/, "", compared_project)
+        sub(/\047$/, "", compared_project)
+        return compared_project != project_name
+      }
+      return 0
+    }
+    /<PackageVersion[[:space:]]/ {
+      include = attr($0, "Include")
+      if (include != id) next
+      version = attr($0, "Version")
+      condition = attr($0, "Condition")
+      if (condition_matches(condition)) selected = version
+    }
+    END { if (selected != "") print selected }
+  ' "$central_file" | tail -n 1
+}
+
 package_refs() {
   local file="$1"
+  local project_name
+  project_name="$(basename "$file" .csproj)"
   { grep -oE '<PackageReference[^>]+' "$file" 2>/dev/null || true; } \
     | while IFS= read -r line; do
       local id version
       id="$(printf '%s\n' "$line" | sed -nE 's/.*Include="([^"]+)".*/\1/p')"
       version="$(printf '%s\n' "$line" | sed -nE 's/.*Version="([^"]+)".*/\1/p')"
+      [ -z "$version" ] && version="$(central_package_version "$id" "$project_name")"
       [ -z "$version" ] && version="(unspecified)"
       [ -n "$id" ] && printf '%s|%s\n' "$id" "$version"
     done
@@ -479,6 +525,7 @@ done
   find "$repo_root/src" -type f \( -name '*.csproj' -o -name '*.cs' \) 2>/dev/null
   find "$repo_root/tests" -type f -name '*.csproj' 2>/dev/null
   find "$repo_root/specs" -type f -name '*.md' 2>/dev/null
+  printf '%s\n' "$repo_root/Directory.Packages.props"
   printf '%s\n' "$repo_root/tools/maps/generate-maps.ps1"
   printf '%s\n' "$repo_root/tools/maps/generate-maps.sh"
   printf '%s\n' "$repo_root/tools/maps/generate-domain-map.ps1"
@@ -504,7 +551,7 @@ if git_head_raw="$(git_head_value)"; then
   git_head="$(json_string_or_null "$git_head_raw")"
 fi
 dirty="null"
-if git_status_raw="$(run_git -C "$repo_root" status --porcelain -- src tests specs tools/maps 2>/dev/null)"; then
+if git_status_raw="$(run_git -C "$repo_root" status --porcelain -- src tests specs tools/maps Directory.Packages.props 2>/dev/null)"; then
   if [ -n "$git_status_raw" ]; then dirty="true"; else dirty="false"; fi
 elif [ "$git_head" != "null" ]; then
   dirty="true"

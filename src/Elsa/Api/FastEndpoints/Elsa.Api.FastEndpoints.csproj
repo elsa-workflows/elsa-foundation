@@ -8,7 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CShells.FastEndpoints.Abstractions" Version="0.0.26" />
+		<PackageReference Include="CShells.FastEndpoints.Abstractions" />
 	</ItemGroup>
 
 	<ItemGroup>
