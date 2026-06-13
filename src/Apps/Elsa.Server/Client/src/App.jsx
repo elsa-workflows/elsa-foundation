@@ -771,6 +771,7 @@ export function App() {
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
   const seenConsoleLineIds = useRef(new Set());
+  const packageUploadInputRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = `${themeFamily}-${themeMode}`;
@@ -1236,28 +1237,33 @@ export function App() {
   }
 
   async function uploadPackage(event) {
+    const input = event.currentTarget;
     const file = event.target.files?.[0];
     if (!file)
       return;
 
-    await runAction("upload", `Uploading ${file.name}...`, async () => {
-      const body = new FormData();
-      body.append("package", file);
-      const response = await request("/_demo/packages/upload", {
-        method: "POST",
-        body
-      });
-      addConsoleLine("stdout", `Package saved: ${response.path}`);
+    try {
+      await runAction("upload", `Uploading ${file.name}...`, async () => {
+        const body = new FormData();
+        body.append("package", file);
+        const response = await request("/_demo/packages/upload", {
+          method: "POST",
+          body
+        });
+        addConsoleLine("stdout", `Package saved: ${response.path}`);
 
-      const reconcile = await request("/_demo/packages/reconcile", {
-        method: "POST",
-        body: "{}"
+        const reconcile = await request("/_demo/packages/reconcile", {
+          method: "POST",
+          body: "{}"
+        });
+        addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
+        await refreshState();
+        await refreshActivities();
+        await refreshFeatures();
       });
-      addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
-      await refreshState();
-      await refreshActivities();
-      await refreshFeatures();
-    });
+    } finally {
+      input.value = "";
+    }
   }
 
   async function resetDemo() {
@@ -1275,6 +1281,8 @@ export function App() {
       setArtifactId("");
       setExecutionId("");
       setPackageNotification(null);
+      if (packageUploadInputRef.current)
+        packageUploadInputRef.current.value = "";
       activityVersionCache.current.clear();
       addConsoleLine(
         "stdout",
@@ -1664,7 +1672,7 @@ export function App() {
               <CloudUpload size={24} />
               <span>Drop folder upload</span>
               <strong>Choose .nupkg</strong>
-              <input type="file" accept=".nupkg" onChange={uploadPackage} />
+              <input ref={packageUploadInputRef} type="file" accept=".nupkg" onChange={uploadPackage} />
             </label>
             <p className="path-hint">{dropFolder || "packages"}</p>
             <div className="split-actions package-actions">
