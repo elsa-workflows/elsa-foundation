@@ -18,7 +18,6 @@ import {
   CloudUpload,
   FileJson,
   GitBranch,
-  Moon,
   PackagePlus,
   Pause,
   Play,
@@ -30,7 +29,6 @@ import {
   Save,
   Search,
   Server,
-  Sun,
   Terminal,
   Trash2,
 } from "lucide-react";
@@ -198,6 +196,14 @@ const steps = [
 
 const initialWorkflow = JSON.stringify(sampleWorkflows.hello.value, null, 2);
 const themeStorageKey = "elsa-demo-theme";
+const themePresets = [
+  { id: "studio", label: "Studio", colors: ["#eef2f4", "#ffffff", "#0f8a83"] },
+  { id: "midnight", label: "Midnight", colors: ["#101719", "#172124", "#20b9ad"] },
+  { id: "ember", label: "Ember", colors: ["#f5efe8", "#fffaf4", "#c45a2a"] },
+  { id: "forest", label: "Forest", colors: ["#edf2ec", "#fbfdf8", "#2c7a4b"] },
+  { id: "orchid", label: "Orchid", colors: ["#f2eef7", "#ffffff", "#7c4ac9"] },
+  { id: "slate", label: "Slate", colors: ["#e8edf2", "#fbfdff", "#315f8f"] }
+];
 const consoleHeightStorageKey = "elsa-demo-console-height";
 const consoleAutoScrollStorageKey = "elsa-demo-console-autoscroll";
 const defaultConsoleHeight = 232;
@@ -246,13 +252,19 @@ const ansiBackgroundClasses = {
 
 function getInitialTheme() {
   if (typeof window === "undefined")
-    return "light";
+    return "studio";
 
   const storedTheme = window.localStorage.getItem(themeStorageKey);
-  if (storedTheme === "light" || storedTheme === "dark")
+  if (themePresets.some((preset) => preset.id === storedTheme))
     return storedTheme;
 
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  if (storedTheme === "light")
+    return "studio";
+
+  if (storedTheme === "dark")
+    return "midnight";
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "midnight" : "studio";
 }
 
 function getMaxConsoleHeight() {
@@ -1220,10 +1232,6 @@ export function App() {
     });
   }
 
-  function toggleTheme() {
-    setTheme((current) => current === "dark" ? "light" : "dark");
-  }
-
   function toggleConsolePaused() {
     if (consolePaused) {
       setConsolePaused(false);
@@ -1316,16 +1324,26 @@ export function App() {
             <Server size={16} />
             <span>/default</span>
           </div>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            <span>{theme === "dark" ? "Light" : "Dark"}</span>
-          </button>
+          <div className="theme-picker" role="group" aria-label="Theme picker">
+            {themePresets.map((preset) => (
+              <button
+                type="button"
+                key={preset.id}
+                className={theme === preset.id ? "theme-swatch active" : "theme-swatch"}
+                onClick={() => setTheme(preset.id)}
+                title={`Use ${preset.label} theme`}
+                aria-label={`Use ${preset.label} theme`}
+                aria-pressed={theme === preset.id}
+              >
+                <span className="theme-swatch-colors" aria-hidden="true">
+                  {preset.colors.map((color) => (
+                    <span key={color} style={{ background: color }} />
+                  ))}
+                </span>
+                <span>{preset.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
