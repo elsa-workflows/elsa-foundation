@@ -408,6 +408,10 @@ export function App() {
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [featureCatalogItems, setFeatureCatalogItems] = useState([]);
+  const [featureSearch, setFeatureSearch] = useState("");
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [togglingFeatures, setTogglingFeatures] = useState(new Set());
   const [executables, setExecutables] = useState([]);
   const [executablesLoading, setExecutablesLoading] = useState(false);
   const lastEventSequence = useRef(0);
@@ -452,6 +456,22 @@ export function App() {
     ].some((value) => value?.toLowerCase().includes(query)));
   }, [activities, activitySearch]);
 
+  const filteredFeatureCatalogItems = useMemo(() => {
+    const query = featureSearch.trim().toLowerCase();
+    if (!query)
+      return featureCatalogItems;
+
+    return featureCatalogItems.filter((feature) => [
+      feature.id,
+      feature.displayName,
+      feature.description,
+      feature.sourceKind,
+      feature.packageId,
+      feature.packageVersion,
+      ...(feature.categories ?? [])
+    ].some((value) => value?.toLowerCase().includes(query)));
+  }, [featureCatalogItems, featureSearch]);
+
   const visibleConsoleLines = consolePaused ? pausedConsoleLines ?? consoleLines : consoleLines;
   const queuedConsoleLineCount = consolePaused
     ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
@@ -473,12 +493,21 @@ export function App() {
       };
     }
 
+    if (mainView === "features") {
+      const enabledCount = featureCatalogItems.filter((feature) => feature.enabled).length;
+      return {
+        icon: PlugZap,
+        title: "Feature Catalog",
+        description: `${enabledCount} enabled of ${featureCatalogItems.length} available shell feature${featureCatalogItems.length === 1 ? "" : "s"}.`
+      };
+    }
+
     return {
       icon: Rocket,
       title: "Executable Artifacts",
       description: `${executables.length} published artifact${executables.length === 1 ? "" : "s"} in the runtime store.`
     };
-  }, [activities.length, executables.length, mainView]);
+  }, [activities.length, executables.length, featureCatalogItems, mainView]);
 
   const addConsoleEntries = useCallback((entries) => {
     if (entries.length === 0)
@@ -568,6 +597,20 @@ export function App() {
   useEffect(() => {
     refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshActivities]);
+
+  const refreshFeatures = useCallback(async () => {
+    setFeaturesLoading(true);
+    try {
+      const catalog = await request("/_demo/features");
+      setFeatureCatalogItems(catalog ?? []);
+    } finally {
+      setFeaturesLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshFeatures().catch((error) => addConsoleLine("stderr", `Feature catalog refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshFeatures]);
 
   const refreshExecutables = useCallback(async () => {
     setExecutablesLoading(true);
@@ -803,6 +846,7 @@ export function App() {
       addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
     });
   }
 
@@ -831,6 +875,7 @@ export function App() {
       }
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
       await refreshExecutables();
     });
     setCompleted(new Set());
@@ -845,8 +890,43 @@ export function App() {
       });
       setShellJson(response.json);
       await refreshState();
+      await refreshFeatures();
       addConsoleLine("stdout", `Feature enabled: ${featureName}`);
     });
+  }
+
+  async function toggleFeature(feature) {
+    const nextEnabled = !feature.enabled;
+    setTogglingFeatures((current) => new Set([...current, feature.id]));
+    setFeatureCatalogItems((current) => current.map((item) =>
+      item.id === feature.id ? { ...item, enabled: nextEnabled } : item));
+    setStatus(`${nextEnabled ? "Enabling" : "Disabling"} feature ${feature.id}...`);
+    addConsoleLine("stdout", `${nextEnabled ? "Enabling" : "Disabling"} feature ${feature.id}...`);
+
+    try {
+      const configuration = nextEnabled ? JSON.parse(feature.configurationJson || "{}") : {};
+      const response = await request(`/_demo/shells/default/features/${encodeURIComponent(feature.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: nextEnabled, configuration })
+      });
+      setShellJson(response.json);
+      if (nextEnabled)
+        markComplete("feature");
+      await refreshState();
+      await refreshFeatures();
+      setStatus("Ready");
+      addConsoleLine("stdout", `Feature ${nextEnabled ? "enabled" : "disabled"}: ${feature.id}`);
+    } catch (error) {
+      setStatus(error.message);
+      addConsoleLine("stderr", error.message);
+      await refreshFeatures().catch(() => {});
+    } finally {
+      setTogglingFeatures((current) => {
+        const next = new Set(current);
+        next.delete(feature.id);
+        return next;
+      });
+    }
   }
 
   async function saveShellJson() {
@@ -858,6 +938,7 @@ export function App() {
       });
       setShellJson(response.json);
       await refreshState();
+      await refreshFeatures();
       addConsoleLine("stdout", "shells.json saved.");
     });
   }
@@ -872,6 +953,7 @@ export function App() {
       activityVersionCache.current.clear();
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
       await refreshExecutables();
       addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
@@ -1018,6 +1100,10 @@ export function App() {
               <button type="button" className="small-button" onClick={refreshActivities} disabled={activitiesLoading}>
                 {activitiesLoading ? "Refreshing" : "Refresh"}
               </button>
+            ) : mainView === "features" ? (
+              <button type="button" className="small-button" onClick={refreshFeatures} disabled={featuresLoading}>
+                {featuresLoading ? "Refreshing" : "Refresh"}
+              </button>
             ) : (
               <button type="button" className="small-button" onClick={refreshExecutables} disabled={executablesLoading}>
                 {executablesLoading ? "Refreshing" : "Refresh"}
@@ -1035,6 +1121,10 @@ export function App() {
                 <Activity size={15} />
                 Activities
               </button>
+              <button type="button" className={mainView === "features" ? "active" : ""} onClick={() => setMainView("features")}>
+                <PlugZap size={15} />
+                Features
+              </button>
               <button type="button" className={mainView === "artifacts" ? "active" : ""} onClick={() => setMainView("artifacts")}>
                 <Rocket size={15} />
                 Artifacts
@@ -1050,6 +1140,11 @@ export function App() {
               <div className="activity-search">
                 <Search size={15} />
                 <input value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} placeholder="Filter activities" />
+              </div>
+            ) : mainView === "features" ? (
+              <div className="activity-search">
+                <Search size={15} />
+                <input value={featureSearch} onChange={(event) => setFeatureSearch(event.target.value)} placeholder="Filter features" />
               </div>
             ) : mainView === "artifacts" ? (
               <div className="artifact-toolbar-summary">
@@ -1078,6 +1173,14 @@ export function App() {
             </>
           ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
+          ) : mainView === "features" ? (
+            <FeatureCatalog
+              features={filteredFeatureCatalogItems}
+              totalCount={featureCatalogItems.length}
+              loading={featuresLoading}
+              togglingFeatures={togglingFeatures}
+              onToggle={toggleFeature}
+            />
           ) : (
             <WorkflowExecutableArtifacts artifacts={executables} loading={executablesLoading} />
           )}
@@ -1233,6 +1336,75 @@ function ActivityCatalog({ activities, totalCount, loading }) {
       </div>
     </div>
   );
+}
+
+function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onToggle }) {
+  const enabledCount = features.filter((feature) => feature.enabled).length;
+
+  return (
+    <div className="feature-catalog">
+      <div className="activity-summary">
+        <strong>{enabledCount}</strong>
+        <span>{features.length === totalCount ? "enabled shown" : `enabled shown of ${totalCount}`}</span>
+      </div>
+      <div className="feature-list">
+        {loading && features.length === 0 && <p className="muted">Loading feature catalog...</p>}
+        {!loading && features.length === 0 && <p className="muted">No features match the current filter.</p>}
+        {features.map((feature) => {
+          const toggling = togglingFeatures.has(feature.id);
+          const disabled = Boolean(feature.readError) || toggling;
+          return (
+            <div className={`feature-row ${feature.enabled ? "enabled" : ""} ${feature.readError ? "warning" : ""}`} key={feature.id}>
+              <button
+                type="button"
+                className="feature-toggle"
+                role="switch"
+                aria-checked={feature.enabled}
+                disabled={disabled}
+                title={`${feature.enabled ? "Disable" : "Enable"} ${feature.id}`}
+                onClick={() => onToggle(feature)}
+              >
+                <span />
+              </button>
+              <div className="feature-row-main">
+                <div className="feature-title-line">
+                  <strong>{feature.displayName || feature.id}</strong>
+                  {feature.advanced && <span className="feature-flag">Advanced</span>}
+                  {feature.experimental && <span className="feature-flag warning">Experimental</span>}
+                </div>
+                <span>{feature.id}</span>
+                {feature.description && <p>{feature.description}</p>}
+                {feature.readError && <p className="feature-warning">Manifest: {feature.readError}</p>}
+                {(feature.categories?.length ?? 0) > 0 && (
+                  <div className="feature-category-list">
+                    {feature.categories.map((category) => <span key={category}>{category}</span>)}
+                  </div>
+                )}
+              </div>
+              <div className="feature-row-meta">
+                <span>{getFeatureSourceLabel(feature)}</span>
+                <code>{feature.packageId ? `${feature.packageId} ${feature.packageVersion ?? ""}`.trim() : feature.sourceKind}</code>
+                {feature.manifestPath && <small>{feature.manifestPath}</small>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function getFeatureSourceLabel(feature) {
+  if (feature.sourceKind === "manifest")
+    return "Package manifest";
+
+  if (feature.sourceKind === "manifest-error")
+    return "Package warning";
+
+  if (feature.sourceKind === "runtime")
+    return "Runtime catalog";
+
+  return "shells.json";
 }
 
 function WorkflowExecutableArtifacts({ artifacts, loading }) {

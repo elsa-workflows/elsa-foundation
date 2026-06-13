@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.IO.Compression;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
@@ -30,6 +32,7 @@ internal static class ElsaDemoApi
         group.MapPost("/packages/upload", UploadPackageAsync)
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
+        group.MapGet("/features", ListFeaturesAsync);
         group.MapPost("/reset", ResetDemoAsync);
         group.MapGet("/workflows/executables", ListWorkflowExecutablesAsync);
         group.MapGet("/shells/default", GetDefaultShellAsync);
@@ -65,14 +68,15 @@ internal static class ElsaDemoApi
 
     private static async Task<IResult> ReloadShellsAsync(IServiceProvider serviceProvider, IShellRegistry shellRegistry, CancellationToken cancellationToken)
     {
-        var featureDescriptorCount = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
+        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
+        var featureDescriptorCount = GetFeatureDescriptorCount(snapshot);
         var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
         Console.WriteLine($"Demo shells reloaded after refreshing {featureDescriptorCount} feature descriptor(s) and reloading {reloadResults.Count} active shell(s).");
 
         return Results.Ok(new DemoReloadShellsResponse(featureDescriptorCount, reloadResults.Count));
     }
 
-    private static async Task<int> RefreshFeatureCatalogAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task<object> RefreshFeatureCatalogAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
         // CShells does not currently expose feature-catalog refresh through a public contract.
         // The demo reload endpoint needs newly loaded Nuplane feature assemblies to be discoverable before shell reload.
@@ -96,6 +100,11 @@ internal static class ElsaDemoApi
         var snapshot = refreshTask.GetType().GetProperty("Result")?.GetValue(refreshTask)
             ?? throw new InvalidOperationException("RuntimeFeatureCatalog.RefreshAsync did not return a snapshot.");
 
+        return snapshot;
+    }
+
+    private static int GetFeatureDescriptorCount(object snapshot)
+    {
         var featureDescriptors = snapshot.GetType().GetProperty("FeatureDescriptors")?.GetValue(snapshot)
             ?? throw new InvalidOperationException("The runtime feature catalog snapshot did not expose feature descriptors.");
 
@@ -115,6 +124,96 @@ internal static class ElsaDemoApi
             outcome.RunResult?.ChangeSet.Added.Select(DemoPackageSummary.FromResolvedPackage).ToArray() ?? [],
             outcome.RunResult?.ChangeSet.Updated.Select(DemoPackageSummary.FromResolvedPackage).ToArray() ?? [],
             outcome.RunResult?.ChangeSet.Removed.ToArray() ?? []));
+    }
+
+    private static async Task<IResult> ListFeaturesAsync(
+        IServiceProvider serviceProvider,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        CancellationToken cancellationToken)
+    {
+        var shellJson = await ReadShellDocumentAsync(environment, cancellationToken);
+        if (shellJson.Error is not null)
+            return shellJson.Error;
+
+        var shellFeatures = GetDefaultFeatures(shellJson.Document!);
+        var items = new Dictionary<string, DemoFeatureCatalogItemBuilder>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var feature in shellFeatures)
+        {
+            UpsertFeature(items, feature.Key, feature.Value?.ToJsonString(IndentedJsonOptions) ?? "{}", builder =>
+            {
+                builder.Enabled = true;
+                builder.SourceKind ??= "shell";
+                builder.DisplayName ??= feature.Key;
+            });
+        }
+
+        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
+        foreach (var descriptor in EnumerateFeatureDescriptors(snapshot))
+        {
+            var featureName = GetStringProperty(descriptor, "FeatureName")
+                ?? GetStringProperty(descriptor, "Name")
+                ?? GetStringProperty(descriptor, "Id");
+            if (string.IsNullOrWhiteSpace(featureName))
+                continue;
+
+            UpsertFeature(items, featureName, "{}", builder =>
+            {
+                builder.SourceKind = builder.SourceKind == "manifest" ? builder.SourceKind : "runtime";
+                builder.DisplayName = GetStringProperty(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
+                builder.Description = GetStringProperty(descriptor, "Description") ?? builder.Description;
+            });
+        }
+
+        var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
+        foreach (var package in packages.Packages)
+        {
+            var summary = DemoPackageSummary.FromActivePackage(package);
+            var packageManifest = ReadPackageManifest(summary, environment);
+            if (packageManifest.Manifest is null)
+            {
+                UpsertFeature(items, $"{summary.Id}:{summary.Version}", "{}", builder =>
+                {
+                    builder.SourceKind = "manifest-error";
+                    builder.DisplayName = summary.Id;
+                    builder.PackageId = summary.Id;
+                    builder.PackageVersion = summary.Version;
+                    builder.ReadError = packageManifest.ReadError ?? "Package manifest not found.";
+                });
+                continue;
+            }
+
+            var manifest = packageManifest.Manifest;
+            foreach (var feature in manifest.Features ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(feature.Id))
+                    continue;
+
+                UpsertFeature(items, feature.Id, "{}", builder =>
+                {
+                    builder.SourceKind = "manifest";
+                    builder.DisplayName = string.IsNullOrWhiteSpace(feature.DisplayName) ? feature.Id : feature.DisplayName;
+                    builder.Description = feature.Description ?? builder.Description;
+                    builder.Categories = MergeCategories(feature.Category, feature.Categories);
+                    builder.PackageId = manifest.Package?.Id ?? summary.Id;
+                    builder.PackageVersion = manifest.Package?.Version ?? summary.Version;
+                    builder.Advanced = feature.Advanced;
+                    builder.Experimental = feature.Experimental;
+                    builder.ManifestPath = packageManifest.Path;
+                    builder.ManifestHash = packageManifest.Hash;
+                });
+            }
+        }
+
+        var response = items.Values
+            .Select(x => x.ToResponse())
+            .OrderByDescending(x => x.Enabled)
+            .ThenBy(x => x.DisplayName ?? x.Id, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Results.Ok(response);
     }
 
     private static async Task<IResult> UploadPackageAsync(HttpRequest request, IWebHostEnvironment environment, CancellationToken cancellationToken)
@@ -245,21 +344,16 @@ internal static class ElsaDemoApi
 
     private static async Task<IResult> GetDefaultShellAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
     {
-        var path = GetShellsJsonPath(environment);
-        if (!File.Exists(path))
-            return Results.NotFound(new DemoErrorResponse($"Could not find shells.json at '{path}'."));
+        var shellJson = await ReadShellDocumentAsync(environment, cancellationToken);
+        if (shellJson.Error is not null)
+            return shellJson.Error;
 
-        var json = await File.ReadAllTextAsync(path, cancellationToken);
-        var document = ParseShellDocument(json);
-        if (document is null)
-            return Results.BadRequest(new DemoErrorResponse("shells.json is not valid JSON."));
-
-        var features = GetDefaultFeatures(document)
+        var features = GetDefaultFeatures(shellJson.Document!)
             .Select(x => new DemoShellFeatureResponse(x.Key, x.Value?.ToJsonString(IndentedJsonOptions) ?? "{}"))
             .OrderBy(x => x.Name)
             .ToArray();
 
-        return Results.Ok(new DemoShellResponse(path, json, features));
+        return Results.Ok(new DemoShellResponse(shellJson.Path, shellJson.Json, features));
     }
 
     private static async Task<IResult> SaveShellDocumentAsync(JsonElement body, IWebHostEnvironment environment, CancellationToken cancellationToken)
@@ -324,17 +418,151 @@ internal static class ElsaDemoApi
         }
     }
 
+    private static async Task<DemoShellDocumentReadResult> ReadShellDocumentAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
+    {
+        var path = GetShellsJsonPath(environment);
+        if (!File.Exists(path))
+            return new(path, "", null, Results.NotFound(new DemoErrorResponse($"Could not find shells.json at '{path}'.")));
+
+        var json = await File.ReadAllTextAsync(path, cancellationToken);
+        var document = ParseShellDocument(json);
+        return document is null
+            ? new(path, json, null, Results.BadRequest(new DemoErrorResponse("shells.json is not valid JSON.")))
+            : new(path, json, document, null);
+    }
+
     private static JsonObject GetDefaultFeatures(JsonNode document)
     {
         var features = document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject;
         return features ?? [];
     }
 
+    private static IEnumerable<object> EnumerateFeatureDescriptors(object snapshot)
+    {
+        var featureDescriptors = snapshot.GetType().GetProperty("FeatureDescriptors")?.GetValue(snapshot);
+        return featureDescriptors is System.Collections.IEnumerable enumerable
+            ? enumerable.Cast<object>()
+            : [];
+    }
+
+    private static string? GetStringProperty(object source, string propertyName)
+    {
+        var value = source.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(source);
+        return value?.ToString();
+    }
+
+    private static void UpsertFeature(
+        IDictionary<string, DemoFeatureCatalogItemBuilder> items,
+        string featureId,
+        string defaultConfigurationJson,
+        Action<DemoFeatureCatalogItemBuilder> configure)
+    {
+        if (!items.TryGetValue(featureId, out var builder))
+        {
+            builder = new DemoFeatureCatalogItemBuilder
+            {
+                Id = featureId,
+                ConfigurationJson = defaultConfigurationJson
+            };
+            items[featureId] = builder;
+        }
+
+        configure(builder);
+    }
+
+    private static IReadOnlyList<string> MergeCategories(string? category, IReadOnlyList<string>? categories)
+    {
+        var result = new List<string>();
+        if (!string.IsNullOrWhiteSpace(category))
+            result.Add(category);
+
+        if (categories is not null)
+            result.AddRange(categories.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+        return result.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static DemoPackageManifestReadResult ReadPackageManifest(DemoPackageSummary package, IWebHostEnvironment environment)
+    {
+        try
+        {
+            var archivePath = ResolvePackageArchivePath(package, environment);
+            if (archivePath is null)
+                return DemoPackageManifestReadResult.Missing("Could not locate the package archive.");
+
+            using var stream = File.OpenRead(archivePath);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            var entries = archive.Entries
+                .Where(x => IsPackageManifestPath(x.FullName))
+                .ToArray();
+            var selected = entries.FirstOrDefault(x => IsRootPackageManifestPath(x.FullName))
+                ?? entries.FirstOrDefault(x => IsFallbackPackageManifestPath(x.FullName));
+
+            if (selected is null)
+                return DemoPackageManifestReadResult.Missing("Package manifest not found.");
+
+            using var manifestStream = selected.Open();
+            using var memory = new MemoryStream();
+            manifestStream.CopyTo(memory);
+            var bytes = memory.ToArray();
+            var json = System.Text.Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
+            var manifest = JsonSerializer.Deserialize<DemoPackageManifest>(json, DemoPackageManifestJsonOptions);
+            if (manifest is null)
+                return DemoPackageManifestReadResult.Missing("Package manifest was empty.");
+
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            return DemoPackageManifestReadResult.Found(NormalizePackagePath(selected.FullName), hash, manifest);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
+        {
+            return DemoPackageManifestReadResult.Missing(ex.Message);
+        }
+    }
+
+    private static string? ResolvePackageArchivePath(DemoPackageSummary package, IWebHostEnvironment environment)
+    {
+        if (File.Exists(package.InstallPath) && string.Equals(Path.GetExtension(package.InstallPath), ".nupkg", StringComparison.OrdinalIgnoreCase))
+            return package.InstallPath;
+
+        if (Directory.Exists(package.InstallPath))
+        {
+            var direct = Directory.EnumerateFiles(package.InstallPath, "*.nupkg", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            if (direct is not null)
+                return direct;
+        }
+
+        var dropFolder = GetPackageDropFolder(environment);
+        if (!Directory.Exists(dropFolder))
+            return null;
+
+        return Directory
+            .EnumerateFiles(dropFolder, "*.nupkg", SearchOption.AllDirectories)
+            .FirstOrDefault(path => string.Equals(Path.GetFileNameWithoutExtension(path), package.Id, StringComparison.OrdinalIgnoreCase)
+                || Path.GetFileName(path).StartsWith($"{package.Id}.", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPackageManifestPath(string path) =>
+        IsRootPackageManifestPath(path) || IsFallbackPackageManifestPath(path);
+
+    private static bool IsRootPackageManifestPath(string path) =>
+        string.Equals(NormalizePackagePath(path), "elsa-package.json", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFallbackPackageManifestPath(string path) =>
+        string.Equals(NormalizePackagePath(path), "build/elsa-package.json", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizePackagePath(string path) =>
+        path.Replace('\\', '/').TrimStart('/');
+
     private static string GetPackageDropFolder(IWebHostEnvironment environment) =>
         Path.Combine(environment.ContentRootPath, "packages");
 
     private static string GetShellsJsonPath(IWebHostEnvironment environment) =>
         Path.Combine(environment.ContentRootPath, "shells.json");
+
+    private static readonly JsonSerializerOptions DemoPackageManifestJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
 }
 
 internal sealed record DemoStateResponse(
@@ -348,6 +576,22 @@ internal sealed record DemoPackagesResponse(
     DateTimeOffset PersistedAtUtc,
     string CorrelationId,
     IReadOnlyList<DemoPackageSummary> Packages);
+
+internal sealed record DemoFeatureCatalogItemResponse(
+    string Id,
+    string? DisplayName,
+    string? Description,
+    IReadOnlyList<string> Categories,
+    string SourceKind,
+    string? PackageId,
+    string? PackageVersion,
+    bool Enabled,
+    string ConfigurationJson,
+    bool Advanced,
+    bool Experimental,
+    string? ManifestPath,
+    string? ManifestHash,
+    string? ReadError);
 
 internal sealed record DemoReconcileResponse(
     string Outcome,
@@ -436,3 +680,62 @@ internal sealed record DemoFeatureUpdateRequest(bool Enabled, JsonElement Config
 internal sealed record DemoSaveShellResponse(string Path, string Json);
 
 internal sealed record DemoErrorResponse(string Error);
+
+internal sealed record DemoShellDocumentReadResult(string Path, string Json, JsonNode? Document, IResult? Error);
+
+internal sealed class DemoFeatureCatalogItemBuilder
+{
+    public string Id { get; init; } = "";
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public IReadOnlyList<string> Categories { get; set; } = [];
+    public string? SourceKind { get; set; }
+    public string? PackageId { get; set; }
+    public string? PackageVersion { get; set; }
+    public bool Enabled { get; set; }
+    public string ConfigurationJson { get; set; } = "{}";
+    public bool Advanced { get; set; }
+    public bool Experimental { get; set; }
+    public string? ManifestPath { get; set; }
+    public string? ManifestHash { get; set; }
+    public string? ReadError { get; set; }
+
+    public DemoFeatureCatalogItemResponse ToResponse() =>
+        new(
+            Id,
+            DisplayName ?? Id,
+            Description,
+            Categories,
+            SourceKind ?? "shell",
+            PackageId,
+            PackageVersion,
+            Enabled,
+            ConfigurationJson,
+            Advanced,
+            Experimental,
+            ManifestPath,
+            ManifestHash,
+            ReadError);
+}
+
+internal sealed record DemoPackageManifestReadResult(string? Path, string? Hash, DemoPackageManifest? Manifest, string? ReadError)
+{
+    public static DemoPackageManifestReadResult Found(string path, string hash, DemoPackageManifest manifest) =>
+        new(path, hash, manifest, null);
+
+    public static DemoPackageManifestReadResult Missing(string readError) =>
+        new(null, null, null, readError);
+}
+
+internal sealed record DemoPackageManifest(DemoPackageIdentity? Package, IReadOnlyList<DemoPackageFeatureManifest>? Features);
+
+internal sealed record DemoPackageIdentity(string? Id, string? Version);
+
+internal sealed record DemoPackageFeatureManifest(
+    string? Id,
+    string? DisplayName,
+    string? Description,
+    string? Category,
+    IReadOnlyList<string>? Categories,
+    bool Advanced,
+    bool Experimental);
