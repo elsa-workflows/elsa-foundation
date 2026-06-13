@@ -4,7 +4,7 @@ This file is the AI-provider-neutral front door for AI agents and engineers work
 
 ## Repository intent
 
-`elsa-foundation` is the transitional Elsa brain. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
+`elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.
 

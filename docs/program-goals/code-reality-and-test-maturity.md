@@ -8,7 +8,7 @@ Steward(s): Joey plus active engineers/agents.
 
 ## Purpose
 
-Track the hard code and test reality work that remains after the Elsa brain operating model became usable.
+Track the hard code and test reality work that remains after the Elsa foundation workspace operating model became usable.
 
 This bucket exists so weak implementations, missing tests, TestContainers policy, event failure-strategy support, and verification follow-ups are not hidden inside broad operating-model reports.
 

@@ -1,6 +1,6 @@
 # Agent Maturity Audit
 
-Status: point-in-time audit for deciding whether the Elsa brain is mature enough to hand a large architecture unit to an AI agent.
+Status: point-in-time audit for deciding whether the Elsa foundation workspace is mature enough to hand a large architecture unit to an AI agent.
 
 ## Purpose
 
@@ -146,7 +146,7 @@ The runtime execution handoff, test maturity report, CShells composition evidenc
 
 Impact:
 
-The Elsa brain is starting to behave like a durable architecture workspace instead of a chat-history-dependent project.
+The Elsa foundation workspace is starting to behave like a durable architecture workspace instead of a chat-history-dependent project.
 
 Recommendation:
 
@@ -192,7 +192,7 @@ The drift guard is lightweight and the default program-goal bucket is clear. The
 
 Impact:
 
-The workspace can keep polishing the Elsa brain instead of using it for architecture decisions.
+The workspace can keep polishing the Elsa foundation workspace instead of using it for architecture decisions.
 
 Recommendation:
 
@@ -214,7 +214,7 @@ When another provider adapter is added, mirror only thin wrappers. Do not copy a
 
 ## Maturity Verdict
 
-The Elsa brain is mature enough to hand an AI agent a large architecture piece if the handoff is constrained.
+The Elsa foundation workspace is mature enough to hand an AI agent a large architecture piece if the handoff is constrained.
 
 It is not mature enough for a vague instruction like "go design runtime" without a reviewed prompt. The safe model is:
 
@@ -243,4 +243,4 @@ Use this checklist before letting a worker handle a large architecture unit:
 
 1. Do targeted constitution thinning from this audit, starting with safe explanatory/provisional material that already has a reference/report home.
 2. Prepare a reviewed handoff prompt template for large architecture workers.
-3. After runtime work lands, run this audit again against the runtime handoff path to see whether the Elsa brain still routes correctly.
+3. After runtime work lands, run this audit again against the runtime handoff path to see whether the Elsa foundation workspace still routes correctly.

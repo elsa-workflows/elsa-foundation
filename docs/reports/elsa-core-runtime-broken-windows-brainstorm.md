@@ -168,4 +168,4 @@ Each topic-specific note should use this shape:
 
 ## Initial Program-Goal Alignment
 
-This work belongs to `Runtime Execution Seam` because it directly affects the runnable artifact boundary, runtime context/value model, workflow-as-activity behavior, execution middleware, and Runtime-owned import/compile/publish decisions. It should not broaden into a general Elsa Brain operating-model cleanup unless the analysis uncovers source-of-truth or governance issues outside runtime execution.
+This work belongs to `Runtime Execution Seam` because it directly affects the runnable artifact boundary, runtime context/value model, workflow-as-activity behavior, execution middleware, and Runtime-owned import/compile/publish decisions. It should not broaden into a general Elsa Foundation operating-model cleanup unless the analysis uncovers source-of-truth or governance issues outside runtime execution.

@@ -4,7 +4,7 @@ Status: point-in-time review for deciding whether `elsa-foundation` is ready to 
 
 ## Purpose
 
-Assess whether the workspace is ready for first-user handoff after the Elsa brain operating model was split into focused program-goal buckets.
+Assess whether the workspace is ready for first-user handoff after the Elsa foundation workspace operating model was split into focused program-goal buckets.
 
 This report does not create architecture rules and does not choose the next implementation unit. It records launch-readiness findings so handoff work can continue through [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) and hard architecture/code work can start in focused buckets.
 
@@ -39,7 +39,7 @@ It is not ready for an unconstrained prompt such as "understand the whole repo a
 | Finding | Classification | Launch impact | Route |
 |---|---|---|---|
 | The entry path is coherent: `README.md` -> `AGENTS.md` / docs index -> architecture tour -> skills / program goals / reports. | Strength | New users have a navigable start path. | Keep under [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md). |
-| Program-goal buckets now separate launch readiness, runtime execution, constitution readiness, code/test reality, feature composition, and workspace split readiness. | Strength | New users can pick a focused bucket instead of continuing broad Elsa Brain polishing. | [Program goals index](../program-goals/README.md). |
+| Program-goal buckets now separate launch readiness, runtime execution, constitution readiness, code/test reality, feature composition, and workspace split readiness. | Strength | New users can pick a focused bucket instead of continuing broad foundation-workspace polishing. | [Program goals index](../program-goals/README.md). |
 | The Architecture Tour is short and correctly routes readers to deeper surfaces. | Strength | It can be the first orientation skill without becoming a second constitution. | [Architecture tour](../architecture-tour.md). |
 | Reports are good evidence surfaces, especially runtime handoff, test maturity, CShells evidence, unfinished work, and agent maturity. | Strength | First workers can start from evidence rather than chat memory. | Reports index plus the relevant bucket. |
 | Maps are not safe as fresh verification facts when the manifest says `relevant_inputs_dirty: true` or freshness is uncertain. | Launch caution | When a thread invokes a map, refresh the relevant map layer first and review generated findings before continuing. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
@@ -73,5 +73,5 @@ Soft blockers to name in handoffs:
 1. Use [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) for first-user handoff checks.
 2. Use [Runtime Execution Seam](../program-goals/runtime-execution-seam.md) for tomorrow's incoming runtime architect.
 3. Use [Constitution Readiness](../program-goals/constitution-readiness.md), [Code Reality And Test Maturity](../program-goals/code-reality-and-test-maturity.md), [Feature Composition Readiness](../program-goals/feature-composition-readiness.md), and [Workspace Split Readiness](../program-goals/workspace-split-readiness.md) for the remaining launch work.
-4. Do not add more broad objectives to [Elsa Brain Operating Model](../program-goals/elsa-brain-operating-model.md) unless the routing layer itself breaks.
+4. Do not add more broad objectives to [Elsa Foundation Operating Model](../program-goals/elsa-foundation-operating-model.md) unless the routing layer itself breaks.
 5. Offer new users simple prompt options from [First-user prompt options](../reference/first-user-prompts.md) so they can choose orientation, workspace mechanics, or a hard next unit without guessing.

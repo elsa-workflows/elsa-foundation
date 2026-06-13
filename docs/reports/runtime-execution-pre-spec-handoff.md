@@ -136,7 +136,7 @@ Forbidden unless the constitution changes:
 
 Classification: known deferred architecture debt.
 
-Pre-spec instruction: do not refactor this as a drive-by fix during runtime execution planning. Keep it named, and require the eventual design-time declaration/runtime binding split after Elsa brain/workspace ownership stabilizes.
+Pre-spec instruction: do not refactor this as a drive-by fix during runtime execution planning. Keep it named, and require the eventual design-time declaration/runtime binding split after foundation/workspace ownership stabilizes.
 
 ### Shared activity/workflow input-output models
 
@@ -197,7 +197,7 @@ Runtime execution depends heavily on variables, expressions, workflow inputs, wo
 
 Classification: incomplete substrate.
 
-Pre-spec question: what can be ported from elsa-core once boundary rules are pinned, and what must be redesigned for the current Elsa brain architecture?
+Pre-spec question: what can be ported from elsa-core once boundary rules are pinned, and what must be redesigned for the current Elsa foundation workspace architecture?
 
 The architect should not treat JavaScript integration as proof that the full runtime substrate is ready. It is useful evidence for required seams and helper functions, but not a complete runtime design.
 

@@ -1,4 +1,4 @@
-# Elsa Brain Operating Model
+# Elsa Foundation Operating Model
 
 Status: active.
 
@@ -8,7 +8,7 @@ Steward(s): Joey plus active architects/agents.
 
 ## Purpose
 
-Turn `elsa-foundation` into the transitional Elsa brain: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
+Turn `elsa-foundation` into the transitional Elsa foundation workspace: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
 
 This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) only when a trigger is present.
 
@@ -36,7 +36,7 @@ This goal does not mean every session must repeat the full program overview. Use
 2. Preserve source-of-truth boundaries: constitution for gates, glossary for meanings, skills for workflows, maps for facts, reports for findings/open work, specs for feature/work-unit detail.
 3. Keep workflows amendable until architecture work proves them.
 4. Keep this bucket's active planned work aligned with the shared program-goals planner while using reports as evidence and inventory.
-5. Redirect new hard work to focused program-goal buckets instead of continuing broad Elsa Brain polishing.
+5. Redirect new hard work to focused program-goal buckets instead of continuing broad foundation-workspace polishing.
 
 ## Linked Surfaces
 
@@ -60,7 +60,7 @@ The temporary alignment sequence has been completed and captured in the normal s
 - Glossary coverage is captured in [glossary coverage audit](../reports/glossary-coverage-audit.md).
 - Current loose findings and concerns live in [unfinished work](../reports/unfinished-work.md) as inventory, not as the active queue.
 
-Use this goal file for planned work in the Elsa Brain Operating Model bucket. Use [unfinished work](../reports/unfinished-work.md) as an inventory of findings and concerns; when an inventory item becomes planned durable work for this operating-model effort, add or move it here before implementation.
+Use this goal file for planned work in the Elsa Foundation Operating Model bucket. Use [unfinished work](../reports/unfinished-work.md) as an inventory of findings and concerns; when an inventory item becomes planned durable work for this operating-model effort, add or move it here before implementation.
 
 ## Bucket Items
 

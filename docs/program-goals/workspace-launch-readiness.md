@@ -10,7 +10,7 @@ Steward(s): Joey plus active architects/agents.
 
 Prepare `elsa-foundation` to receive its first new architects and engineers without relying on chat history or broad operating-model grooming.
 
-This bucket exists to turn the Elsa brain from "still being polished" into a launchable workspace: a new user should be able to initialize the repo, take the architecture tour, understand the source-of-truth layers, find the active program-goal buckets, and know which work is unfinished, unratified, unverified, or intentionally deferred.
+This bucket exists to turn the Elsa foundation workspace from "still being polished" into a launchable workspace: a new user should be able to initialize the repo, take the architecture tour, understand the source-of-truth layers, find the active program-goal buckets, and know which work is unfinished, unratified, unverified, or intentionally deferred.
 
 ## In Scope
 
@@ -55,7 +55,7 @@ This bucket exists to turn the Elsa brain from "still being polished" into a lau
 - If an onboarding gap is discovered while preparing a worker handoff, fix the onboarding surface only when it prevents the handoff from being reliable.
 - When a handoff invokes maps and the manifest is dirty or freshness is uncertain, refresh the relevant map first and review generated findings before continuing.
 - Warn users that constitutions are draft/provisional when that affects their task; route ratification-focused work through [Constitution Readiness](constitution-readiness.md).
-- Do not continue broad Elsa Brain polishing. If the workspace can route the user, redirect to the focused hard-work bucket.
+- Do not continue broad foundation-workspace polishing. If the workspace can route the user, redirect to the focused hard-work bucket.
 
 ## Drift / Review Notes
 
@@ -64,4 +64,4 @@ This bucket exists to turn the Elsa brain from "still being polished" into a lau
 
 ## Removal or Completion Conditions
 
-Complete or pause this bucket when the first-user handoff path has been verified, the first architect can start from a named bucket, and remaining work is tracked in focused program-goal buckets rather than in the broad Elsa Brain Operating Model bucket.
+Complete or pause this bucket when the first-user handoff path has been verified, the first architect can start from a named bucket, and remaining work is tracked in focused program-goal buckets rather than in the broad Elsa Foundation Operating Model bucket.

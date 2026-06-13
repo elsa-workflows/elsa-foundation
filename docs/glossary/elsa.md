@@ -4,7 +4,7 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 
 | Term | Canonical meaning |
 |---|---|
-| Elsa brain | The repository role where foundation libraries, architecture gates, maps, skills, and glossary knowledge make Elsa navigable and verifiable. |
+| Elsa foundation workspace | The repository role where foundation libraries, architecture gates, maps, skills, and glossary knowledge make Elsa navigable and verifiable. |
 | Elsa host | The `Elsa.Server` ASP.NET Core application instance that composes selected Elsa features. |
 | Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
 | Elsa foundation repo | `elsa-foundation`, this repository: the transitional baseline for Elsa foundation libraries, architecture knowledge, maps, specs, and default implementation work. |
