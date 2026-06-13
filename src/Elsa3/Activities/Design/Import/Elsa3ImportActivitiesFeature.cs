@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
@@ -6,8 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa3.Activities.Design.Import;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Elsa3")]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Import")]
 [ShellFeature(
-    name: "Elsa3ImportJsonActivities"
+    name: "Elsa3ImportJsonActivities",
+    Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline."
 )]
 public class Elsa3ImportActivitiesFeature : IShellFeature
 {

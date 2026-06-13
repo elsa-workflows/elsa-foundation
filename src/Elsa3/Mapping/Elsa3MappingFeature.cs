@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa3.Mapping.Contracts;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
@@ -6,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa3.Mapping;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Elsa3")]
+[ManifestFeatureCategory("Mapping")]
 [ShellFeature(
     name: "Elsa3Mapping",
     Description = "Provides converters for Elsa3 workflow models"

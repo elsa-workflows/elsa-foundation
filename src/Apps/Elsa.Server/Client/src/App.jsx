@@ -343,6 +343,13 @@ function getConsoleStreamName(stream) {
   return stream === 1 || stream === "stderr" || stream === "Stderr" ? "stderr" : "stdout";
 }
 
+function formatDateTime(value) {
+  if (!value)
+    return "Not set";
+
+  return new Date(value).toLocaleString();
+}
+
 function compareConsoleEntries(left, right) {
   const timestampDelta = Date.parse(left.timestamp) - Date.parse(right.timestamp);
   if (timestampDelta !== 0)
@@ -401,6 +408,12 @@ export function App() {
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [featureCatalogItems, setFeatureCatalogItems] = useState([]);
+  const [featureSearch, setFeatureSearch] = useState("");
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [togglingFeatures, setTogglingFeatures] = useState(new Set());
+  const [executables, setExecutables] = useState([]);
+  const [executablesLoading, setExecutablesLoading] = useState(false);
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
   const seenConsoleLineIds = useRef(new Set());
@@ -443,10 +456,58 @@ export function App() {
     ].some((value) => value?.toLowerCase().includes(query)));
   }, [activities, activitySearch]);
 
+  const filteredFeatureCatalogItems = useMemo(() => {
+    const query = featureSearch.trim().toLowerCase();
+    if (!query)
+      return featureCatalogItems;
+
+    return featureCatalogItems.filter((feature) => [
+      feature.id,
+      feature.displayName,
+      feature.description,
+      feature.sourceKind,
+      feature.packageId,
+      feature.packageVersion,
+      ...(feature.categories ?? [])
+    ].some((value) => value?.toLowerCase().includes(query)));
+  }, [featureCatalogItems, featureSearch]);
+
   const visibleConsoleLines = consolePaused ? pausedConsoleLines ?? consoleLines : consoleLines;
   const queuedConsoleLineCount = consolePaused
     ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
     : 0;
+  const mainViewMeta = useMemo(() => {
+    if (mainView === "workflow") {
+      return {
+        icon: FileJson,
+        title: "Workflow Definition",
+        description: "Submit, publish, and execute against the mounted default shell."
+      };
+    }
+
+    if (mainView === "activities") {
+      return {
+        icon: Activity,
+        title: "Activity Catalog",
+        description: `${activities.length} activit${activities.length === 1 ? "y" : "ies"} available in /default.`
+      };
+    }
+
+    if (mainView === "features") {
+      const enabledCount = featureCatalogItems.filter((feature) => feature.enabled).length;
+      return {
+        icon: PlugZap,
+        title: "Feature Catalog",
+        description: `${enabledCount} enabled of ${featureCatalogItems.length} available shell feature${featureCatalogItems.length === 1 ? "" : "s"}.`
+      };
+    }
+
+    return {
+      icon: Rocket,
+      title: "Executable Artifacts",
+      description: `${executables.length} published artifact${executables.length === 1 ? "" : "s"} in the runtime store.`
+    };
+  }, [activities.length, executables.length, featureCatalogItems, mainView]);
 
   const addConsoleEntries = useCallback((entries) => {
     if (entries.length === 0)
@@ -536,6 +597,34 @@ export function App() {
   useEffect(() => {
     refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshActivities]);
+
+  const refreshFeatures = useCallback(async () => {
+    setFeaturesLoading(true);
+    try {
+      const catalog = await request("/_demo/features");
+      setFeatureCatalogItems(catalog ?? []);
+    } finally {
+      setFeaturesLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshFeatures().catch((error) => addConsoleLine("stderr", `Feature catalog refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshFeatures]);
+
+  const refreshExecutables = useCallback(async () => {
+    setExecutablesLoading(true);
+    try {
+      const artifacts = await request("/_demo/workflows/executables");
+      setExecutables(artifacts ?? []);
+    } finally {
+      setExecutablesLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshExecutables().catch((error) => addConsoleLine("stderr", `Executable artifact refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshExecutables]);
 
   const showPackageNotification = useCallback((events) => {
     const changedPackages = events
@@ -718,6 +807,7 @@ export function App() {
       });
       setArtifactId(response.artifactId);
       addConsoleLine("stdout", `Published artifact: ${response.artifactId}`);
+      await refreshExecutables();
     });
   }
 
@@ -756,6 +846,7 @@ export function App() {
       addConsoleLine("stdout", `Reconcile ${reconcile.outcome}: ${reconcile.correlationId}`);
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
     });
   }
 
@@ -784,6 +875,8 @@ export function App() {
       }
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
+      await refreshExecutables();
     });
     setCompleted(new Set());
   }
@@ -797,8 +890,43 @@ export function App() {
       });
       setShellJson(response.json);
       await refreshState();
+      await refreshFeatures();
       addConsoleLine("stdout", `Feature enabled: ${featureName}`);
     });
+  }
+
+  async function toggleFeature(feature) {
+    const nextEnabled = !feature.enabled;
+    setTogglingFeatures((current) => new Set([...current, feature.id]));
+    setFeatureCatalogItems((current) => current.map((item) =>
+      item.id === feature.id ? { ...item, enabled: nextEnabled } : item));
+    setStatus(`${nextEnabled ? "Enabling" : "Disabling"} feature ${feature.id}...`);
+    addConsoleLine("stdout", `${nextEnabled ? "Enabling" : "Disabling"} feature ${feature.id}...`);
+
+    try {
+      const configuration = nextEnabled ? JSON.parse(feature.configurationJson || "{}") : {};
+      const response = await request(`/_demo/shells/default/features/${encodeURIComponent(feature.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: nextEnabled, configuration })
+      });
+      setShellJson(response.json);
+      if (nextEnabled)
+        markComplete("feature");
+      await refreshState();
+      await refreshFeatures();
+      setStatus("Ready");
+      addConsoleLine("stdout", `Feature ${nextEnabled ? "enabled" : "disabled"}: ${feature.id}`);
+    } catch (error) {
+      setStatus(error.message);
+      addConsoleLine("stderr", error.message);
+      await refreshFeatures().catch(() => {});
+    } finally {
+      setTogglingFeatures((current) => {
+        const next = new Set(current);
+        next.delete(feature.id);
+        return next;
+      });
+    }
   }
 
   async function saveShellJson() {
@@ -810,6 +938,7 @@ export function App() {
       });
       setShellJson(response.json);
       await refreshState();
+      await refreshFeatures();
       addConsoleLine("stdout", "shells.json saved.");
     });
   }
@@ -824,6 +953,8 @@ export function App() {
       activityVersionCache.current.clear();
       await refreshState();
       await refreshActivities();
+      await refreshFeatures();
+      await refreshExecutables();
       addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
   }
@@ -904,6 +1035,8 @@ export function App() {
     }
   }
 
+  const MainViewIcon = mainViewMeta.icon;
+
   return (
     <div className="app-shell" style={{ "--console-height": `${consoleHeight}px` }}>
       <header className="topbar">
@@ -942,7 +1075,6 @@ export function App() {
             <strong>{packageNotification.title}</strong>
             <span>{packageNotification.message}</span>
           </div>
-          <button type="button" onClick={reloadShells}>Reload shells</button>
         </div>
       )}
 
@@ -953,12 +1085,10 @@ export function App() {
           <div className="panel-titlebar">
             <div>
               <h2>
-                {mainView === "workflow" ? <FileJson size={18} /> : <Activity size={18} />}
-                {mainView === "workflow" ? "Workflow Definition" : "Activity Catalog"}
+                <MainViewIcon size={18} />
+                {mainViewMeta.title}
               </h2>
-              <p>{mainView === "workflow"
-                ? "Submit, publish, and execute against the mounted default shell."
-                : `${activities.length} activit${activities.length === 1 ? "y" : "ies"} available in /default.`}</p>
+              <p>{mainViewMeta.description}</p>
             </div>
             {mainView === "workflow" ? (
               <select value={selectedSample} onChange={(event) => selectSample(event.target.value)}>
@@ -966,9 +1096,17 @@ export function App() {
                   <option key={key} value={key}>{sample.label}</option>
                 ))}
               </select>
-            ) : (
+            ) : mainView === "activities" ? (
               <button type="button" className="small-button" onClick={refreshActivities} disabled={activitiesLoading}>
                 {activitiesLoading ? "Refreshing" : "Refresh"}
+              </button>
+            ) : mainView === "features" ? (
+              <button type="button" className="small-button" onClick={refreshFeatures} disabled={featuresLoading}>
+                {featuresLoading ? "Refreshing" : "Refresh"}
+              </button>
+            ) : (
+              <button type="button" className="small-button" onClick={refreshExecutables} disabled={executablesLoading}>
+                {executablesLoading ? "Refreshing" : "Refresh"}
               </button>
             )}
           </div>
@@ -983,6 +1121,14 @@ export function App() {
                 <Activity size={15} />
                 Activities
               </button>
+              <button type="button" className={mainView === "features" ? "active" : ""} onClick={() => setMainView("features")}>
+                <PlugZap size={15} />
+                Features
+              </button>
+              <button type="button" className={mainView === "artifacts" ? "active" : ""} onClick={() => setMainView("artifacts")}>
+                <Rocket size={15} />
+                Artifacts
+              </button>
             </div>
             {mainView === "workflow" ? (
               <>
@@ -990,11 +1136,23 @@ export function App() {
                 <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
                 <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
               </>
-            ) : (
+            ) : mainView === "activities" ? (
               <div className="activity-search">
                 <Search size={15} />
                 <input value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} placeholder="Filter activities" />
               </div>
+            ) : mainView === "features" ? (
+              <div className="activity-search">
+                <Search size={15} />
+                <input value={featureSearch} onChange={(event) => setFeatureSearch(event.target.value)} placeholder="Filter features" />
+              </div>
+            ) : mainView === "artifacts" ? (
+              <div className="artifact-toolbar-summary">
+                <Rocket size={15} />
+                <span>{executables.length} artifact{executables.length === 1 ? "" : "s"}</span>
+              </div>
+            ) : (
+              null
             )}
           </div>
 
@@ -1013,8 +1171,18 @@ export function App() {
                 <Artifact label="Execution" value={executionId || "Not executed"} />
               </div>
             </>
-          ) : (
+          ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
+          ) : mainView === "features" ? (
+            <FeatureCatalog
+              features={filteredFeatureCatalogItems}
+              totalCount={featureCatalogItems.length}
+              loading={featuresLoading}
+              togglingFeatures={togglingFeatures}
+              onToggle={toggleFeature}
+            />
+          ) : (
+            <WorkflowExecutableArtifacts artifacts={executables} loading={executablesLoading} />
           )}
         </section>
 
@@ -1036,7 +1204,6 @@ export function App() {
             <p className="path-hint">{dropFolder || "packages"}</p>
             <div className="split-actions package-actions">
               <ActionButton icon={RotateCcw} busy={busy === "reset"} onClick={resetDemo}>Reset</ActionButton>
-              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
             </div>
           </section>
 
@@ -1067,7 +1234,7 @@ export function App() {
             />
             <div className="split-actions">
               <ActionButton icon={PlugZap} busy={busy === "feature"} onClick={enableFeature}>Enable</ActionButton>
-              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
+              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload shells</ActionButton>
             </div>
           </section>
 
@@ -1163,6 +1330,110 @@ function ActivityCatalog({ activities, totalCount, loading }) {
             <div className="activity-row-meta">
               <span>{activity.category || "Uncategorized"}</span>
               <code>{activity.id}</code>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onToggle }) {
+  const enabledCount = features.filter((feature) => feature.enabled).length;
+
+  return (
+    <div className="feature-catalog">
+      <div className="activity-summary">
+        <strong>{enabledCount}</strong>
+        <span>{features.length === totalCount ? "enabled shown" : `enabled shown of ${totalCount}`}</span>
+      </div>
+      <div className="feature-list">
+        {loading && features.length === 0 && <p className="muted">Loading feature catalog...</p>}
+        {!loading && features.length === 0 && <p className="muted">No features match the current filter.</p>}
+        {features.map((feature) => {
+          const toggling = togglingFeatures.has(feature.id);
+          const disabled = Boolean(feature.readError) || toggling;
+          return (
+            <div className={`feature-row ${feature.enabled ? "enabled" : ""} ${feature.readError ? "warning" : ""}`} key={feature.id}>
+              <button
+                type="button"
+                className="feature-toggle"
+                role="switch"
+                aria-checked={feature.enabled}
+                disabled={disabled}
+                title={`${feature.enabled ? "Disable" : "Enable"} ${feature.id}`}
+                onClick={() => onToggle(feature)}
+              >
+                <span />
+              </button>
+              <div className="feature-row-main">
+                <div className="feature-title-line">
+                  <strong>{feature.displayName || feature.id}</strong>
+                  {feature.advanced && <span className="feature-flag">Advanced</span>}
+                  {feature.experimental && <span className="feature-flag warning">Experimental</span>}
+                </div>
+                <span>{feature.id}</span>
+                {feature.description && <p>{feature.description}</p>}
+                {feature.readError && <p className="feature-warning">Manifest: {feature.readError}</p>}
+                {(feature.categories?.length ?? 0) > 0 && (
+                  <div className="feature-category-list">
+                    {feature.categories.map((category) => <span key={category}>{category}</span>)}
+                  </div>
+                )}
+              </div>
+              <div className="feature-row-meta">
+                <span>{getFeatureSourceLabel(feature)}</span>
+                <code>{feature.packageId ? `${feature.packageId} ${feature.packageVersion ?? ""}`.trim() : feature.sourceKind}</code>
+                {feature.manifestPath && <small>{feature.manifestPath}</small>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function getFeatureSourceLabel(feature) {
+  if (feature.sourceKind === "manifest")
+    return "Package manifest";
+
+  if (feature.sourceKind === "manifest-error")
+    return "Package warning";
+
+  if (feature.sourceKind === "runtime")
+    return "Runtime catalog";
+
+  return "shells.json";
+}
+
+function WorkflowExecutableArtifacts({ artifacts, loading }) {
+  return (
+    <div className="executable-artifacts">
+      <div className="activity-summary">
+        <strong>{artifacts.length}</strong>
+        <span>published</span>
+      </div>
+      <div className="executable-list">
+        {loading && artifacts.length === 0 && <p className="muted">Loading executable artifacts...</p>}
+        {!loading && artifacts.length === 0 && <p className="muted">No workflow executable artifacts have been published yet.</p>}
+        {artifacts.map((artifact) => (
+          <div className="executable-row" key={artifact.artifactId}>
+            <div className="activity-row-icon"><Rocket size={15} /></div>
+            <div className="executable-row-main">
+              <strong>{artifact.artifactId}</strong>
+              <span>{artifact.definitionId} / {artifact.definitionVersionId}</span>
+              <p>
+                {artifact.rootActivityType} {artifact.rootActivityVersion}
+                {" · "}
+                {artifact.nodeCount} node{artifact.nodeCount === 1 ? "" : "s"}
+                {" · "}
+                {artifact.resumeTargetCount} resume target{artifact.resumeTargetCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="executable-row-meta">
+              <span>{formatDateTime(artifact.publishedAt ?? artifact.createdAt)}</span>
+              <code>{artifact.artifactVersion} / {artifact.artifactHash}</code>
             </div>
           </div>
         ))}

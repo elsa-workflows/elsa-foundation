@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -18,8 +19,13 @@ namespace Elsa.Workflows.Design.Validations;
 /// errors. Activity-specific validators ship in their activity feature (FR-034) by registering
 /// their own <see cref="IDraftValidator"/>.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Design")]
+[ManifestFeatureCategory("Validation")]
 [ShellFeature(
-    name: "WorkflowDesignValidations"
+    name: "WorkflowDesignValidations",
+    Description = "Registers baseline workflow draft validators and validation event handling."
 )]
 public class WorkflowDesignValidationsFeature : IShellFeature
 {
@@ -27,6 +33,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
     /// Maximum tree depth the activity-tree walker descends while validating. Bound to
     /// <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>. Default: 100.
     /// </summary>
+    [ManifestSetting(DisplayName = "Maximum recursion depth", Description = "Maximum activity tree depth inspected by workflow draft validation.", Category = "Validation", DefaultValue = "100")]
     public int MaxRecursionDepth { get; set; } = 100;
 
     public void ConfigureServices(IServiceCollection services)

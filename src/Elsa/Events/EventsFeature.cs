@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Channels;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Services;
@@ -8,8 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Events;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Events")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
-    name: "Events"
+    name: "Events",
+    Description = "Provides event publishing, event pipeline dispatch, and background event processing services."
 )]
 public class EventsFeature : IShellFeature
 {

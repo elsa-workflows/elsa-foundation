@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Caching.Core;
 using Elsa.Caching.Memory.Options;
 using Elsa.Caching.Memory.Services;
@@ -9,6 +10,9 @@ namespace Elsa.Caching.Memory;
 /// <summary>
 /// Configures the MemoryCache.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Caching")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "MemoryCache",
     DisplayName = "Memory Cache",
@@ -16,6 +20,7 @@ namespace Elsa.Caching.Memory;
 )]
 public class MemoryCacheFeature : IShellFeature
 {
+    [ManifestSetting(DisplayName = "Cache duration", Description = "Default duration for entries stored by the memory cache.", Category = "Caching", UIHint = "duration")]
     public TimeSpan CacheDuration { get; set; } = TimeSpan.FromMinutes(1);
 
     public void ConfigureServices(IServiceCollection services)

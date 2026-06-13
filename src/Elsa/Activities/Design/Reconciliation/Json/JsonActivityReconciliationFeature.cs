@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
@@ -19,6 +20,10 @@ namespace Elsa.Activities.Design.Reconciliation.Json;
 /// re-registering just that contract afterwards. The options instance is the only singleton — it is
 /// an application-wide static value; everything else "just executes" and is therefore scoped (§2.5.1).
 /// </remarks>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Design")]
+[ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "JsonActivityReconciliation",
     Description = "Reconciliation source that reads activity definitions from JSON files."

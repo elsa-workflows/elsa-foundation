@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Composition.Runtime.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,10 @@ namespace Elsa.Activities.Composition.Runtime;
 /// <c>Elsa.Workflows.Primitives.Models.WorkflowIdentity</c>). References no <c>Elsa.*.Design.*</c> project
 /// (Elsa §E2.2). Contributes its constructor to the runtime constructor registry via DI.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Runtime")]
+[ManifestFeatureCategory("Composition")]
 [ShellFeature(
     name: "ActivitiesCompositionRuntime",
     DisplayName = "Activities Composition (Runtime)",
