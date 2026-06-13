@@ -1360,17 +1360,18 @@ export function App() {
     });
   }
 
-  async function executeWorkflow(stepKey = "execute") {
-    if (!artifactId)
+  async function executeWorkflow(stepKey = "execute", artifactIdOverride = artifactId) {
+    if (!artifactIdOverride)
       throw new Error("Publish the workflow before executing.");
 
     await runAction(stepKey, "Executing workflow artifact...", async () => {
-      const response = await request(`/default/runtime/workflows/${artifactId}/execute`, {
+      const response = await request(`/default/runtime/workflows/${artifactIdOverride}/execute`, {
         method: "POST",
         body: "{}"
       });
+      setArtifactId(artifactIdOverride);
       setExecutionId(response.workflowExecutionId ?? "");
-      addConsoleLine("stdout", `Execution started: ${response.workflowExecutionId ?? "accepted"}`);
+      addConsoleLine("stdout", `Execution started for ${artifactIdOverride}: ${response.workflowExecutionId ?? "accepted"}`);
     });
   }
 
@@ -1895,7 +1896,12 @@ export function App() {
           ) : mainView === "stack" ? (
             <DemoPackageStack packages={demoStackPackages} />
           ) : (
-            <WorkflowExecutableArtifacts artifacts={executables} loading={executablesLoading} />
+            <WorkflowExecutableArtifacts
+              artifacts={executables}
+              loading={executablesLoading}
+              busy={busy}
+              onExecute={(artifact) => executeWorkflow(`execute:${artifact.artifactId}`, artifact.artifactId)}
+            />
           )}
         </section>
 
@@ -2691,7 +2697,7 @@ function getFeatureSourceLabel(feature) {
   return "shells.json";
 }
 
-function WorkflowExecutableArtifacts({ artifacts, loading }) {
+function WorkflowExecutableArtifacts({ artifacts, loading, busy, onExecute }) {
   return (
     <div className="executable-artifacts">
       <div className="activity-summary">
@@ -2719,6 +2725,16 @@ function WorkflowExecutableArtifacts({ artifacts, loading }) {
               <span>{formatDateTime(artifact.publishedAt ?? artifact.createdAt)}</span>
               <code>{artifact.artifactVersion} / {artifact.artifactHash}</code>
             </div>
+            <button
+              type="button"
+              className="executable-execute-button"
+              onClick={() => onExecute(artifact)}
+              disabled={Boolean(busy)}
+              title={`Execute ${artifact.artifactId}`}
+            >
+              {busy === `execute:${artifact.artifactId}` ? <RefreshCw className="spin" size={15} /> : <Play size={15} />}
+              <span>{busy === `execute:${artifact.artifactId}` ? "Executing" : "Execute"}</span>
+            </button>
           </div>
         ))}
       </div>
