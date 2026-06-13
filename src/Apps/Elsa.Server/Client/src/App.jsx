@@ -251,7 +251,7 @@ const themeFamilies = [
   },
   {
     id: "elsa",
-    label: "Elsa",
+    label: "Beacon",
     colors: {
       light: ["#eee8df", "#fffaf1", "#d88b28"],
       dark: ["#12110e", "#1c1a15", "#f0a83e"]
