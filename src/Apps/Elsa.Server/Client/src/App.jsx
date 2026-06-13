@@ -264,6 +264,7 @@ const demoStackPackages = [
     url: "https://www.elsaworkflows.io",
     imageUrl: "https://www.elsaworkflows.io/assets/elsa-logo-CsMVb5ff.png",
     imageAlt: "Elsa Workflows logo",
+    imageMode: "logo",
     role: "Workflow engine",
     description: "Provides the workflow definition, publishing, execution, activity catalog, and runtime APIs used by the demo.",
     details: ["Workflow definitions", "Publishing", "Execution"]
@@ -1933,7 +1934,7 @@ function DemoPackageStack({ packages }) {
       <div className="stack-grid">
         {packages.map((item) => (
           <article className="stack-card" key={item.name}>
-            <a className="stack-visual" href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
+            <a className={`stack-visual ${item.imageMode === "logo" ? "logo" : "preview"}`} href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
               <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
             </a>
             <div className="stack-card-body">
