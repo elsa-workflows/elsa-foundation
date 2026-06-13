@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: "/_content/Elsa.Admin.Web/admin/",
   plugins: [react()],
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production")
+  },
   build: {
     outDir: "../wwwroot/admin",
     emptyOutDir: true,
