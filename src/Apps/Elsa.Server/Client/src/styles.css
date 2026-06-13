@@ -777,6 +777,7 @@ p {
 }
 
 .toolbar {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -909,6 +910,7 @@ p {
 
 .activity-catalog {
   min-height: 0;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--surface);
@@ -916,6 +918,7 @@ p {
 
 .feature-catalog {
   min-height: 0;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--surface);
@@ -957,6 +960,7 @@ p {
 
 .executable-artifacts {
   min-height: 0;
+  min-width: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--surface);
