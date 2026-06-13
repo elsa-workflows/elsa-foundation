@@ -6,16 +6,17 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 78
-- Test projects: 15
-- Domains: 18
-- Direct cross-domain references: 200
+- Source projects: 75
+- Test projects: 12
+- Domains: 19
+- Direct cross-domain references: 212
 
 ## Domains
 
 | Domain | Source projects | Test projects | Roles |
 |---|---:|---:|---|
 | Elsa.Activities | 15 | 6 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Admin | 5 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Api | 1 | 0 | feature/implementation |
 | Elsa.Architecture | 0 | 1 | test |
 | Elsa.Caching | 2 | 0 | contract<br>feature/implementation |
@@ -24,21 +25,21 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Http | 3 | 0 | contract<br>feature/implementation |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 0 | contract<br>feature/implementation |
-| Elsa.Persistence | 4 | 1 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Persistence | 3 | 0 | contract<br>provider/implementation |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 0 | feature/implementation |
+| Elsa.Samples | 0 | 1 | test |
 | Elsa.Serialization | 3 | 0 | contract<br>feature/implementation |
 | Elsa.Server | 1 | 0 | host |
 | Elsa.Tasks | 3 | 0 | contract<br>feature/implementation<br>helper |
 | Elsa.Workflows | 16 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa3 | 3 | 0 | feature/implementation |
-| Other | 7 | 4 | contract<br>feature/implementation<br>provider/implementation<br>test |
 
 ## Projects
 
 | Project | Kind | Domain | Sub-domain | Role | Direct references |
 |---|---|---|---|---|---|
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | - | host | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | - | host | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Admin.Api<br>Elsa.Admin.Core<br>Elsa.Admin.Samples.Dashboard<br>Elsa.Admin.Samples.WeatherForecast<br>Elsa.Admin.Web<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | Elsa.Activities | Composition.Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | Design.Api | feature/implementation | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | Design.Core | contract | Elsa.Events.Core<br>Elsa.Primitives |
@@ -54,6 +55,11 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | Runtime.Core | contract | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | Sequence | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | source | Elsa.Admin | Api | feature/implementation | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core |
+| [Elsa.Admin.Core](../../src/Elsa/Admin/Core/Elsa.Admin.Core.csproj) | source | Elsa.Admin | Core | contract | Elsa.Events.Core |
+| [Elsa.Admin.Samples.Dashboard](../../src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | source | Elsa.Admin | Samples.Dashboard | feature/implementation | Elsa.Admin.Core<br>Elsa.Events.Core |
+| [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | source | Elsa.Admin | Samples.WeatherForecast | feature/implementation | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core |
+| [Elsa.Admin.Web](../../src/Elsa/Admin/Web/Elsa.Admin.Web.csproj) | source | Elsa.Admin | Web | feature/implementation | - |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | Elsa.Api | FastEndpoints | feature/implementation | Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | Core | contract | - |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | Memory | feature/implementation | Elsa.Caching.Core |
@@ -80,7 +86,6 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | source | Elsa.Persistence | Core | contract | Elsa.Primitives |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Elsa.Persistence | EFCore | provider/implementation | Elsa.Events.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Persistence.EFCore.Sqlite](../../src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Persistence | EFCore.Sqlite | provider/implementation | Elsa.Persistence.EFCore |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Elsa.Persistence | Groundwork | feature/implementation | Elsa.Tasks.Core<br>Groundwork.Core<br>Groundwork.Documents |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | Core | contract | - |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | Hosting | feature/implementation | Elsa.Primitives |
 | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | (root) | feature/implementation | - |
@@ -109,28 +114,18 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models |
 | [Elsa3.Models](../../src/Elsa3/Models/Elsa3.Models.csproj) | source | Elsa3 | - | feature/implementation | - |
-| [Groundwork.Core](../../src/Groundwork/Core/Groundwork.Core.csproj) | source | Other | - | contract | - |
-| [Groundwork.Documents](../../src/Groundwork/Documents/Groundwork.Documents.csproj) | source | Other | - | feature/implementation | Groundwork.Core |
-| [Groundwork.MongoDb](../../src/Groundwork/MongoDb/Groundwork.MongoDb.csproj) | source | Other | - | feature/implementation | Groundwork.Core<br>Groundwork.Documents |
-| [Groundwork.PostgreSql](../../src/Groundwork/PostgreSql/Groundwork.PostgreSql.csproj) | source | Other | - | feature/implementation | Groundwork.Core<br>Groundwork.Documents<br>Groundwork.Relational |
-| [Groundwork.Relational](../../src/Groundwork/Relational/Groundwork.Relational.csproj) | source | Other | - | feature/implementation | Groundwork.Core<br>Groundwork.Documents |
-| [Groundwork.SqlServer](../../src/Groundwork/SqlServer/Groundwork.SqlServer.csproj) | source | Other | - | feature/implementation | Groundwork.Core<br>Groundwork.Documents<br>Groundwork.Relational |
-| [Groundwork.Sqlite](../../src/Groundwork/Sqlite/Groundwork.Sqlite.csproj) | source | Other | - | provider/implementation | Groundwork.Core<br>Groundwork.Documents<br>Groundwork.Relational |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | Elsa.Activities | Composition.Tests | test | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Expressions<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Primitives |
 | [Elsa.Activities.Design.Tests.ClrFixture](../../tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | Design.Tests.ClrFixture | test | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | Design.Tests | test | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Elsa.Activities | Flowchart.Tests | test | Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Elsa.Activities | Runtime.Tests | test | Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Expressions<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | Sequence.Tests | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | Elsa.Admin | Tests | test | Elsa.Admin.Api<br>Elsa.Admin.Core<br>Elsa.Admin.Samples.Dashboard<br>Elsa.Admin.Samples.WeatherForecast<br>Elsa.Events<br>Elsa.Events.Core |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | Tests | test | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Elsa.Persistence | Groundwork.Tests | test | Elsa.Persistence.Groundwork<br>Groundwork.Relational<br>Groundwork.Sqlite |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | Design.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | Publishing.Api.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | Runtime.Tests | test | Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | Other | - | test | Groundwork.MongoDb |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Other | - | test | Groundwork.PostgreSql<br>Groundwork.SqlServer |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | Other | - | test | Groundwork.Sqlite |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | Other | - | test | Groundwork.Core<br>Groundwork.Documents<br>Groundwork.Relational |
 
 ## Direct Cross-Domain References
 
@@ -185,6 +180,14 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | Elsa.Admin | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | Elsa.Admin | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
+| [Elsa.Admin.Core](../../src/Elsa/Admin/Core/Elsa.Admin.Core.csproj) | Elsa.Admin | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
+| [Elsa.Admin.Samples.Dashboard](../../src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | Elsa.Admin | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
+| [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | Elsa.Admin | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
+| [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | Elsa.Admin | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | Elsa.Admin | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | Elsa.Events |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | Elsa.Admin | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api | [Elsa.Mediator.Core](../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Architecture | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | Elsa.Primitives |
@@ -228,11 +231,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | Elsa.Persistence | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | Elsa.Persistence | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | Elsa.Persistence | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | Elsa.Persistence | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | Elsa.Persistence | [Groundwork.Core](../../src/Groundwork/Core/Groundwork.Core.csproj) | Other |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | Elsa.Persistence | [Groundwork.Documents](../../src/Groundwork/Documents/Groundwork.Documents.csproj) | Other |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | Elsa.Persistence | [Groundwork.Relational](../../src/Groundwork/Relational/Groundwork.Relational.csproj) | Other |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | Elsa.Persistence | [Groundwork.Sqlite](../../src/Groundwork/Sqlite/Groundwork.Sqlite.csproj) | Other |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Design.Reconciliation.Core](../../src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj) | Elsa.Activities |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | Elsa.Serialization | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
@@ -247,6 +248,12 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | Elsa.Activities |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | Elsa.Activities |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | Elsa.Activities |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | Elsa.Activities |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | Elsa.Admin |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Admin.Core](../../src/Elsa/Admin/Core/Elsa.Admin.Core.csproj) | Elsa.Admin |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Admin.Samples.Dashboard](../../src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | Elsa.Admin |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | Elsa.Admin |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Admin.Web](../../src/Elsa/Admin/Web/Elsa.Admin.Web.csproj) | Elsa.Admin |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | Elsa.Caching |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | Elsa.Caching |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions |

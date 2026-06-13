@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 43
+- Discovered feature classes: 46
 
 ## Features
 
@@ -22,13 +22,14 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
+| AdminWebFeature | direct IShellFeature | Elsa.Admin.Web | IShellFeature | [AdminWebFeature.cs](../../src/Elsa/Admin/Web/AdminWebFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
+| DashboardAdminSampleFeature | direct IShellFeature | Elsa.Admin.Samples.Dashboard | IShellFeature | [DashboardAdminSampleFeature.cs](../../src/Elsa/Admin/Samples/Dashboard/DashboardAdminSampleFeature.cs) |
 | Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
-| GroundworkPersistenceFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceFeature.cs) |
 | HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/Elsa/Http/HttpFeature.cs) |
 | HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
@@ -50,8 +51,10 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| AdminApiFeature | FastEndpoints feature | Elsa.Admin.Api | FastEndpointsFeatureBase | [AdminApiFeature.cs](../../src/Elsa/Admin/Api/AdminApiFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | FastEndpoints feature | Elsa.Workflows.Runtime.JavaScript | FastEndpointsFeatureBase | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptRenderingEndpointsFeature | FastEndpoints feature | Elsa.Expressions.JavaScript.Rendering | FastEndpointsFeatureBase | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
+| WeatherForecastAdminSampleFeature | FastEndpoints feature | Elsa.Admin.Samples.WeatherForecast | FastEndpointsFeatureBase | [WeatherForecastAdminSampleFeature.cs](../../src/Elsa/Admin/Samples/WeatherForecast/WeatherForecastAdminSampleFeature.cs) |
 | WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |

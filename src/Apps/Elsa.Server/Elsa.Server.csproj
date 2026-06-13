@@ -31,12 +31,17 @@
 		</Content>
 	</ItemGroup>
 
-	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('Client/package.json')">
-		<Exec WorkingDirectory="Client" Command="npm ci" />
-		<Exec WorkingDirectory="Client" Command="npm run build" />
+	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('DemoClient/package.json')">
+		<Exec WorkingDirectory="DemoClient" Command="npm ci" />
+		<Exec WorkingDirectory="DemoClient" Command="npm run build" />
 	</Target>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Admin\Api\Elsa.Admin.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Admin\Core\Elsa.Admin.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Admin\Web\Elsa.Admin.Web.csproj" />
+		<ProjectReference Include="..\..\Elsa\Admin\Samples\Dashboard\Elsa.Admin.Samples.Dashboard.csproj" />
+		<ProjectReference Include="..\..\Elsa\Admin\Samples\WeatherForecast\Elsa.Admin.Samples.WeatherForecast.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />

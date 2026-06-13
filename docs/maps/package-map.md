@@ -8,12 +8,14 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 
 | Package | Versions | Projects |
 |---|---|---|
-| CShells.Abstractions | 0.0.26 | Elsa.Activities.Composition.Runtime (0.0.26)<br>Elsa.Activities.Design.Reconciliation (0.0.26)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.26)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.26)<br>Elsa.Activities.Flowchart (0.0.26)<br>Elsa.Activities.Primitives (0.0.26)<br>Elsa.Activities.Runtime (0.0.26)<br>Elsa.Activities.Sequence (0.0.26)<br>Elsa.Caching.Memory (0.0.26)<br>Elsa.Events (0.0.26)<br>Elsa.Expressions (0.0.26)<br>Elsa.Expressions.JavaScript (0.0.26)<br>Elsa.Expressions.JavaScript.Jint (0.0.26)<br>Elsa.Expressions.JavaScript.Libraries (0.0.26)<br>Elsa.Expressions.JavaScript.Rendering (0.0.26)<br>Elsa.Expressions.Liquid (0.0.26)<br>Elsa.Http (0.0.26)<br>Elsa.Http.JavaScript (0.0.26)<br>Elsa.Locking.FileSystem (0.0.26)<br>Elsa.Mediator (0.0.26)<br>Elsa.Persistence.EFCore (0.0.26)<br>Elsa.Persistence.Groundwork (0.0.26)<br>Elsa.Primitives.Hosting (0.0.26)<br>Elsa.Samples.Nuplane.Activities.Tests (0.0.26)<br>Elsa.Serialization.Newtonsoft (0.0.26)<br>Elsa.Serialization.SystemText (0.0.26)<br>Elsa.Tasks (0.0.26)<br>Elsa.Workflows.Design.JavaScript (0.0.26)<br>Elsa.Workflows.Design.Reconciliation (0.0.26)<br>Elsa.Workflows.Design.Validations (0.0.26)<br>Elsa.Workflows.Runtime.Http (0.0.26)<br>Elsa.Workflows.Runtime.JavaScript (0.0.26)<br>Elsa3.Activities.Design.Import (0.0.26)<br>Elsa3.Mapping (0.0.26) |
-| CShells.FastEndpoints | 0.0.26 | Elsa.Server (0.0.26) |
-| CShells.FastEndpoints.Abstractions | 0.0.26 | Elsa.Api.FastEndpoints (0.0.26) |
-| CShells.Management.Api | 0.0.26 | Elsa.Server (0.0.26) |
+| CShells.Abstractions | 0.0.28 | Elsa.Activities.Composition.Runtime (0.0.28)<br>Elsa.Activities.Design.Reconciliation (0.0.28)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.28)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.28)<br>Elsa.Activities.Flowchart (0.0.28)<br>Elsa.Activities.Primitives (0.0.28)<br>Elsa.Activities.Runtime (0.0.28)<br>Elsa.Activities.Sequence (0.0.28)<br>Elsa.Admin.Api (0.0.28)<br>Elsa.Admin.Samples.Dashboard (0.0.28)<br>Elsa.Admin.Samples.WeatherForecast (0.0.28)<br>Elsa.Admin.Web (0.0.28)<br>Elsa.Caching.Memory (0.0.28)<br>Elsa.Events (0.0.28)<br>Elsa.Expressions (0.0.28)<br>Elsa.Expressions.JavaScript (0.0.28)<br>Elsa.Expressions.JavaScript.Jint (0.0.28)<br>Elsa.Expressions.JavaScript.Libraries (0.0.28)<br>Elsa.Expressions.JavaScript.Rendering (0.0.28)<br>Elsa.Expressions.Liquid (0.0.28)<br>Elsa.Http (0.0.28)<br>Elsa.Http.JavaScript (0.0.28)<br>Elsa.Locking.FileSystem (0.0.28)<br>Elsa.Mediator (0.0.28)<br>Elsa.Persistence.EFCore (0.0.28)<br>Elsa.Primitives.Hosting (0.0.28)<br>Elsa.Samples.Nuplane.Activities.Tests (0.0.28)<br>Elsa.Serialization.Newtonsoft (0.0.28)<br>Elsa.Serialization.SystemText (0.0.28)<br>Elsa.Tasks (0.0.28)<br>Elsa.Workflows.Design.JavaScript (0.0.28)<br>Elsa.Workflows.Design.Reconciliation (0.0.28)<br>Elsa.Workflows.Design.Validations (0.0.28)<br>Elsa.Workflows.Runtime.Http (0.0.28)<br>Elsa.Workflows.Runtime.JavaScript (0.0.28)<br>Elsa3.Activities.Design.Import (0.0.28)<br>Elsa3.Mapping (0.0.28) |
+| CShells.FastEndpoints | 0.0.28 | Elsa.Server (0.0.28) |
+| CShells.FastEndpoints.Abstractions | 0.0.28 | Elsa.Api.FastEndpoints (0.0.28) |
+| CShells.Management.Api | 0.0.28 | Elsa.Server (0.0.28) |
+| ConsoleLogStreaming.AspNetCore | 1.0.0-preview.13 | Elsa.Server (1.0.0-preview.13) |
 | Cronos | 0.13.0 | Elsa.Tasks.Schedules (0.13.0) |
 | DistributedLock.FileSystem | 1.0.3 | Elsa.Locking.FileSystem (1.0.3) |
+| Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 | Elsa.Activities.Composition.Runtime (0.0.1-preview.58)<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite (0.0.1-preview.58)<br>Elsa.Activities.Design.Reconciliation (0.0.1-preview.58)<br>Elsa.Activities.Design.Reconciliation.Clr (0.0.1-preview.58)<br>Elsa.Activities.Design.Reconciliation.Json (0.0.1-preview.58)<br>Elsa.Activities.Flowchart (0.0.1-preview.58)<br>Elsa.Activities.Primitives (0.0.1-preview.58)<br>Elsa.Activities.Runtime (0.0.1-preview.58)<br>Elsa.Activities.Sequence (0.0.1-preview.58)<br>Elsa.Admin.Api (0.0.1-preview.58)<br>Elsa.Admin.Samples.Dashboard (0.0.1-preview.58)<br>Elsa.Admin.Samples.WeatherForecast (0.0.1-preview.58)<br>Elsa.Admin.Web (0.0.1-preview.58)<br>Elsa.Caching.Memory (0.0.1-preview.58)<br>Elsa.Events (0.0.1-preview.58)<br>Elsa.Expressions (0.0.1-preview.58)<br>Elsa.Expressions.JavaScript (0.0.1-preview.58)<br>Elsa.Expressions.JavaScript.Jint (0.0.1-preview.58)<br>Elsa.Expressions.JavaScript.Libraries (0.0.1-preview.58)<br>Elsa.Expressions.JavaScript.Rendering (0.0.1-preview.58)<br>Elsa.Expressions.Liquid (0.0.1-preview.58)<br>Elsa.Http (0.0.1-preview.58)<br>Elsa.Http.JavaScript (0.0.1-preview.58)<br>Elsa.Locking.FileSystem (0.0.1-preview.58)<br>Elsa.Mediator (0.0.1-preview.58)<br>Elsa.Persistence.EFCore (0.0.1-preview.58)<br>Elsa.Primitives.Hosting (0.0.1-preview.58)<br>Elsa.Serialization.Newtonsoft (0.0.1-preview.58)<br>Elsa.Serialization.SystemText (0.0.1-preview.58)<br>Elsa.Tasks (0.0.1-preview.58)<br>Elsa.Workflows.Design.JavaScript (0.0.1-preview.58)<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite (0.0.1-preview.58)<br>Elsa.Workflows.Design.Validations (0.0.1-preview.58)<br>Elsa.Workflows.Runtime.Http (0.0.1-preview.58)<br>Elsa.Workflows.Runtime.JavaScript (0.0.1-preview.58)<br>Elsa3.Activities.Design.Import (0.0.1-preview.58)<br>Elsa3.Mapping (0.0.1-preview.58) |
 | Fluid.Core | 2.31.0 | Elsa.Expressions.Liquid (2.31.0) |
 | Jint | 4.9.1 | Elsa.Expressions.JavaScript.Jint (4.9.1) |
 | Microsoft.AspNetCore.Authorization | 10.0.8 | Elsa.Http (10.0.8)<br>Elsa.Workflows.Runtime.Http (10.0.8) |
@@ -24,8 +26,6 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
-| Microsoft.Data.SqlClient | 7.0.1 | Groundwork.RelationalProviders.Tests (7.0.1)<br>Groundwork.SqlServer (7.0.1) |
-| Microsoft.Data.Sqlite | 10.0.8 | Elsa.Persistence.Groundwork.Tests (10.0.8)<br>Groundwork.Sqlite (10.0.8) |
 | Microsoft.EntityFrameworkCore | 10.0.8 | Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Persistence.EFCore (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
 | Microsoft.EntityFrameworkCore.Design | 10.0.8 | Elsa.Activities.Design.Persistence.EFCore.Sqlite (10.0.8)<br>Elsa.Server (10.0.8)<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite (10.0.8) |
 | Microsoft.EntityFrameworkCore.Relational | 10.0.8 | Elsa.Persistence.EFCore (10.0.8) |
@@ -33,49 +33,49 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.Extensions.Caching.Abstractions | 10.0.8 | Elsa.Caching.Core (10.0.8)<br>Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Expressions.Liquid (10.0.8)<br>Elsa.Http.JavaScript (10.0.8) |
 | Microsoft.Extensions.Caching.Memory | 10.0.8 | Elsa.Caching.Memory (10.0.8) |
 | Microsoft.Extensions.Configuration.Abstractions | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http.JavaScript (10.0.8) |
-| Microsoft.Extensions.DependencyInjection | 10.0.8 | Elsa.Activities.Composition.Tests (10.0.8)<br>Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Activities.Flowchart.Tests (10.0.8)<br>Elsa.Activities.Runtime.Tests (10.0.8)<br>Elsa.Activities.Sequence.Tests (10.0.8)<br>Elsa.Architecture.Tests (10.0.8)<br>Elsa.Persistence.Groundwork.Tests (10.0.8)<br>Elsa.Samples.Nuplane.Activities.Tests (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
-| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events.Core (10.0.8)<br>Elsa.Events.Strategies (10.0.8)<br>Elsa.Expressions.JavaScript (10.0.8)<br>Elsa.Mediator.Core (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Pipelines.Core (10.0.8)<br>Elsa.Primitives.Hosting (10.0.8)<br>Elsa.Serialization.Newtonsoft (10.0.8)<br>Elsa.Serialization.SystemText (10.0.8)<br>Elsa.Tasks.Core (10.0.8) |
+| Microsoft.Extensions.DependencyInjection | 10.0.8 | Elsa.Activities.Composition.Tests (10.0.8)<br>Elsa.Activities.Design.Tests (10.0.8)<br>Elsa.Activities.Flowchart.Tests (10.0.8)<br>Elsa.Activities.Runtime.Tests (10.0.8)<br>Elsa.Activities.Sequence.Tests (10.0.8)<br>Elsa.Architecture.Tests (10.0.8)<br>Elsa.Samples.Nuplane.Activities.Tests (10.0.8)<br>Elsa.Workflows.Design.Tests (10.0.8) |
+| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events.Core (10.0.8)<br>Elsa.Events.Strategies (10.0.8)<br>Elsa.Expressions.JavaScript (10.0.8)<br>Elsa.Mediator.Core (10.0.8)<br>Elsa.Pipelines.Core (10.0.8)<br>Elsa.Primitives.Hosting (10.0.8)<br>Elsa.Serialization.Newtonsoft (10.0.8)<br>Elsa.Serialization.SystemText (10.0.8)<br>Elsa.Tasks.Core (10.0.8) |
 | Microsoft.Extensions.Http | 10.0.8 | Elsa.Http (10.0.8) |
-| Microsoft.Extensions.Logging | 10.0.8 | Elsa.Persistence.Groundwork.Tests (10.0.8) |
-| Microsoft.Extensions.Logging.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Events (10.0.8)<br>Elsa.Expressions (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Mediator (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Tasks.Schedules (10.0.8)<br>Elsa.Workflows.Design.Reconciliation (10.0.8)<br>Elsa3.Activities.Design.Import (10.0.8) |
-| Microsoft.Extensions.Options | 10.0.8 | Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Http.JavaScript (10.0.8)<br>Elsa.Persistence.Groundwork (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Workflows.Design.JavaScript (10.0.8)<br>Elsa.Workflows.Design.Validations (10.0.8) |
+| Microsoft.Extensions.Logging.Abstractions | 10.0.8 | Elsa.Activities.Design.Reconciliation (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Clr (10.0.8)<br>Elsa.Activities.Design.Reconciliation.Json (10.0.8)<br>Elsa.Admin.Tests (10.0.8)<br>Elsa.Events (10.0.8)<br>Elsa.Expressions (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Mediator (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Tasks.Schedules (10.0.8)<br>Elsa.Workflows.Design.Reconciliation (10.0.8)<br>Elsa3.Activities.Design.Import (10.0.8) |
+| Microsoft.Extensions.Options | 10.0.8 | Elsa.Admin.Api (10.0.8)<br>Elsa.Expressions.JavaScript.Jint (10.0.8)<br>Elsa.Expressions.JavaScript.Libraries (10.0.8)<br>Elsa.Http (10.0.8)<br>Elsa.Http.JavaScript (10.0.8)<br>Elsa.Tasks (10.0.8)<br>Elsa.Workflows.Design.JavaScript (10.0.8)<br>Elsa.Workflows.Design.Validations (10.0.8) |
 | Microsoft.Extensions.Primitives | 10.0.8 | Elsa.Caching.Core (10.0.8) |
-| Microsoft.NET.Test.Sdk | 17.11.1<br>18.0.0 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Flowchart.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Activities.Sequence.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Persistence.Groundwork.Tests (17.11.1)<br>Elsa.Samples.Nuplane.Activities.Tests (18.0.0)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1)<br>Elsa.Workflows.Runtime.Tests (17.11.1)<br>Groundwork.MongoDb.Tests (17.11.1)<br>Groundwork.RelationalProviders.Tests (17.11.1)<br>Groundwork.Sqlite.Tests (17.11.1)<br>Groundwork.Tests (17.11.1) |
-| MongoDB.Driver | 3.9.0 | Groundwork.MongoDb (3.9.0)<br>Groundwork.MongoDb.Tests (3.9.0) |
+| Microsoft.NET.Test.Sdk | 17.11.1<br>18.0.0 | Elsa.Activities.Composition.Tests (17.11.1)<br>Elsa.Activities.Design.Tests (17.11.1)<br>Elsa.Activities.Flowchart.Tests (17.11.1)<br>Elsa.Activities.Runtime.Tests (17.11.1)<br>Elsa.Activities.Sequence.Tests (17.11.1)<br>Elsa.Admin.Tests (17.11.1)<br>Elsa.Architecture.Tests (17.11.1)<br>Elsa.Samples.Nuplane.Activities.Tests (18.0.0)<br>Elsa.Workflows.Design.Tests (17.11.1)<br>Elsa.Workflows.Publishing.Api.Tests (17.11.1)<br>Elsa.Workflows.Runtime.Tests (17.11.1) |
 | Newtonsoft.Json | 13.0.4 | Elsa.Serialization.Newtonsoft (13.0.4) |
-| Npgsql | 10.0.3 | Groundwork.PostgreSql (10.0.3)<br>Groundwork.RelationalProviders.Tests (10.0.3) |
 | Nuplane | 0.0.8 | Elsa.Server (0.0.8) |
+| Nuplane.Admin | 0.0.8 | Elsa.Server (0.0.8) |
 | Nuplane.Loading | 0.0.8 | Elsa.Server (0.0.8) |
 | Nuplane.Sources.Directory | 0.0.8 | Elsa.Server (0.0.8) |
 | Open.Linq.AsyncExtensions | 1.2.0 | Elsa.Persistence.EFCore (1.2.0) |
 | System.CommandLine | 2.0.8 | Elsa.Persistence.EFCore (2.0.8) |
 | System.Reflection.MetadataLoadContext | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8) |
-| Testcontainers.MongoDb | 4.12.0 | Groundwork.MongoDb.Tests (4.12.0) |
-| Testcontainers.MsSql | 4.12.0 | Groundwork.RelationalProviders.Tests (4.12.0) |
-| Testcontainers.PostgreSql | 4.12.0 | Groundwork.RelationalProviders.Tests (4.12.0) |
 | Ulid | 1.4.1 | Elsa.Persistence.EFCore (1.4.1) |
-| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Flowchart.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Activities.Sequence.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Persistence.Groundwork.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2)<br>Elsa.Workflows.Runtime.Tests (6.0.2)<br>Groundwork.MongoDb.Tests (6.0.2)<br>Groundwork.RelationalProviders.Tests (6.0.2)<br>Groundwork.Sqlite.Tests (6.0.2)<br>Groundwork.Tests (6.0.2) |
-| xunit | 2.9.0<br>2.9.3 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Flowchart.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Activities.Sequence.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Persistence.Groundwork.Tests (2.9.0)<br>Elsa.Samples.Nuplane.Activities.Tests (2.9.3)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0)<br>Elsa.Workflows.Runtime.Tests (2.9.0)<br>Groundwork.MongoDb.Tests (2.9.0)<br>Groundwork.RelationalProviders.Tests (2.9.0)<br>Groundwork.Sqlite.Tests (2.9.0)<br>Groundwork.Tests (2.9.0) |
-| xunit.runner.visualstudio | 2.8.2<br>3.1.5 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Flowchart.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Activities.Sequence.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Persistence.Groundwork.Tests (2.8.2)<br>Elsa.Samples.Nuplane.Activities.Tests (3.1.5)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2)<br>Elsa.Workflows.Runtime.Tests (2.8.2)<br>Groundwork.MongoDb.Tests (2.8.2)<br>Groundwork.RelationalProviders.Tests (2.8.2)<br>Groundwork.Sqlite.Tests (2.8.2)<br>Groundwork.Tests (2.8.2) |
+| coverlet.collector | 6.0.2 | Elsa.Activities.Composition.Tests (6.0.2)<br>Elsa.Activities.Design.Tests (6.0.2)<br>Elsa.Activities.Flowchart.Tests (6.0.2)<br>Elsa.Activities.Runtime.Tests (6.0.2)<br>Elsa.Activities.Sequence.Tests (6.0.2)<br>Elsa.Admin.Tests (6.0.2)<br>Elsa.Architecture.Tests (6.0.2)<br>Elsa.Workflows.Design.Tests (6.0.2)<br>Elsa.Workflows.Publishing.Api.Tests (6.0.2)<br>Elsa.Workflows.Runtime.Tests (6.0.2) |
+| xunit | 2.9.0<br>2.9.3 | Elsa.Activities.Composition.Tests (2.9.0)<br>Elsa.Activities.Design.Tests (2.9.0)<br>Elsa.Activities.Flowchart.Tests (2.9.0)<br>Elsa.Activities.Runtime.Tests (2.9.0)<br>Elsa.Activities.Sequence.Tests (2.9.0)<br>Elsa.Admin.Tests (2.9.0)<br>Elsa.Architecture.Tests (2.9.0)<br>Elsa.Samples.Nuplane.Activities.Tests (2.9.3)<br>Elsa.Workflows.Design.Tests (2.9.0)<br>Elsa.Workflows.Publishing.Api.Tests (2.9.0)<br>Elsa.Workflows.Runtime.Tests (2.9.0) |
+| xunit.runner.visualstudio | 2.8.2<br>3.1.5 | Elsa.Activities.Composition.Tests (2.8.2)<br>Elsa.Activities.Design.Tests (2.8.2)<br>Elsa.Activities.Flowchart.Tests (2.8.2)<br>Elsa.Activities.Runtime.Tests (2.8.2)<br>Elsa.Activities.Sequence.Tests (2.8.2)<br>Elsa.Admin.Tests (2.8.2)<br>Elsa.Architecture.Tests (2.8.2)<br>Elsa.Samples.Nuplane.Activities.Tests (3.1.5)<br>Elsa.Workflows.Design.Tests (2.8.2)<br>Elsa.Workflows.Publishing.Api.Tests (2.8.2)<br>Elsa.Workflows.Runtime.Tests (2.8.2) |
 
 ## Direct Package References
 
 | Project | Kind | Package | Version |
 |---|---|---|---|
-| [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Activities.Composition.Tests](../../tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Elsa.Activities.Design.Persistence.EFCore.Sqlite](../../src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Design.Persistence.EFCore.Sqlite](../../src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj) | source | Microsoft.EntityFrameworkCore.Design | 10.0.8 |
-| [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
-| [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | source | System.Reflection.MetadataLoadContext | 10.0.8 |
-| [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Microsoft.EntityFrameworkCore | 10.0.8 |
@@ -85,26 +85,44 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Activities.Flowchart](../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Flowchart](../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Flowchart](../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | CShells.Abstractions | 0.0.26 |
-| [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | CShells.FastEndpoints.Abstractions | 0.0.26 |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Admin.Api](../../src/Elsa/Admin/Api/Elsa.Admin.Api.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
+| [Elsa.Admin.Samples.Dashboard](../../src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Admin.Samples.Dashboard](../../src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Admin.Samples.WeatherForecast](../../src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | coverlet.collector | 6.0.2 |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | xunit | 2.9.0 |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Elsa.Admin.Web](../../src/Elsa/Admin/Web/Elsa.Admin.Web.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Admin.Web](../../src/Elsa/Admin/Web/Elsa.Admin.Web.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | CShells.FastEndpoints.Abstractions | 0.0.28 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | coverlet.collector | 6.0.2 |
@@ -112,30 +130,39 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.8 |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Microsoft.Extensions.Primitives | 10.0.8 |
-| [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Microsoft.Extensions.Caching.Memory | 10.0.8 |
-| [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Events.Strategies](../../src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
-| [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Expressions.JavaScript](../../src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Jint | 4.9.1 |
 | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.8 |
 | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Microsoft.Extensions.Configuration.Abstractions | 10.0.8 |
 | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
-| [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.8 |
 | [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | Microsoft.Extensions.Configuration.Abstractions | 10.0.8 |
 | [Elsa.Expressions.JavaScript.Libraries](../../src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
-| [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | CShells.Abstractions | 0.0.26 |
-| [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Fluid.Core | 2.31.0 |
 | [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.8 |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Authorization | 10.0.8 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Authorization.Policy | 2.3.10 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.AspNetCore.Http | 2.3.10 |
@@ -145,63 +172,64 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
 | [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 |
-| [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Microsoft.Extensions.Caching.Abstractions | 10.0.8 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Microsoft.Extensions.Configuration.Abstractions | 10.0.8 |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
-| [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | CShells.Abstractions | 0.0.28 |
 | [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | DistributedLock.FileSystem | 1.0.3 |
-| [Elsa.Mediator](../../src/Elsa/Mediator/Elsa.Mediator.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
+| [Elsa.Mediator](../../src/Elsa/Mediator/Elsa.Mediator.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Mediator](../../src/Elsa/Mediator/Elsa.Mediator.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Mediator](../../src/Elsa/Mediator/Elsa.Mediator.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Mediator.Core](../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Microsoft.EntityFrameworkCore | 10.0.8 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Microsoft.EntityFrameworkCore.Relational | 10.0.8 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Open.Linq.AsyncExtensions | 1.2.0 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | System.CommandLine | 2.0.8 |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Ulid | 1.4.1 |
 | [Elsa.Persistence.EFCore.Sqlite](../../src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj) | source | Microsoft.EntityFrameworkCore.Sqlite | 10.0.8 |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | CShells.Abstractions | 0.0.26 |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
-| [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Data.Sqlite | 10.0.8 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.Extensions.Logging | 10.0.8 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | coverlet.collector | 6.0.2 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | xunit | 2.9.0 |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | CShells.Abstractions | 0.0.26 |
+| [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | CShells.Abstractions | 0.0.28 |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.8 |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | xunit | 2.9.3 |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
-| [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Newtonsoft.Json | 13.0.4 |
-| [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.FastEndpoints | 0.0.26 |
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.Management.Api | 0.0.26 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.FastEndpoints | 0.0.28 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | CShells.Management.Api | 0.0.28 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | ConsoleLogStreaming.AspNetCore | 1.0.0-preview.13 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.9 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Microsoft.EntityFrameworkCore.Design | 10.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane | 0.0.8 |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane.Admin | 0.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane.Loading | 0.0.8 |
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Nuplane.Sources.Directory | 0.0.8 |
-| [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.8 |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Cronos | 0.13.0 |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
-| [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
+| [Elsa.Workflows.Design.Persistence.EFCore.Sqlite](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Workflows.Design.Persistence.EFCore.Sqlite](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj) | source | Microsoft.EntityFrameworkCore.Design | 10.0.8 |
-| [Elsa.Workflows.Design.Reconciliation](../../src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Workflows.Design.Reconciliation](../../src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj) | source | CShells.Abstractions | 0.0.28 |
 | [Elsa.Workflows.Design.Reconciliation](../../src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Microsoft.EntityFrameworkCore | 10.0.8 |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Microsoft.EntityFrameworkCore.Sqlite | 10.0.8 |
@@ -210,46 +238,25 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | Microsoft.Extensions.Options | 10.0.8 |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Authorization | 10.0.8 |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 |
-| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | coverlet.collector | 6.0.2 |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | xunit | 2.9.0 |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | CShells.Abstractions | 0.0.26 |
+| [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.8 |
-| [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | CShells.Abstractions | 0.0.26 |
-| [Groundwork.MongoDb](../../src/Groundwork/MongoDb/Groundwork.MongoDb.csproj) | source | MongoDB.Driver | 3.9.0 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | MongoDB.Driver | 3.9.0 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | Testcontainers.MongoDb | 4.12.0 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | coverlet.collector | 6.0.2 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | xunit | 2.9.0 |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Groundwork.PostgreSql](../../src/Groundwork/PostgreSql/Groundwork.PostgreSql.csproj) | source | Npgsql | 10.0.3 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Microsoft.Data.SqlClient | 7.0.1 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Npgsql | 10.0.3 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Testcontainers.MsSql | 4.12.0 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | Testcontainers.PostgreSql | 4.12.0 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | coverlet.collector | 6.0.2 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | xunit | 2.9.0 |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Groundwork.SqlServer](../../src/Groundwork/SqlServer/Groundwork.SqlServer.csproj) | source | Microsoft.Data.SqlClient | 7.0.1 |
-| [Groundwork.Sqlite](../../src/Groundwork/Sqlite/Groundwork.Sqlite.csproj) | source | Microsoft.Data.Sqlite | 10.0.8 |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | coverlet.collector | 6.0.2 |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | xunit | 2.9.0 |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 17.11.1 |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | coverlet.collector | 6.0.2 |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | xunit | 2.9.0 |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | test | xunit.runner.visualstudio | 2.8.2 |
+| [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | CShells.Abstractions | 0.0.28 |
+| [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.58 |

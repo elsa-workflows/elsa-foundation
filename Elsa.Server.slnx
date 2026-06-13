@@ -11,6 +11,15 @@
     <Project Path="src/apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
   <Folder Name="/src/elsa/" />
+  <Folder Name="/src/elsa/Admin/">
+    <Project Path="src/Elsa/Admin/Api/Elsa.Admin.Api.csproj" />
+    <Project Path="src/Elsa/Admin/Core/Elsa.Admin.Core.csproj" />
+    <Project Path="src/Elsa/Admin/Web/Elsa.Admin.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/elsa/Admin/Samples/">
+    <Project Path="src/Elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj" />
+    <Project Path="src/Elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Activities/">
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
@@ -150,6 +159,9 @@
   </Folder>
   <Folder Name="/tests/" />
   <Folder Name="/tests/Elsa/" />
+  <Folder Name="/tests/Elsa/Admin/">
+    <Project Path="tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/" />
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
