@@ -6,9 +6,9 @@ Records direct test-project references only; it does not claim behavioral covera
 
 ## Summary
 
-- Test projects: 16
-- Source projects directly referenced by at least one test project: 55
-- Source projects not directly referenced by test projects: 25
+- Test projects: 12
+- Source projects directly referenced by at least one test project: 51
+- Source projects not directly referenced by test projects: 26
 
 ## Test Projects
 
@@ -20,22 +20,19 @@ Records direct test-project references only; it does not claim behavioral covera
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Expressions<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | Elsa.Admin.Api<br>Elsa.Admin.Core<br>Elsa.Admin.Samples.Dashboard<br>Elsa.Admin.Samples.WeatherForecast<br>Elsa.Events<br>Elsa.Events.Core |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
-| [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | Elsa.Persistence.Groundwork<br>Groundwork.Relational<br>Groundwork.Sqlite |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
-| [Groundwork.MongoDb.Tests](../../tests/Groundwork/Groundwork.MongoDb.Tests/Groundwork.MongoDb.Tests.csproj) | Groundwork.MongoDb |
-| [Groundwork.RelationalProviders.Tests](../../tests/Groundwork/Groundwork.RelationalProviders.Tests/Groundwork.RelationalProviders.Tests.csproj) | Groundwork.PostgreSql<br>Groundwork.SqlServer |
-| [Groundwork.Sqlite.Tests](../../tests/Groundwork/Groundwork.Sqlite.Tests/Groundwork.Sqlite.Tests.csproj) | Groundwork.Sqlite |
-| [Groundwork.Tests](../../tests/Groundwork/Groundwork.Tests/Groundwork.Tests.csproj) | Groundwork.Core<br>Groundwork.Documents<br>Groundwork.Relational |
 
 ## Source Projects Without Direct Test Reference
 
 | Project | Domain |
 |---|---|
 | [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Server |
+| [Elsa.Admin.Web](../../src/Elsa/Admin/Web/Elsa.Admin.Web.csproj) | Elsa.Admin |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | Elsa.Caching |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | Elsa.Caching |

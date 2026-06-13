@@ -1,0 +1,22 @@
+{
+  "name": "@elsa-workflows/admin-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:app && npm run build:vendor",
+    "build:app": "vite build",
+    "build:vendor": "vite build --config vite.vendor.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.0",
+    "vitest": "^2.1.8"
+  },
+  "devDependencies": {}
+}

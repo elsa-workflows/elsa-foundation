@@ -1,0 +1,9 @@
+.dashboard-sample-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.dashboard-sample-card {
+  border-color: #b8c8ff;
+}

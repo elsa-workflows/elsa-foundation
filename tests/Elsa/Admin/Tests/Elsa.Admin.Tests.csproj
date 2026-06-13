@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Elsa\Admin\Api\Elsa.Admin.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Admin\Core\Elsa.Admin.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Admin\Samples\Dashboard\Elsa.Admin.Samples.Dashboard.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Admin\Samples\WeatherForecast\Elsa.Admin.Samples.WeatherForecast.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Events\Elsa.Events.csproj" />
+  </ItemGroup>
+
+</Project>

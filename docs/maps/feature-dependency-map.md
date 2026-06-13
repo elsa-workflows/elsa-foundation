@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 43
+- Feature classes: 46
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 40
+- Feature-bearing source projects: 43
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -18,27 +18,7 @@ The test shell is not a composition source of truth. The only evidence taken fro
 
 Observed default-shell feature keys:
 
-- `ActivitiesCompositionRuntime`
-- `ActivitiesDesignApi`
-- `ActivitiesDesignPersistenceEFCoreSqlite`
-- `ActivitiesDesignReconciliation`
-- `ActivitiesPrimitives`
-- `ActivitiesRuntime`
-- `ActivitiesSequence`
-- `ClrActivityReconciliation`
-- `Events`
-- `Expressions`
-- `FastEndpoints`
-- `FileSystemDistributedLocking`
-- `Mediator`
-- `MemoryCache`
-- `Primitives`
-- `Serialization`
-- `Tasks`
-- `WorkflowsDesignApi`
-- `WorkflowsDesignPersistenceEFCoreSqlite`
-- `WorkflowsPublishingApi`
-- `WorkflowsRuntimeApi`
+- none
 
 ## Duplicate Feature IDs
 
@@ -59,12 +39,16 @@ No duplicate explicit feature IDs were discovered.
 | ActivitiesPrimitives | ActivitiesPrimitivesFeature | False | Elsa.Activities.Primitives | - | - | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntime | ActivitiesRuntimeFeature | False | Elsa.Activities.Runtime | - | - | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSequence | ActivitiesSequenceFeature | False | Elsa.Activities.Sequence | - | - | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
+| AdminApi | AdminApiFeature | False | Elsa.Admin.Api | Options: AdminApiOptions | - | [AdminApiFeature.cs](../../src/Elsa/Admin/Api/AdminApiFeature.cs) |
+| AdminSamplesDashboard | DashboardAdminSampleFeature | False | Elsa.Admin.Samples.Dashboard | - | - | [DashboardAdminSampleFeature.cs](../../src/Elsa/Admin/Samples/Dashboard/DashboardAdminSampleFeature.cs) |
+| AdminSamplesWeatherForecast | WeatherForecastAdminSampleFeature | False | Elsa.Admin.Samples.WeatherForecast | - | - | [WeatherForecastAdminSampleFeature.cs](../../src/Elsa/Admin/Samples/WeatherForecast/WeatherForecastAdminSampleFeature.cs) |
+| AdminWeb | AdminWebFeature | False | Elsa.Admin.Web | - | - | [AdminWebFeature.cs](../../src/Elsa/Admin/Web/AdminWebFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | JavaScriptExpressions | JavaScriptFeature | False | Elsa.Expressions.JavaScript | GetConfigurationFunction: ConfigurationAccessFunctionProviderOptions?<br>TypeDescriptors: IEnumerable<JavaScriptTypeDescriptor> | - | [JavaScriptFeature.cs](../../src/Elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
 | JavaScriptJintEngine | JintFeature | False | Elsa.Expressions.JavaScript.Jint | AllowClrAccess: bool<br>ScriptCacheTimeout: TimeSpan? | code default | [JintFeature.cs](../../src/Elsa/Expressions/JavaScript/Jint/JintFeature.cs) |
-| JavaScriptLibraries | JavaScriptLibrariesFeature | False | Elsa.Expressions.JavaScript.Libraries | FullModuleResourceName: string?<br>ModuleName: string? | validation/requiredness guard in code | [JavaScriptLibrariesFeature.cs](../../src/Elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |
+| JavaScriptLibraries | JavaScriptLibrariesFeature | False | Elsa.Expressions.JavaScript.Libraries | FullModuleResourceName: string?<br>ModuleName: string? | code default<br>validation/requiredness guard in code | [JavaScriptLibrariesFeature.cs](../../src/Elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |
 | JavaScriptRenderingEndpoints | JavaScriptRenderingEndpointsFeature | False | Elsa.Expressions.JavaScript.Rendering | - | - | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
 | JavaScriptRendering | JavaScriptRenderingFeature | False | Elsa.Expressions.JavaScript.Rendering | FunctionDeclarations: IEnumerable<JavaScriptFunctionDeclaration><br>TypeDeclarations: IEnumerable<JavaScriptTypeDeclaration><br>VariableDeclarations: IEnumerable<JavaScriptVariableDeclaration> | - | [JavaScriptRenderingFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingFeature.cs) |
 | Liquid | LiquidExpressionsFeature | False | Elsa.Expressions.Liquid | AddArrayFilters: bool<br>AddMiscFilters: bool<br>AddNumberFilters: bool<br>AddStringFilters: bool<br>AllowConfigurationAccess: bool<br>EncodingType: LiquidEncodingType<br>VariableDescriptorTypes: IEnumerable<string> | code default<br>sensitive or deployment-specific value signal<br>type-name selection signal | [LiquidExpressionsFeature.cs](../../src/Elsa/Expressions/Liquid/LiquidExpressionsFeature.cs) |
@@ -72,7 +56,6 @@ No duplicate explicit feature IDs were discovered.
 | HttpJavaScript | HttpJavaScriptFeature | False | Elsa.Http.JavaScript | - | - | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
 | FileSystemDistributedLocking | FileSystemLockingFeature | False | Elsa.Locking.FileSystem | LockAcquisitionTimeoutMinutes: double<br>LocksFolderPath: string | code default<br>filesystem path signal | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
 | Mediator | MediatorFeature | False | Elsa.Mediator | - | - | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
-| GroundworkPersistence | GroundworkPersistenceFeature | False | Elsa.Persistence.Groundwork | MaterializeOnStartup: bool | code default | [GroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceFeature.cs) |
 | Primitives | PrimitivesFeature | False | Elsa.Primitives.Hosting | - | - | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
 | Serialization.Newtonsoft | NewtonsoftSerializationFeature | False | Elsa.Serialization.Newtonsoft | - | - | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | Serialization | SerializationFeature | False | Elsa.Serialization.SystemText | - | - | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
@@ -98,46 +81,49 @@ Rows below are dependency evidence, not final policy. Feature-project references
 
 | Feature ID | Project | Feature-project references | Core/helper project references | Direct external packages |
 |---|---|---|---|---|
-| ActivitiesCompositionRuntime | Elsa.Activities.Composition.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.26 |
+| ActivitiesCompositionRuntime | Elsa.Activities.Composition.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | ActivitiesDesignApi | Elsa.Activities.Design.Api | - | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core | - |
-| ActivitiesDesignPersistenceEFCoreSqlite | Elsa.Activities.Design.Persistence.EFCore.Sqlite | Elsa.Activities.Design.Persistence.EFCore (EFCoreActivitiesPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Microsoft.EntityFrameworkCore.Design 10.0.8 |
-| ActivitiesDesignReconciliation | Elsa.Activities.Design.Reconciliation | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| ClrActivityReconciliation | Elsa.Activities.Design.Reconciliation.Clr | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>System.Reflection.MetadataLoadContext 10.0.8 |
-| JsonActivityReconciliation | Elsa.Activities.Design.Reconciliation.Json | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| ActivitiesFlowchart | Elsa.Activities.Flowchart | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| ActivitiesPrimitives | Elsa.Activities.Primitives | - | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.26 |
-| ActivitiesRuntime | Elsa.Activities.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| ActivitiesSequence | Elsa.Activities.Sequence | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
-| Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| JavaScriptExpressions | Elsa.Expressions.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
-| JavaScriptJintEngine | Elsa.Expressions.JavaScript.Jint | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26<br>Jint 4.9.1<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
-| JavaScriptLibraries | Elsa.Expressions.JavaScript.Libraries | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
-| JavaScriptRenderingEndpoints | Elsa.Expressions.JavaScript.Rendering | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.26 |
-| JavaScriptRendering | Elsa.Expressions.JavaScript.Rendering | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.26 |
-| Liquid | Elsa.Expressions.Liquid | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.26<br>Fluid.Core 2.31.0<br>Microsoft.Extensions.Caching.Abstractions 10.0.8 |
-| Http | Elsa.Http | - | Elsa.Caching.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.26<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Authorization.Policy 2.3.10<br>Microsoft.AspNetCore.Http 2.3.10<br>Microsoft.AspNetCore.Routing 2.3.10<br>Microsoft.AspNetCore.StaticFiles 2.3.10<br>Microsoft.Extensions.Http 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
-| HttpJavaScript | Elsa.Http.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Http.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
-| FileSystemDistributedLocking | Elsa.Locking.FileSystem | - | Elsa.Locking.Core | CShells.Abstractions 0.0.26<br>DistributedLock.FileSystem 1.0.3 |
-| Mediator | Elsa.Mediator | - | Elsa.Mediator.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| GroundworkPersistence | Elsa.Persistence.Groundwork | - | Elsa.Tasks.Core<br>Groundwork.Core<br>Groundwork.Documents | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
-| Primitives | Elsa.Primitives.Hosting | - | Elsa.Primitives | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
-| Serialization.Newtonsoft | Elsa.Serialization.Newtonsoft | - | Elsa.Serialization.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Newtonsoft.Json 13.0.4 |
-| Serialization | Elsa.Serialization.SystemText | - | Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
-| Tasks | Elsa.Tasks | - | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| ActivitiesDesignPersistenceEFCoreSqlite | Elsa.Activities.Design.Persistence.EFCore.Sqlite | Elsa.Activities.Design.Persistence.EFCore (EFCoreActivitiesPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
+| ActivitiesDesignReconciliation | Elsa.Activities.Design.Reconciliation | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| ClrActivityReconciliation | Elsa.Activities.Design.Reconciliation.Clr | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>System.Reflection.MetadataLoadContext 10.0.8 |
+| JsonActivityReconciliation | Elsa.Activities.Design.Reconciliation.Json | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| ActivitiesFlowchart | Elsa.Activities.Flowchart | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| ActivitiesPrimitives | Elsa.Activities.Primitives | - | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| ActivitiesRuntime | Elsa.Activities.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| ActivitiesSequence | Elsa.Activities.Sequence | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| AdminApi | Elsa.Admin.Api | - | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
+| AdminSamplesDashboard | Elsa.Admin.Samples.Dashboard | - | Elsa.Admin.Core<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| AdminSamplesWeatherForecast | Elsa.Admin.Samples.WeatherForecast | - | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| AdminWeb | Elsa.Admin.Web | - | - | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
+| Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| JavaScriptExpressions | Elsa.Expressions.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
+| JavaScriptJintEngine | Elsa.Expressions.JavaScript.Jint | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Jint 4.9.1<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| JavaScriptLibraries | Elsa.Expressions.JavaScript.Libraries | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| JavaScriptRenderingEndpoints | Elsa.Expressions.JavaScript.Rendering | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| JavaScriptRendering | Elsa.Expressions.JavaScript.Rendering | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| Liquid | Elsa.Expressions.Liquid | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Fluid.Core 2.31.0<br>Microsoft.Extensions.Caching.Abstractions 10.0.8 |
+| Http | Elsa.Http | - | Elsa.Caching.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Authorization.Policy 2.3.10<br>Microsoft.AspNetCore.Http 2.3.10<br>Microsoft.AspNetCore.Routing 2.3.10<br>Microsoft.AspNetCore.StaticFiles 2.3.10<br>Microsoft.Extensions.Http 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| HttpJavaScript | Elsa.Http.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Http.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Abstractions 10.0.8<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| FileSystemDistributedLocking | Elsa.Locking.FileSystem | - | Elsa.Locking.Core | CShells.Abstractions 0.0.28<br>DistributedLock.FileSystem 1.0.3<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| Mediator | Elsa.Mediator | - | Elsa.Mediator.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| Primitives | Elsa.Primitives.Hosting | - | Elsa.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
+| Serialization.Newtonsoft | Elsa.Serialization.Newtonsoft | - | Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Newtonsoft.Json 13.0.4 |
+| Serialization | Elsa.Serialization.SystemText | - | Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
+| Tasks | Elsa.Tasks | - | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsDesignApi | Elsa.Workflows.Design.Api | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Workflows.Design.Persistence.Core | - |
-| JavaScriptWorkflowsDesign | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Options 10.0.8 |
-| WorkflowsDesignPersistenceEFCoreSqlite | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Workflows.Design.Persistence.EFCore (EFCoreWorkflowsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Microsoft.EntityFrameworkCore.Design 10.0.8 |
-| WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Options 10.0.8 |
+| JavaScriptWorkflowsDesign | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
+| WorkflowsDesignPersistenceEFCoreSqlite | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Workflows.Design.Persistence.EFCore (EFCoreWorkflowsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
+| WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core | - |
 | WorkflowsRuntimeApi | Elsa.Workflows.Runtime.Api | - | Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | - |
-| WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | - | Elsa.Http.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.26<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
-| JavaScriptEndpoints | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| JavaScriptActivities | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| JavaScriptWorkflowsRuntime | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.26 |
-| Elsa3ImportJsonActivities | Elsa3.Activities.Design.Import | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models | CShells.Abstractions 0.0.26<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
-| Elsa3Mapping | Elsa3.Mapping | - | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models | CShells.Abstractions 0.0.26 |
+| WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | - | Elsa.Http.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
+| JavaScriptEndpoints | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| JavaScriptActivities | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| JavaScriptWorkflowsRuntime | Elsa.Workflows.Runtime.JavaScript | - | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| Elsa3ImportJsonActivities | Elsa3.Activities.Design.Import | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
+| Elsa3Mapping | Elsa3.Mapping | - | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 
 ## Gaps For Generator Work
 

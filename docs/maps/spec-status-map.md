@@ -88,3 +88,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Draft | - | 7 | 0 | - |
 | [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 9 | 1 | - |
 | [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 14 | 0 | superseded |
+| [071-react-admin-module-host](../../specs/071-react-admin-module-host/spec.md) | React Admin Module Host | Draft | - | 0 | 0 | out of scope |
