@@ -5,10 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>0.0.1-local</Version>
+    <GenerateElsaPackageManifest>false</GenerateElsaPackageManifest>
   </PropertyGroup>
 
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
+		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" />		
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
 		<PackageReference Include="Open.Linq.AsyncExtensions" />

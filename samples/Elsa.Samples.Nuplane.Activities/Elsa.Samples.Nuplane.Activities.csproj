@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" PrivateAssets="all" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,6 +10,7 @@
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>

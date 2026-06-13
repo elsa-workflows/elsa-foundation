@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -12,6 +13,9 @@ namespace Elsa.Activities.Primitives;
 /// <c>Elsa.*.Design.*</c> project (Elsa §E2.2). Contributes its constructor to the runtime
 /// constructor registry via DI; the runtime feature's startup task aggregates it.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Runtime")]
 [ShellFeature(
     name: "ActivitiesPrimitives",
     DisplayName = "Activities Primitives",

@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using CShells.Lifecycle;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
@@ -6,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Tasks;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Tasks")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "Tasks",
     DisplayName = "Tasks",

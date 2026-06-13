@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Constants;
 using Elsa.Expressions.JavaScript.Core.Contracts;
@@ -14,6 +15,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Expressions")]
+[ManifestFeatureCategory("JavaScript")]
 [ShellFeature(
     name: "JavaScriptExpressions",
     DisplayName = "JavaScript Expressions",

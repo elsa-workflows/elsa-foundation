@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Mediator.Commands;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Requests;
@@ -6,8 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Mediator;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Mediator")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
-    name: "Mediator"
+    name: "Mediator",
+    Description = "Provides request and command dispatch pipelines for synchronous in-process mediation."
 )]
 public class MediatorFeature : IShellFeature
 {

@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Options;
@@ -7,6 +8,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Runtime")]
+[ManifestFeatureCategory("HTTP")]
 [ShellFeature(
     name: "WorkflowsRuntimeHttp",
     DisplayName = "Workflows Runtime HTTP",
@@ -14,11 +19,18 @@ namespace Elsa.Workflows.Runtime.Http;
 )]
 public class WorkflowsRuntimeHttpFeature : IShellFeature
 {
+    [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow runtime endpoints.", Category = "Routing")]
     public string BasePath { get; set; } = string.Empty;
+
+    [ManifestSetting(DisplayName = "Fault handler type", Description = "CLR type name of the HTTP endpoint fault handler implementation.", Category = "Services", Advanced = true)]
 
     public string FaultHandlerType { get; set; } = typeof(HttpEndpointFaultHandler).FullName!;
 
+    [ManifestSetting(DisplayName = "Authorization handler type", Description = "CLR type name of the HTTP endpoint authorization handler implementation.", Category = "Services", Advanced = true)]
+
     public string AuthorizationHandlerType { get; set; } = typeof(AuthenticationBasedHttpEndpointAuthorizationHandler).FullName!;
+
+    [ManifestSetting(DisplayName = "Route resolver type", Description = "CLR type name of the HTTP endpoint route resolver implementation.", Category = "Services", Advanced = true)]
 
     public string RouteResolverType { get; set; } = typeof(HttpEndpointRoutesResolver).FullName!;
 

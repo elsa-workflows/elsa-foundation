@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Events;
 using Elsa.Activities.Runtime.Handlers;
@@ -19,6 +20,9 @@ namespace Elsa.Activities.Runtime;
 /// the registry from every contributed <see cref="IActivityConstructor"/>. Carries no Design
 /// dependency (Elsa §E2.2).
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Runtime")]
 [ShellFeature(
     name: "ActivitiesRuntime",
     DisplayName = "Activities Runtime",

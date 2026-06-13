@@ -1,8 +1,12 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Flowchart;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Composition")]
 [ShellFeature(
     name: "ActivitiesFlowchart",
     DisplayName = "Activities Flowchart",
