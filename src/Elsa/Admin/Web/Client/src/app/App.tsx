@@ -73,7 +73,7 @@ export function App() {
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
-    () => [...(api?.navigation.list() ?? []), { id: "diagnostics", label: "Diagnostics", path: "/admin/diagnostics/modules", order: 900 }]
+    () => [...(api?.navigation.list() ?? []), { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900 }]
       .sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
     [api, state]
   );
@@ -91,10 +91,10 @@ export function App() {
 
   return (
     <ShellFrame navigation={navigation} path={path} onNavigate={navigateTo}>
-      {path === "/admin" || path === "/admin/" ? <Home api={api!} /> : null}
-      {path === "/admin/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
+      {path === "/" ? <Home api={api!} /> : null}
+      {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/admin" && path !== "/admin/" && path !== "/admin/diagnostics/modules" ? (
+      {!ActiveComponent && path !== "/" && path !== "/diagnostics/modules" ? (
         <div className="empty-state">No admin route is registered for {path}.</div>
       ) : null}
     </ShellFrame>
@@ -115,7 +115,7 @@ function ShellFrame({
   return (
     <div className="admin-shell">
       <aside className="sidebar">
-        <a className="brand" href="/admin" onClick={event => { event.preventDefault(); onNavigate("/admin"); }}>
+        <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
           <span className="brand-mark">E</span>
           <span>Elsa Admin</span>
         </a>
@@ -181,8 +181,8 @@ function Diagnostics({ api }: { api: ElsaAdminModuleApi }) {
 }
 
 function normalizePath(path: string) {
-  if (path === "/admin/") {
-    return "/admin";
+  if (path.length > 1 && path.endsWith("/")) {
+    return path.slice(0, -1);
   }
 
   return path;

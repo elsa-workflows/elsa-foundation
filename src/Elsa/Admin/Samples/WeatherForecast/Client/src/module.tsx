@@ -17,14 +17,14 @@ export function register(api: ElsaAdminModuleApi) {
   api.navigation.add({
     id: "weather-forecast-sample",
     label: "Weather",
-    path: "/admin/weather",
+    path: "/weather",
     order: 120
   });
 
   api.routes.add({
     id: "weather-forecast-sample",
     label: "Weather",
-    path: "/admin/weather",
+    path: "/weather",
     component: WeatherPage
   });
 }

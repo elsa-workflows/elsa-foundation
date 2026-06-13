@@ -7,13 +7,6 @@ using ConsoleLogStreaming.Core.Capture;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
-using Elsa.Admin.Api;
-using Elsa.Admin.Api.Extensions;
-using Elsa.Admin.Samples.Dashboard;
-using Elsa.Admin.Samples.WeatherForecast;
-using Elsa.Admin.Samples.WeatherForecast.Extensions;
-using Elsa.Admin.Web;
-using Elsa.Admin.Web.Extensions;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
@@ -43,7 +36,6 @@ using Nuplane.Sources.Directory.Configuration;
 ConsoleStreamHook.Install();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseStaticWebAssets();
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
@@ -77,10 +69,6 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 
 new EventsFeature().ConfigureServices(builder.Services);
-new AdminApiFeature().ConfigureServices(builder.Services);
-new DashboardAdminSampleFeature().ConfigureServices(builder.Services);
-new WeatherForecastAdminSampleFeature().ConfigureServices(builder.Services);
-
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
@@ -97,10 +85,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
-            typeof(AdminApiFeature).Assembly,
-            typeof(AdminWebFeature).Assembly,
-            typeof(DashboardAdminSampleFeature).Assembly,
-            typeof(WeatherForecastAdminSampleFeature).Assembly,
             typeof(SqliteWorkflowsDesignPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(SqliteActivitiesDesignPersistenceShellFeature).Assembly,
@@ -141,9 +125,6 @@ app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
-app.MapElsaAdminApi();
-app.MapWeatherForecastAdminSample();
-app.MapElsaAdminWeb();
 app.MapFallbackToFile("/demo", "index.html");
 app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
 app.MapFallbackToFile("index.html");

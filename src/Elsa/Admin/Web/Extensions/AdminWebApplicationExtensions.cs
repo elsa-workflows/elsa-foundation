@@ -6,10 +6,29 @@ namespace Elsa.Admin.Web.Extensions;
 
 public static class AdminWebApplicationExtensions
 {
-    public static IEndpointRouteBuilder MapElsaAdminWeb(this IEndpointRouteBuilder endpoints)
+    private const string AdminIndexFile = "_content/Elsa.Admin.Web/admin/index.html";
+
+    public static IEndpointRouteBuilder MapElsaAdminWeb(this IEndpointRouteBuilder endpoints, string pathPrefix = "")
     {
-        endpoints.MapFallbackToFile("/admin", "/_content/Elsa.Admin.Web/admin/index.html");
-        endpoints.MapFallbackToFile("/admin/{*path:nonfile}", "/_content/Elsa.Admin.Web/admin/index.html");
+        var normalizedPrefix = NormalizePathPrefix(pathPrefix);
+
+        if (normalizedPrefix.Length == 0)
+        {
+            endpoints.MapFallbackToFile(AdminIndexFile);
+            return endpoints;
+        }
+
+        endpoints.MapFallbackToFile(normalizedPrefix, AdminIndexFile);
+        endpoints.MapFallbackToFile($"{normalizedPrefix}/{{*path:nonfile}}", AdminIndexFile);
         return endpoints;
+    }
+
+    private static string NormalizePathPrefix(string pathPrefix)
+    {
+        if (string.IsNullOrWhiteSpace(pathPrefix) || pathPrefix == "/")
+            return "";
+
+        var trimmed = pathPrefix.TrimEnd('/');
+        return trimmed.StartsWith('/') ? trimmed : $"/{trimmed}";
     }
 }

@@ -263,12 +263,12 @@ function le(s) {
   s.navigation.add({
     id: "dashboard-sample",
     label: "Dashboard",
-    path: "/admin/dashboard",
+    path: "/dashboard",
     order: 100
   }), s.routes.add({
     id: "dashboard-sample",
     label: "Dashboard",
-    path: "/admin/dashboard",
+    path: "/dashboard",
     component: oe
   }), s.dashboardWidgets.add({
     id: "dashboard-sample-health",

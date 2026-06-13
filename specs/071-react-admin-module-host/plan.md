@@ -4,7 +4,7 @@
 
 ## Summary
 
-Add a modular React admin shell mounted at `/admin`, with server-discovered ESM admin modules and two proving samples. Preserve the temporary demo client at `/` and add `/demo` as an alias while moving its source into `DemoClient`.
+Add a modular React admin shell hosted by `Elsa.Studio.Web` at `/`, with server-discovered ESM admin modules and two proving samples. Preserve the temporary `Elsa.Server` demo client at `/` and `/demo`.
 
 ## Technical Context
 
@@ -44,6 +44,7 @@ src/Elsa/Admin/Api/
 src/Elsa/Admin/Web/
 src/Elsa/Admin/Samples/Dashboard/
 src/Elsa/Admin/Samples/WeatherForecast/
+src/apps/Elsa.Studio.Web/
 src/Apps/Elsa.Server/DemoClient/
 tests/Elsa/Admin/Tests/
 specs/071-react-admin-module-host/
@@ -60,7 +61,7 @@ specs/071-react-admin-module-host/
 5. Add admin web feature, route mapping, React shell, SDK, loader, diagnostics, and static asset build.
 6. Add dashboard sample module.
 7. Add weather forecast sample module and deterministic endpoint.
-8. Wire features into `Elsa.Server` and mount `/admin` plus `/demo`.
+8. Wire admin features into `Elsa.Studio.Web` and mount the admin shell at `/` without an `/admin` prefix.
 9. Add server and frontend tests.
 10. Build/test, refresh maps, and commit.
 
@@ -68,4 +69,4 @@ specs/071-react-admin-module-host/
 
 - Static web asset paths must be stable enough for module manifests.
 - Import-map-based dependency sharing needs browser support and deterministic asset paths.
-- Demo fallback routing must not swallow `/admin` paths.
+- Studio fallback routing must not swallow `/_elsa/*` API paths or `/_content/*` static assets.

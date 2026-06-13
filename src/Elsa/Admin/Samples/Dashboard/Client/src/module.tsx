@@ -6,14 +6,14 @@ export function register(api: ElsaAdminModuleApi) {
   api.navigation.add({
     id: "dashboard-sample",
     label: "Dashboard",
-    path: "/admin/dashboard",
+    path: "/dashboard",
     order: 100
   });
 
   api.routes.add({
     id: "dashboard-sample",
     label: "Dashboard",
-    path: "/admin/dashboard",
+    path: "/dashboard",
     component: DashboardPage
   });
 

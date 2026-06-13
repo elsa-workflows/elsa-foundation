@@ -264,12 +264,12 @@ function ue(l) {
   L = l, l.navigation.add({
     id: "weather-forecast-sample",
     label: "Weather",
-    path: "/admin/weather",
+    path: "/weather",
     order: 120
   }), l.routes.add({
     id: "weather-forecast-sample",
     label: "Weather",
-    path: "/admin/weather",
+    path: "/weather",
     component: le
   });
 }

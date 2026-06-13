@@ -35,7 +35,7 @@ describe("admin module loader", () => {
 
           return {
             register(moduleApi) {
-              moduleApi.navigation.add({ id: entry, label: entry, path: `/admin/${entry}` });
+              moduleApi.navigation.add({ id: entry, label: entry, path: `/${entry}` });
             }
           };
         }

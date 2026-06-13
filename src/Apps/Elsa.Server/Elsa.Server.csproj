@@ -37,11 +37,6 @@
 	</Target>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Elsa\Admin\Api\Elsa.Admin.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Admin\Core\Elsa.Admin.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Admin\Web\Elsa.Admin.Web.csproj" />
-		<ProjectReference Include="..\..\Elsa\Admin\Samples\Dashboard\Elsa.Admin.Samples.Dashboard.csproj" />
-		<ProjectReference Include="..\..\Elsa\Admin\Samples\WeatherForecast\Elsa.Admin.Samples.WeatherForecast.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />

@@ -6,22 +6,22 @@
 
 **Status**: Draft
 
-**Input**: Build a React-based Elsa admin shell that discovers installed admin modules from the ASP.NET host, loads their built React assets at runtime, and lets first-party and third-party modules register routes, navigation, dashboard widgets, diagnostics, and future designer extension points through a stable admin SDK. Preserve the current Monday demo app at `/` and expose it at `/demo`.
+**Input**: Build a React-based Elsa Studio admin shell that discovers installed admin modules from the ASP.NET host, loads their built React assets at runtime, and lets first-party and third-party modules register routes, navigation, dashboard widgets, diagnostics, and future designer extension points through a stable admin SDK. Keep the current Monday demo app in `Elsa.Server`; host the admin app from a separate `Elsa.Studio.Web` project.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Open The Modular Admin Shell (Priority: P1)
 
-An ASP.NET host user can open the admin shell separately from the temporary Monday demo app.
+An ASP.NET host user can open the Studio admin shell separately from the temporary Monday demo app.
 
 **Why this priority**: The admin host must exist before contributed modules can prove the extension model.
 
-**Independent Test**: Start `Elsa.Server`, open `/admin`, and confirm the admin shell loads while `/` still opens the demo app.
+**Independent Test**: Start `Elsa.Studio.Web`, open `/`, and confirm the admin shell loads without an `/admin` prefix.
 
 **Acceptance Scenarios**:
 
-1. **Given** the host references the admin packages, **When** a user opens `/admin`, **Then** the admin shell loads from the admin static assets.
-2. **Given** the current demo app exists, **When** a user opens `/` or `/demo`, **Then** the demo app still loads.
+1. **Given** the Studio host references the admin packages, **When** a user opens `/`, **Then** the admin shell loads from the admin static assets.
+2. **Given** the current demo app exists in `Elsa.Server`, **When** a user opens `/` or `/demo` in that app, **Then** the demo app still loads.
 
 ---
 
@@ -47,12 +47,12 @@ Developers can inspect two simple sample modules that prove both frontend-only a
 
 **Why this priority**: The first slice must show a realistic third-party module path without pulling in workflow designer complexity.
 
-**Independent Test**: Open `/admin/dashboard` and `/admin/weather`; the dashboard route renders local widgets, and the weather route fetches deterministic data from its sample endpoint.
+**Independent Test**: Open `/dashboard` and `/weather`; the dashboard route renders local widgets, and the weather route fetches deterministic data from its sample endpoint.
 
 **Acceptance Scenarios**:
 
-1. **Given** the dashboard sample module is installed, **When** a user opens `/admin/dashboard`, **Then** the module renders dashboard widgets without a custom backend endpoint.
-2. **Given** the weather sample module is installed, **When** a user opens `/admin/weather`, **Then** the module fetches and renders deterministic forecast data from `/_elsa/samples/weather-forecast`.
+1. **Given** the dashboard sample module is installed, **When** a user opens `/dashboard`, **Then** the module renders dashboard widgets without a custom backend endpoint.
+2. **Given** the weather sample module is installed, **When** a user opens `/weather`, **Then** the module fetches and renders deterministic forecast data from `/_elsa/samples/weather-forecast`.
 
 ### Edge Cases
 
@@ -76,7 +76,7 @@ Developers can inspect two simple sample modules that prove both frontend-only a
 - **FR-009**: Module assets MUST be served from same-origin application paths by default.
 - **FR-010**: The first implementation MUST support modules available at ASP.NET application startup.
 - **FR-011**: The admin shell MUST provide diagnostics for loaded, skipped, incompatible, and failed modules.
-- **FR-012**: The current demo React app MUST remain reachable at `/` and `/demo`.
+- **FR-012**: The current demo React app MUST remain reachable at `/` and `/demo` in `Elsa.Server`, while `Elsa.Studio.Web` owns the admin app at `/`.
 
 ### Key Entities
 
@@ -88,7 +88,7 @@ Developers can inspect two simple sample modules that prove both frontend-only a
 
 ### Measurable Outcomes
 
-- **SC-001**: A host with no contributed modules can load `/admin` without errors.
+- **SC-001**: A Studio host with no contributed modules can load `/` without errors.
 - **SC-002**: Dashboard and weather sample modules can be added without rebuilding the admin shell source.
 - **SC-003**: A failed or incompatible module does not prevent another compatible module from loading.
 - **SC-004**: Server and frontend tests prove manifest collection, compatibility rejection, activation failure isolation, and sample module rendering.

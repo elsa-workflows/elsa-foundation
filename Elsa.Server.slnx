@@ -9,6 +9,7 @@
   <Folder Name="/src/" />
   <Folder Name="/src/apps/">
     <Project Path="src/apps/Elsa.Server/Elsa.Server.csproj" />
+    <Project Path="src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" />
   </Folder>
   <Folder Name="/src/elsa/" />
   <Folder Name="/src/elsa/Admin/">
