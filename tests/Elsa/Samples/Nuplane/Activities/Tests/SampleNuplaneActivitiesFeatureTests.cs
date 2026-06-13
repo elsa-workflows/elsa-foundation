@@ -20,7 +20,7 @@ public sealed class SampleNuplaneActivitiesFeatureTests
         new SampleNuplaneActivitiesFeature().ConfigureServices(services);
 
         Assert.Contains(services, x => x.ServiceType == typeof(IActivityReconciliationSource) && x.ImplementationType == typeof(SampleNuplaneActivityReconciliationSource));
-        Assert.Contains(services, x => x.ServiceType == typeof(IActivityConstructor) && x.ImplementationType == typeof(SampleNuplaneActivityConstructor));
+        Assert.Contains(services, x => x.ServiceType == typeof(IActivityConstructor) && x.ImplementationInstance is SampleNuplaneActivityConstructor);
     }
 
     [Fact]
@@ -39,10 +39,12 @@ public sealed class SampleNuplaneActivitiesFeatureTests
     [Fact]
     public async Task Constructor_CreatesSampleActivity()
     {
-        var constructor = new SampleNuplaneActivityConstructor();
+        var constructor = new SampleNuplaneActivityConstructor("Hello {recipient}.", true);
 
         var activity = await constructor.Construct(SampleNuplaneActivityDescriptor.Default, null, null, CancellationToken.None);
 
-        Assert.IsType<SayHelloFromNuplane>(activity);
+        var sampleActivity = Assert.IsType<SayHelloFromNuplane>(activity);
+        Assert.Equal("Hello {recipient}.", sampleActivity.MessageTemplate);
+        Assert.True(sampleActivity.IncludeTimestamp);
     }
 }
