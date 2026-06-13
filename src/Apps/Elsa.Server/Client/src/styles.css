@@ -354,8 +354,7 @@ p {
 
 .action-button,
 .small-button,
-.icon-button,
-.package-notification button {
+.icon-button {
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: var(--control-bg);
@@ -373,8 +372,7 @@ p {
 }
 
 .action-button:first-child,
-.toolbar > .action-button:first-of-type,
-.package-notification button {
+.toolbar > .action-button:first-of-type {
   border-color: var(--accent);
   background: var(--accent);
   color: white;
@@ -654,12 +652,6 @@ p {
 .package-notification span {
   color: var(--alert-muted);
   overflow-wrap: anywhere;
-}
-
-.package-notification button {
-  height: 30px;
-  padding: 0 10px;
-  white-space: nowrap;
 }
 
 .ops-section {

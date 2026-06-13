@@ -942,7 +942,6 @@ export function App() {
             <strong>{packageNotification.title}</strong>
             <span>{packageNotification.message}</span>
           </div>
-          <button type="button" onClick={reloadShells}>Reload shells</button>
         </div>
       )}
 
@@ -1036,7 +1035,6 @@ export function App() {
             <p className="path-hint">{dropFolder || "packages"}</p>
             <div className="split-actions package-actions">
               <ActionButton icon={RotateCcw} busy={busy === "reset"} onClick={resetDemo}>Reset</ActionButton>
-              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
             </div>
           </section>
 
@@ -1067,7 +1065,7 @@ export function App() {
             />
             <div className="split-actions">
               <ActionButton icon={PlugZap} busy={busy === "feature"} onClick={enableFeature}>Enable</ActionButton>
-              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload</ActionButton>
+              <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload shells</ActionButton>
             </div>
           </section>
 
