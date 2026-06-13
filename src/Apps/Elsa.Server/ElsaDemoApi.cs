@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.IO.Compression;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
@@ -201,6 +202,7 @@ internal static class ElsaDemoApi
                     builder.PackageVersion = manifest.Package?.Version ?? summary.Version;
                     builder.Advanced = feature.Advanced;
                     builder.Experimental = feature.Experimental;
+                    builder.Settings = MapManifestSettings(feature.Settings);
                     builder.ManifestPath = packageManifest.Path;
                     builder.ManifestHash = packageManifest.Hash;
                 });
@@ -592,6 +594,71 @@ internal static class ElsaDemoApi
     private static string NormalizePackagePath(string path) =>
         path.Replace('\\', '/').TrimStart('/');
 
+    private static IReadOnlyList<DemoFeatureSettingResponse> MapManifestSettings(IReadOnlyList<DemoPackageFeatureSettingManifest>? settings) =>
+        settings?
+            .Where(setting => !string.IsNullOrWhiteSpace(setting.Name))
+            .Select(setting =>
+            {
+                var advanced = setting.Ui?.Advanced ?? false;
+                var experimental = setting.Ui?.Experimental ?? false;
+                var uiHint = setting.Ui?.Hint;
+                var sensitive = setting.Sensitive || GetBoolExtension(setting.Extensions, "sensitive");
+                var options = MapSettingOptions(setting.Ui?.Options, setting.Validation?.Enum);
+
+                return new DemoFeatureSettingResponse(
+                    Name: setting.Name!,
+                    DisplayName: string.IsNullOrWhiteSpace(setting.DisplayName) ? setting.Name : setting.DisplayName,
+                    Description: setting.Description,
+                    Category: setting.Category,
+                    Group: setting.Group,
+                    ClrType: setting.ClrType,
+                    JsonType: setting.JsonType,
+                    Required: setting.Required,
+                    DefaultValue: setting.DefaultValue,
+                    Secret: setting.Secret,
+                    Sensitive: sensitive,
+                    RestartRequired: setting.RestartRequired,
+                    Advanced: advanced,
+                    Experimental: experimental,
+                    UIHint: uiHint,
+                    OptionsProvider: setting.Ui?.OptionsProvider,
+                    Options: options);
+            })
+            .OrderBy(setting => setting.Category ?? "", StringComparer.OrdinalIgnoreCase)
+            .ThenBy(setting => setting.DisplayName ?? setting.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray()
+        ?? [];
+
+    private static IReadOnlyList<DemoFeatureSettingOptionResponse> MapSettingOptions(
+        IReadOnlyList<DemoPackageFeatureSettingOptionManifest>? uiOptions,
+        IReadOnlyList<JsonElement>? validationOptions)
+    {
+        if (uiOptions is { Count: > 0 })
+        {
+            return uiOptions
+                .Where(option => option.Value is not null)
+                .Select(option => new DemoFeatureSettingOptionResponse(
+                    option.Label ?? JsonElementToDisplayText(option.Value!.Value),
+                    option.Value!.Value,
+                    option.Description))
+                .ToArray();
+        }
+
+        return validationOptions?
+            .Select(option => new DemoFeatureSettingOptionResponse(JsonElementToDisplayText(option), option, null))
+            .ToArray()
+        ?? [];
+    }
+
+    private static string JsonElementToDisplayText(JsonElement value) =>
+        value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? "",
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+            JsonValueKind.Null or JsonValueKind.Undefined => "",
+            _ => value.GetRawText()
+        };
+
     private static string? GetStringExtension(JsonObject? extensions, string name)
     {
         if (extensions is null ||
@@ -604,6 +671,19 @@ internal static class ElsaDemoApi
         }
 
         return text;
+    }
+
+    private static bool GetBoolExtension(JsonObject? extensions, string name)
+    {
+        if (extensions is null ||
+            !extensions.TryGetPropertyValue(name, out var node) ||
+            node is not JsonValue value ||
+            !value.TryGetValue<bool>(out var result))
+        {
+            return false;
+        }
+
+        return result;
     }
 
     private static string GetPackageDropFolder(IWebHostEnvironment environment) =>
@@ -647,7 +727,29 @@ internal sealed record DemoFeatureCatalogItemResponse(
     bool Experimental,
     string? ManifestPath,
     string? ManifestHash,
-    string? ReadError);
+    string? ReadError,
+    IReadOnlyList<DemoFeatureSettingResponse> Settings);
+
+internal sealed record DemoFeatureSettingResponse(
+    string Name,
+    string? DisplayName,
+    string? Description,
+    string? Category,
+    string? Group,
+    string? ClrType,
+    string? JsonType,
+    bool Required,
+    JsonElement? DefaultValue,
+    bool Secret,
+    bool Sensitive,
+    bool RestartRequired,
+    bool Advanced,
+    bool Experimental,
+    string? UIHint,
+    string? OptionsProvider,
+    IReadOnlyList<DemoFeatureSettingOptionResponse> Options);
+
+internal sealed record DemoFeatureSettingOptionResponse(string Label, JsonElement Value, string? Description);
 
 internal sealed record DemoReconcileResponse(
     string Outcome,
@@ -761,6 +863,7 @@ internal sealed class DemoFeatureCatalogItemBuilder
     public string? ManifestPath { get; set; }
     public string? ManifestHash { get; set; }
     public string? ReadError { get; set; }
+    public IReadOnlyList<DemoFeatureSettingResponse> Settings { get; set; } = [];
 
     public DemoFeatureCatalogItemResponse ToResponse() =>
         new(
@@ -777,7 +880,8 @@ internal sealed class DemoFeatureCatalogItemBuilder
             Experimental,
             ManifestPath,
             ManifestHash,
-            ReadError);
+            ReadError,
+            Settings);
 }
 
 internal sealed record DemoPackageManifestReadResult(string? Path, string? Hash, DemoPackageManifest? Manifest, string? ReadError)
@@ -801,4 +905,37 @@ internal sealed record DemoPackageFeatureManifest(
     IReadOnlyList<string>? Categories,
     bool Advanced,
     bool Experimental,
+    IReadOnlyList<DemoPackageFeatureSettingManifest>? Settings,
     JsonObject? Extensions);
+
+internal sealed record DemoPackageFeatureSettingManifest(
+    string? Name,
+    string? ClrType,
+    string? JsonType,
+    bool Required,
+    JsonElement? DefaultValue,
+    string? DisplayName,
+    string? Description,
+    string? Category,
+    string? Group,
+    DemoPackageFeatureSettingValidationManifest? Validation,
+    bool Secret,
+    bool Sensitive,
+    bool RestartRequired,
+    DemoPackageFeatureSettingUiManifest? Ui,
+    JsonObject? Extensions);
+
+internal sealed record DemoPackageFeatureSettingValidationManifest(
+    [property: JsonPropertyName("enum")] IReadOnlyList<JsonElement>? Enum);
+
+internal sealed record DemoPackageFeatureSettingUiManifest(
+    string? Hint,
+    bool Advanced,
+    bool Experimental,
+    IReadOnlyList<DemoPackageFeatureSettingOptionManifest>? Options,
+    string? OptionsProvider);
+
+internal sealed record DemoPackageFeatureSettingOptionManifest(
+    string? Label,
+    JsonElement? Value,
+    string? Description);

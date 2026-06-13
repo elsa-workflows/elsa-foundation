@@ -820,6 +820,7 @@ export function App() {
   const [featureSearch, setFeatureSearch] = useState("");
   const [featuresLoading, setFeaturesLoading] = useState(false);
   const [togglingFeatures, setTogglingFeatures] = useState(new Set());
+  const [savingFeatureSettings, setSavingFeatureSettings] = useState(new Set());
   const [executables, setExecutables] = useState([]);
   const [executablesLoading, setExecutablesLoading] = useState(false);
   const lastEventSequence = useRef(0);
@@ -1414,6 +1415,40 @@ export function App() {
     }
   }
 
+  async function updateFeatureConfiguration(feature, configuration) {
+    setSavingFeatureSettings((current) => new Set([...current, feature.id]));
+    setStatus(`Saving settings for ${feature.id}...`);
+    addConsoleLine("stdout", `Saving settings for ${feature.id}...`);
+
+    try {
+      const response = await request(`/_demo/shells/default/features/${encodeURIComponent(feature.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ enabled: true, configuration })
+      });
+      setShellJson(response.json);
+      await refreshState();
+      await refreshFeatures();
+      setStatus("Ready");
+      setPackageNotification({
+        title: "Feature changes pending",
+        message: `Settings for ${feature.id} were saved to shells.json. Apply changes to reload the default shell.`,
+        actionLabel: "Apply changes",
+        actionKind: "apply-feature-changes"
+      });
+      addConsoleLine("stdout", `Feature settings saved in shells.json: ${feature.id}`);
+    } catch (error) {
+      setStatus(error.message);
+      addConsoleLine("stderr", error.message);
+      await refreshFeatures().catch(() => {});
+    } finally {
+      setSavingFeatureSettings((current) => {
+        const next = new Set(current);
+        next.delete(feature.id);
+        return next;
+      });
+    }
+  }
+
   async function applyNotificationAction() {
     const actionKind = packageNotification?.actionKind;
     if (!actionKind)
@@ -1735,7 +1770,9 @@ export function App() {
               totalCount={featureCatalogItems.length}
               loading={featuresLoading}
               togglingFeatures={togglingFeatures}
+              savingFeatureSettings={savingFeatureSettings}
               onToggle={toggleFeature}
+              onUpdateConfiguration={updateFeatureConfiguration}
             />
           ) : mainView === "stack" ? (
             <DemoPackageStack packages={demoStackPackages} />
@@ -2058,7 +2095,7 @@ function DemoPackageStack({ packages }) {
   );
 }
 
-function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onToggle }) {
+function FeatureCatalog({ features, totalCount, loading, togglingFeatures, savingFeatureSettings, onToggle, onUpdateConfiguration }) {
   const enabledCount = features.filter((feature) => feature.enabled).length;
 
   return (
@@ -2072,7 +2109,8 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onTog
         {!loading && features.length === 0 && <p className="muted">No features match the current filter.</p>}
         {features.map((feature) => {
           const toggling = togglingFeatures.has(feature.id);
-          const disabled = Boolean(feature.readError) || toggling;
+          const savingSettings = savingFeatureSettings.has(feature.id);
+          const disabled = Boolean(feature.readError) || toggling || savingSettings;
           return (
             <div className={`feature-row ${feature.enabled ? "enabled" : ""} ${feature.readError ? "warning" : ""}`} key={feature.id}>
               <button
@@ -2094,6 +2132,11 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onTog
                 </div>
                 <span>{feature.id}</span>
                 {feature.description && <p>{feature.description}</p>}
+                <div className="feature-detail-list">
+                  {feature.packageId && <span>Package: <strong>{feature.packageId}</strong>{feature.packageVersion ? ` ${feature.packageVersion}` : ""}</span>}
+                  {feature.manifestPath && <span>Manifest: <strong>{feature.manifestPath}</strong></span>}
+                  {feature.manifestHash && <span>Hash: <code>{feature.manifestHash.slice(0, 12)}</code></span>}
+                </div>
                 {feature.readError && (
                   <div className="feature-warning-panel">
                     <strong>Package manifest could not be read</strong>
@@ -2107,6 +2150,12 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onTog
                     {feature.categories.map((category) => <span key={category}>{category}</span>)}
                   </div>
                 )}
+                <FeatureSettings
+                  feature={feature}
+                  disabled={disabled || !feature.enabled}
+                  saving={savingSettings}
+                  onUpdateConfiguration={onUpdateConfiguration}
+                />
               </div>
               <div className="feature-row-meta">
                 <span>{getFeatureSourceLabel(feature)}</span>
@@ -2119,6 +2168,232 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onTog
       </div>
     </div>
   );
+}
+
+function FeatureSettings({ feature, disabled, saving, onUpdateConfiguration }) {
+  const settings = feature.settings ?? [];
+  const initialConfiguration = useMemo(
+    () => parseFeatureConfiguration(feature.configurationJson),
+    [feature.configurationJson]
+  );
+  const [draft, setDraft] = useState(initialConfiguration);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setDraft(initialConfiguration);
+    setError("");
+  }, [feature.id, initialConfiguration]);
+
+  if (settings.length === 0) {
+    if (feature.sourceKind === "manifest" && !feature.readError)
+      return <div className="feature-settings-empty">No configurable settings exposed by this manifest.</div>;
+
+    return null;
+  }
+
+  const handleSave = () => {
+    const next = { ...initialConfiguration };
+    try {
+      for (const setting of settings) {
+        const value = draft[setting.name];
+        if (isEmptySettingValue(value) && !setting.required) {
+          delete next[setting.name];
+          continue;
+        }
+
+        next[setting.name] = normalizeSettingValue(setting, value);
+      }
+    } catch (saveError) {
+      setError(saveError.message);
+      return;
+    }
+
+    setError("");
+    onUpdateConfiguration(feature, next);
+  };
+
+  return (
+    <div className="feature-settings-panel">
+      <div className="feature-settings-header">
+        <span>{settings.length} setting{settings.length === 1 ? "" : "s"}</span>
+        <button type="button" className="small-button" onClick={handleSave} disabled={disabled || saving}>
+          {saving ? "Saving" : "Save settings"}
+        </button>
+      </div>
+      <div className="feature-settings-grid">
+        {settings.map((setting) => (
+          <FeatureSettingInput
+            key={setting.name}
+            setting={setting}
+            value={getDraftSettingValue(draft, setting)}
+            disabled={disabled || saving}
+            onChange={(value) => setDraft((current) => ({ ...current, [setting.name]: value }))}
+          />
+        ))}
+      </div>
+      {error && <p className="feature-settings-error">{error}</p>}
+    </div>
+  );
+}
+
+function FeatureSettingInput({ setting, value, disabled, onChange }) {
+  const inputKind = getFeatureSettingInputKind(setting);
+  const inputId = `feature-setting-${setting.name}`;
+  const label = setting.displayName || setting.name;
+
+  return (
+    <label className={`feature-setting-field ${inputKind === "checkbox" ? "checkbox" : ""}`} htmlFor={inputId}>
+      <span>
+        <strong>{label}</strong>
+        {setting.required && <em>Required</em>}
+        {setting.restartRequired && <em>Reload</em>}
+        {setting.advanced && <em>Advanced</em>}
+      </span>
+      {setting.description && <small>{setting.description}</small>}
+      {renderFeatureSettingInput(inputKind, inputId, setting, value, disabled, onChange)}
+      <code>{setting.name}</code>
+    </label>
+  );
+}
+
+function renderFeatureSettingInput(inputKind, inputId, setting, value, disabled, onChange) {
+  if (inputKind === "checkbox") {
+    return (
+      <input
+        id={inputId}
+        type="checkbox"
+        checked={Boolean(value)}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    );
+  }
+
+  if (inputKind === "select") {
+    const selected = JSON.stringify(value ?? "");
+    return (
+      <select
+        id={inputId}
+        value={selected}
+        disabled={disabled}
+        onChange={(event) => {
+          const option = (setting.options ?? []).find((candidate) => JSON.stringify(candidate.value) === event.target.value);
+          onChange(option?.value ?? "");
+        }}
+      >
+        {!setting.required && <option value={JSON.stringify("")}>Empty</option>}
+        {(setting.options ?? []).map((option) => (
+          <option key={`${setting.name}-${JSON.stringify(option.value)}`} value={JSON.stringify(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (inputKind === "textarea") {
+    return (
+      <textarea
+        id={inputId}
+        value={formatDraftSettingValue(value)}
+        disabled={disabled}
+        rows={4}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  }
+
+  return (
+    <input
+      id={inputId}
+      type={inputKind}
+      value={formatDraftSettingValue(value)}
+      disabled={disabled}
+      placeholder={setting.uiHint === "duration" ? "00:05:00" : undefined}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+function parseFeatureConfiguration(configurationJson) {
+  try {
+    const parsed = JSON.parse(configurationJson || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getDraftSettingValue(draft, setting) {
+  if (Object.prototype.hasOwnProperty.call(draft, setting.name))
+    return draft[setting.name];
+
+  if (setting.defaultValue !== undefined && setting.defaultValue !== null)
+    return setting.defaultValue;
+
+  return setting.jsonType === "boolean" ? false : "";
+}
+
+function getFeatureSettingInputKind(setting) {
+  const hint = (setting.uiHint || "").toLowerCase();
+  const jsonType = (setting.jsonType || "").toLowerCase();
+
+  if ((setting.options?.length ?? 0) > 0 || hint.includes("select"))
+    return "select";
+
+  if (jsonType === "boolean")
+    return "checkbox";
+
+  if (setting.secret || setting.sensitive)
+    return "password";
+
+  if (jsonType === "integer" || jsonType === "number")
+    return "number";
+
+  if (jsonType === "object" || jsonType === "array" || hint.includes("json") || hint.includes("textarea"))
+    return "textarea";
+
+  return "text";
+}
+
+function normalizeSettingValue(setting, value) {
+  const jsonType = (setting.jsonType || "").toLowerCase();
+
+  if (jsonType === "integer") {
+    const number = Number.parseInt(value, 10);
+    return Number.isNaN(number) ? 0 : number;
+  }
+
+  if (jsonType === "number") {
+    const number = Number.parseFloat(value);
+    return Number.isNaN(number) ? 0 : number;
+  }
+
+  if (jsonType === "boolean")
+    return Boolean(value);
+
+  if (jsonType === "object" || jsonType === "array") {
+    if (typeof value !== "string")
+      return value;
+
+    return JSON.parse(value || (jsonType === "array" ? "[]" : "{}"));
+  }
+
+  return value;
+}
+
+function formatDraftSettingValue(value) {
+  if (value === null || value === undefined)
+    return "";
+
+  if (typeof value === "object")
+    return JSON.stringify(value, null, 2);
+
+  return String(value);
+}
+
+function isEmptySettingValue(value) {
+  return value === undefined || value === null || value === "";
 }
 
 function getFeatureSourceLabel(feature) {

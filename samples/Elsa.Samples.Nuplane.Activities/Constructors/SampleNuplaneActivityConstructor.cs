@@ -6,7 +6,7 @@ using Elsa.Samples.Nuplane.Activities.Descriptors;
 
 namespace Elsa.Samples.Nuplane.Activities.Constructors;
 
-public sealed class SampleNuplaneActivityConstructor : IActivityConstructor<SampleNuplaneActivityDescriptor>
+public sealed class SampleNuplaneActivityConstructor(string messageTemplate, bool includeTimestamp) : IActivityConstructor<SampleNuplaneActivityDescriptor>
 {
     public string DescriptorType => typeof(SampleNuplaneActivityDescriptor).FullName!;
 
@@ -28,7 +28,11 @@ public sealed class SampleNuplaneActivityConstructor : IActivityConstructor<Samp
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
     {
-        var activity = new SayHelloFromNuplane();
+        var activity = new SayHelloFromNuplane
+        {
+            MessageTemplate = messageTemplate,
+            IncludeTimestamp = includeTimestamp
+        };
         if (inputs?.TryGetValue(nameof(SayHelloFromNuplane.Recipient), out var recipient) == true)
             activity.Recipient = (InputArgument<string>)recipient;
 
