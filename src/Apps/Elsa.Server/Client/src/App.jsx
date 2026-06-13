@@ -1803,9 +1803,9 @@ export function App() {
           </section>
 
           <section className="ops-section compact">
-            <h3>Active Packages</h3>
+            <h3>Installed Packages</h3>
             <div className="package-list">
-              {packages.length === 0 && <p className="muted">No active packages reported yet.</p>}
+              {packages.length === 0 && <p className="muted">No installed packages reported yet.</p>}
               {packages.map((pkg) => (
                 <div className="package-row" key={`${pkg.id}-${pkg.version}`}>
                   <PackagePlus size={15} />
