@@ -18,6 +18,7 @@ import {
   CloudUpload,
   FileJson,
   GitBranch,
+  Moon,
   PackagePlus,
   Pause,
   Play,
@@ -29,6 +30,7 @@ import {
   Save,
   Search,
   Server,
+  Sun,
   Terminal,
   Trash2,
 } from "lucide-react";
@@ -196,13 +198,56 @@ const steps = [
 
 const initialWorkflow = JSON.stringify(sampleWorkflows.hello.value, null, 2);
 const themeStorageKey = "elsa-demo-theme";
-const themePresets = [
-  { id: "studio", label: "Studio", colors: ["#eef2f4", "#ffffff", "#0f8a83"] },
-  { id: "midnight", label: "Midnight", colors: ["#101719", "#172124", "#20b9ad"] },
-  { id: "ember", label: "Ember", colors: ["#f5efe8", "#fffaf4", "#c45a2a"] },
-  { id: "forest", label: "Forest", colors: ["#edf2ec", "#fbfdf8", "#2c7a4b"] },
-  { id: "orchid", label: "Orchid", colors: ["#f2eef7", "#ffffff", "#7c4ac9"] },
-  { id: "slate", label: "Slate", colors: ["#e8edf2", "#fbfdff", "#315f8f"] }
+const themeModeStorageKey = "elsa-demo-theme-mode";
+const themeFamilies = [
+  {
+    id: "studio",
+    label: "Studio",
+    colors: {
+      light: ["#eef2f4", "#ffffff", "#0f8a83"],
+      dark: ["#101719", "#172124", "#20b9ad"]
+    }
+  },
+  {
+    id: "harbor",
+    label: "Harbor",
+    colors: {
+      light: ["#eaf3f4", "#fbfefe", "#188d9a"],
+      dark: ["#0d171b", "#152329", "#35bfd0"]
+    }
+  },
+  {
+    id: "ember",
+    label: "Ember",
+    colors: {
+      light: ["#f5efe8", "#fffaf4", "#c45a2a"],
+      dark: ["#1b1310", "#261a15", "#ef8b55"]
+    }
+  },
+  {
+    id: "forest",
+    label: "Forest",
+    colors: {
+      light: ["#edf2ec", "#fbfdf8", "#2c7a4b"],
+      dark: ["#101811", "#18231a", "#5fcf85"]
+    }
+  },
+  {
+    id: "orchid",
+    label: "Orchid",
+    colors: {
+      light: ["#f2eef7", "#ffffff", "#7c4ac9"],
+      dark: ["#17121e", "#221a2c", "#b888ff"]
+    }
+  },
+  {
+    id: "slate",
+    label: "Slate",
+    colors: {
+      light: ["#e8edf2", "#fbfdff", "#315f8f"],
+      dark: ["#10161d", "#182331", "#70a9df"]
+    }
+  }
 ];
 const consoleHeightStorageKey = "elsa-demo-console-height";
 const consoleAutoScrollStorageKey = "elsa-demo-console-autoscroll";
@@ -250,21 +295,36 @@ const ansiBackgroundClasses = {
   107: "console-ansi-bg-bright-white"
 };
 
-function getInitialTheme() {
+function getInitialThemeFamily() {
   if (typeof window === "undefined")
     return "studio";
 
   const storedTheme = window.localStorage.getItem(themeStorageKey);
-  if (themePresets.some((preset) => preset.id === storedTheme))
+  if (themeFamilies.some((family) => family.id === storedTheme))
     return storedTheme;
 
+  if (storedTheme === "midnight")
+    return "harbor";
+
+  return "studio";
+}
+
+function getInitialThemeMode() {
+  if (typeof window === "undefined")
+    return "light";
+
+  const storedMode = window.localStorage.getItem(themeModeStorageKey);
+  if (storedMode === "light" || storedMode === "dark")
+    return storedMode;
+
+  const storedTheme = window.localStorage.getItem(themeStorageKey);
+  if (storedTheme === "dark" || storedTheme === "midnight")
+    return "dark";
+
   if (storedTheme === "light")
-    return "studio";
+    return "light";
 
-  if (storedTheme === "dark")
-    return "midnight";
-
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "midnight" : "studio";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function getMaxConsoleHeight() {
@@ -607,7 +667,8 @@ function setActivityLiteralInput(activity, referenceKey, value) {
 }
 
 export function App() {
-  const [theme, setTheme] = useState(getInitialTheme);
+  const [themeFamily, setThemeFamily] = useState(getInitialThemeFamily);
+  const [themeMode, setThemeMode] = useState(getInitialThemeMode);
   const [consoleHeight, setConsoleHeight] = useState(getInitialConsoleHeight);
   const [selectedSample, setSelectedSample] = useState("hello");
   const [workflowJson, setWorkflowJson] = useState(initialWorkflow);
@@ -648,9 +709,12 @@ export function App() {
   const seenConsoleLineIds = useRef(new Set());
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(themeStorageKey, theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = `${themeFamily}-${themeMode}`;
+    document.documentElement.dataset.themeFamily = themeFamily;
+    document.documentElement.dataset.themeMode = themeMode;
+    window.localStorage.setItem(themeStorageKey, themeFamily);
+    window.localStorage.setItem(themeModeStorageKey, themeMode);
+  }, [themeFamily, themeMode]);
 
   useEffect(() => {
     window.localStorage.setItem(consoleHeightStorageKey, String(consoleHeight));
@@ -1324,25 +1388,33 @@ export function App() {
             <Server size={16} />
             <span>/default</span>
           </div>
-          <div className="theme-picker" role="group" aria-label="Theme picker">
-            {themePresets.map((preset) => (
-              <button
-                type="button"
-                key={preset.id}
-                className={theme === preset.id ? "theme-swatch active" : "theme-swatch"}
-                onClick={() => setTheme(preset.id)}
-                title={`Use ${preset.label} theme`}
-                aria-label={`Use ${preset.label} theme`}
-                aria-pressed={theme === preset.id}
-              >
-                <span className="theme-swatch-colors" aria-hidden="true">
-                  {preset.colors.map((color) => (
-                    <span key={color} style={{ background: color }} />
-                  ))}
-                </span>
-                <span>{preset.label}</span>
-              </button>
-            ))}
+          <div className="theme-picker" role="group" aria-label="Theme controls">
+            <span className="theme-preview" aria-hidden="true">
+              {(themeFamilies.find((family) => family.id === themeFamily)?.colors[themeMode] ?? themeFamilies[0].colors.light).map((color) => (
+                <span key={color} style={{ background: color }} />
+              ))}
+            </span>
+            <select
+              value={themeFamily}
+              onChange={(event) => setThemeFamily(event.target.value)}
+              aria-label="Theme"
+              title="Theme"
+            >
+              {themeFamilies.map((family) => (
+                <option key={family.id} value={family.id}>{family.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="theme-mode-toggle"
+              onClick={() => setThemeMode((current) => current === "dark" ? "light" : "dark")}
+              title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-pressed={themeMode === "dark"}
+            >
+              {themeMode === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              <span>{themeMode === "dark" ? "Light" : "Dark"}</span>
+            </button>
           </div>
         </div>
       </header>
