@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Rendering.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
@@ -11,9 +12,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Rendering;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Expressions")]
+[ManifestFeatureCategory("JavaScript")]
+[ManifestFeatureCategory("Design")]
 [ShellFeature(
     name: "JavaScriptRendering",
-    DisplayName = "JavaScript rendering"
+    DisplayName = "JavaScript rendering",
+    Description = "Builds JavaScript declaration documents for design-time expression rendering."
 )]
 public class JavaScriptRenderingFeature : IShellFeature
 {

@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Options;
 using Elsa.Http.Services;
@@ -9,6 +10,9 @@ using System.Reflection;
 
 namespace Elsa.Http;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("HTTP")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "Http",
     DisplayName = "HTTP",
@@ -16,15 +20,26 @@ namespace Elsa.Http;
 )]
 public class HttpFeature : IShellFeature
 {
+    [ManifestSetting(DisplayName = "Content type provider type", Description = "CLR type name of the content type provider implementation.", Category = "Services", Advanced = true)]
     public string ContentTypeProviderType { get; set; } = typeof(FileExtensionContentTypeProvider).FullName!;
+
+    [ManifestSetting(DisplayName = "Zip file cache provider type", Description = "CLR type name of the ZIP file cache storage provider implementation.", Category = "Services", Advanced = true)]
 
     public string ZipFileCacheProviderType { get; set; } = typeof(FileSystemZipFileCacheStorageProvider).FullName!;
 
+    [ManifestSetting(DisplayName = "ZIP archive manager type", Description = "CLR type name of the ZIP archive manager implementation.", Category = "Services", Advanced = true)]
+
     public string ZipArchiveManagerType { get; set; } = typeof(ZipArchiveManager).FullName!;
+
+    [ManifestSetting(DisplayName = "File downloader type", Description = "CLR type name of the file downloader implementation.", Category = "Services", Advanced = true)]
 
     public string FileDownloaderType { get; set; } = typeof(HttpClientFileDownloader).FullName!;
 
+    [ManifestSetting(DisplayName = "ZIP cache time to live", Description = "Duration downloaded ZIP files remain in the local cache.", Category = "Caching", UIHint = "duration")]
+
     public TimeSpan CacheTtl { get; set; } = TimeSpan.FromDays(7);
+
+    [ManifestSetting(DisplayName = "Local cache directory", Description = "Directory used for local HTTP ZIP file caching.", Category = "Caching")]
 
     public string LocalCacheDirectory { get; set; } = Path.GetTempPath();
 

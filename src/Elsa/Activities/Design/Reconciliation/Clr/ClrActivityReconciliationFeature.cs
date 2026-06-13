@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Clr.Options;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
@@ -20,6 +21,10 @@ namespace Elsa.Activities.Design.Reconciliation.Clr;
 /// instance is the only singleton — it is an application-wide static value; everything else "just
 /// executes" and is therefore scoped.
 /// </remarks>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Design")]
+[ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "ClrActivityReconciliation",
     Description = "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind)."

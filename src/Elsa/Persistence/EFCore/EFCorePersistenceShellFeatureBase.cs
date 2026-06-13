@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Events.Core.Contracts;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Persistence.EFCore.Handlers;
 using Elsa.Persistence.EFCore.Options;
@@ -23,34 +24,40 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
     /// Gets or sets a value indicating whether to use context pooling.
     /// When not explicitly set, falls back to shared settings if available.
     /// </summary>
+    [ManifestSetting(DisplayName = "Use context pooling", Description = "Controls whether EF Core DbContext pooling is enabled for this persistence feature.", Category = "Persistence", Advanced = true)]
     public bool? UseContextPooling { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to run migrations.
     /// When not explicitly set, falls back to shared settings if available, defaulting to true.
     /// </summary>
+    [ManifestSetting(DisplayName = "Run migrations", Description = "Controls whether database migrations run during startup.", Category = "Persistence", DefaultValue = "true")]
     public bool? RunMigrations { get; set; }
 
     /// <summary>
     /// Gets or sets the lifetime of the <see cref="IDbContextFactory{TContext}"/>.
     /// When not explicitly set, falls back to shared settings if available, defaulting to <see cref="ServiceLifetime.Scoped"/>.
     /// </summary>
+    [ManifestSetting(DisplayName = "DbContext factory lifetime", Description = "Service lifetime used for the EF Core DbContext factory.", Category = "Persistence", Advanced = true)]
     public ServiceLifetime? DbContextFactoryLifetime { get; set; }
 
     /// <summary>
     /// Gets or sets the connection string to use for the database.
     /// When not explicitly set, falls back to shared settings if available.
     /// </summary>
+    [ManifestSetting(DisplayName = "Connection string", Description = "Database connection string used by this persistence feature.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// 
+    /// Controls whether command-side persistence services are registered.
     /// </summary>
+    [ManifestSetting(DisplayName = "Use commands", Description = "Registers command-side EF Core persistence services and entity saving handlers.", Category = "Persistence", DefaultValue = "true", Advanced = true)]
     public bool UseCommands { get; set; } = true;
 
     /// <summary>
-    /// 
+    /// Controls whether query-side persistence services are registered.
     /// </summary>
+    [ManifestSetting(DisplayName = "Use queries", Description = "Registers query-side EF Core persistence services and entity loading handlers.", Category = "Persistence", DefaultValue = "true", Advanced = true)]
     public bool UseQueries { get; set; } = true;
 
     /// <summary>
@@ -67,6 +74,7 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
     /// Gets or sets additional options to configure the database context.
     /// When not explicitly set, falls back to shared settings if available.
     /// </summary>
+    [ManifestIgnore]
     public ElsaDbContextOptions? DbContextOptions { get; set; }
 
     /// <summary>

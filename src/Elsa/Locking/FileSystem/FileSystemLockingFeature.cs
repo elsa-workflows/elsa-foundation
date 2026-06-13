@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading.FileSystem;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,6 +7,9 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Locking.FileSystem;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Locking")]
+[ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "FileSystemDistributedLocking",
     DisplayName = "File System Distributed Locking",
@@ -13,7 +17,10 @@ namespace Elsa.Locking.FileSystem;
 )]
 public class FileSystemLockingFeature : IShellFeature
 {
+    [ManifestSetting(DisplayName = "Locks folder path", Description = "Directory used to store file-system distributed lock files.", Category = "Locking", Required = true)]
     public string LocksFolderPath { get; set; } = Path.Combine(Environment.CurrentDirectory, "App_Data/locks");
+
+    [ManifestSetting(DisplayName = "Lock acquisition timeout", Description = "Maximum time in minutes to wait when acquiring a distributed lock.", Category = "Locking", DefaultValue = "10")]
 
     public double LockAcquisitionTimeoutMinutes { get; set; } = 10;
 

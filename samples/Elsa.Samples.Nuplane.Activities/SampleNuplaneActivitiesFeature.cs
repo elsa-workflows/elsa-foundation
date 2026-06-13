@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Samples.Nuplane.Activities.Constructors;
@@ -7,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Samples.Nuplane.Activities;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Samples")]
+[ManifestFeatureCategory("Activities")]
 [ShellFeature(
     name: "SampleNuplaneActivities",
     DisplayName = "Sample Nuplane Activities",

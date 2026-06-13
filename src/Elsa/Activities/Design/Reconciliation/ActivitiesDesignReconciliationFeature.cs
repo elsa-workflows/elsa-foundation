@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;
@@ -17,6 +18,10 @@ namespace Elsa.Activities.Design.Reconciliation;
 /// <see cref="IActivityReconciliationSource"/> via their own feature (§2.6.1) — this feature
 /// owns none and is no longer extended by inheritance (FR-021, gate G13).
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Design")]
+[ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "ActivitiesDesignReconciliation",
     Description = "Universal activity-design reconciliation pass; discovers IActivityReconciliationSource contributions from DI."

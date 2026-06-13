@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Handlers;
@@ -10,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Serialization.SystemText;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Serialization")]
 [ShellFeature(
     name: "Serialization",
     DisplayName = "Serialization",

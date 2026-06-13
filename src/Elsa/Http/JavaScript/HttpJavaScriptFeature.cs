@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Options;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Http.JavaScript.Constants;
@@ -7,9 +8,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Http.JavaScript;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("HTTP")]
+[ManifestFeatureCategory("JavaScript")]
 [ShellFeature(
     name: "HttpJavaScript",
-    DisplayName = "HTTP JavaScript services"
+    DisplayName = "HTTP JavaScript services",
+    Description = "Adds HTTP type descriptors and declarations to JavaScript expression services."
 )]
 public class HttpJavaScriptFeature : IShellFeature
 {

@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Liquid.Contracts;
 using Elsa.Expressions.Liquid.Enums;
@@ -18,6 +19,9 @@ namespace Elsa.Expressions.Liquid;
 /// <summary>
 /// Configures Liquid functionality.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Expressions")]
+[ManifestFeatureCategory("Liquid")]
 [ShellFeature(
     name: "Liquid",
     DisplayName = "Liquid Expressions",
@@ -39,15 +43,26 @@ public class LiquidExpressionsFeature : IShellFeature
     /// <summary>
     /// Gets or sets a value indicating whether to allow access to the configuration object.
     /// </summary>
+    [ManifestSetting(DisplayName = "Allow configuration access", Description = "Allows Liquid templates to read application configuration values.", Category = "Security", Advanced = true)]
     public bool AllowConfigurationAccess { get; set; }
+
+    [ManifestSetting(DisplayName = "Add array filters", Description = "Registers the built-in Liquid array filters.", Category = "Filters", DefaultValue = "true")]
 
     public bool AddArrayFilters { get; set; } = true;
 
+    [ManifestSetting(DisplayName = "Add string filters", Description = "Registers the built-in Liquid string filters.", Category = "Filters", DefaultValue = "true")]
+
     public bool AddStringFilters { get; set; } = true;
+
+    [ManifestSetting(DisplayName = "Add number filters", Description = "Registers the built-in Liquid number filters.", Category = "Filters", DefaultValue = "true")]
 
     public bool AddNumberFilters { get; set; } = true;
 
+    [ManifestSetting(DisplayName = "Add miscellaneous filters", Description = "Registers the built-in miscellaneous Liquid filters.", Category = "Filters", DefaultValue = "true")]
+
     public bool AddMiscFilters { get; set; } = true;
+
+    [ManifestSetting(DisplayName = "Encoding type", Description = "Text encoder used when rendering Liquid templates.", Category = "Rendering")]
 
     public LiquidEncodingType EncodingType { get; set; }
 

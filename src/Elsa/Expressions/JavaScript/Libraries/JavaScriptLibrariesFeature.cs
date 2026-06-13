@@ -1,4 +1,5 @@
 ﻿using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Libraries.Options;
 using Elsa.Expressions.JavaScript.Libraries.PreProcessors;
@@ -7,16 +8,22 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Libraries;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Expressions")]
+[ManifestFeatureCategory("JavaScript")]
 [ShellFeature(
     name: "JavaScriptLibraries",
-    DisplayName = "JavaScript libraries such as 'lodash', 'lodashFp', or 'moment'"
+    DisplayName = "JavaScript libraries such as 'lodash', 'lodashFp', or 'moment'",
+    Description = "Registers embedded JavaScript libraries for expression script preprocessing."
 )]
 public class JavaScriptLibrariesFeature : IShellFeature
 {
     private const string ElsaClientLibResourceNameFormat = "Elsa.Expressions.JavaScript.Libraries.ClientLib.dist.{0}.js";
 
+    [ManifestSetting(DisplayName = "Full module resource name", Description = "Embedded JavaScript module resource name to register for script preprocessing.", Category = "JavaScript", Advanced = true)]
     public string? FullModuleResourceName { get; set; }
 
+    [ManifestSetting(DisplayName = "Module name", Description = "Built-in JavaScript module name to register for script preprocessing.", Category = "JavaScript")]
     public string? ModuleName { get; set; }
 
     public void ConfigureServices(IServiceCollection services)
