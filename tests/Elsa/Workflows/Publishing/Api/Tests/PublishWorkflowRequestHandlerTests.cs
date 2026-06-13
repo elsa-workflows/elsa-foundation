@@ -22,6 +22,8 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class PublishWorkflowRequestHandlerTests
 {
     private const string ActivitiesSlotName = "Activities";
+    private const string StructureKind = "test.composite.structure";
+    private const string StructureSchemaVersion = "1.0.0";
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
@@ -82,6 +84,32 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(3, view.NodeCount);
         var childSlot = Assert.Single(executable.RootActivity.ChildSlots);
         Assert.Equal(["write-one", "write-two"], childSlot.Activities.Select(activity => activity.ExecutableNodeId));
+    }
+
+    [Fact]
+    public async Task PublishesActivityOwnedStructureIntoExecutableArtifact()
+    {
+        var root = CompositeNode(
+            "composite",
+            [
+                Node("write-one", Text("one")),
+                Node("write-two", Text("two"))
+            ],
+            new ActivityNodeStructure(
+                StructureKind,
+                StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { startActivityNodeId = "write-two" })));
+        var workflowVersion = WorkflowVersion(root);
+        var handler = Handler(workflowVersion);
+
+        var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var executable = await _store.FindAsync(view.ArtifactId);
+
+        Assert.NotNull(executable);
+        Assert.NotNull(executable.RootActivity.Structure);
+        Assert.Equal(StructureKind, executable.RootActivity.Structure.Kind);
+        Assert.Equal(StructureSchemaVersion, executable.RootActivity.Structure.SchemaVersion);
+        Assert.Equal("write-two", executable.RootActivity.Structure.Payload.GetProperty("startActivityNodeId").GetString());
     }
 
     [Fact]
@@ -189,12 +217,16 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static ActivityNode CompositeNode(
         string nodeId,
-        IReadOnlyCollection<ActivityNode> activities) =>
+        IReadOnlyCollection<ActivityNode> activities,
+        ActivityNodeStructure? structure = null) =>
         Node(
             nodeId,
             [
                 new ActivityChildSlot(ActivitiesSlotName, activities)
-            ]);
+            ]) with
+            {
+                Structure = structure
+            };
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -21,7 +22,8 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 internal static class UpdateDraftTestKit
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+    private const string StructureKind = "test.workflow-root.structure";
+    private const string StructureSchemaVersion = "1.0.0";
 
     public static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId = "wf-1")
     {
@@ -113,13 +115,13 @@ internal static class UpdateDraftTestKit
             [
                 new ActivityChildSlot(
                     ActivitiesSlotName,
-                    activitySnapshot,
-                    startActivityNodeId is null
-                        ? null
-                        : new Dictionary<string, string>
-                        {
-                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
-                        })
-            ]);
+                    activitySnapshot)
+            ],
+            Structure: startActivityNodeId is null
+                ? null
+                : new ActivityNodeStructure(
+                    StructureKind,
+                    StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { startActivityNodeId })));
     }
 }

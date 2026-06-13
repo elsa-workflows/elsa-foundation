@@ -121,7 +121,8 @@ public sealed class PublishWorkflowRequestHandler(
             {
                 ["authoredNodeId"] = activity.NodeId
             },
-            childSlots: childSlots);
+            childSlots: childSlots,
+            structure: CompileStructure(activity.Structure));
     }
 
     private static IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
@@ -131,8 +132,7 @@ public sealed class PublishWorkflowRequestHandler(
         return (childSlots ?? [])
             .Select(slot => new ExecutableChildSlot(
                 MapSlotName(slot.Name),
-                slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray(),
-                MapSlotMetadata(slot.Metadata)))
+                slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray()))
             .ToArray();
     }
 
@@ -141,14 +141,10 @@ public sealed class PublishWorkflowRequestHandler(
         return name;
     }
 
-    private static IReadOnlyDictionary<string, string> MapSlotMetadata(IReadOnlyDictionary<string, string>? metadata)
-    {
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (key, value) in metadata ?? new Dictionary<string, string>())
-            result[key] = value;
-
-        return result;
-    }
+    private static ExecutableActivityStructure? CompileStructure(ActivityNodeStructure? structure) =>
+        structure is null
+            ? null
+            : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
 
     private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
@@ -236,13 +232,13 @@ public sealed class PublishWorkflowRequestHandler(
             .OrderBy(slot => slot.Name, StringComparer.Ordinal)
             .Select(slot =>
             {
-                var metadata = string.Join(';', slot.Metadata
-                    .OrderBy(item => item.Key, StringComparer.Ordinal)
-                    .Select(item => $"{item.Key}={item.Value}"));
                 var activities = string.Join(';', slot.Activities.Select(activity => activity.ExecutableNodeId).Order(StringComparer.Ordinal));
-                return $"{slot.Name}[{metadata}]({activities})";
+                return $"{slot.Name}({activities})";
             }));
-        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
+        var structure = node.Structure is null
+            ? string.Empty
+            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{node.Structure.Payload.GetRawText()}";
+        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
     }
 
     private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)

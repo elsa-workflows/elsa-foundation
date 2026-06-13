@@ -43,6 +43,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 5. Capture any approved spec, report, or implementation follow-up here instead of stretching the Elsa Brain Operating Model bucket.
 6. Supersede graph-shaped workflow boundary specs with the root-activity contract and implement that contract before adding flowchart/sequence/state-machine behavior.
 7. Remove generic `ActivityComposition` / `ExecutableActivityComposition` assumptions. Composite child structure belongs to activity-specific contracts such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
+8. Keep `ActivityChildSlot` and `ExecutableChildSlot` as traversal projections only. Activity-owned relationship semantics belong to node/executable structure owned by the activity module, not slot metadata.
 
 ## Linked Surfaces
 
@@ -61,6 +62,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - Use the Elsa Core runtime broken-windows brainstorm report to preserve maintainer concerns and source-derived analysis before selecting Speckit work units.
 - Do not implement `WorkflowExecutionContext`, `WorkflowDefinitionActivity.Execute`, or runtime graph behavior as a drive-by change.
 - Treat `WorkflowDefinitionState.Activities`/`ActivityConnections`, `ActivityNode.Composition`, `WorkflowExecutable.Edges`/`StartNodeIds`, and `ExecutableNode.Composition` as superseded provisional slice artifacts. The workflow boundary is a single root activity; child ownership and flowchart traversal are activity behavior.
+- Treat generic child-slot metadata as superseded for composite semantics. Flowchart connections/start, If branch meaning, loop bodies, and similar structure must be module-owned activity structure.
 - Before relying on generated maps for verification, check [maps manifest](../maps/manifest.json); regenerate the relevant map if freshness matters.
 - Treat the Runtime JavaScript Design reference as known deferred architecture debt, not as the first runtime-execution fix.
 

@@ -211,11 +211,10 @@ public sealed class FlowchartActivityTests : IDisposable
         IReadOnlyCollection<FlowchartConnection>? connections = null,
         string? startNodeId = null)
     {
-        var metadata = new Dictionary<string, string>();
-        if (connections is not null)
-            metadata[FlowchartActivity.ConnectionsMetadataKey] = JsonSerializer.Serialize(connections);
-        if (startNodeId is not null)
-            metadata[FlowchartActivity.StartNodeIdMetadataKey] = startNodeId;
+        var structure = new ExecutableActivityStructure(
+            FlowchartActivity.StructureKind,
+            FlowchartActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new FlowchartStructure(connections ?? [], startNodeId)));
 
         return NewNode(
             "node-flowchart",
@@ -224,15 +223,16 @@ public sealed class FlowchartActivityTests : IDisposable
             [
                 new ExecutableChildSlot(
                     FlowchartActivity.ActivitiesSlotName,
-                    children,
-                    metadata)
-            ]);
+                    children)
+            ],
+            structure: structure);
     }
 
     private static ExecutableNode NewNode(
         string nodeId,
         string activityType = "test/probe",
-        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null) =>
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -243,7 +243,8 @@ public sealed class FlowchartActivityTests : IDisposable
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: childSlots);
+            childSlots: childSlots,
+            structure: structure);
 
     private static FlowchartConnection NewConnection(string sourceNodeId, string targetNodeId, string? sourcePort = null) =>
         new(new FlowchartEndpoint(sourceNodeId, sourcePort), new FlowchartEndpoint(targetNodeId));

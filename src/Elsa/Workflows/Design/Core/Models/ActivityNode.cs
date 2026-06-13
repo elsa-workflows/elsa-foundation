@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
@@ -14,21 +16,54 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// sibling as a <c>DesignMetadataRecord</c> keyed by <see cref="NodeId"/> per Elsa §E2.9.2.
 /// Child activities are exposed through activity-specific named slots such as
 /// <c>Sequence.Activities</c>, <c>If.Then</c>, <c>ForEach.Body</c>, or
-/// <c>Flowchart.Activities</c>. The node itself is not a universal composition carrier.
+/// <c>Flowchart.Activities</c>. These slots are traversal projections only. Activity-owned
+/// relationship semantics such as ordering, branch meaning, loop bodies, flowchart
+/// connections, and start nodes belong to <see cref="Structure"/> and are interpreted by
+/// the owning activity module.
 /// </remarks>
 public sealed record ActivityNode(
     string NodeId,
     string ActivityVersionId,
     IEnumerable<ArgumentState> Inputs,
     IEnumerable<ArgumentState> Outputs,
-    IEnumerable<ActivityChildSlot>? ChildSlots = null
+    IEnumerable<ActivityChildSlot>? ChildSlots = null,
+    ActivityNodeStructure? Structure = null
 );
 
 /// <summary>
-/// Activity-specific child activity slot. The slot name is part of the owning activity contract.
+/// Traversal projection of activity-specific children. The slot name is part of the owning
+/// activity contract, but core does not interpret it.
 /// </summary>
 public sealed record ActivityChildSlot(
     string Name,
-    IEnumerable<ActivityNode> Activities,
-    IReadOnlyDictionary<string, string>? Metadata = null
+    IEnumerable<ActivityNode> Activities
 );
+
+/// <summary>
+/// Activity-owned authored structure for one activity node.
+/// </summary>
+/// <remarks>
+/// This is per-node authored content, not activity catalog metadata. Core stores and
+/// round-trips the generic shape; the owning activity module owns the kind name,
+/// schema version, payload, and consistency rules against projected child slots.
+/// </remarks>
+public sealed record ActivityNodeStructure
+{
+    public ActivityNodeStructure(string kind, string schemaVersion, JsonElement payload)
+    {
+        if (string.IsNullOrWhiteSpace(kind))
+            throw new ArgumentException("An activity node structure kind is required.", nameof(kind));
+        if (string.IsNullOrWhiteSpace(schemaVersion))
+            throw new ArgumentException("An activity node structure schema version is required.", nameof(schemaVersion));
+        if (payload.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            throw new ArgumentException("An activity node structure payload is required.", nameof(payload));
+
+        Kind = kind;
+        SchemaVersion = schemaVersion;
+        Payload = payload.Clone();
+    }
+
+    public string Kind { get; }
+    public string SchemaVersion { get; }
+    public JsonElement Payload { get; }
+}

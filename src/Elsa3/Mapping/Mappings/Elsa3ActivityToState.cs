@@ -12,7 +12,6 @@ namespace Elsa3.Mapping.Mappings;
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
 
     public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
     {
@@ -26,22 +25,13 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         if (source.Connections?.Any() == true)
             throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
 
-        var startActivityNodeId = childActivities
-            .FirstOrDefault(activity => source.Activities?.FirstOrDefault(sourceActivity => sourceActivity.NodeId == activity.NodeId)?.CustomProperties?.CanStartWorkflow == true)
-            ?.NodeId;
         var childSlots = childActivities.Length == 0
             ? null
             : new[]
             {
                 new ActivityChildSlot(
                     ActivitiesSlotName,
-                    childActivities,
-                    startActivityNodeId is null
-                        ? null
-                        : new Dictionary<string, string>
-                        {
-                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
-                        })
+                    childActivities)
             };
 
         return new ActivityNode(

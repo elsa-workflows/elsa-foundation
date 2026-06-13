@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -14,7 +15,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 internal static class ValidatorTestHelpers
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+    private const string StructureKind = "test.workflow-root.structure";
+    private const string StructureSchemaVersion = "1.0.0";
 
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
@@ -57,12 +59,14 @@ internal static class ValidatorTestHelpers
             [
                 new ActivityChildSlot(
                     ActivitiesSlotName,
-                    childActivities,
-                    new Dictionary<string, string>
-                    {
-                        [StartActivityNodeIdMetadataKey] = childActivities.FirstOrDefault()?.NodeId ?? string.Empty
-                    })
-            ]
+                    childActivities)
+            ],
+        Structure: childActivities is null
+            ? null
+            : new ActivityNodeStructure(
+                StructureKind,
+                StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { startActivityNodeId = childActivities.FirstOrDefault()?.NodeId ?? string.Empty }))
     );
 
     public static VariableDefinition Variable(string referenceKey, string name) => new(
@@ -95,14 +99,14 @@ internal static class ValidatorTestHelpers
             [
                 new ActivityChildSlot(
                     ActivitiesSlotName,
-                    activitySnapshot,
-                    startActivityNodeId is null
-                        ? null
-                        : new Dictionary<string, string>
-                        {
-                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
-                        })
-            ]);
+                    activitySnapshot)
+            ],
+            Structure: startActivityNodeId is null
+                ? null
+                : new ActivityNodeStructure(
+                    StructureKind,
+                    StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new { startActivityNodeId })));
     }
 
     private sealed class StubDraft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft

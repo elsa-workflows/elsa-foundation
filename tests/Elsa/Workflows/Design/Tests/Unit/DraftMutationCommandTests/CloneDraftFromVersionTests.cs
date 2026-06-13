@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
@@ -20,7 +21,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 public sealed class CloneDraftFromVersionTests
 {
     private const string ActivitiesSlotName = "Activities";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
+    private const string StructureKind = "test.workflow-root.structure";
+    private const string StructureSchemaVersion = "1.0.0";
 
     [Fact]
     public async Task Clone_deep_copies_State_from_source_Version()
@@ -176,12 +178,12 @@ public sealed class CloneDraftFromVersionTests
             [
                 new ActivityChildSlot(
                     ActivitiesSlotName,
-                    activities,
-                    new Dictionary<string, string>
-                    {
-                        [StartActivityNodeIdMetadataKey] = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty
-                    })
-            ]),
+                    activities)
+            ],
+            Structure: new ActivityNodeStructure(
+                StructureKind,
+                StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { startActivityNodeId = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty }))),
         Inputs: [],
         Outputs: [],
         WorkflowActivityOptions: null,
@@ -205,9 +207,7 @@ public sealed class CloneDraftFromVersionTests
     }
 
     private static string? StartActivityNodeId(ActivityNode? root) =>
-        root?.ChildSlots?
-            .Select(slot => slot.Metadata?.TryGetValue(StartActivityNodeIdMetadataKey, out var startActivityNodeId) == true
-                ? startActivityNodeId
-                : null)
-            .FirstOrDefault(startActivityNodeId => startActivityNodeId is not null);
+        root?.Structure?.Payload.TryGetProperty("startActivityNodeId", out var startActivityNodeId) == true
+            ? startActivityNodeId.GetString()
+            : null;
 }
