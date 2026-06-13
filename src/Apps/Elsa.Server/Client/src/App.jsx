@@ -146,31 +146,85 @@ const sampleWorkflows = {
   nuplane: {
     label: "Nuplane Activity",
     activityTokens: {
+      "{{writeLineActivityVersionId}}": "WriteLine",
+      "{{sequenceActivityVersionId}}": "Sequence",
       "{{sayHelloFromNuplaneActivityVersionId}}": "SayHelloFromNuplane"
     },
     value: {
-      name: "Say Hello From Nuplane",
-      description: "Runs the SayHelloFromNuplane activity loaded from a Nuplane package.",
+      name: "Nuplane Sequence",
+      description: "Runs WriteLine, SayHelloFromNuplane, then a final WriteLine inside a Sequence root activity.",
       state: {
         variables: [],
         rootActivity: {
-          nodeId: "say-hello-from-nuplane",
-          activityVersionId: "{{sayHelloFromNuplaneActivityVersionId}}",
-          inputs: [
-            {
-              referenceKey: "Recipient",
-              value: {
-                value: "World",
-                expressionType: "Literal"
-              },
-              autoEvaluate: null,
-              evaluatorType: null,
-              storageDriverType: null,
-              isSensitive: null
-            }
-          ],
+          nodeId: "nuplane-sequence-root",
+          activityVersionId: "{{sequenceActivityVersionId}}",
+          inputs: [],
           outputs: [],
-          childSlots: null
+          childSlots: [
+            {
+              name: "Sequence.Activities",
+              activities: [
+                {
+                  nodeId: "write-before-nuplane",
+                  activityVersionId: "{{writeLineActivityVersionId}}",
+                  inputs: [
+                    {
+                      referenceKey: "Text",
+                      value: {
+                        value: "Before Nuplane activity",
+                        expressionType: "Literal"
+                      },
+                      autoEvaluate: null,
+                      evaluatorType: null,
+                      storageDriverType: null,
+                      isSensitive: null
+                    }
+                  ],
+                  outputs: [],
+                  childSlots: null
+                },
+                {
+                  nodeId: "say-hello-from-nuplane",
+                  activityVersionId: "{{sayHelloFromNuplaneActivityVersionId}}",
+                  inputs: [
+                    {
+                      referenceKey: "Recipient",
+                      value: {
+                        value: "World",
+                        expressionType: "Literal"
+                      },
+                      autoEvaluate: null,
+                      evaluatorType: null,
+                      storageDriverType: null,
+                      isSensitive: null
+                    }
+                  ],
+                  outputs: [],
+                  childSlots: null
+                },
+                {
+                  nodeId: "write-after-nuplane",
+                  activityVersionId: "{{writeLineActivityVersionId}}",
+                  inputs: [
+                    {
+                      referenceKey: "Text",
+                      value: {
+                        value: "After Nuplane activity",
+                        expressionType: "Literal"
+                      },
+                      autoEvaluate: null,
+                      evaluatorType: null,
+                      storageDriverType: null,
+                      isSensitive: null
+                    }
+                  ],
+                  outputs: [],
+                  childSlots: null
+                }
+              ],
+              metadata: null
+            }
+          ]
         },
         inputs: [],
         outputs: [],
