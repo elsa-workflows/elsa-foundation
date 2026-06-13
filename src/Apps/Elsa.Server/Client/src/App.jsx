@@ -1035,7 +1035,9 @@ export function App() {
 
     setPackageNotification({
       title: "New package detected",
-      message: `${packageText} is ready. Enable its feature if needed, then reload shells.`
+      message: `${packageText} is ready. Enable its feature if needed, then reload shells.`,
+      actionLabel: "Reload shells",
+      actionKind: "reload-shells"
     });
   }, []);
 
@@ -1335,12 +1337,16 @@ export function App() {
         body: JSON.stringify({ enabled: nextEnabled, configuration })
       });
       setShellJson(response.json);
-      if (nextEnabled)
-        markComplete("feature");
       await refreshState();
       await refreshFeatures();
       setStatus("Ready");
-      addConsoleLine("stdout", `Feature ${nextEnabled ? "enabled" : "disabled"}: ${feature.id}`);
+      setPackageNotification({
+        title: "Feature changes pending",
+        message: `${feature.id} was ${nextEnabled ? "enabled" : "disabled"} in shells.json. Apply changes to reload the default shell.`,
+        actionLabel: "Apply changes",
+        actionKind: "apply-feature-changes"
+      });
+      addConsoleLine("stdout", `Feature ${nextEnabled ? "enabled" : "disabled"} in shells.json: ${feature.id}`);
     } catch (error) {
       setStatus(error.message);
       addConsoleLine("stderr", error.message);
@@ -1351,6 +1357,26 @@ export function App() {
         next.delete(feature.id);
         return next;
       });
+    }
+  }
+
+  async function applyNotificationAction() {
+    const actionKind = packageNotification?.actionKind;
+    if (!actionKind)
+      return;
+
+    if (actionKind === "apply-feature-changes") {
+      await runAction("feature", "Applying feature changes and reloading shells...", async () => {
+        const response = await reloadShellsCore();
+        markComplete("feature");
+        markComplete("reload");
+        addConsoleLine("stdout", `Feature changes applied after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
+      });
+      return;
+    }
+
+    if (actionKind === "reload-shells") {
+      await reloadShells();
     }
   }
 
@@ -1519,6 +1545,11 @@ export function App() {
             <strong>{packageNotification.title}</strong>
             <span>{packageNotification.message}</span>
           </div>
+          {packageNotification.actionLabel && (
+            <button type="button" className="small-button" onClick={applyNotificationAction} disabled={Boolean(busy)}>
+              {packageNotification.actionLabel}
+            </button>
+          )}
         </div>
       )}
 
