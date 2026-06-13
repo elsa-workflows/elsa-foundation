@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Nuplane.Admin;
@@ -30,6 +31,7 @@ internal static class ElsaDemoApi
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
         group.MapPost("/reset", ResetDemoAsync);
+        group.MapGet("/workflows/executables", ListWorkflowExecutablesAsync);
         group.MapGet("/shells/default", GetDefaultShellAsync);
         group.MapPost("/shells/reload", ReloadShellsAsync);
         group.MapPut("/shells/default", SaveShellDocumentAsync);
@@ -167,6 +169,22 @@ internal static class ElsaDemoApi
             activities,
             packages,
             new DemoResetReconcileResponse(reconcile.OutcomeCode.ToString(), reconcile.CorrelationId, reconcile.ReasonCode)));
+    }
+
+    private static async Task<IResult> ListWorkflowExecutablesAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken)
+    {
+        var shell = await shellRegistry.GetOrActivateAsync("default", cancellationToken);
+        await using var shellScope = shell.BeginScope();
+        var store = shellScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var executables = await store.ListAsync(cancellationToken);
+
+        var response = executables
+            .Select(DemoWorkflowExecutableResponse.FromExecutable)
+            .OrderByDescending(x => x.PublishedAt ?? x.CreatedAt)
+            .ThenBy(x => x.ArtifactId)
+            .ToArray();
+
+        return Results.Ok(response);
     }
 
     private static async Task<DemoResetWorkflowCounts> ClearWorkflowsAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
@@ -368,6 +386,40 @@ internal sealed record DemoResetWorkflowCounts(
 internal sealed record DemoResetActivityCounts(int Definitions, int Versions)
 {
     public int TotalDeleted => Definitions + Versions;
+}
+
+internal sealed record DemoWorkflowExecutableResponse(
+    string ArtifactId,
+    string ArtifactVersion,
+    string ArtifactHash,
+    string DefinitionId,
+    string DefinitionVersionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? PublishedAt,
+    string? SourceKind,
+    string? SourceId,
+    string? SourceVersion,
+    string RootActivityType,
+    string RootActivityVersion,
+    int NodeCount,
+    int ResumeTargetCount)
+{
+    public static DemoWorkflowExecutableResponse FromExecutable(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable executable) =>
+        new(
+            executable.Identity.ArtifactId,
+            executable.Identity.ArtifactVersion,
+            executable.Identity.ArtifactHash,
+            executable.Identity.DefinitionId,
+            executable.Identity.DefinitionVersionId,
+            executable.CreatedAt,
+            executable.PublishedAt,
+            executable.Identity.Source?.SourceKind,
+            executable.Identity.Source?.SourceId,
+            executable.Identity.Source?.SourceVersion,
+            executable.RootActivity.ActivityType,
+            executable.RootActivity.ActivityTypeVersion,
+            executable.Nodes.Count,
+            executable.ResumeTargets.Count);
 }
 
 internal sealed record DemoReloadShellsResponse(int FeatureDescriptorCount, int ReloadedShellCount);

@@ -343,6 +343,13 @@ function getConsoleStreamName(stream) {
   return stream === 1 || stream === "stderr" || stream === "Stderr" ? "stderr" : "stdout";
 }
 
+function formatDateTime(value) {
+  if (!value)
+    return "Not set";
+
+  return new Date(value).toLocaleString();
+}
+
 function compareConsoleEntries(left, right) {
   const timestampDelta = Date.parse(left.timestamp) - Date.parse(right.timestamp);
   if (timestampDelta !== 0)
@@ -401,6 +408,8 @@ export function App() {
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [executables, setExecutables] = useState([]);
+  const [executablesLoading, setExecutablesLoading] = useState(false);
   const lastEventSequence = useRef(0);
   const activityVersionCache = useRef(new Map());
   const seenConsoleLineIds = useRef(new Set());
@@ -447,6 +456,29 @@ export function App() {
   const queuedConsoleLineCount = consolePaused
     ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
     : 0;
+  const mainViewMeta = useMemo(() => {
+    if (mainView === "workflow") {
+      return {
+        icon: FileJson,
+        title: "Workflow Definition",
+        description: "Submit, publish, and execute against the mounted default shell."
+      };
+    }
+
+    if (mainView === "activities") {
+      return {
+        icon: Activity,
+        title: "Activity Catalog",
+        description: `${activities.length} activit${activities.length === 1 ? "y" : "ies"} available in /default.`
+      };
+    }
+
+    return {
+      icon: Rocket,
+      title: "Executable Artifacts",
+      description: `${executables.length} published artifact${executables.length === 1 ? "" : "s"} in the runtime store.`
+    };
+  }, [activities.length, executables.length, mainView]);
 
   const addConsoleEntries = useCallback((entries) => {
     if (entries.length === 0)
@@ -536,6 +568,20 @@ export function App() {
   useEffect(() => {
     refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshActivities]);
+
+  const refreshExecutables = useCallback(async () => {
+    setExecutablesLoading(true);
+    try {
+      const artifacts = await request("/_demo/workflows/executables");
+      setExecutables(artifacts ?? []);
+    } finally {
+      setExecutablesLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshExecutables().catch((error) => addConsoleLine("stderr", `Executable artifact refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshExecutables]);
 
   const showPackageNotification = useCallback((events) => {
     const changedPackages = events
@@ -718,6 +764,7 @@ export function App() {
       });
       setArtifactId(response.artifactId);
       addConsoleLine("stdout", `Published artifact: ${response.artifactId}`);
+      await refreshExecutables();
     });
   }
 
@@ -784,6 +831,7 @@ export function App() {
       }
       await refreshState();
       await refreshActivities();
+      await refreshExecutables();
     });
     setCompleted(new Set());
   }
@@ -824,6 +872,7 @@ export function App() {
       activityVersionCache.current.clear();
       await refreshState();
       await refreshActivities();
+      await refreshExecutables();
       addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
   }
@@ -904,6 +953,8 @@ export function App() {
     }
   }
 
+  const MainViewIcon = mainViewMeta.icon;
+
   return (
     <div className="app-shell" style={{ "--console-height": `${consoleHeight}px` }}>
       <header className="topbar">
@@ -952,12 +1003,10 @@ export function App() {
           <div className="panel-titlebar">
             <div>
               <h2>
-                {mainView === "workflow" ? <FileJson size={18} /> : <Activity size={18} />}
-                {mainView === "workflow" ? "Workflow Definition" : "Activity Catalog"}
+                <MainViewIcon size={18} />
+                {mainViewMeta.title}
               </h2>
-              <p>{mainView === "workflow"
-                ? "Submit, publish, and execute against the mounted default shell."
-                : `${activities.length} activit${activities.length === 1 ? "y" : "ies"} available in /default.`}</p>
+              <p>{mainViewMeta.description}</p>
             </div>
             {mainView === "workflow" ? (
               <select value={selectedSample} onChange={(event) => selectSample(event.target.value)}>
@@ -965,9 +1014,13 @@ export function App() {
                   <option key={key} value={key}>{sample.label}</option>
                 ))}
               </select>
-            ) : (
+            ) : mainView === "activities" ? (
               <button type="button" className="small-button" onClick={refreshActivities} disabled={activitiesLoading}>
                 {activitiesLoading ? "Refreshing" : "Refresh"}
+              </button>
+            ) : (
+              <button type="button" className="small-button" onClick={refreshExecutables} disabled={executablesLoading}>
+                {executablesLoading ? "Refreshing" : "Refresh"}
               </button>
             )}
           </div>
@@ -982,6 +1035,10 @@ export function App() {
                 <Activity size={15} />
                 Activities
               </button>
+              <button type="button" className={mainView === "artifacts" ? "active" : ""} onClick={() => setMainView("artifacts")}>
+                <Rocket size={15} />
+                Artifacts
+              </button>
             </div>
             {mainView === "workflow" ? (
               <>
@@ -989,11 +1046,18 @@ export function App() {
                 <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
                 <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
               </>
-            ) : (
+            ) : mainView === "activities" ? (
               <div className="activity-search">
                 <Search size={15} />
                 <input value={activitySearch} onChange={(event) => setActivitySearch(event.target.value)} placeholder="Filter activities" />
               </div>
+            ) : mainView === "artifacts" ? (
+              <div className="artifact-toolbar-summary">
+                <Rocket size={15} />
+                <span>{executables.length} artifact{executables.length === 1 ? "" : "s"}</span>
+              </div>
+            ) : (
+              null
             )}
           </div>
 
@@ -1012,8 +1076,10 @@ export function App() {
                 <Artifact label="Execution" value={executionId || "Not executed"} />
               </div>
             </>
-          ) : (
+          ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
+          ) : (
+            <WorkflowExecutableArtifacts artifacts={executables} loading={executablesLoading} />
           )}
         </section>
 
@@ -1161,6 +1227,41 @@ function ActivityCatalog({ activities, totalCount, loading }) {
             <div className="activity-row-meta">
               <span>{activity.category || "Uncategorized"}</span>
               <code>{activity.id}</code>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowExecutableArtifacts({ artifacts, loading }) {
+  return (
+    <div className="executable-artifacts">
+      <div className="activity-summary">
+        <strong>{artifacts.length}</strong>
+        <span>published</span>
+      </div>
+      <div className="executable-list">
+        {loading && artifacts.length === 0 && <p className="muted">Loading executable artifacts...</p>}
+        {!loading && artifacts.length === 0 && <p className="muted">No workflow executable artifacts have been published yet.</p>}
+        {artifacts.map((artifact) => (
+          <div className="executable-row" key={artifact.artifactId}>
+            <div className="activity-row-icon"><Rocket size={15} /></div>
+            <div className="executable-row-main">
+              <strong>{artifact.artifactId}</strong>
+              <span>{artifact.definitionId} / {artifact.definitionVersionId}</span>
+              <p>
+                {artifact.rootActivityType} {artifact.rootActivityVersion}
+                {" · "}
+                {artifact.nodeCount} node{artifact.nodeCount === 1 ? "" : "s"}
+                {" · "}
+                {artifact.resumeTargetCount} resume target{artifact.resumeTargetCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="executable-row-meta">
+              <span>{formatDateTime(artifact.publishedAt ?? artifact.createdAt)}</span>
+              <code>{artifact.artifactVersion} / {artifact.artifactHash}</code>
             </div>
           </div>
         ))}
