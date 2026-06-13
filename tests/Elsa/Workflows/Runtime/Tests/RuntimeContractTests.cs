@@ -77,6 +77,16 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
+    public void ExecutableNode_exposes_activity_owned_structure()
+    {
+        var property = typeof(ExecutableNode)
+            .GetProperty(nameof(ExecutableNode.Structure), BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.NotNull(property);
+        Assert.Equal(typeof(ExecutableActivityStructure), property!.PropertyType);
+    }
+
+    [Fact]
     public void WorkflowsRuntimeCore_defines_no_activity_specific_child_slot_name_or_metadata_catalog()
     {
         var assembly = typeof(ExecutableNode).Assembly;
@@ -84,6 +94,18 @@ public sealed class RuntimeContractTests
         Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotNames"));
         Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableChildSlotMetadataKeys"));
         Assert.Null(assembly.GetType("Elsa.Workflows.Runtime.Core.Models.ExecutableEdge"));
+    }
+
+    [Fact]
+    public void ExecutableChildSlot_is_projection_only()
+    {
+        var members = typeof(ExecutableChildSlot)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(p => p.Name);
+
+        Assert.Contains(nameof(ExecutableChildSlot.Name), members);
+        Assert.Contains(nameof(ExecutableChildSlot.Activities), members);
+        Assert.DoesNotContain("Metadata", members);
     }
 
     [Fact]

@@ -23,8 +23,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
                 NodeId: "root",
                 ActivityVersionId: "activity-version-1",
                 Inputs: [new ArgumentState("Text", new ArgumentValue("Hello", "Literal"), null, null, null, null)],
-                Outputs: [],
-                ChildSlots: null),
+                Outputs: []),
             Inputs: [],
             Outputs: [],
             WorkflowActivityOptions: null,
@@ -58,7 +57,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         using var host = WorkflowsDesignTestHost.Create();
         var state = new WorkflowDefinitionState(
             Variables: [],
-            RootActivity: new ActivityNode("root", string.Empty, [], [], null),
+            RootActivity: new ActivityNode("root", string.Empty, [], []),
             Inputs: [],
             Outputs: [],
             WorkflowActivityOptions: null,

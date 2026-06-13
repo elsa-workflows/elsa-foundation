@@ -63,8 +63,7 @@ const sampleWorkflows = {
               isSensitive: null
             }
           ],
-          outputs: [],
-          childSlots: null
+          outputs: []
         },
         inputs: [],
         outputs: [],
@@ -89,9 +88,10 @@ const sampleWorkflows = {
           activityVersionId: "{{sequenceActivityVersionId}}",
           inputs: [],
           outputs: [],
-          childSlots: [
-            {
-              name: "Sequence.Activities",
+          structure: {
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
               activities: [
                 {
                   nodeId: "write-sequence-line-one",
@@ -109,8 +109,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "write-sequence-line-two",
@@ -128,13 +127,11 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 }
-              ],
-              metadata: null
+              ]
             }
-          ]
+          }
         },
         inputs: [],
         outputs: [],
@@ -160,9 +157,10 @@ const sampleWorkflows = {
           activityVersionId: "{{sequenceActivityVersionId}}",
           inputs: [],
           outputs: [],
-          childSlots: [
-            {
-              name: "Sequence.Activities",
+          structure: {
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
               activities: [
                 {
                   nodeId: "write-before-nuplane",
@@ -180,8 +178,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "say-hello-from-nuplane",
@@ -199,8 +196,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "write-after-nuplane",
@@ -218,13 +214,11 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 }
-              ],
-              metadata: null
+              ]
             }
-          ]
+          }
         },
         inputs: [],
         outputs: [],
@@ -643,8 +637,24 @@ function getPrimaryActivityInput(activity) {
   return input ? `${input.referenceKey}: ${input.value.value}` : "";
 }
 
+function getActivityStructurePayload(activity) {
+  return activity?.structure?.payload ?? null;
+}
+
 function getActivityChildSlots(activity) {
-  return Array.isArray(activity?.childSlots) ? activity.childSlots : [];
+  const payload = getActivityStructurePayload(activity);
+  const activities = Array.isArray(payload?.activities) ? payload.activities : [];
+  if (activities.length === 0)
+    return [];
+
+  const kind = activity?.structure?.kind ?? "";
+  if (kind === "elsa.flowchart.structure")
+    return [{ name: "Flowchart.Activities", activities }];
+
+  if (kind === "elsa.sequence.structure")
+    return [{ name: "Sequence.Activities", activities }];
+
+  return [{ name: "Activities", activities }];
 }
 
 function getSlotActivities(slot) {
@@ -659,6 +669,7 @@ function getActivityContainerKind(activity) {
     getActivityDisplayName(activity),
     activity.activityVersionId,
     activity.nodeId,
+    activity?.structure?.kind,
     ...getActivityChildSlots(activity).map((slot) => slot?.name)
   ].filter(Boolean).join(" ").toLowerCase();
 
@@ -1371,7 +1382,7 @@ export function App() {
       });
       setArtifactId(artifactIdOverride);
       setExecutionId(response.workflowExecutionId ?? "");
-      addConsoleLine("stdout", `Execution started for ${artifactIdOverride}: ${response.workflowExecutionId ?? "accepted"}`);
+      addConsoleLine("stdout", `Execution accepted for ${artifactIdOverride}: ${response.workflowExecutionId ?? "accepted"}`);
     });
   }
 
@@ -1866,21 +1877,28 @@ export function App() {
                 onChange={(event) => setWorkflowJson(event.target.value)}
               />
 
-              <div className="artifact-strip">
-                <Artifact label="Version" value={workflowVersionId || "Not saved"} />
-                <Artifact label="Artifact" value={artifactId || "Not published"} />
-                <Artifact label="Execution" value={executionId || "Not executed"} />
-              </div>
+              <ArtifactStrip
+                workflowVersionId={workflowVersionId}
+                artifactId={artifactId}
+                executionId={executionId}
+              />
             </>
           ) : mainView === "designer" ? (
-            <WorkflowDesigner
-              parseError={designerParseResult.error}
-              model={designerModel}
-              selectedPath={selectedDesignerPath}
-              selectedActivity={selectedDesignerActivity}
-              onSelectPath={setSelectedDesignerPath}
-              onUpdateActivity={applyDesignerActivityUpdate}
-            />
+            <>
+              <WorkflowDesigner
+                parseError={designerParseResult.error}
+                model={designerModel}
+                selectedPath={selectedDesignerPath}
+                selectedActivity={selectedDesignerActivity}
+                onSelectPath={setSelectedDesignerPath}
+                onUpdateActivity={applyDesignerActivityUpdate}
+              />
+              <ArtifactStrip
+                workflowVersionId={workflowVersionId}
+                artifactId={artifactId}
+                executionId={executionId}
+              />
+            </>
           ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
           ) : mainView === "features" ? (
@@ -2016,6 +2034,16 @@ function ActionButton({ icon: Icon, busy, children, ...props }) {
       {busy ? <RefreshCw className="spin" size={16} /> : <Icon size={16} />}
       {children}
     </button>
+  );
+}
+
+function ArtifactStrip({ workflowVersionId, artifactId, executionId }) {
+  return (
+    <div className="artifact-strip">
+      <Artifact label="Version" value={workflowVersionId || "Not saved"} />
+      <Artifact label="Artifact" value={artifactId || "Not published"} />
+      <Artifact label="Execution" value={executionId || "Not executed"} />
+    </div>
   );
 }
 

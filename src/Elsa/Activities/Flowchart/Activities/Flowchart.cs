@@ -11,8 +11,8 @@ namespace Elsa.Activities.Flowchart.Activities;
 public sealed class Flowchart : ActivityBase, IActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
-    public const string ConnectionsMetadataKey = "flowchart.connections";
-    public const string StartNodeIdMetadataKey = "flowchart.startNodeId";
+    public const string StructureKind = "elsa.flowchart.structure";
+    public const string StructureSchemaVersion = "1.0.0";
 
     protected override void Execute(IActivityExecutionContext context)
     {

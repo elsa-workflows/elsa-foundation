@@ -1,4 +1,5 @@
 using Elsa.Activities.Flowchart;
+using Elsa.Workflows.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -7,25 +8,15 @@ namespace Elsa.Activities.Flowchart.Tests;
 public sealed class ActivitiesFlowchartFeatureTests
 {
     [Fact]
-    public void ConfigureServices_DoesNotRequireDesignProjects()
+    public void ConfigureServices_RegistersFlowchartStructureHandler()
     {
         var services = new ServiceCollection();
 
         new ActivitiesFlowchartFeature().ConfigureServices(services);
+        var provider = services.BuildServiceProvider();
 
-        var projectFile = File.ReadAllText(ProjectFilePath());
-        Assert.DoesNotContain("Design", projectFile, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Elsa.Activities.Runtime.Core.csproj", projectFile, StringComparison.Ordinal);
-        Assert.Contains("Elsa.Workflows.Runtime.Core.csproj", projectFile, StringComparison.Ordinal);
-    }
-
-    private static string ProjectFilePath()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
-
-        Assert.NotNull(directory);
-        return Path.Combine(directory.FullName, "src", "Elsa", "Activities", "Flowchart", "Elsa.Activities.Flowchart.csproj");
+        var handler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
+        Assert.Equal(global::Elsa.Activities.Flowchart.Activities.Flowchart.StructureKind, handler.Kind);
+        Assert.Equal(global::Elsa.Activities.Flowchart.Activities.Flowchart.StructureSchemaVersion, handler.SchemaVersion);
     }
 }

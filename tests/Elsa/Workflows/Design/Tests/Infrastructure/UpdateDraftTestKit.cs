@@ -20,9 +20,6 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// </summary>
 internal static class UpdateDraftTestKit
 {
-    private const string ActivitiesSlotName = "Activities";
-    private const string StartActivityNodeIdMetadataKey = "StartActivityNodeId";
-
     public static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId = "wf-1")
     {
         await host.EnsureDefinition(workflowDefinitionId);
@@ -109,17 +106,6 @@ internal static class UpdateDraftTestKit
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            ChildSlots:
-            [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    activitySnapshot,
-                    startActivityNodeId is null
-                        ? null
-                        : new Dictionary<string, string>
-                        {
-                            [StartActivityNodeIdMetadataKey] = startActivityNodeId
-                        })
-            ]);
+            Structure: TestActivityStructureHandler.CreateStructure(activitySnapshot, startActivityNodeId));
     }
 }

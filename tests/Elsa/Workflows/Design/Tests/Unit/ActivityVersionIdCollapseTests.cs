@@ -44,6 +44,25 @@ public sealed class ActivityVersionIdCollapseTests
     }
 
     [Fact]
+    public void ActivityNode_exposes_activity_owned_structure()
+    {
+        var property = typeof(ActivityNode)
+            .GetProperty(nameof(ActivityNode.Structure), BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.NotNull(property);
+        Assert.Equal(typeof(ActivityNodeStructure), property!.PropertyType);
+    }
+
+    [Fact]
+    public void ActivityNode_has_no_persisted_child_slots()
+    {
+        var property = typeof(ActivityNode)
+            .GetProperty("ChildSlots", BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.Null(property);
+    }
+
+    [Fact]
     public void ActivityNode_has_no_generic_Composition_property()
     {
         var members = typeof(ActivityNode)
@@ -60,5 +79,17 @@ public sealed class ActivityVersionIdCollapseTests
 
         Assert.Null(assembly.GetType("Elsa.Workflows.Design.Core.Models.ActivityChildSlotNames"));
         Assert.Null(assembly.GetType("Elsa.Workflows.Design.Core.Models.ActivityChildSlotMetadataKeys"));
+    }
+
+    [Fact]
+    public void ActivityChildProjection_is_projection_only()
+    {
+        var members = typeof(ActivityChildProjection)
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Select(p => p.Name);
+
+        Assert.Contains(nameof(ActivityChildProjection.Name), members);
+        Assert.Contains(nameof(ActivityChildProjection.Activities), members);
+        Assert.DoesNotContain("Metadata", members);
     }
 }

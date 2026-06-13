@@ -36,7 +36,7 @@ public sealed class SequenceRuntimeTests
     }
 
     [Fact]
-    public async Task CompletedChild_SchedulesNextChildInSlotOrder()
+    public async Task CompletedChild_SchedulesNextChildInStructureOrder()
     {
         await using var provider = NewProvider(["actexec-sequence", "actexec-a", "actexec-b", "actexec-c"]);
         var executable = NewExecutable([NewProbeNode("node-a"), NewProbeNode("node-b"), NewProbeNode("node-c")]);
@@ -126,7 +126,8 @@ public sealed class SequenceRuntimeTests
                 new ExecutableChildSlot(
                     SequenceActivity.ActivitiesSlotName,
                     children)
-            ]);
+            ],
+            structure: NewSequenceStructure(children.Select(child => child.ExecutableNodeId).ToArray()));
 
         return new WorkflowExecutable(
             identity: NewIdentity(),
@@ -181,6 +182,12 @@ public sealed class SequenceRuntimeTests
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    private static ExecutableActivityStructure NewSequenceStructure(IReadOnlyCollection<string> activities) =>
+        new(
+            SequenceActivity.StructureKind,
+            SequenceActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new { activities }));
 
     private sealed class SequenceActivityConstructor : IActivityConstructor<SequenceDescriptor>
     {

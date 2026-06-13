@@ -37,8 +37,9 @@ internal sealed class FlowchartGraph
 
         var children = slot.Activities.ToArray();
         var nodesById = children.ToDictionary(child => child.ExecutableNodeId, StringComparer.Ordinal);
-        var connections = ReadConnections(slot);
-        var startNodeId = ReadStartNodeId(slot);
+        var structure = ReadStructure(executableNode);
+        var connections = structure?.Connections ?? [];
+        var startNodeId = NormalizeStartNodeId(structure?.StartNodeId);
 
         ValidateConnections(connections, nodesById);
         if (startNodeId is not null && !nodesById.ContainsKey(startNodeId))
@@ -83,15 +84,21 @@ internal sealed class FlowchartGraph
         return targetIds.Select(targetId => _nodesById[targetId]).ToArray();
     }
 
-    private static IReadOnlyCollection<FlowchartConnection> ReadConnections(ExecutableChildSlot slot)
+    private static FlowchartStructure? ReadStructure(ExecutableNode executableNode)
     {
-        if (!slot.Metadata.TryGetValue(FlowchartActivity.ConnectionsMetadataKey, out var serializedConnections) || string.IsNullOrWhiteSpace(serializedConnections))
-            return [];
+        if (executableNode.Structure is null)
+            return null;
+
+        if (!StringComparer.Ordinal.Equals(executableNode.Structure.Kind, FlowchartActivity.StructureKind))
+            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' has unsupported structure kind '{executableNode.Structure.Kind}'.");
+
+        if (!StringComparer.Ordinal.Equals(executableNode.Structure.SchemaVersion, FlowchartActivity.StructureSchemaVersion))
+            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' has unsupported structure schema version '{executableNode.Structure.SchemaVersion}'.");
 
         try
         {
-            return JsonSerializer.Deserialize<FlowchartConnection[]>(serializedConnections, SerializerOptions)
-                   ?? throw new FlowchartExecutionException($"Flowchart metadata key '{FlowchartActivity.ConnectionsMetadataKey}' resolved to null.");
+            return executableNode.Structure.Payload.Deserialize<FlowchartStructure>(SerializerOptions)
+                   ?? throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' structure resolved to null.");
         }
         catch (FlowchartExecutionException)
         {
@@ -99,13 +106,13 @@ internal sealed class FlowchartGraph
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
-            throw new FlowchartExecutionException($"Flowchart metadata key '{FlowchartActivity.ConnectionsMetadataKey}' is not a valid connection array.", exception);
+            throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' structure is not a valid Flowchart structure payload.", exception);
         }
     }
 
-    private static string? ReadStartNodeId(ExecutableChildSlot slot)
+    private static string? NormalizeStartNodeId(string? startNodeId)
     {
-        if (!slot.Metadata.TryGetValue(FlowchartActivity.StartNodeIdMetadataKey, out var startNodeId) || string.IsNullOrWhiteSpace(startNodeId))
+        if (string.IsNullOrWhiteSpace(startNodeId))
             return null;
 
         return startNodeId.Trim();
