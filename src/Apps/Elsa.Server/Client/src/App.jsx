@@ -1371,7 +1371,7 @@ export function App() {
       });
       setArtifactId(artifactIdOverride);
       setExecutionId(response.workflowExecutionId ?? "");
-      addConsoleLine("stdout", `Execution started for ${artifactIdOverride}: ${response.workflowExecutionId ?? "accepted"}`);
+      addConsoleLine("stdout", `Execution accepted for ${artifactIdOverride}: ${response.workflowExecutionId ?? "accepted"}`);
     });
   }
 
