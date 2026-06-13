@@ -1866,21 +1866,28 @@ export function App() {
                 onChange={(event) => setWorkflowJson(event.target.value)}
               />
 
-              <div className="artifact-strip">
-                <Artifact label="Version" value={workflowVersionId || "Not saved"} />
-                <Artifact label="Artifact" value={artifactId || "Not published"} />
-                <Artifact label="Execution" value={executionId || "Not executed"} />
-              </div>
+              <ArtifactStrip
+                workflowVersionId={workflowVersionId}
+                artifactId={artifactId}
+                executionId={executionId}
+              />
             </>
           ) : mainView === "designer" ? (
-            <WorkflowDesigner
-              parseError={designerParseResult.error}
-              model={designerModel}
-              selectedPath={selectedDesignerPath}
-              selectedActivity={selectedDesignerActivity}
-              onSelectPath={setSelectedDesignerPath}
-              onUpdateActivity={applyDesignerActivityUpdate}
-            />
+            <>
+              <WorkflowDesigner
+                parseError={designerParseResult.error}
+                model={designerModel}
+                selectedPath={selectedDesignerPath}
+                selectedActivity={selectedDesignerActivity}
+                onSelectPath={setSelectedDesignerPath}
+                onUpdateActivity={applyDesignerActivityUpdate}
+              />
+              <ArtifactStrip
+                workflowVersionId={workflowVersionId}
+                artifactId={artifactId}
+                executionId={executionId}
+              />
+            </>
           ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
           ) : mainView === "features" ? (
@@ -2016,6 +2023,16 @@ function ActionButton({ icon: Icon, busy, children, ...props }) {
       {busy ? <RefreshCw className="spin" size={16} /> : <Icon size={16} />}
       {children}
     </button>
+  );
+}
+
+function ArtifactStrip({ workflowVersionId, artifactId, executionId }) {
+  return (
+    <div className="artifact-strip">
+      <Artifact label="Version" value={workflowVersionId || "Not saved"} />
+      <Artifact label="Artifact" value={artifactId || "Not published"} />
+      <Artifact label="Execution" value={executionId || "Not executed"} />
+    </div>
   );
 }
 
