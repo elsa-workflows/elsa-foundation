@@ -248,6 +248,14 @@ const themeFamilies = [
       light: ["#e8edf2", "#fbfdff", "#315f8f"],
       dark: ["#10161d", "#182331", "#70a9df"]
     }
+  },
+  {
+    id: "elsa",
+    label: "Elsa",
+    colors: {
+      light: ["#eee8df", "#fffaf1", "#d88b28"],
+      dark: ["#12110e", "#1c1a15", "#f0a83e"]
+    }
   }
 ];
 const demoStackPackages = [
