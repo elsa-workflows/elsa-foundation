@@ -9,7 +9,7 @@ Give me the architecture tour of this workspace. Keep it concise and tell me whe
 ```
 
 ```text
-Explain what the Elsa brain is, what belongs in elsa-foundation, and what might later move to elsa-workspace.
+Explain what the Elsa foundation workspace is, what belongs in elsa-foundation, and what might later move to elsa-workspace.
 ```
 
 ```text
@@ -68,5 +68,5 @@ If you invoke generated maps and the manifest says inputs are dirty or freshness
 
 Warn me if the task depends on draft or unratified constitution material. If ratification is the goal, help me start a targeted work unit with the available skills and guardrails.
 
-Do not broaden this into Elsa Brain polishing. If the repo can already route me, guide me to the focused hard-work bucket and the next concrete artifact.
+Do not broaden this into foundation-workspace polishing. If the repo can already route me, guide me to the focused hard-work bucket and the next concrete artifact.
 ```

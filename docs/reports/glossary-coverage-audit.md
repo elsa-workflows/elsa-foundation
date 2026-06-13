@@ -4,7 +4,7 @@ Status: point-in-time audit for keeping stable architecture terms centralized in
 
 ## Purpose
 
-Check whether key Elsa Brain Operating Model terms are centralized in [root glossary](../glossary/root.md) and [Elsa glossary](../glossary/elsa.md), and identify terms that should remain in reports, program-goal files, or entrypoint guidance instead of becoming glossary entries.
+Check whether key Elsa Foundation Operating Model terms are centralized in [root glossary](../glossary/root.md) and [Elsa glossary](../glossary/elsa.md), and identify terms that should remain in reports, program-goal files, or entrypoint guidance instead of becoming glossary entries.
 
 ## Inputs Reviewed
 

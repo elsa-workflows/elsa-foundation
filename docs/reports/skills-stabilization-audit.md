@@ -1,12 +1,12 @@
 # Skills Stabilization Audit
 
-Status: point-in-time audit for making the Elsa brain skill layer stable before adding more domain implementation work.
+Status: point-in-time audit for making the Elsa foundation workspace skill layer stable before adding more domain implementation work.
 
 ## Purpose
 
 This report identifies which repeatable workflows already exist, which ones are hidden inside architecture guidance, and which concepts should stay in glossary/reference docs instead of becoming skills.
 
-The goal is to keep the Elsa brain AI-provider-neutral: `docs/skills/catalog.md` is the canonical skill catalog, while AI-provider-specific folders such as `.claude/skills/` are executable wrappers or adapters.
+The goal is to keep the Elsa foundation workspace AI-provider-neutral: `docs/skills/catalog.md` is the canonical skill catalog, while AI-provider-specific folders such as `.claude/skills/` are executable wrappers or adapters.
 
 ## Zoom-Out Check
 
@@ -17,7 +17,7 @@ Program milestone advanced:
 - Knowledge surfaces: separates glossary/reference explanations from task workflows.
 - Workspace split readiness: keeps feature-development workflows explicit so they can later move to `elsa-workspace` with less coupling.
 
-This is higher-value than starting another domain implementation unit because the original Elsa-brain intent requires any future agent to enter through efficient maps, glossary, reports, and skills rather than re-learning the repo from broad constitution prose.
+This is higher-value than starting another domain implementation unit because the original foundation-workspace intent requires any future agent to enter through efficient maps, glossary, reports, and skills rather than re-learning the repo from broad constitution prose.
 
 Result type: report finding. Accepted workflow descriptions belong in `docs/skills/catalog.md`. AI-provider-specific wrappers belong under AI-provider adapter folders after the neutral workflow is stable.
 
@@ -42,8 +42,8 @@ Result type: report finding. Accepted workflow descriptions belong in `docs/skil
 | Surface | Current role | Finding |
 |---|---|---|
 | `docs/skills/catalog.md` | AI-provider-neutral workflow catalog | Canonical but short; mixes stable skills with planned workflows that do not yet have executable wrappers. |
-| `.claude/skills/*` | Claude-specific command wrappers | Executable wrappers now include Speckit commands and Elsa-brain skills. They should not become canonical architecture docs. |
-| `.specify/integrations/claude.manifest.json` | Claude integration manifest | Tracks Speckit and Elsa-brain Claude wrapper files by hash. |
+| `.claude/skills/*` | Claude-specific command wrappers | Executable wrappers now include Speckit commands and foundation-workspace skills. They should not become canonical architecture docs. |
+| `.specify/integrations/claude.manifest.json` | Claude integration manifest | Tracks Speckit and foundation-workspace Claude wrapper files by hash. |
 | `.specify/workflows/*` | Speckit workflow definitions | Tool workflow layer for specify -> plan -> tasks -> implement with review gates. |
 | `.specify/extensions/git/*` | Speckit git extension and scripts | Supports official branch/commit flow; should be surfaced through Speckit guidance, not duplicated in architecture docs. |
 | `AGENTS.md` task paths | AI-provider-neutral entrypoint | Correctly points to skills, maps, glossary, reports, and Speckit flow. |
@@ -101,7 +101,7 @@ These workflows are already clear enough to remain in the catalog and can later 
 | Source-of-Truth Audit | `AGENTS.md`; `knowledge-inventory.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-source-of-truth-audit/` | Needed for constitution thinning and layer drift prevention. |
 | Create Agent Preference | `AGENTS.md`; `docs/reference/agent-preferences.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-create-agent-preference/` | Keeps personal workflow choices in ignored `.agent-prefs/` files instead of shared doctrine. |
 | Initialize Agent Preferences | `AGENTS.md`; `docs/reference/agent-preferences.md`; `docs/reference/git-operating-models.md`; `docs/skills/catalog.md` | Claude wrapper: `.claude/skills/elsa-initialize-agent-preferences/` | Bootstraps local preferences only when none exist, without making one user's workflow the repo default. |
-| Speckit Flow Guide | `.specify/workflows`; `.claude/skills/speckit-*` | Claude wrappers exist | Existing AI-provider wrappers are Speckit command-level, not Elsa-brain-level. |
+| Speckit Flow Guide | `.specify/workflows`; `.claude/skills/speckit-*` | Claude wrappers exist | Existing AI-provider wrappers are Speckit command-level, not foundation-workspace-level. |
 | Feature/Dependency Map Builder | `tools/maps/*`; `docs/maps/*` | Claude wrapper: `.claude/skills/elsa-feature-dependency-map/` | Map scripts already exist; workflow should point to the split map refresh commands. |
 
 ## Planned Skills That Need More Input

@@ -84,11 +84,11 @@ Evidence:
 
 Risk:
 
-This remains a constitution-boundary exception candidate because the constitution text treats the Workflows runtime-to-design direction as a hard rule. The current preference is to avoid code changes until the Elsa brain / workspace split is stable, so this should not trigger an immediate refactor. The durable risk is rediscovery: future reviews may treat the generated-map signal as accidental drift unless the deferred shortcut stays documented.
+This remains a constitution-boundary exception candidate because the constitution text treats the Workflows runtime-to-design direction as a hard rule. The current preference is to avoid code changes until the foundation/workspace split is stable, so this should not trigger an immediate refactor. The durable risk is rediscovery: future reviews may treat the generated-map signal as accidental drift unless the deferred shortcut stays documented.
 
 Next action:
 
-Keep this as a named deferred boundary item until Elsa brain / workspace ownership is stable. The [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) preserves this classification so future runtime planning does not treat the generated-map signal as accidental drift. Future resolution should split design-time JavaScript declarations from runtime JavaScript bindings, likely by moving designer-facing declarations into a design/workspace-side package and keeping runtime pre/post processors in `Elsa.Workflows.Runtime.JavaScript`. Share only neutral shape records from a stable `.Core` or primitives package if the split needs common data.
+Keep this as a named deferred boundary item until foundation/workspace ownership is stable. The [runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md) preserves this classification so future runtime planning does not treat the generated-map signal as accidental drift. Future resolution should split design-time JavaScript declarations from runtime JavaScript bindings, likely by moving designer-facing declarations into a design/workspace-side package and keeping runtime pre/post processors in `Elsa.Workflows.Runtime.JavaScript`. Share only neutral shape records from a stable `.Core` or primitives package if the split needs common data.
 
 ### F3 - Workflow-as-activity is construct-only and intentionally non-executable
 
@@ -188,7 +188,7 @@ Plan `Elsa.Events.Tests` and possibly `Elsa.Mediator.Tests` as shared-infrastruc
 3. Shared event/mediator pipeline test unit.
 4. `NotImplementedException` classification pass.
 5. Keep validation workflow-level binding gap attached to Unit D/E.
-6. Keep the Runtime JavaScript design-reference shortcut documented until Elsa brain / workspace ownership is stable.
+6. Keep the Runtime JavaScript design-reference shortcut documented until foundation/workspace ownership is stable.
 
 ## What This Report Does Not Do
 

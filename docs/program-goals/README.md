@@ -27,7 +27,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
 | [Workspace Launch Readiness](workspace-launch-readiness.md) | Active | First-user handoff / repository launch preparation | Joey plus active architects/agents | Verify the repo can receive first users through tour, skills, reports, and buckets |
-| [Elsa Brain Operating Model](elsa-brain-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Keep the shared routing layer stable; do not use this as the default next-work bucket |
+| [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Keep the shared routing layer stable; do not use this as the default next-work bucket |
 | [Runtime Execution Seam](runtime-execution-seam.md) | Active | Workflows Runtime architecture / executable artifact seam | Joey plus the incoming runtime architect | Prepare the Runtime execution seam for architect-owned Speckit planning |
 | [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Active | Provider-neutral persistence framework / Elsa validation bridge | Joey plus active architects/agents | Extract Persistence vNext into Groundwork and validate it through Elsa before standalone repository movement |
 | [Constitution Readiness](constitution-readiness.md) | Active | Targeted constitution review / ratification readiness | Joey plus active architects/agents | Review only launch-blocking or work-unit-specific gates |

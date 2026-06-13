@@ -2,7 +2,7 @@
 
 # Elsa Foundation
 
-`elsa-foundation` is the transitional Elsa 4 brain and foundation-library workspace.
+`elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
 

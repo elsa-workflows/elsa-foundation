@@ -8,7 +8,7 @@ Steward(s): Joey plus the incoming runtime architect.
 
 ## Purpose
 
-Create a focused coordination bucket for the Workflows Runtime execution seam so the incoming architect can start from the current evidence, define the runnable artifact boundary, and move into Speckit without reopening the broader Elsa Brain Operating Model work.
+Create a focused coordination bucket for the Workflows Runtime execution seam so the incoming architect can start from the current evidence, define the runnable artifact boundary, and move into Speckit without reopening the broader Elsa Foundation Operating Model work.
 
 The goal is to specify the seam between Workflows Design and Workflows Runtime before runtime implementation begins. This bucket should keep runtime execution planning separate from operating-model grooming, CShells composition work, and broad constitution ratification.
 
@@ -40,7 +40,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 2. Convert the handoff into an architect-owned Speckit work unit when the incoming architect is ready.
 3. Keep Design reads confined to compile/publish bridge planning; execution-time Runtime must remain artifact-only.
 4. Decide the runtime artifact, crossing points, context lifetime, graph terminology, and I/O boundary questions before coding.
-5. Capture any approved spec, report, or implementation follow-up here instead of stretching the Elsa Brain Operating Model bucket.
+5. Capture any approved spec, report, or implementation follow-up here instead of stretching the Elsa Foundation Operating Model bucket.
 6. Supersede graph-shaped workflow boundary specs with the root-activity contract and implement that contract before adding flowchart/sequence/state-machine behavior.
 7. Remove generic `ActivityComposition` / `ExecutableActivityComposition` assumptions. Composite child structure belongs to activity-specific contracts such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
 

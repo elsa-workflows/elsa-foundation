@@ -4,7 +4,7 @@ This is the short orientation path. It explains where things are and why they ex
 
 ## The repo shape
 
-`elsa-foundation` is the transitional Elsa brain:
+`elsa-foundation` is the transitional Elsa foundation workspace:
 
 - `src/` contains foundation libraries and default implementations.
 - `tests/` contains focused tests for foundation behavior.

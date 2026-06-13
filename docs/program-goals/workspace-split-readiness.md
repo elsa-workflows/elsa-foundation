@@ -18,7 +18,7 @@ This bucket exists so feature-development flows remain explicit and portable whi
 - Keeping feature-development flow guidance explicit rather than buried in foundation-specific docs.
 - Tracking extraction blockers and coupling risks between `elsa-foundation` and future `elsa-workspace`.
 - Preserving Speckit feature/work-unit flow in a way that can move or be mirrored later.
-- Documenting boundaries between Elsa brain architecture work and feature-development workspace work.
+- Documenting boundaries between Elsa foundation workspace architecture work and feature-development workspace work.
 
 ## Out Of Scope
 
