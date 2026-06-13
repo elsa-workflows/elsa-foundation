@@ -34,7 +34,8 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </remarks>
 public sealed class RequiredInputOutputValidator(
     IActivityDefinitionLookup catalog,
-    IOptions<WorkflowDesignValidatorOptions> options
+    IOptions<WorkflowDesignValidatorOptions> options,
+    ActivityTreeWalker activityTreeWalker
 ) : IDraftValidator
 {
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
@@ -42,7 +43,7 @@ public sealed class RequiredInputOutputValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
-        foreach (var node in ActivityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
+        foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
             var version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
             if (version is null)

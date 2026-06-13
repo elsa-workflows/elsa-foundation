@@ -63,8 +63,7 @@ const sampleWorkflows = {
               isSensitive: null
             }
           ],
-          outputs: [],
-          childSlots: null
+          outputs: []
         },
         inputs: [],
         outputs: [],
@@ -89,9 +88,10 @@ const sampleWorkflows = {
           activityVersionId: "{{sequenceActivityVersionId}}",
           inputs: [],
           outputs: [],
-          childSlots: [
-            {
-              name: "Sequence.Activities",
+          structure: {
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
               activities: [
                 {
                   nodeId: "write-sequence-line-one",
@@ -109,8 +109,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "write-sequence-line-two",
@@ -128,12 +127,11 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 }
               ]
             }
-          ]
+          }
         },
         inputs: [],
         outputs: [],
@@ -159,9 +157,10 @@ const sampleWorkflows = {
           activityVersionId: "{{sequenceActivityVersionId}}",
           inputs: [],
           outputs: [],
-          childSlots: [
-            {
-              name: "Sequence.Activities",
+          structure: {
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
               activities: [
                 {
                   nodeId: "write-before-nuplane",
@@ -179,8 +178,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "say-hello-from-nuplane",
@@ -198,8 +196,7 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 },
                 {
                   nodeId: "write-after-nuplane",
@@ -217,12 +214,11 @@ const sampleWorkflows = {
                       isSensitive: null
                     }
                   ],
-                  outputs: [],
-                  childSlots: null
+                  outputs: []
                 }
               ]
             }
-          ]
+          }
         },
         inputs: [],
         outputs: [],
@@ -641,8 +637,24 @@ function getPrimaryActivityInput(activity) {
   return input ? `${input.referenceKey}: ${input.value.value}` : "";
 }
 
+function getActivityStructurePayload(activity) {
+  return activity?.structure?.payload ?? null;
+}
+
 function getActivityChildSlots(activity) {
-  return Array.isArray(activity?.childSlots) ? activity.childSlots : [];
+  const payload = getActivityStructurePayload(activity);
+  const activities = Array.isArray(payload?.activities) ? payload.activities : [];
+  if (activities.length === 0)
+    return [];
+
+  const kind = activity?.structure?.kind ?? "";
+  if (kind === "elsa.flowchart.structure")
+    return [{ name: "Flowchart.Activities", activities }];
+
+  if (kind === "elsa.sequence.structure")
+    return [{ name: "Sequence.Activities", activities }];
+
+  return [{ name: "Activities", activities }];
 }
 
 function getSlotActivities(slot) {
@@ -657,6 +669,7 @@ function getActivityContainerKind(activity) {
     getActivityDisplayName(activity),
     activity.activityVersionId,
     activity.nodeId,
+    activity?.structure?.kind,
     ...getActivityChildSlots(activity).map((slot) => slot?.name)
   ].filter(Boolean).join(" ").toLowerCase();
 

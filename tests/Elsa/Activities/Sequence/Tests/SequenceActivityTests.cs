@@ -54,6 +54,19 @@ public sealed class SequenceActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_SchedulesFirstChildFromStructureOrder()
+    {
+        var context = NewContext(NewSequenceNode(
+            [NewNode("node-a"), NewNode("node-b")],
+            ["node-b", "node-a"]));
+
+        await ExecuteAsync(context);
+
+        var request = Assert.Single(context.GetChildActivityScheduleRequests());
+        Assert.Equal("node-b", request.ExecutableNodeId);
+    }
+
+    [Fact]
     public async Task OnChildCompletedAsync_SchedulesNextChild()
     {
         var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b"), NewNode("node-c")]));
@@ -89,6 +102,22 @@ public sealed class SequenceActivityTests : IDisposable
         await Assert.ThrowsAsync<SequenceExecutionException>(() => sequence
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-missing", "missing", [ActivityOutcomes.Done]))
             .AsTask());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ThrowsWhenStructureReferencesMissingChild()
+    {
+        var context = NewContext(NewSequenceNode([NewNode("node-a")], ["node-a", "missing"]));
+
+        await Assert.ThrowsAsync<SequenceExecutionException>(() => ExecuteAsync(context).AsTask());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ThrowsWhenStructureContainsDuplicateChild()
+    {
+        var context = NewContext(NewSequenceNode([NewNode("node-a")], ["node-a", "node-a"]));
+
+        await Assert.ThrowsAsync<SequenceExecutionException>(() => ExecuteAsync(context).AsTask());
     }
 
     [Fact]
@@ -152,7 +181,7 @@ public sealed class SequenceActivityTests : IDisposable
             commandMetadata: new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
 
-    private static ExecutableNode NewSequenceNode(IReadOnlyCollection<ExecutableNode> children) =>
+    private static ExecutableNode NewSequenceNode(IReadOnlyCollection<ExecutableNode> children, IReadOnlyCollection<string>? orderedChildIds = null) =>
         NewNode(
             "node-sequence",
             activityType: "sequence",
@@ -161,12 +190,14 @@ public sealed class SequenceActivityTests : IDisposable
                 new ExecutableChildSlot(
                     SequenceActivity.ActivitiesSlotName,
                     children)
-            ]);
+            ],
+            structure: NewSequenceStructure(orderedChildIds ?? children.Select(child => child.ExecutableNodeId).ToArray()));
 
     private static ExecutableNode NewNode(
         string nodeId,
         string activityType = "test/probe",
-        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null) =>
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -177,7 +208,14 @@ public sealed class SequenceActivityTests : IDisposable
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: childSlots);
+            childSlots: childSlots,
+            structure: structure);
+
+    private static ExecutableActivityStructure NewSequenceStructure(IReadOnlyCollection<string> activities) =>
+        new(
+            SequenceActivity.StructureKind,
+            SequenceActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new { activities }));
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");

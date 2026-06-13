@@ -14,27 +14,23 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// Designer layout (position, size, canvas metadata) is NOT carried on the node — it lives
 /// on the parent's <c>WorkflowDefinitionVersionLayout</c> / <c>WorkflowDefinitionDraftLayout</c>
 /// sibling as a <c>DesignMetadataRecord</c> keyed by <see cref="NodeId"/> per Elsa §E2.9.2.
-/// Child activities are exposed through activity-specific named slots such as
-/// <c>Sequence.Activities</c>, <c>If.Then</c>, <c>ForEach.Body</c>, or
-/// <c>Flowchart.Activities</c>. These slots are traversal projections only. Activity-owned
-/// relationship semantics such as ordering, branch meaning, loop bodies, flowchart
-/// connections, and start nodes belong to <see cref="Structure"/> and are interpreted by
-/// the owning activity module.
+/// Child activities and their relationships belong to <see cref="Structure"/> and are interpreted
+/// by the owning activity module. Generic design-time traversal is derived from structure through
+/// activity-specific projection handlers rather than stored directly on the node.
 /// </remarks>
 public sealed record ActivityNode(
     string NodeId,
     string ActivityVersionId,
     IEnumerable<ArgumentState> Inputs,
     IEnumerable<ArgumentState> Outputs,
-    IEnumerable<ActivityChildSlot>? ChildSlots = null,
     ActivityNodeStructure? Structure = null
 );
 
 /// <summary>
-/// Traversal projection of activity-specific children. The slot name is part of the owning
-/// activity contract, but core does not interpret it.
+/// Non-persisted traversal projection of activity-specific children. The slot name is part of
+/// the owning activity contract, but core does not interpret it.
 /// </summary>
-public sealed record ActivityChildSlot(
+public sealed record ActivityChildProjection(
     string Name,
     IEnumerable<ActivityNode> Activities
 );
@@ -45,7 +41,7 @@ public sealed record ActivityChildSlot(
 /// <remarks>
 /// This is per-node authored content, not activity catalog metadata. Core stores and
 /// round-trips the generic shape; the owning activity module owns the kind name,
-/// schema version, payload, and consistency rules against projected child slots.
+/// schema version, payload, and consistency rules for projected children.
 /// </remarks>
 public sealed record ActivityNodeStructure
 {

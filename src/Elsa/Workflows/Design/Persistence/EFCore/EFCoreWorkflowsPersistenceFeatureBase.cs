@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Persistence.EFCore;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
@@ -8,6 +9,7 @@ using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore;
 
@@ -24,6 +26,7 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
         services.AddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.AddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.AddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+        services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
 
         if (UseCommands)
         {

@@ -7,6 +7,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Extensions;
@@ -21,7 +22,8 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 public sealed class PublishWorkflowRequestHandler(
     IQueries<WorkflowDefinitionVersion> workflowVersions,
     IQueries<ActivityDefinitionVersion> activityVersions,
-    IWorkflowExecutableStore executableStore)
+    IWorkflowExecutableStore executableStore,
+    IActivityStructureService activityStructureService)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string LiteralExpressionType = "Literal";
@@ -87,7 +89,7 @@ public sealed class PublishWorkflowRequestHandler(
         return $"artifact-{artifactHash[ArtifactHashPrefix.Length..(ArtifactHashPrefix.Length + ArtifactIdHashLength)]}";
     }
 
-    private static ExecutableNode CompileNode(
+    private ExecutableNode CompileNode(
         ActivityNode activity,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
@@ -95,7 +97,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var childSlots = CompileChildSlots(activity.ChildSlots, activityRows);
+        var childSlots = CompileChildSlots(activityStructureService.ProjectChildren(activity), activityRows);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -122,14 +124,14 @@ public sealed class PublishWorkflowRequestHandler(
                 ["authoredNodeId"] = activity.NodeId
             },
             childSlots: childSlots,
-            structure: CompileStructure(activity.Structure));
+            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
     }
 
-    private static IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
-        IEnumerable<ActivityChildSlot>? childSlots,
+    private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
+        IEnumerable<ActivityChildProjection> childSlots,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
-        return (childSlots ?? [])
+        return childSlots
             .Select(slot => new ExecutableChildSlot(
                 MapSlotName(slot.Name),
                 slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray()))
@@ -241,7 +243,7 @@ public sealed class PublishWorkflowRequestHandler(
         return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
     }
 
-    private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
+    private IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
     {
         var stack = new Stack<ActivityNode>();
         stack.Push(rootActivity);
@@ -251,7 +253,7 @@ public sealed class PublishWorkflowRequestHandler(
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
+            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }

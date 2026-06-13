@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -21,10 +20,6 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// </summary>
 internal static class UpdateDraftTestKit
 {
-    private const string ActivitiesSlotName = "Activities";
-    private const string StructureKind = "test.workflow-root.structure";
-    private const string StructureSchemaVersion = "1.0.0";
-
     public static async Task<string> SeedEmptyDraft(WorkflowsDesignTestHost host, string workflowDefinitionId = "wf-1")
     {
         await host.EnsureDefinition(workflowDefinitionId);
@@ -111,17 +106,6 @@ internal static class UpdateDraftTestKit
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            ChildSlots:
-            [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    activitySnapshot)
-            ],
-            Structure: startActivityNodeId is null
-                ? null
-                : new ActivityNodeStructure(
-                    StructureKind,
-                    StructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(new { startActivityNodeId })));
+            Structure: TestActivityStructureHandler.CreateStructure(activitySnapshot, startActivityNodeId));
     }
 }

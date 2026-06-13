@@ -20,10 +20,6 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 /// </summary>
 public sealed class CloneDraftFromVersionTests
 {
-    private const string ActivitiesSlotName = "Activities";
-    private const string StructureKind = "test.workflow-root.structure";
-    private const string StructureSchemaVersion = "1.0.0";
-
     [Fact]
     public async Task Clone_deep_copies_State_from_source_Version()
     {
@@ -174,16 +170,7 @@ public sealed class CloneDraftFromVersionTests
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            ChildSlots:
-            [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    activities)
-            ],
-            Structure: new ActivityNodeStructure(
-                StructureKind,
-                StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { startActivityNodeId = activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId ?? string.Empty }))),
+            Structure: TestActivityStructureHandler.CreateStructure(activities, activities.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId)),
         Inputs: [],
         Outputs: [],
         WorkflowActivityOptions: null,
@@ -201,7 +188,11 @@ public sealed class CloneDraftFromVersionTests
             yield break;
 
         yield return root;
-        foreach (var child in (root.ChildSlots ?? []).SelectMany(slot => slot.Activities))
+        var childActivities = root.Structure?.Payload.TryGetProperty("activities", out var activities) == true
+            ? activities.Deserialize<IReadOnlyCollection<ActivityNode>>() ?? []
+            : [];
+
+        foreach (var child in childActivities)
         foreach (var nested in Flatten(child))
             yield return nested;
     }

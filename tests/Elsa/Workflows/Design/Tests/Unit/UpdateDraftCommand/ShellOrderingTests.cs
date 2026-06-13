@@ -43,7 +43,11 @@ public sealed class ShellOrderingTests
 
         // (2) Exactly one validation gate, fired against POST-diff state (sees c + the rename).
         var validating = Assert.Single(window.OfType<OnDraftValidating>());
-        Assert.Contains("c", validating.Draft.State.RootActivity?.ChildSlots?.SelectMany(slot => slot.Activities).Select(n => n.NodeId) ?? []);
+        var activityNodeIds = validating.Draft.State.RootActivity?.Structure?.Payload.GetProperty("activities")
+            .EnumerateArray()
+            .Select(activity => activity.GetProperty("nodeId").GetString())
+            .ToArray() ?? [];
+        Assert.Contains("c", activityNodeIds);
         Assert.Contains(validating.Draft.State.Variables, v => v.Name == "RenamedVar");
 
         // (3) Exactly one validation outcome.

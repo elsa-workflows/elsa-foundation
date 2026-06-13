@@ -2,31 +2,42 @@ using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
+using Elsa.Activities.Sequence;
+using Elsa.Activities.Sequence.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class PublishWorkflowRequestHandlerTests
 {
-    private const string ActivitiesSlotName = "Activities";
-    private const string StructureKind = "test.composite.structure";
-    private const string StructureSchemaVersion = "1.0.0";
+    private const string UnknownStructureKind = "test.opaque.structure";
+    private const string UnknownStructureSchemaVersion = "1.0.0";
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
+    private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
+    private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
+    private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
 
     [Fact]
     public async Task PublishesRootActivityIntoExecutableArtifact()
@@ -65,51 +76,79 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task PublishesCompositeRootWithActivityOwnedChildSlot()
+    public async Task PublishesSequenceAuthoredStructureIntoExecutableChildSlotAndStructure()
     {
-        var root = CompositeNode(
-            "composite",
+        var root = SequenceNode(
+            "sequence",
             [
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two"))
             ]);
         var workflowVersion = WorkflowVersion(root);
-        var handler = Handler(workflowVersion);
+        var handler = Handler(workflowVersion, _writeLineActivity, _sequenceActivity);
 
         var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var executable = await _store.FindAsync(view.ArtifactId);
 
         Assert.NotNull(executable);
-        Assert.Equal("composite", view.RootActivityId);
+        Assert.Equal("sequence", view.RootActivityId);
         Assert.Equal(3, view.NodeCount);
         var childSlot = Assert.Single(executable.RootActivity.ChildSlots);
+        Assert.Equal(SequenceActivity.ActivitiesSlotName, childSlot.Name);
         Assert.Equal(["write-one", "write-two"], childSlot.Activities.Select(activity => activity.ExecutableNodeId));
+
+        Assert.NotNull(executable.RootActivity.Structure);
+        Assert.Equal(SequenceActivity.StructureKind, executable.RootActivity.Structure.Kind);
+        Assert.Equal(["write-one", "write-two"], executable.RootActivity.Structure.Payload.GetProperty("activities").EnumerateArray().Select(item => item.GetString()));
     }
 
     [Fact]
-    public async Task PublishesActivityOwnedStructureIntoExecutableArtifact()
+    public async Task PublishesFlowchartAuthoredStructureIntoExecutableChildSlotAndRuntimeStructure()
     {
-        var root = CompositeNode(
-            "composite",
+        var root = FlowchartNode(
+            "flowchart",
             [
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two"))
             ],
-            new ActivityNodeStructure(
-                StructureKind,
-                StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { startActivityNodeId = "write-two" })));
+            [new FlowchartConnection(new FlowchartEndpoint("write-one", "Done"), new FlowchartEndpoint("write-two", null))],
+            "write-one");
         var workflowVersion = WorkflowVersion(root);
-        var handler = Handler(workflowVersion);
+        var handler = Handler(workflowVersion, _writeLineActivity, _flowchartActivity);
 
         var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var executable = await _store.FindAsync(view.ArtifactId);
 
         Assert.NotNull(executable);
         Assert.NotNull(executable.RootActivity.Structure);
-        Assert.Equal(StructureKind, executable.RootActivity.Structure.Kind);
-        Assert.Equal(StructureSchemaVersion, executable.RootActivity.Structure.SchemaVersion);
-        Assert.Equal("write-two", executable.RootActivity.Structure.Payload.GetProperty("startActivityNodeId").GetString());
+        Assert.Equal(FlowchartActivity.StructureKind, executable.RootActivity.Structure.Kind);
+        Assert.Equal(FlowchartActivity.StructureSchemaVersion, executable.RootActivity.Structure.SchemaVersion);
+        Assert.Equal("write-one", executable.RootActivity.Structure.Payload.GetProperty("startNodeId").GetString());
+        Assert.False(executable.RootActivity.Structure.Payload.TryGetProperty("activities", out _));
+        var childSlot = Assert.Single(executable.RootActivity.ChildSlots);
+        Assert.Equal(FlowchartActivity.ActivitiesSlotName, childSlot.Name);
+        Assert.Equal(["write-one", "write-two"], childSlot.Activities.Select(activity => activity.ExecutableNodeId));
+    }
+
+    [Fact]
+    public async Task PublishesUnknownOpaqueStructureWithoutProjectingChildren()
+    {
+        var root = Node(
+            "opaque",
+            structure: new ActivityNodeStructure(
+                UnknownStructureKind,
+                UnknownStructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { marker = "kept" })));
+        var workflowVersion = WorkflowVersion(root);
+        var handler = Handler(workflowVersion);
+
+        var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var executable = await _store.FindAsync(view.ArtifactId);
+
+        Assert.NotNull(executable);
+        Assert.Empty(executable.RootActivity.ChildSlots);
+        Assert.Equal(UnknownStructureKind, executable.RootActivity.Structure?.Kind);
+        Assert.Equal("kept", executable.RootActivity.Structure?.Payload.GetProperty("marker").GetString());
     }
 
     [Fact]
@@ -137,7 +176,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task RejectsUnknownActivityVersionId()
     {
-        var workflowVersion = WorkflowVersion(new ActivityNode("missing", "missing-activity", [Text("one")], [], null));
+        var workflowVersion = WorkflowVersion(new ActivityNode("missing", "missing-activity", [Text("one")], []));
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
@@ -148,27 +187,27 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task ComputesSameArtifactIdForEquivalentWorkflowOrdering()
+    public async Task ComputesDifferentArtifactIdWhenSequenceOrderChanges()
     {
-        var firstWorkflowVersion = WorkflowVersion(CompositeNode(
-            "composite",
+        var firstWorkflowVersion = WorkflowVersion(SequenceNode(
+            "sequence",
             [
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two")),
                 Node("write-three", Text("three"))
             ]));
-        var secondWorkflowVersion = WorkflowVersion(CompositeNode(
-            "composite",
+        var secondWorkflowVersion = WorkflowVersion(SequenceNode(
+            "sequence",
             [
                 Node("write-three", Text("three")),
                 Node("write-one", Text("one")),
                 Node("write-two", Text("two"))
             ]));
-        var firstView = await Handler(firstWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var secondView = await Handler(secondWorkflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var firstView = await Handler(firstWorkflowVersion, _writeLineActivity, _sequenceActivity).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var secondView = await Handler(secondWorkflowVersion, _writeLineActivity, _sequenceActivity).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        Assert.Equal(firstView.ArtifactId, secondView.ArtifactId);
-        Assert.Equal(firstView.ArtifactHash, secondView.ArtifactHash);
+        Assert.NotEqual(firstView.ArtifactId, secondView.ArtifactId);
+        Assert.NotEqual(firstView.ArtifactHash, secondView.ArtifactHash);
     }
 
     [Fact]
@@ -191,7 +230,8 @@ public sealed class PublishWorkflowRequestHandlerTests
         new(
             new FakeQueries<WorkflowDefinitionVersion>([workflowVersion]),
             new FakeQueries<ActivityDefinitionVersion>(activityVersions.ToList()),
-            _store);
+            _store,
+            _activityStructureService);
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")
@@ -202,49 +242,80 @@ public sealed class PublishWorkflowRequestHandlerTests
         };
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
-        Node(nodeId, null, inputs);
+        Node(nodeId, structure: null, inputs);
 
     private static ActivityNode Node(
         string nodeId,
-        IReadOnlyCollection<ActivityChildSlot>? childSlots,
+        ActivityNodeStructure? structure,
         params WorkflowArgumentState[] inputs) =>
         new(
             nodeId,
             "activity-write-line",
             inputs,
             Outputs: [],
-            ChildSlots: childSlots);
+            Structure: structure);
 
-    private static ActivityNode CompositeNode(
+    private static ActivityNode SequenceNode(
+        string nodeId,
+        IReadOnlyCollection<ActivityNode> activities) =>
+        new(
+            nodeId,
+            "activity-sequence",
+            Inputs: [],
+            Outputs: [],
+            Structure: new ActivityNodeStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities))));
+
+    private static ActivityNode FlowchartNode(
         string nodeId,
         IReadOnlyCollection<ActivityNode> activities,
-        ActivityNodeStructure? structure = null) =>
-        Node(
+        IReadOnlyCollection<FlowchartConnection> connections,
+        string? startNodeId) =>
+        new(
             nodeId,
-            [
-                new ActivityChildSlot(ActivitiesSlotName, activities)
-            ]) with
-            {
-                Structure = structure
-            };
+            "activity-flowchart",
+            Inputs: [],
+            Outputs: [],
+            Structure: new ActivityNodeStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, startNodeId))));
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
+        ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
+
+    private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey) =>
+        ActivityVersion(id, activityTypeKey, []);
+
+    private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition> inputs) =>
         new("1.0.0", "activity-definition-1")
         {
             Id = id,
             Definition = new ActivityDefinition
             {
                 Id = "activity-definition-1",
-                ActivityTypeKey = "Test.WriteLine",
+                ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
             DescriptorType = typeof(TypeInformation).FullName!,
             DescriptorPayload = JsonSerializer.SerializeToElement(TypeInformation.FromType<object>()),
-            Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]
+            Inputs = inputs
         };
+
+    private static IActivityStructureService ActivityStructureService()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
+
+        return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
+    }
 
     private sealed class FakeQueries<TEntity>(List<TEntity> items) : IQueries<TEntity>
         where TEntity : Entity

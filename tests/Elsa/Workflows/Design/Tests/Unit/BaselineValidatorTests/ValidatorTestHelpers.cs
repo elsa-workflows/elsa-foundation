@@ -1,11 +1,13 @@
-using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Internal;
 using Microsoft.Extensions.Options;
 using InputDefinition = Elsa.Activities.Design.Core.Models.InputDefinition;
 using OutputDefinition = Elsa.Activities.Design.Core.Models.OutputDefinition;
@@ -14,10 +16,6 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 internal static class ValidatorTestHelpers
 {
-    private const string ActivitiesSlotName = "Activities";
-    private const string StructureKind = "test.workflow-root.structure";
-    private const string StructureSchemaVersion = "1.0.0";
-
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
         IEnumerable<VariableDefinition>? variables = null,
@@ -41,6 +39,9 @@ internal static class ValidatorTestHelpers
     public static IOptions<WorkflowDesignValidatorOptions> Options(int maxRecursionDepth = 100) =>
         Microsoft.Extensions.Options.Options.Create(new WorkflowDesignValidatorOptions { MaxRecursionDepth = maxRecursionDepth });
 
+    public static ActivityTreeWalker Walker() =>
+        new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
+
     public static ActivityNode Node(
         string nodeId,
         string activityVersionId = "av-1",
@@ -53,20 +54,9 @@ internal static class ValidatorTestHelpers
         ActivityVersionId: activityVersionId,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        ChildSlots: childActivities is null
-            ? null
-            :
-            [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    childActivities)
-            ],
         Structure: childActivities is null
             ? null
-            : new ActivityNodeStructure(
-                StructureKind,
-                StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { startActivityNodeId = childActivities.FirstOrDefault()?.NodeId ?? string.Empty }))
+            : TestActivityStructureHandler.CreateStructure(childActivities, childActivities.FirstOrDefault()?.NodeId)
     );
 
     public static VariableDefinition Variable(string referenceKey, string name) => new(
@@ -95,18 +85,7 @@ internal static class ValidatorTestHelpers
             ActivityVersionId: "$workflow-root",
             Inputs: [],
             Outputs: [],
-            ChildSlots:
-            [
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    activitySnapshot)
-            ],
-            Structure: startActivityNodeId is null
-                ? null
-                : new ActivityNodeStructure(
-                    StructureKind,
-                    StructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(new { startActivityNodeId })));
+            Structure: TestActivityStructureHandler.CreateStructure(activitySnapshot, startActivityNodeId));
     }
 
     private sealed class StubDraft(WorkflowDefinitionState state) : IWorkflowDefinitionDraft

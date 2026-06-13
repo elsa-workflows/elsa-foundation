@@ -1,5 +1,7 @@
 using CShells.Features;
+using Elsa.Activities.Flowchart.Internal;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Flowchart;
@@ -16,5 +18,6 @@ public class ActivitiesFlowchartFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<IActivityStructureHandler, FlowchartStructureHandler>();
     }
 }

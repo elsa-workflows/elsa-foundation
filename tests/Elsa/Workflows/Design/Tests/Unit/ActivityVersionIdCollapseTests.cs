@@ -54,6 +54,15 @@ public sealed class ActivityVersionIdCollapseTests
     }
 
     [Fact]
+    public void ActivityNode_has_no_persisted_child_slots()
+    {
+        var property = typeof(ActivityNode)
+            .GetProperty("ChildSlots", BindingFlags.Instance | BindingFlags.Public);
+
+        Assert.Null(property);
+    }
+
+    [Fact]
     public void ActivityNode_has_no_generic_Composition_property()
     {
         var members = typeof(ActivityNode)
@@ -73,14 +82,14 @@ public sealed class ActivityVersionIdCollapseTests
     }
 
     [Fact]
-    public void ActivityChildSlot_is_projection_only()
+    public void ActivityChildProjection_is_projection_only()
     {
-        var members = typeof(ActivityChildSlot)
+        var members = typeof(ActivityChildProjection)
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Select(p => p.Name);
 
-        Assert.Contains(nameof(ActivityChildSlot.Name), members);
-        Assert.Contains(nameof(ActivityChildSlot.Activities), members);
+        Assert.Contains(nameof(ActivityChildProjection.Name), members);
+        Assert.Contains(nameof(ActivityChildProjection.Activities), members);
         Assert.DoesNotContain("Metadata", members);
     }
 }

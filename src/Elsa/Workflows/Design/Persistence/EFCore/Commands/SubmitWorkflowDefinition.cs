@@ -1,4 +1,5 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -10,7 +11,8 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
 public sealed class SubmitWorkflowDefinition(
     IIdentityGenerator identityGenerator,
-    IDbContextFactory<WorkflowsDesignDbContext> contextFactory)
+    IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
+    IActivityStructureService activityStructureService)
     : ISubmitWorkflowDefinitionCommand
 {
     private const string InitialVersion = "1.0.0";
@@ -82,7 +84,7 @@ public sealed class SubmitWorkflowDefinition(
         return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
     }
 
-    private static void ValidateActivityTree(ActivityNode? rootActivity)
+    private void ValidateActivityTree(ActivityNode? rootActivity)
     {
         if (rootActivity is null)
             throw new ArgumentException("Workflow definition state must specify a root activity.", nameof(rootActivity));
@@ -100,7 +102,7 @@ public sealed class SubmitWorkflowDefinition(
             if (string.IsNullOrWhiteSpace(node.ActivityVersionId))
                 throw new ArgumentException($"Activity node '{node.NodeId}' must specify an activity version id.", nameof(rootActivity));
 
-            foreach (var child in node.ChildSlots?.SelectMany(slot => slot.Activities) ?? [])
+            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }

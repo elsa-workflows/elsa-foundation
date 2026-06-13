@@ -11,7 +11,8 @@ namespace Elsa3.Mapping.Mappings;
 /// <summary>Converts an Elsa-3 activity to an Elsa-4 <see cref="ActivityNode"/>.</summary>
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
-    private const string ActivitiesSlotName = "Activities";
+    private const string ImportedStructureKind = "elsa3.imported-activity.structure";
+    private const string ImportedStructureSchemaVersion = "1.0.0";
 
     public async ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken)
     {
@@ -25,21 +26,19 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         if (source.Connections?.Any() == true)
             throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
 
-        var childSlots = childActivities.Length == 0
+        var structure = childActivities.Length == 0
             ? null
-            : new[]
-            {
-                new ActivityChildSlot(
-                    ActivitiesSlotName,
-                    childActivities)
-            };
+            : new ActivityNodeStructure(
+                ImportedStructureKind,
+                ImportedStructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = childActivities }));
 
         return new ActivityNode(
             source.NodeId,
             version.Id,                 // FR-011: single ActivityVersionId : string (Unit B catalog row id)
             inputs,
             outputs,
-            childSlots
+            structure
         );
         // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata

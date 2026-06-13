@@ -1,5 +1,7 @@
 using CShells.Features;
+using Elsa.Activities.Sequence.Internal;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Design.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Sequence;
@@ -16,5 +18,6 @@ public class ActivitiesSequenceFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<IActivityStructureHandler, SequenceStructureHandler>();
     }
 }

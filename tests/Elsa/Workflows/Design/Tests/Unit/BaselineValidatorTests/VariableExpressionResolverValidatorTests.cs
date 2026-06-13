@@ -17,7 +17,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [LiteralInput("body", "hello")])],
             variables: []
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         Assert.Empty(errors);
     }
@@ -29,7 +29,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-1")])],
             variables: [Variable("var-1", "MyVar")]
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         Assert.Empty(errors);
     }
@@ -41,7 +41,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-missing")])],
             variables: [Variable("var-1", "MyVar")]
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         var error = Assert.Single(errors);
         Assert.Equal("n1/inputs/body", error.Path);
@@ -56,7 +56,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "")])],
             variables: []
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         Assert.Single(errors);
     }
@@ -69,7 +69,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", inputs: [VariableInput("body", "var-1")])],
             variables: [Variable("var-1", "DifferentName")]
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         Assert.Empty(errors);
     }
@@ -83,7 +83,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [root],
             variables: []
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         Assert.Contains(errors, e => e.Path == "child/inputs/body");
     }
@@ -95,7 +95,7 @@ public sealed class VariableExpressionResolverValidatorTests
             activities: [Node("n1", outputs: [VariableInput("result", "var-missing")])],
             variables: []
         );
-        var errors = await Validate(new VariableExpressionResolverValidator(Options()), state);
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
 
         var error = Assert.Single(errors);
         Assert.Equal("n1/outputs/result", error.Path);

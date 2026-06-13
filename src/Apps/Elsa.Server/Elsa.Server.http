@@ -58,8 +58,7 @@ Accept: application/json
           "isSensitive": null
         }
       ],
-      "outputs": [],
-      "childSlots": null
+      "outputs": []
     },
     "inputs": [],
     "outputs": [],
@@ -142,9 +141,10 @@ Accept: application/json
       "activityVersionId": "{{sequenceActivityVersionId}}",
       "inputs": [],
       "outputs": [],
-      "childSlots": [
-        {
-          "name": "Sequence.Activities",
+      "structure": {
+        "kind": "elsa.sequence.structure",
+        "schemaVersion": "1.0.0",
+        "payload": {
           "activities": [
             {
               "nodeId": "write-sequence-line-one",
@@ -162,8 +162,7 @@ Accept: application/json
                   "isSensitive": null
                 }
               ],
-              "outputs": [],
-              "childSlots": null
+              "outputs": []
             },
             {
               "nodeId": "write-sequence-line-two",
@@ -181,12 +180,11 @@ Accept: application/json
                   "isSensitive": null
                 }
               ],
-              "outputs": [],
-              "childSlots": null
+              "outputs": []
             }
           ]
         }
-      ]
+      }
     },
     "inputs": [],
     "outputs": [],
@@ -245,8 +243,7 @@ Accept: application/json
           "isSensitive": null
         }
       ],
-      "outputs": [],
-      "childSlots": null
+      "outputs": []
     },
     "inputs": [],
     "outputs": [],
