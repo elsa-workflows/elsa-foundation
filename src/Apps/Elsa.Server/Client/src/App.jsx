@@ -554,6 +554,22 @@ function getActivityDisplayName(activity) {
   return versionId || nodeId || "Activity";
 }
 
+function getActivityCatalogDisplayName(activity) {
+  const displayName = activity?.displayName?.trim();
+  if (displayName)
+    return displayName;
+
+  const typeName = activity?.activityTypeKey?.split(".").filter(Boolean).at(-1) ?? "";
+  return humanizeIdentifier(typeName) || activity?.activityTypeKey || activity?.id || "Activity";
+}
+
+function humanizeIdentifier(value) {
+  return value
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+}
+
 function getPrimaryActivityInput(activity) {
   const input = activity?.inputs?.find((item) => item?.value?.expressionType === "Literal" && item?.value?.value != null);
   return input ? `${input.referenceKey}: ${input.value.value}` : "";
@@ -788,6 +804,7 @@ export function App() {
       return activities;
 
     return activities.filter((activity) => [
+      getActivityCatalogDisplayName(activity),
       activity.displayName,
       activity.activityTypeKey,
       activity.category,
@@ -967,7 +984,7 @@ export function App() {
     try {
       const definitions = await request("/default/design/activities/definitions");
       const ordered = [...(definitions ?? [])].sort((left, right) =>
-        (left.displayName ?? left.activityTypeKey).localeCompare(right.displayName ?? right.activityTypeKey));
+        getActivityCatalogDisplayName(left).localeCompare(getActivityCatalogDisplayName(right)));
       setActivities(ordered);
     } finally {
       setActivitiesLoading(false);
@@ -1895,7 +1912,7 @@ function ActivityCatalog({ activities, totalCount, loading }) {
           <div className="activity-row" key={activity.id}>
             <div className="activity-row-icon"><Activity size={15} /></div>
             <div className="activity-row-main">
-              <strong>{activity.displayName || activity.activityTypeKey}</strong>
+              <strong>{getActivityCatalogDisplayName(activity)}</strong>
               <span>{activity.activityTypeKey}</span>
               {activity.description && <p>{activity.description}</p>}
             </div>
