@@ -2097,6 +2097,55 @@ function DemoPackageStack({ packages }) {
 
 function FeatureCatalog({ features, totalCount, loading, togglingFeatures, savingFeatureSettings, onToggle, onUpdateConfiguration }) {
   const enabledCount = features.filter((feature) => feature.enabled).length;
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedFeatureId, setSelectedFeatureId] = useState("");
+  const categories = useMemo(() => {
+    const names = new Set();
+    for (const feature of features) {
+      for (const category of getFeatureCategories(feature))
+        names.add(category);
+    }
+
+    return ["All", ...[...names].sort((left, right) => left.localeCompare(right))];
+  }, [features]);
+  const visibleFeatures = useMemo(() =>
+    selectedCategory === "All"
+      ? features
+      : features.filter((feature) => getFeatureCategories(feature).includes(selectedCategory)),
+  [features, selectedCategory]);
+  const featureGroups = useMemo(() => {
+    const groups = new Map();
+    for (const feature of visibleFeatures) {
+      const category = selectedCategory === "All" ? getPrimaryFeatureCategory(feature) : selectedCategory;
+      const group = groups.get(category) ?? [];
+      group.push(feature);
+      groups.set(category, group);
+    }
+
+    return [...groups.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([category, items]) => ({
+        category,
+        items: items.sort((left, right) =>
+          (left.displayName || left.id).localeCompare(right.displayName || right.id))
+      }));
+  }, [selectedCategory, visibleFeatures]);
+  const selectedFeature = visibleFeatures.find((feature) => feature.id === selectedFeatureId)
+    ?? visibleFeatures.find((feature) => (feature.settings?.length ?? 0) > 0)
+    ?? visibleFeatures[0]
+    ?? null;
+
+  useEffect(() => {
+    if (!categories.includes(selectedCategory))
+      setSelectedCategory("All");
+  }, [categories, selectedCategory]);
+
+  useEffect(() => {
+    if (!selectedFeature)
+      setSelectedFeatureId("");
+    else if (selectedFeature.id !== selectedFeatureId)
+      setSelectedFeatureId(selectedFeature.id);
+  }, [selectedFeature, selectedFeatureId]);
 
   return (
     <div className="feature-catalog">
@@ -2104,69 +2153,165 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, savin
         <strong>{enabledCount}</strong>
         <span>{features.length === totalCount ? "enabled shown" : `enabled shown of ${totalCount}`}</span>
       </div>
-      <div className="feature-list">
-        {loading && features.length === 0 && <p className="muted">Loading feature catalog...</p>}
-        {!loading && features.length === 0 && <p className="muted">No features match the current filter.</p>}
-        {features.map((feature) => {
-          const toggling = togglingFeatures.has(feature.id);
-          const savingSettings = savingFeatureSettings.has(feature.id);
-          const disabled = Boolean(feature.readError) || toggling || savingSettings;
-          return (
-            <div className={`feature-row ${feature.enabled ? "enabled" : ""} ${feature.readError ? "warning" : ""}`} key={feature.id}>
+      <div className="feature-browser">
+        <aside className="feature-category-filter" aria-label="Feature categories">
+          {categories.map((category) => {
+            const count = category === "All"
+              ? features.length
+              : features.filter((feature) => getFeatureCategories(feature).includes(category)).length;
+            return (
               <button
                 type="button"
-                className="feature-toggle"
-                role="switch"
-                aria-checked={feature.enabled}
-                disabled={disabled}
-                title={`${feature.enabled ? "Disable" : "Enable"} ${feature.id}`}
-                onClick={() => onToggle(feature)}
+                key={category}
+                className={selectedCategory === category ? "active" : ""}
+                onClick={() => setSelectedCategory(category)}
               >
-                <span />
+                <span>{category}</span>
+                <strong>{count}</strong>
               </button>
-              <div className="feature-row-main">
-                <div className="feature-title-line">
-                  <strong>{feature.displayName || feature.id}</strong>
-                  {feature.advanced && <span className="feature-flag">Advanced</span>}
-                  {feature.experimental && <span className="feature-flag warning">Experimental</span>}
-                </div>
-                <span>{feature.id}</span>
-                {feature.description && <p>{feature.description}</p>}
-                <div className="feature-detail-list">
-                  {feature.packageId && <span>Package: <strong>{feature.packageId}</strong>{feature.packageVersion ? ` ${feature.packageVersion}` : ""}</span>}
-                  {feature.manifestPath && <span>Manifest: <strong>{feature.manifestPath}</strong></span>}
-                  {feature.manifestHash && <span>Hash: <code>{feature.manifestHash.slice(0, 12)}</code></span>}
-                </div>
-                {feature.readError && (
-                  <div className="feature-warning-panel">
-                    <strong>Package manifest could not be read</strong>
-                    <span>Issue: {feature.readError}</span>
-                    <span>Action: add an <code>elsa-package.json</code> file at the package root, or <code>build/elsa-package.json</code>, then upload or reconcile the package again.</span>
-                    <span>Tip: the runtime feature may still appear separately if the assembly registered one; use that runtime feature row for toggling.</span>
-                  </div>
-                )}
-                {(feature.categories?.length ?? 0) > 0 && (
-                  <div className="feature-category-list">
-                    {feature.categories.map((category) => <span key={category}>{category}</span>)}
-                  </div>
-                )}
-                <FeatureSettings
-                  feature={feature}
-                  disabled={disabled || !feature.enabled}
-                  saving={savingSettings}
-                  onUpdateConfiguration={onUpdateConfiguration}
-                />
+            );
+          })}
+        </aside>
+        <div className="feature-list">
+          {loading && features.length === 0 && <p className="muted">Loading feature catalog...</p>}
+          {!loading && features.length === 0 && <p className="muted">No features match the current filter.</p>}
+          {!loading && features.length > 0 && visibleFeatures.length === 0 && <p className="muted">No features in this category match the current filter.</p>}
+          {featureGroups.map((group) => (
+            <section className="feature-group" key={group.category}>
+              <div className="feature-group-heading">
+                <h3>{group.category}</h3>
+                <span>{group.items.length}</span>
               </div>
-              <div className="feature-row-meta">
-                <span>{getFeatureSourceLabel(feature)}</span>
-                <code>{feature.packageId ? `${feature.packageId} ${feature.packageVersion ?? ""}`.trim() : feature.sourceKind}</code>
-                {feature.manifestPath && <small>{feature.manifestPath}</small>}
+              <div className="feature-card-grid">
+                {group.items.map((feature) => {
+                  const toggling = togglingFeatures.has(feature.id);
+                  const savingSettings = savingFeatureSettings.has(feature.id);
+                  const disabled = Boolean(feature.readError) || toggling || savingSettings;
+                  const selected = feature.id === selectedFeature?.id;
+                  return (
+                    <FeatureCard
+                      key={feature.id}
+                      feature={feature}
+                      disabled={disabled}
+                      selected={selected}
+                      onSelect={() => setSelectedFeatureId(feature.id)}
+                      onToggle={onToggle}
+                    />
+                  );
+                })}
               </div>
-            </div>
-          );
-        })}
+            </section>
+          ))}
+        </div>
+        <FeatureInspector
+          feature={selectedFeature}
+          toggling={selectedFeature ? togglingFeatures.has(selectedFeature.id) : false}
+          saving={selectedFeature ? savingFeatureSettings.has(selectedFeature.id) : false}
+          onToggle={onToggle}
+          onUpdateConfiguration={onUpdateConfiguration}
+        />
       </div>
     </div>
+  );
+}
+
+function FeatureCard({ feature, disabled, selected, onSelect, onToggle }) {
+  const settingsCount = feature.settings?.length ?? 0;
+
+  return (
+    <article className={`feature-card ${feature.enabled ? "enabled" : ""} ${feature.readError ? "warning" : ""} ${selected ? "selected" : ""}`}>
+      <div className="feature-card-top">
+        <button
+          type="button"
+          className="feature-toggle"
+          role="switch"
+          aria-checked={feature.enabled}
+          disabled={disabled}
+          title={`${feature.enabled ? "Disable" : "Enable"} ${feature.id}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(feature);
+          }}
+        >
+          <span />
+        </button>
+        <button type="button" className="feature-card-select" onClick={onSelect}>
+          <span>{getFeatureSourceLabel(feature)}</span>
+          <strong>{feature.displayName || feature.id}</strong>
+          <code>{feature.id}</code>
+        </button>
+      </div>
+      {feature.description && <p>{feature.description}</p>}
+      {feature.readError && <span className="feature-card-warning">Manifest warning</span>}
+      <div className="feature-card-footer">
+        <span>{settingsCount} setting{settingsCount === 1 ? "" : "s"}</span>
+        {feature.packageId && <span>{feature.packageId}</span>}
+      </div>
+    </article>
+  );
+}
+
+function FeatureInspector({ feature, toggling, saving, onToggle, onUpdateConfiguration }) {
+  if (!feature) {
+    return (
+      <aside className="feature-inspector">
+        <p className="muted">Select a feature to inspect package details and settings.</p>
+      </aside>
+    );
+  }
+
+  const disabled = Boolean(feature.readError) || toggling || saving;
+  const settingsDisabled = disabled || !feature.enabled;
+
+  return (
+    <aside className="feature-inspector">
+      <div className="feature-inspector-header">
+        <span>{getFeatureSourceLabel(feature)}</span>
+        <button
+          type="button"
+          className="feature-toggle"
+          role="switch"
+          aria-checked={feature.enabled}
+          disabled={disabled}
+          title={`${feature.enabled ? "Disable" : "Enable"} ${feature.id}`}
+          onClick={() => onToggle(feature)}
+        >
+          <span />
+        </button>
+      </div>
+      <h3>{feature.displayName || feature.id}</h3>
+      <code>{feature.id}</code>
+      {feature.description && <p>{feature.description}</p>}
+      <div className="feature-detail-list">
+        {feature.packageId && <span>Package: <strong>{feature.packageId}</strong>{feature.packageVersion ? ` ${feature.packageVersion}` : ""}</span>}
+        {feature.manifestPath && <span>Manifest: <strong>{feature.manifestPath}</strong></span>}
+        {feature.manifestHash && <span>Hash: <code>{feature.manifestHash.slice(0, 12)}</code></span>}
+      </div>
+      {(feature.categories?.length ?? 0) > 0 && (
+        <div className="feature-category-list">
+          {feature.categories.map((category) => <span key={category}>{category}</span>)}
+        </div>
+      )}
+      {feature.advanced && <span className="feature-flag">Advanced</span>}
+      {feature.experimental && <span className="feature-flag warning">Experimental</span>}
+      {feature.readError && (
+        <div className="feature-warning-panel">
+          <strong>Package manifest could not be read</strong>
+          <span>Issue: {feature.readError}</span>
+          <span>Action: add an <code>elsa-package.json</code> file at the package root, or <code>build/elsa-package.json</code>, then upload or reconcile the package again.</span>
+          <span>Tip: the runtime feature may still appear separately if the assembly registered one; use that runtime feature row for toggling.</span>
+        </div>
+      )}
+      {settingsDisabled && !feature.readError && (feature.settings?.length ?? 0) > 0 && (
+        <p className="feature-settings-empty">Enable this feature to edit settings.</p>
+      )}
+      <FeatureSettings
+        feature={feature}
+        disabled={settingsDisabled}
+        saving={saving}
+        onUpdateConfiguration={onUpdateConfiguration}
+      />
+    </aside>
   );
 }
 
@@ -2394,6 +2539,25 @@ function formatDraftSettingValue(value) {
 
 function isEmptySettingValue(value) {
   return value === undefined || value === null || value === "";
+}
+
+function getFeatureCategories(feature) {
+  const categories = feature.categories?.filter(Boolean) ?? [];
+  return categories.length > 0 ? categories : [getPrimaryFeatureCategory(feature)];
+}
+
+function getPrimaryFeatureCategory(feature) {
+  const categories = feature.categories?.filter(Boolean) ?? [];
+  if (categories.length > 0)
+    return categories[0];
+
+  if (feature.sourceKind === "manifest-error")
+    return "Package warnings";
+
+  if (feature.packageId)
+    return "Packages";
+
+  return "Runtime";
 }
 
 function getFeatureSourceLabel(feature) {
