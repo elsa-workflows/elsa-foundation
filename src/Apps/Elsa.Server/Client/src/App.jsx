@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Circle,
   CloudUpload,
+  ExternalLink,
   FileJson,
   GitBranch,
   Moon,
@@ -247,6 +248,44 @@ const themeFamilies = [
       light: ["#e8edf2", "#fbfdff", "#315f8f"],
       dark: ["#10161d", "#182331", "#70a9df"]
     }
+  }
+];
+const demoStackPackages = [
+  {
+    name: "Elsa Workflows",
+    url: "https://www.elsaworkflows.io",
+    imageUrl: "https://www.elsaworkflows.io/assets/elsa-logo-CsMVb5ff.png",
+    imageAlt: "Elsa Workflows logo",
+    role: "Workflow engine",
+    description: "Provides the workflow definition, publishing, execution, activity catalog, and runtime APIs used by the demo.",
+    details: ["Workflow definitions", "Publishing", "Execution"]
+  },
+  {
+    name: "CShells",
+    url: "https://www.cshells.io",
+    imageUrl: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/a83ce4f2-5732-459a-904a-1c5573548edc/id-preview-744ebe73--89fe6b5d-3d2f-47a7-b058-2139fcd37836.lovable.app-1772287578314.png",
+    imageAlt: "CShells website preview",
+    role: "Dynamic shell composition",
+    description: "Hosts the default shell, reads shell feature configuration, and reloads shell composition without restarting the host.",
+    details: ["Feature composition", "Shell reload", "Runtime catalog"]
+  },
+  {
+    name: "Nuplane",
+    url: "https://www.nuplane.io",
+    imageUrl: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/29b2b93f-9fca-472a-8a1a-d139071a465b/id-preview-7da9d3f9--6d0124ec-ad1c-46ef-9162-e801fb8223de.lovable.app-1772455899178.png",
+    imageAlt: "Nuplane website preview",
+    role: "Package loading",
+    description: "Observes the package drop folder, reconciles NuGet packages, and makes package-provided assemblies available to the running app.",
+    details: ["Drop folder", "Reconcile", "Package observer"]
+  },
+  {
+    name: "ConsoleLogStreaming",
+    url: "https://www.consolelogstreaming.dev/",
+    imageUrl: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1465100f-0b0a-450b-b0b3-6d8d47c3642b",
+    imageAlt: "ConsoleLogStreaming website preview",
+    role: "Live backend console",
+    description: "Captures stdout and stderr from the backend and streams console lines into the demo UI in real time.",
+    details: ["Console capture", "SignalR streaming", "ANSI styling"]
   }
 ];
 const consoleHeightStorageKey = "elsa-demo-console-height";
@@ -824,6 +863,14 @@ export function App() {
         icon: PlugZap,
         title: "Feature Catalog",
         description: `${enabledCount} enabled of ${featureCatalogItems.length} available shell feature${featureCatalogItems.length === 1 ? "" : "s"}.`
+      };
+    }
+
+    if (mainView === "stack") {
+      return {
+        icon: Boxes,
+        title: "Demo Package Stack",
+        description: "Reference cards for the packages and platforms powering this demo."
       };
     }
 
@@ -1467,6 +1514,11 @@ export function App() {
               <button type="button" className="small-button" onClick={refreshFeatures} disabled={featuresLoading}>
                 {featuresLoading ? "Refreshing" : "Refresh"}
               </button>
+            ) : mainView === "stack" ? (
+              <div className="artifact-toolbar-summary">
+                <Boxes size={15} />
+                <span>{demoStackPackages.length} references</span>
+              </div>
             ) : (
               <button type="button" className="small-button" onClick={refreshExecutables} disabled={executablesLoading}>
                 {executablesLoading ? "Refreshing" : "Refresh"}
@@ -1496,6 +1548,10 @@ export function App() {
                 <Rocket size={15} />
                 Artifacts
               </button>
+              <button type="button" className={mainView === "stack" ? "active" : ""} onClick={() => setMainView("stack")}>
+                <Boxes size={15} />
+                Stack
+              </button>
             </div>
             {mainView === "workflow" || mainView === "designer" ? (
               <>
@@ -1517,6 +1573,11 @@ export function App() {
               <div className="artifact-toolbar-summary">
                 <Rocket size={15} />
                 <span>{executables.length} artifact{executables.length === 1 ? "" : "s"}</span>
+              </div>
+            ) : mainView === "stack" ? (
+              <div className="artifact-toolbar-summary">
+                <Boxes size={15} />
+                <span>{demoStackPackages.length} packages</span>
               </div>
             ) : (
               null
@@ -1557,6 +1618,8 @@ export function App() {
               togglingFeatures={togglingFeatures}
               onToggle={toggleFeature}
             />
+          ) : mainView === "stack" ? (
+            <DemoPackageStack packages={demoStackPackages} />
           ) : (
             <WorkflowExecutableArtifacts artifacts={executables} loading={executablesLoading} />
           )}
@@ -1833,6 +1896,37 @@ function ActivityCatalog({ activities, totalCount, loading }) {
               <code>{activity.id}</code>
             </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DemoPackageStack({ packages }) {
+  return (
+    <div className="stack-page">
+      <div className="stack-grid">
+        {packages.map((item) => (
+          <article className="stack-card" key={item.name}>
+            <a className="stack-visual" href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
+              <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
+            </a>
+            <div className="stack-card-body">
+              <div className="stack-card-heading">
+                <div>
+                  <span>{item.role}</span>
+                  <h3>{item.name}</h3>
+                </div>
+                <a className="stack-link" href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name} website`}>
+                  <ExternalLink size={15} />
+                </a>
+              </div>
+              <p>{item.description}</p>
+              <div className="stack-tags">
+                {item.details.map((detail) => <span key={detail}>{detail}</span>)}
+              </div>
+            </div>
+          </article>
         ))}
       </div>
     </div>
