@@ -2094,7 +2094,14 @@ function FeatureCatalog({ features, totalCount, loading, togglingFeatures, onTog
                 </div>
                 <span>{feature.id}</span>
                 {feature.description && <p>{feature.description}</p>}
-                {feature.readError && <p className="feature-warning">Manifest: {feature.readError}</p>}
+                {feature.readError && (
+                  <div className="feature-warning-panel">
+                    <strong>Package manifest could not be read</strong>
+                    <span>Issue: {feature.readError}</span>
+                    <span>Action: add an <code>elsa-package.json</code> file at the package root, or <code>build/elsa-package.json</code>, then upload or reconcile the package again.</span>
+                    <span>Tip: the runtime feature may still appear separately if the assembly registered one; use that runtime feature row for toggling.</span>
+                  </div>
+                )}
                 {(feature.categories?.length ?? 0) > 0 && (
                   <div className="feature-category-list">
                     {feature.categories.map((category) => <span key={category}>{category}</span>)}

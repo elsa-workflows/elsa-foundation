@@ -1150,6 +1150,24 @@ p {
   color: var(--muted);
 }
 
+.feature-row.warning .feature-row-main {
+  grid-column: 2 / -1;
+}
+
+.feature-row.warning .feature-row-meta {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+.feature-row.warning .feature-row-meta code,
+.feature-row.warning .feature-row-meta small {
+  margin-top: 0;
+}
+
 .activity-row:last-child {
   border-bottom: 0;
 }
@@ -1331,6 +1349,45 @@ p {
 .feature-flag.warning,
 .feature-warning {
   color: var(--amber);
+}
+
+.feature-warning-panel {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--alert-line);
+  border-radius: 6px;
+  background: var(--alert-bg);
+  color: var(--alert-muted);
+}
+
+.feature-warning-panel strong,
+.feature-warning-panel span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  margin: 0;
+  font-family: inherit;
+}
+
+.feature-warning-panel strong {
+  color: var(--ink);
+  font-size: 11.5px;
+  line-height: 1.35;
+  font-weight: 780;
+}
+
+.feature-warning-panel span {
+  color: var(--alert-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.feature-warning-panel code {
+  color: var(--code-ink);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
 }
 
 .feature-category-list {
