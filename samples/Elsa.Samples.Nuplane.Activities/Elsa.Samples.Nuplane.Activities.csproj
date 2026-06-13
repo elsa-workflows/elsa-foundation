@@ -16,9 +16,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CShells.Abstractions" PrivateAssets="all" />
+    <PackageReference Include="CShells.Abstractions" GeneratePathProperty="true" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
+
+  <Target Name="AddCShellsAbstractionsToPackageManifestReferences" BeforeTargets="GenerateElsaPackageManifest">
+    <ItemGroup>
+      <ReferencePath Include="$(TargetDir)*.dll" Condition="'$(TargetDir)' != '' and Exists('$(TargetDir)')" />
+      <ReferencePath Include="$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll" Condition="'$(PkgCShells_Abstractions)' != '' and Exists('$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll')" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />

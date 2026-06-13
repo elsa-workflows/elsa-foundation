@@ -187,13 +187,14 @@ internal static class ElsaDemoApi
             var manifest = packageManifest.Manifest;
             foreach (var feature in manifest.Features ?? [])
             {
-                if (string.IsNullOrWhiteSpace(feature.Id))
+                var featureName = GetStringExtension(feature.Extensions, "cshellsFeatureName") ?? feature.Id;
+                if (string.IsNullOrWhiteSpace(featureName))
                     continue;
 
-                UpsertFeature(items, feature.Id, "{}", builder =>
+                UpsertFeature(items, featureName, "{}", builder =>
                 {
                     builder.SourceKind = "manifest";
-                    builder.DisplayName = string.IsNullOrWhiteSpace(feature.DisplayName) ? feature.Id : feature.DisplayName;
+                    builder.DisplayName = string.IsNullOrWhiteSpace(feature.DisplayName) ? featureName : feature.DisplayName;
                     builder.Description = feature.Description ?? builder.Description;
                     builder.Categories = MergeCategories(feature.Category, feature.Categories);
                     builder.PackageId = manifest.Package?.Id ?? summary.Id;
@@ -591,6 +592,20 @@ internal static class ElsaDemoApi
     private static string NormalizePackagePath(string path) =>
         path.Replace('\\', '/').TrimStart('/');
 
+    private static string? GetStringExtension(JsonObject? extensions, string name)
+    {
+        if (extensions is null ||
+            !extensions.TryGetPropertyValue(name, out var node) ||
+            node is not JsonValue value ||
+            !value.TryGetValue<string>(out var text) ||
+            string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        return text;
+    }
+
     private static string GetPackageDropFolder(IWebHostEnvironment environment) =>
         Path.Combine(environment.ContentRootPath, "packages");
 
@@ -785,4 +800,5 @@ internal sealed record DemoPackageFeatureManifest(
     string? Category,
     IReadOnlyList<string>? Categories,
     bool Advanced,
-    bool Experimental);
+    bool Experimental,
+    JsonObject? Extensions);
