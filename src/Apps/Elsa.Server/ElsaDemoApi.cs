@@ -245,29 +245,44 @@ internal static class ElsaDemoApi
         Results.Ok(ClearPackageDropFolder(environment));
 
     private static async Task<IResult> ResetDemoAsync(
+        IServiceProvider serviceProvider,
         IShellRegistry shellRegistry,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var shell = await shellRegistry.GetOrActivateAsync("default", cancellationToken);
-        await using var shellScope = shell.BeginScope();
+        var shellRestore = await RestoreShellDocumentFromBaselineAsync(environment, cancellationToken);
+        if (shellRestore.Error is not null)
+            return shellRestore.Error;
 
-        var workflows = await ClearWorkflowsAsync(shellScope.ServiceProvider, cancellationToken);
-        var activities = await ClearActivitiesAsync(shellScope.ServiceProvider, cancellationToken);
+        DemoResetWorkflowCounts workflows;
+        DemoResetActivityCounts activities;
+        var shell = await shellRegistry.GetOrActivateAsync("default", cancellationToken);
+        await using (var shellScope = shell.BeginScope())
+        {
+            workflows = await ClearWorkflowsAsync(shellScope.ServiceProvider, cancellationToken);
+            activities = await ClearActivitiesAsync(shellScope.ServiceProvider, cancellationToken);
+        }
+
         var packages = ClearPackageDropFolder(environment);
         var reconcile = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
+        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
+        var featureDescriptorCount = GetFeatureDescriptorCount(snapshot);
+        var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
 
         Console.WriteLine(
             $"Demo reset completed: {workflows.TotalDeleted} workflow row(s), {activities.TotalDeleted} activity row(s), " +
             $"{packages.DeletedFiles} package file(s), {packages.DeletedDirectories} package folder(s) deleted, " +
-            $"Nuplane reconcile {reconcile.OutcomeCode} ({reconcile.CorrelationId}).");
+            $"shells.json restored from baseline, Nuplane reconcile {reconcile.OutcomeCode} ({reconcile.CorrelationId}), " +
+            $"{reloadResults.Count} active shell(s) reloaded.");
 
         return Results.Ok(new DemoResetResponse(
             workflows,
             activities,
             packages,
-            new DemoResetReconcileResponse(reconcile.OutcomeCode.ToString(), reconcile.CorrelationId, reconcile.ReasonCode)));
+            shellRestore.Response!,
+            new DemoResetReconcileResponse(reconcile.OutcomeCode.ToString(), reconcile.CorrelationId, reconcile.ReasonCode),
+            new DemoReloadShellsResponse(featureDescriptorCount, reloadResults.Count)));
     }
 
     private static async Task<IResult> ListWorkflowExecutablesAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken)
@@ -371,6 +386,29 @@ internal static class ElsaDemoApi
         Console.WriteLine("Demo shells.json saved.");
 
         return Results.Ok(new DemoSaveShellResponse(path, json));
+    }
+
+    private static async Task<DemoShellRestoreResult> RestoreShellDocumentFromBaselineAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
+    {
+        var baselinePath = GetShellsBaselineJsonPath(environment);
+        var path = GetShellsJsonPath(environment);
+
+        if (!File.Exists(baselinePath))
+            return new(null, Results.NotFound(new DemoErrorResponse($"Could not find shells baseline at '{baselinePath}'.")));
+
+        var baselineJson = await File.ReadAllTextAsync(baselinePath, cancellationToken);
+        var document = ParseShellDocument(baselineJson);
+        if (document is null)
+            return new(null, Results.BadRequest(new DemoErrorResponse("shells.baseline.json is not valid JSON.")));
+
+        if (GetDefaultFeatures(document).Count == 0)
+            return new(null, Results.BadRequest(new DemoErrorResponse("shells.baseline.json must contain CShells.Shells.default.Features.")));
+
+        var json = document.ToJsonString(IndentedJsonOptions);
+        await File.WriteAllTextAsync(path, json + Environment.NewLine, cancellationToken);
+        Console.WriteLine($"Demo shells.json restored from '{baselinePath}'.");
+
+        return new(new DemoShellRestoreResponse(path, baselinePath, json), null);
     }
 
     private static async Task<IResult> UpdateFeatureAsync(string featureName, DemoFeatureUpdateRequest body, IWebHostEnvironment environment, CancellationToken cancellationToken)
@@ -559,6 +597,9 @@ internal static class ElsaDemoApi
     private static string GetShellsJsonPath(IWebHostEnvironment environment) =>
         Path.Combine(environment.ContentRootPath, "shells.json");
 
+    private static string GetShellsBaselineJsonPath(IWebHostEnvironment environment) =>
+        Path.Combine(environment.ContentRootPath, "shells.baseline.json");
+
     private static readonly JsonSerializerOptions DemoPackageManifestJsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
@@ -608,11 +649,17 @@ internal sealed record DemoUploadPackageResponse(string FileName, string Path, l
 
 internal sealed record DemoClearPackageDropFolderResponse(string Path, int DeletedFiles, int DeletedDirectories);
 
+internal sealed record DemoShellRestoreResponse(string Path, string BaselinePath, string Json);
+
+internal sealed record DemoShellRestoreResult(DemoShellRestoreResponse? Response, IResult? Error);
+
 internal sealed record DemoResetResponse(
     DemoResetWorkflowCounts Workflows,
     DemoResetActivityCounts Activities,
     DemoClearPackageDropFolderResponse Packages,
-    DemoResetReconcileResponse Reconcile);
+    DemoShellRestoreResponse Shells,
+    DemoResetReconcileResponse Reconcile,
+    DemoReloadShellsResponse Reload);
 
 internal sealed record DemoResetReconcileResponse(string Outcome, string CorrelationId, string? ReasonCode);
 

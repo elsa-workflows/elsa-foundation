@@ -1210,6 +1210,12 @@ export function App() {
       if (response.reconcile?.outcome) {
         addConsoleLine("stdout", `Reconcile ${response.reconcile.outcome}: ${response.reconcile.correlationId}`);
       }
+      if (response.shells?.path) {
+        addConsoleLine("stdout", `shells.json restored from baseline: ${response.shells.path}`);
+      }
+      if (response.reload?.reloadedShellCount != null) {
+        addConsoleLine("stdout", `Reloaded ${response.reload.reloadedShellCount} active shell(s).`);
+      }
       await refreshState();
       await refreshActivities();
       await refreshFeatures();
