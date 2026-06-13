@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
+import ReactFlow, {
+  Background,
+  Controls,
+  Handle,
+  MiniMap,
+  Position
+} from "reactflow";
+import "reactflow/dist/style.css";
 import {
   Activity,
   ArrowDownToLine,
@@ -9,6 +17,7 @@ import {
   Circle,
   CloudUpload,
   FileJson,
+  GitBranch,
   Moon,
   PackagePlus,
   Pause,
@@ -169,6 +178,12 @@ const sampleWorkflows = {
       }
     }
   }
+};
+
+const activityTokenLabels = {
+  "{{writeLineActivityVersionId}}": "WriteLine",
+  "{{sequenceActivityVersionId}}": "Sequence",
+  "{{sayHelloFromNuplaneActivityVersionId}}": "SayHelloFromNuplane"
 };
 
 const steps = [
@@ -378,6 +393,207 @@ function createConsoleEntryFromLine(line) {
   };
 }
 
+function parseWorkflowDesignerJson(workflowJson) {
+  try {
+    const workflow = JSON.parse(workflowJson);
+    if (!workflow?.state?.rootActivity)
+      return { workflow: null, error: "Workflow JSON must contain state.rootActivity." };
+
+    return { workflow, error: "" };
+  } catch (error) {
+    return { workflow: null, error: error.message };
+  }
+}
+
+function getActivityDisplayName(activity) {
+  const versionId = activity?.activityVersionId ?? "";
+  if (activityTokenLabels[versionId])
+    return activityTokenLabels[versionId];
+
+  if (versionId.includes("WriteLine"))
+    return "WriteLine";
+
+  if (versionId.includes("Sequence"))
+    return "Sequence";
+
+  if (versionId.includes("Flowchart"))
+    return "Flowchart";
+
+  if (versionId.includes("SayHelloFromNuplane"))
+    return "SayHelloFromNuplane";
+
+  const nodeId = activity?.nodeId ?? "";
+  if (nodeId.includes("write"))
+    return "WriteLine";
+
+  if (nodeId.includes("sequence"))
+    return "Sequence";
+
+  if (nodeId.includes("flowchart"))
+    return "Flowchart";
+
+  return versionId || nodeId || "Activity";
+}
+
+function getPrimaryActivityInput(activity) {
+  const input = activity?.inputs?.find((item) => item?.value?.expressionType === "Literal" && item?.value?.value != null);
+  return input ? `${input.referenceKey}: ${input.value.value}` : "";
+}
+
+function getActivityChildSlots(activity) {
+  return Array.isArray(activity?.childSlots) ? activity.childSlots : [];
+}
+
+function getSlotActivities(slot) {
+  return Array.isArray(slot?.activities) ? slot.activities : [];
+}
+
+function getActivityContainerKind(activity) {
+  if (!activity)
+    return null;
+
+  const activityText = [
+    getActivityDisplayName(activity),
+    activity.activityVersionId,
+    activity.nodeId,
+    ...getActivityChildSlots(activity).map((slot) => slot?.name)
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (activityText.includes("flowchart"))
+    return "flowchart";
+
+  if (activityText.includes("sequence"))
+    return "sequence";
+
+  return null;
+}
+
+function getDesignerMode(rootActivity) {
+  const containerKind = getActivityContainerKind(rootActivity);
+  if (containerKind)
+    return containerKind;
+
+  const childSlots = getActivityChildSlots(rootActivity);
+  const childCount = childSlots.reduce((count, slot) => count + getSlotActivities(slot).length, 0);
+  if (childCount === 0)
+    return "single";
+
+  return "sequence";
+}
+
+function buildWorkflowDesignerModel(workflow) {
+  const rootActivity = workflow?.state?.rootActivity;
+  if (!rootActivity)
+    return { mode: "single", containerTitle: "", nodes: [], edges: [], activityPaths: [] };
+
+  const mode = getDesignerMode(rootActivity);
+  const containerKind = getActivityContainerKind(rootActivity);
+  const nodes = [];
+  const edges = [];
+  const activityPaths = [];
+
+  function addActivityNode(activity, path, position, role = "") {
+    activityPaths.push(path);
+    nodes.push({
+      id: path,
+      type: "activity",
+      position,
+      data: {
+        title: getActivityDisplayName(activity),
+        nodeId: activity.nodeId || "unnamed",
+        subtitle: getPrimaryActivityInput(activity),
+        role
+      }
+    });
+  }
+
+  if (!containerKind) {
+    addActivityNode(rootActivity, "root", { x: 260, y: 160 }, "Root");
+    return {
+      mode,
+      containerTitle: "Root activity",
+      nodes,
+      edges,
+      activityPaths
+    };
+  }
+
+  const childSlots = getActivityChildSlots(rootActivity);
+  const children = childSlots.flatMap((slot, slotIndex) =>
+    getSlotActivities(slot).map((activity, activityIndex) => ({
+      activity,
+      slotName: slot.name || `Slot ${slotIndex + 1}`,
+      path: `root.slot${slotIndex}.activity${activityIndex}`
+    })));
+
+  if (mode === "sequence") {
+    children.forEach((child, index) => {
+      addActivityNode(child.activity, child.path, { x: 280, y: 80 + index * 140 }, child.slotName);
+      if (index > 0) {
+        edges.push({
+          id: `${children[index - 1].path}-to-${child.path}`,
+          source: children[index - 1].path,
+          target: child.path,
+          type: "smoothstep"
+        });
+      }
+    });
+  } else if (mode === "flowchart") {
+    children.forEach((child, index) => {
+      addActivityNode(child.activity, child.path, {
+        x: 80 + (index % 3) * 260,
+        y: 90 + Math.floor(index / 3) * 150
+      }, child.slotName);
+    });
+  }
+
+  return {
+    mode,
+    containerTitle: getActivityDisplayName(rootActivity),
+    containerNodeId: rootActivity.nodeId || "",
+    nodes,
+    edges,
+    activityPaths
+  };
+}
+
+function findActivityByDesignerPath(rootActivity, path) {
+  if (!rootActivity || path === "root")
+    return rootActivity ?? null;
+
+  const match = path.match(/^root\.slot(\d+)\.activity(\d+)$/);
+  if (!match)
+    return null;
+
+  const slot = getActivityChildSlots(rootActivity)[Number(match[1])];
+  return getSlotActivities(slot)[Number(match[2])] ?? null;
+}
+
+function updateActivityByDesignerPath(workflow, path, update) {
+  const activity = findActivityByDesignerPath(workflow?.state?.rootActivity, path);
+  if (!activity)
+    return false;
+
+  update(activity);
+  return true;
+}
+
+function getActivityLiteralInputs(activity) {
+  return (activity?.inputs ?? []).filter((input) => input?.value?.expressionType === "Literal");
+}
+
+function setActivityLiteralInput(activity, referenceKey, value) {
+  const input = (activity.inputs ?? []).find((item) => item.referenceKey === referenceKey);
+  if (!input)
+    return;
+
+  input.value = {
+    ...(input.value ?? {}),
+    value,
+    expressionType: input.value?.expressionType ?? "Literal"
+  };
+}
+
 export function App() {
   const [theme, setTheme] = useState(getInitialTheme);
   const [consoleHeight, setConsoleHeight] = useState(getInitialConsoleHeight);
@@ -405,6 +621,7 @@ export function App() {
   const [pausedConsoleLineCount, setPausedConsoleLineCount] = useState(0);
   const [dropFolder, setDropFolder] = useState("");
   const [mainView, setMainView] = useState("workflow");
+  const [selectedDesignerPath, setSelectedDesignerPath] = useState("root");
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
@@ -472,6 +689,30 @@ export function App() {
     ].some((value) => value?.toLowerCase().includes(query)));
   }, [featureCatalogItems, featureSearch]);
 
+  const designerParseResult = useMemo(() => parseWorkflowDesignerJson(workflowJson), [workflowJson]);
+  const designerModel = useMemo(() =>
+    designerParseResult.workflow
+      ? buildWorkflowDesignerModel(designerParseResult.workflow)
+      : { mode: "single", containerTitle: "", nodes: [], edges: [], activityPaths: [] },
+  [designerParseResult.workflow]);
+  const selectedDesignerActivity = useMemo(() =>
+    designerModel.activityPaths.includes(selectedDesignerPath)
+      ? findActivityByDesignerPath(designerParseResult.workflow?.state?.rootActivity, selectedDesignerPath)
+      : null,
+  [designerModel.activityPaths, designerParseResult.workflow, selectedDesignerPath]);
+
+  useEffect(() => {
+    if (designerModel.activityPaths.length === 0) {
+      if (selectedDesignerPath)
+        setSelectedDesignerPath("");
+
+      return;
+    }
+
+    if (!designerModel.activityPaths.includes(selectedDesignerPath))
+      setSelectedDesignerPath(designerModel.activityPaths[0]);
+  }, [designerModel.activityPaths, selectedDesignerPath]);
+
   const visibleConsoleLines = consolePaused ? pausedConsoleLines ?? consoleLines : consoleLines;
   const queuedConsoleLineCount = consolePaused
     ? Math.max(0, consoleLineCount - pausedConsoleLineCount)
@@ -482,6 +723,14 @@ export function App() {
         icon: FileJson,
         title: "Workflow Definition",
         description: "Submit, publish, and execute against the mounted default shell."
+      };
+    }
+
+    if (mainView === "designer") {
+      return {
+        icon: GitBranch,
+        title: "Workflow Designer",
+        description: designerParseResult.error || `${designerModel.mode === "single" ? "Single activity" : `${designerModel.mode} graph`} synced with workflow JSON.`
       };
     }
 
@@ -507,7 +756,7 @@ export function App() {
       title: "Executable Artifacts",
       description: `${executables.length} published artifact${executables.length === 1 ? "" : "s"} in the runtime store.`
     };
-  }, [activities.length, executables.length, featureCatalogItems, mainView]);
+  }, [activities.length, designerModel.mode, designerParseResult.error, executables.length, featureCatalogItems, mainView]);
 
   const addConsoleEntries = useCallback((entries) => {
     if (entries.length === 0)
@@ -762,6 +1011,18 @@ export function App() {
     }
 
     return JSON.parse(text);
+  }
+
+  function applyDesignerActivityUpdate(path, update) {
+    const workflow = JSON.parse(workflowJson);
+    const updated = updateActivityByDesignerPath(workflow, path, update);
+    if (!updated)
+      return;
+
+    setWorkflowJson(JSON.stringify(workflow, null, 2));
+    setWorkflowVersionId("");
+    setArtifactId("");
+    setExecutionId("");
   }
 
   async function runAction(stepKey, message, action) {
@@ -1090,7 +1351,7 @@ export function App() {
               </h2>
               <p>{mainViewMeta.description}</p>
             </div>
-            {mainView === "workflow" ? (
+            {mainView === "workflow" || mainView === "designer" ? (
               <select value={selectedSample} onChange={(event) => selectSample(event.target.value)}>
                 {Object.entries(sampleWorkflows).map(([key, sample]) => (
                   <option key={key} value={key}>{sample.label}</option>
@@ -1117,6 +1378,10 @@ export function App() {
                 <FileJson size={15} />
                 Workflow
               </button>
+              <button type="button" className={mainView === "designer" ? "active" : ""} onClick={() => setMainView("designer")}>
+                <GitBranch size={15} />
+                Designer
+              </button>
               <button type="button" className={mainView === "activities" ? "active" : ""} onClick={() => setMainView("activities")}>
                 <Activity size={15} />
                 Activities
@@ -1130,7 +1395,7 @@ export function App() {
                 Artifacts
               </button>
             </div>
-            {mainView === "workflow" ? (
+            {mainView === "workflow" || mainView === "designer" ? (
               <>
                 <ActionButton icon={Save} busy={busy === "save"} onClick={saveWorkflow}>Save</ActionButton>
                 <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
@@ -1171,6 +1436,15 @@ export function App() {
                 <Artifact label="Execution" value={executionId || "Not executed"} />
               </div>
             </>
+          ) : mainView === "designer" ? (
+            <WorkflowDesigner
+              parseError={designerParseResult.error}
+              model={designerModel}
+              selectedPath={selectedDesignerPath}
+              selectedActivity={selectedDesignerActivity}
+              onSelectPath={setSelectedDesignerPath}
+              onUpdateActivity={applyDesignerActivityUpdate}
+            />
           ) : mainView === "activities" ? (
             <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
           ) : mainView === "features" ? (
@@ -1308,6 +1582,131 @@ function Artifact({ label, value }) {
     </div>
   );
 }
+
+function WorkflowDesigner({
+  parseError,
+  model,
+  selectedPath,
+  selectedActivity,
+  onSelectPath,
+  onUpdateActivity
+}) {
+  const nodes = useMemo(() => model.nodes.map((node) => ({
+    ...node,
+    selected: node.id === selectedPath
+  })), [model.nodes, selectedPath]);
+
+  const literalInputs = getActivityLiteralInputs(selectedActivity);
+
+  if (parseError) {
+    return (
+      <div className="designer-empty">
+        <GitBranch size={28} />
+        <strong>Designer paused</strong>
+        <span>{parseError}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="workflow-designer">
+      <div className="designer-canvas">
+        <div className="designer-surface-label">
+          <span>{model.mode}</span>
+          <strong>{model.mode === "single" ? "Root activity" : `${model.containerTitle} surface`}</strong>
+        </div>
+        {model.nodes.length === 0 && (
+          <div className="designer-surface-empty">
+            <GitBranch size={24} />
+            <strong>No activities in this {model.mode}</strong>
+            <span>Add child activities in the JSON editor to populate this surface.</span>
+          </div>
+        )}
+        <ReactFlow
+          nodes={nodes}
+          edges={model.edges}
+          nodeTypes={designerNodeTypes}
+          fitView
+          minZoom={0.45}
+          maxZoom={1.4}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable
+          onNodeClick={(_, node) => onSelectPath(node.id)}
+        >
+          <MiniMap pannable zoomable />
+          <Controls />
+          <Background gap={18} size={1} />
+        </ReactFlow>
+      </div>
+      <aside className="designer-properties">
+        <div className="designer-properties-heading">
+          <span>{model.mode === "single" ? "Activity" : `${model.containerTitle} surface`}</span>
+          <strong>{selectedActivity ? getActivityDisplayName(selectedActivity) : "No activity selected"}</strong>
+        </div>
+        {!selectedActivity ? (
+          <p className="muted">Select an activity node to edit its properties.</p>
+        ) : (
+          <>
+            <label className="designer-field">
+              <span>Node ID</span>
+              <input
+                value={selectedActivity.nodeId ?? ""}
+                onChange={(event) => onUpdateActivity(selectedPath, (activity) => {
+                  activity.nodeId = event.target.value;
+                })}
+              />
+            </label>
+            <label className="designer-field">
+              <span>Activity version ID</span>
+              <input
+                value={selectedActivity.activityVersionId ?? ""}
+                onChange={(event) => onUpdateActivity(selectedPath, (activity) => {
+                  activity.activityVersionId = event.target.value;
+                })}
+              />
+            </label>
+            <div className="designer-inputs">
+              <h3>Inputs</h3>
+              {literalInputs.length === 0 && <p className="muted">This activity has no literal inputs to edit.</p>}
+              {literalInputs.map((input) => (
+                <label className="designer-field" key={input.referenceKey}>
+                  <span>{input.referenceKey}</span>
+                  <input
+                    value={input.value?.value ?? ""}
+                    onChange={(event) => onUpdateActivity(selectedPath, (activity) => {
+                      setActivityLiteralInput(activity, input.referenceKey, event.target.value);
+                    })}
+                  />
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+const ActivityDesignerNode = memo(function ActivityDesignerNode({ data, selected }) {
+  return (
+    <div className={`designer-node ${selected ? "selected" : ""}`}>
+      <Handle type="target" position={Position.Top} className="designer-node-handle" />
+      <div className="designer-node-icon"><Activity size={16} /></div>
+      <div>
+        <span>{data.role}</span>
+        <strong>{data.title}</strong>
+        <code>{data.nodeId}</code>
+        {data.subtitle && <p>{data.subtitle}</p>}
+      </div>
+      <Handle type="source" position={Position.Bottom} className="designer-node-handle" />
+    </div>
+  );
+});
+
+const designerNodeTypes = {
+  activity: ActivityDesignerNode
+};
 
 function ActivityCatalog({ activities, totalCount, loading }) {
   return (
