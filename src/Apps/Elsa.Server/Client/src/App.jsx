@@ -784,6 +784,40 @@ function setActivityLiteralInput(activity, referenceKey, value) {
   };
 }
 
+function getShellStatusMeta(status) {
+  if (status === "reloading") {
+    return {
+      label: "Shell reloading",
+      title: "The default shell is being reloaded"
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      label: "Shell reload failed",
+      title: "The last default shell reload failed"
+    };
+  }
+
+  return {
+    label: "Shell active",
+    title: "The default shell is loaded and active"
+  };
+}
+
+function ShellStatusIndicator({ status }) {
+  const meta = getShellStatusMeta(status);
+
+  return (
+    <span className={`shell-status ${status}`} title={meta.title} aria-live="polite">
+      <span className="shell-bulb" aria-hidden="true" />
+      <Server size={16} />
+      <span>{meta.label}</span>
+      <span className="shell-path">/default</span>
+    </span>
+  );
+}
+
 export function App() {
   const [themeFamily, setThemeFamily] = useState(getInitialThemeFamily);
   const [themeMode, setThemeMode] = useState(getInitialThemeMode);
@@ -806,6 +840,7 @@ export function App() {
   const [consoleLines, setConsoleLines] = useState([]);
   const [consoleLineCount, setConsoleLineCount] = useState(0);
   const [consoleConnected, setConsoleConnected] = useState(false);
+  const [shellStatus, setShellStatus] = useState("active");
   const [consolePaused, setConsolePaused] = useState(false);
   const [consoleAutoScroll, setConsoleAutoScroll] = useState(getInitialConsoleAutoScroll);
   const [pausedConsoleLines, setPausedConsoleLines] = useState(null);
@@ -839,6 +874,14 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(consoleHeightStorageKey, String(consoleHeight));
   }, [consoleHeight]);
+
+  useEffect(() => {
+    if (shellStatus !== "failed")
+      return undefined;
+
+    const timer = window.setTimeout(() => setShellStatus("active"), 5000);
+    return () => window.clearTimeout(timer);
+  }, [shellStatus]);
 
   useEffect(() => {
     window.localStorage.setItem(consoleAutoScrollStorageKey, String(consoleAutoScroll));
@@ -1325,10 +1368,10 @@ export function App() {
 
   async function resetDemo() {
     await runAction("reset", "Resetting demo database and package drop folder...", async () => {
-      const response = await request("/_demo/reset", {
+      const response = await trackShellReload(() => request("/_demo/reset", {
         method: "POST",
         body: "{}"
-      });
+      }));
       const workflowRows = response.workflows?.totalDeleted ?? 0;
       const activityRows = response.activities?.totalDeleted ?? 0;
       const packageFiles = response.packages?.deletedFiles ?? 0;
@@ -1484,10 +1527,10 @@ export function App() {
   }
 
   async function reloadShellsCore() {
-    const response = await request("/_demo/shells/reload", {
+    const response = await trackShellReload(() => request("/_demo/shells/reload", {
       method: "POST",
       body: "{}"
-    });
+    }));
     setPackageNotification(null);
     activityVersionCache.current.clear();
     await refreshState();
@@ -1495,6 +1538,30 @@ export function App() {
     await refreshFeatures();
     await refreshExecutables();
     return response;
+  }
+
+  async function trackShellReload(action) {
+    const startedAt = Date.now();
+    setShellStatus("reloading");
+
+    try {
+      const result = await action();
+      await settleShellStatus("active", startedAt);
+      return result;
+    } catch (error) {
+      await settleShellStatus("failed", startedAt);
+      throw error;
+    }
+  }
+
+  async function settleShellStatus(nextStatus, startedAt) {
+    const elapsed = Date.now() - startedAt;
+    const remaining = Math.max(0, 750 - elapsed);
+
+    if (remaining > 0)
+      await new Promise((resolve) => window.setTimeout(resolve, remaining));
+
+    setShellStatus(nextStatus);
   }
 
   async function reloadShells() {
@@ -1593,8 +1660,7 @@ export function App() {
             <span className={consoleConnected ? "status-dot online" : "status-dot"} />
             <span>{consoleConnected ? "Console connected" : "Console offline"}</span>
             <span className="divider" />
-            <Server size={16} />
-            <span>/default</span>
+            <ShellStatusIndicator status={shellStatus} />
           </div>
           <div className="theme-picker" role="group" aria-label="Theme controls">
             <span className="theme-preview" aria-hidden="true">
