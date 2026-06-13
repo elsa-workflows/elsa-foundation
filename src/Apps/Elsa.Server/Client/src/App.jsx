@@ -131,8 +131,7 @@ const sampleWorkflows = {
                   outputs: [],
                   childSlots: null
                 }
-              ],
-              metadata: null
+              ]
             }
           ]
         },
@@ -221,8 +220,7 @@ const sampleWorkflows = {
                   outputs: [],
                   childSlots: null
                 }
-              ],
-              metadata: null
+              ]
             }
           ]
         },

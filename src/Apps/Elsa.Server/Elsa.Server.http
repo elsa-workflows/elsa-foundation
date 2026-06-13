@@ -184,8 +184,7 @@ Accept: application/json
               "outputs": [],
               "childSlots": null
             }
-          ],
-          "metadata": null
+          ]
         }
       ]
     },
@@ -304,4 +303,3 @@ Content-Type: application/json
 Accept: application/json
 
 {}
-
