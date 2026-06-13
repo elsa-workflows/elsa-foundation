@@ -1225,16 +1225,17 @@ export function App() {
   }
 
   async function enableFeature() {
-    await runAction("feature", `Enabling feature ${featureName}...`, async () => {
+    await runAction("feature", `Enabling feature ${featureName} and reloading shells...`, async () => {
       const configuration = JSON.parse(featureConfig || "{}");
       const response = await request(`/_demo/shells/default/features/${encodeURIComponent(featureName)}`, {
         method: "PUT",
         body: JSON.stringify({ enabled: true, configuration })
       });
       setShellJson(response.json);
-      await refreshState();
-      await refreshFeatures();
-      addConsoleLine("stdout", `Feature enabled: ${featureName}`);
+      addConsoleLine("stdout", `Feature enabled and shells.json saved: ${featureName}`);
+      const reload = await reloadShellsCore();
+      markComplete("reload");
+      addConsoleLine("stdout", `Shells reloaded after refreshing ${reload.featureDescriptorCount} feature descriptor(s).`);
     });
   }
 
@@ -1286,18 +1287,23 @@ export function App() {
     });
   }
 
+  async function reloadShellsCore() {
+    const response = await request("/_demo/shells/reload", {
+      method: "POST",
+      body: "{}"
+    });
+    setPackageNotification(null);
+    activityVersionCache.current.clear();
+    await refreshState();
+    await refreshActivities();
+    await refreshFeatures();
+    await refreshExecutables();
+    return response;
+  }
+
   async function reloadShells() {
     await runAction("reload", "Reloading all shells...", async () => {
-      const response = await request("/_demo/shells/reload", {
-        method: "POST",
-        body: "{}"
-      });
-      setPackageNotification(null);
-      activityVersionCache.current.clear();
-      await refreshState();
-      await refreshActivities();
-      await refreshFeatures();
-      await refreshExecutables();
+      const response = await reloadShellsCore();
       addConsoleLine("stdout", `Shells reloaded after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
     });
   }
@@ -1603,7 +1609,7 @@ export function App() {
               onChange={(event) => setFeatureConfig(event.target.value)}
             />
             <div className="split-actions">
-              <ActionButton icon={PlugZap} busy={busy === "feature"} onClick={enableFeature}>Enable</ActionButton>
+              <ActionButton icon={PlugZap} busy={busy === "feature"} onClick={enableFeature}>Enable & reload</ActionButton>
               <ActionButton icon={RefreshCw} busy={busy === "reload"} onClick={reloadShells}>Reload shells</ActionButton>
             </div>
           </section>
