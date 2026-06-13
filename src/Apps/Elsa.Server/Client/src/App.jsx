@@ -1935,7 +1935,13 @@ function DemoPackageStack({ packages }) {
         {packages.map((item) => (
           <article className="stack-card" key={item.name}>
             <a className={`stack-visual ${item.imageMode === "logo" ? "logo" : "preview"}`} href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
-              <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
+              {item.imageMode === "logo" ? (
+                <span className="stack-logo-plate">
+                  <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
+                </span>
+              ) : (
+                <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
+              )}
             </a>
             <div className="stack-card-body">
               <div className="stack-card-heading">
