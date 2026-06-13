@@ -359,6 +359,11 @@ const maxConsoleHeight = 560;
 const minWorkspaceHeight = 260;
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
+const activityCatalogReadyAttempts = 12;
+const activityCatalogReadyDelay = 500;
+const featureReadinessActivities = {
+  SampleNuplaneActivities: "SayHelloFromNuplane"
+};
 const ansiEscapePattern = /\x1b\[([0-9;]*)m/g;
 const ansiForegroundClasses = {
   30: "console-ansi-fg-black",
@@ -456,6 +461,14 @@ function getInitialConsoleAutoScroll() {
     return true;
 
   return window.localStorage.getItem(consoleAutoScrollStorageKey) !== "false";
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function getFeatureReadinessActivity(featureName) {
+  return featureReadinessActivities[featureName] ?? null;
 }
 
 function createAnsiState() {
@@ -1228,20 +1241,45 @@ export function App() {
     setExecutionId("");
   }
 
+  async function loadActivityDefinitions(searchTerm) {
+    const definitions = await request(`/default/design/activities/definitions?searchTerm=${encodeURIComponent(searchTerm)}`);
+    return Array.isArray(definitions) ? definitions : [];
+  }
+
+  async function waitForActivityAvailable(searchTerm) {
+    for (let attempt = 0; attempt < activityCatalogReadyAttempts; attempt += 1) {
+      const definitions = await loadActivityDefinitions(searchTerm);
+      if (definitions.length > 0) {
+        await refreshActivities();
+        return definitions[0];
+      }
+
+      if (attempt < activityCatalogReadyAttempts - 1)
+        await delay(activityCatalogReadyDelay);
+    }
+
+    throw new Error(`Activity '${searchTerm}' is not available in the catalog.`);
+  }
+
   async function resolveActivityVersion(searchTerm) {
     if (activityVersionCache.current.has(searchTerm))
       return activityVersionCache.current.get(searchTerm);
 
-    const definitions = await request(`/default/design/activities/definitions?searchTerm=${encodeURIComponent(searchTerm)}`);
-    if (!Array.isArray(definitions) || definitions.length === 0)
-      throw new Error(`Activity '${searchTerm}' is not available in the catalog.`);
+    for (let attempt = 0; attempt < activityCatalogReadyAttempts; attempt += 1) {
+      const definitions = await loadActivityDefinitions(searchTerm);
+      if (definitions.length > 0) {
+        const versions = await request(`/default/design/activities/definitions/${definitions[0].id}/versions`);
+        if (Array.isArray(versions) && versions.length > 0) {
+          activityVersionCache.current.set(searchTerm, versions[0].id);
+          return versions[0].id;
+        }
+      }
 
-    const versions = await request(`/default/design/activities/definitions/${definitions[0].id}/versions`);
-    if (!Array.isArray(versions) || versions.length === 0)
-      throw new Error(`Activity '${searchTerm}' has no versions.`);
+      if (attempt < activityCatalogReadyAttempts - 1)
+        await delay(activityCatalogReadyDelay);
+    }
 
-    activityVersionCache.current.set(searchTerm, versions[0].id);
-    return versions[0].id;
+    throw new Error(`Activity '${searchTerm}' is not available in the catalog.`);
   }
 
   async function materializeWorkflowJson() {
@@ -1407,6 +1445,7 @@ export function App() {
 
   async function enableFeature() {
     await runAction("feature", `Enabling feature ${featureName} and reloading shells...`, async () => {
+      const readinessActivity = getFeatureReadinessActivity(featureName);
       const configuration = JSON.parse(featureConfig || "{}");
       const response = await request(`/_demo/shells/default/features/${encodeURIComponent(featureName)}`, {
         method: "PUT",
@@ -1415,6 +1454,12 @@ export function App() {
       setShellJson(response.json);
       addConsoleLine("stdout", `Feature enabled and shells.json saved: ${featureName}`);
       const reload = await reloadShellsCore();
+      if (readinessActivity) {
+        setStatus(`Waiting for activity ${readinessActivity}...`);
+        addConsoleLine("stdout", `Waiting for activity catalog entry: ${readinessActivity}`);
+        await waitForActivityAvailable(readinessActivity);
+        addConsoleLine("stdout", `Activity catalog entry available: ${readinessActivity}`);
+      }
       markComplete("reload");
       addConsoleLine("stdout", `Shells reloaded after refreshing ${reload.featureDescriptorCount} feature descriptor(s).`);
     });
@@ -1442,7 +1487,8 @@ export function App() {
         title: "Feature changes pending",
         message: `${feature.id} was ${nextEnabled ? "enabled" : "disabled"} in shells.json. Apply changes to reload the default shell.`,
         actionLabel: "Apply changes",
-        actionKind: "apply-feature-changes"
+        actionKind: "apply-feature-changes",
+        readinessActivity: nextEnabled ? getFeatureReadinessActivity(feature.id) : null
       });
       addConsoleLine("stdout", `Feature ${nextEnabled ? "enabled" : "disabled"} in shells.json: ${feature.id}`);
     } catch (error) {
@@ -1500,6 +1546,12 @@ export function App() {
     if (actionKind === "apply-feature-changes") {
       await runAction("feature", "Applying feature changes and reloading shells...", async () => {
         const response = await reloadShellsCore();
+        if (packageNotification.readinessActivity) {
+          setStatus(`Waiting for activity ${packageNotification.readinessActivity}...`);
+          addConsoleLine("stdout", `Waiting for activity catalog entry: ${packageNotification.readinessActivity}`);
+          await waitForActivityAvailable(packageNotification.readinessActivity);
+          addConsoleLine("stdout", `Activity catalog entry available: ${packageNotification.readinessActivity}`);
+        }
         markComplete("feature");
         markComplete("reload");
         addConsoleLine("stdout", `Feature changes applied after refreshing ${response.featureDescriptorCount} feature descriptor(s).`);
