@@ -36,3 +36,17 @@
 - Existing runtime defaults still run when bridge is disabled.
 - Operational hot-path migration gates are documented and linked.
 
+## Hot-path viability gates
+
+Before any operational hot-path store is migrated to Groundwork, the seven gaps in the [hot-path gap analysis](../../docs/reports/groundwork-host-configurable-persistence-feasibility.md#hot-path-gap-analysis) must be closed in Groundwork and proven by tests:
+
+1. Atomic claim with visibility timeout (lease-on-read).
+2. Ordered, destructive dequeue (FIFO per partition).
+3. Cross-unit / multi-document atomic commit (unit of work).
+4. Ownership / leases / fencing with TTL.
+5. First-class retry/idempotency metadata (attempts, next-visible-at, dead-letter).
+6. Range & comparison query operations (`<=`, `>=`, ordered scans).
+7. Insert-only semantics (already covered — verify, don't rebuild).
+
+These primitives belong in a new operational contract family alongside `IDocumentStore`, gated through Groundwork's `ProviderCapabilityValidator` rather than the self-declared workload-category enum.
+
