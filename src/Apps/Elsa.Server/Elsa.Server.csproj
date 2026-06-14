@@ -31,9 +31,9 @@
 		</Content>
 	</ItemGroup>
 
-	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('Client/package.json')">
-		<Exec WorkingDirectory="Client" Command="npm ci" />
-		<Exec WorkingDirectory="Client" Command="npm run build" />
+	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('DemoClient/package.json')">
+		<Exec WorkingDirectory="DemoClient" Command="npm ci" />
+		<Exec WorkingDirectory="DemoClient" Command="npm run build" />
 	</Target>
 
 	<ItemGroup>

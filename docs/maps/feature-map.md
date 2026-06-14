@@ -6,52 +6,51 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 43
+- Discovered feature classes: 42
 
 ## Features
 
 | Feature class | Kind | Project | Base/interface | File |
 |---|---|---|---|---|
-| EFCoreActivitiesPersistenceFeatureBase | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreActivitiesPersistenceFeatureBase.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/EFCoreActivitiesPersistenceFeatureBase.cs) |
-| EFCoreWorkflowsPersistenceFeatureBase | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreWorkflowsPersistenceFeatureBase.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/EFCoreWorkflowsPersistenceFeatureBase.cs) |
-| SqliteActivitiesDesignPersistenceShellFeature | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore.Sqlite | EFCoreActivitiesPersistenceFeatureBase | [SqliteActivitiesDesignPersistenceShellFeature.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/SqliteActivitiesDesignPersistenceShellFeature.cs) |
-| SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
-| ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
-| ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
-| ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
-| ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
-| ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
-| ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
-| ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
-| Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
-| Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
-| EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
-| ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
-| FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
-| GroundworkPersistenceFeature | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkPersistenceFeature.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceFeature.cs) |
-| HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/Elsa/Http/HttpFeature.cs) |
-| HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
-| JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
-| JavaScriptFeature | direct IShellFeature | Elsa.Expressions.JavaScript | IShellFeature | [JavaScriptFeature.cs](../../src/Elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
-| JavaScriptLibrariesFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Libraries | IShellFeature | [JavaScriptLibrariesFeature.cs](../../src/Elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |
-| JavaScriptRenderingFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Rendering | IShellFeature | [JavaScriptRenderingFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingFeature.cs) |
-| JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
-| JavaScriptWorkflowsRuntimeFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
-| JintFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Jint | IShellFeature | [JintFeature.cs](../../src/Elsa/Expressions/JavaScript/Jint/JintFeature.cs) |
-| JsonActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Json | IShellFeature | [JsonActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Json/JsonActivityReconciliationFeature.cs) |
-| LiquidExpressionsFeature | direct IShellFeature | Elsa.Expressions.Liquid | IShellFeature | [LiquidExpressionsFeature.cs](../../src/Elsa/Expressions/Liquid/LiquidExpressionsFeature.cs) |
-| MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
-| MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
-| NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
-| PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
-| SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
-| TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
-| WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
-| WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
-| WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
-| ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
-| JavaScriptActivitiesEndpointsFeature | FastEndpoints feature | Elsa.Workflows.Runtime.JavaScript | FastEndpointsFeatureBase | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
-| JavaScriptRenderingEndpointsFeature | FastEndpoints feature | Elsa.Expressions.JavaScript.Rendering | FastEndpointsFeatureBase | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
-| WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
-| WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
-| WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
+| EFCoreActivitiesPersistenceFeatureBase | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreActivitiesPersistenceFeatureBase.cs](../../src/elsa/Activities/Design/Persistence/EFCore/EFCoreActivitiesPersistenceFeatureBase.cs) |
+| EFCoreWorkflowsPersistenceFeatureBase | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreWorkflowsPersistenceFeatureBase.cs](../../src/elsa/Workflows/Design/Persistence/EFCore/EFCoreWorkflowsPersistenceFeatureBase.cs) |
+| SqliteActivitiesDesignPersistenceShellFeature | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore.Sqlite | EFCoreActivitiesPersistenceFeatureBase | [SqliteActivitiesDesignPersistenceShellFeature.cs](../../src/elsa/Activities/Design/Persistence/EFCore/Sqlite/SqliteActivitiesDesignPersistenceShellFeature.cs) |
+| SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
+| ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
+| ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
+| ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
+| ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
+| ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
+| ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
+| ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
+| Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
+| Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/elsa3/Mapping/Elsa3MappingFeature.cs) |
+| EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/elsa/Events/EventsFeature.cs) |
+| ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/elsa/Expressions/ExpressionsFeature.cs) |
+| FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
+| HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/elsa/Http/HttpFeature.cs) |
+| HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
+| JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
+| JavaScriptFeature | direct IShellFeature | Elsa.Expressions.JavaScript | IShellFeature | [JavaScriptFeature.cs](../../src/elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
+| JavaScriptLibrariesFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Libraries | IShellFeature | [JavaScriptLibrariesFeature.cs](../../src/elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |
+| JavaScriptRenderingFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Rendering | IShellFeature | [JavaScriptRenderingFeature.cs](../../src/elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingFeature.cs) |
+| JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
+| JavaScriptWorkflowsRuntimeFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/elsa/Workflows/Runtime/JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
+| JintFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Jint | IShellFeature | [JintFeature.cs](../../src/elsa/Expressions/JavaScript/Jint/JintFeature.cs) |
+| JsonActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Json | IShellFeature | [JsonActivityReconciliationFeature.cs](../../src/elsa/Activities/Design/Reconciliation/Json/JsonActivityReconciliationFeature.cs) |
+| LiquidExpressionsFeature | direct IShellFeature | Elsa.Expressions.Liquid | IShellFeature | [LiquidExpressionsFeature.cs](../../src/elsa/Expressions/Liquid/LiquidExpressionsFeature.cs) |
+| MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/elsa/Mediator/MediatorFeature.cs) |
+| MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/elsa/Caching/Memory/MemoryCacheFeature.cs) |
+| NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
+| PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/elsa/Primitives/Hosting/PrimitivesFeature.cs) |
+| SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/elsa/Serialization/SystemText/SerializationFeature.cs) |
+| TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/elsa/Tasks/TasksFeature.cs) |
+| WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
+| WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
+| WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
+| ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| JavaScriptActivitiesEndpointsFeature | FastEndpoints feature | Elsa.Workflows.Runtime.JavaScript | FastEndpointsFeatureBase | [JavaScriptActivitiesEndpointsFeature.cs](../../src/elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
+| JavaScriptRenderingEndpointsFeature | FastEndpoints feature | Elsa.Expressions.JavaScript.Rendering | FastEndpointsFeatureBase | [JavaScriptRenderingEndpointsFeature.cs](../../src/elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
+| WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
+| WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
+| WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |

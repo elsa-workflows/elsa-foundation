@@ -68,6 +68,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 
+new EventsFeature().ConfigureServices(builder.Services);
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
@@ -124,5 +125,7 @@ app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
+app.MapFallbackToFile("/demo", "index.html");
+app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
 app.MapFallbackToFile("index.html");
 app.Run();
