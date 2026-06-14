@@ -19,7 +19,8 @@ public static class ServiceCollectionExtensions
         string sourceFeature,
         params string[] tags)
     {
-        return services.AddElsaCapability(new ElsaCapability(id, displayName, "1.0.0", sourceFeature, tags));
+        var version = System.Reflection.Assembly.GetCallingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+        return services.AddElsaCapability(new ElsaCapability(id, displayName, version, sourceFeature, tags));
     }
 
     public static IServiceCollection AddElsaCapability(this IServiceCollection services, ElsaCapability capability)

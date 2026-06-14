@@ -1,4 +1,6 @@
 ﻿using CShells.Features;
+using Elsa.Features.Abstractions;
+using Elsa.Features.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Runtime.JavaScript.PostProcessors;
@@ -20,9 +22,8 @@ public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
-            services,
-            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsRuntimeJavaScript,
+        services.AddElsaCapability(
+            ElsaCapabilities.WorkflowsRuntimeJavaScript,
             "Workflow runtime JavaScript integration",
             "JavaScriptWorkflowsRuntime",
             "workflows",

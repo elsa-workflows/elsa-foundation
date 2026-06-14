@@ -1,4 +1,6 @@
 ﻿using CShells.Features;
+using Elsa.Features.Abstractions;
+using Elsa.Features.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Workflows.Design.JavaScript.Contributors;
@@ -19,9 +21,8 @@ public class JavaScriptWorkflowsDesignFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
-            services,
-            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsDesignJavaScript,
+        services.AddElsaCapability(
+            ElsaCapabilities.WorkflowsDesignJavaScript,
             "Workflow design JavaScript declarations",
             "JavaScriptWorkflowsDesign",
             "workflows",
