@@ -1,0 +1,6 @@
+scripts:
+- name: Web
+  command: dotnet run --launch-profile https --project src/Elsa.Studio.Web/Elsa.Studio.Web.csproj
+automation:
+  auto_issue_session: true
+  remote_control: true
