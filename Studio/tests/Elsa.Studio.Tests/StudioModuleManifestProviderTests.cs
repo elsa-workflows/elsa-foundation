@@ -98,6 +98,24 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_ModuleOverrideEnabledWinsOverLegacyDisabledModuleIds()
+    {
+        using var provider = CreateProvider(options =>
+        {
+            options.BackendCapabilityIds.Add(MissingBackendCapability);
+            options.DisabledModuleIds.Add(MissingBackendModuleId);
+            options.Modules[MissingBackendModuleId] = "true";
+        }, services => services.AddStudioEventHandler<OnStudioModuleManifestsCollecting, ContributeMissingBackendModule>());
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.Contains(response.Modules, x => x.Id == MissingBackendModuleId);
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == MissingBackendModuleId &&
+            x.Status == StudioModuleDiagnosticStatuses.Available);
+    }
+
+    [Fact]
     public async Task GetModules_ForcedModuleWithMissingBackendCapabilitiesReportsIncompatible()
     {
         using var provider = CreateProvider(options => options.Modules[MissingBackendModuleId] = "true", services =>

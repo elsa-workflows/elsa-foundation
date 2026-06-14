@@ -1,8 +1,10 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Events;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Studio.Api.Services;
@@ -10,6 +12,7 @@ namespace Elsa.Studio.Api.Services;
 public sealed class BackendCapabilityProvider(
     IEnumerable<IStudioEventHandler<OnBackendCapabilitiesCollecting>> handlers,
     IHttpClientFactory httpClientFactory,
+    ILogger<BackendCapabilityProvider> logger,
     IOptions<StudioApiOptions> options) : IBackendCapabilityProvider
 {
     public async Task<IReadOnlySet<string>> GetCapabilityIdsAsync(CancellationToken cancellationToken)
@@ -24,7 +27,16 @@ public sealed class BackendCapabilityProvider(
             capabilityIds.Add(capabilityId);
 
         if (!string.IsNullOrWhiteSpace(options.Value.BackendCapabilitiesUrl))
-            await AddRemoteCapabilities(capabilityIds, options.Value.BackendCapabilitiesUrl, cancellationToken);
+        {
+            try
+            {
+                await AddRemoteCapabilities(capabilityIds, options.Value.BackendCapabilitiesUrl, cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException || ex is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Could not collect backend capabilities from {BackendCapabilitiesUrl}. Continuing with configured and local capabilities.", options.Value.BackendCapabilitiesUrl);
+            }
+        }
 
         return capabilityIds;
     }

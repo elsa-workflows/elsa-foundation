@@ -66,11 +66,10 @@ public sealed class StudioModuleManifestProvider(
 
     private static StudioModuleMode GetModuleMode(StudioApiOptions options, string moduleId)
     {
-        if (options.DisabledModuleIds.Contains(moduleId))
-            return StudioModuleMode.Disabled;
-
         if (!options.Modules.TryGetValue(moduleId, out var configuredMode))
-            return StudioModuleMode.Auto;
+            return options.DisabledModuleIds.Contains(moduleId)
+                ? StudioModuleMode.Disabled
+                : StudioModuleMode.Auto;
 
         return configuredMode.Trim().ToLowerInvariant() switch
         {
