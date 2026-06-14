@@ -3,6 +3,8 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Features.Abstractions;
+using Elsa.Features.Abstractions.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Primitives;
@@ -25,6 +27,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaCapability(ElsaCapabilities.ActivitiesPrimitives, "Primitive activities", "ActivitiesPrimitives", "activities", "runtime", "primitives");
         services.AddSingleton<ActivityArgumentBinder>();
         services.AddSingleton<IActivityConstructor, ClrActivityConstructor>();
     }

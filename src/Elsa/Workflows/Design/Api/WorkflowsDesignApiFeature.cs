@@ -2,6 +2,8 @@ using CShells.Features;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
+using Elsa.Features.Abstractions;
+using Elsa.Features.Abstractions.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Api;
@@ -18,6 +20,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
+        services.AddElsaCapability(ElsaCapabilities.WorkflowsDesign, "Workflow design API", "WorkflowsDesignApi", "workflows", "design", "api");
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);

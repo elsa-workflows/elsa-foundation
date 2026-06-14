@@ -34,3 +34,13 @@ Feature-development workflows remain here for now, but the documentation and ope
 ```powershell
 dotnet build Elsa.Server.slnx
 ```
+
+## Backend capabilities
+
+Enabled CShell features can publish stable capability IDs such as `elsa.workflows.design` and `elsa.workflows.runtime`. The `CapabilitiesApi` shell feature exposes the active shell capability set for Studio module discovery:
+
+```http
+GET /default/_elsa/capabilities
+```
+
+The `/default` segment comes from the sample shell's `WebRouting:Path`; hosts with a different shell path should use that path instead.

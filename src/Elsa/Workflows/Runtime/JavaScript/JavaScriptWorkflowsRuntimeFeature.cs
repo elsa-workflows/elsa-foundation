@@ -20,6 +20,15 @@ public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
+            services,
+            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsRuntimeJavaScript,
+            "Workflow runtime JavaScript integration",
+            "JavaScriptWorkflowsRuntime",
+            "workflows",
+            "runtime",
+            "javascript");
+
         services
             .AddScoped<IScriptPostProcessor, CopyVariablesToWorkflowContext>()
             .AddScoped<IScriptPreProcessor, WorkflowVariablesContextPreProcessor>()

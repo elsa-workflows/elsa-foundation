@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\Features\Abstractions\Elsa.Features.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />

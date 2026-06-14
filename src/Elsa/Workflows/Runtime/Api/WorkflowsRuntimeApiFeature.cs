@@ -1,5 +1,7 @@
 using CShells.Features;
 using Elsa.Api.FastEndpoints;
+using Elsa.Features.Abstractions;
+using Elsa.Features.Abstractions.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Resolvers;
@@ -19,6 +21,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
     {
         base.ConfigureServices(services);
 
+        services.AddElsaCapability(ElsaCapabilities.WorkflowsRuntime, "Workflow runtime API", "WorkflowsRuntimeApi", "workflows", "runtime", "api");
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
