@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   height: 36px;
   border: 1.5px solid var(--border);
   border-radius: 6px;
@@ -51,6 +51,8 @@
   font-weight: 500;
   transition: all 0.2s ease;
   white-space: nowrap;
+  min-width: 120px;
+  justify-content: flex-start;
 }
 
 .theme-selector-button:hover {
@@ -138,20 +140,23 @@
 .theme-item {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   border: 1.5px solid var(--border);
   border-radius: 10px;
   background: var(--muted);
   color: var(--foreground);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   text-align: center;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  min-height: 80px;
 }
 
 .theme-item::before {
@@ -162,6 +167,7 @@
   opacity: 0;
   transition: opacity 0.2s ease;
   z-index: 0;
+  border-radius: 8px;
 }
 
 .theme-item:hover {
@@ -188,7 +194,7 @@
 
 .theme-item-preview {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
@@ -198,45 +204,58 @@
 
 .theme-color-dot {
   display: inline-block;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
   border: 2px solid color-mix(in srgb, var(--foreground) 20%, transparent);
   transition: all 0.2s ease;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--foreground) 10%, transparent);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .theme-item:hover .theme-color-dot {
-  transform: scale(1.15);
+  transform: scale(1.1);
   border-color: var(--primary);
 }
 
 .theme-item.active .theme-color-dot {
   border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .theme-item-name {
   font-weight: 600;
   position: relative;
   z-index: 1;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.3;
+  max-width: 100%;
+  word-wrap: break-word;
 }
 
 .theme-item-checkmark {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   opacity: 0;
   transition: all 0.2s ease;
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   z-index: 2;
+  background: var(--primary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primaryForeground);
 }
 
 .theme-item.active .theme-item-checkmark {
   opacity: 1;
+  background: var(--primaryForeground);
+  color: var(--primary);
 }
 
 /* Scrollbar styling */
