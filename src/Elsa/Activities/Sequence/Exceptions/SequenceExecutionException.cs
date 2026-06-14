@@ -6,4 +6,9 @@ public sealed class SequenceExecutionException : Exception
         : base(message)
     {
     }
+
+    public SequenceExecutionException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

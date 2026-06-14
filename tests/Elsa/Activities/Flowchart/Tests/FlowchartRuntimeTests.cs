@@ -125,10 +125,6 @@ public sealed class FlowchartRuntimeTests
         IReadOnlyCollection<ExecutableNode> children,
         IReadOnlyCollection<FlowchartConnection> connections)
     {
-        var metadata = new Dictionary<string, string>
-        {
-            [FlowchartActivity.ConnectionsMetadataKey] = JsonSerializer.Serialize(connections)
-        };
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
             authoredActivityId: "authored-flowchart",
@@ -143,9 +139,12 @@ public sealed class FlowchartRuntimeTests
             [
                 new ExecutableChildSlot(
                     FlowchartActivity.ActivitiesSlotName,
-                    children,
-                    metadata)
-            ]);
+                    children)
+            ],
+            structure: new ExecutableActivityStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartStructure(connections))));
 
         return new WorkflowExecutable(
             identity: NewIdentity(),

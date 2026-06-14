@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -40,7 +41,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <c>public sealed</c> per G27 for cross-assembly test visibility via the test project.
 /// </para>
 /// </remarks>
-public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
+public sealed class DraftStateDiffEngine(IActivityStructureService activityStructureService) : IDraftStateDiffEngine
 {
     public IReadOnlyList<IEvent> Evaluate(
         string draftId,
@@ -115,7 +116,7 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
                 events.Add(new OnWorkflowOutputRemovedFromDraft(draftId, output.ReferenceKey));
     }
 
-    private static void DiffActivities(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
+    private void DiffActivities(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
     {
         var storedActivities = FlattenActivities(stored.RootActivity).ToArray();
         var desiredActivities = FlattenActivities(desired.RootActivity).ToArray();
@@ -205,7 +206,7 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
         return map;
     }
 
-    private static IEnumerable<ActivityNode> FlattenActivities(ActivityNode? root)
+    private IEnumerable<ActivityNode> FlattenActivities(ActivityNode? root)
     {
         if (root is null)
             yield break;
@@ -218,7 +219,7 @@ public sealed class DraftStateDiffEngine : IDraftStateDiffEngine
             var node = stack.Pop();
             yield return node;
 
-            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
+            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
                 stack.Push(child);
         }
     }

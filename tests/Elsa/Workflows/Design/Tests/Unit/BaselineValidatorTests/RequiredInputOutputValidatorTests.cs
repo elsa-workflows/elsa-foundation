@@ -22,7 +22,7 @@ public sealed class RequiredInputOutputValidatorTests
 
         var state = State(activities: [Node("n1", "av-1",
             inputs: [LiteralInput("body", "hello")])]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         Assert.Empty(errors);
     }
@@ -35,7 +35,7 @@ public sealed class RequiredInputOutputValidatorTests
             outputs: []);
 
         var state = State(activities: [Node("n1", "av-1")]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         var error = Assert.Single(errors);
         Assert.Equal("n1/inputs/body", error.Path);
@@ -51,7 +51,7 @@ public sealed class RequiredInputOutputValidatorTests
 
         var state = State(activities: [Node("n1", "av-1",
             inputs: [LiteralInput("body", "")])]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         Assert.Single(errors);
     }
@@ -64,7 +64,7 @@ public sealed class RequiredInputOutputValidatorTests
             outputs: [RequiredOutput("result")]);
 
         var state = State(activities: [Node("n1", "av-1")]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         var error = Assert.Single(errors);
         Assert.Equal("n1/outputs/result", error.Path);
@@ -76,7 +76,7 @@ public sealed class RequiredInputOutputValidatorTests
         var lookup = StubLookup.Empty();
 
         var state = State(activities: [Node("n1", "av-missing")]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         Assert.Empty(errors);
     }
@@ -91,7 +91,7 @@ public sealed class RequiredInputOutputValidatorTests
         var child = Node("child", "av-1");
         var root = Node("container", "av-1", childActivities: [child]);
         var state = State(activities: [root]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options()), state);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         // One error per activity (root + child) — both have unbound required "body".
         Assert.Equal(2, errors.Count);

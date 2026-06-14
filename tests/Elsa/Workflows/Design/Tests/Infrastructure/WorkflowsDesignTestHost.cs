@@ -9,6 +9,8 @@ using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers;
@@ -89,6 +91,8 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services.AddSingleton<ISystemClock, SystemClock>();
         services.AddSingleton<IIdentityGenerator, GuidIdentityGenerator>();
         services.AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
+        services.AddSingleton<IActivityStructureHandler, TestActivityStructureHandler>();
+        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
 
         // Serializer + entity handlers — the Draft saving handler re-serializes
         // State → StateSource on every SaveChanges (and the loading handler hydrates on read).

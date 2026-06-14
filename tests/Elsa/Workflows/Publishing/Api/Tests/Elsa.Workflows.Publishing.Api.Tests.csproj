@@ -22,6 +22,8 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />

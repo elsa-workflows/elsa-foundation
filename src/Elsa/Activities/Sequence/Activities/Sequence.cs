@@ -11,6 +11,8 @@ namespace Elsa.Activities.Sequence.Activities;
 public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Sequence.Activities";
+    public const string StructureKind = "elsa.sequence.structure";
+    public const string StructureSchemaVersion = "1.0.0";
 
     protected override void Execute(IActivityExecutionContext context)
     {

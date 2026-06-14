@@ -18,7 +18,8 @@ public sealed class ExecutableNode
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
         IReadOnlyDictionary<string, RuntimeOutputCapture> outputCaptures,
         IReadOnlyDictionary<string, string> metadata,
-        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null)
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
@@ -54,6 +55,7 @@ public sealed class ExecutableNode
         OutputCaptures = new ReadOnlyDictionary<string, RuntimeOutputCapture>(outputCaptureSnapshot);
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ChildSlots = Array.AsReadOnly((childSlots ?? []).ToArray());
+        Structure = structure;
     }
 
     public string ExecutableNodeId { get; }
@@ -66,4 +68,5 @@ public sealed class ExecutableNode
     public IReadOnlyDictionary<string, RuntimeOutputCapture> OutputCaptures { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public IReadOnlyCollection<ExecutableChildSlot> ChildSlots { get; }
+    public ExecutableActivityStructure? Structure { get; }
 }

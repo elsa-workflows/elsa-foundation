@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
@@ -8,7 +9,7 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 /// never the bottleneck; <paramref name="maxDepth"/> is a safety net against cyclic /
 /// malformed Draft data.
 /// </summary>
-internal static class ActivityTreeWalker
+public sealed class ActivityTreeWalker(IActivityStructureService activityStructureService)
 {
     /// <summary>
     /// Yields every activity reachable from <paramref name="root"/> up to
@@ -16,7 +17,7 @@ internal static class ActivityTreeWalker
     /// 1; etc. Nodes beyond <paramref name="maxDepth"/> are silently skipped — the
     /// caller decides whether to surface that as a validation error.
     /// </summary>
-    public static IEnumerable<ActivityNode> Walk(ActivityNode? root, int maxDepth)
+    public IEnumerable<ActivityNode> Walk(ActivityNode? root, int maxDepth)
     {
         if (root is null)
             yield break;
@@ -32,7 +33,7 @@ internal static class ActivityTreeWalker
             if (depth >= maxDepth)
                 continue;
 
-            foreach (var child in (node.ChildSlots ?? []).SelectMany(slot => slot.Activities))
+            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
                 stack.Push((child, depth + 1));
         }
     }

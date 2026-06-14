@@ -23,7 +23,8 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
 /// </remarks>
 public sealed class VariableExpressionResolverValidator(
-    IOptions<WorkflowDesignValidatorOptions> options
+    IOptions<WorkflowDesignValidatorOptions> options,
+    ActivityTreeWalker activityTreeWalker
 ) : IDraftValidator
 {
     public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
@@ -36,7 +37,7 @@ public sealed class VariableExpressionResolverValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
-        foreach (var node in ActivityTreeWalker.Walk(state.RootActivity, maxDepth))
+        foreach (var node in activityTreeWalker.Walk(state.RootActivity, maxDepth))
         {
             foreach (var argument in node.Inputs)
                 CheckArgument(errors, node.NodeId, "inputs", argument, knownReferenceKeys);

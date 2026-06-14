@@ -29,6 +29,11 @@ slot-name constants, metadata keys, port endpoint records, connection records, o
 records for activity-specific concepts. New custom activities must be able to add their own child
 structure without changing Workflows Design Core or Workflows Runtime Core.
 
+Follow-on cleanup [071-activity-owned-composite-structure](../071-activity-owned-composite-structure/spec.md)
+narrows those child slot records to traversal projections only. Activity-owned relationship
+semantics such as Flowchart connections/start nodes, If branch meaning, and loop bodies live in
+activity-owned node/executable structure, not generic slot metadata.
+
 Elsa Core cue: `Flowchart` is a composite/container activity. It carries its own `Start` activity
 and `Connections`, then schedules child activities from the Flowchart activity execution context.
 The foundation runtime boundary should therefore schedule the workflow root activity and leave

@@ -40,7 +40,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** implemented by composite activities that own child-completion routing semantics. The runtime invokes it only for parent-completion evaluation work after reconstructing the parent activity from the pinned executable artifact.
 
 **Known implementations (shipped):**
-- `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned slot metadata)*
+- `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 
 ---
