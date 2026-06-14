@@ -67,6 +67,9 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork Physicalization And Performance plan](../../specs/019-groundwork-physicalization-performance/plan.md)
 - [Groundwork Runtime Evaluation And Hardening spec](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md)
 - [Groundwork Runtime Evaluation And Hardening plan](../../specs/020-groundwork-runtime-evaluation-hardening/plan.md)
+- [Groundwork host-configurable persistence feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md)
+- [Groundwork host-configurable runtime store POC spec](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md)
+- [Groundwork host-configurable runtime store POC plan](../../specs/071-groundwork-host-configurable-runtime-store-poc/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
@@ -81,6 +84,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - G6 adds an Elsa bridge runtime-defined entity mapping over portable document storage.
 - G7 proves opt-in physicalization paths without making physical tables the runtime-defined entity default.
 - G8 records runtime-store go/no-go decisions and preserves benchmark, concurrency, retry, and operational gates before any runtime hot-path migration.
+- Post-G8 feasibility work can validate host-configurable Groundwork adoption for low-risk runtime store contracts while keeping hot-path stores behind explicit viability gates.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
 
 ## Drift / Review Notes
