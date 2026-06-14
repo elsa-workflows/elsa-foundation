@@ -1,6 +1,7 @@
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
+using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.Core.Services;
@@ -22,6 +23,7 @@ public sealed class StudioModuleManifestProviderTests
 
         Assert.Equal("1.0.0", response.HostVersion);
         Assert.Equal("1.0.0", response.SdkVersion);
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
@@ -37,6 +39,19 @@ public sealed class StudioModuleManifestProviderTests
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Diagnostics, x =>
             x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
+    public async Task GetModules_FiltersConsoleStreamModuleAndReportsDiagnostic()
+    {
+        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.ConsoleStream"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.ConsoleStream" &&
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
@@ -142,6 +157,7 @@ public sealed class StudioModuleManifestProviderTests
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
+        services.AddConsoleStreamStudio();
         services.AddDashboardStudioSample();
         services.AddWeatherForecastStudioSample();
         configureServices?.Invoke(services);
@@ -151,7 +167,6 @@ public sealed class StudioModuleManifestProviderTests
 
         return services.BuildServiceProvider();
     }
-
     private sealed class ContributeMissingBackendModule : IStudioEventHandler<OnStudioModuleManifestsCollecting>
     {
         public Task Handle(OnStudioModuleManifestsCollecting @event, CancellationToken cancellationToken)

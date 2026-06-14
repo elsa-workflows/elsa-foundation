@@ -23,6 +23,7 @@ Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each m
       "Default": {
         "Features": {
           "StudioApi": {},
+          "ConsoleStream": {},
           "DashboardSample": {},
           "WeatherForecastSample": {}
         },
@@ -68,6 +69,7 @@ Features ship in:
 | Feature name | Library | Contract |
 |---|---|---|
 | `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
+| `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
 | `DashboardSample` | `Elsa.Studio.Samples.Dashboard` | `IShellFeature` |
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
 
@@ -93,4 +95,7 @@ Open:
 - `/weather`
 - `/diagnostics/modules`
 - `/_elsa/studio/modules`
+- `/_elsa/studio/diagnostics/console-logs/recent`
+- `/_elsa/studio/diagnostics/console-logs/sources`
+- `/_elsa/studio/diagnostics/console-logs/hub`
 - `/_elsa/studio/samples/weather-forecast`

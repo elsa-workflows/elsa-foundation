@@ -54,6 +54,13 @@ export interface StudioDashboardWidgetContribution {
   component: ComponentType;
 }
 
+export interface StudioPanelContribution {
+  id: string;
+  title: string;
+  order?: number;
+  component: ComponentType;
+}
+
 export interface StudioContributionRegistry<T> {
   add(contribution: T): void;
   list(): T[];
@@ -72,7 +79,7 @@ export interface ElsaStudioModuleApi {
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
-  readonly panels: StudioContributionRegistry<unknown>;
+  readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;
   readonly propertyEditors: StudioContributionRegistry<unknown>;

@@ -10,10 +10,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
   </ItemGroup>
 
 </Project>
-
