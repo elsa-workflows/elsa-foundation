@@ -1,6 +1,12 @@
 import type { ComponentType } from "react";
 
-export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
+export type StudioModuleStatus =
+  | "available"
+  | "loaded"
+  | "disabled"
+  | "incompatible"
+  | "missing-backend-capability"
+  | "failed";
 
 export interface StudioModuleManifest {
   id: string;
@@ -11,6 +17,7 @@ export interface StudioModuleManifest {
   requiredHostVersion: string;
   requiredSdkVersion: string;
   capabilities: string[];
+  requiredBackendCapabilities: string[];
 }
 
 export interface StudioModuleDiagnostic {
@@ -92,4 +99,3 @@ export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
     }
   };
 }
-

@@ -9,7 +9,8 @@ public static class WeatherForecastStudioSampleServiceCollectionExtensions
 {
     public static IServiceCollection AddWeatherForecastStudioSample(this IServiceCollection services)
     {
-        return services.AddStudioEventHandler<OnStudioModuleManifestsCollecting, ContributeWeatherForecastStudioModule>();
+        return services
+            .AddStudioEventHandler<OnBackendCapabilitiesCollecting, ContributeWeatherForecastBackendCapability>()
+            .AddStudioEventHandler<OnStudioModuleManifestsCollecting, ContributeWeatherForecastStudioModule>();
     }
 }
-

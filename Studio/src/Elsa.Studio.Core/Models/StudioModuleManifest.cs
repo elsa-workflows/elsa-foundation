@@ -8,5 +8,5 @@ public sealed record StudioModuleManifest(
     IReadOnlyCollection<string> Styles,
     string RequiredHostVersion,
     string RequiredSdkVersion,
-    IReadOnlyCollection<string> Capabilities);
-
+    IReadOnlyCollection<string> Capabilities,
+    IReadOnlyCollection<string> RequiredBackendCapabilities);

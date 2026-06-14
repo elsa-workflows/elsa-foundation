@@ -15,9 +15,9 @@ public sealed class ContributeDashboardStudioModule : IStudioEventHandler<OnStud
             ["/_content/Elsa.Studio.Samples.Dashboard/studio/modules/dashboard/module.css"],
             "^1.0.0",
             "^1.0.0",
-            ["navigation", "routes", "dashboard-widgets"]));
+            ["navigation", "routes", "dashboard-widgets"],
+            []));
 
         return Task.CompletedTask;
     }
 }
-

@@ -15,9 +15,9 @@ public sealed class ContributeWeatherForecastStudioModule : IStudioEventHandler<
             ["/_content/Elsa.Studio.Samples.WeatherForecast/studio/modules/weather/module.css"],
             "^1.0.0",
             "^1.0.0",
-            ["navigation", "routes", "http"]));
+            ["navigation", "routes", "http"],
+            [StudioBackendCapabilities.WeatherForecastSample]));
 
         return Task.CompletedTask;
     }
 }
-
