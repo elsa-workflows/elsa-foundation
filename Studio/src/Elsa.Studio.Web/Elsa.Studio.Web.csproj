@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />

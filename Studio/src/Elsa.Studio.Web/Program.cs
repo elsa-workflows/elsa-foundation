@@ -1,22 +1,34 @@
-using Elsa.Studio.Api.Extensions;
+using CShells.AspNetCore.Configuration;
+using CShells.AspNetCore.Extensions;
+using CShells.DependencyInjection;
+using Elsa.Studio.Api.Features;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
-using Elsa.Studio.Samples.WeatherForecast.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuration = builder.Configuration;
 
 builder.WebHost.UseStaticWebAssets();
 
-builder.Services.AddElsaStudioApi();
-builder.Services.AddDashboardStudioSample();
-builder.Services.AddWeatherForecastStudioSample();
+builder.Services.AddCShellsAspNetCore(shells =>
+{
+    shells
+        .WithAssemblies(
+            typeof(StudioApiFeature).Assembly,
+            typeof(DashboardStudioFeature).Assembly,
+            typeof(WeatherForecastStudioFeature).Assembly)
+        .WithConfigurationProvider(configuration)
+        .WithWebRouting(options =>
+        {
+            options.EnablePathRouting = true;
+        });
+});
 
 var app = builder.Build();
 
 app.UseStaticFiles();
 
-app.MapElsaStudioApi();
-app.MapWeatherForecastStudioSample();
+app.MapShells();
 app.MapFallbackToFile("studio/index.html");
 
 app.Run();

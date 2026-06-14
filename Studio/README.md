@@ -12,6 +12,39 @@ The first slice intentionally proves the extension boundary only:
 
 The shell UX is adapted from [`elsa-workflows/elsa-foundation-designer`](https://github.com/elsa-workflows/elsa-foundation-designer) main at `2a04fdb`, without importing its Next.js runtime or product feature modules.
 
+## Modular features (CShells)
+
+Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each module is a class library that exposes a CShells *feature* (`IShellFeature` / `IWebShellFeature`) instead of being hardwired into the host. The host (`Elsa.Studio.Web`) does not call module-specific registration methods — it enables features per shell from `appsettings.json`:
+
+```json
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "StudioApi": {},
+          "DashboardSample": {},
+          "WeatherForecastSample": {}
+        },
+        "Configuration": {
+          "WebRouting": { "Path": "" }
+        }
+      }
+    }
+  }
+}
+```
+
+Removing a feature key (or setting the shell up differently) turns the corresponding module — its services, manifest contribution, and endpoints — on or off without code changes. `WebRouting:Path` of `""` mounts the shell's endpoints at the application root.
+
+Features ship in:
+
+| Feature name | Library | Contract |
+|---|---|---|
+| `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
+| `DashboardSample` | `Elsa.Studio.Samples.Dashboard` | `IShellFeature` |
+| `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
+
 ## Build
 
 ```bash

@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>
 

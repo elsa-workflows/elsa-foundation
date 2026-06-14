@@ -4,6 +4,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="CShells" Version="0.0.28" />
+    <PackageVersion Include="CShells.Abstractions" Version="0.0.28" />
+    <PackageVersion Include="CShells.AspNetCore" Version="0.0.28" />
+    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.28" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
