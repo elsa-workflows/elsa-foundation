@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
+    <Project Path="src/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <Project Path="src/Elsa.Studio.Samples.Dashboard/Elsa.Studio.Samples.Dashboard.csproj" />
+    <Project Path="src/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
+    <Project Path="src/Elsa.Studio.Web/Elsa.Studio.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" />
+  </Folder>
+</Solution>

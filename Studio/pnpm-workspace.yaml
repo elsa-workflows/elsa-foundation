@@ -1,0 +1,5 @@
+packages:
+  - "src/Elsa.Studio.Web/Client"
+  - "src/Elsa.Studio.Samples.Dashboard/Client"
+  - "src/Elsa.Studio.Samples.WeatherForecast/Client"
+

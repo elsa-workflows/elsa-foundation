@@ -1,0 +1,10 @@
+.dashboard-sample-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.dashboard-sample-card {
+  border-color: #a7c5ff;
+}
+

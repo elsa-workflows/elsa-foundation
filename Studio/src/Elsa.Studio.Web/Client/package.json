@@ -1,0 +1,13 @@
+{
+  "name": "@elsa-workflows/studio-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm build:app && pnpm build:vendor",
+    "build:app": "vite build",
+    "build:vendor": "vite build --config vite.vendor.config.ts",
+    "test": "vitest run"
+  }
+}
+

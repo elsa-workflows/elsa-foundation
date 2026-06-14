@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
+  </ItemGroup>
+
+</Project>
+

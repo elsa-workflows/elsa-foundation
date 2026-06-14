@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <StaticWebAssetBasePath>_content/Elsa.Studio.Samples.WeatherForecast</StaticWebAssetBasePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+  </ItemGroup>
+
+</Project>
+
