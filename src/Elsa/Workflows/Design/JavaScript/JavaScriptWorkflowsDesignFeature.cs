@@ -19,6 +19,15 @@ public class JavaScriptWorkflowsDesignFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
+            services,
+            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsDesignJavaScript,
+            "Workflow design JavaScript declarations",
+            "JavaScriptWorkflowsDesign",
+            "workflows",
+            "design",
+            "javascript");
+
         services
             .AddScoped<IJavaScriptDeclarationContributor, ActivityOutputFunctionDeclarationContributor>()
             .AddScoped<IJavaScriptDeclarationContributor, WorkflowFunctionDeclarationContributor>()

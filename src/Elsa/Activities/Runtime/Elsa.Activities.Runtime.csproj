@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\Features\Abstractions\Elsa.Features.Abstractions.csproj" />
     <ProjectReference Include="Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
