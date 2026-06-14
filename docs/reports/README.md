@@ -17,7 +17,6 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Skills stabilization audit](skills-stabilization-audit.md)
 - [CShells composition evidence](cshells-composition-evidence.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
-- [React admin module host technical design](react-admin-module-host-technical-design.md)
 - [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md)
 - [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md)
 - [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md)

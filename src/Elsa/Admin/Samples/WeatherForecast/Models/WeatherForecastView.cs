@@ -1,9 +1,0 @@
-namespace Elsa.Admin.Samples.WeatherForecast.Models;
-
-public sealed record WeatherForecastView(
-    DateOnly Date,
-    int TemperatureC,
-    string Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

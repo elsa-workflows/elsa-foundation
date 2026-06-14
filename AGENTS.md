@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: [React Admin Module Host](specs/071-react-admin-module-host/plan.md)
+Current Speckit plan: none
 <!-- SPECKIT END -->

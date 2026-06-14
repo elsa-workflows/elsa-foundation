@@ -6,16 +6,15 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 76
-- Test projects: 12
-- Direct project references: 323
+- Source projects: 70
+- Test projects: 11
+- Direct project references: 302
 
 ## Projects
 
 | Project | Kind | Domain | Target | Packable | Direct project references |
 |---|---|---|---|---|---|
 | [Elsa.Server](../../src/apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | net10.0 | default | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
-| [Elsa.Studio.Web](../../src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj) | source | Elsa.Studio | net10.0 | default | Elsa.Admin.Api<br>Elsa.Admin.Core<br>Elsa.Admin.Samples.Dashboard<br>Elsa.Admin.Samples.WeatherForecast<br>Elsa.Admin.Web<br>Elsa.Events |
 | [Elsa.Activities.Composition.Runtime](../../src/elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives |
 | [Elsa.Activities.Design.Api](../../src/elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core |
 | [Elsa.Activities.Design.Core](../../src/elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Events.Core<br>Elsa.Primitives |
@@ -31,11 +30,6 @@ Records direct project references only.
 | [Elsa.Activities.Runtime.Core](../../src/elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../src/elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Sequence](../../src/elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Admin.Api](../../src/elsa/Admin/Api/Elsa.Admin.Api.csproj) | source | Elsa.Admin | net10.0 | default | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core |
-| [Elsa.Admin.Core](../../src/elsa/Admin/Core/Elsa.Admin.Core.csproj) | source | Elsa.Admin | net10.0 | default | Elsa.Events.Core |
-| [Elsa.Admin.Samples.Dashboard](../../src/elsa/Admin/Samples/Dashboard/Elsa.Admin.Samples.Dashboard.csproj) | source | Elsa.Admin | net10.0 | default | Elsa.Admin.Core<br>Elsa.Events.Core |
-| [Elsa.Admin.Samples.WeatherForecast](../../src/elsa/Admin/Samples/WeatherForecast/Elsa.Admin.Samples.WeatherForecast.csproj) | source | Elsa.Admin | net10.0 | default | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core |
-| [Elsa.Admin.Web](../../src/elsa/Admin/Web/Elsa.Admin.Web.csproj) | source | Elsa.Admin | net10.0 | default | - |
 | [Elsa.Api.FastEndpoints](../../src/elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | Elsa.Api | net10.0 | default | Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Caching.Core](../../src/elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | net10.0 | default | - |
 | [Elsa.Caching.Memory](../../src/elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | net10.0 | default | Elsa.Caching.Core |
@@ -96,7 +90,6 @@ Records direct project references only.
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Expressions<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Admin.Tests](../../tests/Elsa/Admin/Tests/Elsa.Admin.Tests.csproj) | test | Elsa.Admin | net10.0 | false | Elsa.Admin.Api<br>Elsa.Admin.Core<br>Elsa.Admin.Samples.Dashboard<br>Elsa.Admin.Samples.WeatherForecast<br>Elsa.Events<br>Elsa.Events.Core |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | net10.0 | false | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
@@ -108,7 +101,6 @@ Records direct project references only.
 | Domain | Source projects | Test projects |
 |---|---:|---:|
 | Elsa.Activities | 15 | 6 |
-| Elsa.Admin | 5 | 1 |
 | Elsa.Api | 1 | 0 |
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Caching | 2 | 0 |
@@ -123,7 +115,6 @@ Records direct project references only.
 | Elsa.Samples | 0 | 1 |
 | Elsa.Serialization | 3 | 0 |
 | Elsa.Server | 1 | 0 |
-| Elsa.Studio | 1 | 0 |
 | Elsa.Tasks | 3 | 0 |
 | Elsa.Workflows | 16 | 3 |
 | Elsa3 | 3 | 0 |

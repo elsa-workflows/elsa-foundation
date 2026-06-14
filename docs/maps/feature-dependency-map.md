@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 46
+- Feature classes: 42
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 43
+- Feature-bearing source projects: 39
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -39,10 +39,6 @@ No duplicate explicit feature IDs were discovered.
 | ActivitiesPrimitives | ActivitiesPrimitivesFeature | False | Elsa.Activities.Primitives | - | - | [ActivitiesPrimitivesFeature.cs](../../src/elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntime | ActivitiesRuntimeFeature | False | Elsa.Activities.Runtime | - | - | [ActivitiesRuntimeFeature.cs](../../src/elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSequence | ActivitiesSequenceFeature | False | Elsa.Activities.Sequence | - | - | [ActivitiesSequenceFeature.cs](../../src/elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
-| AdminApi | AdminApiFeature | False | Elsa.Admin.Api | Options: AdminApiOptions | - | [AdminApiFeature.cs](../../src/elsa/Admin/Api/AdminApiFeature.cs) |
-| AdminSamplesDashboard | DashboardAdminSampleFeature | False | Elsa.Admin.Samples.Dashboard | - | - | [DashboardAdminSampleFeature.cs](../../src/elsa/Admin/Samples/Dashboard/DashboardAdminSampleFeature.cs) |
-| AdminSamplesWeatherForecast | WeatherForecastAdminSampleFeature | False | Elsa.Admin.Samples.WeatherForecast | - | - | [WeatherForecastAdminSampleFeature.cs](../../src/elsa/Admin/Samples/WeatherForecast/WeatherForecastAdminSampleFeature.cs) |
-| AdminWeb | AdminWebFeature | False | Elsa.Admin.Web | - | - | [AdminWebFeature.cs](../../src/elsa/Admin/Web/AdminWebFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/elsa/Expressions/ExpressionsFeature.cs) |
@@ -91,10 +87,6 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | ActivitiesPrimitives | Elsa.Activities.Primitives | - | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | ActivitiesRuntime | Elsa.Activities.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | ActivitiesSequence | Elsa.Activities.Sequence | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
-| AdminApi | Elsa.Admin.Api | - | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
-| AdminSamplesDashboard | Elsa.Admin.Samples.Dashboard | - | Elsa.Admin.Core<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
-| AdminSamplesWeatherForecast | Elsa.Admin.Samples.WeatherForecast | - | Elsa.Admin.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
-| AdminWeb | Elsa.Admin.Web | - | - | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
 | Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.28<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
