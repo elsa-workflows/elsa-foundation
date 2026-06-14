@@ -3,6 +3,8 @@ import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard
 import type { ElsaStudioModuleApi, StudioModulesResponse, StudioNavigationContribution } from "../sdk";
 import { createStudioRegistry } from "./registry";
 import { loadStudioModules } from "./loader";
+import { ThemeProvider } from "./components/ThemeProvider";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "failed";
@@ -12,7 +14,7 @@ const builtInNavigation: StudioNavigationContribution[] = [
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900 }
 ];
 
-export function App() {
+function AppContent() {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
@@ -178,14 +180,12 @@ function ShellFrame({
           </div>
           <div className="topbar-actions">
             <a href="https://github.com/elsa-workflows/elsa-foundation-studio" aria-label="GitHub">
-              <Github size={17} />
+              <Github size={18} />
             </a>
             <a href="https://github.com/elsa-workflows/elsa-foundation-designer" aria-label="Designer source">
-              <ExternalLink size={17} />
+              <ExternalLink size={18} />
             </a>
-            <button type="button" aria-label="Settings">
-              <Settings size={17} />
-            </button>
+            <ThemeSwitcher />
           </div>
         </header>
         <main className="content">{children}</main>
@@ -204,9 +204,9 @@ function Home({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section>
       <div className="dashboard-metrics">
-        <MetricCard title="Available modules" value={available} icon={<Boxes size={18} />} />
-        <MetricCard title="Loaded modules" value={loaded} icon={<Activity size={18} />} />
-        <MetricCard title="Failed modules" value={failed} icon={<Gauge size={18} />} />
+        <MetricCard title="Available modules" value={available} icon={<Boxes size={20} />} />
+        <MetricCard title="Loaded modules" value={loaded} icon={<Activity size={20} />} />
+        <MetricCard title="Failed modules" value={failed} icon={<Gauge size={20} />} />
       </div>
 
       <div className="section-header">
@@ -261,18 +261,18 @@ function MetricCard({ title, value, icon }: { title: string; value: number; icon
 
 function NavIcon({ id }: { id: string }) {
   if (id.includes("dashboard")) {
-    return <LayoutDashboard size={16} />;
+    return <LayoutDashboard size={18} />;
   }
 
   if (id.includes("weather")) {
-    return <Activity size={16} />;
+    return <Activity size={18} />;
   }
 
   if (id.includes("diagnostics")) {
-    return <FileText size={16} />;
+    return <FileText size={18} />;
   }
 
-  return <Gauge size={16} />;
+  return <Gauge size={18} />;
 }
 
 function normalizePath(path: string) {
@@ -286,5 +286,13 @@ function normalizePath(path: string) {
 function navigateTo(path: string) {
   window.history.pushState({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
 }
 
