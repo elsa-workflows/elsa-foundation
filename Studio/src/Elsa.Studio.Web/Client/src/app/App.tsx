@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, Search, Settings, ShieldCheck } from "lucide-react";
+import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, Search, ShieldCheck } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioModulesResponse, StudioNavigationContribution } from "../sdk";
 import { createStudioRegistry } from "./registry";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "failed";
@@ -136,7 +137,9 @@ function ShellFrame({
     <div className="studio-shell">
       <aside className="sidebar">
         <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
-          <span className="brand-mark">E</span>
+          <span className="brand-mark" aria-hidden="true">
+            <img src={elsaLogo} alt="" />
+          </span>
           <span>
             <strong>Elsa Studio</strong>
             <small>Foundation</small>
@@ -202,7 +205,7 @@ function Home({ api }: { api: ElsaStudioModuleApi }) {
   const failed = diagnostics.filter(x => x.status === "failed").length;
 
   return (
-    <section>
+    <section className="dashboard-view">
       <div className="dashboard-metrics">
         <MetricCard title="Available modules" value={available} icon={<Boxes size={20} />} />
         <MetricCard title="Loaded modules" value={loaded} icon={<Activity size={20} />} />
@@ -217,7 +220,12 @@ function Home({ api }: { api: ElsaStudioModuleApi }) {
       </div>
 
       <div className="widget-grid">
-        {widgets.length === 0 ? <div className="empty-state">No dashboard widgets are registered.</div> : null}
+        {widgets.length === 0 ? (
+          <div className="empty-state">
+            <LayoutDashboard size={22} />
+            <span>No dashboard widgets are registered.</span>
+          </div>
+        ) : null}
         {widgets.map(widget => {
           const Widget = widget.component;
           return <Widget key={widget.id} />;
@@ -295,4 +303,3 @@ export function App() {
     </ThemeProvider>
   );
 }
-

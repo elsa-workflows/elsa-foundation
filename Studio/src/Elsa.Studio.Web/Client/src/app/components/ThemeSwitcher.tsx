@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Moon, Sun, Palette, ChevronDown } from "lucide-react";
+import { Moon, Sun, Palette, Check } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import "./ThemeSwitcher.css";
 
@@ -42,11 +42,20 @@ export function ThemeSwitcher() {
           className="theme-selector-button"
           onClick={() => setIsThemeOpen(!isThemeOpen)}
           aria-label="Select theme"
-          title="Theme selector"
+          aria-expanded={isThemeOpen}
+          title={`Theme: ${currentTheme.name}`}
         >
           <Palette size={18} />
-          <span className="theme-name">{currentTheme.name}</span>
-          <ChevronDown size={16} className={`chevron ${isThemeOpen ? "open" : ""}`} />
+          <span className="theme-selector-swatch" aria-hidden="true">
+            <span
+              className="theme-selector-swatch-dot"
+              style={{ backgroundColor: currentTheme.light.primary }}
+            />
+            <span
+              className="theme-selector-swatch-dot"
+              style={{ backgroundColor: currentTheme.dark.primary }}
+            />
+          </span>
         </button>
 
         {isThemeOpen && (
@@ -59,13 +68,15 @@ export function ThemeSwitcher() {
                 <button
                   key={theme.id}
                   className={`theme-item ${currentTheme.id === theme.id ? "active" : ""}`}
+                  aria-label={theme.name}
+                  aria-pressed={currentTheme.id === theme.id}
                   onClick={() => {
                     setTheme(theme.id);
                     setIsThemeOpen(false);
                   }}
                   title={theme.description}
                 >
-                  <span className="theme-item-preview">
+                  <span className="theme-item-preview" aria-hidden="true">
                     <span
                       className="theme-color-dot light"
                       style={{ backgroundColor: theme.light.primary }}
@@ -77,7 +88,7 @@ export function ThemeSwitcher() {
                   </span>
                   <span className="theme-item-name">{theme.name}</span>
                   {currentTheme.id === theme.id && (
-                    <span className="theme-item-checkmark">✓</span>
+                    <Check size={16} className="theme-item-checkmark" aria-hidden="true" />
                   )}
                 </button>
               ))}

@@ -7,8 +7,8 @@
   --radius: 6px;
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
   
   /* Spacing Scale */
   --spacing-xs: 4px;
@@ -21,8 +21,8 @@
   /* Shadow System */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 20px 44px rgba(15, 23, 42, 0.12);
   
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -80,10 +80,15 @@ html {
   scroll-behavior: smooth;
 }
 
+html[data-theme-mode="dark"] {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--background);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 58%, var(--background)) 0, var(--background) 280px);
   color: var(--foreground);
   transition: background-color var(--transition-base), color var(--transition-base);
 }
@@ -130,18 +135,18 @@ textarea:focus {
 
 .studio-shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 268px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   border-right: 1px solid var(--border);
-  background: var(--sidebar);
+  background: color-mix(in srgb, var(--sidebar) 88%, var(--background));
   color: var(--sidebar-foreground);
-  padding: 20px 16px;
+  padding: 18px 14px;
   overflow-y: auto;
   transition: background-color var(--transition-base);
 }
@@ -150,9 +155,10 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 44px;
-  padding: 0 4px;
+  min-height: 46px;
+  padding: 4px;
   margin: 0 -4px;
+  border-radius: var(--radius-md);
 }
 
 .brand span:last-child {
@@ -162,7 +168,7 @@ textarea:focus {
 
 .brand strong {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.2;
 }
 
@@ -174,28 +180,39 @@ textarea:focus {
 }
 
 .brand-mark {
-  display: inline-grid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  background: var(--primary);
+  width: 38px;
+  height: 38px;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: transparent;
   color: var(--primary-foreground);
   font-weight: 800;
   font-size: 16px;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
+  overflow: hidden;
 }
 
-.brand:hover .brand-mark {
-  transform: scale(1.05);
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.brand:hover .brand-mark img {
+  filter: saturate(1.08);
 }
 
 .sidebar-search {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  height: 38px;
+  height: 40px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
@@ -224,7 +241,7 @@ textarea:focus {
 
 .nav-section {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .nav-heading {
@@ -241,7 +258,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 38px;
+  min-height: 40px;
   border-radius: var(--radius);
   color: var(--sidebar-foreground);
   font-size: 14px;
@@ -258,7 +275,7 @@ textarea:focus {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 2px;
   background: var(--primary);
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -286,7 +303,7 @@ textarea:focus {
   margin-top: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 78%, transparent);
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.5;
@@ -315,9 +332,9 @@ textarea:focus {
   gap: 20px;
   min-height: 70px;
   border-bottom: 1px solid var(--border);
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
   backdrop-filter: blur(8px);
-  padding: 14px 28px;
+  padding: 14px 30px;
   transition: all var(--transition-base);
 }
 
@@ -333,15 +350,15 @@ textarea:focus {
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   opacity: 0.7;
 }
 
 .topbar h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 23px;
+  font-weight: 760;
   line-height: 1.2;
   color: var(--foreground);
 }
@@ -349,11 +366,11 @@ textarea:focus {
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.topbar-actions a,
-.topbar-actions button {
+.topbar-actions > a,
+.topbar-actions > button {
   display: inline-grid;
   place-items: center;
   width: 40px;
@@ -367,8 +384,8 @@ textarea:focus {
   font-size: 16px;
 }
 
-.topbar-actions a:hover,
-.topbar-actions button:hover {
+.topbar-actions > a:hover,
+.topbar-actions > button:hover {
   border-color: var(--primary);
   background: var(--muted);
   color: var(--primary);
@@ -378,8 +395,17 @@ textarea:focus {
 
 .content {
   flex: 1;
-  padding: 32px;
+  padding: 32px 34px;
   overflow-y: auto;
+}
+
+.content > section {
+  max-width: 1220px;
+}
+
+.dashboard-view {
+  display: grid;
+  gap: 28px;
 }
 
 .section-header {
@@ -387,7 +413,11 @@ textarea:focus {
   align-items: end;
   justify-content: space-between;
   gap: 20px;
-  margin: 32px 0 20px 0;
+  margin: 0 0 20px;
+}
+
+.dashboard-view .section-header {
+  margin: 0;
 }
 
 .section-header div {
@@ -397,8 +427,8 @@ textarea:focus {
 
 .section-header h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 25px;
+  font-weight: 760;
   line-height: 1.2;
   color: var(--foreground);
 }
@@ -413,18 +443,24 @@ textarea:focus {
 .dashboard-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: 14px;
+  margin-bottom: 0;
 }
 
 .metric-card {
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 12px;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 4px;
+  min-height: 124px;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 52%),
+    var(--card);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
   overflow: hidden;
@@ -437,8 +473,8 @@ textarea:focus {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
+  height: 2px;
+  background: var(--primary);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -454,19 +490,28 @@ textarea:focus {
 }
 
 .metric-card strong {
-  font-size: 32px;
+  grid-column: 2;
+  font-size: 34px;
   line-height: 1;
   color: var(--primary);
-  font-weight: 700;
+  font-weight: 760;
+}
+
+.metric-card > span:not(.metric-icon) {
+  grid-column: 2;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .metric-icon {
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  grid-row: 1 / span 2;
+  width: 46px;
+  height: 46px;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
   color: var(--primary);
   flex-shrink: 0;
   transition: all var(--transition-fast);
@@ -479,7 +524,7 @@ textarea:focus {
 .widget-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .admin-card,
@@ -488,7 +533,7 @@ textarea:focus {
 .empty-state,
 .error-state {
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--card);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
@@ -576,10 +621,21 @@ textarea:focus {
 }
 
 .empty-state {
-  min-height: 200px;
+  min-height: 220px;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   align-items: center;
   justify-content: center;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 52%),
+    var(--card);
+  border-style: dashed;
+}
+
+.empty-state svg {
+  color: var(--primary);
+  opacity: 0.75;
 }
 
 .error-state {
@@ -696,4 +752,3 @@ textarea:focus {
     margin: 24px 0 16px 0;
   }
 }
-
