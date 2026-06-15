@@ -88,6 +88,10 @@
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
   </Folder>
@@ -172,6 +176,9 @@
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Samples/" />
   <Folder Name="/tests/Elsa/Samples/Nuplane/" />
   <Folder Name="/tests/Elsa/Samples/Nuplane/Activities/">

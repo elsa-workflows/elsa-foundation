@@ -86,6 +86,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - G8 records runtime-store go/no-go decisions and preserves benchmark, concurrency, retry, and operational gates before any runtime hot-path migration.
 - Post-G8 feasibility work can validate host-configurable Groundwork adoption for low-risk runtime store contracts while keeping hot-path stores behind explicit viability gates.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
+- Update: re-assessment against the live Groundwork confirms it now ships an operational layer (Outbox, WorkQueue, Leases, UnitOfWork), closing the seven hot-path gaps the feasibility report flagged as missing. A first opt-in bridge is landed in this repo — `Elsa.Persistence.Groundwork` implementing `IBookmarkStateStore` over Groundwork's `IDocumentStore`, with a host-owned `Elsa.Persistence.Groundwork.Sqlite` provider feature, consuming the feedz.io preview feed (`Groundwork.* @ 0.0.1-preview.4`). See the [feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md) Update section.
 
 ## Drift / Review Notes
 

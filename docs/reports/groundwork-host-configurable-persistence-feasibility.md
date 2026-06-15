@@ -2,11 +2,21 @@
 
 Program goal state: [Groundwork Persistence Readiness](../program-goals/groundwork-persistence-readiness.md).
 
-Status: draft feasibility report.
+Status: draft feasibility report. Updated after re-assessment against the live Groundwork repository and a landed in-repo bridge (see "Update" below).
 
 ## Outcome
 
 Groundwork is feasible as a provider-neutral persistence lane in `elsa-foundation`, with provider choice remaining host-owned via feature composition. A full all-in replacement for every runtime persistence surface is not yet proven.
+
+## Update — live re-assessment and landed bridge
+
+This report originally concluded against an earlier Groundwork that shipped only a document store, leaving seven hot-path operational gaps (preserved below for history). Two things have changed since:
+
+1. **Groundwork now ships an operational layer.** The live repository adds `Groundwork.Operational` (Outbox, WorkQueue, Leases, UnitOfWork) plus `Groundwork.Operational.Relational`, alongside the Documents/Relational providers (Sqlite/SqlServer/PostgreSql/MongoDb). These provide atomic claim with visibility timeout, ordered destructive dequeue, fencing leases with TTL, cross-unit atomic commit, and retry/idempotency/dead-letter state — i.e. the seven gaps in the table below are now addressed by first-class contracts that sit *alongside* `IDocumentStore`, exactly as this report recommended. The remaining question for operational stores is **evidence/benchmark**, not capability.
+
+2. **A real opt-in bridge is landed and tested in this repo.** An `Elsa.Persistence.Groundwork` bridge implements the runtime `IBookmarkStateStore` seam purely over Groundwork's provider-neutral `IDocumentStore`, with a host-owned `Elsa.Persistence.Groundwork.Sqlite` feature selecting the SQLite provider. The dependency is the feedz.io preview feed (`Groundwork.* @ 0.0.1-preview.4`). Tests prove identical behavior across the SQLite provider and an in-memory document store, and prove the in-memory runtime default is untouched unless the host composes the bridge.
+
+This confirms the central goal: runtime/domain code depends only on Elsa's seam contract; only the host names a concrete provider.
 
 ## What the current codebase already gives us
 
@@ -37,9 +47,11 @@ Groundwork's current document-store contract is strong for document persistence 
 
 Until those guarantees are modeled and proven, operational stores stay specialized or benchmark-gated.
 
-## Hot-path gap analysis
+## Hot-path gap analysis (historical — superseded by Groundwork's operational layer)
 
-Comparing the runtime operational contracts (`IRuntimePostCommitOutboxStore`, `IWorkflowSchedulerWorkQueue`, `IOperationalStateStore`, `IIncidentStateStore`, plus the multi-store checkpoint commit) against Groundwork's current `IDocumentStore` (Save/Load/Delete/Query with per-document optimistic concurrency, single-field equality query, per-Save transaction scope, offset paging) surfaces seven concrete gaps.
+> The seven gaps below were identified against an earlier Groundwork that shipped only `IDocumentStore`. The live Groundwork now ships `Groundwork.Operational` (Outbox, WorkQueue, Leases, UnitOfWork), which supplies these primitives as contracts alongside the document store. The table is retained to document the original analysis and the contract family it predicted; treat each row as **addressed pending benchmark evidence** rather than missing.
+
+Comparing the runtime operational contracts (`IRuntimePostCommitOutboxStore`, `IWorkflowSchedulerWorkQueue`, `IOperationalStateStore`, `IIncidentStateStore`, plus the multi-store checkpoint commit) against Groundwork's *earlier* `IDocumentStore` (Save/Load/Delete/Query with per-document optimistic concurrency, single-field equality query, per-Save transaction scope, offset paging) surfaced seven concrete gaps.
 
 | # | Gap | Driving runtime contract | Groundwork today | Needed |
 |---|---|---|---|---|
@@ -96,10 +108,10 @@ Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and huma
 
 ## Recommended implementation route
 
-1. Implement an opt-in `Elsa.Persistence.Groundwork` bridge with provider adapters resolved at host composition time.
-2. Implement one runtime low-risk POC store behind an existing replacement contract (`IWorkflowExecutableStore`).
-3. Keep existing defaults intact when Groundwork is not enabled.
-4. Add a hot-path viability matrix/checklist to prevent silent migration and prevent premature rejection.
+1. ✅ **Done.** Opt-in `Elsa.Persistence.Groundwork` bridge with the provider adapter resolved at host composition time (`Elsa.Persistence.Groundwork.Sqlite`).
+2. ✅ **Done (first seam).** One runtime store landed behind an existing replacement contract — `IBookmarkStateStore` over Groundwork's `IDocumentStore` — with provider-neutral and registration tests. `IWorkflowExecutableStore` remains a candidate for the next document-shaped seam.
+3. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
+4. ⏳ **Open.** Add a hot-path viability matrix/checklist before migrating operational seams (outbox, scheduler work queue, leases) onto Groundwork's operational layer, gated on benchmark evidence rather than capability.
 
 ## POC acceptance criteria
 
