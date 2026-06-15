@@ -3,6 +3,7 @@ using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Models;
+using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,7 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Equal("1.0.0", response.HostVersion);
         Assert.Equal("1.0.0", response.SdkVersion);
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
@@ -68,6 +70,7 @@ public sealed class StudioModuleManifestProviderTests
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
         services.AddConsoleStreamStudio();
+        services.AddFeatureManagementStudio();
         services.AddDashboardStudioSample();
         services.AddWeatherForecastStudioSample();
 

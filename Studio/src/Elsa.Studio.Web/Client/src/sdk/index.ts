@@ -63,6 +63,46 @@ export interface StudioPanelContribution {
   component: ComponentType;
 }
 
+export interface StudioSettingDescriptor {
+  name: string;
+  displayName: string;
+  description?: string | null;
+  category?: string | null;
+  group?: string | null;
+  clrType?: string | null;
+  jsonType?: string | null;
+  required: boolean;
+  defaultValue?: unknown;
+  secret: boolean;
+  sensitive: boolean;
+  restartRequired: boolean;
+  advanced: boolean;
+  experimental: boolean;
+  uiHint?: string | null;
+  optionsProvider?: string | null;
+  options: StudioSettingOptionDescriptor[];
+}
+
+export interface StudioSettingOptionDescriptor {
+  label: string;
+  value: unknown;
+  description?: string | null;
+}
+
+export interface StudioSettingEditorProps {
+  setting: StudioSettingDescriptor;
+  value: unknown;
+  disabled?: boolean;
+  onChange(value: unknown): void;
+}
+
+export interface StudioSettingEditorContribution {
+  id: string;
+  order?: number;
+  supports(setting: StudioSettingDescriptor): boolean;
+  component: ComponentType<StudioSettingEditorProps>;
+}
+
 export interface StudioContributionRegistry<T> {
   add(contribution: T): void;
   list(): T[];
@@ -86,6 +126,7 @@ export interface ElsaStudioModuleApi {
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;
   readonly propertyEditors: StudioContributionRegistry<unknown>;
+  readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
