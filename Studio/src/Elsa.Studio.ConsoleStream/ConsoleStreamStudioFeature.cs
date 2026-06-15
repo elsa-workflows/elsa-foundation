@@ -11,7 +11,7 @@ namespace Elsa.Studio.ConsoleStream;
 [ShellFeature(
     name: "ConsoleStream",
     DisplayName = "Console stream",
-    Description = "Captures backend stdout/stderr and contributes a live console panel to Elsa Studio."
+    Description = "Contributes a live console panel to Elsa Studio that streams console logs from the server backend."
 )]
 public sealed class ConsoleStreamStudioFeature : IWebShellFeature
 {
@@ -19,7 +19,6 @@ public sealed class ConsoleStreamStudioFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        ConsoleStreamHookInstaller.InstallOnce();
         services.AddConsoleStreamStudio(Options);
     }
 
