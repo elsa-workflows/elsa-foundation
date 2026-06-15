@@ -20,6 +20,8 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
+using Elsa.Modularity.Api;
+using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -88,6 +90,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
+builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 
 new EventsFeature().ConfigureServices(builder.Services);
 builder.Services.AddCShellsAspNetCore(shells =>
@@ -127,28 +130,32 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsPublishingApiFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
-            typeof(WorkflowsRuntimeApiFeature).Assembly
+            typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(ModularityApiFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
-        });
+        })
+        .ConfigureAllShells(shell => shell.WithFeature<ModularityApiFeature>());
 });
 
 var app = builder.Build();
 
-app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    RequestPath = "/demo"
+});
 
 app.UseCors(studioCorsPolicy);
 
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
 app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
 app.MapFallbackToFile("/demo", "index.html");
 app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
-app.MapFallbackToFile("index.html");
 app.Run();

@@ -56,6 +56,9 @@
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
+		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
