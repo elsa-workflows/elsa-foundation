@@ -17,8 +17,6 @@ namespace Elsa.Modularity.Api;
 )]
 public class ModularityApiFeature : FastEndpointsFeatureBase
 {
-    public string ShellName { get; set; } = "default";
-
     public string ShellsJsonPath { get; set; } = "shells.json";
 
     public override void ConfigureServices(IServiceCollection services)
@@ -27,7 +25,6 @@ public class ModularityApiFeature : FastEndpointsFeatureBase
 
         services.AddModularityApi(options =>
         {
-            options.ShellName = ShellName;
             options.ShellsJsonPath = ShellsJsonPath;
         });
     }

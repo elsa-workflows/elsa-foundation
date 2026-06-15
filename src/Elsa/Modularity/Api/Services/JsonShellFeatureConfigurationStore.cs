@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CShells;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
@@ -12,6 +13,7 @@ namespace Elsa.Modularity.Api.Services;
 
 public sealed class JsonShellFeatureConfigurationStore(
     IWebHostEnvironment environment,
+    ShellSettings shellSettings,
     IOptions<FeatureManagementOptions> options) : IShellFeatureConfigurationStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -108,15 +110,14 @@ public sealed class JsonShellFeatureConfigurationStore(
         }
 
         var revision = CreateRevision(featuresNode.ToJsonString(JsonOptions));
-        return new ShellFeatureConfigurationSnapshot(Options.ShellName, revision, features);
+        return new ShellFeatureConfigurationSnapshot(CurrentShellId, revision, features);
     }
 
     private JsonObject GetFeaturesNode(JsonObject document, bool create)
     {
-        var shellName = Options.ShellName;
         var shells = GetObject(document, "CShells", create);
         shells = GetObject(shells, "Shells", create);
-        var shell = GetObjectCaseInsensitive(shells, shellName, create);
+        var shell = GetObjectCaseInsensitive(shells, CurrentShellId, create);
         return GetObject(shell, "Features", create);
     }
 
@@ -162,6 +163,8 @@ public sealed class JsonShellFeatureConfigurationStore(
     }
 
     private FeatureManagementOptions Options => options.Value;
+
+    private string CurrentShellId => shellSettings.Id.Name;
 
     private sealed record ShellDocument(string Path, string Json, JsonObject Document);
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CShells;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Api.Services;
 using Elsa.Modularity.Core.Exceptions;
@@ -30,6 +31,13 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
                     "Enabled": true
                   },
                   "Disabled": false
+                }
+              },
+              "tenant-a": {
+                "Features": {
+                  "TenantFeature": {
+                    "Value": "tenant"
+                  }
                 }
               }
             }
@@ -76,6 +84,16 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task LoadUsesResolvedShellSettingsId()
+    {
+        var snapshot = await CreateStore("tenant-a").LoadAsync();
+
+        Assert.Equal("tenant-a", snapshot.ShellId);
+        Assert.True(snapshot.Features.ContainsKey("TenantFeature"));
+        Assert.False(snapshot.Features.ContainsKey("Existing"));
+    }
+
+    [Fact]
     public async Task LoadRejectsMissingShellConfigurationFile()
     {
         File.Delete(_shellsPath);
@@ -103,12 +121,12 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    private JsonShellFeatureConfigurationStore CreateStore() =>
+    private JsonShellFeatureConfigurationStore CreateStore(string shellId = "default") =>
         new(
             new FakeEnvironment(_directory),
+            new ShellSettings(new ShellId(shellId)),
             Options.Create(new FeatureManagementOptions
             {
-                ShellName = "default",
                 ShellsJsonPath = _shellsPath
             }));
 

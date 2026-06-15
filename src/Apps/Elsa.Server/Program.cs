@@ -105,7 +105,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(TasksFeature).Assembly,
             typeof(MemoryCacheFeature).Assembly,
             typeof(MediatorFeature).Assembly,
-            typeof(ModularityApiFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
             typeof(SqliteWorkflowsDesignPersistenceShellFeature).Assembly,
@@ -129,14 +128,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsPublishingApiFeature).Assembly,
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
-            typeof(WorkflowsRuntimeApiFeature).Assembly
+            typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(ModularityApiFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
-        });
+        })
+        .ConfigureAllShells(shell => shell.WithFeature<ModularityApiFeature>());
 });
 
 var app = builder.Build();
