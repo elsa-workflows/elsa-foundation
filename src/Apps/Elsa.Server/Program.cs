@@ -42,6 +42,27 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
 
+const string studioCorsPolicy = "ElsaStudio";
+
+var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
+{
+    studioCorsOrigins =
+    [
+        "https://localhost:7030",
+        "http://localhost:5089"
+    ];
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(studioCorsPolicy, policy => policy
+        .WithOrigins(studioCorsOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 builder.Services.AddConsoleLogStreamingHost(options =>
 {
     options.ServiceName = "elsa-server";
@@ -52,9 +73,9 @@ builder.Services.AddConsoleLogStreamingHost(options =>
 });
 builder.Services.AddConsoleLogStreamingAspNetCore(options =>
 {
-    options.RecentPath = "/diagnostics/console-logs/recent";
-    options.SourcesPath = "/diagnostics/console-logs/sources";
-    options.HubPath = "/diagnostics/console-logs/hub";
+    options.RecentPath = "/_elsa/studio/diagnostics/console-logs/recent";
+    options.SourcesPath = "/_elsa/studio/diagnostics/console-logs/sources";
+    options.HubPath = "/_elsa/studio/diagnostics/console-logs/hub";
 });
 builder.Services.AddNuplaneAdmin();
 builder.Services.AddSingleton<DemoPackageEventStore>();
@@ -120,6 +141,8 @@ var app = builder.Build();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.UseCors(studioCorsPolicy);
 
 app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
