@@ -1,6 +1,4 @@
 ﻿using CShells.Features;
-using Elsa.Features.Abstractions;
-using Elsa.Features.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Constants;
@@ -33,8 +31,9 @@ public class JavaScriptFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaCapability(
-            ElsaCapabilities.ExpressionsJavaScript,
+        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
+            services,
+            Elsa.Features.Abstractions.ElsaCapabilities.ExpressionsJavaScript,
             "JavaScript expressions",
             "JavaScriptExpressions",
             "expressions",

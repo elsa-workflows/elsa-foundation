@@ -1,6 +1,4 @@
 ﻿using CShells.Features;
-using Elsa.Features.Abstractions;
-using Elsa.Features.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Options;
@@ -47,8 +45,9 @@ public class HttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaCapability(
-            ElsaCapabilities.Http,
+        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
+            services,
+            Elsa.Features.Abstractions.ElsaCapabilities.Http,
             "HTTP infrastructure",
             "Http",
             "http",

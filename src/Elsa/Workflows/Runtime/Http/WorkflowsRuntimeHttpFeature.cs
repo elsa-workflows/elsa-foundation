@@ -1,6 +1,4 @@
 ﻿using CShells.Features;
-using Elsa.Features.Abstractions;
-using Elsa.Features.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Extensions;
 using Elsa.Workflows.Runtime.Http.Contracts;
@@ -38,8 +36,9 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaCapability(
-            ElsaCapabilities.WorkflowsRuntimeHttp,
+        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
+            services,
+            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsRuntimeHttp,
             "Workflow runtime HTTP integration",
             "WorkflowsRuntimeHttp",
             "workflows",
