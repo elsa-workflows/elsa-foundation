@@ -4,8 +4,6 @@ public sealed class StudioApiOptions
 {
     public string HostVersion { get; set; } = "1.0.0";
     public string SdkVersion { get; set; } = "1.0.0";
-    public string? BackendCapabilitiesUrl { get; set; }
     public ISet<string> DisabledModuleIds { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    public ISet<string> BackendCapabilityIds { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    public IDictionary<string, string> Modules { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }
+

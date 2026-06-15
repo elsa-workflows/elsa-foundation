@@ -18,3 +18,4 @@
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
   </ItemGroup>
 </Project>
+

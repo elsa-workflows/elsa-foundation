@@ -13,9 +13,8 @@ public static class StudioApiServiceCollectionExtensions
             services.Configure(configure);
 
         services.AddOptions<StudioApiOptions>();
-        services.AddHttpClient();
-        services.AddScoped<IBackendCapabilityProvider, BackendCapabilityProvider>();
         services.AddScoped<IStudioModuleManifestProvider, StudioModuleManifestProvider>();
         return services;
     }
 }
+

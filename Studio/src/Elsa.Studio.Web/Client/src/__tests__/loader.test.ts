@@ -78,7 +78,7 @@ function manifest(id: string, entry: string, host = "^1.0.0") {
     styles: [],
     requiredHostVersion: host,
     requiredSdkVersion: "^1.0.0",
-    capabilities: [],
-    requiredBackendCapabilities: []
+    capabilities: []
   };
 }
+

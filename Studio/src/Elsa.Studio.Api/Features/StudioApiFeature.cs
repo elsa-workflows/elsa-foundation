@@ -23,16 +23,9 @@ public sealed class StudioApiFeature : IWebShellFeature
         {
             options.HostVersion = Options.HostVersion;
             options.SdkVersion = Options.SdkVersion;
-            options.BackendCapabilitiesUrl = Options.BackendCapabilitiesUrl;
 
             foreach (var moduleId in Options.DisabledModuleIds)
                 options.DisabledModuleIds.Add(moduleId);
-
-            foreach (var capabilityId in Options.BackendCapabilityIds)
-                options.BackendCapabilityIds.Add(capabilityId);
-
-            foreach (var module in Options.Modules)
-                options.Modules[module.Key] = module.Value;
         });
     }
 
