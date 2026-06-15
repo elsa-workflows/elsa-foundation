@@ -52,6 +52,9 @@ const recentPath = `${endpointPrefix}/recent`;
 const hubPath = `${endpointPrefix}/hub`;
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
+const consoleStreamServerTimeoutInMilliseconds = 120_000;
+const consoleStreamKeepAliveIntervalInMilliseconds = 15_000;
+const consoleStreamTimeoutMessage = "Server timeout elapsed without receiving a message from the server.";
 const autoScrollStorageKey = "elsa-studio-console-stream-autoscroll";
 const ansiEscapePattern = /\x1b\[([0-9;]*)m/g;
 const ansiForegroundClasses: Record<number, string> = {
@@ -170,10 +173,51 @@ export function ConsoleStreamPanel() {
       .withUrl(hubPath)
       .withAutomaticReconnect()
       .build();
+    connection.serverTimeoutInMilliseconds = consoleStreamServerTimeoutInMilliseconds;
+    connection.keepAliveIntervalInMilliseconds = consoleStreamKeepAliveIntervalInMilliseconds;
 
     connection.onreconnecting(() => setConnected(false));
-    connection.onreconnected(() => setConnected(true));
+    connection.onreconnected(() => {
+      setConnected(true);
+      void subscribeToStream();
+    });
     connection.onclose(() => setConnected(false));
+
+    function disposeSubscription() {
+      subscription?.dispose();
+      subscription = null;
+    }
+
+    function subscribeToStream() {
+      if (cancelled || connection.state !== signalR.HubConnectionState.Connected) {
+        return;
+      }
+
+      disposeSubscription();
+      subscription = connection.stream<ConsoleStreamItem>("StreamAsync", { limit: consoleReplayLimit }).subscribe({
+        next: item => {
+          if (item?.line) {
+            addEntries([createConsoleEntryFromLine(item.line)]);
+          } else if (item?.droppedLines || item?.dropped) {
+            const dropped = item.droppedLines ?? item.dropped;
+            addLine("stderr", `${dropped?.count ?? 0} console lines were dropped.`);
+          }
+        },
+        error: error => {
+          if (cancelled) {
+            return;
+          }
+
+          if (isRecoverableConsoleStreamError(error)) {
+            void subscribeToStream();
+            return;
+          }
+
+          addLine("stderr", `Console stream failed: ${getErrorMessage(error)}`);
+        },
+        complete: () => addLine("stdout", "Console stream completed.")
+      });
+    }
 
     async function connect() {
       try {
@@ -183,18 +227,7 @@ export function ConsoleStreamPanel() {
         }
 
         setConnected(true);
-        subscription = connection.stream<ConsoleStreamItem>("StreamAsync", { limit: consoleReplayLimit }).subscribe({
-          next: item => {
-            if (item?.line) {
-              addEntries([createConsoleEntryFromLine(item.line)]);
-            } else if (item?.droppedLines || item?.dropped) {
-              const dropped = item.droppedLines ?? item.dropped;
-              addLine("stderr", `${dropped?.count ?? 0} console lines were dropped.`);
-            }
-          },
-          error: error => addLine("stderr", `Console stream failed: ${getErrorMessage(error)}`),
-          complete: () => addLine("stdout", "Console stream completed.")
-        });
+        subscribeToStream();
 
         await loadRecentLines();
       } catch (error) {
@@ -209,7 +242,7 @@ export function ConsoleStreamPanel() {
 
     return () => {
       cancelled = true;
-      subscription?.dispose();
+      disposeSubscription();
       void connection.stop();
     };
   }, [addEntries, addLine, loadRecentLines]);
@@ -401,4 +434,8 @@ function getInitialAutoScroll() {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+export function isRecoverableConsoleStreamError(error: unknown) {
+  return getErrorMessage(error) === consoleStreamTimeoutMessage;
 }

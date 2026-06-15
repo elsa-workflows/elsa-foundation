@@ -4,6 +4,7 @@ import {
   createConsoleEntryFromLine,
   getConsoleStreamName,
   parseAnsiSegments,
+  isRecoverableConsoleStreamError,
   register,
   type ConsoleEntry
 } from "../module";
@@ -68,6 +69,11 @@ describe("console stream module", () => {
       { text: "red", className: "console-stream-ansi-fg-red" },
       { text: " normal", className: "" }
     ]);
+  });
+
+  it("treats stream timeout errors as recoverable", () => {
+    expect(isRecoverableConsoleStreamError(new Error("Server timeout elapsed without receiving a message from the server."))).toBe(true);
+    expect(isRecoverableConsoleStreamError(new Error("Something else"))).toBe(false);
   });
 });
 
