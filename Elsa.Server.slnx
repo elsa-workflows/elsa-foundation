@@ -81,6 +81,11 @@
     <Project Path="src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj" />
     <Project Path="src/Elsa/Mediator/Elsa.Mediator.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Modularity/">
+    <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
+    <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Persistence/">
     <Project Path="src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
   </Folder>
@@ -174,6 +179,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Modularity/">
+    <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">

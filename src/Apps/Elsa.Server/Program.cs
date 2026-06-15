@@ -20,6 +20,7 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
+using Elsa.Modularity.Api;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -104,6 +105,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(TasksFeature).Assembly,
             typeof(MemoryCacheFeature).Assembly,
             typeof(MediatorFeature).Assembly,
+            typeof(ModularityApiFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
             typeof(SqliteWorkflowsDesignPersistenceShellFeature).Assembly,
