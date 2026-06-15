@@ -1362,6 +1362,28 @@ p {
   object-fit: contain;
 }
 
+.stack-mark-plate {
+  width: 98px;
+  height: 98px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 40%),
+    color-mix(in srgb, var(--surface) 72%, var(--surface-2));
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.stack-mark-plate strong {
+  max-width: 76px;
+  color: var(--accent-strong);
+  font-size: 19px;
+  font-weight: 820;
+  line-height: 1;
+  text-align: center;
+}
+
 .stack-card-body {
   min-width: 0;
   padding: 14px;

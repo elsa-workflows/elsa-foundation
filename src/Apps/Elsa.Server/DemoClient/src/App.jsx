@@ -343,6 +343,42 @@ const demoStackPackages = [
     role: "Live backend console",
     description: "Captures stdout and stderr from the backend and streams console lines into the demo UI in real time.",
     details: ["Console capture", "SignalR streaming", "ANSI styling"]
+  },
+  {
+    name: "React",
+    url: "https://react.dev",
+    imageMode: "mark",
+    mark: "React",
+    role: "Client UI runtime",
+    description: "Renders the interactive demo workspace, navigation, forms, local state, and Stack view itself.",
+    details: ["Component UI", "Local state", "Demo workspace"]
+  },
+  {
+    name: "React Flow",
+    url: "https://reactflow.dev",
+    imageMode: "mark",
+    mark: "Flow",
+    role: "Designer canvas",
+    description: "Powers the workflow designer canvas with node positioning, edges, minimap, and canvas controls.",
+    details: ["Node graph", "Edges", "Canvas controls"]
+  },
+  {
+    name: "ASP.NET Core",
+    url: "https://dotnet.microsoft.com/en-us/apps/aspnet",
+    imageMode: "mark",
+    mark: ".NET",
+    role: "Backend host",
+    description: "Hosts the demo app, serves static client assets, exposes demo APIs, and maps shell routes.",
+    details: ["Static files", "Demo APIs", "Shell routing"]
+  },
+  {
+    name: "Vite",
+    url: "https://vite.dev",
+    imageMode: "mark",
+    mark: "Vite",
+    role: "Client build tooling",
+    description: "Builds and serves the React demo client during development and publish-time static asset generation.",
+    details: ["Dev server", "Bundling", "Static assets"]
   }
 ];
 const consoleHeightStorageKey = "elsa-demo-console-height";
@@ -2216,10 +2252,14 @@ function DemoPackageStack({ packages }) {
       <div className="stack-grid">
         {packages.map((item) => (
           <article className="stack-card" key={item.name}>
-            <a className={`stack-visual ${item.imageMode === "logo" ? "logo" : "preview"}`} href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
+            <a className={`stack-visual ${item.imageMode === "logo" ? "logo" : item.imageMode === "mark" ? "mark" : "preview"}`} href={item.url} target="_blank" rel="noreferrer" aria-label={`Open ${item.name}`}>
               {item.imageMode === "logo" ? (
                 <span className="stack-logo-plate">
                   <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
+                </span>
+              ) : item.imageMode === "mark" ? (
+                <span className="stack-mark-plate" aria-hidden="true">
+                  <strong>{item.mark}</strong>
                 </span>
               ) : (
                 <img src={item.imageUrl} alt={item.imageAlt} loading="lazy" />
