@@ -9,6 +9,7 @@ The first slice intentionally proves the extension boundary only:
 - `Elsa.Studio.Web` hosts the root-mounted Vite shell.
 - `Elsa.Studio.Samples.Dashboard` contributes a frontend-only dashboard module.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
+- `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 
 The shell UX is adapted from [`elsa-workflows/elsa-foundation-designer`](https://github.com/elsa-workflows/elsa-foundation-designer) main at `2a04fdb`, without importing its Next.js runtime or product feature modules.
 
@@ -37,6 +38,8 @@ Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each m
 ```
 
 Removing a feature key (or setting the shell up differently) turns the corresponding module — its services, manifest contribution, and endpoints — on or off without code changes. `WebRouting:Path` of `""` mounts the shell's endpoints at the application root.
+
+Backend-targeted Studio modules should use the runtime backend base URL instead of the shell origin. The shell exposes it through `/studio-runtime.js` and the frontend SDK surfaces it as `api.backend.http`. If `Studio:BackendBaseUrl` is unset, the backend client falls back to the shell origin.
 
 Features ship in:
 
@@ -73,4 +76,3 @@ Open:
 - `/_elsa/studio/diagnostics/console-logs/sources`
 - `/_elsa/studio/diagnostics/console-logs/hub`
 - `/_elsa/studio/samples/weather-forecast`
-

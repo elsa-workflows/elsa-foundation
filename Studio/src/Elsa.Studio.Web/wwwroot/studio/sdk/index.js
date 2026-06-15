@@ -1,4 +1,4 @@
-function r() {
+function u() {
   const t = [];
   return {
     add(n) {
@@ -9,6 +9,27 @@ function r() {
     }
   };
 }
+function s(t) {
+  return {
+    baseUrl: t,
+    http: o(t)
+  };
+}
+function o(t) {
+  return {
+    async getJson(n, r) {
+      const e = await fetch(i(t, n), r);
+      if (!e.ok)
+        throw new Error(`Request failed with ${e.status}.`);
+      return await e.json();
+    }
+  };
+}
+function i(t, n) {
+  return new URL(n, t).toString();
+}
 export {
-  r as createContributionRegistry
+  u as createContributionRegistry,
+  s as createEndpointContext,
+  o as createHttpClient
 };

@@ -1,9 +1,9 @@
-import { useState as T, useRef as se, useCallback as J, useEffect as X, useMemo as Te } from "react";
+import { useState as T, useRef as re, useCallback as J, useEffect as X, useMemo as Te } from "react";
 var V = { exports: {} }, M = {};
-var re;
+var ie;
 function Pe() {
-  if (re) return M;
-  re = 1;
+  if (ie) return M;
+  ie = 1;
   var o = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
   function t(n, s, r) {
     var c = null;
@@ -22,9 +22,9 @@ function Pe() {
   }
   return M.Fragment = e, M.jsx = t, M.jsxs = t, M;
 }
-var ie;
+var ce;
 function Re() {
-  return ie || (ie = 1, V.exports = Pe()), V.exports;
+  return ce || (ce = 1, V.exports = Pe()), V.exports;
 }
 var p = Re();
 class P extends Error {
@@ -91,7 +91,7 @@ class De extends Error {
     super(e), this.transport = t, this.errorType = "FailedToStartTransportError", this.__proto__ = n;
   }
 }
-class ce extends Error {
+class ae extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.FailedToNegotiateWithServerError}.
    *
    * @param {string} message A descriptive error message.
@@ -112,7 +112,7 @@ class Ae extends Error {
     super(e), this.innerErrors = t, this.__proto__ = n;
   }
 }
-class me {
+class we {
   constructor(e, t, n) {
     this.statusCode = e, this.statusText = t, this.content = n;
   }
@@ -212,7 +212,7 @@ function $(o) {
   return o && typeof ArrayBuffer < "u" && (o instanceof ArrayBuffer || // Sometimes we get an ArrayBuffer that doesn't satisfy instanceof
   o.constructor && o.constructor.name === "ArrayBuffer");
 }
-async function we(o, e, t, n, s, r) {
+async function be(o, e, t, n, s, r) {
   const c = {}, [a, l] = A();
   c[a] = l, o.log(i.Trace, `(${e} transport) sending data. ${H(s, r.logMessageContent)}.`);
   const h = $(s) ? "arraybuffer" : "text", d = await t.post(n, {
@@ -362,18 +362,18 @@ class qe extends B {
       s && clearTimeout(s), e.abortSignal && (e.abortSignal.onabort = null);
     }
     if (!r.ok) {
-      const l = await ae(r, "text");
+      const l = await le(r, "text");
       throw new P(l || r.statusText, r.status);
     }
-    const a = await ae(r, e.responseType);
-    return new me(r.status, r.statusText, a);
+    const a = await le(r, e.responseType);
+    return new we(r.status, r.statusText, a);
   }
   getCookieString(e) {
     let t = "";
     return _.isNode && this._jar && this._jar.getCookies(e, (n, s) => t = s.join("; ")), t;
   }
 }
-function ae(o, e) {
+function le(o, e) {
   let t;
   switch (e) {
     case "arraybuffer":
@@ -407,7 +407,7 @@ class Fe extends B {
       }), e.responseType && (s.responseType = e.responseType), e.abortSignal && (e.abortSignal.onabort = () => {
         s.abort(), n(new E());
       }), e.timeout && (s.timeout = e.timeout), s.onload = () => {
-        e.abortSignal && (e.abortSignal.onabort = null), s.status >= 200 && s.status < 300 ? t(new me(s.status, s.statusText, s.response || s.responseText)) : n(new P(s.response || s.responseText || s.statusText, s.status));
+        e.abortSignal && (e.abortSignal.onabort = null), s.status >= 200 && s.status < 300 ? t(new we(s.status, s.statusText, s.response || s.responseText)) : n(new P(s.response || s.responseText || s.statusText, s.status));
       }, s.onerror = () => {
         this._logger.log(i.Warning, `Error from HTTP request. ${s.status}: ${s.statusText}.`), n(new P(s.statusText, s.status));
       }, s.ontimeout = () => {
@@ -1102,7 +1102,7 @@ class Q {
   }
 }
 const Ze = [0, 2e3, 1e4, 3e4, null];
-class le {
+class he {
   constructor(e) {
     this._retryDelays = e !== void 0 ? [...e, null] : Ze;
   }
@@ -1153,7 +1153,7 @@ let tt = class {
     return this._isAborted;
   }
 };
-class he {
+class ue {
   // This is an internal type, not exported from 'index' so this is really just internal.
   get pollAborted() {
     return this._pollAbort.aborted;
@@ -1192,7 +1192,7 @@ class he {
     }
   }
   async send(e) {
-    return this._running ? we(this._logger, "LongPolling", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
+    return this._running ? be(this._logger, "LongPolling", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
   }
   async stop() {
     this._logger.log(i.Trace, "(LongPolling transport) Stopping polling."), this._running = !1, this._pollAbort.abort();
@@ -1264,7 +1264,7 @@ class nt {
     });
   }
   async send(e) {
-    return this._eventSource ? we(this._logger, "SSE", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
+    return this._eventSource ? be(this._logger, "SSE", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
   }
   stop() {
     return this._close(), Promise.resolve();
@@ -1331,7 +1331,7 @@ class ot {
     return e && typeof e.wasClean == "boolean" && typeof e.code == "number";
   }
 }
-const ue = 100;
+const de = 100;
 class st {
   constructor(e, t = {}) {
     if (this._stopPromiseResolver = () => {
@@ -1410,12 +1410,12 @@ class st {
             this._accessTokenFactory = () => r, this._httpClient._accessToken = r, this._httpClient._accessTokenFactory = void 0;
           }
           s++;
-        } while (n.url && s < ue);
-        if (s === ue && n.url)
+        } while (n.url && s < de);
+        if (s === de && n.url)
           throw new Error("Negotiate redirection limit exceeded.");
         await this._createTransport(t, this._options.transport, n, e);
       }
-      this.transport instanceof he && (this.features.inherentKeepAlive = !0), this._connectionState === "Connecting" && (this._logger.log(i.Debug, "The HttpConnection connected successfully."), this._connectionState = "Connected");
+      this.transport instanceof ue && (this.features.inherentKeepAlive = !0), this._connectionState === "Connecting" && (this._logger.log(i.Debug, "The HttpConnection connected successfully."), this._connectionState = "Connected");
     } catch (n) {
       return this._logger.log(i.Error, "Failed to start the connection: " + n), this._connectionState = "Disconnected", this.transport = void 0, this._stopPromiseResolver(), Promise.reject(n);
     }
@@ -1435,10 +1435,10 @@ class st {
       if (c.statusCode !== 200)
         return Promise.reject(new Error(`Unexpected status code returned from negotiate '${c.statusCode}'`));
       const a = JSON.parse(c.content);
-      return (!a.negotiateVersion || a.negotiateVersion < 1) && (a.connectionToken = a.connectionId), a.useStatefulReconnect && this._options._useStatefulReconnect !== !0 ? Promise.reject(new ce("Client didn't negotiate Stateful Reconnect but the server did.")) : a;
+      return (!a.negotiateVersion || a.negotiateVersion < 1) && (a.connectionToken = a.connectionId), a.useStatefulReconnect && this._options._useStatefulReconnect !== !0 ? Promise.reject(new ae("Client didn't negotiate Stateful Reconnect but the server did.")) : a;
     } catch (c) {
       let a = "Failed to complete negotiation with the server: " + c;
-      return c instanceof P && c.statusCode === 404 && (a = a + " Either this is not a SignalR endpoint or there is a proxy blocking the connection."), this._logger.log(i.Error, a), Promise.reject(new ce(a));
+      return c instanceof P && c.statusCode === 404 && (a = a + " Either this is not a SignalR endpoint or there is a proxy blocking the connection."), this._logger.log(i.Error, a), Promise.reject(new ae(a));
     }
   }
   _createConnectUrl(e, t) {
@@ -1489,7 +1489,7 @@ class st {
           throw new Error("'EventSource' is not supported in your environment.");
         return new nt(this._httpClient, this._httpClient._accessToken, this._logger, this._options);
       case w.LongPolling:
-        return new he(this._httpClient, this._logger, this._options);
+        return new ue(this._httpClient, this._logger, this._options);
       default:
         throw new Error(`Unknown transport: ${e}.`);
     }
@@ -1746,7 +1746,7 @@ class ht {
   withAutomaticReconnect(e) {
     if (this.reconnectPolicy)
       throw new Error("A reconnectPolicy has already been set.");
-    return e ? Array.isArray(e) ? this.reconnectPolicy = new le(e) : this.reconnectPolicy = e : this.reconnectPolicy = new le(), this;
+    return e ? Array.isArray(e) ? this.reconnectPolicy = new he(e) : this.reconnectPolicy = e : this.reconnectPolicy = new he(), this;
   }
   /** Configures {@link @microsoft/signalr.HubConnection.serverTimeoutInMilliseconds} for the {@link @microsoft/signalr.HubConnection}.
    *
@@ -1784,7 +1784,7 @@ class ht {
 function ut(o) {
   return o.log !== void 0;
 }
-const be = "/_elsa/studio/diagnostics/console-logs", dt = `${be}/recent`, gt = `${be}/hub`, de = 2e3, ft = 12e4, _t = 15e3, pt = "Server timeout elapsed without receiving a message from the server.", Se = "elsa-studio-console-stream-autoscroll", G = /\x1b\[([0-9;]*)m/g, ge = {
+const Se = "/_elsa/studio/diagnostics/console-logs", dt = `${Se}/recent`, gt = `${Se}/hub`, ge = 2e3, ft = 12e4, _t = 15e3, pt = "Server timeout elapsed without receiving a message from the server.", Ce = "elsa-studio-console-stream-autoscroll", G = /\x1b\[([0-9;]*)m/g, fe = {
   30: "console-stream-ansi-fg-black",
   31: "console-stream-ansi-fg-red",
   32: "console-stream-ansi-fg-green",
@@ -1801,7 +1801,7 @@ const be = "/_elsa/studio/diagnostics/console-logs", dt = `${be}/recent`, gt = `
   95: "console-stream-ansi-fg-bright-magenta",
   96: "console-stream-ansi-fg-bright-cyan",
   97: "console-stream-ansi-fg-bright-white"
-}, fe = {
+}, _e = {
   40: "console-stream-ansi-bg-black",
   41: "console-stream-ansi-bg-red",
   42: "console-stream-ansi-bg-green",
@@ -1819,9 +1819,9 @@ const be = "/_elsa/studio/diagnostics/console-logs", dt = `${be}/recent`, gt = `
   106: "console-stream-ansi-bg-bright-cyan",
   107: "console-stream-ansi-bg-bright-white"
 };
-let Ce;
-function Rt(o) {
-  Ce = o, o.panels.add({
+let ee;
+function $t(o) {
+  ee = o, o.panels.add({
     id: "console-stream",
     title: "Console",
     order: 1e3,
@@ -1829,7 +1829,7 @@ function Rt(o) {
   });
 }
 function mt() {
-  const [o, e] = T([]), [t, n] = T(0), [s, r] = T(!1), [c, a] = T(!1), [l, h] = T(null), [d, y] = T(0), [I, ve] = T(Et), U = se(/* @__PURE__ */ new Set()), ee = se(null), O = c ? l ?? o : o, te = c ? Math.max(0, t - d) : 0, x = J((g) => {
+  const [o, e] = T([]), [t, n] = T(0), [s, r] = T(!1), [c, a] = T(!1), [l, h] = T(null), [d, y] = T(0), [I, ve] = T(Et), U = re(/* @__PURE__ */ new Set()), te = re(null), O = c ? l ?? o : o, ne = c ? Math.max(0, t - d) : 0, x = J((g) => {
     const v = [];
     for (const b of g)
       U.current.has(b.id) || (U.current.add(b.id), v.push(b));
@@ -1837,30 +1837,30 @@ function mt() {
   }, []), D = J((g, v) => {
     x([Ct(g, v)]);
   }, [x]), q = J(async () => {
-    const g = await Ce.host.http.getJson(`${dt}?limit=${de}`), v = g.items ?? g.lines ?? [];
-    x(v.map(_e));
+    const g = await ee.backend.http.getJson(`${dt}?limit=${ge}`), v = g.items ?? g.lines ?? [];
+    x(v.map(pe));
   }, [x]);
   X(() => {
-    window.localStorage.setItem(Se, String(I));
+    window.localStorage.setItem(Ce, String(I));
   }, [I]), X(() => {
     if (!I || c)
       return;
-    const g = ee.current;
+    const g = te.current;
     g && (g.scrollTop = g.scrollHeight);
   }, [I, c, O]), X(() => {
     let g = !1, v = null;
-    const b = new ht().withUrl(gt).withAutomaticReconnect().build();
+    const b = new ht().withUrl(Tt(gt)).withAutomaticReconnect().build();
     b.serverTimeoutInMilliseconds = ft, b.keepAliveIntervalInMilliseconds = _t, b.onreconnecting(() => r(!1)), b.onreconnected(() => {
       r(!0), F();
     }), b.onclose(() => r(!1));
-    function oe() {
+    function se() {
       v?.dispose(), v = null;
     }
     function F() {
-      g || b.state !== f.Connected || (oe(), v = b.stream("StreamAsync", { limit: de }).subscribe({
+      g || b.state !== f.Connected || (se(), v = b.stream("StreamAsync", { limit: ge }).subscribe({
         next: (k) => {
           if (k?.line)
-            x([_e(k.line)]);
+            x([pe(k.line)]);
           else if (k?.droppedLines || k?.dropped) {
             const z = k.droppedLines ?? k.dropped;
             D("stderr", `${z?.count ?? 0} console lines were dropped.`);
@@ -1888,10 +1888,10 @@ function mt() {
       }
     }
     return Ie(), () => {
-      g = !0, oe(), b.stop();
+      g = !0, se(), b.stop();
     };
   }, [x, D, q]);
-  const ne = Te(
+  const oe = Te(
     () => O.map((g) => ({ ...g, renderedText: vt(g.text) })),
     [O]
   );
@@ -1909,8 +1909,8 @@ function mt() {
     /* @__PURE__ */ p.jsxs("header", { className: "console-stream-header", children: [
       /* @__PURE__ */ p.jsxs("div", { children: [
         /* @__PURE__ */ p.jsx("h2", { children: "Backend console" }),
-        te > 0 ? /* @__PURE__ */ p.jsxs("p", { children: [
-          te,
+        ne > 0 ? /* @__PURE__ */ p.jsxs("p", { children: [
+          ne,
           " buffered while paused"
         ] }) : null
       ] }),
@@ -1924,12 +1924,12 @@ function mt() {
         /* @__PURE__ */ p.jsx("button", { type: "button", onClick: Ee, children: "Clear" })
       ] })
     ] }),
-    /* @__PURE__ */ p.jsxs("div", { className: "console-stream-lines", ref: ee, children: [
-      ne.length === 0 ? /* @__PURE__ */ p.jsxs("div", { className: "console-stream-line stdout", children: [
+    /* @__PURE__ */ p.jsxs("div", { className: "console-stream-lines", ref: te, children: [
+      oe.length === 0 ? /* @__PURE__ */ p.jsxs("div", { className: "console-stream-line stdout", children: [
         /* @__PURE__ */ p.jsx("span", { children: (/* @__PURE__ */ new Date()).toLocaleTimeString() }),
         /* @__PURE__ */ p.jsx("code", { children: "Console stream is ready." })
       ] }) : null,
-      ne.map((g) => /* @__PURE__ */ p.jsxs("div", { className: `console-stream-line ${g.stream}`, children: [
+      oe.map((g) => /* @__PURE__ */ p.jsxs("div", { className: `console-stream-line ${g.stream}`, children: [
         /* @__PURE__ */ p.jsx("span", { children: new Date(g.timestamp).toLocaleTimeString() }),
         /* @__PURE__ */ p.jsx("code", { children: g.renderedText })
       ] }, g.id))
@@ -1955,7 +1955,7 @@ function Ct(o, e) {
     text: e
   };
 }
-function _e(o) {
+function pe(o) {
   return {
     id: o.id ?? `${o.sequence ?? Date.now()}-${Math.random()}`,
     timestamp: o.timestamp ?? o.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
@@ -1970,11 +1970,11 @@ function yt(o) {
   const e = [], t = ye();
   let n = 0, s;
   for (G.lastIndex = 0; (s = G.exec(o)) !== null; ) {
-    s.index > n && e.push({ text: o.slice(n, s.index), className: pe(t) });
+    s.index > n && e.push({ text: o.slice(n, s.index), className: me(t) });
     const r = s[1] === "" ? [0] : s[1].split(";").map((c) => Number(c || 0));
     kt(t, r), n = G.lastIndex;
   }
-  return n < o.length && e.push({ text: o.slice(n), className: pe(t) }), e;
+  return n < o.length && e.push({ text: o.slice(n), className: me(t) }), e;
 }
 function vt(o) {
   return yt(o).map((e, t) => e.className ? /* @__PURE__ */ p.jsx("span", { className: e.className, children: e.text }, t) : e.text);
@@ -1989,9 +1989,9 @@ function ye() {
 }
 function kt(o, e) {
   for (const t of e)
-    t === 0 ? Object.assign(o, ye()) : t === 1 ? (o.bold = !0, o.dim = !1) : t === 2 ? (o.dim = !0, o.bold = !1) : t === 22 ? (o.bold = !1, o.dim = !1) : t === 39 ? o.foreground = "" : t === 49 ? o.background = "" : ge[t] ? o.foreground = ge[t] : fe[t] && (o.background = fe[t]);
+    t === 0 ? Object.assign(o, ye()) : t === 1 ? (o.bold = !0, o.dim = !1) : t === 2 ? (o.dim = !0, o.bold = !1) : t === 22 ? (o.bold = !1, o.dim = !1) : t === 39 ? o.foreground = "" : t === 49 ? o.background = "" : fe[t] ? o.foreground = fe[t] : _e[t] && (o.background = _e[t]);
 }
-function pe(o) {
+function me(o) {
   return [
     o.bold ? "console-stream-ansi-bold" : "",
     o.dim ? "console-stream-ansi-dim" : "",
@@ -2000,7 +2000,7 @@ function pe(o) {
   ].filter(Boolean).join(" ");
 }
 function Et() {
-  return typeof window > "u" ? !0 : window.localStorage.getItem(Se) !== "false";
+  return typeof window > "u" ? !0 : window.localStorage.getItem(Ce) !== "false";
 }
 function L(o) {
   return o instanceof Error ? o.message : String(o);
@@ -2008,14 +2008,17 @@ function L(o) {
 function It(o) {
   return L(o) === pt;
 }
+function Tt(o) {
+  return new URL(o, ee.backend.baseUrl).toString();
+}
 export {
   mt as ConsoleStreamPanel,
   St as appendConsoleEntries,
   bt as compareConsoleEntries,
   Ct as createConsoleEntry,
-  _e as createConsoleEntryFromLine,
+  pe as createConsoleEntryFromLine,
   wt as getConsoleStreamName,
   It as isRecoverableConsoleStreamError,
   yt as parseAnsiSegments,
-  Rt as register
+  $t as register
 };

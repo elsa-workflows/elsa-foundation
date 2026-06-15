@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createStudioRegistry } from "../app/registry";
+import { createEndpointContext } from "../sdk";
 import { isVersionRangeCompatible, loadStudioModules } from "../app/loader";
 
 describe("studio module loader", () => {
@@ -14,7 +15,7 @@ describe("studio module loader", () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: { getJson: async () => ({}) }
+      ...createEndpointContext("https://studio.example/")
     });
 
     await loadStudioModules(
@@ -50,7 +51,7 @@ describe("studio module loader", () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: { getJson: async () => ({}) }
+      ...createEndpointContext("https://studio.example/")
     });
 
     await loadStudioModules(
@@ -81,4 +82,3 @@ function manifest(id: string, entry: string, host = "^1.0.0") {
     capabilities: []
   };
 }
-

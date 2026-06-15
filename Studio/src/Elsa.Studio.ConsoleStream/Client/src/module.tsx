@@ -146,7 +146,7 @@ export function ConsoleStreamPanel() {
   }, [addEntries]);
 
   const loadRecentLines = useCallback(async () => {
-    const response = await moduleApi.host.http.getJson<ConsoleRecentResponse>(`${recentPath}?limit=${consoleReplayLimit}`);
+    const response = await moduleApi.backend.http.getJson<ConsoleRecentResponse>(`${recentPath}?limit=${consoleReplayLimit}`);
     const recentLines = response.items ?? response.lines ?? [];
     addEntries(recentLines.map(createConsoleEntryFromLine));
   }, [addEntries]);
@@ -170,7 +170,7 @@ export function ConsoleStreamPanel() {
     let cancelled = false;
     let subscription: signalR.ISubscription<ConsoleStreamItem> | null = null;
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(hubPath)
+      .withUrl(resolveBackendUrl(hubPath))
       .withAutomaticReconnect()
       .build();
     connection.serverTimeoutInMilliseconds = consoleStreamServerTimeoutInMilliseconds;
@@ -438,4 +438,8 @@ function getErrorMessage(error: unknown) {
 
 export function isRecoverableConsoleStreamError(error: unknown) {
   return getErrorMessage(error) === consoleStreamTimeoutMessage;
+}
+
+function resolveBackendUrl(path: string) {
+  return new URL(path, moduleApi.backend.baseUrl).toString();
 }

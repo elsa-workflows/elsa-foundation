@@ -7,6 +7,8 @@ import type {
   StudioPanelContribution
 } from "../sdk";
 import { createStudioRegistry } from "./registry";
+import { createEndpointContext } from "../sdk";
+import { getStudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
@@ -32,6 +34,9 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
   const [path, setPath] = useState(normalizePath(window.location.pathname));
+  const runtimeConfig = getStudioRuntimeConfig();
+  const shellBaseUrl = window.location.origin;
+  const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
 
   useEffect(() => {
     const onPopState = () => setPath(normalizePath(window.location.pathname));
@@ -53,16 +58,8 @@ function AppContent() {
         const registry = createStudioRegistry({
           hostVersion: manifestResponse.hostVersion,
           sdkVersion: manifestResponse.sdkVersion,
-          http: {
-            async getJson<T>(url, init) {
-              const result = await fetch(url, init);
-              if (!result.ok) {
-                throw new Error(`Request failed with ${result.status}.`);
-              }
-              return (await result.json()) as T;
-            }
-          }
-        });
+          ...createEndpointContext(shellBaseUrl)
+        }, backendBaseUrl);
 
         for (const diagnostic of manifestResponse.diagnostics) {
           registry.diagnostics.add(diagnostic);
@@ -90,7 +87,7 @@ function AppContent() {
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [backendBaseUrl, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
@@ -106,7 +103,7 @@ function AppContent() {
 
   if (state === "loading") {
     return (
-      <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo}>
+      <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
         <div className="empty-state">Loading Studio modules...</div>
       </ShellFrame>
     );
@@ -114,7 +111,7 @@ function AppContent() {
 
   if (state === "failed") {
     return (
-      <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo}>
+      <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
         <div className="error-state">{error}</div>
       </ShellFrame>
     );
@@ -125,7 +122,7 @@ function AppContent() {
   const pageTitle = navigation.find(item => item.path === path)?.label ?? activeRoute?.label ?? "Studio";
 
   return (
-    <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo}>
+    <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
       {path === "/" ? <Home api={api!} /> : null}
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
@@ -141,6 +138,7 @@ function ShellFrame({
   panels,
   path,
   title,
+  backendBaseUrl,
   onNavigate,
   children
 }: {
@@ -148,6 +146,7 @@ function ShellFrame({
   panels: StudioPanelContribution[];
   path: string;
   title: string;
+  backendBaseUrl: string;
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
@@ -189,7 +188,7 @@ function ShellFrame({
 
         <div className="sidebar-footer">
           <ShieldCheck size={16} />
-          <span>Trusted same-origin modules</span>
+          <span>Backend API: {new URL(backendBaseUrl).host}</span>
         </div>
       </aside>
 
@@ -411,6 +410,10 @@ function normalizePath(path: string) {
   }
 
   return path;
+}
+
+function resolveRuntimeBaseUrl(value: string | undefined, fallbackBaseUrl: string) {
+  return value ? new URL(value, fallbackBaseUrl).toString() : fallbackBaseUrl;
 }
 
 function getMaxBottomPanelHeight() {

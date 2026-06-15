@@ -26,6 +26,15 @@ export interface StudioModulesResponse {
   diagnostics: StudioModuleDiagnostic[];
 }
 
+export interface StudioHttpClient {
+  getJson<T>(url: string, init?: RequestInit): Promise<T>;
+}
+
+export interface StudioEndpointContext {
+  baseUrl: string;
+  http: StudioHttpClient;
+}
+
 export interface StudioRouteContribution {
   id: string;
   path: string;
@@ -59,16 +68,17 @@ export interface StudioContributionRegistry<T> {
   list(): T[];
 }
 
-export interface ElsaStudioHostContext {
+export interface ElsaStudioHostContext extends StudioEndpointContext {
   hostVersion: string;
   sdkVersion: string;
-  http: {
-    getJson<T>(url: string, init?: RequestInit): Promise<T>;
-  };
+}
+
+export interface ElsaStudioBackendContext extends StudioEndpointContext {
 }
 
 export interface ElsaStudioModuleApi {
   readonly host: ElsaStudioHostContext;
+  readonly backend: ElsaStudioBackendContext;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
@@ -100,3 +110,26 @@ export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
   };
 }
 
+export function createEndpointContext(baseUrl: string): StudioEndpointContext {
+  return {
+    baseUrl,
+    http: createHttpClient(baseUrl)
+  };
+}
+
+export function createHttpClient(baseUrl: string): StudioHttpClient {
+  return {
+    async getJson<T>(url: string, init?: RequestInit) {
+      const response = await fetch(resolveStudioUrl(baseUrl, url), init);
+      if (!response.ok) {
+        throw new Error(`Request failed with ${response.status}.`);
+      }
+
+      return (await response.json()) as T;
+    }
+  };
+}
+
+function resolveStudioUrl(baseUrl: string, url: string) {
+  return new URL(url, baseUrl).toString();
+}

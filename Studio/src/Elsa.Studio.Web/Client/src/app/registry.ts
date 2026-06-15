@@ -1,13 +1,17 @@
 import {
+  createEndpointContext,
   createContributionRegistry,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
   type StudioModuleDiagnostic
 } from "../sdk";
 
-export function createStudioRegistry(host: ElsaStudioHostContext): ElsaStudioModuleApi {
+export function createStudioRegistry(host: ElsaStudioHostContext, backendBaseUrl?: string): ElsaStudioModuleApi {
+  const backend = createEndpointContext(backendBaseUrl ?? host.baseUrl);
+
   return {
     host,
+    backend,
     navigation: createContributionRegistry(),
     routes: createContributionRegistry(),
     dashboardWidgets: createContributionRegistry(),
@@ -22,4 +26,3 @@ export function createStudioRegistry(host: ElsaStudioHostContext): ElsaStudioMod
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>()
   };
 }
-

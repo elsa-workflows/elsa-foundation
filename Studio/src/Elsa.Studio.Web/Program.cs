@@ -5,6 +5,7 @@ using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -27,6 +28,18 @@ builder.Services.AddCShellsAspNetCore(shells =>
 });
 
 var app = builder.Build();
+
+app.MapGet("/studio-runtime.js", () =>
+{
+    var runtimeConfig = new
+    {
+        backendBaseUrl = configuration["Studio:BackendBaseUrl"] ?? string.Empty
+    };
+
+    return Results.Content(
+        $"window.__ELSA_STUDIO_RUNTIME__ = {JsonSerializer.Serialize(runtimeConfig)};",
+        "application/javascript");
+});
 
 app.UseStaticFiles();
 

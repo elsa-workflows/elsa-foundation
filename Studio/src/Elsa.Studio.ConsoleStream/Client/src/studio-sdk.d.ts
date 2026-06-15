@@ -3,6 +3,13 @@ declare module "@elsa-workflows/studio-sdk" {
 
   export interface ElsaStudioModuleApi {
     readonly host: {
+      readonly baseUrl: string;
+      readonly http: {
+        getJson<T>(url: string, init?: RequestInit): Promise<T>;
+      };
+    };
+    readonly backend: {
+      readonly baseUrl: string;
       readonly http: {
         getJson<T>(url: string, init?: RequestInit): Promise<T>;
       };
