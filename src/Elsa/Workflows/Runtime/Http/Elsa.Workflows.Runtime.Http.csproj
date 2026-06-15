@@ -15,7 +15,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Http\Core\Elsa.Http.Core.csproj" />
-    <ProjectReference Include="..\..\..\Features\Abstractions\Elsa.Features.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 

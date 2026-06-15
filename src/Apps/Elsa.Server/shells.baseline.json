@@ -5,7 +5,6 @@
         "Name": "default",
         "Features": {
           "Primitives": {},
-          "CapabilitiesApi": {},
           "FileSystemDistributedLocking": {},
           "Serialization": {},
           "Tasks": {},

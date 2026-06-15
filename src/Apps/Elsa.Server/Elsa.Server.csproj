@@ -53,7 +53,6 @@
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Elsa.Expressions.csproj" />
-		<ProjectReference Include="..\..\Elsa\Features\Abstractions\Elsa.Features.Abstractions.csproj" />
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
