@@ -32,10 +32,7 @@
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
-          "SampleNuplaneActivities": {
-            "IncludeTimestamp": true,
-            "MessageTemplate": "Hello :) {recipient} from a Nuplane-loaded activity."
-          }
+          "SampleNuplaneActivities": {}
         },
         "Configuration": {
           "WebRouting": {
