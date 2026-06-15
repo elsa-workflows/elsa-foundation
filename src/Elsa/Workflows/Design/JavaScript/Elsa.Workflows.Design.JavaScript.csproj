@@ -15,7 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\Features\Abstractions\Elsa.Features.Abstractions.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Elsa.Workflows.Primitives.csproj" />
   </ItemGroup>

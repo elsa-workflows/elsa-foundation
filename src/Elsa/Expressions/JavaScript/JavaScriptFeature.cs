@@ -31,14 +31,6 @@ public class JavaScriptFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
-            services,
-            Elsa.Features.Abstractions.ElsaCapabilities.ExpressionsJavaScript,
-            "JavaScript expressions",
-            "JavaScriptExpressions",
-            "expressions",
-            "javascript");
-
         services
             .Configure<ConfigurationAccessFunctionProviderOptions>(o =>
             {

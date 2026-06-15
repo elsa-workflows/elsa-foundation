@@ -68,9 +68,6 @@
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Features/">
-    <Project Path="src/Elsa/Features/Abstractions/Elsa.Features.Abstractions.csproj" />
-  </Folder>
   <Folder Name="/src/elsa/Http/">
     <Project Path="src/Elsa/Http/Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa/Http/Elsa.Http.csproj" />

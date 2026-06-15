@@ -1,7 +1,5 @@
 using CShells.Features;
 using Elsa.Api.FastEndpoints;
-using Elsa.Features.Abstractions;
-using Elsa.Features.Abstractions.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
@@ -31,7 +29,6 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         var assembly = GetType().Assembly;
 
-        services.AddElsaCapability(ElsaCapabilities.WorkflowsPublishing, "Workflow publishing API", "WorkflowsPublishingApi", "workflows", "publishing", "api");
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         services.AddRequestHandlersFrom(assembly);

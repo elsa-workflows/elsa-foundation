@@ -45,14 +45,6 @@ public class HttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
-            services,
-            Elsa.Features.Abstractions.ElsaCapabilities.Http,
-            "HTTP infrastructure",
-            "Http",
-            "http",
-            "infrastructure");
-
         RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
         RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
         RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);

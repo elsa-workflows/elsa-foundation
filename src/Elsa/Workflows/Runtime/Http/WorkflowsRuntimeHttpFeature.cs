@@ -36,15 +36,6 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        Elsa.Features.Abstractions.Extensions.ServiceCollectionExtensions.AddElsaCapability(
-            services,
-            Elsa.Features.Abstractions.ElsaCapabilities.WorkflowsRuntimeHttp,
-            "Workflow runtime HTTP integration",
-            "WorkflowsRuntimeHttp",
-            "workflows",
-            "runtime",
-            "http");
-
         // Startup tasks.
         //.AddStartupTask<UpdateRouteTableStartupTask>()
         // Very important we will make sure the Route Table is filled at start up, unless we come up with a better way to read endpoint routes!

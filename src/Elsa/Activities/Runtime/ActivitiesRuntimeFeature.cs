@@ -6,8 +6,6 @@ using Elsa.Activities.Runtime.Handlers;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Events.Core.Extensions;
-using Elsa.Features.Abstractions;
-using Elsa.Features.Abstractions.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -34,8 +32,6 @@ public class ActivitiesRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaCapability(ElsaCapabilities.ActivitiesRuntime, "Activities runtime", "ActivitiesRuntime", "activities", "runtime");
-
         // Registry — singleton; populated by the startup task below.
         services.AddSingleton<IActivityConstructorRegistry, ActivityConstructorRegistry>();
 
