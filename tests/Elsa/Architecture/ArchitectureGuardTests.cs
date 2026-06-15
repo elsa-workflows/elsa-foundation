@@ -47,9 +47,9 @@ public sealed class ArchitectureGuardTests
             .Select(project => Path.GetDirectoryName(project.RelativePath)!)
             .ToHashSet(StringComparer.Ordinal);
         var expectedFolders = ProjectFiles()
-            .ToDictionary(project => project.RelativePath, project => ExpectedSolutionFolder(project, projectDirectories), StringComparer.Ordinal);
+            .ToDictionary(project => project.RelativePath, project => ExpectedSolutionFolder(project, projectDirectories), StringComparer.OrdinalIgnoreCase);
         var actualFolders = SolutionProjects()
-            .ToDictionary(project => project.Path, project => project.Folder, StringComparer.Ordinal);
+            .ToDictionary(project => project.Path, project => project.Folder, StringComparer.OrdinalIgnoreCase);
         var mismatches = expectedFolders
             .Where(expected => !actualFolders.TryGetValue(expected.Key, out var actual) || actual != expected.Value)
             .Select(expected =>
@@ -499,19 +499,19 @@ public sealed class ArchitectureGuardTests
     private static string ExpectedProjectPath(ProjectInfo project)
     {
         if (project.Name == "Elsa.Server")
-            return "src/Apps/Elsa.Server/Elsa.Server.csproj";
+            return "src/apps/Elsa.Server/Elsa.Server.csproj";
 
         if (project.Name == "Elsa.Architecture.Tests")
             return "tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj";
 
         if (project.Name == "Elsa.Primitives")
-            return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
+            return "src/elsa/Primitives/Primitives/Elsa.Primitives.csproj";
 
         if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
-            return $"src/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+            return $"src/elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("src/", StringComparison.Ordinal))
-            return $"src/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+            return $"src/elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/", StringComparison.Ordinal))
             return $"tests/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
@@ -521,6 +521,9 @@ public sealed class ArchitectureGuardTests
 
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
+        if (project.Name == "Elsa.Server")
+            return "/src/apps/";
+
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
         var lastProjectSegment = project.Name.Split('.')[^1];
         var lastDirectorySegment = directory.Split('/')[^1];

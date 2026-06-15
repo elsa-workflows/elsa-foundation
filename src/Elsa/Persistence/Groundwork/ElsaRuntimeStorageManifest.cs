@@ -21,6 +21,20 @@ public static class ElsaRuntimeStorageManifest
 
     public const string WorkflowExecutionIdField = "workflowExecutionId";
 
+    public const string WorkflowExecutableDocumentKind = "workflowExecutable";
+
+    /// <summary>Index used by <c>IWorkflowExecutableStore.ListAsync()</c> to enumerate every executable.</summary>
+    public const string WorkflowExecutableByCollection = "by-collection";
+
+    public const string CollectionField = "collection";
+
+    /// <summary>
+    /// Constant partition value stamped on every workflow executable document so the unfiltered
+    /// <c>ListAsync()</c> can be served through the declared-index equality query contract that every
+    /// provider supports, rather than relying on a provider-specific "scan all" capability.
+    /// </summary>
+    public const string WorkflowExecutableCollection = "workflowExecutable";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -42,6 +56,27 @@ public static class ElsaRuntimeStorageManifest
                     new PortableQueryDeclaration(
                         "list-by-workflow-execution",
                         BookmarkStateByWorkflowExecution,
+                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+                        QuerySortSupport.None,
+                        QueryPagingSupport.Offset)
+                ],
+                PhysicalizationPolicy.Portable),
+            new StorageUnit(
+                new StorageUnitIdentity(WorkflowExecutableDocumentKind),
+                "Workflow executable",
+                StorageIntent.PortableDocument(),
+                LifecyclePolicy.Mutable,
+                IdentityPolicy.StringId(),
+                TenancyPolicy.None,
+                ConcurrencyPolicy.Optimistic(),
+                SerializationPolicy.Json(),
+                [
+                    Keyword(WorkflowExecutableByCollection, CollectionField)
+                ],
+                [
+                    new PortableQueryDeclaration(
+                        "list-all",
+                        WorkflowExecutableByCollection,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
                         QuerySortSupport.None,
                         QueryPagingSupport.Offset)

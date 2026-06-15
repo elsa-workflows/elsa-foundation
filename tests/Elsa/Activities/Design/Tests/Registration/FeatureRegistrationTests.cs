@@ -163,6 +163,7 @@ public sealed class FeatureRegistrationTests
     private static void StubReconcilerDependencies(IServiceCollection services)
     {
         services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
+        services.AddSingleton<IActivityDefinitionHasher, StubActivityDefinitionHasher>();
         services.AddSingleton<IQueries<ActivityDefinition>, ThrowingQueriesForRegistration<ActivityDefinition>>();
         services.AddSingleton<IQueries<ActivityDefinitionVersion>, ThrowingQueriesForRegistration<ActivityDefinitionVersion>>();
         services.AddSingleton<IAddActivityDefinitionCommand, StubAddActivityDefinitionCommand>();
@@ -177,6 +178,11 @@ public sealed class FeatureRegistrationTests
     private sealed class StubIdentityGenerator : IIdentityGenerator
     {
         public string Generate() => Guid.NewGuid().ToString("N");
+    }
+
+    private sealed class StubActivityDefinitionHasher : IActivityDefinitionHasher
+    {
+        public string Hash(IActivityDefinition definition, IActivityDefinitionVersion version) => "stub";
     }
 
     private sealed class ThrowingQueriesForRegistration<TEntity> : IQueries<TEntity> where TEntity : Elsa.Primitives.Entities.Entity

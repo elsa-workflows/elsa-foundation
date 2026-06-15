@@ -17,10 +17,12 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
 
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
     }
 
     [Fact]
@@ -28,6 +30,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
 
         services.AddGroundworkRuntimeStores();
@@ -35,6 +38,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
     }
 
     [Fact]
@@ -42,6 +46,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
 
         new SqliteGroundworkRuntimePersistenceShellFeature().ConfigureServices(services);
 
@@ -49,5 +54,6 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.IsType<SqliteGroundworkDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
     }
 }

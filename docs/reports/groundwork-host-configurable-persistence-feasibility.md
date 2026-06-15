@@ -14,9 +14,14 @@ This report originally concluded against an earlier Groundwork that shipped only
 
 1. **Groundwork now ships an operational layer.** The live repository adds `Groundwork.Operational` (Outbox, WorkQueue, Leases, UnitOfWork) plus `Groundwork.Operational.Relational`, alongside the Documents/Relational providers (Sqlite/SqlServer/PostgreSql/MongoDb). These provide atomic claim with visibility timeout, ordered destructive dequeue, fencing leases with TTL, cross-unit atomic commit, and retry/idempotency/dead-letter state — i.e. the seven gaps in the table below are now addressed by first-class contracts that sit *alongside* `IDocumentStore`, exactly as this report recommended. The remaining question for operational stores is **evidence/benchmark**, not capability.
 
-2. **A real opt-in bridge is landed and tested in this repo.** An `Elsa.Persistence.Groundwork` bridge implements the runtime `IBookmarkStateStore` seam purely over Groundwork's provider-neutral `IDocumentStore`, with a host-owned `Elsa.Persistence.Groundwork.Sqlite` feature selecting the SQLite provider. The dependency is the feedz.io preview feed (`Groundwork.* @ 0.0.1-preview.4`). Tests prove identical behavior across the SQLite provider and an in-memory document store, and prove the in-memory runtime default is untouched unless the host composes the bridge.
+2. **A real opt-in bridge is landed and tested in this repo.** An `Elsa.Persistence.Groundwork` bridge implements two runtime seams — `IBookmarkStateStore` and `IWorkflowExecutableStore` — purely over Groundwork's provider-neutral `IDocumentStore`, with a host-owned `Elsa.Persistence.Groundwork.Sqlite` feature selecting the SQLite provider. The dependency is the feedz.io preview feed (`Groundwork.* @ 0.0.1-preview.4`). Tests prove identical behavior across the SQLite provider and an in-memory document store (including round-tripping the full nested `WorkflowExecutable` graph), and prove the in-memory runtime defaults are untouched unless the host composes the bridge.
 
-This confirms the central goal: runtime/domain code depends only on Elsa's seam contract; only the host names a concrete provider.
+This confirms the central goal: runtime/domain code depends only on Elsa's seam contracts; only the host names a concrete provider.
+
+### Bridge design notes worth carrying forward
+
+- **Unfiltered list via a constant partition.** `IWorkflowExecutableStore.ListAsync()` has no filter, but Groundwork's portable query contract is declared-index equality (no "scan all"). The bridge stamps a constant `collection` value on each executable document and lists via an equality query on it, so enumeration stays inside the portable contract every provider supports rather than depending on a provider-specific full scan.
+- **Don't persist derived projections.** `WorkflowExecutable` recomputes `Nodes`/`NodesById` from `RootActivity` in its constructor. A bridge-local `JsonTypeInfo` modifier drops those two properties from serialization (the constructor rebuilds them on load), avoiding storing the executable graph three times. This is a serialization concern owned by the bridge, not a domain-model change.
 
 ## What the current codebase already gives us
 
@@ -109,7 +114,7 @@ Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and huma
 ## Recommended implementation route
 
 1. ✅ **Done.** Opt-in `Elsa.Persistence.Groundwork` bridge with the provider adapter resolved at host composition time (`Elsa.Persistence.Groundwork.Sqlite`).
-2. ✅ **Done (first seam).** One runtime store landed behind an existing replacement contract — `IBookmarkStateStore` over Groundwork's `IDocumentStore` — with provider-neutral and registration tests. `IWorkflowExecutableStore` remains a candidate for the next document-shaped seam.
+2. ✅ **Done (two seams).** Two runtime stores landed behind existing replacement contracts — `IBookmarkStateStore` and `IWorkflowExecutableStore` — over Groundwork's `IDocumentStore`, each with provider-neutral and registration tests. `IWorkflowExecutionStateStore` / `IDurableValueStateStore` / `IIncidentStateStore` remain candidate document-shaped seams.
 3. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
 4. ⏳ **Open.** Add a hot-path viability matrix/checklist before migrating operational seams (outbox, scheduler work queue, leases) onto Groundwork's operational layer, gated on benchmark evidence rather than capability.
 

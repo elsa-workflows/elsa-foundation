@@ -18,6 +18,8 @@ public static class GroundworkRuntimeStoreRegistration
         // the bridge wins regardless of feature composition order.
         services.RemoveAll<IBookmarkStateStore>();
         services.AddSingleton<IBookmarkStateStore, GroundworkBookmarkStateStore>();
+        services.RemoveAll<IWorkflowExecutableStore>();
+        services.AddSingleton<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
         return services;
     }
 }
