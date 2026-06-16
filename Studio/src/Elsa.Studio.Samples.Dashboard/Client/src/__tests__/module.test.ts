@@ -8,6 +8,7 @@ describe("dashboard sample module", () => {
     register(api);
 
     expect(api.navigation.items).toHaveLength(1);
+    expect(api.navigation.items[0]).toMatchObject({ iconColor: "#0ea5e9" });
     expect(api.routes.items).toHaveLength(1);
     expect(api.dashboardWidgets.items).toHaveLength(1);
   });
@@ -33,4 +34,3 @@ function registry() {
     }
   };
 }
-

@@ -20,6 +20,18 @@ describe("studio registry", () => {
     expect(api.panels.list().map(panel => panel.id)).toEqual(["second", "first"]);
   });
 
+  it("preserves navigation icon colors", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    api.navigation.add({ id: "weather", label: "Weather", path: "/weather", iconColor: "#14b8a6" });
+
+    expect(api.navigation.list()[0]).toMatchObject({ iconColor: "#14b8a6" });
+  });
+
   it("creates a backend client that can target a separate base url", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

@@ -1,5 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, PackageSearch, PanelBottomClose, PanelBottomOpen, Search, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  Boxes,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  FileText,
+  Gauge,
+  Github,
+  LayoutDashboard,
+  Maximize2,
+  Minimize2,
+  PackageSearch,
+  Search,
+  ShieldCheck
+} from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioModulesResponse,
@@ -17,16 +32,18 @@ import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "failed";
+type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "home", label: "Overview", path: "/", order: 0 },
-  { id: "modules", label: "Modules", path: "/modules", order: 80 },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900 }
+  { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
 ];
 
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
 const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
+const bottomPanelMaximizedStorageKey = "elsa-studio-bottom-panel-maximized";
 const defaultBottomPanelHeight = 260;
 const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
@@ -184,7 +201,7 @@ function ShellFrame({
                 onNavigate(item.path);
               }}
             >
-              <NavIcon id={item.id} />
+              <NavIconTile item={item} />
               {item.label}
             </a>
           ))}
@@ -220,9 +237,11 @@ function ShellFrame({
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
+  const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [isCollapsed, setIsCollapsed] = useState(getInitialBottomPanelCollapsed);
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
 
@@ -243,21 +262,47 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }, [activePanel?.id]);
 
   useEffect(() => {
-    window.localStorage.setItem(bottomPanelCollapsedStorageKey, String(isCollapsed));
-  }, [isCollapsed]);
+    window.localStorage.setItem(bottomPanelCollapsedStorageKey, String(collapsed));
+  }, [collapsed]);
 
   useEffect(() => {
-    const handleResize = () => setHeight(current => clampBottomPanelHeight(current));
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    window.localStorage.setItem(bottomPanelMaximizedStorageKey, String(maximized));
+  }, [maximized]);
 
-  function startResize(event: React.PointerEvent<HTMLDivElement>) {
-    if (isCollapsed) {
+  useEffect(() => {
+    document.body.classList.toggle("bottom-panel-maximized", maximized);
+    return () => document.body.classList.remove("bottom-panel-maximized");
+  }, [maximized]);
+
+  useEffect(() => {
+    if (!maximized) {
       return;
     }
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMaximized(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [maximized]);
+
+  useEffect(() => {
+    if (maximized) {
+      return;
+    }
+
+    const handleResize = () => setHeight(current => clampBottomPanelHeight(current));
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [maximized]);
+
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
+    setCollapsed(false);
+    setMaximized(false);
 
     const startY = event.clientY;
     const startHeight = height;
@@ -281,12 +326,9 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }
 
   function handleResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (isCollapsed) {
-      return;
-    }
-
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      setCollapsed(false);
       setHeight(current => clampBottomPanelHeight(current + 16));
     } else if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -300,13 +342,33 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
     }
   }
 
+  function toggleCollapsed() {
+    setCollapsed(current => {
+      const next = !current;
+      if (next) {
+        setMaximized(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleMaximized() {
+    setMaximized(current => {
+      const next = !current;
+      if (next) {
+        setCollapsed(false);
+      }
+      return next;
+    });
+  }
+
   return (
     <section
-      className={`bottom-panel${isCollapsed ? " collapsed" : ""}`}
+      className={`bottom-panel ${collapsed ? "collapsed" : ""} ${maximized ? "maximized" : ""}`}
       style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}
       aria-label="Bottom panel"
     >
-      {!isCollapsed ? (
+      {!collapsed && !maximized ? (
         <div
           className="bottom-panel-resize-handle"
           role="separator"
@@ -320,8 +382,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           onKeyDown={handleResizeKeyDown}
         />
       ) : null}
-      <div className="bottom-panel-bar">
-        <div className="bottom-panel-tabs" role="tablist" aria-label="Bottom panels">
+      <div className="bottom-panel-tabs">
+        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels">
           {panels.map(panel => (
             <button
               key={panel.id}
@@ -329,28 +391,37 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
               role="tab"
               aria-selected={panel.id === activePanel.id}
               className={panel.id === activePanel.id ? "active" : ""}
-              onClick={() => setActivePanelId(panel.id)}
+              onClick={() => {
+                setActivePanelId(panel.id);
+                setCollapsed(false);
+              }}
             >
               {panel.title}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="bottom-panel-toggle"
-          aria-label={isCollapsed ? "Expand bottom panel" : "Collapse bottom panel"}
-          aria-expanded={!isCollapsed}
-          onClick={() => setIsCollapsed(current => !current)}
-        >
-          {isCollapsed ? <PanelBottomOpen size={16} /> : <PanelBottomClose size={16} />}
-        </button>
+        <div className="bottom-panel-actions" aria-label="Bottom panel controls">
+          <button
+            type="button"
+            className="bottom-panel-action-button"
+            aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
+            title={collapsed ? "Expand" : "Collapse"}
+            onClick={toggleCollapsed}
+          >
+            {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+          <button
+            type="button"
+            className="bottom-panel-action-button"
+            aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
+            title={maximized ? "Restore" : "Maximize"}
+            onClick={toggleMaximized}
+          >
+            {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </div>
       </div>
-      <div
-        className="bottom-panel-content"
-        role="tabpanel"
-        aria-label={activePanel.title}
-        aria-hidden={isCollapsed}
-      >
+      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title} aria-hidden={collapsed}>
         <ActivePanelComponent />
       </div>
     </section>
@@ -447,6 +518,38 @@ function NavIcon({ id }: { id: string }) {
   return <Gauge size={18} />;
 }
 
+function NavIconTile({ item }: { item: StudioNavigationContribution }) {
+  return (
+    <span
+      className="nav-icon-tile"
+      style={{ "--nav-icon-color": item.iconColor ?? getDefaultNavIconColor(item.id) } as NavIconTileStyle}
+      aria-hidden="true"
+    >
+      <NavIcon id={item.id} />
+    </span>
+  );
+}
+
+function getDefaultNavIconColor(id: string) {
+  if (id.includes("dashboard") || id === "home") {
+    return "#0ea5e9";
+  }
+
+  if (id.includes("weather")) {
+    return "#14b8a6";
+  }
+
+  if (id.includes("diagnostics")) {
+    return "#10b981";
+  }
+
+  if (id.includes("modules")) {
+    return "#8b5cf6";
+  }
+
+  return "var(--primary)";
+}
+
 function normalizePath(path: string) {
   if (path.length > 1 && path.endsWith("/")) {
     return path.slice(0, -1);
@@ -492,12 +595,13 @@ function getInitialActiveBottomPanelId() {
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
 }
 
-function getInitialBottomPanelCollapsed() {
+function getInitialBoolean(storageKey: string, fallback: boolean) {
   if (typeof window === "undefined") {
-    return false;
+    return fallback;
   }
 
-  return window.localStorage.getItem(bottomPanelCollapsedStorageKey) === "true";
+  const value = window.localStorage.getItem(storageKey);
+  return value === null ? fallback : value === "true";
 }
 
 function navigateTo(path: string) {

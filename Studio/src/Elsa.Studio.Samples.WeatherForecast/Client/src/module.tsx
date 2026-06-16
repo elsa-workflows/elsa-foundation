@@ -18,7 +18,8 @@ export function register(api: ElsaStudioModuleApi) {
     id: "weather-forecast-sample",
     label: "Weather",
     path: "/weather",
-    order: 120
+    order: 120,
+    iconColor: "#14b8a6"
   });
 
   api.routes.add({
@@ -66,4 +67,3 @@ export function WeatherPage() {
     </section>
   );
 }
-

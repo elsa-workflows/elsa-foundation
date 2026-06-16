@@ -31,7 +31,8 @@ function v(s) {
     id: "dashboard-sample",
     label: "Dashboard",
     path: "/dashboard",
-    order: 100
+    order: 100,
+    iconColor: "#0ea5e9"
   }), s.routes.add({
     id: "dashboard-sample",
     label: "Dashboard",
