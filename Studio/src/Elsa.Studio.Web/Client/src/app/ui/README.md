@@ -17,6 +17,8 @@ Visual rules:
 
 - Shell/page titles stay compact; no hero-scale admin headings.
 - Resource lists are row-first. Avoid stacked large cards for scan-heavy data.
+- Resource workbenches use the available content width; avoid fixed desktop
+  max-width caps that leave unused space beside lists or inspectors.
 - Use true white or cool neutral surfaces, hairline borders, minimal shadow, and
   5-8px radii for admin chrome.
 - Selection uses the shared blue/cyan accent; statuses use the shared semantic
