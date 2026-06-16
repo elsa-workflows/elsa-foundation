@@ -1,7 +1,8 @@
 .feature-management-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  max-width: 1440px;
 }
 
 .feature-management-header {
@@ -10,7 +11,7 @@
 
 .feature-management-actions {
   display: flex;
-  gap: 8px;
+  gap: 7px;
 }
 
 .feature-management-actions button,
@@ -20,9 +21,12 @@
   border: 1px solid var(--border);
   background: var(--studio-surface, var(--card));
   color: var(--studio-text, var(--foreground));
-  border-radius: 6px;
-  padding: 8px 12px;
+  border-radius: 5px;
+  min-height: 32px;
+  padding: 6px 11px;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .feature-management-actions button.primary {
@@ -50,21 +54,21 @@
   background: color-mix(in srgb, var(--danger, #dc2626) 8%, var(--studio-surface, var(--card)));
   color: var(--studio-text, var(--foreground));
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 9px 12px;
 }
 
 .feature-management-status {
   border: 1px solid color-mix(in srgb, var(--studio-accent, var(--primary)) 45%, var(--border));
   background: color-mix(in srgb, var(--studio-accent, var(--primary)) 8%, var(--studio-surface, var(--card)));
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 9px 12px;
 }
 
 .feature-management-layout {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(320px, 460px) minmax(420px, 1fr);
+  grid-template-columns: minmax(176px, 220px) minmax(360px, 470px) minmax(420px, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: 14px;
   min-height: 520px;
 }
 
@@ -72,27 +76,27 @@
 .feature-management-list-column,
 .feature-management-inspector {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--studio-surface, var(--card));
 }
 
 .feature-management-categories,
 .feature-management-inspector {
   position: sticky;
-  top: 16px;
-  max-height: calc(100vh - 120px);
+  top: 12px;
+  max-height: calc(100vh - 112px);
 }
 
 .feature-management-categories {
-  padding: 14px;
+  padding: 12px;
   overflow: auto;
 }
 
 .feature-management-panel-label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -101,7 +105,7 @@
 .feature-management-category-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .feature-management-category-list button {
@@ -111,11 +115,12 @@
   gap: 8px;
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--studio-text, var(--foreground));
   cursor: pointer;
-  padding: 9px 10px;
+  min-height: 32px;
+  padding: 7px 9px;
   text-align: left;
 }
 
@@ -138,7 +143,8 @@
 }
 
 .feature-management-list-column {
-  padding: 14px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .feature-management-list-heading {
@@ -146,7 +152,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+  margin-bottom: 0;
+  padding: 10px 13px;
 }
 
 .feature-management-list-heading strong,
@@ -156,33 +165,34 @@
 
 .feature-management-list-heading span {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .feature-management-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .feature-management-card {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 38px;
-  align-items: start;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
   color: var(--studio-text, var(--foreground));
-  padding: 12px;
+  min-height: 58px;
+  padding: 9px 13px;
   position: relative;
   text-align: left;
 }
 
 .feature-management-card.selected {
-  border-color: color-mix(in srgb, var(--studio-accent, var(--primary)) 70%, var(--border));
   background: color-mix(in srgb, var(--studio-accent, var(--primary)) 9%, var(--background));
-  box-shadow: inset 3px 0 0 var(--studio-accent, var(--primary));
+  box-shadow: inset 2px 0 0 var(--studio-accent, var(--primary));
 }
 
 .feature-management-card strong,
@@ -199,15 +209,15 @@
 }
 
 .feature-management-switch {
-  width: 30px;
-  height: 18px;
+  width: 28px;
+  height: 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--studio-text-muted, var(--muted-foreground));
   position: relative;
   cursor: pointer;
   padding: 0;
-  margin-top: 3px;
+  margin-top: 0;
 }
 
 .feature-management-switch::after {
@@ -215,8 +225,8 @@
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: white;
 }
@@ -242,7 +252,7 @@
 
 .feature-management-card-title {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -251,16 +261,16 @@
 .feature-management-card-meta span,
 .feature-management-inspector-tags span {
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 5px;
   color: var(--studio-text-muted, var(--muted-foreground));
   font-size: 11px;
   font-style: normal;
-  padding: 2px 7px;
+  padding: 2px 6px;
 }
 
 .feature-management-card small {
   display: -webkit-box;
-  margin-top: 6px;
+  margin-top: 3px;
   overflow: hidden;
   color: var(--studio-text-muted, var(--muted-foreground));
   -webkit-box-orient: vertical;
@@ -272,7 +282,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .feature-management-card-count {
@@ -284,15 +294,15 @@
 .feature-management-inspector {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
   overflow: auto;
 }
 
 .feature-management-inspector-heading {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   align-items: flex-start;
   margin-bottom: 0;
 }
@@ -304,12 +314,14 @@
 
 .feature-management-inspector-heading h3 {
   margin: 2px 0;
+  font-size: 17px;
+  line-height: 1.22;
 }
 
 .feature-management-metadata {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   margin: 0;
 }
 
@@ -317,8 +329,8 @@
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 9px 10px;
+  border-radius: 5px;
+  padding: 8px 9px;
 }
 
 .feature-management-metadata dt {
@@ -337,7 +349,7 @@
 
 .feature-management-settings {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .feature-management-setting-group {
@@ -363,8 +375,8 @@
   flex-direction: column;
   gap: 7px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 6px;
+  padding: 10px 11px;
 }
 
 .feature-management-setting span {
@@ -376,7 +388,7 @@
 
 .feature-management-setting em {
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 5px;
   color: var(--studio-text-muted, var(--muted-foreground));
   font-size: 11px;
   font-style: normal;
@@ -394,10 +406,10 @@
 .feature-management-setting textarea {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--background);
   color: var(--studio-text, var(--foreground));
-  padding: 8px 10px;
+  padding: 7px 9px;
   font: inherit;
 }
 
@@ -412,18 +424,18 @@
 
 .feature-management-sticky-actions {
   position: sticky;
-  bottom: -18px;
+  bottom: -16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 4px -18px -18px;
+  margin: 4px -16px -16px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--studio-surface, var(--card)) 94%, transparent);
   backdrop-filter: blur(8px);
   color: var(--studio-text-muted, var(--muted-foreground));
   font-size: 13px;
-  padding: 12px 18px;
+  padding: 10px 16px;
 }
 
 .feature-management-sticky-actions > div {

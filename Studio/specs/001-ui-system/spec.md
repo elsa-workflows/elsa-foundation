@@ -89,6 +89,9 @@ As a frequent Studio user, I want the shell to provide consistent global search,
 - **FR-002**: System MUST expose stable shared primitives for shell, navigation, page header, toolbar, search/filter controls, summary strip, data grid/list, inspector, drawer, tabs, forms/settings, alerts, status chips, empty/loading/error states, and bottom console/log panels.
 - **FR-003**: System MUST document the intended page archetypes: resource index, master/detail, configuration, overview, diagnostics/logs, and specialized extensions.
 - **FR-004**: System MUST define token usage for typography, color, spacing, border, radius, shadow, focus ring, and semantic status states.
+- **FR-004a**: Resource and configuration screens MUST use compact admin typography: shell/page titles around 18-22px, section headings around 14-17px, row/body text around 13px, labels around 10-12px, and medium weights instead of heavy display weights.
+- **FR-004b**: Resource lists MUST render as dense rows or data grids with selected states, not as stacked large cards. Cards are reserved for repeated dashboard widgets, compact metadata blocks, and empty/error states.
+- **FR-004c**: The default visual surface MUST be true white or cool neutral with hairline borders, minimal shadow, 5-8px radii, restrained blue/cyan selection color, and semantic green/amber/red statuses.
 - **FR-005**: Module authors MUST be able to build native-feeling contributed pages without copying host shell CSS or inventing local typography and status styles.
 - **FR-006**: Feature management MUST be refactored or implemented as a split-inspector configuration screen using shared primitives.
 - **FR-007**: Module management MUST include frontend and backend module visibility, manifests, compatibility, contributions, diagnostics, and load state.
@@ -116,6 +119,7 @@ As a frequent Studio user, I want the shell to provide consistent global search,
 - **SC-001**: A new module page can be assembled from documented shared primitives without custom page-level CSS for shell, page header, toolbar, status, form, or inspector styling.
 - **SC-002**: Feature management and module management share the same visual language for search/filter toolbars, selected rows, inspectors, tabs, alerts, and status chips.
 - **SC-003**: Page titles, table rows, controls, labels, and inspector chrome stay within the compact typography ranges defined by the UI system tokens.
+- **SC-003a**: In the first desktop viewport, Feature Management and Module Management show their primary list/grid plus inspector without oversized cards, hero-scale headings, or decorative gradients.
 - **SC-004**: Keyboard users can reach and operate shared navigation, toolbar actions, row selection, tabs, form controls, drawer/inspector actions, and bottom-panel tabs.
 - **SC-005**: Light and dark themes preserve readable foreground/background contrast, status contrast, and focus visibility for all shared primitives.
 - **SC-006**: At least one representative module-authored screen demonstrates native UI composition without importing private host CSS selectors.
@@ -128,3 +132,4 @@ As a frequent Studio user, I want the shell to provide consistent global search,
 - Backend module management may require new API surface beyond the current manifest endpoint.
 - The user strongly approved the exploratory mockups; stakeholder note: the mockups are considered "fire" and should guide visual ambition without becoming static screenshots to copy.
 - The first two implementation priorities after the foundation are feature management and module management, with backend modules included as required.
+- Latest visual direction: match the approved Workbench mockups with flatter surfaces, compact row-first lists, slim command/header chrome, cool neutral color, and subdued shadows.

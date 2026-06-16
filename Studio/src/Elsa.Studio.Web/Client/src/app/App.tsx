@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, PackageSearch, Search, ShieldCheck } from "lucide-react";
+import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, PackageSearch, PanelBottomClose, PanelBottomOpen, Search, ShieldCheck } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioModulesResponse,
@@ -26,6 +26,7 @@ const builtInNavigation: StudioNavigationContribution[] = [
 
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
+const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
 const defaultBottomPanelHeight = 260;
 const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
@@ -221,6 +222,7 @@ function ShellFrame({
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
+  const [isCollapsed, setIsCollapsed] = useState(getInitialBottomPanelCollapsed);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
 
@@ -241,12 +243,20 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }, [activePanel?.id]);
 
   useEffect(() => {
+    window.localStorage.setItem(bottomPanelCollapsedStorageKey, String(isCollapsed));
+  }, [isCollapsed]);
+
+  useEffect(() => {
     const handleResize = () => setHeight(current => clampBottomPanelHeight(current));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
+    if (isCollapsed) {
+      return;
+    }
+
     event.preventDefault();
 
     const startY = event.clientY;
@@ -271,6 +281,10 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }
 
   function handleResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (isCollapsed) {
+      return;
+    }
+
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setHeight(current => clampBottomPanelHeight(current + 16));
@@ -287,34 +301,56 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }
 
   return (
-    <section className="bottom-panel" style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}>
-      <div
-        className="bottom-panel-resize-handle"
-        role="separator"
-        aria-label="Resize bottom panel"
-        aria-orientation="horizontal"
-        aria-valuemin={minBottomPanelHeight}
-        aria-valuemax={getMaxBottomPanelHeight()}
-        aria-valuenow={height}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={handleResizeKeyDown}
-      />
-      <div className="bottom-panel-tabs" role="tablist" aria-label="Bottom panels">
-        {panels.map(panel => (
-          <button
-            key={panel.id}
-            type="button"
-            role="tab"
-            aria-selected={panel.id === activePanel.id}
-            className={panel.id === activePanel.id ? "active" : ""}
-            onClick={() => setActivePanelId(panel.id)}
-          >
-            {panel.title}
-          </button>
-        ))}
+    <section
+      className={`bottom-panel${isCollapsed ? " collapsed" : ""}`}
+      style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}
+      aria-label="Bottom panel"
+    >
+      {!isCollapsed ? (
+        <div
+          className="bottom-panel-resize-handle"
+          role="separator"
+          aria-label="Resize bottom panel"
+          aria-orientation="horizontal"
+          aria-valuemin={minBottomPanelHeight}
+          aria-valuemax={getMaxBottomPanelHeight()}
+          aria-valuenow={height}
+          tabIndex={0}
+          onPointerDown={startResize}
+          onKeyDown={handleResizeKeyDown}
+        />
+      ) : null}
+      <div className="bottom-panel-bar">
+        <div className="bottom-panel-tabs" role="tablist" aria-label="Bottom panels">
+          {panels.map(panel => (
+            <button
+              key={panel.id}
+              type="button"
+              role="tab"
+              aria-selected={panel.id === activePanel.id}
+              className={panel.id === activePanel.id ? "active" : ""}
+              onClick={() => setActivePanelId(panel.id)}
+            >
+              {panel.title}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="bottom-panel-toggle"
+          aria-label={isCollapsed ? "Expand bottom panel" : "Collapse bottom panel"}
+          aria-expanded={!isCollapsed}
+          onClick={() => setIsCollapsed(current => !current)}
+        >
+          {isCollapsed ? <PanelBottomOpen size={16} /> : <PanelBottomClose size={16} />}
+        </button>
       </div>
-      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title}>
+      <div
+        className="bottom-panel-content"
+        role="tabpanel"
+        aria-label={activePanel.title}
+        aria-hidden={isCollapsed}
+      >
         <ActivePanelComponent />
       </div>
     </section>
@@ -454,6 +490,14 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
+}
+
+function getInitialBottomPanelCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(bottomPanelCollapsedStorageKey) === "true";
 }
 
 function navigateTo(path: string) {

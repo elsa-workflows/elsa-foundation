@@ -30,6 +30,12 @@ required.
 
 **Constraints**: Module pages must not depend on private host CSS selectors; UI must support light/dark themes; shell must remain compatible with same-origin module asset loading
 
+**Visual Direction**: Implement the approved Workbench mockup language holistically:
+true-white/cool-neutral surfaces, hairline borders, small radii, restrained
+blue/cyan selection states, compact row-first resource lists, split inspectors,
+and minimal shadow. Avoid oversized cards, heavy display weights, decorative
+gradients, and one-off module palettes.
+
 **Scale/Scope**: Foundation plus two real screens: feature management and module management. Additional pages adopt the system incrementally.
 
 ## Constitution Check
@@ -39,6 +45,7 @@ required.
 - **Modular UI contract**: PASS. The plan introduces shared primitives and token contracts under the Studio shell, with module-facing consumption documented in contracts.
 - **Workbench pattern fit**: PASS. The foundation uses resource index, master/detail, configuration, overview, and diagnostics/log page archetypes.
 - **Typography and token discipline**: PASS. Typography, color, radius, spacing, border, shadow, focus, and semantic states are governed through tokens and shared component CSS.
+- **Visual-language fidelity**: PASS. The plan requires Feature Management and Module Management to match the latest mockup direction through compact typography, row/grid-first layouts, and flatter surfaces.
 - **Accessible interaction**: PASS. Shared controls must cover keyboard, focus, labels, disabled/loading, empty/error, validation, and screen-reader behavior.
 - **Real-screen proof**: PASS. Feature management and module management are the first two proof screens after the foundation.
 
@@ -124,5 +131,6 @@ Design artifacts:
 - **Modular UI contract**: PASS. Component and API contracts explicitly separate host internals from module-facing UI.
 - **Workbench pattern fit**: PASS. Contracts define resource index, split inspector, configuration, and diagnostics surfaces.
 - **Typography and token discipline**: PASS. Tokens are first-class entities and component contracts reject unmanaged visual styling.
+- **Visual-language fidelity**: PASS. The implemented screens are verified against the Workbench direction, with any drift tracked through browser screenshots and CSS audit.
 - **Accessible interaction**: PASS. Accessibility states are included in primitive contracts and validation steps.
 - **Real-screen proof**: PASS. Tasks require feature management and module management migrations, tests, and browser verification.

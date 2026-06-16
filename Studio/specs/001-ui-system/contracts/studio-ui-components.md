@@ -100,3 +100,9 @@ Every shared primitive documents whether it supports:
 - Radius, border, spacing, shadow, and focus rings come from Studio tokens.
 - Page titles stay compact; no hero-scale headings in admin surfaces.
 - Resource pages avoid card-heavy layouts unless cards are repeated widgets.
+- Resource rows target roughly 44-64px height depending on content density.
+- Summary strips are flat, bordered, and compact; numbers are functional, not display typography.
+- Inspectors use grouped metadata, compact headings, and sticky actions; they do not use nested card stacks.
+- Module CSS uses `--studio-*` variables or documented aliases and does not redefine product colors locally.
+- Default radii stay between 5px and 8px for admin chrome. Larger radii require an explicit component reason.
+- Shadows are minimal and used for layering only; table/list structure comes from borders, spacing, and selected states.
