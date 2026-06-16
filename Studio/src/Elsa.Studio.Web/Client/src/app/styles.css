@@ -464,6 +464,12 @@ textarea:focus {
   border-top: 0;
 }
 
+.bottom-panel-maximized .studio-shell > .sidebar,
+.bottom-panel-maximized .studio-shell > .main-frame {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .bottom-panel-resize-handle {
   display: grid;
   place-items: center;

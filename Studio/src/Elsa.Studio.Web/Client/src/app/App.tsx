@@ -233,10 +233,11 @@ function ShellFrame({
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
+  const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => getInitialBoolean(bottomPanelCollapsedStorageKey, false));
-  const [maximized, setMaximized] = useState(() => getInitialBoolean(bottomPanelMaximizedStorageKey, false));
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
 
@@ -262,6 +263,26 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
 
   useEffect(() => {
     window.localStorage.setItem(bottomPanelMaximizedStorageKey, String(maximized));
+  }, [maximized]);
+
+  useEffect(() => {
+    document.body.classList.toggle("bottom-panel-maximized", maximized);
+    return () => document.body.classList.remove("bottom-panel-maximized");
+  }, [maximized]);
+
+  useEffect(() => {
+    if (!maximized) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMaximized(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [maximized]);
 
   useEffect(() => {
