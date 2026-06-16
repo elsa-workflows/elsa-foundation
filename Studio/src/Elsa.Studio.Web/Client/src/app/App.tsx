@@ -1,5 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, Search, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  Boxes,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  FileText,
+  Gauge,
+  Github,
+  LayoutDashboard,
+  Maximize2,
+  Minimize2,
+  Search,
+  ShieldCheck
+} from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioModulesResponse,
@@ -16,14 +30,17 @@ import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "failed";
+type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "home", label: "Overview", path: "/", order: 0 },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900 }
+  { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
 ];
 
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
+const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
+const bottomPanelMaximizedStorageKey = "elsa-studio-bottom-panel-maximized";
 const defaultBottomPanelHeight = 260;
 const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
@@ -180,7 +197,7 @@ function ShellFrame({
                 onNavigate(item.path);
               }}
             >
-              <NavIcon id={item.id} />
+              <NavIconTile item={item} />
               {item.label}
             </a>
           ))}
@@ -218,6 +235,8 @@ function ShellFrame({
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
+  const [collapsed, setCollapsed] = useState(() => getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [maximized, setMaximized] = useState(() => getInitialBoolean(bottomPanelMaximizedStorageKey, false));
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
 
@@ -238,13 +257,27 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   }, [activePanel?.id]);
 
   useEffect(() => {
+    window.localStorage.setItem(bottomPanelCollapsedStorageKey, String(collapsed));
+  }, [collapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(bottomPanelMaximizedStorageKey, String(maximized));
+  }, [maximized]);
+
+  useEffect(() => {
+    if (maximized) {
+      return;
+    }
+
     const handleResize = () => setHeight(current => clampBottomPanelHeight(current));
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [maximized]);
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
+    setCollapsed(false);
+    setMaximized(false);
 
     const startY = event.clientY;
     const startHeight = height;
@@ -270,6 +303,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   function handleResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      setCollapsed(false);
       setHeight(current => clampBottomPanelHeight(current + 16));
     } else if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -283,35 +317,85 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
     }
   }
 
+  function toggleCollapsed() {
+    setCollapsed(current => {
+      const next = !current;
+      if (next) {
+        setMaximized(false);
+      }
+      return next;
+    });
+  }
+
+  function toggleMaximized() {
+    setMaximized(current => {
+      const next = !current;
+      if (next) {
+        setCollapsed(false);
+      }
+      return next;
+    });
+  }
+
   return (
-    <section className="bottom-panel" style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}>
-      <div
-        className="bottom-panel-resize-handle"
-        role="separator"
-        aria-label="Resize bottom panel"
-        aria-orientation="horizontal"
-        aria-valuemin={minBottomPanelHeight}
-        aria-valuemax={getMaxBottomPanelHeight()}
-        aria-valuenow={height}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onKeyDown={handleResizeKeyDown}
-      />
-      <div className="bottom-panel-tabs" role="tablist" aria-label="Bottom panels">
-        {panels.map(panel => (
+    <section
+      className={`bottom-panel ${collapsed ? "collapsed" : ""} ${maximized ? "maximized" : ""}`}
+      style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}
+    >
+      {!collapsed && !maximized ? (
+        <div
+          className="bottom-panel-resize-handle"
+          role="separator"
+          aria-label="Resize bottom panel"
+          aria-orientation="horizontal"
+          aria-valuemin={minBottomPanelHeight}
+          aria-valuemax={getMaxBottomPanelHeight()}
+          aria-valuenow={height}
+          tabIndex={0}
+          onPointerDown={startResize}
+          onKeyDown={handleResizeKeyDown}
+        />
+      ) : null}
+      <div className="bottom-panel-tabs">
+        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels">
+          {panels.map(panel => (
+            <button
+              key={panel.id}
+              type="button"
+              role="tab"
+              aria-selected={panel.id === activePanel.id}
+              className={panel.id === activePanel.id ? "active" : ""}
+              onClick={() => {
+                setActivePanelId(panel.id);
+                setCollapsed(false);
+              }}
+            >
+              {panel.title}
+            </button>
+          ))}
+        </div>
+        <div className="bottom-panel-actions" aria-label="Bottom panel controls">
           <button
-            key={panel.id}
             type="button"
-            role="tab"
-            aria-selected={panel.id === activePanel.id}
-            className={panel.id === activePanel.id ? "active" : ""}
-            onClick={() => setActivePanelId(panel.id)}
+            className="bottom-panel-action-button"
+            aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
+            title={collapsed ? "Expand" : "Collapse"}
+            onClick={toggleCollapsed}
           >
-            {panel.title}
+            {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
-        ))}
+          <button
+            type="button"
+            className="bottom-panel-action-button"
+            aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
+            title={maximized ? "Restore" : "Maximize"}
+            onClick={toggleMaximized}
+          >
+            {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </div>
       </div>
-      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title}>
+      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title} aria-hidden={collapsed}>
         <ActivePanelComponent />
       </div>
     </section>
@@ -404,6 +488,34 @@ function NavIcon({ id }: { id: string }) {
   return <Gauge size={18} />;
 }
 
+function NavIconTile({ item }: { item: StudioNavigationContribution }) {
+  return (
+    <span
+      className="nav-icon-tile"
+      style={{ "--nav-icon-color": item.iconColor ?? getDefaultNavIconColor(item.id) } as NavIconTileStyle}
+      aria-hidden="true"
+    >
+      <NavIcon id={item.id} />
+    </span>
+  );
+}
+
+function getDefaultNavIconColor(id: string) {
+  if (id.includes("dashboard") || id === "home") {
+    return "#0ea5e9";
+  }
+
+  if (id.includes("weather")) {
+    return "#14b8a6";
+  }
+
+  if (id.includes("diagnostics")) {
+    return "#10b981";
+  }
+
+  return "var(--primary)";
+}
+
 function normalizePath(path: string) {
   if (path.length > 1 && path.endsWith("/")) {
     return path.slice(0, -1);
@@ -447,6 +559,15 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
+}
+
+function getInitialBoolean(storageKey: string, fallback: boolean) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const value = window.localStorage.getItem(storageKey);
+  return value === null ? fallback : value === "true";
 }
 
 function navigateTo(path: string) {

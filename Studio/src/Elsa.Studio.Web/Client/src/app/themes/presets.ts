@@ -126,38 +126,12 @@ const createTheme = (
 });
 
 export const themes: Theme[] = [
-  // Blues & Cyans
-  createTheme('cyan', 'Cyan', 'Vibrant cyan and blue palette', oklchToVar(0.685, 0.156, 237), oklchToVar(0.585, 0.156, 237), 237),
-  createTheme('sky', 'Sky', 'Light sky blue palette', oklchToVar(0.72, 0.14, 236), oklchToVar(0.62, 0.14, 236), 236),
-  createTheme('ocean', 'Ocean', 'Deep ocean blues', oklchToVar(0.64, 0.15, 255), oklchToVar(0.54, 0.15, 255), 255),
-  createTheme('slate', 'Slate', 'Cool slate blue', oklchToVar(0.58, 0.1, 270), oklchToVar(0.48, 0.1, 270), 270),
-  
-  // Purples & Violets
-  createTheme('indigo', 'Indigo', 'Deep indigo tones', oklchToVar(0.62, 0.18, 264), oklchToVar(0.52, 0.18, 264), 264),
-  createTheme('violet', 'Violet', 'Rich violet palette', oklchToVar(0.68, 0.16, 280), oklchToVar(0.58, 0.16, 280), 280),
-  createTheme('purple', 'Purple', 'Warm purple palette', oklchToVar(0.7, 0.15, 290), oklchToVar(0.6, 0.15, 290), 290),
-  createTheme('plum', 'Plum', 'Sophisticated plum', oklchToVar(0.65, 0.12, 300), oklchToVar(0.55, 0.12, 300), 300),
-  
-  // Greens & Teals
-  createTheme('emerald', 'Emerald', 'Vibrant emerald green', oklchToVar(0.75, 0.16, 150), oklchToVar(0.65, 0.16, 150), 150),
-  createTheme('teal', 'Teal', 'Sophisticated teal', oklchToVar(0.74, 0.12, 175), oklchToVar(0.64, 0.12, 175), 175),
-  createTheme('forest', 'Forest', 'Deep forest green', oklchToVar(0.58, 0.15, 140), oklchToVar(0.48, 0.15, 140), 140),
-  createTheme('mint', 'Mint', 'Fresh mint green', oklchToVar(0.72, 0.1, 165), oklchToVar(0.62, 0.1, 165), 165),
-  
-  // Reds, Oranges & Ambers
-  createTheme('rose', 'Rose', 'Elegant rose palette', oklchToVar(0.72, 0.15, 0), oklchToVar(0.62, 0.15, 0), 0),
-  createTheme('orange', 'Orange', 'Warm orange tones', oklchToVar(0.72, 0.18, 45), oklchToVar(0.62, 0.18, 45), 45),
-  createTheme('amber', 'Amber', 'Golden amber', oklchToVar(0.72, 0.18, 60), oklchToVar(0.62, 0.18, 60), 60),
-  createTheme('scarlet', 'Scarlet', 'Bold scarlet red', oklchToVar(0.65, 0.2, 20), oklchToVar(0.55, 0.2, 20), 20),
-  
-  // Grays & Neutrals
-  createTheme('neutral', 'Neutral', 'Pure neutral gray', oklchToVar(0.68, 0.02, 240), oklchToVar(0.58, 0.02, 240), 240),
-  createTheme('stone', 'Stone', 'Warm stone gray', oklchToVar(0.68, 0.02, 70), oklchToVar(0.58, 0.02, 70), 70),
-  createTheme('zinc', 'Zinc', 'Cool zinc gray', oklchToVar(0.68, 0.01, 260), oklchToVar(0.58, 0.01, 260), 260),
-  
-  // Specialized Palettes
-  createTheme('nord', 'Nordisk', 'Nordic-inspired cool palette', oklchToVar(0.72, 0.08, 235), oklchToVar(0.52, 0.1, 235), 235),
-  createTheme('aurora', 'Aurora', 'Aurora borealis inspired', oklchToVar(0.75, 0.14, 200), oklchToVar(0.55, 0.14, 200), 200),
+  createTheme('harbor', 'Harbor', 'Crisp blue for operational dashboards', oklchToVar(0.68, 0.16, 235), oklchToVar(0.6, 0.16, 235), 235),
+  createTheme('borealis', 'Borealis', 'Green-teal palette with a calm technical feel', oklchToVar(0.72, 0.14, 168), oklchToVar(0.62, 0.14, 168), 168),
+  createTheme('ember', 'Ember', 'Warm amber palette for high-contrast highlights', oklchToVar(0.74, 0.17, 58), oklchToVar(0.64, 0.17, 58), 58),
+  createTheme('orchid', 'Orchid', 'Refined violet palette for expressive workspaces', oklchToVar(0.66, 0.17, 292), oklchToVar(0.58, 0.16, 292), 292),
+  createTheme('coral', 'Coral', 'Soft red-coral palette with readable emphasis', oklchToVar(0.68, 0.18, 24), oklchToVar(0.58, 0.17, 24), 24),
+  createTheme('graphite', 'Graphite', 'Restrained neutral palette with a cool accent', oklchToVar(0.6, 0.04, 248), oklchToVar(0.52, 0.04, 248), 248),
 ];
 
 export const getTheme = (themeId: string): Theme | undefined => 

@@ -8,6 +8,7 @@ describe("weather forecast sample module", () => {
     register(api);
 
     expect(api.navigation.items).toHaveLength(1);
+    expect(api.navigation.items[0]).toMatchObject({ iconColor: "#14b8a6" });
     expect(api.routes.items).toHaveLength(1);
   });
 });
@@ -32,4 +33,3 @@ function registry() {
     }
   };
 }
-

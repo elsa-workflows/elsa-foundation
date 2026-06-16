@@ -47,6 +47,7 @@ export interface StudioNavigationContribution {
   label: string;
   path: string;
   order?: number;
+  iconColor?: string;
 }
 
 export interface StudioDashboardWidgetContribution {

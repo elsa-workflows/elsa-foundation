@@ -6,16 +6,16 @@ function j() {
   c = 1;
   var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), i = /* @__PURE__ */ Symbol.for("react.fragment");
   function a(o, e, s) {
-    var d = null;
-    if (s !== void 0 && (d = "" + s), e.key !== void 0 && (d = "" + e.key), "key" in e) {
+    var l = null;
+    if (s !== void 0 && (l = "" + s), e.key !== void 0 && (l = "" + e.key), "key" in e) {
       s = {};
-      for (var l in e)
-        l !== "key" && (s[l] = e[l]);
+      for (var d in e)
+        d !== "key" && (s[d] = e[d]);
     } else s = e;
     return e = s.ref, {
       $$typeof: t,
       type: o,
-      key: d,
+      key: l,
       ref: e !== void 0 ? e : null,
       props: s
     };
@@ -33,7 +33,8 @@ function E(t) {
     id: "weather-forecast-sample",
     label: "Weather",
     path: "/weather",
-    order: 120
+    order: 120,
+    iconColor: "#14b8a6"
   }), t.routes.add({
     id: "weather-forecast-sample",
     label: "Weather",

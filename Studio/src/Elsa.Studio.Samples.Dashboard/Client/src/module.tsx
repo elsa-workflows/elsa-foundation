@@ -7,7 +7,8 @@ export function register(api: ElsaStudioModuleApi) {
     id: "dashboard-sample",
     label: "Dashboard",
     path: "/dashboard",
-    order: 100
+    order: 100,
+    iconColor: "#0ea5e9"
   });
 
   api.routes.add({
@@ -60,4 +61,3 @@ export function ModuleHealthWidget() {
     </div>
   );
 }
-
