@@ -101,6 +101,8 @@ Every shared primitive documents whether it supports:
 - Page titles stay compact; no hero-scale headings in admin surfaces.
 - Resource pages avoid card-heavy layouts unless cards are repeated widgets.
 - Resource rows target roughly 44-64px height depending on content density.
+- Resource workbench pages use the available shell content width on desktop and
+  do not impose fixed max-width caps that strand empty space beside inspectors.
 - Summary strips are flat, bordered, and compact; numbers are functional, not display typography.
 - Inspectors use grouped metadata, compact headings, and sticky actions; they do not use nested card stacks.
 - Module CSS uses `--studio-*` variables or documented aliases and does not redefine product colors locally.

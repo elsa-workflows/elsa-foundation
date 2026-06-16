@@ -408,7 +408,7 @@ textarea:focus {
 }
 
 .content > section {
-  max-width: 1440px;
+  width: 100%;
 }
 
 .dashboard-view {
@@ -1024,7 +1024,6 @@ textarea:focus {
 .modules-page {
   display: grid;
   gap: 14px;
-  max-width: 1440px;
 }
 
 .modules-header {

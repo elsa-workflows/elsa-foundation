@@ -2,7 +2,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 1440px;
 }
 
 .feature-management-header {
