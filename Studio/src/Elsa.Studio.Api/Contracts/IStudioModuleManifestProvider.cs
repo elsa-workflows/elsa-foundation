@@ -5,5 +5,5 @@ namespace Elsa.Studio.Api.Contracts;
 public interface IStudioModuleManifestProvider
 {
     Task<StudioModulesResponse> GetModules(CancellationToken cancellationToken);
+    Task<StudioModuleRegistryResponse> GetModuleRegistry(CancellationToken cancellationToken);
 }
-

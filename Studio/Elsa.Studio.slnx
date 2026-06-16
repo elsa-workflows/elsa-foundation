@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/solution/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="NuGet.config" />
+    <File Path="package.json" />
+    <File Path="README.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <Project Path="src/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />

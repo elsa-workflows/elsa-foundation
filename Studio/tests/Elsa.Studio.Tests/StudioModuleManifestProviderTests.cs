@@ -30,6 +30,23 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_ReturnsFeatureManagementManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
+        Assert.Equal("Feature management", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains("v=1.0.1", module.Entry);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("setting-editors", module.Capabilities);
+    }
+
+    [Fact]
     public async Task GetModules_FiltersDisabledModulesAndReportsDiagnostic()
     {
         var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
@@ -63,6 +80,36 @@ public sealed class StudioModuleManifestProviderTests
         var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
 
         Assert.True(response.Modules.Count >= 2);
+    }
+
+    [Fact]
+    public async Task GetModuleRegistry_ReturnsBackendAwareModuleMetadata()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
+
+        var featureManagement = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
+        Assert.Equal("full-stack", featureManagement.Scope);
+        Assert.Equal("compatible", featureManagement.Compatibility);
+        Assert.Equal("available", featureManagement.Status);
+        Assert.Contains(featureManagement.Contributions, x => x.Type == "http" && x.Label == "HTTP endpoints");
+        Assert.Contains(featureManagement.Contributions, x => x.Type == "setting-editors");
+        Assert.Contains(featureManagement.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+    }
+
+    [Fact]
+    public async Task GetModuleRegistry_IncludesDisabledModulesForInspection()
+    {
+        var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
+
+        var weather = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
+        Assert.Equal(StudioModuleDiagnosticStatuses.Disabled, weather.Status);
+        Assert.Contains(weather.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
     private static ServiceProvider CreateProvider(Action<StudioApiOptions>? configure = null)

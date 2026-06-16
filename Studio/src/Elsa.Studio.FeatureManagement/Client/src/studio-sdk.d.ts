@@ -45,6 +45,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly backend: {
       readonly http: {
         getJson<T>(url: string, init?: RequestInit): Promise<T>;
+        postJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
       };
     };
     readonly navigation: { add(item: { id: string; label: string; path: string; order?: number }): void };

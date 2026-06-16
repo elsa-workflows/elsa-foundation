@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, Search, ShieldCheck } from "lucide-react";
+import { Activity, Boxes, ExternalLink, FileText, Gauge, Github, LayoutDashboard, PackageSearch, Search, ShieldCheck } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioModulesResponse,
@@ -12,6 +12,7 @@ import { getStudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
@@ -19,6 +20,7 @@ type LoadState = "loading" | "ready" | "failed";
 
 const builtInNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Overview", path: "/", order: 0 },
+  { id: "modules", label: "Modules", path: "/modules", order: 80 },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900 }
 ];
 
@@ -124,9 +126,10 @@ function AppContent() {
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
       {path === "/" ? <Home api={api!} /> : null}
+      {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/" && path !== "/diagnostics/modules" ? (
+      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/diagnostics/modules" ? (
         <div className="empty-state">No Studio route is registered for {path}.</div>
       ) : null}
     </ShellFrame>
@@ -399,6 +402,10 @@ function NavIcon({ id }: { id: string }) {
 
   if (id.includes("diagnostics")) {
     return <FileText size={18} />;
+  }
+
+  if (id.includes("modules")) {
+    return <PackageSearch size={18} />;
   }
 
   return <Gauge size={18} />;

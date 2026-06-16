@@ -40,6 +40,21 @@ interface DraftFeature extends FeatureCatalogItem {
   configuration: Record<string, unknown>;
 }
 
+interface CategoryFilterItem {
+  id: string;
+  label: string;
+  count: number;
+}
+
+interface SettingGroupItem {
+  id: string;
+  label: string;
+  settings: StudioSettingDescriptor[];
+}
+
+const AllCategoriesId = "__all";
+const UncategorizedId = "__uncategorized";
+
 let moduleApi: ElsaStudioModuleApi;
 
 export function register(api: ElsaStudioModuleApi) {
@@ -132,6 +147,7 @@ export function FeatureManagementPage() {
   const [catalog, setCatalog] = useState<FeatureCatalogResponse | null>(null);
   const [draft, setDraft] = useState<DraftFeature[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(AllCategoriesId);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -141,18 +157,29 @@ export function FeatureManagementPage() {
     void refresh();
   }, []);
 
-  const selectedFeature = draft.find(feature => feature.id === selectedId)
-    ?? draft.find(feature => feature.enabled)
-    ?? draft[0]
+  const categories = useMemo(() => getCategoryFilters(draft), [draft]);
+  const filteredDraft = useMemo(
+    () => filterFeaturesByCategory(draft, selectedCategory),
+    [draft, selectedCategory]);
+  const selectedFeature = filteredDraft.find(feature => feature.id === selectedId)
+    ?? filteredDraft.find(feature => feature.enabled)
+    ?? filteredDraft[0]
     ?? null;
   const dirty = isDirty(catalog, draft);
   const enabledCount = draft.filter(feature => feature.enabled).length;
+  const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.id !== selectedId) {
       setSelectedId(selectedFeature.id);
     }
   }, [selectedFeature, selectedId]);
+
+  useEffect(() => {
+    if (!categories.some(category => category.id === selectedCategory)) {
+      setSelectedCategory(AllCategoriesId);
+    }
+  }, [categories, selectedCategory]);
 
   async function refresh() {
     setLoading(true);
@@ -176,12 +203,11 @@ export function FeatureManagementPage() {
 
     setApplying(true);
     setError(null);
+    setStatus(null);
     try {
-      const response = await moduleApi.backend.http.getJson<FeatureApplyResult>("/modularity/features/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createApplyPayload(catalog.revision, draft))
-      });
+      const response = await moduleApi.backend.http.postJson<FeatureApplyResult>(
+        "/modularity/features/apply",
+        createApplyPayload(catalog.revision, draft));
       setCatalog(response.catalog);
       setDraft(response.catalog.features.map(toDraftFeature));
       setStatus(`Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`);
@@ -210,15 +236,26 @@ export function FeatureManagementPage() {
     }));
   }
 
+  function reset() {
+    if (!catalog) {
+      return;
+    }
+
+    setDraft(catalog.features.map(toDraftFeature));
+    setStatus(null);
+    setError(null);
+  }
+
   return (
     <section className="feature-management-page">
       <div className="section-header feature-management-header">
         <div>
           <h2>Features</h2>
-          <p>{enabledCount} enabled of {draft.length} available</p>
+          <p>{enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
         </div>
         <div className="feature-management-actions">
           <button type="button" onClick={refresh} disabled={loading || applying}>Refresh</button>
+          <button type="button" onClick={reset} disabled={!dirty || loading || applying}>Reset</button>
           <button type="button" className="primary" onClick={apply} disabled={!dirty || loading || applying}>
             {applying ? "Applying" : "Apply"}
           </button>
@@ -229,56 +266,142 @@ export function FeatureManagementPage() {
       {status ? <div className="feature-management-status">{status}</div> : null}
 
       <div className="feature-management-layout">
-        <div className="feature-management-list" aria-busy={loading}>
-          {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
-          {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
-          {draft.map(feature => (
-            <button
-              key={feature.id}
-              type="button"
-              className={feature.id === selectedFeature?.id ? "feature-management-row selected" : "feature-management-row"}
-              onClick={() => setSelectedId(feature.id)}
-            >
-              <span className={feature.enabled ? "feature-management-switch enabled" : "feature-management-switch"} onClick={event => {
-                event.stopPropagation();
-                toggleFeature(feature);
-              }} role="switch" aria-checked={feature.enabled} tabIndex={0} />
-              <span>
-                <strong>{feature.displayName || feature.id}</strong>
-                <code>{feature.id}</code>
-              </span>
-              <em>{feature.settings.length}</em>
-            </button>
-          ))}
+        <CategoryFilter
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+
+        <div className="feature-management-list-column">
+          <div className="feature-management-list-heading">
+            <div>
+              <strong>{selectedCategoryLabel}</strong>
+              <span>{filteredDraft.length} feature{filteredDraft.length === 1 ? "" : "s"}</span>
+            </div>
+            <span>{filteredDraft.filter(feature => feature.enabled).length} enabled</span>
+          </div>
+
+          <div className="feature-management-list" aria-busy={loading}>
+            {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
+            {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
+            {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">No features match this category.</p> : null}
+            {filteredDraft.map(feature => (
+              <FeatureCard
+                key={feature.id}
+                feature={feature}
+                selected={feature.id === selectedFeature?.id}
+                onSelect={() => setSelectedId(feature.id)}
+                onToggle={() => toggleFeature(feature)}
+              />
+            ))}
+          </div>
         </div>
 
         <FeatureInspector
           feature={selectedFeature}
           disabled={applying || loading}
+          dirty={dirty}
           onToggle={toggleFeature}
           onSettingChange={updateSetting}
+          onReset={reset}
+          onApply={apply}
         />
       </div>
     </section>
   );
 }
 
+function CategoryFilter({
+  categories,
+  selectedCategory,
+  onSelect
+}: {
+  categories: CategoryFilterItem[];
+  selectedCategory: string;
+  onSelect(categoryId: string): void;
+}) {
+  return (
+    <aside className="feature-management-categories" aria-label="Feature categories">
+      <span className="feature-management-panel-label">Categories</span>
+      <div className="feature-management-category-list">
+        {categories.map(category => (
+          <button
+            key={category.id}
+            type="button"
+            className={category.id === selectedCategory ? "active" : ""}
+            onClick={() => onSelect(category.id)}
+          >
+            <span>{category.label}</span>
+            <em>{category.count}</em>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function FeatureCard({
+  feature,
+  selected,
+  onSelect,
+  onToggle
+}: {
+  feature: DraftFeature;
+  selected: boolean;
+  onSelect(): void;
+  onToggle(): void;
+}) {
+  return (
+    <article className={selected ? "feature-management-card selected" : "feature-management-card"}>
+      <button
+        type="button"
+        className={feature.enabled ? "feature-management-switch enabled" : "feature-management-switch"}
+        onClick={onToggle}
+        role="switch"
+        aria-checked={feature.enabled}
+        aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.displayName || feature.id}`}
+      />
+      <button type="button" className="feature-management-feature-button" onClick={onSelect}>
+        <span className="feature-management-card-title">
+          <strong>{feature.displayName || feature.id}</strong>
+          {feature.experimental ? <em>Experimental</em> : null}
+          {feature.advanced ? <em>Advanced</em> : null}
+        </span>
+        <code>{feature.id}</code>
+        {feature.description ? <small>{feature.description}</small> : null}
+        <span className="feature-management-card-meta">
+          <span>{feature.sourceKind}</span>
+          {feature.categories.slice(0, 2).map(category => <span key={category}>{category}</span>)}
+          {feature.categories.length > 2 ? <span>+{feature.categories.length - 2}</span> : null}
+        </span>
+      </button>
+      <span className="feature-management-card-count">{feature.settings.length}</span>
+    </article>
+  );
+}
+
 function FeatureInspector({
   feature,
   disabled,
+  dirty,
   onToggle,
-  onSettingChange
+  onSettingChange,
+  onReset,
+  onApply
 }: {
   feature: DraftFeature | null;
   disabled: boolean;
+  dirty: boolean;
   onToggle(feature: DraftFeature): void;
   onSettingChange(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown): void;
+  onReset(): void;
+  onApply(): void;
 }) {
-  const editors = useMemo(() => moduleApi.settingEditors.list(), []);
-
   if (!feature) {
     return <aside className="feature-management-inspector"><p className="feature-management-muted">Select a feature.</p></aside>;
   }
+
+  const settingGroups = getSettingGroups(feature.settings);
 
   return (
     <aside className="feature-management-inspector">
@@ -296,30 +419,54 @@ function FeatureInspector({
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
       {feature.packageId ? <p className="feature-management-muted">{feature.packageId} {feature.packageVersion}</p> : null}
+      {feature.categories.length > 0 ? (
+        <div className="feature-management-inspector-tags">
+          {feature.categories.map(category => <span key={category}>{category}</span>)}
+        </div>
+      ) : null}
+
+      <dl className="feature-management-metadata">
+        <div><dt>Source</dt><dd>{feature.sourceKind}</dd></div>
+        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
+        {feature.manifestHash ? <div><dt>Manifest</dt><dd>{feature.manifestHash}</dd></div> : null}
+        {feature.manifestPath ? <div><dt>Path</dt><dd>{feature.manifestPath}</dd></div> : null}
+      </dl>
 
       {feature.settings.length === 0 ? (
         <p className="feature-management-muted">No configurable settings.</p>
       ) : (
         <div className="feature-management-settings">
-          {feature.settings.map(setting => {
-            const editor = editors
-              .filter(candidate => candidate.supports(setting))
-              .sort((a, b) => (a.order ?? 500) - (b.order ?? 500))[0];
-            const Editor = editor?.component ?? TextSettingEditor;
+          {settingGroups.map(group => (
+            <section key={group.id} className="feature-management-setting-group">
+              <h4>{group.label}</h4>
+              <div>
+                {group.settings.map(setting => {
+                  const Editor = selectSettingEditor(moduleApi, setting).component;
 
-            return (
-              <SettingField key={setting.name} setting={setting}>
-                <Editor
-                  setting={setting}
-                  value={getSettingValue(feature, setting)}
-                  disabled={disabled || !feature.enabled}
-                  onChange={value => onSettingChange(feature, setting, value)}
-                />
-              </SettingField>
-            );
-          })}
+                  return (
+                    <SettingField key={setting.name} setting={setting}>
+                      <Editor
+                        setting={setting}
+                        value={getSettingValue(feature, setting)}
+                        disabled={disabled || !feature.enabled}
+                        onChange={value => onSettingChange(feature, setting, value)}
+                      />
+                    </SettingField>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
+
+      <div className="feature-management-sticky-actions">
+        <span>{dirty ? "Unsaved changes" : "No pending changes"}</span>
+        <div>
+          <button type="button" onClick={onReset} disabled={!dirty || disabled}>Reset</button>
+          <button type="button" className="primary" onClick={onApply} disabled={!dirty || disabled}>Apply</button>
+        </div>
+      </div>
     </aside>
   );
 }
@@ -448,6 +595,56 @@ function defaultJsonText(setting: StudioSettingDescriptor) {
   return normalizeType(setting.jsonType) === "array" ? "[]" : "{}";
 }
 
+function getCategoryFilters(features: DraftFeature[]): CategoryFilterItem[] {
+  const counts = new Map<string, number>();
+
+  for (const feature of features) {
+    const categories = getFeatureCategoryIds(feature);
+    for (const category of categories) {
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+  }
+
+  return [
+    { id: AllCategoriesId, label: "All categories", count: features.length },
+    ...Array.from(counts.entries())
+      .sort(([a], [b]) => getCategoryLabel(a).localeCompare(getCategoryLabel(b)))
+      .map(([id, count]) => ({ id, label: getCategoryLabel(id), count }))
+  ];
+}
+
+function filterFeaturesByCategory(features: DraftFeature[], category: string) {
+  if (category === AllCategoriesId) {
+    return features;
+  }
+
+  return features.filter(feature => getFeatureCategoryIds(feature).includes(category));
+}
+
+function getFeatureCategoryIds(feature: DraftFeature) {
+  return feature.categories.length > 0 ? feature.categories : [UncategorizedId];
+}
+
+function getCategoryLabel(category: string) {
+  return category === UncategorizedId ? "Uncategorized" : category;
+}
+
+function getSettingGroups(settings: StudioSettingDescriptor[]): SettingGroupItem[] {
+  const groups = new Map<string, SettingGroupItem>();
+
+  for (const setting of settings) {
+    const id = setting.group || setting.category || "General";
+    const existing = groups.get(id);
+    if (existing) {
+      existing.settings.push(setting);
+    } else {
+      groups.set(id, { id, label: id, settings: [setting] });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
 function includesHint(setting: StudioSettingDescriptor, value: string) {
   return (setting.uiHint ?? "").toLowerCase().includes(value);
 }
@@ -467,5 +664,19 @@ function canonicalize(features: FeatureCatalogItem[] | DraftFeature[]) {
 }
 
 export function getErrorMessage(error: unknown) {
+  if (isHttpError(error)) {
+    if (error.status === 409) {
+      return `The feature catalog changed before your changes were applied. Refresh and review the latest feature state. ${error.message}`;
+    }
+
+    if (error.status === 400) {
+      return `The feature configuration was rejected. ${error.message}`;
+    }
+  }
+
   return error instanceof Error ? error.message : String(error);
+}
+
+function isHttpError(error: unknown): error is { status: number; message: string } {
+  return error instanceof Error && typeof (error as { status?: unknown }).status === "number";
 }
