@@ -19,7 +19,15 @@ public static class StudioApiEndpointRouteBuilderExtensions
             return Results.Ok(response);
         });
 
+        endpoints.MapGet("/_elsa/studio/module-registry", async (HttpContext httpContext) =>
+        {
+            var response = await httpContext.RequestServices
+                .GetRequiredService<IStudioModuleManifestProvider>()
+                .GetModuleRegistry(httpContext.RequestAborted);
+
+            return Results.Ok(response);
+        });
+
         return endpoints;
     }
 }
-

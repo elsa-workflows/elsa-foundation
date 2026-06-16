@@ -1,0 +1,37 @@
+:root {
+  --studio-font-ui: var(--font-sans);
+  --studio-font-mono: var(--font-mono);
+
+  --studio-bg: var(--background);
+  --studio-surface: var(--card);
+  --studio-surface-muted: var(--muted);
+  --studio-text: var(--foreground);
+  --studio-text-muted: var(--muted-foreground);
+  --studio-border: var(--border);
+  --studio-accent: var(--primary);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --studio-focus: color-mix(in srgb, var(--ring) 24%, transparent);
+
+  --studio-success: var(--success);
+  --studio-success-text: var(--success-foreground);
+  --studio-warning: var(--warning);
+  --studio-warning-text: var(--warning-foreground);
+  --studio-danger: var(--danger);
+  --studio-danger-text: var(--danger-foreground);
+
+  --studio-radius-sm: var(--radius-sm);
+  --studio-radius: var(--radius);
+  --studio-radius-md: var(--radius-md);
+  --studio-shadow-sm: var(--shadow-sm);
+
+  --studio-page-title-size: 20px;
+  --studio-section-title-size: 16px;
+  --studio-body-size: 13px;
+  --studio-label-size: 12px;
+
+  /* Compatibility aliases for independently bundled Studio modules. */
+  --surface: var(--studio-surface);
+  --text: var(--studio-text);
+  --muted: var(--studio-text-muted);
+  --accent: var(--studio-accent);
+}

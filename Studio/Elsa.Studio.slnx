@@ -1,8 +1,16 @@
 <Solution>
+  <Folder Name="/solution/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="NuGet.config" />
+    <File Path="package.json" />
+    <File Path="README.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
     <Project Path="src/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj" />
     <Project Path="src/Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
+    <Project Path="src/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" />
     <Project Path="src/Elsa.Studio.Samples.Dashboard/Elsa.Studio.Samples.Dashboard.csproj" />
     <Project Path="src/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
     <Project Path="src/Elsa.Studio.Web/Elsa.Studio.Web.csproj" />

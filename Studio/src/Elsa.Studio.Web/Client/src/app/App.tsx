@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Maximize2,
   Minimize2,
+  PackageSearch,
   Search,
   ShieldCheck
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { getStudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
@@ -34,6 +36,7 @@ type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
 
 const builtInNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
 ];
 
@@ -141,9 +144,10 @@ function AppContent() {
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
       {path === "/" ? <Home api={api!} /> : null}
+      {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/" && path !== "/diagnostics/modules" ? (
+      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/diagnostics/modules" ? (
         <div className="empty-state">No Studio route is registered for {path}.</div>
       ) : null}
     </ShellFrame>
@@ -362,6 +366,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
     <section
       className={`bottom-panel ${collapsed ? "collapsed" : ""} ${maximized ? "maximized" : ""}`}
       style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}
+      aria-label="Bottom panel"
     >
       {!collapsed && !maximized ? (
         <div
@@ -506,6 +511,10 @@ function NavIcon({ id }: { id: string }) {
     return <FileText size={18} />;
   }
 
+  if (id.includes("modules")) {
+    return <PackageSearch size={18} />;
+  }
+
   return <Gauge size={18} />;
 }
 
@@ -532,6 +541,10 @@ function getDefaultNavIconColor(id: string) {
 
   if (id.includes("diagnostics")) {
     return "#10b981";
+  }
+
+  if (id.includes("modules")) {
+    return "#8b5cf6";
   }
 
   return "var(--primary)";
