@@ -3,6 +3,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
+using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
 using System.Text.Json;
@@ -18,6 +19,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithAssemblies(
             typeof(StudioApiFeature).Assembly,
             typeof(ConsoleStreamStudioFeature).Assembly,
+            typeof(FeatureManagementStudioFeature).Assembly,
             typeof(DashboardStudioFeature).Assembly,
             typeof(WeatherForecastStudioFeature).Assembly)
         .WithConfigurationProvider(configuration)
