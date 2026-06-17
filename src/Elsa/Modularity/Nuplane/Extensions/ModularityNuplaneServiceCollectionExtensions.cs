@@ -12,6 +12,7 @@ public static class ModularityNuplaneServiceCollectionExtensions
         services.TryAddScoped<IFeatureManagementService, FeatureManagementService>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, RuntimeFeatureCatalogContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, PackageManifestFeatureCatalogContributor>());
+        services.TryAddScoped<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
         services.TryAddScoped<IRuntimeFeatureCatalogRefresher, RuntimeFeatureCatalogRefresher>();
         return services;
     }
