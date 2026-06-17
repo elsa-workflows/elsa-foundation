@@ -40,6 +40,9 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IRuntimeCheckpointWriter>();
         services.AddSingleton<IRuntimeCheckpointWriter, GroundworkRuntimeCheckpointWriter>();
 
+        services.RemoveAll<IRuntimePostCommitOutboxStore>();
+        services.AddSingleton<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();
+
         return services;
     }
 }

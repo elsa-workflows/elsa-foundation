@@ -51,6 +51,8 @@ public static class ElsaRuntimeStorageManifest
     // is skipped. This survives process restarts, unlike the in-memory writer's in-process dedup set.
     public const string CheckpointCommitDocumentKind = "checkpointCommit";
 
+    public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -117,7 +119,18 @@ public static class ElsaRuntimeStorageManifest
                 CheckpointCommitDocumentKind,
                 "Checkpoint commit ledger",
                 [],
-                [])
+                []),
+            Unit(
+                PostCommitOutboxDocumentKind,
+                "Post-commit outbox",
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByCollectionIndex, CollectionField)
+                ],
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-all", ByCollectionIndex)
+                ])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);
