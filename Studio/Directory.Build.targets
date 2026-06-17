@@ -1,0 +1,9 @@
+<Project>
+  <Target Name="AddCShellsAbstractionsToElsaPackageManifestReferences" BeforeTargets="GenerateElsaPackageManifest">
+    <ItemGroup>
+      <ReferencePath Include="$(TargetDir)*.dll" Condition="'$(TargetDir)' != '' and Exists('$(TargetDir)')" />
+      <ReferencePath Include="$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll" Condition="'$(PkgCShells_Abstractions)' != '' and Exists('$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll')" />
+      <ReferencePath Include="$(PkgCShells_AspNetCore_Abstractions)/lib/$(TargetFramework)/CShells.AspNetCore.Abstractions.dll" Condition="'$(PkgCShells_AspNetCore_Abstractions)' != '' and Exists('$(PkgCShells_AspNetCore_Abstractions)/lib/$(TargetFramework)/CShells.AspNetCore.Abstractions.dll')" />
+    </ItemGroup>
+  </Target>
+</Project>

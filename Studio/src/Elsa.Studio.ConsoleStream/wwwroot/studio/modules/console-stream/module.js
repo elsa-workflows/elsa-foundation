@@ -1,11 +1,11 @@
-import { useState as T, useRef as re, useCallback as J, useEffect as X, useMemo as Te } from "react";
-var V = { exports: {} }, M = {};
-var ie;
-function Pe() {
-  if (ie) return M;
-  ie = 1;
-  var o = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
-  function t(n, s, r) {
+import { useState as E, useRef as pe, useMemo as ne, useCallback as oe, useEffect as J } from "react";
+var se = { exports: {} }, W = {};
+var me;
+function Ue() {
+  if (me) return W;
+  me = 1;
+  var n = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
+  function t(o, s, r) {
     var c = null;
     if (r !== void 0 && (c = "" + r), s.key !== void 0 && (c = "" + s.key), "key" in s) {
       r = {};
@@ -13,32 +13,32 @@ function Pe() {
         a !== "key" && (r[a] = s[a]);
     } else r = s;
     return s = r.ref, {
-      $$typeof: o,
-      type: n,
+      $$typeof: n,
+      type: o,
       key: c,
       ref: s !== void 0 ? s : null,
       props: r
     };
   }
-  return M.Fragment = e, M.jsx = t, M.jsxs = t, M;
+  return W.Fragment = e, W.jsx = t, W.jsxs = t, W;
 }
-var ce;
-function Re() {
-  return ce || (ce = 1, V.exports = Pe()), V.exports;
+var be;
+function Oe() {
+  return be || (be = 1, se.exports = Ue()), se.exports;
 }
-var p = Re();
-class P extends Error {
+var f = Oe();
+class R extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.HttpError}.
    *
    * @param {string} errorMessage A descriptive error message.
    * @param {number} statusCode The HTTP status code represented by this error.
    */
   constructor(e, t) {
-    const n = new.target.prototype;
-    super(`${e}: Status code '${t}'`), this.statusCode = t, this.__proto__ = n;
+    const o = new.target.prototype;
+    super(`${e}: Status code '${t}'`), this.statusCode = t, this.__proto__ = o;
   }
 }
-class Y extends Error {
+class le extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.TimeoutError}.
    *
    * @param {string} errorMessage A descriptive error message.
@@ -48,7 +48,7 @@ class Y extends Error {
     super(e), this.__proto__ = t;
   }
 }
-class E extends Error {
+class I extends Error {
   /** Constructs a new instance of {@link AbortError}.
    *
    * @param {string} errorMessage A descriptive error message.
@@ -58,40 +58,40 @@ class E extends Error {
     super(e), this.__proto__ = t;
   }
 }
-class $e extends Error {
+class qe extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.UnsupportedTransportError}.
    *
    * @param {string} message A descriptive error message.
    * @param {HttpTransportType} transport The {@link @microsoft/signalr.HttpTransportType} this error occurred on.
    */
   constructor(e, t) {
-    const n = new.target.prototype;
-    super(e), this.transport = t, this.errorType = "UnsupportedTransportError", this.__proto__ = n;
+    const o = new.target.prototype;
+    super(e), this.transport = t, this.errorType = "UnsupportedTransportError", this.__proto__ = o;
   }
 }
-class xe extends Error {
+class Fe extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.DisabledTransportError}.
    *
    * @param {string} message A descriptive error message.
    * @param {HttpTransportType} transport The {@link @microsoft/signalr.HttpTransportType} this error occurred on.
    */
   constructor(e, t) {
-    const n = new.target.prototype;
-    super(e), this.transport = t, this.errorType = "DisabledTransportError", this.__proto__ = n;
+    const o = new.target.prototype;
+    super(e), this.transport = t, this.errorType = "DisabledTransportError", this.__proto__ = o;
   }
 }
-class De extends Error {
+class ze extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.FailedToStartTransportError}.
    *
    * @param {string} message A descriptive error message.
    * @param {HttpTransportType} transport The {@link @microsoft/signalr.HttpTransportType} this error occurred on.
    */
   constructor(e, t) {
-    const n = new.target.prototype;
-    super(e), this.transport = t, this.errorType = "FailedToStartTransportError", this.__proto__ = n;
+    const o = new.target.prototype;
+    super(e), this.transport = t, this.errorType = "FailedToStartTransportError", this.__proto__ = o;
   }
 }
-class ae extends Error {
+class we extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.FailedToNegotiateWithServerError}.
    *
    * @param {string} message A descriptive error message.
@@ -101,23 +101,23 @@ class ae extends Error {
     super(e), this.errorType = "FailedToNegotiateWithServerError", this.__proto__ = t;
   }
 }
-class Ae extends Error {
+class Je extends Error {
   /** Constructs a new instance of {@link @microsoft/signalr.AggregateErrors}.
    *
    * @param {string} message A descriptive error message.
    * @param {Error[]} innerErrors The collection of errors this error is aggregating.
    */
   constructor(e, t) {
-    const n = new.target.prototype;
-    super(e), this.innerErrors = t, this.__proto__ = n;
+    const o = new.target.prototype;
+    super(e), this.innerErrors = t, this.__proto__ = o;
   }
 }
-class we {
-  constructor(e, t, n) {
-    this.statusCode = e, this.statusText = t, this.content = n;
+class Re {
+  constructor(e, t, o) {
+    this.statusCode = e, this.statusText = t, this.content = o;
   }
 }
-class B {
+class G {
   get(e, t) {
     return this.send({
       ...t,
@@ -150,10 +150,10 @@ class B {
   }
 }
 var i;
-(function(o) {
-  o[o.Trace = 0] = "Trace", o[o.Debug = 1] = "Debug", o[o.Information = 2] = "Information", o[o.Warning = 3] = "Warning", o[o.Error = 4] = "Error", o[o.Critical = 5] = "Critical", o[o.None = 6] = "None";
+(function(n) {
+  n[n.Trace = 0] = "Trace", n[n.Debug = 1] = "Debug", n[n.Information = 2] = "Information", n[n.Warning = 3] = "Warning", n[n.Error = 4] = "Error", n[n.Critical = 5] = "Critical", n[n.None = 6] = "None";
 })(i || (i = {}));
-class N {
+class B {
   constructor() {
   }
   /** @inheritDoc */
@@ -161,8 +161,8 @@ class N {
   log(e, t) {
   }
 }
-N.instance = new N();
-const Me = "8.0.17";
+B.instance = new B();
+const Xe = "8.0.17";
 class m {
   static isRequired(e, t) {
     if (e == null)
@@ -172,23 +172,23 @@ class m {
     if (!e || e.match(/^\s*$/))
       throw new Error(`The '${t}' argument should not be empty.`);
   }
-  static isIn(e, t, n) {
+  static isIn(e, t, o) {
     if (!(e in t))
-      throw new Error(`Unknown ${n} value: ${e}.`);
+      throw new Error(`Unknown ${o} value: ${e}.`);
   }
 }
-class _ {
+class p {
   // react-native has a window but no document so we should check both
   static get isBrowser() {
-    return !_.isNode && typeof window == "object" && typeof window.document == "object";
+    return !p.isNode && typeof window == "object" && typeof window.document == "object";
   }
   // WebWorkers don't have a window object so the isBrowser check would fail
   static get isWebWorker() {
-    return !_.isNode && typeof self == "object" && "importScripts" in self;
+    return !p.isNode && typeof self == "object" && "importScripts" in self;
   }
   // react-native has a window but no document
   static get isReactNative() {
-    return !_.isNode && typeof window == "object" && typeof window.document > "u";
+    return !p.isNode && typeof window == "object" && typeof window.document > "u";
   }
   // Node apps shouldn't have a window object, but WebWorkers don't either
   // so we need to check for both WebWorker and window
@@ -196,38 +196,38 @@ class _ {
     return typeof process < "u" && process.release && process.release.name === "node";
   }
 }
-function H(o, e) {
+function U(n, e) {
   let t = "";
-  return $(o) ? (t = `Binary data of length ${o.byteLength}`, e && (t += `. Content: '${Ne(o)}'`)) : typeof o == "string" && (t = `String data of length ${o.length}`, e && (t += `. Content: '${o}'`)), t;
+  return $(n) ? (t = `Binary data of length ${n.byteLength}`, e && (t += `. Content: '${Ve(n)}'`)) : typeof n == "string" && (t = `String data of length ${n.length}`, e && (t += `. Content: '${n}'`)), t;
 }
-function Ne(o) {
-  const e = new Uint8Array(o);
+function Ve(n) {
+  const e = new Uint8Array(n);
   let t = "";
-  return e.forEach((n) => {
-    const s = n < 16 ? "0" : "";
-    t += `0x${s}${n.toString(16)} `;
+  return e.forEach((o) => {
+    const s = o < 16 ? "0" : "";
+    t += `0x${s}${o.toString(16)} `;
   }), t.substr(0, t.length - 1);
 }
-function $(o) {
-  return o && typeof ArrayBuffer < "u" && (o instanceof ArrayBuffer || // Sometimes we get an ArrayBuffer that doesn't satisfy instanceof
-  o.constructor && o.constructor.name === "ArrayBuffer");
+function $(n) {
+  return n && typeof ArrayBuffer < "u" && (n instanceof ArrayBuffer || // Sometimes we get an ArrayBuffer that doesn't satisfy instanceof
+  n.constructor && n.constructor.name === "ArrayBuffer");
 }
-async function be(o, e, t, n, s, r) {
-  const c = {}, [a, l] = A();
-  c[a] = l, o.log(i.Trace, `(${e} transport) sending data. ${H(s, r.logMessageContent)}.`);
-  const h = $(s) ? "arraybuffer" : "text", d = await t.post(n, {
+async function xe(n, e, t, o, s, r) {
+  const c = {}, [a, l] = j();
+  c[a] = l, n.log(i.Trace, `(${e} transport) sending data. ${U(s, r.logMessageContent)}.`);
+  const u = $(s) ? "arraybuffer" : "text", g = await t.post(o, {
     content: s,
     headers: { ...c, ...r.headers },
-    responseType: h,
+    responseType: u,
     timeout: r.timeout,
     withCredentials: r.withCredentials
   });
-  o.log(i.Trace, `(${e} transport) request complete. Response status: ${d.statusCode}.`);
+  n.log(i.Trace, `(${e} transport) request complete. Response status: ${g.statusCode}.`);
 }
-function He(o) {
-  return o === void 0 ? new W(i.Information) : o === null ? N.instance : o.log !== void 0 ? o : new W(o);
+function Ke(n) {
+  return n === void 0 ? new K(i.Information) : n === null ? B.instance : n.log !== void 0 ? n : new K(n);
 }
-class je {
+class Ge {
   constructor(e, t) {
     this._subject = e, this._observer = t;
   }
@@ -237,42 +237,42 @@ class je {
     });
   }
 }
-class W {
+class K {
   constructor(e) {
     this._minLevel = e, this.out = console;
   }
   log(e, t) {
     if (e >= this._minLevel) {
-      const n = `[${(/* @__PURE__ */ new Date()).toISOString()}] ${i[e]}: ${t}`;
+      const o = `[${(/* @__PURE__ */ new Date()).toISOString()}] ${i[e]}: ${t}`;
       switch (e) {
         case i.Critical:
         case i.Error:
-          this.out.error(n);
+          this.out.error(o);
           break;
         case i.Warning:
-          this.out.warn(n);
+          this.out.warn(o);
           break;
         case i.Information:
-          this.out.info(n);
+          this.out.info(o);
           break;
         default:
-          this.out.log(n);
+          this.out.log(o);
           break;
       }
     }
   }
 }
-function A() {
-  let o = "X-SignalR-User-Agent";
-  return _.isNode && (o = "User-Agent"), [o, Le(Me, We(), Ue(), Be())];
+function j() {
+  let n = "X-SignalR-User-Agent";
+  return p.isNode && (n = "User-Agent"), [n, Ye(Xe, Qe(), et(), Ze())];
 }
-function Le(o, e, t, n) {
+function Ye(n, e, t, o) {
   let s = "Microsoft SignalR/";
-  const r = o.split(".");
-  return s += `${r[0]}.${r[1]}`, s += ` (${o}; `, e && e !== "" ? s += `${e}; ` : s += "Unknown OS; ", s += `${t}`, n ? s += `; ${n}` : s += "; Unknown Runtime Version", s += ")", s;
+  const r = n.split(".");
+  return s += `${r[0]}.${r[1]}`, s += ` (${n}; `, e && e !== "" ? s += `${e}; ` : s += "Unknown OS; ", s += `${t}`, o ? s += `; ${o}` : s += "; Unknown Runtime Version", s += ")", s;
 }
-function We() {
-  if (_.isNode)
+function Qe() {
+  if (p.isNode)
     switch (process.platform) {
       case "win32":
         return "Windows NT";
@@ -286,17 +286,17 @@ function We() {
   else
     return "";
 }
-function Be() {
-  if (_.isNode)
+function Ze() {
+  if (p.isNode)
     return process.versions.node;
 }
-function Ue() {
-  return _.isNode ? "NodeJS" : "Browser";
+function et() {
+  return p.isNode ? "NodeJS" : "Browser";
 }
-function K(o) {
-  return o.stack ? o.stack : o.message ? o.message : `${o}`;
+function re(n) {
+  return n.stack ? n.stack : n.message ? n.message : `${n}`;
 }
-function Oe() {
+function tt() {
   if (typeof globalThis < "u")
     return globalThis;
   if (typeof self < "u")
@@ -307,13 +307,13 @@ function Oe() {
     return global;
   throw new Error("could not find global");
 }
-class qe extends B {
+class nt extends G {
   constructor(e) {
-    if (super(), this._logger = e, typeof fetch > "u" || _.isNode) {
+    if (super(), this._logger = e, typeof fetch > "u" || p.isNode) {
       const t = typeof __webpack_require__ == "function" ? __non_webpack_require__ : require;
       this._jar = new (t("tough-cookie")).CookieJar(), typeof fetch > "u" ? this._fetchType = t("node-fetch") : this._fetchType = fetch, this._fetchType = t("fetch-cookie")(this._fetchType, this._jar);
     } else
-      this._fetchType = fetch.bind(Oe());
+      this._fetchType = fetch.bind(tt());
     if (typeof AbortController > "u") {
       const t = typeof __webpack_require__ == "function" ? __non_webpack_require__ : require;
       this._abortControllerType = t("abort-controller");
@@ -323,21 +323,21 @@ class qe extends B {
   /** @inheritDoc */
   async send(e) {
     if (e.abortSignal && e.abortSignal.aborted)
-      throw new E();
+      throw new I();
     if (!e.method)
       throw new Error("No method defined.");
     if (!e.url)
       throw new Error("No url defined.");
     const t = new this._abortControllerType();
-    let n;
+    let o;
     e.abortSignal && (e.abortSignal.onabort = () => {
-      t.abort(), n = new E();
+      t.abort(), o = new I();
     });
     let s = null;
     if (e.timeout) {
       const l = e.timeout;
       s = setTimeout(() => {
-        t.abort(), this._logger.log(i.Warning, "Timeout from HTTP request."), n = new Y();
+        t.abort(), this._logger.log(i.Warning, "Timeout from HTTP request."), o = new le();
       }, l);
     }
     e.content === "" && (e.content = void 0), e.content && (e.headers = e.headers || {}, $(e.content) ? e.headers["Content-Type"] = "application/octet-stream" : e.headers["Content-Type"] = "text/plain;charset=UTF-8");
@@ -357,127 +357,127 @@ class qe extends B {
         signal: t.signal
       });
     } catch (l) {
-      throw n || (this._logger.log(i.Warning, `Error from HTTP request. ${l}.`), l);
+      throw o || (this._logger.log(i.Warning, `Error from HTTP request. ${l}.`), l);
     } finally {
       s && clearTimeout(s), e.abortSignal && (e.abortSignal.onabort = null);
     }
     if (!r.ok) {
-      const l = await le(r, "text");
-      throw new P(l || r.statusText, r.status);
+      const l = await Se(r, "text");
+      throw new R(l || r.statusText, r.status);
     }
-    const a = await le(r, e.responseType);
-    return new we(r.status, r.statusText, a);
+    const a = await Se(r, e.responseType);
+    return new Re(r.status, r.statusText, a);
   }
   getCookieString(e) {
     let t = "";
-    return _.isNode && this._jar && this._jar.getCookies(e, (n, s) => t = s.join("; ")), t;
+    return p.isNode && this._jar && this._jar.getCookies(e, (o, s) => t = s.join("; ")), t;
   }
 }
-function le(o, e) {
+function Se(n, e) {
   let t;
   switch (e) {
     case "arraybuffer":
-      t = o.arrayBuffer();
+      t = n.arrayBuffer();
       break;
     case "text":
-      t = o.text();
+      t = n.text();
       break;
     case "blob":
     case "document":
     case "json":
       throw new Error(`${e} is not supported.`);
     default:
-      t = o.text();
+      t = n.text();
       break;
   }
   return t;
 }
-class Fe extends B {
+class ot extends G {
   constructor(e) {
     super(), this._logger = e;
   }
   /** @inheritDoc */
   send(e) {
-    return e.abortSignal && e.abortSignal.aborted ? Promise.reject(new E()) : e.method ? e.url ? new Promise((t, n) => {
+    return e.abortSignal && e.abortSignal.aborted ? Promise.reject(new I()) : e.method ? e.url ? new Promise((t, o) => {
       const s = new XMLHttpRequest();
       s.open(e.method, e.url, !0), s.withCredentials = e.withCredentials === void 0 ? !0 : e.withCredentials, s.setRequestHeader("X-Requested-With", "XMLHttpRequest"), e.content === "" && (e.content = void 0), e.content && ($(e.content) ? s.setRequestHeader("Content-Type", "application/octet-stream") : s.setRequestHeader("Content-Type", "text/plain;charset=UTF-8"));
       const r = e.headers;
       r && Object.keys(r).forEach((c) => {
         s.setRequestHeader(c, r[c]);
       }), e.responseType && (s.responseType = e.responseType), e.abortSignal && (e.abortSignal.onabort = () => {
-        s.abort(), n(new E());
+        s.abort(), o(new I());
       }), e.timeout && (s.timeout = e.timeout), s.onload = () => {
-        e.abortSignal && (e.abortSignal.onabort = null), s.status >= 200 && s.status < 300 ? t(new we(s.status, s.statusText, s.response || s.responseText)) : n(new P(s.response || s.responseText || s.statusText, s.status));
+        e.abortSignal && (e.abortSignal.onabort = null), s.status >= 200 && s.status < 300 ? t(new Re(s.status, s.statusText, s.response || s.responseText)) : o(new R(s.response || s.responseText || s.statusText, s.status));
       }, s.onerror = () => {
-        this._logger.log(i.Warning, `Error from HTTP request. ${s.status}: ${s.statusText}.`), n(new P(s.statusText, s.status));
+        this._logger.log(i.Warning, `Error from HTTP request. ${s.status}: ${s.statusText}.`), o(new R(s.statusText, s.status));
       }, s.ontimeout = () => {
-        this._logger.log(i.Warning, "Timeout from HTTP request."), n(new Y());
+        this._logger.log(i.Warning, "Timeout from HTTP request."), o(new le());
       }, s.send(e.content);
     }) : Promise.reject(new Error("No url defined.")) : Promise.reject(new Error("No method defined."));
   }
 }
-class ze extends B {
+class st extends G {
   /** Creates a new instance of the {@link @microsoft/signalr.DefaultHttpClient}, using the provided {@link @microsoft/signalr.ILogger} to log messages. */
   constructor(e) {
-    if (super(), typeof fetch < "u" || _.isNode)
-      this._httpClient = new qe(e);
+    if (super(), typeof fetch < "u" || p.isNode)
+      this._httpClient = new nt(e);
     else if (typeof XMLHttpRequest < "u")
-      this._httpClient = new Fe(e);
+      this._httpClient = new ot(e);
     else
       throw new Error("No usable HttpClient found.");
   }
   /** @inheritDoc */
   send(e) {
-    return e.abortSignal && e.abortSignal.aborted ? Promise.reject(new E()) : e.method ? e.url ? this._httpClient.send(e) : Promise.reject(new Error("No url defined.")) : Promise.reject(new Error("No method defined."));
+    return e.abortSignal && e.abortSignal.aborted ? Promise.reject(new I()) : e.method ? e.url ? this._httpClient.send(e) : Promise.reject(new Error("No url defined.")) : Promise.reject(new Error("No method defined."));
   }
   getCookieString(e) {
     return this._httpClient.getCookieString(e);
   }
 }
-class C {
+class k {
   static write(e) {
-    return `${e}${C.RecordSeparator}`;
+    return `${e}${k.RecordSeparator}`;
   }
   static parse(e) {
-    if (e[e.length - 1] !== C.RecordSeparator)
+    if (e[e.length - 1] !== k.RecordSeparator)
       throw new Error("Message is incomplete.");
-    const t = e.split(C.RecordSeparator);
+    const t = e.split(k.RecordSeparator);
     return t.pop(), t;
   }
 }
-C.RecordSeparatorCode = 30;
-C.RecordSeparator = String.fromCharCode(C.RecordSeparatorCode);
-class Je {
+k.RecordSeparatorCode = 30;
+k.RecordSeparator = String.fromCharCode(k.RecordSeparatorCode);
+class rt {
   // Handshake request is always JSON
   writeHandshakeRequest(e) {
-    return C.write(JSON.stringify(e));
+    return k.write(JSON.stringify(e));
   }
   parseHandshakeResponse(e) {
-    let t, n;
+    let t, o;
     if ($(e)) {
-      const a = new Uint8Array(e), l = a.indexOf(C.RecordSeparatorCode);
+      const a = new Uint8Array(e), l = a.indexOf(k.RecordSeparatorCode);
       if (l === -1)
         throw new Error("Message is incomplete.");
-      const h = l + 1;
-      t = String.fromCharCode.apply(null, Array.prototype.slice.call(a.slice(0, h))), n = a.byteLength > h ? a.slice(h).buffer : null;
+      const u = l + 1;
+      t = String.fromCharCode.apply(null, Array.prototype.slice.call(a.slice(0, u))), o = a.byteLength > u ? a.slice(u).buffer : null;
     } else {
-      const a = e, l = a.indexOf(C.RecordSeparator);
+      const a = e, l = a.indexOf(k.RecordSeparator);
       if (l === -1)
         throw new Error("Message is incomplete.");
-      const h = l + 1;
-      t = a.substring(0, h), n = a.length > h ? a.substring(h) : null;
+      const u = l + 1;
+      t = a.substring(0, u), o = a.length > u ? a.substring(u) : null;
     }
-    const s = C.parse(t), r = JSON.parse(s[0]);
+    const s = k.parse(t), r = JSON.parse(s[0]);
     if (r.type)
       throw new Error("Expected a handshake response from the server.");
-    return [n, r];
+    return [o, r];
   }
 }
-var u;
-(function(o) {
-  o[o.Invocation = 1] = "Invocation", o[o.StreamItem = 2] = "StreamItem", o[o.Completion = 3] = "Completion", o[o.StreamInvocation = 4] = "StreamInvocation", o[o.CancelInvocation = 5] = "CancelInvocation", o[o.Ping = 6] = "Ping", o[o.Close = 7] = "Close", o[o.Ack = 8] = "Ack", o[o.Sequence = 9] = "Sequence";
-})(u || (u = {}));
-class Xe {
+var d;
+(function(n) {
+  n[n.Invocation = 1] = "Invocation", n[n.StreamItem = 2] = "StreamItem", n[n.Completion = 3] = "Completion", n[n.StreamInvocation = 4] = "StreamInvocation", n[n.CancelInvocation = 5] = "CancelInvocation", n[n.Ping = 6] = "Ping", n[n.Close = 7] = "Close", n[n.Ack = 8] = "Ack", n[n.Sequence = 9] = "Sequence";
+})(d || (d = {}));
+class it {
   constructor() {
     this.observers = [];
   }
@@ -494,38 +494,38 @@ class Xe {
       e.complete && e.complete();
   }
   subscribe(e) {
-    return this.observers.push(e), new je(this, e);
+    return this.observers.push(e), new Ge(this, e);
   }
 }
-class Ve {
-  constructor(e, t, n) {
-    this._bufferSize = 1e5, this._messages = [], this._totalMessageCount = 0, this._waitForSequenceMessage = !1, this._nextReceivingSequenceId = 1, this._latestReceivedSequenceId = 0, this._bufferedByteCount = 0, this._reconnectInProgress = !1, this._protocol = e, this._connection = t, this._bufferSize = n;
+class ct {
+  constructor(e, t, o) {
+    this._bufferSize = 1e5, this._messages = [], this._totalMessageCount = 0, this._waitForSequenceMessage = !1, this._nextReceivingSequenceId = 1, this._latestReceivedSequenceId = 0, this._bufferedByteCount = 0, this._reconnectInProgress = !1, this._protocol = e, this._connection = t, this._bufferSize = o;
   }
   async _send(e) {
     const t = this._protocol.writeMessage(e);
-    let n = Promise.resolve();
+    let o = Promise.resolve();
     if (this._isInvocationMessage(e)) {
       this._totalMessageCount++;
       let s = () => {
       }, r = () => {
       };
-      $(t) ? this._bufferedByteCount += t.byteLength : this._bufferedByteCount += t.length, this._bufferedByteCount >= this._bufferSize && (n = new Promise((c, a) => {
+      $(t) ? this._bufferedByteCount += t.byteLength : this._bufferedByteCount += t.length, this._bufferedByteCount >= this._bufferSize && (o = new Promise((c, a) => {
         s = c, r = a;
-      })), this._messages.push(new Ke(t, this._totalMessageCount, s, r));
+      })), this._messages.push(new at(t, this._totalMessageCount, s, r));
     }
     try {
       this._reconnectInProgress || await this._connection.send(t);
     } catch {
       this._disconnected();
     }
-    await n;
+    await o;
   }
   _ack(e) {
     let t = -1;
-    for (let n = 0; n < this._messages.length; n++) {
-      const s = this._messages[n];
+    for (let o = 0; o < this._messages.length; o++) {
+      const s = this._messages[o];
       if (s._id <= e.sequenceId)
-        t = n, $(s._message) ? this._bufferedByteCount -= s._message.byteLength : this._bufferedByteCount -= s._message.length, s._resolver();
+        t = o, $(s._message) ? this._bufferedByteCount -= s._message.byteLength : this._bufferedByteCount -= s._message.length, s._resolver();
       else if (this._bufferedByteCount < this._bufferSize)
         s._resolver();
       else
@@ -535,7 +535,7 @@ class Ve {
   }
   _shouldProcessMessage(e) {
     if (this._waitForSequenceMessage)
-      return e.type !== u.Sequence ? !1 : (this._waitForSequenceMessage = !1, !0);
+      return e.type !== d.Sequence ? !1 : (this._waitForSequenceMessage = !1, !0);
     if (!this._isInvocationMessage(e))
       return !0;
     const t = this._nextReceivingSequenceId;
@@ -553,10 +553,10 @@ class Ve {
   }
   async _resend() {
     const e = this._messages.length !== 0 ? this._messages[0]._id : this._totalMessageCount + 1;
-    await this._connection.send(this._protocol.writeMessage({ type: u.Sequence, sequenceId: e }));
+    await this._connection.send(this._protocol.writeMessage({ type: d.Sequence, sequenceId: e }));
     const t = this._messages;
-    for (const n of t)
-      await this._connection.send(n._message);
+    for (const o of t)
+      await this._connection.send(o._message);
     this._reconnectInProgress = !1;
   }
   _dispose(e) {
@@ -566,52 +566,52 @@ class Ve {
   }
   _isInvocationMessage(e) {
     switch (e.type) {
-      case u.Invocation:
-      case u.StreamItem:
-      case u.Completion:
-      case u.StreamInvocation:
-      case u.CancelInvocation:
+      case d.Invocation:
+      case d.StreamItem:
+      case d.Completion:
+      case d.StreamInvocation:
+      case d.CancelInvocation:
         return !0;
-      case u.Close:
-      case u.Sequence:
-      case u.Ping:
-      case u.Ack:
+      case d.Close:
+      case d.Sequence:
+      case d.Ping:
+      case d.Ack:
         return !1;
     }
   }
   _ackTimer() {
     this._ackTimerHandle === void 0 && (this._ackTimerHandle = setTimeout(async () => {
       try {
-        this._reconnectInProgress || await this._connection.send(this._protocol.writeMessage({ type: u.Ack, sequenceId: this._latestReceivedSequenceId }));
+        this._reconnectInProgress || await this._connection.send(this._protocol.writeMessage({ type: d.Ack, sequenceId: this._latestReceivedSequenceId }));
       } catch {
       }
       clearTimeout(this._ackTimerHandle), this._ackTimerHandle = void 0;
     }, 1e3));
   }
 }
-class Ke {
-  constructor(e, t, n, s) {
-    this._message = e, this._id = t, this._resolver = n, this._rejector = s;
+class at {
+  constructor(e, t, o, s) {
+    this._message = e, this._id = t, this._resolver = o, this._rejector = s;
   }
 }
-const Ge = 30 * 1e3, Ye = 15 * 1e3, Qe = 1e5;
-var f;
-(function(o) {
-  o.Disconnected = "Disconnected", o.Connecting = "Connecting", o.Connected = "Connected", o.Disconnecting = "Disconnecting", o.Reconnecting = "Reconnecting";
-})(f || (f = {}));
-class Q {
+const lt = 30 * 1e3, ht = 15 * 1e3, ut = 1e5;
+var _;
+(function(n) {
+  n.Disconnected = "Disconnected", n.Connecting = "Connecting", n.Connected = "Connected", n.Disconnecting = "Disconnecting", n.Reconnecting = "Reconnecting";
+})(_ || (_ = {}));
+class he {
   /** @internal */
   // Using a public static factory method means we can have a private constructor and an _internal_
   // create method that can be used by HubConnectionBuilder. An "internal" constructor would just
   // be stripped away and the '.d.ts' file would have no constructor, which is interpreted as a
   // public parameter-less constructor.
-  static create(e, t, n, s, r, c, a) {
-    return new Q(e, t, n, s, r, c, a);
+  static create(e, t, o, s, r, c, a) {
+    return new he(e, t, o, s, r, c, a);
   }
-  constructor(e, t, n, s, r, c, a) {
+  constructor(e, t, o, s, r, c, a) {
     this._nextKeepAlive = 0, this._freezeEventListener = () => {
       this._logger.log(i.Warning, "The page is being frozen, this will likely lead to the connection being closed and messages being lost. For more information see the docs at https://learn.microsoft.com/aspnet/core/signalr/javascript-client#bsleep");
-    }, m.isRequired(e, "connection"), m.isRequired(t, "logger"), m.isRequired(n, "protocol"), this.serverTimeoutInMilliseconds = r ?? Ge, this.keepAliveIntervalInMilliseconds = c ?? Ye, this._statefulReconnectBufferSize = a ?? Qe, this._logger = t, this._protocol = n, this.connection = e, this._reconnectPolicy = s, this._handshakeProtocol = new Je(), this.connection.onreceive = (l) => this._processIncomingData(l), this.connection.onclose = (l) => this._connectionClosed(l), this._callbacks = {}, this._methods = {}, this._closedCallbacks = [], this._reconnectingCallbacks = [], this._reconnectedCallbacks = [], this._invocationId = 0, this._receivedHandshakeResponse = !1, this._connectionState = f.Disconnected, this._connectionStarted = !1, this._cachedPingMessage = this._protocol.writeMessage({ type: u.Ping });
+    }, m.isRequired(e, "connection"), m.isRequired(t, "logger"), m.isRequired(o, "protocol"), this.serverTimeoutInMilliseconds = r ?? lt, this.keepAliveIntervalInMilliseconds = c ?? ht, this._statefulReconnectBufferSize = a ?? ut, this._logger = t, this._protocol = o, this.connection = e, this._reconnectPolicy = s, this._handshakeProtocol = new rt(), this.connection.onreceive = (l) => this._processIncomingData(l), this.connection.onclose = (l) => this._connectionClosed(l), this._callbacks = {}, this._methods = {}, this._closedCallbacks = [], this._reconnectingCallbacks = [], this._reconnectedCallbacks = [], this._invocationId = 0, this._receivedHandshakeResponse = !1, this._connectionState = _.Disconnected, this._connectionStarted = !1, this._cachedPingMessage = this._protocol.writeMessage({ type: d.Ping });
   }
   /** Indicates the state of the {@link HubConnection} to the server. */
   get state() {
@@ -633,7 +633,7 @@ class Q {
    * @param {string} url The url to connect to.
    */
   set baseUrl(e) {
-    if (this._connectionState !== f.Disconnected && this._connectionState !== f.Reconnecting)
+    if (this._connectionState !== _.Disconnected && this._connectionState !== _.Reconnecting)
       throw new Error("The HubConnection must be in the Disconnected or Reconnecting state to change the url.");
     if (!e)
       throw new Error("The HubConnection url must be a valid url.");
@@ -647,31 +647,31 @@ class Q {
     return this._startPromise = this._startWithStateTransitions(), this._startPromise;
   }
   async _startWithStateTransitions() {
-    if (this._connectionState !== f.Disconnected)
+    if (this._connectionState !== _.Disconnected)
       return Promise.reject(new Error("Cannot start a HubConnection that is not in the 'Disconnected' state."));
-    this._connectionState = f.Connecting, this._logger.log(i.Debug, "Starting HubConnection.");
+    this._connectionState = _.Connecting, this._logger.log(i.Debug, "Starting HubConnection.");
     try {
-      await this._startInternal(), _.isBrowser && window.document.addEventListener("freeze", this._freezeEventListener), this._connectionState = f.Connected, this._connectionStarted = !0, this._logger.log(i.Debug, "HubConnection connected successfully.");
+      await this._startInternal(), p.isBrowser && window.document.addEventListener("freeze", this._freezeEventListener), this._connectionState = _.Connected, this._connectionStarted = !0, this._logger.log(i.Debug, "HubConnection connected successfully.");
     } catch (e) {
-      return this._connectionState = f.Disconnected, this._logger.log(i.Debug, `HubConnection failed to start successfully because of error '${e}'.`), Promise.reject(e);
+      return this._connectionState = _.Disconnected, this._logger.log(i.Debug, `HubConnection failed to start successfully because of error '${e}'.`), Promise.reject(e);
     }
   }
   async _startInternal() {
     this._stopDuringStartError = void 0, this._receivedHandshakeResponse = !1;
-    const e = new Promise((t, n) => {
-      this._handshakeResolver = t, this._handshakeRejecter = n;
+    const e = new Promise((t, o) => {
+      this._handshakeResolver = t, this._handshakeRejecter = o;
     });
     await this.connection.start(this._protocol.transferFormat);
     try {
       let t = this._protocol.version;
       this.connection.features.reconnect || (t = 1);
-      const n = {
+      const o = {
         protocol: this._protocol.name,
         version: t
       };
-      if (this._logger.log(i.Debug, "Sending handshake request."), await this._sendMessage(this._handshakeProtocol.writeHandshakeRequest(n)), this._logger.log(i.Information, `Using HubProtocol '${this._protocol.name}'.`), this._cleanupTimeout(), this._resetTimeoutPeriod(), this._resetKeepAliveInterval(), await e, this._stopDuringStartError)
+      if (this._logger.log(i.Debug, "Sending handshake request."), await this._sendMessage(this._handshakeProtocol.writeHandshakeRequest(o)), this._logger.log(i.Information, `Using HubProtocol '${this._protocol.name}'.`), this._cleanupTimeout(), this._resetTimeoutPeriod(), this._resetKeepAliveInterval(), await e, this._stopDuringStartError)
         throw this._stopDuringStartError;
-      this.connection.features.reconnect && (this._messageBuffer = new Ve(this._protocol, this.connection, this._statefulReconnectBufferSize), this.connection.features.disconnected = this._messageBuffer._disconnected.bind(this._messageBuffer), this.connection.features.resend = () => {
+      this.connection.features.reconnect && (this._messageBuffer = new ct(this._protocol, this.connection, this._statefulReconnectBufferSize), this.connection.features.disconnected = this._messageBuffer._disconnected.bind(this._messageBuffer), this.connection.features.resend = () => {
         if (this._messageBuffer)
           return this._messageBuffer._resend();
       }), this.connection.features.inherentKeepAlive || await this._sendMessage(this._cachedPingMessage);
@@ -692,12 +692,12 @@ class Q {
     }
   }
   _stopInternal(e) {
-    if (this._connectionState === f.Disconnected)
+    if (this._connectionState === _.Disconnected)
       return this._logger.log(i.Debug, `Call to HubConnection.stop(${e}) ignored because it is already in the disconnected state.`), Promise.resolve();
-    if (this._connectionState === f.Disconnecting)
+    if (this._connectionState === _.Disconnecting)
       return this._logger.log(i.Debug, `Call to HttpConnection.stop(${e}) ignored because the connection is already in the disconnecting state.`), this._stopPromise;
     const t = this._connectionState;
-    return this._connectionState = f.Disconnecting, this._logger.log(i.Debug, "Stopping HubConnection."), this._reconnectDelayHandle ? (this._logger.log(i.Debug, "Connection stopped during reconnect delay. Done reconnecting."), clearTimeout(this._reconnectDelayHandle), this._reconnectDelayHandle = void 0, this._completeClose(), Promise.resolve()) : (t === f.Connected && this._sendCloseMessage(), this._cleanupTimeout(), this._cleanupPingTimer(), this._stopDuringStartError = e || new E("The connection was stopped before the hub handshake could complete."), this.connection.stop(e));
+    return this._connectionState = _.Disconnecting, this._logger.log(i.Debug, "Stopping HubConnection."), this._reconnectDelayHandle ? (this._logger.log(i.Debug, "Connection stopped during reconnect delay. Done reconnecting."), clearTimeout(this._reconnectDelayHandle), this._reconnectDelayHandle = void 0, this._completeClose(), Promise.resolve()) : (t === _.Connected && this._sendCloseMessage(), this._cleanupTimeout(), this._cleanupPingTimer(), this._stopDuringStartError = e || new I("The connection was stopped before the hub handshake could complete."), this.connection.stop(e));
   }
   async _sendCloseMessage() {
     try {
@@ -713,20 +713,20 @@ class Q {
    * @returns {IStreamResult<T>} An object that yields results from the server as they are received.
    */
   stream(e, ...t) {
-    const [n, s] = this._replaceStreamingParams(t), r = this._createStreamInvocation(e, t, s);
+    const [o, s] = this._replaceStreamingParams(t), r = this._createStreamInvocation(e, t, s);
     let c;
-    const a = new Xe();
+    const a = new it();
     return a.cancelCallback = () => {
       const l = this._createCancelInvocation(r.invocationId);
       return delete this._callbacks[r.invocationId], c.then(() => this._sendWithProtocol(l));
-    }, this._callbacks[r.invocationId] = (l, h) => {
-      if (h) {
-        a.error(h);
+    }, this._callbacks[r.invocationId] = (l, u) => {
+      if (u) {
+        a.error(u);
         return;
-      } else l && (l.type === u.Completion ? l.error ? a.error(new Error(l.error)) : a.complete() : a.next(l.item));
+      } else l && (l.type === d.Completion ? l.error ? a.error(new Error(l.error)) : a.complete() : a.next(l.item));
     }, c = this._sendWithProtocol(r).catch((l) => {
       a.error(l), delete this._callbacks[r.invocationId];
-    }), this._launchStreams(n, c), a;
+    }), this._launchStreams(o, c), a;
   }
   _sendMessage(e) {
     return this._resetKeepAliveInterval(), this.connection.send(e);
@@ -748,8 +748,8 @@ class Q {
    * @returns {Promise<void>} A Promise that resolves when the invocation has been successfully sent, or rejects with an error.
    */
   send(e, ...t) {
-    const [n, s] = this._replaceStreamingParams(t), r = this._sendWithProtocol(this._createInvocation(e, t, !0, s));
-    return this._launchStreams(n, r), r;
+    const [o, s] = this._replaceStreamingParams(t), r = this._sendWithProtocol(this._createInvocation(e, t, !0, s));
+    return this._launchStreams(o, r), r;
   }
   /** Invokes a hub method on the server using the specified name and arguments.
    *
@@ -763,18 +763,18 @@ class Q {
    * @returns {Promise<T>} A Promise that resolves with the result of the server method (if any), or rejects with an error.
    */
   invoke(e, ...t) {
-    const [n, s] = this._replaceStreamingParams(t), r = this._createInvocation(e, t, !1, s);
+    const [o, s] = this._replaceStreamingParams(t), r = this._createInvocation(e, t, !1, s);
     return new Promise((a, l) => {
-      this._callbacks[r.invocationId] = (d, y) => {
+      this._callbacks[r.invocationId] = (g, y) => {
         if (y) {
           l(y);
           return;
-        } else d && (d.type === u.Completion ? d.error ? l(new Error(d.error)) : a(d.result) : l(new Error(`Unexpected message type: ${d.type}`)));
+        } else g && (g.type === d.Completion ? g.error ? l(new Error(g.error)) : a(g.result) : l(new Error(`Unexpected message type: ${g.type}`)));
       };
-      const h = this._sendWithProtocol(r).catch((d) => {
-        l(d), delete this._callbacks[r.invocationId];
+      const u = this._sendWithProtocol(r).catch((g) => {
+        l(g), delete this._callbacks[r.invocationId];
       });
-      this._launchStreams(n, h);
+      this._launchStreams(o, u);
     });
   }
   on(e, t) {
@@ -784,11 +784,11 @@ class Q {
     if (!e)
       return;
     e = e.toLowerCase();
-    const n = this._methods[e];
-    if (n)
+    const o = this._methods[e];
+    if (o)
       if (t) {
-        const s = n.indexOf(t);
-        s !== -1 && (n.splice(s, 1), n.length === 0 && delete this._methods[e]);
+        const s = o.indexOf(t);
+        s !== -1 && (o.splice(s, 1), o.length === 0 && delete this._methods[e]);
       } else
         delete this._methods[e];
   }
@@ -816,52 +816,52 @@ class Q {
   _processIncomingData(e) {
     if (this._cleanupTimeout(), this._receivedHandshakeResponse || (e = this._processHandshakeResponse(e), this._receivedHandshakeResponse = !0), e) {
       const t = this._protocol.parseMessages(e, this._logger);
-      for (const n of t)
-        if (!(this._messageBuffer && !this._messageBuffer._shouldProcessMessage(n)))
-          switch (n.type) {
-            case u.Invocation:
-              this._invokeClientMethod(n).catch((s) => {
-                this._logger.log(i.Error, `Invoke client method threw error: ${K(s)}`);
+      for (const o of t)
+        if (!(this._messageBuffer && !this._messageBuffer._shouldProcessMessage(o)))
+          switch (o.type) {
+            case d.Invocation:
+              this._invokeClientMethod(o).catch((s) => {
+                this._logger.log(i.Error, `Invoke client method threw error: ${re(s)}`);
               });
               break;
-            case u.StreamItem:
-            case u.Completion: {
-              const s = this._callbacks[n.invocationId];
+            case d.StreamItem:
+            case d.Completion: {
+              const s = this._callbacks[o.invocationId];
               if (s) {
-                n.type === u.Completion && delete this._callbacks[n.invocationId];
+                o.type === d.Completion && delete this._callbacks[o.invocationId];
                 try {
-                  s(n);
+                  s(o);
                 } catch (r) {
-                  this._logger.log(i.Error, `Stream callback threw error: ${K(r)}`);
+                  this._logger.log(i.Error, `Stream callback threw error: ${re(r)}`);
                 }
               }
               break;
             }
-            case u.Ping:
+            case d.Ping:
               break;
-            case u.Close: {
+            case d.Close: {
               this._logger.log(i.Information, "Close message received from server.");
-              const s = n.error ? new Error("Server returned an error on close: " + n.error) : void 0;
-              n.allowReconnect === !0 ? this.connection.stop(s) : this._stopPromise = this._stopInternal(s);
+              const s = o.error ? new Error("Server returned an error on close: " + o.error) : void 0;
+              o.allowReconnect === !0 ? this.connection.stop(s) : this._stopPromise = this._stopInternal(s);
               break;
             }
-            case u.Ack:
-              this._messageBuffer && this._messageBuffer._ack(n);
+            case d.Ack:
+              this._messageBuffer && this._messageBuffer._ack(o);
               break;
-            case u.Sequence:
-              this._messageBuffer && this._messageBuffer._resetSequence(n);
+            case d.Sequence:
+              this._messageBuffer && this._messageBuffer._resetSequence(o);
               break;
             default:
-              this._logger.log(i.Warning, `Invalid message type: ${n.type}.`);
+              this._logger.log(i.Warning, `Invalid message type: ${o.type}.`);
               break;
           }
     }
     this._resetTimeoutPeriod();
   }
   _processHandshakeResponse(e) {
-    let t, n;
+    let t, o;
     try {
-      [n, t] = this._handshakeProtocol.parseHandshakeResponse(e);
+      [o, t] = this._handshakeProtocol.parseHandshakeResponse(e);
     } catch (s) {
       const r = "Error parsing handshake response: " + s;
       this._logger.log(i.Error, r);
@@ -875,7 +875,7 @@ class Q {
       throw this._handshakeRejecter(r), r;
     } else
       this._logger.log(i.Debug, "Server handshake complete.");
-    return this._handshakeResolver(), n;
+    return this._handshakeResolver(), o;
   }
   _resetKeepAliveInterval() {
     this.connection.features.inherentKeepAlive || (this._nextKeepAlive = (/* @__PURE__ */ new Date()).getTime() + this.keepAliveIntervalInMilliseconds, this._cleanupPingTimer());
@@ -884,7 +884,7 @@ class Q {
     if ((!this.connection.features || !this.connection.features.inherentKeepAlive) && (this._timeoutHandle = setTimeout(() => this.serverTimeout(), this.serverTimeoutInMilliseconds), this._pingServerHandle === void 0)) {
       let e = this._nextKeepAlive - (/* @__PURE__ */ new Date()).getTime();
       e < 0 && (e = 0), this._pingServerHandle = setTimeout(async () => {
-        if (this._connectionState === f.Connected)
+        if (this._connectionState === _.Connected)
           try {
             await this._sendMessage(this._cachedPingMessage);
           } catch {
@@ -898,28 +898,28 @@ class Q {
     this.connection.stop(new Error("Server timeout elapsed without receiving a message from the server."));
   }
   async _invokeClientMethod(e) {
-    const t = e.target.toLowerCase(), n = this._methods[t];
-    if (!n) {
+    const t = e.target.toLowerCase(), o = this._methods[t];
+    if (!o) {
       this._logger.log(i.Warning, `No client method with the name '${t}' found.`), e.invocationId && (this._logger.log(i.Warning, `No result given for '${t}' method and invocation ID '${e.invocationId}'.`), await this._sendWithProtocol(this._createCompletionMessage(e.invocationId, "Client didn't provide a result.", null)));
       return;
     }
-    const s = n.slice(), r = !!e.invocationId;
+    const s = o.slice(), r = !!e.invocationId;
     let c, a, l;
-    for (const h of s)
+    for (const u of s)
       try {
-        const d = c;
-        c = await h.apply(this, e.arguments), r && c && d && (this._logger.log(i.Error, `Multiple results provided for '${t}'. Sending error to server.`), l = this._createCompletionMessage(e.invocationId, "Client provided multiple results.", null)), a = void 0;
-      } catch (d) {
-        a = d, this._logger.log(i.Error, `A callback for the method '${t}' threw error '${d}'.`);
+        const g = c;
+        c = await u.apply(this, e.arguments), r && c && g && (this._logger.log(i.Error, `Multiple results provided for '${t}'. Sending error to server.`), l = this._createCompletionMessage(e.invocationId, "Client provided multiple results.", null)), a = void 0;
+      } catch (g) {
+        a = g, this._logger.log(i.Error, `A callback for the method '${t}' threw error '${g}'.`);
       }
     l ? await this._sendWithProtocol(l) : r ? (a ? l = this._createCompletionMessage(e.invocationId, `${a}`, null) : c !== void 0 ? l = this._createCompletionMessage(e.invocationId, null, c) : (this._logger.log(i.Warning, `No result given for '${t}' method and invocation ID '${e.invocationId}'.`), l = this._createCompletionMessage(e.invocationId, "Client didn't provide a result.", null)), await this._sendWithProtocol(l)) : c && this._logger.log(i.Error, `Result given for '${t}' method but server is not expecting a result.`);
   }
   _connectionClosed(e) {
-    this._logger.log(i.Debug, `HubConnection.connectionClosed(${e}) called while in state ${this._connectionState}.`), this._stopDuringStartError = this._stopDuringStartError || e || new E("The underlying connection was closed before the hub handshake could complete."), this._handshakeResolver && this._handshakeResolver(), this._cancelCallbacksWithError(e || new Error("Invocation canceled due to the underlying connection being closed.")), this._cleanupTimeout(), this._cleanupPingTimer(), this._connectionState === f.Disconnecting ? this._completeClose(e) : this._connectionState === f.Connected && this._reconnectPolicy ? this._reconnect(e) : this._connectionState === f.Connected && this._completeClose(e);
+    this._logger.log(i.Debug, `HubConnection.connectionClosed(${e}) called while in state ${this._connectionState}.`), this._stopDuringStartError = this._stopDuringStartError || e || new I("The underlying connection was closed before the hub handshake could complete."), this._handshakeResolver && this._handshakeResolver(), this._cancelCallbacksWithError(e || new Error("Invocation canceled due to the underlying connection being closed.")), this._cleanupTimeout(), this._cleanupPingTimer(), this._connectionState === _.Disconnecting ? this._completeClose(e) : this._connectionState === _.Connected && this._reconnectPolicy ? this._reconnect(e) : this._connectionState === _.Connected && this._completeClose(e);
   }
   _completeClose(e) {
     if (this._connectionStarted) {
-      this._connectionState = f.Disconnected, this._connectionStarted = !1, this._messageBuffer && (this._messageBuffer._dispose(e ?? new Error("Connection closed.")), this._messageBuffer = void 0), _.isBrowser && window.document.removeEventListener("freeze", this._freezeEventListener);
+      this._connectionState = _.Disconnected, this._connectionStarted = !1, this._messageBuffer && (this._messageBuffer._dispose(e ?? new Error("Connection closed.")), this._messageBuffer = void 0), p.isBrowser && window.document.removeEventListener("freeze", this._freezeEventListener);
       try {
         this._closedCallbacks.forEach((t) => t.apply(this, [e]));
       } catch (t) {
@@ -929,31 +929,31 @@ class Q {
   }
   async _reconnect(e) {
     const t = Date.now();
-    let n = 0, s = e !== void 0 ? e : new Error("Attempting to reconnect due to a unknown error."), r = this._getNextRetryDelay(n++, 0, s);
+    let o = 0, s = e !== void 0 ? e : new Error("Attempting to reconnect due to a unknown error."), r = this._getNextRetryDelay(o++, 0, s);
     if (r === null) {
       this._logger.log(i.Debug, "Connection not reconnecting because the IRetryPolicy returned null on the first reconnect attempt."), this._completeClose(e);
       return;
     }
-    if (this._connectionState = f.Reconnecting, e ? this._logger.log(i.Information, `Connection reconnecting because of error '${e}'.`) : this._logger.log(i.Information, "Connection reconnecting."), this._reconnectingCallbacks.length !== 0) {
+    if (this._connectionState = _.Reconnecting, e ? this._logger.log(i.Information, `Connection reconnecting because of error '${e}'.`) : this._logger.log(i.Information, "Connection reconnecting."), this._reconnectingCallbacks.length !== 0) {
       try {
         this._reconnectingCallbacks.forEach((c) => c.apply(this, [e]));
       } catch (c) {
         this._logger.log(i.Error, `An onreconnecting callback called with error '${e}' threw error '${c}'.`);
       }
-      if (this._connectionState !== f.Reconnecting) {
+      if (this._connectionState !== _.Reconnecting) {
         this._logger.log(i.Debug, "Connection left the reconnecting state in onreconnecting callback. Done reconnecting.");
         return;
       }
     }
     for (; r !== null; ) {
-      if (this._logger.log(i.Information, `Reconnect attempt number ${n} will start in ${r} ms.`), await new Promise((c) => {
+      if (this._logger.log(i.Information, `Reconnect attempt number ${o} will start in ${r} ms.`), await new Promise((c) => {
         this._reconnectDelayHandle = setTimeout(c, r);
-      }), this._reconnectDelayHandle = void 0, this._connectionState !== f.Reconnecting) {
+      }), this._reconnectDelayHandle = void 0, this._connectionState !== _.Reconnecting) {
         this._logger.log(i.Debug, "Connection left the reconnecting state during reconnect delay. Done reconnecting.");
         return;
       }
       try {
-        if (await this._startInternal(), this._connectionState = f.Connected, this._logger.log(i.Information, "HubConnection reconnected successfully."), this._reconnectedCallbacks.length !== 0)
+        if (await this._startInternal(), this._connectionState = _.Connected, this._logger.log(i.Information, "HubConnection reconnected successfully."), this._reconnectedCallbacks.length !== 0)
           try {
             this._reconnectedCallbacks.forEach((c) => c.apply(this, [this.connection.connectionId]));
           } catch (c) {
@@ -961,21 +961,21 @@ class Q {
           }
         return;
       } catch (c) {
-        if (this._logger.log(i.Information, `Reconnect attempt failed because of error '${c}'.`), this._connectionState !== f.Reconnecting) {
-          this._logger.log(i.Debug, `Connection moved to the '${this._connectionState}' from the reconnecting state during reconnect attempt. Done reconnecting.`), this._connectionState === f.Disconnecting && this._completeClose();
+        if (this._logger.log(i.Information, `Reconnect attempt failed because of error '${c}'.`), this._connectionState !== _.Reconnecting) {
+          this._logger.log(i.Debug, `Connection moved to the '${this._connectionState}' from the reconnecting state during reconnect attempt. Done reconnecting.`), this._connectionState === _.Disconnecting && this._completeClose();
           return;
         }
-        s = c instanceof Error ? c : new Error(c.toString()), r = this._getNextRetryDelay(n++, Date.now() - t, s);
+        s = c instanceof Error ? c : new Error(c.toString()), r = this._getNextRetryDelay(o++, Date.now() - t, s);
       }
     }
-    this._logger.log(i.Information, `Reconnect retries have been exhausted after ${Date.now() - t} ms and ${n} failed attempts. Connection disconnecting.`), this._completeClose();
+    this._logger.log(i.Information, `Reconnect retries have been exhausted after ${Date.now() - t} ms and ${o} failed attempts. Connection disconnecting.`), this._completeClose();
   }
-  _getNextRetryDelay(e, t, n) {
+  _getNextRetryDelay(e, t, o) {
     try {
       return this._reconnectPolicy.nextRetryDelayInMilliseconds({
         elapsedMilliseconds: t,
         previousRetryCount: e,
-        retryReason: n
+        retryReason: o
       });
     } catch (s) {
       return this._logger.log(i.Error, `IRetryPolicy.nextRetryDelayInMilliseconds(${e}, ${t}) threw error '${s}'.`), null;
@@ -983,12 +983,12 @@ class Q {
   }
   _cancelCallbacksWithError(e) {
     const t = this._callbacks;
-    this._callbacks = {}, Object.keys(t).forEach((n) => {
-      const s = t[n];
+    this._callbacks = {}, Object.keys(t).forEach((o) => {
+      const s = t[o];
       try {
         s(null, e);
       } catch (r) {
-        this._logger.log(i.Error, `Stream 'error' callback called with '${e}' threw error: ${K(r)}`);
+        this._logger.log(i.Error, `Stream 'error' callback called with '${e}' threw error: ${re(r)}`);
       }
     });
   }
@@ -998,17 +998,17 @@ class Q {
   _cleanupTimeout() {
     this._timeoutHandle && clearTimeout(this._timeoutHandle);
   }
-  _createInvocation(e, t, n, s) {
-    if (n)
+  _createInvocation(e, t, o, s) {
+    if (o)
       return s.length !== 0 ? {
         arguments: t,
         streamIds: s,
         target: e,
-        type: u.Invocation
+        type: d.Invocation
       } : {
         arguments: t,
         target: e,
-        type: u.Invocation
+        type: d.Invocation
       };
     {
       const r = this._invocationId;
@@ -1017,129 +1017,129 @@ class Q {
         invocationId: r.toString(),
         streamIds: s,
         target: e,
-        type: u.Invocation
+        type: d.Invocation
       } : {
         arguments: t,
         invocationId: r.toString(),
         target: e,
-        type: u.Invocation
+        type: d.Invocation
       };
     }
   }
   _launchStreams(e, t) {
     if (e.length !== 0) {
       t || (t = Promise.resolve());
-      for (const n in e)
-        e[n].subscribe({
+      for (const o in e)
+        e[o].subscribe({
           complete: () => {
-            t = t.then(() => this._sendWithProtocol(this._createCompletionMessage(n)));
+            t = t.then(() => this._sendWithProtocol(this._createCompletionMessage(o)));
           },
           error: (s) => {
             let r;
-            s instanceof Error ? r = s.message : s && s.toString ? r = s.toString() : r = "Unknown error", t = t.then(() => this._sendWithProtocol(this._createCompletionMessage(n, r)));
+            s instanceof Error ? r = s.message : s && s.toString ? r = s.toString() : r = "Unknown error", t = t.then(() => this._sendWithProtocol(this._createCompletionMessage(o, r)));
           },
           next: (s) => {
-            t = t.then(() => this._sendWithProtocol(this._createStreamItemMessage(n, s)));
+            t = t.then(() => this._sendWithProtocol(this._createStreamItemMessage(o, s)));
           }
         });
     }
   }
   _replaceStreamingParams(e) {
-    const t = [], n = [];
+    const t = [], o = [];
     for (let s = 0; s < e.length; s++) {
       const r = e[s];
       if (this._isObservable(r)) {
         const c = this._invocationId;
-        this._invocationId++, t[c] = r, n.push(c.toString()), e.splice(s, 1);
+        this._invocationId++, t[c] = r, o.push(c.toString()), e.splice(s, 1);
       }
     }
-    return [t, n];
+    return [t, o];
   }
   _isObservable(e) {
     return e && e.subscribe && typeof e.subscribe == "function";
   }
-  _createStreamInvocation(e, t, n) {
+  _createStreamInvocation(e, t, o) {
     const s = this._invocationId;
-    return this._invocationId++, n.length !== 0 ? {
+    return this._invocationId++, o.length !== 0 ? {
       arguments: t,
       invocationId: s.toString(),
-      streamIds: n,
+      streamIds: o,
       target: e,
-      type: u.StreamInvocation
+      type: d.StreamInvocation
     } : {
       arguments: t,
       invocationId: s.toString(),
       target: e,
-      type: u.StreamInvocation
+      type: d.StreamInvocation
     };
   }
   _createCancelInvocation(e) {
     return {
       invocationId: e,
-      type: u.CancelInvocation
+      type: d.CancelInvocation
     };
   }
   _createStreamItemMessage(e, t) {
     return {
       invocationId: e,
       item: t,
-      type: u.StreamItem
+      type: d.StreamItem
     };
   }
-  _createCompletionMessage(e, t, n) {
+  _createCompletionMessage(e, t, o) {
     return t ? {
       error: t,
       invocationId: e,
-      type: u.Completion
+      type: d.Completion
     } : {
       invocationId: e,
-      result: n,
-      type: u.Completion
+      result: o,
+      type: d.Completion
     };
   }
   _createCloseMessage() {
-    return { type: u.Close };
+    return { type: d.Close };
   }
 }
-const Ze = [0, 2e3, 1e4, 3e4, null];
-class he {
+const dt = [0, 2e3, 1e4, 3e4, null];
+class Ce {
   constructor(e) {
-    this._retryDelays = e !== void 0 ? [...e, null] : Ze;
+    this._retryDelays = e !== void 0 ? [...e, null] : dt;
   }
   nextRetryDelayInMilliseconds(e) {
     return this._retryDelays[e.previousRetryCount];
   }
 }
-class R {
+class x {
 }
-R.Authorization = "Authorization";
-R.Cookie = "Cookie";
-class et extends B {
+x.Authorization = "Authorization";
+x.Cookie = "Cookie";
+class gt extends G {
   constructor(e, t) {
     super(), this._innerClient = e, this._accessTokenFactory = t;
   }
   async send(e) {
     let t = !0;
     this._accessTokenFactory && (!this._accessToken || e.url && e.url.indexOf("/negotiate?") > 0) && (t = !1, this._accessToken = await this._accessTokenFactory()), this._setAuthorizationHeader(e);
-    const n = await this._innerClient.send(e);
-    return t && n.statusCode === 401 && this._accessTokenFactory ? (this._accessToken = await this._accessTokenFactory(), this._setAuthorizationHeader(e), await this._innerClient.send(e)) : n;
+    const o = await this._innerClient.send(e);
+    return t && o.statusCode === 401 && this._accessTokenFactory ? (this._accessToken = await this._accessTokenFactory(), this._setAuthorizationHeader(e), await this._innerClient.send(e)) : o;
   }
   _setAuthorizationHeader(e) {
-    e.headers || (e.headers = {}), this._accessToken ? e.headers[R.Authorization] = `Bearer ${this._accessToken}` : this._accessTokenFactory && e.headers[R.Authorization] && delete e.headers[R.Authorization];
+    e.headers || (e.headers = {}), this._accessToken ? e.headers[x.Authorization] = `Bearer ${this._accessToken}` : this._accessTokenFactory && e.headers[x.Authorization] && delete e.headers[x.Authorization];
   }
   getCookieString(e) {
     return this._innerClient.getCookieString(e);
   }
 }
 var w;
-(function(o) {
-  o[o.None = 0] = "None", o[o.WebSockets = 1] = "WebSockets", o[o.ServerSentEvents = 2] = "ServerSentEvents", o[o.LongPolling = 4] = "LongPolling";
+(function(n) {
+  n[n.None = 0] = "None", n[n.WebSockets = 1] = "WebSockets", n[n.ServerSentEvents = 2] = "ServerSentEvents", n[n.LongPolling = 4] = "LongPolling";
 })(w || (w = {}));
 var S;
-(function(o) {
-  o[o.Text = 1] = "Text", o[o.Binary = 2] = "Binary";
+(function(n) {
+  n[n.Text = 1] = "Text", n[n.Binary = 2] = "Binary";
 })(S || (S = {}));
-let tt = class {
+let ft = class {
   constructor() {
     this._isAborted = !1, this.onabort = null;
   }
@@ -1153,18 +1153,18 @@ let tt = class {
     return this._isAborted;
   }
 };
-class ue {
+class ye {
   // This is an internal type, not exported from 'index' so this is really just internal.
   get pollAborted() {
     return this._pollAbort.aborted;
   }
-  constructor(e, t, n) {
-    this._httpClient = e, this._logger = t, this._pollAbort = new tt(), this._options = n, this._running = !1, this.onreceive = null, this.onclose = null;
+  constructor(e, t, o) {
+    this._httpClient = e, this._logger = t, this._pollAbort = new ft(), this._options = o, this._running = !1, this.onreceive = null, this.onclose = null;
   }
   async connect(e, t) {
     if (m.isRequired(e, "url"), m.isRequired(t, "transferFormat"), m.isIn(t, S, "transferFormat"), this._url = e, this._logger.log(i.Trace, "(LongPolling transport) Connecting."), t === S.Binary && typeof XMLHttpRequest < "u" && typeof new XMLHttpRequest().responseType != "string")
       throw new Error("Binary protocols over XmlHttpRequest not implementing advanced features are not supported.");
-    const [n, s] = A(), r = { [n]: s, ...this._options.headers }, c = {
+    const [o, s] = j(), r = { [o]: s, ...this._options.headers }, c = {
       abortSignal: this._pollAbort.signal,
       headers: r,
       timeout: 1e5,
@@ -1174,32 +1174,32 @@ class ue {
     const a = `${e}&_=${Date.now()}`;
     this._logger.log(i.Trace, `(LongPolling transport) polling: ${a}.`);
     const l = await this._httpClient.get(a, c);
-    l.statusCode !== 200 ? (this._logger.log(i.Error, `(LongPolling transport) Unexpected response code: ${l.statusCode}.`), this._closeError = new P(l.statusText || "", l.statusCode), this._running = !1) : this._running = !0, this._receiving = this._poll(this._url, c);
+    l.statusCode !== 200 ? (this._logger.log(i.Error, `(LongPolling transport) Unexpected response code: ${l.statusCode}.`), this._closeError = new R(l.statusText || "", l.statusCode), this._running = !1) : this._running = !0, this._receiving = this._poll(this._url, c);
   }
   async _poll(e, t) {
     try {
       for (; this._running; )
         try {
-          const n = `${e}&_=${Date.now()}`;
-          this._logger.log(i.Trace, `(LongPolling transport) polling: ${n}.`);
-          const s = await this._httpClient.get(n, t);
-          s.statusCode === 204 ? (this._logger.log(i.Information, "(LongPolling transport) Poll terminated by server."), this._running = !1) : s.statusCode !== 200 ? (this._logger.log(i.Error, `(LongPolling transport) Unexpected response code: ${s.statusCode}.`), this._closeError = new P(s.statusText || "", s.statusCode), this._running = !1) : s.content ? (this._logger.log(i.Trace, `(LongPolling transport) data received. ${H(s.content, this._options.logMessageContent)}.`), this.onreceive && this.onreceive(s.content)) : this._logger.log(i.Trace, "(LongPolling transport) Poll timed out, reissuing.");
-        } catch (n) {
-          this._running ? n instanceof Y ? this._logger.log(i.Trace, "(LongPolling transport) Poll timed out, reissuing.") : (this._closeError = n, this._running = !1) : this._logger.log(i.Trace, `(LongPolling transport) Poll errored after shutdown: ${n.message}`);
+          const o = `${e}&_=${Date.now()}`;
+          this._logger.log(i.Trace, `(LongPolling transport) polling: ${o}.`);
+          const s = await this._httpClient.get(o, t);
+          s.statusCode === 204 ? (this._logger.log(i.Information, "(LongPolling transport) Poll terminated by server."), this._running = !1) : s.statusCode !== 200 ? (this._logger.log(i.Error, `(LongPolling transport) Unexpected response code: ${s.statusCode}.`), this._closeError = new R(s.statusText || "", s.statusCode), this._running = !1) : s.content ? (this._logger.log(i.Trace, `(LongPolling transport) data received. ${U(s.content, this._options.logMessageContent)}.`), this.onreceive && this.onreceive(s.content)) : this._logger.log(i.Trace, "(LongPolling transport) Poll timed out, reissuing.");
+        } catch (o) {
+          this._running ? o instanceof le ? this._logger.log(i.Trace, "(LongPolling transport) Poll timed out, reissuing.") : (this._closeError = o, this._running = !1) : this._logger.log(i.Trace, `(LongPolling transport) Poll errored after shutdown: ${o.message}`);
         }
     } finally {
       this._logger.log(i.Trace, "(LongPolling transport) Polling complete."), this.pollAborted || this._raiseOnClose();
     }
   }
   async send(e) {
-    return this._running ? be(this._logger, "LongPolling", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
+    return this._running ? xe(this._logger, "LongPolling", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
   }
   async stop() {
     this._logger.log(i.Trace, "(LongPolling transport) Stopping polling."), this._running = !1, this._pollAbort.abort();
     try {
       await this._receiving, this._logger.log(i.Trace, `(LongPolling transport) sending DELETE request to ${this._url}.`);
-      const e = {}, [t, n] = A();
-      e[t] = n;
+      const e = {}, [t, o] = j();
+      e[t] = o;
       const s = {
         headers: { ...e, ...this._options.headers },
         timeout: this._options.timeout,
@@ -1211,7 +1211,7 @@ class ue {
       } catch (c) {
         r = c;
       }
-      r ? r instanceof P && (r.statusCode === 404 ? this._logger.log(i.Trace, "(LongPolling transport) A 404 response was returned from sending a DELETE request.") : this._logger.log(i.Trace, `(LongPolling transport) Error sending a DELETE request: ${r}`)) : this._logger.log(i.Trace, "(LongPolling transport) DELETE request accepted.");
+      r ? r instanceof R && (r.statusCode === 404 ? this._logger.log(i.Trace, "(LongPolling transport) A 404 response was returned from sending a DELETE request.") : this._logger.log(i.Trace, `(LongPolling transport) Error sending a DELETE request: ${r}`)) : this._logger.log(i.Trace, "(LongPolling transport) DELETE request accepted.");
     } finally {
       this._logger.log(i.Trace, "(LongPolling transport) Stop finished."), this._raiseOnClose();
     }
@@ -1223,31 +1223,31 @@ class ue {
     }
   }
 }
-class nt {
-  constructor(e, t, n, s) {
-    this._httpClient = e, this._accessToken = t, this._logger = n, this._options = s, this.onreceive = null, this.onclose = null;
+class _t {
+  constructor(e, t, o, s) {
+    this._httpClient = e, this._accessToken = t, this._logger = o, this._options = s, this.onreceive = null, this.onclose = null;
   }
   async connect(e, t) {
-    return m.isRequired(e, "url"), m.isRequired(t, "transferFormat"), m.isIn(t, S, "transferFormat"), this._logger.log(i.Trace, "(SSE transport) Connecting."), this._url = e, this._accessToken && (e += (e.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(this._accessToken)}`), new Promise((n, s) => {
+    return m.isRequired(e, "url"), m.isRequired(t, "transferFormat"), m.isIn(t, S, "transferFormat"), this._logger.log(i.Trace, "(SSE transport) Connecting."), this._url = e, this._accessToken && (e += (e.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(this._accessToken)}`), new Promise((o, s) => {
       let r = !1;
       if (t !== S.Text) {
         s(new Error("The Server-Sent Events transport only supports the 'Text' transfer format"));
         return;
       }
       let c;
-      if (_.isBrowser || _.isWebWorker)
+      if (p.isBrowser || p.isWebWorker)
         c = new this._options.EventSource(e, { withCredentials: this._options.withCredentials });
       else {
         const a = this._httpClient.getCookieString(e), l = {};
         l.Cookie = a;
-        const [h, d] = A();
-        l[h] = d, c = new this._options.EventSource(e, { withCredentials: this._options.withCredentials, headers: { ...l, ...this._options.headers } });
+        const [u, g] = j();
+        l[u] = g, c = new this._options.EventSource(e, { withCredentials: this._options.withCredentials, headers: { ...l, ...this._options.headers } });
       }
       try {
         c.onmessage = (a) => {
           if (this.onreceive)
             try {
-              this._logger.log(i.Trace, `(SSE transport) data received. ${H(a.data, this._options.logMessageContent)}.`), this.onreceive(a.data);
+              this._logger.log(i.Trace, `(SSE transport) data received. ${U(a.data, this._options.logMessageContent)}.`), this.onreceive(a.data);
             } catch (l) {
               this._close(l);
               return;
@@ -1255,7 +1255,7 @@ class nt {
         }, c.onerror = (a) => {
           r ? this._close() : s(new Error("EventSource failed to connect. The connection could not be found on the server, either the connection ID is not present on the server, or a proxy is refusing/buffering the connection. If you have multiple servers check that sticky sessions are enabled."));
         }, c.onopen = () => {
-          this._logger.log(i.Information, `SSE connected to ${this._url}`), this._eventSource = c, r = !0, n();
+          this._logger.log(i.Information, `SSE connected to ${this._url}`), this._eventSource = c, r = !0, o();
         };
       } catch (a) {
         s(a);
@@ -1264,7 +1264,7 @@ class nt {
     });
   }
   async send(e) {
-    return this._eventSource ? be(this._logger, "SSE", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
+    return this._eventSource ? xe(this._logger, "SSE", this._httpClient, this._url, e, this._options) : Promise.reject(new Error("Cannot send until the transport is connected"));
   }
   stop() {
     return this._close(), Promise.resolve();
@@ -1273,50 +1273,50 @@ class nt {
     this._eventSource && (this._eventSource.close(), this._eventSource = void 0, this.onclose && this.onclose(e));
   }
 }
-class ot {
-  constructor(e, t, n, s, r, c) {
-    this._logger = n, this._accessTokenFactory = t, this._logMessageContent = s, this._webSocketConstructor = r, this._httpClient = e, this.onreceive = null, this.onclose = null, this._headers = c;
+class pt {
+  constructor(e, t, o, s, r, c) {
+    this._logger = o, this._accessTokenFactory = t, this._logMessageContent = s, this._webSocketConstructor = r, this._httpClient = e, this.onreceive = null, this.onclose = null, this._headers = c;
   }
   async connect(e, t) {
     m.isRequired(e, "url"), m.isRequired(t, "transferFormat"), m.isIn(t, S, "transferFormat"), this._logger.log(i.Trace, "(WebSockets transport) Connecting.");
-    let n;
-    return this._accessTokenFactory && (n = await this._accessTokenFactory()), new Promise((s, r) => {
+    let o;
+    return this._accessTokenFactory && (o = await this._accessTokenFactory()), new Promise((s, r) => {
       e = e.replace(/^http/, "ws");
       let c;
       const a = this._httpClient.getCookieString(e);
       let l = !1;
-      if (_.isNode || _.isReactNative) {
-        const h = {}, [d, y] = A();
-        h[d] = y, n && (h[R.Authorization] = `Bearer ${n}`), a && (h[R.Cookie] = a), c = new this._webSocketConstructor(e, void 0, {
-          headers: { ...h, ...this._headers }
+      if (p.isNode || p.isReactNative) {
+        const u = {}, [g, y] = j();
+        u[g] = y, o && (u[x.Authorization] = `Bearer ${o}`), a && (u[x.Cookie] = a), c = new this._webSocketConstructor(e, void 0, {
+          headers: { ...u, ...this._headers }
         });
       } else
-        n && (e += (e.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(n)}`);
-      c || (c = new this._webSocketConstructor(e)), t === S.Binary && (c.binaryType = "arraybuffer"), c.onopen = (h) => {
+        o && (e += (e.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(o)}`);
+      c || (c = new this._webSocketConstructor(e)), t === S.Binary && (c.binaryType = "arraybuffer"), c.onopen = (u) => {
         this._logger.log(i.Information, `WebSocket connected to ${e}.`), this._webSocket = c, l = !0, s();
-      }, c.onerror = (h) => {
-        let d = null;
-        typeof ErrorEvent < "u" && h instanceof ErrorEvent ? d = h.error : d = "There was an error with the transport", this._logger.log(i.Information, `(WebSockets transport) ${d}.`);
-      }, c.onmessage = (h) => {
-        if (this._logger.log(i.Trace, `(WebSockets transport) data received. ${H(h.data, this._logMessageContent)}.`), this.onreceive)
+      }, c.onerror = (u) => {
+        let g = null;
+        typeof ErrorEvent < "u" && u instanceof ErrorEvent ? g = u.error : g = "There was an error with the transport", this._logger.log(i.Information, `(WebSockets transport) ${g}.`);
+      }, c.onmessage = (u) => {
+        if (this._logger.log(i.Trace, `(WebSockets transport) data received. ${U(u.data, this._logMessageContent)}.`), this.onreceive)
           try {
-            this.onreceive(h.data);
-          } catch (d) {
-            this._close(d);
+            this.onreceive(u.data);
+          } catch (g) {
+            this._close(g);
             return;
           }
-      }, c.onclose = (h) => {
+      }, c.onclose = (u) => {
         if (l)
-          this._close(h);
+          this._close(u);
         else {
-          let d = null;
-          typeof ErrorEvent < "u" && h instanceof ErrorEvent ? d = h.error : d = "WebSocket failed to connect. The connection could not be found on the server, either the endpoint may not be a SignalR endpoint, the connection ID is not present on the server, or there is a proxy blocking WebSockets. If you have multiple servers check that sticky sessions are enabled.", r(new Error(d));
+          let g = null;
+          typeof ErrorEvent < "u" && u instanceof ErrorEvent ? g = u.error : g = "WebSocket failed to connect. The connection could not be found on the server, either the endpoint may not be a SignalR endpoint, the connection ID is not present on the server, or there is a proxy blocking WebSockets. If you have multiple servers check that sticky sessions are enabled.", r(new Error(g));
         }
       };
     });
   }
   send(e) {
-    return this._webSocket && this._webSocket.readyState === this._webSocketConstructor.OPEN ? (this._logger.log(i.Trace, `(WebSockets transport) sending data. ${H(e, this._logMessageContent)}.`), this._webSocket.send(e), Promise.resolve()) : Promise.reject("WebSocket is not in the OPEN state");
+    return this._webSocket && this._webSocket.readyState === this._webSocketConstructor.OPEN ? (this._logger.log(i.Trace, `(WebSockets transport) sending data. ${U(e, this._logMessageContent)}.`), this._webSocket.send(e), Promise.resolve()) : Promise.reject("WebSocket is not in the OPEN state");
   }
   stop() {
     return this._webSocket && this._close(void 0), Promise.resolve();
@@ -1331,36 +1331,36 @@ class ot {
     return e && typeof e.wasClean == "boolean" && typeof e.code == "number";
   }
 }
-const de = 100;
-class st {
+const ve = 100;
+class mt {
   constructor(e, t = {}) {
     if (this._stopPromiseResolver = () => {
-    }, this.features = {}, this._negotiateVersion = 1, m.isRequired(e, "url"), this._logger = He(t.logger), this.baseUrl = this._resolveUrl(e), t = t || {}, t.logMessageContent = t.logMessageContent === void 0 ? !1 : t.logMessageContent, typeof t.withCredentials == "boolean" || t.withCredentials === void 0)
+    }, this.features = {}, this._negotiateVersion = 1, m.isRequired(e, "url"), this._logger = Ke(t.logger), this.baseUrl = this._resolveUrl(e), t = t || {}, t.logMessageContent = t.logMessageContent === void 0 ? !1 : t.logMessageContent, typeof t.withCredentials == "boolean" || t.withCredentials === void 0)
       t.withCredentials = t.withCredentials === void 0 ? !0 : t.withCredentials;
     else
       throw new Error("withCredentials option was not a 'boolean' or 'undefined' value");
     t.timeout = t.timeout === void 0 ? 100 * 1e3 : t.timeout;
-    let n = null, s = null;
-    if (_.isNode && typeof require < "u") {
+    let o = null, s = null;
+    if (p.isNode && typeof require < "u") {
       const r = typeof __webpack_require__ == "function" ? __non_webpack_require__ : require;
-      n = r("ws"), s = r("eventsource");
+      o = r("ws"), s = r("eventsource");
     }
-    !_.isNode && typeof WebSocket < "u" && !t.WebSocket ? t.WebSocket = WebSocket : _.isNode && !t.WebSocket && n && (t.WebSocket = n), !_.isNode && typeof EventSource < "u" && !t.EventSource ? t.EventSource = EventSource : _.isNode && !t.EventSource && typeof s < "u" && (t.EventSource = s), this._httpClient = new et(t.httpClient || new ze(this._logger), t.accessTokenFactory), this._connectionState = "Disconnected", this._connectionStarted = !1, this._options = t, this.onreceive = null, this.onclose = null;
+    !p.isNode && typeof WebSocket < "u" && !t.WebSocket ? t.WebSocket = WebSocket : p.isNode && !t.WebSocket && o && (t.WebSocket = o), !p.isNode && typeof EventSource < "u" && !t.EventSource ? t.EventSource = EventSource : p.isNode && !t.EventSource && typeof s < "u" && (t.EventSource = s), this._httpClient = new gt(t.httpClient || new st(this._logger), t.accessTokenFactory), this._connectionState = "Disconnected", this._connectionStarted = !1, this._options = t, this.onreceive = null, this.onclose = null;
   }
   async start(e) {
     if (e = e || S.Binary, m.isIn(e, S, "transferFormat"), this._logger.log(i.Debug, `Starting connection with transfer format '${S[e]}'.`), this._connectionState !== "Disconnected")
       return Promise.reject(new Error("Cannot start an HttpConnection that is not in the 'Disconnected' state."));
     if (this._connectionState = "Connecting", this._startInternalPromise = this._startInternal(e), await this._startInternalPromise, this._connectionState === "Disconnecting") {
       const t = "Failed to start the HttpConnection before stop() was called.";
-      return this._logger.log(i.Error, t), await this._stopPromise, Promise.reject(new E(t));
+      return this._logger.log(i.Error, t), await this._stopPromise, Promise.reject(new I(t));
     } else if (this._connectionState !== "Connected") {
       const t = "HttpConnection.startInternal completed gracefully but didn't enter the connection into the connected state!";
-      return this._logger.log(i.Error, t), Promise.reject(new E(t));
+      return this._logger.log(i.Error, t), Promise.reject(new I(t));
     }
     this._connectionStarted = !0;
   }
   send(e) {
-    return this._connectionState !== "Connected" ? Promise.reject(new Error("Cannot send data if the connection is not in the 'Connected' State.")) : (this._sendQueue || (this._sendQueue = new Z(this.transport)), this._sendQueue.send(e));
+    return this._connectionState !== "Connected" ? Promise.reject(new Error("Cannot send data if the connection is not in the 'Connected' State.")) : (this._sendQueue || (this._sendQueue = new ue(this.transport)), this._sendQueue.send(e));
   }
   async stop(e) {
     if (this._connectionState === "Disconnected")
@@ -1397,32 +1397,32 @@ class st {
         else
           throw new Error("Negotiation can only be skipped when using the WebSocket transport directly.");
       else {
-        let n = null, s = 0;
+        let o = null, s = 0;
         do {
-          if (n = await this._getNegotiationResponse(t), this._connectionState === "Disconnecting" || this._connectionState === "Disconnected")
-            throw new E("The connection was stopped during negotiation.");
-          if (n.error)
-            throw new Error(n.error);
-          if (n.ProtocolVersion)
+          if (o = await this._getNegotiationResponse(t), this._connectionState === "Disconnecting" || this._connectionState === "Disconnected")
+            throw new I("The connection was stopped during negotiation.");
+          if (o.error)
+            throw new Error(o.error);
+          if (o.ProtocolVersion)
             throw new Error("Detected a connection attempt to an ASP.NET SignalR Server. This client only supports connecting to an ASP.NET Core SignalR Server. See https://aka.ms/signalr-core-differences for details.");
-          if (n.url && (t = n.url), n.accessToken) {
-            const r = n.accessToken;
+          if (o.url && (t = o.url), o.accessToken) {
+            const r = o.accessToken;
             this._accessTokenFactory = () => r, this._httpClient._accessToken = r, this._httpClient._accessTokenFactory = void 0;
           }
           s++;
-        } while (n.url && s < de);
-        if (s === de && n.url)
+        } while (o.url && s < ve);
+        if (s === ve && o.url)
           throw new Error("Negotiate redirection limit exceeded.");
-        await this._createTransport(t, this._options.transport, n, e);
+        await this._createTransport(t, this._options.transport, o, e);
       }
-      this.transport instanceof ue && (this.features.inherentKeepAlive = !0), this._connectionState === "Connecting" && (this._logger.log(i.Debug, "The HttpConnection connected successfully."), this._connectionState = "Connected");
-    } catch (n) {
-      return this._logger.log(i.Error, "Failed to start the connection: " + n), this._connectionState = "Disconnected", this.transport = void 0, this._stopPromiseResolver(), Promise.reject(n);
+      this.transport instanceof ye && (this.features.inherentKeepAlive = !0), this._connectionState === "Connecting" && (this._logger.log(i.Debug, "The HttpConnection connected successfully."), this._connectionState = "Connected");
+    } catch (o) {
+      return this._logger.log(i.Error, "Failed to start the connection: " + o), this._connectionState = "Disconnected", this.transport = void 0, this._stopPromiseResolver(), Promise.reject(o);
     }
   }
   async _getNegotiationResponse(e) {
-    const t = {}, [n, s] = A();
-    t[n] = s;
+    const t = {}, [o, s] = j();
+    t[o] = s;
     const r = this._resolveNegotiateUrl(e);
     this._logger.log(i.Debug, `Sending negotiation request: ${r}.`);
     try {
@@ -1435,29 +1435,29 @@ class st {
       if (c.statusCode !== 200)
         return Promise.reject(new Error(`Unexpected status code returned from negotiate '${c.statusCode}'`));
       const a = JSON.parse(c.content);
-      return (!a.negotiateVersion || a.negotiateVersion < 1) && (a.connectionToken = a.connectionId), a.useStatefulReconnect && this._options._useStatefulReconnect !== !0 ? Promise.reject(new ae("Client didn't negotiate Stateful Reconnect but the server did.")) : a;
+      return (!a.negotiateVersion || a.negotiateVersion < 1) && (a.connectionToken = a.connectionId), a.useStatefulReconnect && this._options._useStatefulReconnect !== !0 ? Promise.reject(new we("Client didn't negotiate Stateful Reconnect but the server did.")) : a;
     } catch (c) {
       let a = "Failed to complete negotiation with the server: " + c;
-      return c instanceof P && c.statusCode === 404 && (a = a + " Either this is not a SignalR endpoint or there is a proxy blocking the connection."), this._logger.log(i.Error, a), Promise.reject(new ae(a));
+      return c instanceof R && c.statusCode === 404 && (a = a + " Either this is not a SignalR endpoint or there is a proxy blocking the connection."), this._logger.log(i.Error, a), Promise.reject(new we(a));
     }
   }
   _createConnectUrl(e, t) {
     return t ? e + (e.indexOf("?") === -1 ? "?" : "&") + `id=${t}` : e;
   }
-  async _createTransport(e, t, n, s) {
-    let r = this._createConnectUrl(e, n.connectionToken);
+  async _createTransport(e, t, o, s) {
+    let r = this._createConnectUrl(e, o.connectionToken);
     if (this._isITransport(t)) {
-      this._logger.log(i.Debug, "Connection was provided an instance of ITransport, using that directly."), this.transport = t, await this._startTransport(r, s), this.connectionId = n.connectionId;
+      this._logger.log(i.Debug, "Connection was provided an instance of ITransport, using that directly."), this.transport = t, await this._startTransport(r, s), this.connectionId = o.connectionId;
       return;
     }
-    const c = [], a = n.availableTransports || [];
-    let l = n;
-    for (const h of a) {
-      const d = this._resolveTransportOrError(h, t, s, l?.useStatefulReconnect === !0);
-      if (d instanceof Error)
-        c.push(`${h.transport} failed:`), c.push(d);
-      else if (this._isITransport(d)) {
-        if (this.transport = d, !l) {
+    const c = [], a = o.availableTransports || [];
+    let l = o;
+    for (const u of a) {
+      const g = this._resolveTransportOrError(u, t, s, l?.useStatefulReconnect === !0);
+      if (g instanceof Error)
+        c.push(`${u.transport} failed:`), c.push(g);
+      else if (this._isITransport(g)) {
+        if (this.transport = g, !l) {
           try {
             l = await this._getNegotiationResponse(e);
           } catch (y) {
@@ -1469,33 +1469,33 @@ class st {
           await this._startTransport(r, s), this.connectionId = l.connectionId;
           return;
         } catch (y) {
-          if (this._logger.log(i.Error, `Failed to start the transport '${h.transport}': ${y}`), l = void 0, c.push(new De(`${h.transport} failed: ${y}`, w[h.transport])), this._connectionState !== "Connecting") {
-            const I = "Failed to select transport before stop() was called.";
-            return this._logger.log(i.Debug, I), Promise.reject(new E(I));
+          if (this._logger.log(i.Error, `Failed to start the transport '${u.transport}': ${y}`), l = void 0, c.push(new ze(`${u.transport} failed: ${y}`, w[u.transport])), this._connectionState !== "Connecting") {
+            const M = "Failed to select transport before stop() was called.";
+            return this._logger.log(i.Debug, M), Promise.reject(new I(M));
           }
         }
       }
     }
-    return c.length > 0 ? Promise.reject(new Ae(`Unable to connect to the server with any of the available transports. ${c.join(" ")}`, c)) : Promise.reject(new Error("None of the transports supported by the client are supported by the server."));
+    return c.length > 0 ? Promise.reject(new Je(`Unable to connect to the server with any of the available transports. ${c.join(" ")}`, c)) : Promise.reject(new Error("None of the transports supported by the client are supported by the server."));
   }
   _constructTransport(e) {
     switch (e) {
       case w.WebSockets:
         if (!this._options.WebSocket)
           throw new Error("'WebSocket' is not supported in your environment.");
-        return new ot(this._httpClient, this._accessTokenFactory, this._logger, this._options.logMessageContent, this._options.WebSocket, this._options.headers || {});
+        return new pt(this._httpClient, this._accessTokenFactory, this._logger, this._options.logMessageContent, this._options.WebSocket, this._options.headers || {});
       case w.ServerSentEvents:
         if (!this._options.EventSource)
           throw new Error("'EventSource' is not supported in your environment.");
-        return new nt(this._httpClient, this._httpClient._accessToken, this._logger, this._options);
+        return new _t(this._httpClient, this._httpClient._accessToken, this._logger, this._options);
       case w.LongPolling:
-        return new ue(this._httpClient, this._logger, this._options);
+        return new ye(this._httpClient, this._logger, this._options);
       default:
         throw new Error(`Unknown transport: ${e}.`);
     }
   }
   _startTransport(e, t) {
-    return this.transport.onreceive = this.onreceive, this.features.reconnect ? this.transport.onclose = async (n) => {
+    return this.transport.onreceive = this.onreceive, this.features.reconnect ? this.transport.onclose = async (o) => {
       let s = !1;
       if (this.features.reconnect)
         try {
@@ -1504,20 +1504,20 @@ class st {
           s = !0;
         }
       else {
-        this._stopConnection(n);
+        this._stopConnection(o);
         return;
       }
-      s && this._stopConnection(n);
-    } : this.transport.onclose = (n) => this._stopConnection(n), this.transport.connect(e, t);
+      s && this._stopConnection(o);
+    } : this.transport.onclose = (o) => this._stopConnection(o), this.transport.connect(e, t);
   }
-  _resolveTransportOrError(e, t, n, s) {
+  _resolveTransportOrError(e, t, o, s) {
     const r = w[e.transport];
     if (r == null)
       return this._logger.log(i.Debug, `Skipping transport '${e.transport}' because it is not supported by this client.`), new Error(`Skipping transport '${e.transport}' because it is not supported by this client.`);
-    if (rt(t, r))
-      if (e.transferFormats.map((a) => S[a]).indexOf(n) >= 0) {
+    if (bt(t, r))
+      if (e.transferFormats.map((a) => S[a]).indexOf(o) >= 0) {
         if (r === w.WebSockets && !this._options.WebSocket || r === w.ServerSentEvents && !this._options.EventSource)
-          return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it is not supported in your environment.'`), new $e(`'${w[r]}' is not supported in your environment.`, r);
+          return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it is not supported in your environment.'`), new qe(`'${w[r]}' is not supported in your environment.`, r);
         this._logger.log(i.Debug, `Selecting transport '${w[r]}'.`);
         try {
           return this.features.reconnect = r === w.WebSockets ? s : void 0, this._constructTransport(r);
@@ -1525,9 +1525,9 @@ class st {
           return a;
         }
       } else
-        return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it does not support the requested transfer format '${S[n]}'.`), new Error(`'${w[r]}' does not support ${S[n]}.`);
+        return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it does not support the requested transfer format '${S[o]}'.`), new Error(`'${w[r]}' does not support ${S[o]}.`);
     else
-      return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it was disabled by the client.`), new xe(`'${w[r]}' is disabled by the client.`, r);
+      return this._logger.log(i.Debug, `Skipping transport '${w[r]}' because it was disabled by the client.`), new Fe(`'${w[r]}' is disabled by the client.`, r);
   }
   _isITransport(e) {
     return e && typeof e == "object" && "connect" in e;
@@ -1553,7 +1553,7 @@ class st {
   _resolveUrl(e) {
     if (e.lastIndexOf("https://", 0) === 0 || e.lastIndexOf("http://", 0) === 0)
       return e;
-    if (!_.isBrowser)
+    if (!p.isBrowser)
       throw new Error(`Cannot resolve '${e}'.`);
     const t = window.document.createElement("a");
     return t.href = e, this._logger.log(i.Information, `Normalizing '${e}' to '${t.href}'.`), t.href;
@@ -1561,19 +1561,19 @@ class st {
   _resolveNegotiateUrl(e) {
     const t = new URL(e);
     t.pathname.endsWith("/") ? t.pathname += "negotiate" : t.pathname += "/negotiate";
-    const n = new URLSearchParams(t.searchParams);
-    return n.has("negotiateVersion") || n.append("negotiateVersion", this._negotiateVersion.toString()), n.has("useStatefulReconnect") ? n.get("useStatefulReconnect") === "true" && (this._options._useStatefulReconnect = !0) : this._options._useStatefulReconnect === !0 && n.append("useStatefulReconnect", "true"), t.search = n.toString(), t.toString();
+    const o = new URLSearchParams(t.searchParams);
+    return o.has("negotiateVersion") || o.append("negotiateVersion", this._negotiateVersion.toString()), o.has("useStatefulReconnect") ? o.get("useStatefulReconnect") === "true" && (this._options._useStatefulReconnect = !0) : this._options._useStatefulReconnect === !0 && o.append("useStatefulReconnect", "true"), t.search = o.toString(), t.toString();
   }
 }
-function rt(o, e) {
-  return !o || (e & o) !== 0;
+function bt(n, e) {
+  return !n || (e & n) !== 0;
 }
-class Z {
+class ue {
   constructor(e) {
-    this._transport = e, this._buffer = [], this._executing = !0, this._sendBufferedData = new j(), this._transportResult = new j(), this._sendLoopPromise = this._sendLoop();
+    this._transport = e, this._buffer = [], this._executing = !0, this._sendBufferedData = new X(), this._transportResult = new X(), this._sendLoopPromise = this._sendLoop();
   }
   send(e) {
-    return this._bufferData(e), this._transportResult || (this._transportResult = new j()), this._transportResult.promise;
+    return this._bufferData(e), this._transportResult || (this._transportResult = new X()), this._transportResult.promise;
   }
   stop() {
     return this._executing = !1, this._sendBufferedData.resolve(), this._sendLoopPromise;
@@ -1589,27 +1589,27 @@ class Z {
         this._transportResult && this._transportResult.reject("Connection stopped.");
         break;
       }
-      this._sendBufferedData = new j();
+      this._sendBufferedData = new X();
       const e = this._transportResult;
       this._transportResult = void 0;
-      const t = typeof this._buffer[0] == "string" ? this._buffer.join("") : Z._concatBuffers(this._buffer);
+      const t = typeof this._buffer[0] == "string" ? this._buffer.join("") : ue._concatBuffers(this._buffer);
       this._buffer.length = 0;
       try {
         await this._transport.send(t), e.resolve();
-      } catch (n) {
-        e.reject(n);
+      } catch (o) {
+        e.reject(o);
       }
     }
   }
   static _concatBuffers(e) {
-    const t = e.map((r) => r.byteLength).reduce((r, c) => r + c), n = new Uint8Array(t);
+    const t = e.map((r) => r.byteLength).reduce((r, c) => r + c), o = new Uint8Array(t);
     let s = 0;
     for (const r of e)
-      n.set(new Uint8Array(r), s), s += r.byteLength;
-    return n.buffer;
+      o.set(new Uint8Array(r), s), s += r.byteLength;
+    return o.buffer;
   }
 }
-class j {
+class X {
   constructor() {
     this.promise = new Promise((e, t) => [this._resolver, this._rejecter] = [e, t]);
   }
@@ -1620,10 +1620,10 @@ class j {
     this._rejecter(e);
   }
 }
-const it = "json";
-class ct {
+const wt = "json";
+class St {
   constructor() {
-    this.name = it, this.version = 2, this.transferFormat = S.Text;
+    this.name = wt, this.version = 2, this.transferFormat = S.Text;
   }
   /** Creates an array of {@link @microsoft/signalr.HubMessage} objects from the specified serialized representation.
    *
@@ -1635,30 +1635,30 @@ class ct {
       throw new Error("Invalid input for JSON hub protocol. Expected a string.");
     if (!e)
       return [];
-    t === null && (t = N.instance);
-    const n = C.parse(e), s = [];
-    for (const r of n) {
+    t === null && (t = B.instance);
+    const o = k.parse(e), s = [];
+    for (const r of o) {
       const c = JSON.parse(r);
       if (typeof c.type != "number")
         throw new Error("Invalid payload.");
       switch (c.type) {
-        case u.Invocation:
+        case d.Invocation:
           this._isInvocationMessage(c);
           break;
-        case u.StreamItem:
+        case d.StreamItem:
           this._isStreamItemMessage(c);
           break;
-        case u.Completion:
+        case d.Completion:
           this._isCompletionMessage(c);
           break;
-        case u.Ping:
+        case d.Ping:
           break;
-        case u.Close:
+        case d.Close:
           break;
-        case u.Ack:
+        case d.Ack:
           this._isAckMessage(c);
           break;
-        case u.Sequence:
+        case d.Sequence:
           this._isSequenceMessage(c);
           break;
         default:
@@ -1675,7 +1675,7 @@ class ct {
    * @returns {string} A string containing the serialized representation of the message.
    */
   writeMessage(e) {
-    return C.write(JSON.stringify(e));
+    return k.write(JSON.stringify(e));
   }
   _isInvocationMessage(e) {
     this._assertNotEmptyString(e.target, "Invalid payload for Invocation message."), e.invocationId !== void 0 && this._assertNotEmptyString(e.invocationId, "Invalid payload for Invocation message.");
@@ -1702,7 +1702,7 @@ class ct {
       throw new Error(t);
   }
 }
-const at = {
+const Ct = {
   trace: i.Trace,
   debug: i.Debug,
   info: i.Information,
@@ -1713,21 +1713,21 @@ const at = {
   critical: i.Critical,
   none: i.None
 };
-function lt(o) {
-  const e = at[o.toLowerCase()];
+function yt(n) {
+  const e = Ct[n.toLowerCase()];
   if (typeof e < "u")
     return e;
-  throw new Error(`Unknown log level: ${o}`);
+  throw new Error(`Unknown log level: ${n}`);
 }
-class ht {
+class vt {
   configureLogging(e) {
-    if (m.isRequired(e, "logging"), ut(e))
+    if (m.isRequired(e, "logging"), kt(e))
       this.logger = e;
     else if (typeof e == "string") {
-      const t = lt(e);
-      this.logger = new W(t);
+      const t = yt(e);
+      this.logger = new K(t);
     } else
-      this.logger = new W(e);
+      this.logger = new K(e);
     return this;
   }
   withUrl(e, t) {
@@ -1746,7 +1746,7 @@ class ht {
   withAutomaticReconnect(e) {
     if (this.reconnectPolicy)
       throw new Error("A reconnectPolicy has already been set.");
-    return e ? Array.isArray(e) ? this.reconnectPolicy = new he(e) : this.reconnectPolicy = e : this.reconnectPolicy = new he(), this;
+    return e ? Array.isArray(e) ? this.reconnectPolicy = new Ce(e) : this.reconnectPolicy = e : this.reconnectPolicy = new Ce(), this;
   }
   /** Configures {@link @microsoft/signalr.HubConnection.serverTimeoutInMilliseconds} for the {@link @microsoft/signalr.HubConnection}.
    *
@@ -1777,14 +1777,17 @@ class ht {
     const e = this.httpConnectionOptions || {};
     if (e.logger === void 0 && (e.logger = this.logger), !this.url)
       throw new Error("The 'HubConnectionBuilder.withUrl' method must be called before building the connection.");
-    const t = new st(this.url, e);
-    return Q.create(t, this.logger || N.instance, this.protocol || new ct(), this.reconnectPolicy, this._serverTimeoutInMilliseconds, this._keepAliveIntervalInMilliseconds, this._statefulReconnectBufferSize);
+    const t = new mt(this.url, e);
+    return he.create(t, this.logger || B.instance, this.protocol || new St(), this.reconnectPolicy, this._serverTimeoutInMilliseconds, this._keepAliveIntervalInMilliseconds, this._statefulReconnectBufferSize);
   }
 }
-function ut(o) {
-  return o.log !== void 0;
+function kt(n) {
+  return n.log !== void 0;
 }
-const Se = "/_elsa/studio/diagnostics/console-logs", dt = `${Se}/recent`, gt = `${Se}/hub`, ge = 2e3, ft = 12e4, _t = 15e3, pt = "Server timeout elapsed without receiving a message from the server.", Ce = "elsa-studio-console-stream-autoscroll", G = /\x1b\[([0-9;]*)m/g, fe = {
+const $e = {
+  server: { id: "server", label: "Server", endpointPrefix: "/diagnostics/console-logs" },
+  studio: { id: "studio", label: "Studio", endpointPrefix: "/_elsa/studio/diagnostics/console-logs" }
+}, ce = 2e3, Et = 12e4, It = 15e3, Tt = "Server timeout elapsed without receiving a message from the server.", De = "elsa-studio-console-stream-autoscroll", ie = /\x1b\[([0-9;]*)m/g, ke = {
   30: "console-stream-ansi-fg-black",
   31: "console-stream-ansi-fg-red",
   32: "console-stream-ansi-fg-green",
@@ -1801,7 +1804,7 @@ const Se = "/_elsa/studio/diagnostics/console-logs", dt = `${Se}/recent`, gt = `
   95: "console-stream-ansi-fg-bright-magenta",
   96: "console-stream-ansi-fg-bright-cyan",
   97: "console-stream-ansi-fg-bright-white"
-}, _e = {
+}, Ee = {
   40: "console-stream-ansi-bg-black",
   41: "console-stream-ansi-bg-red",
   42: "console-stream-ansi-bg-green",
@@ -1819,167 +1822,225 @@ const Se = "/_elsa/studio/diagnostics/console-logs", dt = `${Se}/recent`, gt = `
   106: "console-stream-ansi-bg-bright-cyan",
   107: "console-stream-ansi-bg-bright-white"
 };
-let ee;
-function $t(o) {
-  ee = o, o.panels.add({
+let ae;
+function Jt(n) {
+  ae = n, n.panels.add({
     id: "console-stream",
     title: "Console",
     order: 1e3,
-    component: mt
+    component: Pt
   });
 }
-function mt() {
-  const [o, e] = T([]), [t, n] = T(0), [s, r] = T(!1), [c, a] = T(!1), [l, h] = T(null), [d, y] = T(0), [I, ve] = T(Et), U = re(/* @__PURE__ */ new Set()), te = re(null), O = c ? l ?? o : o, ne = c ? Math.max(0, t - d) : 0, x = J((g) => {
-    const v = [];
-    for (const b of g)
-      U.current.has(b.id) || (U.current.add(b.id), v.push(b));
-    v.length !== 0 && (n((b) => b + v.length), e((b) => St(b, v)));
-  }, []), D = J((g, v) => {
-    x([Ct(g, v)]);
-  }, [x]), q = J(async () => {
-    const g = await ee.backend.http.getJson(`${dt}?limit=${ge}`), v = g.items ?? g.lines ?? [];
-    x(v.map(pe));
-  }, [x]);
-  X(() => {
-    window.localStorage.setItem(Ce, String(I));
-  }, [I]), X(() => {
-    if (!I || c)
-      return;
-    const g = te.current;
-    g && (g.scrollTop = g.scrollHeight);
-  }, [I, c, O]), X(() => {
-    let g = !1, v = null;
-    const b = new ht().withUrl(Tt(gt)).withAutomaticReconnect().build();
-    b.serverTimeoutInMilliseconds = ft, b.keepAliveIntervalInMilliseconds = _t, b.onreconnecting(() => r(!1)), b.onreconnected(() => {
-      r(!0), F();
-    }), b.onclose(() => r(!1));
-    function se() {
-      v?.dispose(), v = null;
-    }
-    function F() {
-      g || b.state !== f.Connected || (se(), v = b.stream("StreamAsync", { limit: ge }).subscribe({
-        next: (k) => {
-          if (k?.line)
-            x([pe(k.line)]);
-          else if (k?.droppedLines || k?.dropped) {
-            const z = k.droppedLines ?? k.dropped;
-            D("stderr", `${z?.count ?? 0} console lines were dropped.`);
-          }
-        },
-        error: (k) => {
-          if (!g) {
-            if (It(k)) {
-              F();
-              return;
-            }
-            D("stderr", `Console stream failed: ${L(k)}`);
-          }
-        },
-        complete: () => D("stdout", "Console stream completed.")
-      }));
-    }
-    async function Ie() {
+function Pt() {
+  const [n, e] = E("server"), [t, o] = E([]), [s, r] = E(""), [c, a] = E("loading"), [l, u] = E([]), [g, y] = E(0), [M, H] = E(!1), [P, de] = E(!1), [Ne, q] = E(null), [je, Y] = E(0), [D, Me] = E(Ht), F = pe(/* @__PURE__ */ new Set()), ge = pe(null), Q = P ? Ne ?? l : l, He = P ? Math.max(0, g - je) : 0, T = ne(() => Wt(n), [n]), Z = ne(
+    () => t.find((h) => h.id === s) ?? null,
+    [s, t]
+  ), z = s || null, A = oe((h) => {
+    const C = [];
+    for (const b of h)
+      F.current.has(b.id) || (F.current.add(b.id), C.push(b));
+    C.length !== 0 && (y((b) => b + C.length), u((b) => $t(b, C)));
+  }, []), N = oe((h, C) => {
+    A([Dt(h, C)]);
+  }, [A]), ee = oe(async () => {
+    const h = await T.context.http.getJson(Bt(T, z));
+    h.sources && o(h.sources);
+    const C = h.items ?? h.lines ?? [];
+    A(C.map(Ie));
+  }, [A, z, T]);
+  J(() => {
+    let h = !1;
+    a("loading"), r("");
+    async function C() {
       try {
-        if (await b.start(), g)
-          return;
-        r(!0), F(), await q();
-      } catch (k) {
-        r(!1), D("stderr", `Console stream connection failed: ${L(k)}`), await q().catch((z) => D("stderr", `Recent console lines failed: ${L(z)}`));
+        const b = await T.context.http.getJson(`${T.endpointPrefix}/sources`);
+        h || (o(b), a("ready"));
+      } catch {
+        h || (o([]), a("failed"));
       }
     }
-    return Ie(), () => {
-      g = !0, se(), b.stop();
+    return C(), () => {
+      h = !0;
     };
-  }, [x, D, q]);
-  const oe = Te(
-    () => O.map((g) => ({ ...g, renderedText: vt(g.text) })),
-    [O]
+  }, [T]), J(() => {
+    window.localStorage.setItem(De, String(D));
+  }, [D]), J(() => {
+    if (!D || P)
+      return;
+    const h = ge.current;
+    h && (h.scrollTop = h.scrollHeight);
+  }, [D, P, Q]), J(() => {
+    let h = !1, C = null;
+    F.current.clear(), u([]), y(0), q(null), Y(0);
+    const b = new vt().withUrl(Ut(T, `${T.endpointPrefix}/hub`)).withAutomaticReconnect().build();
+    b.serverTimeoutInMilliseconds = Et, b.keepAliveIntervalInMilliseconds = It, b.onreconnecting(() => H(!1)), b.onreconnected(() => {
+      H(!0), te();
+    }), b.onclose(() => H(!1));
+    function _e() {
+      C?.dispose(), C = null;
+    }
+    function te() {
+      h || b.state !== _.Connected || (_e(), C = b.stream("StreamAsync", At(z)).subscribe({
+        next: (v) => {
+          if (v?.line)
+            A([Ie(v.line)]);
+          else if (v?.droppedLines || v?.dropped) {
+            const L = v.droppedLines ?? v.dropped;
+            N("stderr", `${L?.count ?? 0} console lines were dropped.`);
+          } else v?.source && o((L) => Ot(L, v.source));
+        },
+        error: (v) => {
+          if (!h) {
+            if (Lt(v)) {
+              te();
+              return;
+            }
+            N("stderr", `Console stream failed: ${V(v)}`);
+          }
+        },
+        complete: () => N("stdout", "Console stream completed.")
+      }));
+    }
+    async function Be() {
+      try {
+        if (await b.start(), h)
+          return;
+        H(!0), te(), await ee();
+      } catch (v) {
+        H(!1), N("stderr", `Console stream connection failed: ${V(v)}`), await ee().catch((L) => N("stderr", `Recent console lines failed: ${V(L)}`));
+      }
+    }
+    return Be(), () => {
+      h = !0, _e(), b.stop();
+    };
+  }, [A, N, ee, z, T]);
+  const fe = ne(
+    () => Q.map((h) => ({ ...h, renderedText: jt(h.text) })),
+    [Q]
   );
-  function ke() {
-    if (c) {
-      a(!1), h(null);
+  function Le() {
+    if (P) {
+      de(!1), q(null);
       return;
     }
-    h(o), y(t), a(!0);
+    q(l), Y(g), de(!0);
   }
-  function Ee() {
-    e([]), n(0), h(c ? [] : null), y(0), U.current.clear();
+  function We() {
+    u([]), y(0), q(P ? [] : null), Y(0), F.current.clear();
   }
-  return /* @__PURE__ */ p.jsxs("section", { className: "console-stream-panel", children: [
-    /* @__PURE__ */ p.jsxs("header", { className: "console-stream-header", children: [
-      /* @__PURE__ */ p.jsxs("div", { children: [
-        /* @__PURE__ */ p.jsx("h2", { children: "Backend console" }),
-        ne > 0 ? /* @__PURE__ */ p.jsxs("p", { children: [
-          ne,
-          " buffered while paused"
-        ] }) : null
+  return /* @__PURE__ */ f.jsxs("section", { className: "console-stream-panel", children: [
+    /* @__PURE__ */ f.jsxs("header", { className: "console-stream-header", children: [
+      /* @__PURE__ */ f.jsxs("div", { children: [
+        /* @__PURE__ */ f.jsxs("h2", { children: [
+          T.label,
+          " console"
+        ] }),
+        /* @__PURE__ */ f.jsx("p", { children: qt(Z, c, He) })
       ] }),
-      /* @__PURE__ */ p.jsxs("div", { className: "console-stream-tools", children: [
-        /* @__PURE__ */ p.jsx("span", { className: s ? "console-stream-status online" : "console-stream-status" }),
-        /* @__PURE__ */ p.jsx("span", { children: s ? "live" : "waiting" }),
-        /* @__PURE__ */ p.jsx("span", { children: "stdout" }),
-        /* @__PURE__ */ p.jsx("span", { children: "stderr" }),
-        /* @__PURE__ */ p.jsx("button", { type: "button", className: c ? "active" : "", onClick: ke, "aria-pressed": c, children: c ? "Resume" : "Pause" }),
-        /* @__PURE__ */ p.jsx("button", { type: "button", className: I ? "active" : "", onClick: () => ve((g) => !g), "aria-pressed": I, children: "Autoscroll" }),
-        /* @__PURE__ */ p.jsx("button", { type: "button", onClick: Ee, children: "Clear" })
+      /* @__PURE__ */ f.jsxs("div", { className: "console-stream-tools", children: [
+        /* @__PURE__ */ f.jsx("div", { className: "console-stream-hosts", role: "group", "aria-label": "Console host", children: Object.values($e).map((h) => /* @__PURE__ */ f.jsx(
+          "button",
+          {
+            type: "button",
+            className: h.id === n ? "active" : "",
+            "aria-pressed": h.id === n,
+            onClick: () => e(h.id),
+            children: h.label
+          },
+          h.id
+        )) }),
+        /* @__PURE__ */ f.jsxs(
+          "select",
+          {
+            "aria-label": "Console source",
+            value: s,
+            onChange: (h) => r(h.target.value),
+            children: [
+              /* @__PURE__ */ f.jsx("option", { value: "", children: "All sources" }),
+              t.map((h) => /* @__PURE__ */ f.jsx("option", { value: h.id, children: O(h) }, h.id))
+            ]
+          }
+        ),
+        /* @__PURE__ */ f.jsx("span", { className: M ? "console-stream-status online" : "console-stream-status" }),
+        /* @__PURE__ */ f.jsx("span", { children: M ? "live" : "waiting" }),
+        /* @__PURE__ */ f.jsx("span", { children: "stdout" }),
+        /* @__PURE__ */ f.jsx("span", { children: "stderr" }),
+        /* @__PURE__ */ f.jsx("button", { type: "button", className: P ? "active" : "", onClick: Le, "aria-pressed": P, children: P ? "Resume" : "Pause" }),
+        /* @__PURE__ */ f.jsx("button", { type: "button", className: D ? "active" : "", onClick: () => Me((h) => !h), "aria-pressed": D, children: "Autoscroll" }),
+        /* @__PURE__ */ f.jsx("button", { type: "button", onClick: We, children: "Clear" })
       ] })
     ] }),
-    /* @__PURE__ */ p.jsxs("div", { className: "console-stream-lines", ref: te, children: [
-      oe.length === 0 ? /* @__PURE__ */ p.jsxs("div", { className: "console-stream-line stdout", children: [
-        /* @__PURE__ */ p.jsx("span", { children: (/* @__PURE__ */ new Date()).toLocaleTimeString() }),
-        /* @__PURE__ */ p.jsx("code", { children: "Console stream is ready." })
+    /* @__PURE__ */ f.jsxs("div", { className: "console-stream-lines", ref: ge, children: [
+      fe.length === 0 ? /* @__PURE__ */ f.jsxs("div", { className: "console-stream-line stdout", children: [
+        /* @__PURE__ */ f.jsx("span", { children: (/* @__PURE__ */ new Date()).toLocaleTimeString() }),
+        /* @__PURE__ */ f.jsx("small", { children: Z ? O(Z) : "All sources" }),
+        /* @__PURE__ */ f.jsx("code", { children: "Console stream is ready." })
       ] }) : null,
-      oe.map((g) => /* @__PURE__ */ p.jsxs("div", { className: `console-stream-line ${g.stream}`, children: [
-        /* @__PURE__ */ p.jsx("span", { children: new Date(g.timestamp).toLocaleTimeString() }),
-        /* @__PURE__ */ p.jsx("code", { children: g.renderedText })
-      ] }, g.id))
+      fe.map((h) => /* @__PURE__ */ f.jsxs("div", { className: `console-stream-line ${h.stream}`, children: [
+        /* @__PURE__ */ f.jsx("span", { children: new Date(h.timestamp).toLocaleTimeString() }),
+        /* @__PURE__ */ f.jsx("small", { children: h.sourceLabel ?? "local" }),
+        /* @__PURE__ */ f.jsx("code", { children: h.renderedText })
+      ] }, h.id))
     ] })
   ] });
 }
-function wt(o) {
-  return o === 1 || o === "stderr" || o === "Stderr" ? "stderr" : "stdout";
+function Rt(n) {
+  return n === 1 || n === "stderr" || n === "Stderr" ? "stderr" : "stdout";
 }
-function bt(o, e) {
-  const t = Date.parse(o.timestamp) - Date.parse(e.timestamp);
-  return t !== 0 ? t : (o.sequence ?? 0) - (e.sequence ?? 0);
+function xt(n, e) {
+  const t = Date.parse(n.timestamp) - Date.parse(e.timestamp);
+  return t !== 0 ? t : (n.sequence ?? 0) - (e.sequence ?? 0);
 }
-function St(o, e) {
-  return [...o, ...e].sort(bt).slice(-2e3);
+function $t(n, e) {
+  return [...n, ...e].sort(xt).slice(-2e3);
 }
-function Ct(o, e) {
+function Dt(n, e) {
   return {
     id: `${Date.now()}-${Math.random()}`,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     sequence: null,
-    stream: o,
-    text: e
+    stream: n,
+    text: e,
+    sourceId: null,
+    sourceLabel: null
   };
 }
-function pe(o) {
+function Ie(n) {
   return {
-    id: o.id ?? `${o.sequence ?? Date.now()}-${Math.random()}`,
-    timestamp: o.timestamp ?? o.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
-    sequence: o.sequence ?? null,
-    stream: wt(o.stream),
-    text: o.text ?? ""
+    id: n.id ?? `${n.sequence ?? Date.now()}-${Math.random()}`,
+    timestamp: n.timestamp ?? n.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+    sequence: n.sequence ?? null,
+    stream: Rt(n.stream),
+    text: n.text ?? "",
+    sourceId: n.source?.id ?? null,
+    sourceLabel: n.source ? O(n.source) : null
   };
 }
-function yt(o) {
-  if (!o.includes("\x1B["))
-    return [{ text: o, className: "" }];
-  const e = [], t = ye();
-  let n = 0, s;
-  for (G.lastIndex = 0; (s = G.exec(o)) !== null; ) {
-    s.index > n && e.push({ text: o.slice(n, s.index), className: me(t) });
+function O(n) {
+  if (n.podName)
+    return [n.namespace, n.podName, n.containerName].filter(Boolean).join(" / ");
+  const e = n.displayName || n.serviceName || n.id;
+  return n.machineName && n.processId ? `${e} · ${n.machineName}:${n.processId}` : e;
+}
+function At(n) {
+  return n ? { limit: ce, sourceId: n } : { limit: ce };
+}
+function Nt(n) {
+  if (!n.includes("\x1B["))
+    return [{ text: n, className: "" }];
+  const e = [], t = Ae();
+  let o = 0, s;
+  for (ie.lastIndex = 0; (s = ie.exec(n)) !== null; ) {
+    s.index > o && e.push({ text: n.slice(o, s.index), className: Te(t) });
     const r = s[1] === "" ? [0] : s[1].split(";").map((c) => Number(c || 0));
-    kt(t, r), n = G.lastIndex;
+    Mt(t, r), o = ie.lastIndex;
   }
-  return n < o.length && e.push({ text: o.slice(n), className: me(t) }), e;
+  return o < n.length && e.push({ text: n.slice(o), className: Te(t) }), e;
 }
-function vt(o) {
-  return yt(o).map((e, t) => e.className ? /* @__PURE__ */ p.jsx("span", { className: e.className, children: e.text }, t) : e.text);
+function jt(n) {
+  return Nt(n).map((e, t) => e.className ? /* @__PURE__ */ f.jsx("span", { className: e.className, children: e.text }, t) : e.text);
 }
-function ye() {
+function Ae() {
   return {
     bold: !1,
     dim: !1,
@@ -1987,38 +2048,63 @@ function ye() {
     background: ""
   };
 }
-function kt(o, e) {
+function Mt(n, e) {
   for (const t of e)
-    t === 0 ? Object.assign(o, ye()) : t === 1 ? (o.bold = !0, o.dim = !1) : t === 2 ? (o.dim = !0, o.bold = !1) : t === 22 ? (o.bold = !1, o.dim = !1) : t === 39 ? o.foreground = "" : t === 49 ? o.background = "" : fe[t] ? o.foreground = fe[t] : _e[t] && (o.background = _e[t]);
+    t === 0 ? Object.assign(n, Ae()) : t === 1 ? (n.bold = !0, n.dim = !1) : t === 2 ? (n.dim = !0, n.bold = !1) : t === 22 ? (n.bold = !1, n.dim = !1) : t === 39 ? n.foreground = "" : t === 49 ? n.background = "" : ke[t] ? n.foreground = ke[t] : Ee[t] && (n.background = Ee[t]);
 }
-function me(o) {
+function Te(n) {
   return [
-    o.bold ? "console-stream-ansi-bold" : "",
-    o.dim ? "console-stream-ansi-dim" : "",
-    o.foreground,
-    o.background
+    n.bold ? "console-stream-ansi-bold" : "",
+    n.dim ? "console-stream-ansi-dim" : "",
+    n.foreground,
+    n.background
   ].filter(Boolean).join(" ");
 }
-function Et() {
-  return typeof window > "u" ? !0 : window.localStorage.getItem(Ce) !== "false";
+function Ht() {
+  return typeof window > "u" ? !0 : window.localStorage.getItem(De) !== "false";
 }
-function L(o) {
-  return o instanceof Error ? o.message : String(o);
+function V(n) {
+  return n instanceof Error ? n.message : String(n);
 }
-function It(o) {
-  return L(o) === pt;
+function Lt(n) {
+  return V(n) === Tt;
 }
-function Tt(o) {
-  return new URL(o, ee.backend.baseUrl).toString();
+function Wt(n) {
+  return {
+    ...$e[n],
+    context: n === "server" ? ae.backend : ae.host
+  };
+}
+function Bt(n, e) {
+  const t = new URLSearchParams({ limit: String(ce) });
+  return e && t.set("sourceId", e), `${n.endpointPrefix}/recent?${t}`;
+}
+function Ut(n, e) {
+  return new URL(e, n.context.baseUrl).toString();
+}
+function Ot(n, e) {
+  const t = n.findIndex((s) => s.id === e.id);
+  if (t === -1)
+    return [...n, e].sort(Pe);
+  const o = [...n];
+  return o[t] = e, o.sort(Pe);
+}
+function Pe(n, e) {
+  return O(n).localeCompare(O(e));
+}
+function qt(n, e, t) {
+  return t > 0 ? `${t} buffered while paused` : n ? n.podName ? [n.namespace, n.nodeName].filter(Boolean).join(" / ") : n.id : e === "loading" ? "Loading sources" : e === "failed" ? "Sources unavailable" : "Merged source stream";
 }
 export {
-  mt as ConsoleStreamPanel,
-  St as appendConsoleEntries,
-  bt as compareConsoleEntries,
-  Ct as createConsoleEntry,
-  pe as createConsoleEntryFromLine,
-  wt as getConsoleStreamName,
-  It as isRecoverableConsoleStreamError,
-  yt as parseAnsiSegments,
-  $t as register
+  Pt as ConsoleStreamPanel,
+  $t as appendConsoleEntries,
+  xt as compareConsoleEntries,
+  Dt as createConsoleEntry,
+  Ie as createConsoleEntryFromLine,
+  At as createConsoleFilter,
+  O as formatConsoleSourceLabel,
+  Rt as getConsoleStreamName,
+  Lt as isRecoverableConsoleStreamError,
+  Nt as parseAnsiSegments,
+  Jt as register
 };

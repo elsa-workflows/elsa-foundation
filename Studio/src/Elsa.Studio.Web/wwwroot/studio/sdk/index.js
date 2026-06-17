@@ -18,10 +18,10 @@ function w(t) {
 function u(t) {
   return {
     async getJson(e, n) {
-      return o(t, e, p(n));
+      return i(t, e, p(n));
     },
     async postJson(e, n, r) {
-      return o(t, e, {
+      return i(t, e, {
         ...r,
         method: "POST",
         headers: d(r?.headers),
@@ -30,17 +30,17 @@ function u(t) {
     }
   };
 }
-async function o(t, e, n) {
+async function i(t, e, n) {
   const r = f(t, e), s = await fetch(r, n);
   if (!s.ok)
     throw new c(s.status, await a(s));
-  const i = await s.text();
+  const o = await s.text();
   try {
-    return JSON.parse(i);
+    return JSON.parse(o);
   } catch {
     throw new c(
       s.status,
-      `Expected JSON from ${r}, but received ${l(s, i)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+      `Expected JSON from ${r}, but received ${l(s, o)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
@@ -69,7 +69,11 @@ function f(t, e) {
 }
 function p(t) {
   const e = new Headers(t?.headers);
-  return e.has("Accept") || e.set("Accept", "application/json"), t ? { ...t, headers: e } : { headers: e };
+  return e.has("Accept") || e.set("Accept", "application/json"), {
+    ...t,
+    cache: t?.cache ?? "no-store",
+    headers: e
+  };
 }
 function d(t) {
   const e = new Headers(t);

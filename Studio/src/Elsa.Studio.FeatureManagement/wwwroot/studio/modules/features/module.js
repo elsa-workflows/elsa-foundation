@@ -1,36 +1,36 @@
-import { useState as m, useEffect as E, useMemo as L } from "react";
-var A = { exports: {} }, v = {};
-var z;
-function K() {
-  if (z) return v;
-  z = 1;
+import { useMemo as w, useState as I, useEffect as E } from "react";
+var R = { exports: {} }, C = {};
+var W;
+function oe() {
+  if (W) return C;
+  W = 1;
   var e = /* @__PURE__ */ Symbol.for("react.transitional.element"), t = /* @__PURE__ */ Symbol.for("react.fragment");
-  function s(a, i, l) {
-    var c = null;
-    if (l !== void 0 && (c = "" + l), i.key !== void 0 && (c = "" + i.key), "key" in i) {
-      l = {};
-      for (var d in i)
-        d !== "key" && (l[d] = i[d]);
-    } else l = i;
-    return i = l.ref, {
+  function a(i, d, r) {
+    var p = null;
+    if (r !== void 0 && (p = "" + r), d.key !== void 0 && (p = "" + d.key), "key" in d) {
+      r = {};
+      for (var o in d)
+        o !== "key" && (r[o] = d[o]);
+    } else r = d;
+    return d = r.ref, {
       $$typeof: e,
-      type: a,
-      key: c,
-      ref: i !== void 0 ? i : null,
-      props: l
+      type: i,
+      key: p,
+      ref: d !== void 0 ? d : null,
+      props: r
     };
   }
-  return v.Fragment = t, v.jsx = s, v.jsxs = s, v;
+  return C.Fragment = t, C.jsx = a, C.jsxs = a, C;
 }
-var H;
-function ee() {
-  return H || (H = 1, A.exports = K()), A.exports;
+var Q;
+function ue() {
+  return Q || (Q = 1, R.exports = oe()), R.exports;
 }
-var n = ee();
-const k = "__all", U = "__uncategorized";
-let R;
-function Se(e) {
-  R = e, ne(e), e.navigation.add({
+var n = ue();
+const T = "__all", ne = "__uncategorized";
+let O;
+function _e(e) {
+  O = e, he(e), e.navigation.add({
     id: "feature-management",
     label: "Features",
     path: "/features",
@@ -39,246 +39,453 @@ function Se(e) {
     id: "feature-management",
     label: "Features",
     path: "/features",
-    component: re
+    component: fe
   });
 }
-function ne(e) {
+function he(e) {
   e.settingEditors.add({
     id: "select",
     order: 10,
-    supports: (t) => (t.options?.length ?? 0) > 0 || w(t, "select"),
-    component: pe
+    supports: (t) => (t.options?.length ?? 0) > 0 || D(t, "select"),
+    component: Ie
   }), e.settingEditors.add({
     id: "boolean",
     order: 20,
-    supports: (t) => j(t.jsonType) === "boolean",
-    component: de
+    supports: (t) => N(t.jsonType) === "boolean",
+    component: Ce
   }), e.settingEditors.add({
     id: "number",
     order: 30,
-    supports: (t) => ["integer", "number"].includes(j(t.jsonType)),
-    component: ge
+    supports: (t) => ["integer", "number"].includes(N(t.jsonType)),
+    component: we
   }), e.settingEditors.add({
     id: "json",
     order: 40,
-    supports: (t) => ["object", "array"].includes(j(t.jsonType)) || w(t, "json") || w(t, "textarea"),
-    component: he
+    supports: (t) => ["object", "array"].includes(N(t.jsonType)) || D(t, "json") || D(t, "textarea"),
+    component: Te
   }), e.settingEditors.add({
     id: "secret",
     order: 50,
     supports: (t) => t.secret || t.sensitive,
-    component: me
+    component: Fe
   }), e.settingEditors.add({
     id: "text",
     order: 100,
     supports: () => !0,
-    component: ue
+    component: Ee
   });
 }
-function te(e, t) {
-  const s = e.settingEditors.list().filter((a) => a.supports(t)).sort((a, i) => (a.order ?? 500) - (i.order ?? 500))[0];
-  if (!s)
+function me(e, t) {
+  const a = e.settingEditors.list().filter((i) => i.supports(t)).sort((i, d) => (i.order ?? 500) - (d.order ?? 500))[0];
+  if (!a)
     throw new Error(`No setting editor is registered for '${t.name}'.`);
-  return s;
+  return a;
 }
-function se(e, t) {
+function ge(e, t) {
   return {
     revision: e,
-    features: t.map((s) => ({
-      id: s.id,
-      enabled: s.enabled,
-      configuration: s.enabled ? s.configuration : {}
+    features: t.map((a) => ({
+      id: a.id,
+      enabled: a.enabled,
+      configuration: a.enabled ? a.configuration : {}
     }))
   };
 }
-function ae(e, t) {
-  return e ? B(e.features) !== B(t) : !1;
+function pe(e, t) {
+  return e ? K(e.features) !== K(t) : !1;
 }
-function re() {
-  const [e, t] = m(null), [s, a] = m([]), [i, l] = m(""), [c, d] = m(k), [o, u] = m(!0), [p, N] = m(!1), [O, S] = m(null), [_, b] = m(null);
+function xe(e) {
+  return [
+    {
+      id: "studio",
+      label: "Studio",
+      runtime: "Elsa.Studio.Web",
+      context: e.host,
+      writable: !1
+    },
+    {
+      id: "server",
+      label: "Server",
+      runtime: "Elsa.Server",
+      context: e.backend,
+      writable: !0
+    }
+  ];
+}
+function X() {
+  return {
+    catalog: null,
+    draft: [],
+    selectedId: "",
+    checkedFeatureIds: /* @__PURE__ */ new Set(),
+    selectedCategory: T,
+    loading: !0,
+    applying: !1,
+    status: null,
+    error: null
+  };
+}
+function fe() {
+  const e = w(() => xe(O), []), [t, a] = I("server"), [i, d] = I(() => ({
+    studio: X(),
+    server: X()
+  })), r = e.find((s) => s.id === t) ?? e[0], p = i[r.id], { catalog: o, draft: u, selectedId: m, checkedFeatureIds: f, selectedCategory: v, loading: j, applying: S, status: M, error: _ } = p;
   E(() => {
-    $();
+    for (const s of e)
+      L(s.id);
   }, []);
-  const C = L(() => je(s), [s]), g = L(
-    () => be(s, c),
-    [s, c]
-  ), h = g.find((r) => r.id === i) ?? g.find((r) => r.enabled) ?? g[0] ?? null, y = ae(e, s), W = s.filter((r) => r.enabled).length, X = C.find((r) => r.id === c)?.label ?? "All categories";
+  const F = w(() => Je(u), [u]), x = w(
+    () => He(u, v),
+    [u, v]
+  ), y = x.find((s) => s.id === m) ?? x.find((s) => s.enabled) ?? x[0] ?? null, k = pe(o, u), ae = u.filter((s) => s.enabled).length, ie = F.find((s) => s.id === v)?.label ?? "All categories", z = w(() => new Set(x.map((s) => s.id)), [x]), P = x.filter((s) => f.has(s.id)).length, q = x.length > 0 && P === x.length, re = u.filter((s) => f.has(s.id)), b = !r.writable, A = j || S || b;
   E(() => {
-    h && h.id !== i && l(h.id);
-  }, [h, i]), E(() => {
-    C.some((r) => r.id === c) || d(k);
-  }, [C, c]);
-  async function $() {
-    u(!0), b(null);
+    y && y.id !== m && g(r.id, (s) => ({ ...s, selectedId: y.id }));
+  }, [r.id, y, m]), E(() => {
+    F.some((s) => s.id === v) || g(r.id, (s) => ({ ...s, selectedCategory: T }));
+  }, [r.id, F, v]), E(() => {
+    g(r.id, (s) => {
+      const l = new Set(s.draft.map((h) => h.id)), c = new Set(Array.from(s.checkedFeatureIds).filter((h) => l.has(h)));
+      return c.size === s.checkedFeatureIds.size ? s : { ...s, checkedFeatureIds: c };
+    });
+  }, [r.id, u]);
+  function g(s, l) {
+    d((c) => ({
+      ...c,
+      [s]: l(c[s])
+    }));
+  }
+  async function L(s = r.id) {
+    const l = e.find((c) => c.id === s) ?? r;
+    g(l.id, (c) => ({ ...c, loading: !0, error: null }));
     try {
-      const r = await R.backend.http.getJson("/modularity/features");
-      t(r), a(r.features.map(F)), S(null);
-    } catch (r) {
-      b(G(r));
-    } finally {
-      u(!1);
+      const c = await l.context.http.getJson("/modularity/features");
+      g(l.id, (h) => ({
+        ...h,
+        catalog: c,
+        draft: c.features.map(J),
+        checkedFeatureIds: /* @__PURE__ */ new Set(),
+        status: null,
+        loading: !1
+      }));
+    } catch (c) {
+      g(l.id, (h) => ({ ...h, error: ee(c), loading: !1 }));
     }
   }
-  async function P() {
-    if (!(!e || !y)) {
-      N(!0), b(null), S(null);
+  async function V() {
+    if (!(!o || !k || b)) {
+      g(r.id, (s) => ({ ...s, applying: !0, error: null, status: null }));
       try {
-        const r = await R.backend.http.postJson(
+        const s = await r.context.http.postJson(
           "/modularity/features/apply",
-          se(e.revision, s)
+          ge(o.revision, u)
         );
-        t(r.catalog), a(r.catalog.features.map(F)), S(`Applied ${r.featureDescriptorCount} descriptor(s); reloaded ${r.reloadedShellCount} shell(s).`);
-      } catch (r) {
-        b(G(r));
-      } finally {
-        N(!1);
+        g(r.id, (l) => ({
+          ...l,
+          catalog: s.catalog,
+          draft: s.catalog.features.map(J),
+          status: `Applied ${s.featureDescriptorCount} descriptor(s); reloaded ${s.reloadedShellCount} shell(s).`,
+          applying: !1
+        }));
+      } catch (s) {
+        g(r.id, (l) => ({ ...l, error: ee(s), applying: !1 }));
       }
     }
   }
-  function q(r, f) {
-    a((T) => T.map((x) => x.id === r ? f(x) : x));
+  function B(s, l) {
+    b || g(r.id, (c) => ({
+      ...c,
+      draft: c.draft.map((h) => h.id === s ? l(h) : h)
+    }));
   }
-  function M(r) {
-    q(r.id, (f) => ({ ...f, enabled: !f.enabled }));
+  function U(s) {
+    B(s.id, (l) => ({ ...l, enabled: !l.enabled }));
   }
-  function Z(r, f, T) {
-    q(r.id, (x) => ({
-      ...x,
+  function le(s, l) {
+    b || g(r.id, (c) => {
+      const h = new Set(c.checkedFeatureIds);
+      return l ? h.add(s) : h.delete(s), { ...c, checkedFeatureIds: h };
+    });
+  }
+  function de() {
+    b || g(r.id, (s) => {
+      const l = new Set(s.checkedFeatureIds);
+      if (q)
+        for (const c of z)
+          l.delete(c);
+      else
+        for (const c of z)
+          l.add(c);
+      return { ...s, checkedFeatureIds: l };
+    });
+  }
+  function G(s) {
+    b || f.size === 0 || g(r.id, (l) => ({
+      ...l,
+      draft: l.draft.map((c) => l.checkedFeatureIds.has(c.id) ? { ...c, enabled: s } : c)
+    }));
+  }
+  function ce(s, l, c) {
+    B(s.id, (h) => ({
+      ...h,
       configuration: {
-        ...x.configuration,
-        [f.name]: T
+        ...h.configuration,
+        [l.name]: c
       }
     }));
   }
-  function D() {
-    e && (a(e.features.map(F)), S(null), b(null));
+  function Y() {
+    o && g(r.id, (s) => ({
+      ...s,
+      draft: o.features.map(J),
+      status: null,
+      error: null
+    }));
   }
   return /* @__PURE__ */ n.jsxs("section", { className: "feature-management-page", children: [
     /* @__PURE__ */ n.jsxs("div", { className: "section-header feature-management-header", children: [
       /* @__PURE__ */ n.jsxs("div", { children: [
         /* @__PURE__ */ n.jsx("h2", { children: "Features" }),
         /* @__PURE__ */ n.jsxs("p", { children: [
-          W,
+          r.label,
+          ": ",
+          ae,
           " enabled of ",
-          s.length,
+          u.length,
           " available",
-          y ? " - Unsaved changes" : ""
+          k ? " - Unsaved changes" : ""
         ] })
       ] }),
       /* @__PURE__ */ n.jsxs("div", { className: "feature-management-actions", children: [
-        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: $, disabled: o || p, children: "Refresh" }),
-        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: D, disabled: !y || o || p, children: "Reset" }),
-        /* @__PURE__ */ n.jsx("button", { type: "button", className: "primary", onClick: P, disabled: !y || o || p, children: p ? "Applying" : "Apply" })
+        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: () => L(), disabled: j || S, children: "Refresh" }),
+        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: Y, disabled: !k || j || S || b, children: "Reset" }),
+        /* @__PURE__ */ n.jsx("button", { type: "button", className: "primary", onClick: V, disabled: !k || j || S || b, children: S ? "Applying" : "Apply" })
       ] })
     ] }),
+    /* @__PURE__ */ n.jsx(je, { hosts: e, activeHostId: r.id, onSelect: a }),
     _ ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-error", children: _ }) : null,
-    O ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-status", children: O }) : null,
+    M ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-status", children: M }) : null,
+    b ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-status", children: "Studio features are shown from the Studio host runtime. Feature toggles are available for backend features on the Server tab." }) : null,
     /* @__PURE__ */ n.jsxs("div", { className: "feature-management-layout", children: [
       /* @__PURE__ */ n.jsx(
-        ie,
+        ve,
         {
-          categories: C,
-          selectedCategory: c,
-          onSelect: d
+          categories: F,
+          selectedCategory: v,
+          onSelect: (s) => g(r.id, (l) => ({ ...l, selectedCategory: s }))
         }
       ),
       /* @__PURE__ */ n.jsxs("div", { className: "feature-management-list-column", children: [
         /* @__PURE__ */ n.jsxs("div", { className: "feature-management-list-heading", children: [
           /* @__PURE__ */ n.jsxs("div", { children: [
-            /* @__PURE__ */ n.jsx("strong", { children: X }),
+            /* @__PURE__ */ n.jsx("strong", { children: ie }),
             /* @__PURE__ */ n.jsxs("span", { children: [
-              g.length,
+              x.length,
               " feature",
-              g.length === 1 ? "" : "s"
+              x.length === 1 ? "" : "s"
             ] })
           ] }),
           /* @__PURE__ */ n.jsxs("span", { children: [
-            g.filter((r) => r.enabled).length,
+            x.filter((s) => s.enabled).length,
             " enabled"
           ] })
         ] }),
-        /* @__PURE__ */ n.jsxs("div", { className: "feature-management-list", "aria-busy": o, children: [
-          o && s.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "Loading features..." }) : null,
-          !o && s.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No features are available." }) : null,
-          !o && s.length > 0 && g.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No features match this category." }) : null,
-          g.map((r) => /* @__PURE__ */ n.jsx(
-            le,
+        /* @__PURE__ */ n.jsx(
+          be,
+          {
+            disabled: A || x.length === 0,
+            selectedCount: f.size,
+            visibleCount: x.length,
+            visibleSelectedCount: P,
+            selectedEnabledCount: re.filter((s) => s.enabled).length,
+            allVisibleChecked: q,
+            onToggleVisible: de,
+            onClearSelection: () => setCheckedFeatureIds(/* @__PURE__ */ new Set()),
+            onEnableSelected: () => G(!0),
+            onDisableSelected: () => G(!1)
+          }
+        ),
+        /* @__PURE__ */ n.jsxs("div", { className: "feature-management-list", "aria-busy": j, children: [
+          j && u.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "Loading features..." }) : null,
+          !j && u.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No features are available." }) : null,
+          !j && u.length > 0 && x.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No features match this category." }) : null,
+          x.map((s) => /* @__PURE__ */ n.jsx(
+            ye,
             {
-              feature: r,
-              selected: r.id === h?.id,
-              onSelect: () => l(r.id),
-              onToggle: () => M(r)
+              feature: s,
+              selected: s.id === y?.id,
+              checked: f.has(s.id),
+              disabled: A,
+              onSelect: () => g(r.id, (l) => ({ ...l, selectedId: s.id })),
+              onToggle: () => U(s),
+              onCheckedChange: (l) => le(s.id, l)
             },
-            r.id
+            s.id
           ))
         ] })
       ] }),
       /* @__PURE__ */ n.jsx(
-        oe,
+        Ne,
         {
-          feature: h,
-          disabled: p || o,
-          dirty: y,
-          onToggle: M,
-          onSettingChange: Z,
-          onReset: D,
-          onApply: P
+          feature: y,
+          disabled: A,
+          dirty: k,
+          onToggle: U,
+          onSettingChange: ce,
+          onReset: Y,
+          onApply: V
         }
       )
     ] })
   ] });
 }
-function ie({
+function je({
+  hosts: e,
+  activeHostId: t,
+  onSelect: a
+}) {
+  return /* @__PURE__ */ n.jsx("div", { className: "feature-management-host-tabs", role: "tablist", "aria-label": "Feature host", children: e.map((i) => /* @__PURE__ */ n.jsxs(
+    "button",
+    {
+      type: "button",
+      role: "tab",
+      "aria-selected": i.id === t,
+      className: i.id === t ? "active" : "",
+      onClick: () => a(i.id),
+      children: [
+        /* @__PURE__ */ n.jsx("span", { children: i.label }),
+        /* @__PURE__ */ n.jsx("small", { children: i.runtime })
+      ]
+    },
+    i.id
+  )) });
+}
+function be({
+  disabled: e,
+  selectedCount: t,
+  visibleCount: a,
+  visibleSelectedCount: i,
+  selectedEnabledCount: d,
+  allVisibleChecked: r,
+  onToggleVisible: p,
+  onClearSelection: o,
+  onEnableSelected: u,
+  onDisableSelected: m
+}) {
+  return /* @__PURE__ */ n.jsxs("div", { className: "feature-management-bulk-actions", "aria-label": "Bulk feature actions", children: [
+    /* @__PURE__ */ n.jsxs("label", { children: [
+      /* @__PURE__ */ n.jsx(
+        "input",
+        {
+          type: "checkbox",
+          checked: r,
+          disabled: e,
+          onChange: p,
+          "aria-label": r ? "Clear visible feature selection" : "Select visible features"
+        }
+      ),
+      /* @__PURE__ */ n.jsxs("span", { children: [
+        i,
+        "/",
+        a,
+        " visible"
+      ] })
+    ] }),
+    /* @__PURE__ */ n.jsxs("div", { children: [
+      /* @__PURE__ */ n.jsxs("span", { title: `${d} enabled`, children: [
+        t,
+        " selected"
+      ] }),
+      /* @__PURE__ */ n.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Enable selected features",
+          disabled: e || t === 0 || d === t,
+          onClick: u,
+          children: "Enable"
+        }
+      ),
+      /* @__PURE__ */ n.jsx(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Disable selected features",
+          disabled: e || t === 0 || d === 0,
+          onClick: m,
+          children: "Disable"
+        }
+      ),
+      /* @__PURE__ */ n.jsx("button", { type: "button", "aria-label": "Clear selected features", disabled: e || t === 0, onClick: o, children: "Clear" })
+    ] })
+  ] });
+}
+function ve({
   categories: e,
   selectedCategory: t,
-  onSelect: s
+  onSelect: a
 }) {
   return /* @__PURE__ */ n.jsxs("aside", { className: "feature-management-categories", "aria-label": "Feature categories", children: [
     /* @__PURE__ */ n.jsx("span", { className: "feature-management-panel-label", children: "Categories" }),
-    /* @__PURE__ */ n.jsx("div", { className: "feature-management-category-list", children: e.map((a) => /* @__PURE__ */ n.jsxs(
+    /* @__PURE__ */ n.jsx("div", { className: "feature-management-category-list", children: e.map((i) => /* @__PURE__ */ n.jsxs(
       "button",
       {
         type: "button",
-        className: a.id === t ? "active" : "",
-        onClick: () => s(a.id),
+        className: i.id === t ? "active" : "",
+        onClick: () => a(i.id),
         children: [
-          /* @__PURE__ */ n.jsx("span", { children: a.label }),
-          /* @__PURE__ */ n.jsx("em", { children: a.count })
+          /* @__PURE__ */ n.jsx("span", { children: i.label }),
+          /* @__PURE__ */ n.jsx("em", { children: i.count })
         ]
       },
-      a.id
+      i.id
     )) })
   ] });
 }
-function le({
+function ye({
   feature: e,
   selected: t,
-  onSelect: s,
-  onToggle: a
+  checked: a,
+  disabled: i,
+  onSelect: d,
+  onToggle: r,
+  onCheckedChange: p
 }) {
+  const o = e.displayName || e.id, u = !Oe(o, e.id);
   return /* @__PURE__ */ n.jsxs("article", { className: t ? "feature-management-card selected" : "feature-management-card", children: [
+    /* @__PURE__ */ n.jsx(
+      "input",
+      {
+        type: "checkbox",
+        className: "feature-management-row-checkbox",
+        checked: a,
+        disabled: i,
+        "aria-label": `Select ${e.displayName || e.id}`,
+        onChange: (m) => p(m.target.checked)
+      }
+    ),
     /* @__PURE__ */ n.jsx(
       "button",
       {
         type: "button",
         className: e.enabled ? "feature-management-switch enabled" : "feature-management-switch",
-        onClick: a,
+        onClick: r,
+        disabled: i,
         role: "switch",
         "aria-checked": e.enabled,
         "aria-label": `${e.enabled ? "Disable" : "Enable"} ${e.displayName || e.id}`
       }
     ),
-    /* @__PURE__ */ n.jsxs("button", { type: "button", className: "feature-management-feature-button", onClick: s, children: [
+    /* @__PURE__ */ n.jsxs("button", { type: "button", className: "feature-management-feature-button", onClick: d, children: [
       /* @__PURE__ */ n.jsxs("span", { className: "feature-management-card-title", children: [
-        /* @__PURE__ */ n.jsx("strong", { children: e.displayName || e.id }),
+        /* @__PURE__ */ n.jsx("strong", { children: o }),
         e.experimental ? /* @__PURE__ */ n.jsx("em", { children: "Experimental" }) : null,
         e.advanced ? /* @__PURE__ */ n.jsx("em", { children: "Advanced" }) : null
       ] }),
-      /* @__PURE__ */ n.jsx("code", { children: e.id }),
+      u ? /* @__PURE__ */ n.jsx("code", { children: e.id }) : null,
       e.description ? /* @__PURE__ */ n.jsx("small", { children: e.description }) : null,
       /* @__PURE__ */ n.jsxs("span", { className: "feature-management-card-meta", children: [
         /* @__PURE__ */ n.jsx("span", { children: e.sourceKind }),
-        e.categories.slice(0, 2).map((i) => /* @__PURE__ */ n.jsx("span", { children: i }, i)),
+        e.categories.slice(0, 2).map((m) => /* @__PURE__ */ n.jsx("span", { children: m }, m)),
         e.categories.length > 2 ? /* @__PURE__ */ n.jsxs("span", { children: [
           "+",
           e.categories.length - 2
@@ -288,78 +495,110 @@ function le({
     /* @__PURE__ */ n.jsx("span", { className: "feature-management-card-count", children: e.settings.length })
   ] });
 }
-function oe({
+function Ne({
   feature: e,
   disabled: t,
-  dirty: s,
-  onToggle: a,
-  onSettingChange: i,
-  onReset: l,
-  onApply: c
+  dirty: a,
+  onToggle: i,
+  onSettingChange: d,
+  onReset: r,
+  onApply: p
 }) {
   if (!e)
     return /* @__PURE__ */ n.jsx("aside", { className: "feature-management-inspector", children: /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "Select a feature." }) });
-  const d = ye(e.settings);
+  const o = De(e.settings), u = e.displayName || e.id;
   return /* @__PURE__ */ n.jsxs("aside", { className: "feature-management-inspector", children: [
     /* @__PURE__ */ n.jsxs("div", { className: "feature-management-inspector-heading", children: [
       /* @__PURE__ */ n.jsxs("div", { children: [
         /* @__PURE__ */ n.jsx("span", { children: e.sourceKind }),
-        /* @__PURE__ */ n.jsx("h3", { children: e.displayName || e.id }),
-        /* @__PURE__ */ n.jsx("code", { children: e.id })
+        /* @__PURE__ */ n.jsx("h3", { children: u })
       ] }),
-      /* @__PURE__ */ n.jsx("button", { type: "button", onClick: () => a(e), disabled: t, children: e.enabled ? "Disable" : "Enable" })
+      /* @__PURE__ */ n.jsx("button", { type: "button", onClick: () => i(e), disabled: t, children: e.enabled ? "Disable" : "Enable" })
     ] }),
     e.description ? /* @__PURE__ */ n.jsx("p", { children: e.description }) : null,
     e.readError ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-warning", children: e.readError }) : null,
-    e.packageId ? /* @__PURE__ */ n.jsxs("p", { className: "feature-management-muted", children: [
-      e.packageId,
-      " ",
-      e.packageVersion
-    ] }) : null,
-    e.categories.length > 0 ? /* @__PURE__ */ n.jsx("div", { className: "feature-management-inspector-tags", children: e.categories.map((o) => /* @__PURE__ */ n.jsx("span", { children: o }, o)) }) : null,
-    /* @__PURE__ */ n.jsxs("dl", { className: "feature-management-metadata", children: [
+    /* @__PURE__ */ n.jsx(Se, { feature: e, displayName: u }),
+    e.settings.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No configurable settings." }) : /* @__PURE__ */ n.jsx("div", { className: "feature-management-settings", children: o.map((m) => /* @__PURE__ */ n.jsxs("section", { className: "feature-management-setting-group", children: [
+      /* @__PURE__ */ n.jsx("h4", { children: m.label }),
+      /* @__PURE__ */ n.jsx("div", { children: m.settings.map((f) => {
+        const v = me(O, f).component;
+        return /* @__PURE__ */ n.jsx(ke, { setting: f, children: /* @__PURE__ */ n.jsx(
+          v,
+          {
+            setting: f,
+            value: Ae(e, f),
+            disabled: t || !e.enabled,
+            onChange: (j) => d(e, f, j)
+          }
+        ) }, f.name);
+      }) })
+    ] }, m.id)) }),
+    /* @__PURE__ */ n.jsxs("div", { className: "feature-management-sticky-actions", children: [
+      /* @__PURE__ */ n.jsx("span", { children: a ? "Unsaved changes" : "No pending changes" }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: r, disabled: !a || t, children: "Reset" }),
+        /* @__PURE__ */ n.jsx("button", { type: "button", className: "primary", onClick: p, disabled: !a || t, children: "Apply" })
+      ] })
+    ] })
+  ] });
+}
+function Se({ feature: e, displayName: t }) {
+  const a = e.categories.length > 0 ? e.categories.join(", ") : "Uncategorized", i = e.packageId ? [e.packageId, e.packageVersion].filter(Boolean).join(" ") : "Not package-backed";
+  return /* @__PURE__ */ n.jsxs("section", { className: "feature-management-metadata", "aria-label": "Feature metadata", children: [
+    /* @__PURE__ */ n.jsx("h4", { children: "Metadata" }),
+    /* @__PURE__ */ n.jsxs("dl", { className: "feature-management-detail-list", children: [
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Display name" }),
+        /* @__PURE__ */ n.jsx("dd", { children: t })
+      ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Technical name" }),
+        /* @__PURE__ */ n.jsx("dd", { children: /* @__PURE__ */ n.jsx("code", { children: e.id }) })
+      ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Status" }),
+        /* @__PURE__ */ n.jsx("dd", { children: e.enabled ? "Enabled" : "Disabled" })
+      ] }),
       /* @__PURE__ */ n.jsxs("div", { children: [
         /* @__PURE__ */ n.jsx("dt", { children: "Source" }),
         /* @__PURE__ */ n.jsx("dd", { children: e.sourceKind })
       ] }),
       /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Categories" }),
+        /* @__PURE__ */ n.jsx("dd", { children: a })
+      ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Package" }),
+        /* @__PURE__ */ n.jsx("dd", { children: i })
+      ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
         /* @__PURE__ */ n.jsx("dt", { children: "Settings" }),
         /* @__PURE__ */ n.jsx("dd", { children: e.settings.length })
       ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Advanced" }),
+        /* @__PURE__ */ n.jsx("dd", { children: e.advanced ? "Yes" : "No" })
+      ] }),
+      /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Experimental" }),
+        /* @__PURE__ */ n.jsx("dd", { children: e.experimental ? "Yes" : "No" })
+      ] }),
+      e.description ? /* @__PURE__ */ n.jsxs("div", { children: [
+        /* @__PURE__ */ n.jsx("dt", { children: "Description" }),
+        /* @__PURE__ */ n.jsx("dd", { children: e.description })
+      ] }) : null,
       e.manifestHash ? /* @__PURE__ */ n.jsxs("div", { children: [
-        /* @__PURE__ */ n.jsx("dt", { children: "Manifest" }),
+        /* @__PURE__ */ n.jsx("dt", { children: "Manifest hash" }),
         /* @__PURE__ */ n.jsx("dd", { children: e.manifestHash })
       ] }) : null,
       e.manifestPath ? /* @__PURE__ */ n.jsxs("div", { children: [
-        /* @__PURE__ */ n.jsx("dt", { children: "Path" }),
+        /* @__PURE__ */ n.jsx("dt", { children: "Manifest path" }),
         /* @__PURE__ */ n.jsx("dd", { children: e.manifestPath })
       ] }) : null
-    ] }),
-    e.settings.length === 0 ? /* @__PURE__ */ n.jsx("p", { className: "feature-management-muted", children: "No configurable settings." }) : /* @__PURE__ */ n.jsx("div", { className: "feature-management-settings", children: d.map((o) => /* @__PURE__ */ n.jsxs("section", { className: "feature-management-setting-group", children: [
-      /* @__PURE__ */ n.jsx("h4", { children: o.label }),
-      /* @__PURE__ */ n.jsx("div", { children: o.settings.map((u) => {
-        const p = te(R, u).component;
-        return /* @__PURE__ */ n.jsx(ce, { setting: u, children: /* @__PURE__ */ n.jsx(
-          p,
-          {
-            setting: u,
-            value: fe(e, u),
-            disabled: t || !e.enabled,
-            onChange: (N) => i(e, u, N)
-          }
-        ) }, u.name);
-      }) })
-    ] }, o.id)) }),
-    /* @__PURE__ */ n.jsxs("div", { className: "feature-management-sticky-actions", children: [
-      /* @__PURE__ */ n.jsx("span", { children: s ? "Unsaved changes" : "No pending changes" }),
-      /* @__PURE__ */ n.jsxs("div", { children: [
-        /* @__PURE__ */ n.jsx("button", { type: "button", onClick: l, disabled: !s || t, children: "Reset" }),
-        /* @__PURE__ */ n.jsx("button", { type: "button", className: "primary", onClick: c, disabled: !s || t, children: "Apply" })
-      ] })
     ] })
   ] });
 }
-function ce({ setting: e, children: t }) {
+function ke({ setting: e, children: t }) {
   return /* @__PURE__ */ n.jsxs("label", { className: "feature-management-setting", children: [
     /* @__PURE__ */ n.jsxs("span", { children: [
       /* @__PURE__ */ n.jsx("strong", { children: e.displayName || e.name }),
@@ -372,119 +611,122 @@ function ce({ setting: e, children: t }) {
     /* @__PURE__ */ n.jsx("code", { children: e.name })
   ] });
 }
-function de({ value: e, disabled: t, onChange: s }) {
-  return /* @__PURE__ */ n.jsx("input", { type: "checkbox", checked: !!e, disabled: t, onChange: (a) => s(a.target.checked) });
+function Ce({ value: e, disabled: t, onChange: a }) {
+  return /* @__PURE__ */ n.jsx("input", { type: "checkbox", checked: !!e, disabled: t, onChange: (i) => a(i.target.checked) });
 }
-function ue({ value: e, disabled: t, onChange: s }) {
-  return /* @__PURE__ */ n.jsx("input", { type: "text", value: I(e), disabled: t, onChange: (a) => s(a.target.value) });
+function Ee({ value: e, disabled: t, onChange: a }) {
+  return /* @__PURE__ */ n.jsx("input", { type: "text", value: $(e), disabled: t, onChange: (i) => a(i.target.value) });
 }
-function me({ value: e, disabled: t, onChange: s }) {
-  return /* @__PURE__ */ n.jsx("input", { type: "password", value: I(e), disabled: t, onChange: (a) => s(a.target.value) });
+function Fe({ value: e, disabled: t, onChange: a }) {
+  return /* @__PURE__ */ n.jsx("input", { type: "password", value: $(e), disabled: t, onChange: (i) => a(i.target.value) });
 }
-function ge({ setting: e, value: t, disabled: s, onChange: a }) {
+function we({ setting: e, value: t, disabled: a, onChange: i }) {
   return /* @__PURE__ */ n.jsx(
     "input",
     {
       type: "number",
-      value: I(t),
-      disabled: s,
-      onChange: (i) => a(j(e.jsonType) === "integer" ? Number.parseInt(i.target.value || "0", 10) : Number.parseFloat(i.target.value || "0"))
+      value: $(t),
+      disabled: a,
+      onChange: (d) => i(N(e.jsonType) === "integer" ? Number.parseInt(d.target.value || "0", 10) : Number.parseFloat(d.target.value || "0"))
     }
   );
 }
-function pe({ setting: e, value: t, disabled: s, onChange: a }) {
-  const i = JSON.stringify(t ?? "");
-  return /* @__PURE__ */ n.jsxs("select", { value: i, disabled: s, onChange: (l) => {
-    const c = e.options.find((d) => JSON.stringify(d.value) === l.target.value);
-    a(c?.value ?? "");
+function Ie({ setting: e, value: t, disabled: a, onChange: i }) {
+  const d = JSON.stringify(t ?? "");
+  return /* @__PURE__ */ n.jsxs("select", { value: d, disabled: a, onChange: (r) => {
+    const p = e.options.find((o) => JSON.stringify(o.value) === r.target.value);
+    i(p?.value ?? "");
   }, children: [
     e.required ? null : /* @__PURE__ */ n.jsx("option", { value: JSON.stringify(""), children: "Empty" }),
-    e.options.map((l) => /* @__PURE__ */ n.jsx("option", { value: JSON.stringify(l.value), children: l.label }, `${e.name}-${JSON.stringify(l.value)}`))
+    e.options.map((r) => /* @__PURE__ */ n.jsx("option", { value: JSON.stringify(r.value), children: r.label }, `${e.name}-${JSON.stringify(r.value)}`))
   ] });
 }
-function he({ setting: e, value: t, disabled: s, onChange: a }) {
-  const [i, l] = m(V(t, e)), [c, d] = m(!1);
+function Te({ setting: e, value: t, disabled: a, onChange: i }) {
+  const [d, r] = I(Z(t, e)), [p, o] = I(!1);
   return E(() => {
-    l(V(t, e)), d(!1);
+    r(Z(t, e)), o(!1);
   }, [e.name, t]), /* @__PURE__ */ n.jsxs(n.Fragment, { children: [
-    /* @__PURE__ */ n.jsx("textarea", { value: i, disabled: s, rows: 5, onChange: (o) => {
-      const u = o.target.value;
-      l(u);
+    /* @__PURE__ */ n.jsx("textarea", { value: d, disabled: a, rows: 5, onChange: (u) => {
+      const m = u.target.value;
+      r(m);
       try {
-        a(JSON.parse(u || Y(e))), d(!1);
+        i(JSON.parse(m || te(e))), o(!1);
       } catch {
-        d(!0);
+        o(!0);
       }
     } }),
-    c ? /* @__PURE__ */ n.jsx("small", { className: "feature-management-setting-error", children: "Invalid JSON" }) : null
+    p ? /* @__PURE__ */ n.jsx("small", { className: "feature-management-setting-error", children: "Invalid JSON" }) : null
   ] });
 }
-function F(e) {
+function J(e) {
   return {
     ...e,
     configuration: e.configuration && typeof e.configuration == "object" && !Array.isArray(e.configuration) ? { ...e.configuration } : {}
   };
 }
-function fe(e, t) {
-  return Object.prototype.hasOwnProperty.call(e.configuration, t.name) ? e.configuration[t.name] : t.defaultValue ?? xe(t);
+function Ae(e, t) {
+  return Object.prototype.hasOwnProperty.call(e.configuration, t.name) ? e.configuration[t.name] : t.defaultValue ?? Re(t);
 }
-function xe(e) {
-  const t = j(e.jsonType);
+function Re(e) {
+  const t = N(e.jsonType);
   return t === "boolean" ? !1 : t === "integer" || t === "number" ? 0 : t === "array" ? [] : t === "object" ? {} : "";
 }
-function I(e) {
+function $(e) {
   return e == null ? "" : typeof e == "object" ? JSON.stringify(e) : String(e);
 }
-function V(e, t) {
-  return e == null || e === "" ? Y(t) : JSON.stringify(e, null, 2);
+function Z(e, t) {
+  return e == null || e === "" ? te(t) : JSON.stringify(e, null, 2);
 }
-function Y(e) {
-  return j(e.jsonType) === "array" ? "[]" : "{}";
+function te(e) {
+  return N(e.jsonType) === "array" ? "[]" : "{}";
 }
-function je(e) {
+function Je(e) {
   const t = /* @__PURE__ */ new Map();
-  for (const s of e) {
-    const a = Q(s);
-    for (const i of a)
-      t.set(i, (t.get(i) ?? 0) + 1);
+  for (const a of e) {
+    const i = se(a);
+    for (const d of i)
+      t.set(d, (t.get(d) ?? 0) + 1);
   }
   return [
-    { id: k, label: "All categories", count: e.length },
-    ...Array.from(t.entries()).sort(([s], [a]) => J(s).localeCompare(J(a))).map(([s, a]) => ({ id: s, label: J(s), count: a }))
+    { id: T, label: "All categories", count: e.length },
+    ...Array.from(t.entries()).sort(([a], [i]) => H(a).localeCompare(H(i))).map(([a, i]) => ({ id: a, label: H(a), count: i }))
   ];
 }
-function be(e, t) {
-  return t === k ? e : e.filter((s) => Q(s).includes(t));
+function He(e, t) {
+  return t === T ? e : e.filter((a) => se(a).includes(t));
 }
-function Q(e) {
-  return e.categories.length > 0 ? e.categories : [U];
+function se(e) {
+  return e.categories.length > 0 ? e.categories : [ne];
 }
-function J(e) {
-  return e === U ? "Uncategorized" : e;
+function H(e) {
+  return e === ne ? "Uncategorized" : e;
 }
-function ye(e) {
+function De(e) {
   const t = /* @__PURE__ */ new Map();
-  for (const s of e) {
-    const a = s.group || s.category || "General", i = t.get(a);
-    i ? i.settings.push(s) : t.set(a, { id: a, label: a, settings: [s] });
+  for (const a of e) {
+    const i = a.group || a.category || "General", d = t.get(i);
+    d ? d.settings.push(a) : t.set(i, { id: i, label: i, settings: [a] });
   }
   return Array.from(t.values());
 }
-function w(e, t) {
+function D(e, t) {
   return (e.uiHint ?? "").toLowerCase().includes(t);
 }
-function j(e) {
+function N(e) {
   return (e ?? "").trim().toLowerCase();
 }
-function B(e) {
+function Oe(e, t) {
+  return (e ?? "").trim().toLowerCase() === (t ?? "").trim().toLowerCase();
+}
+function K(e) {
   return JSON.stringify(e.map((t) => ({
     id: t.id,
     enabled: t.enabled,
     configuration: t.enabled ? t.configuration : {}
-  })).sort((t, s) => t.id.localeCompare(s.id)));
+  })).sort((t, a) => t.id.localeCompare(a.id)));
 }
-function G(e) {
-  if (ve(e)) {
+function ee(e) {
+  if ($e(e)) {
     if (e.status === 409)
       return `The feature catalog changed before your changes were applied. Refresh and review the latest feature state. ${e.message}`;
     if (e.status === 400)
@@ -492,15 +734,15 @@ function G(e) {
   }
   return e instanceof Error ? e.message : String(e);
 }
-function ve(e) {
+function $e(e) {
   return e instanceof Error && typeof e.status == "number";
 }
 export {
-  re as FeatureManagementPage,
-  se as createApplyPayload,
-  G as getErrorMessage,
-  ae as isDirty,
-  Se as register,
-  ne as registerBuiltInSettingEditors,
-  te as selectSettingEditor
+  fe as FeatureManagementPage,
+  ge as createApplyPayload,
+  ee as getErrorMessage,
+  pe as isDirty,
+  _e as register,
+  he as registerBuiltInSettingEditors,
+  me as selectSettingEditor
 };

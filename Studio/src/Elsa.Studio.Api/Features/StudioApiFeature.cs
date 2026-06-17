@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Microsoft.AspNetCore.Routing;
@@ -8,6 +9,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Studio.Api.Features;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
+[ManifestFeatureCategory("Studio")]
+[ManifestFeatureCategory("API")]
+[ManifestFeatureCategory("Modules")]
 [ShellFeature(
     name: "StudioApi",
     DisplayName = "Elsa Studio API",

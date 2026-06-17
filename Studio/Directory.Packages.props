@@ -12,10 +12,14 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageVersion Include="Nuplane" Version="0.0.8" />
+    <PackageVersion Include="Nuplane.Admin" Version="0.0.8" />
+    <PackageVersion Include="Nuplane.Loading" Version="0.0.8" />
+    <PackageVersion Include="Nuplane.Sources.Directory" Version="0.0.8" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
+    <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
   </ItemGroup>
 </Project>
-

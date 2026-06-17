@@ -52,6 +52,29 @@ interface SettingGroupItem {
   settings: StudioSettingDescriptor[];
 }
 
+type FeatureHostId = "studio" | "server";
+type FeatureEndpointContext = Pick<ElsaStudioModuleApi["host"], "http">;
+
+interface FeatureHostConfig {
+  id: FeatureHostId;
+  label: string;
+  runtime: string;
+  context: FeatureEndpointContext;
+  writable: boolean;
+}
+
+interface FeatureHostState {
+  catalog: FeatureCatalogResponse | null;
+  draft: DraftFeature[];
+  selectedId: string;
+  checkedFeatureIds: Set<string>;
+  selectedCategory: string;
+  loading: boolean;
+  applying: boolean;
+  status: string | null;
+  error: string | null;
+}
+
 const AllCategoriesId = "__all";
 const UncategorizedId = "__uncategorized";
 
@@ -143,18 +166,55 @@ export function isDirty(current: FeatureCatalogResponse | null, draft: DraftFeat
   return current ? canonicalize(current.features) !== canonicalize(draft) : false;
 }
 
+function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
+  return [
+    {
+      id: "studio",
+      label: "Studio",
+      runtime: "Elsa.Studio.Web",
+      context: api.host,
+      writable: false
+    },
+    {
+      id: "server",
+      label: "Server",
+      runtime: "Elsa.Server",
+      context: api.backend,
+      writable: true
+    }
+  ];
+}
+
+function createInitialHostState(): FeatureHostState {
+  return {
+    catalog: null,
+    draft: [],
+    selectedId: "",
+    checkedFeatureIds: new Set(),
+    selectedCategory: AllCategoriesId,
+    loading: true,
+    applying: false,
+    status: null,
+    error: null
+  };
+}
+
 export function FeatureManagementPage() {
-  const [catalog, setCatalog] = useState<FeatureCatalogResponse | null>(null);
-  const [draft, setDraft] = useState<DraftFeature[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(AllCategoriesId);
-  const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
+  const [activeHostId, setActiveHostId] = useState<FeatureHostId>("server");
+  const [hostStates, setHostStates] = useState<Record<FeatureHostId, FeatureHostState>>(() => ({
+    studio: createInitialHostState(),
+    server: createInitialHostState()
+  }));
+
+  const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
+  const hostState = hostStates[activeHost.id];
+  const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, loading, applying, status, error } = hostState;
 
   useEffect(() => {
-    void refresh();
+    for (const host of hosts) {
+      void refreshHost(host.id);
+    }
   }, []);
 
   const categories = useMemo(() => getCategoryFilters(draft), [draft]);
@@ -168,62 +228,142 @@ export function FeatureManagementPage() {
   const dirty = isDirty(catalog, draft);
   const enabledCount = draft.filter(feature => feature.enabled).length;
   const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
+  const visibleFeatureIds = useMemo(() => new Set(filteredDraft.map(feature => feature.id)), [filteredDraft]);
+  const checkedVisibleCount = filteredDraft.filter(feature => checkedFeatureIds.has(feature.id)).length;
+  const allVisibleChecked = filteredDraft.length > 0 && checkedVisibleCount === filteredDraft.length;
+  const checkedFeatures = draft.filter(feature => checkedFeatureIds.has(feature.id));
+  const readOnly = !activeHost.writable;
+  const editingDisabled = loading || applying || readOnly;
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.id !== selectedId) {
-      setSelectedId(selectedFeature.id);
+      updateHostState(activeHost.id, state => ({ ...state, selectedId: selectedFeature.id }));
     }
-  }, [selectedFeature, selectedId]);
+  }, [activeHost.id, selectedFeature, selectedId]);
 
   useEffect(() => {
     if (!categories.some(category => category.id === selectedCategory)) {
-      setSelectedCategory(AllCategoriesId);
+      updateHostState(activeHost.id, state => ({ ...state, selectedCategory: AllCategoriesId }));
     }
-  }, [categories, selectedCategory]);
+  }, [activeHost.id, categories, selectedCategory]);
 
-  async function refresh() {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    updateHostState(activeHost.id, state => {
+      const existingIds = new Set(state.draft.map(feature => feature.id));
+      const next = new Set(Array.from(state.checkedFeatureIds).filter(id => existingIds.has(id)));
+      return next.size === state.checkedFeatureIds.size ? state : { ...state, checkedFeatureIds: next };
+    });
+  }, [activeHost.id, draft]);
+
+  function updateHostState(hostId: FeatureHostId, update: (state: FeatureHostState) => FeatureHostState) {
+    setHostStates(current => ({
+      ...current,
+      [hostId]: update(current[hostId])
+    }));
+  }
+
+  async function refreshHost(hostId = activeHost.id) {
+    const host = hosts.find(candidate => candidate.id === hostId) ?? activeHost;
+    updateHostState(host.id, state => ({ ...state, loading: true, error: null }));
     try {
-      const response = await moduleApi.backend.http.getJson<FeatureCatalogResponse>("/modularity/features");
-      setCatalog(response);
-      setDraft(response.features.map(toDraftFeature));
-      setStatus(null);
+      const response = await host.context.http.getJson<FeatureCatalogResponse>("/modularity/features");
+      updateHostState(host.id, state => ({
+        ...state,
+        catalog: response,
+        draft: response.features.map(toDraftFeature),
+        checkedFeatureIds: new Set(),
+        status: null,
+        loading: false
+      }));
     } catch (e) {
-      setError(getErrorMessage(e));
-    } finally {
-      setLoading(false);
+      updateHostState(host.id, state => ({ ...state, error: getErrorMessage(e), loading: false }));
     }
   }
 
   async function apply() {
-    if (!catalog || !dirty) {
+    if (!catalog || !dirty || readOnly) {
       return;
     }
 
-    setApplying(true);
-    setError(null);
-    setStatus(null);
+    updateHostState(activeHost.id, state => ({ ...state, applying: true, error: null, status: null }));
     try {
-      const response = await moduleApi.backend.http.postJson<FeatureApplyResult>(
+      const response = await activeHost.context.http.postJson<FeatureApplyResult>(
         "/modularity/features/apply",
         createApplyPayload(catalog.revision, draft));
-      setCatalog(response.catalog);
-      setDraft(response.catalog.features.map(toDraftFeature));
-      setStatus(`Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`);
+      updateHostState(activeHost.id, state => ({
+        ...state,
+        catalog: response.catalog,
+        draft: response.catalog.features.map(toDraftFeature),
+        status: `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`,
+        applying: false
+      }));
     } catch (e) {
-      setError(getErrorMessage(e));
-    } finally {
-      setApplying(false);
+      updateHostState(activeHost.id, state => ({ ...state, error: getErrorMessage(e), applying: false }));
     }
   }
 
   function updateFeature(id: string, update: (feature: DraftFeature) => DraftFeature) {
-    setDraft(features => features.map(feature => feature.id === id ? update(feature) : feature));
+    if (readOnly) {
+      return;
+    }
+
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      draft: state.draft.map(feature => feature.id === id ? update(feature) : feature)
+    }));
   }
 
   function toggleFeature(feature: DraftFeature) {
     updateFeature(feature.id, current => ({ ...current, enabled: !current.enabled }));
+  }
+
+  function toggleCheckedFeature(id: string, checked: boolean) {
+    if (readOnly) {
+      return;
+    }
+
+    updateHostState(activeHost.id, state => {
+      const next = new Set(state.checkedFeatureIds);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return { ...state, checkedFeatureIds: next };
+    });
+  }
+
+  function toggleVisibleFeatureSelection() {
+    if (readOnly) {
+      return;
+    }
+
+    updateHostState(activeHost.id, state => {
+      const next = new Set(state.checkedFeatureIds);
+      if (allVisibleChecked) {
+        for (const id of visibleFeatureIds) {
+          next.delete(id);
+        }
+      } else {
+        for (const id of visibleFeatureIds) {
+          next.add(id);
+        }
+      }
+      return { ...state, checkedFeatureIds: next };
+    });
+  }
+
+  function setCheckedFeaturesEnabled(enabled: boolean) {
+    if (readOnly || checkedFeatureIds.size === 0) {
+      return;
+    }
+
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      draft: state.draft.map(feature => state.checkedFeatureIds.has(feature.id)
+        ? { ...feature, enabled }
+        : feature)
+    }));
   }
 
   function updateSetting(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown) {
@@ -241,9 +381,12 @@ export function FeatureManagementPage() {
       return;
     }
 
-    setDraft(catalog.features.map(toDraftFeature));
-    setStatus(null);
-    setError(null);
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      draft: catalog.features.map(toDraftFeature),
+      status: null,
+      error: null
+    }));
   }
 
   return (
@@ -251,25 +394,28 @@ export function FeatureManagementPage() {
       <div className="section-header feature-management-header">
         <div>
           <h2>Features</h2>
-          <p>{enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
+          <p>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
         </div>
         <div className="feature-management-actions">
-          <button type="button" onClick={refresh} disabled={loading || applying}>Refresh</button>
-          <button type="button" onClick={reset} disabled={!dirty || loading || applying}>Reset</button>
-          <button type="button" className="primary" onClick={apply} disabled={!dirty || loading || applying}>
+          <button type="button" onClick={() => refreshHost()} disabled={loading || applying}>Refresh</button>
+          <button type="button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
+          <button type="button" className="primary" onClick={apply} disabled={!dirty || loading || applying || readOnly}>
             {applying ? "Applying" : "Apply"}
           </button>
         </div>
       </div>
 
+      <HostTabs hosts={hosts} activeHostId={activeHost.id} onSelect={setActiveHostId} />
+
       {error ? <div className="feature-management-error">{error}</div> : null}
       {status ? <div className="feature-management-status">{status}</div> : null}
+      {readOnly ? <div className="feature-management-status">Studio features are shown from the Studio host runtime. Feature toggles are available for backend features on the Server tab.</div> : null}
 
       <div className="feature-management-layout">
         <CategoryFilter
           categories={categories}
           selectedCategory={selectedCategory}
-          onSelect={setSelectedCategory}
+          onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
         />
 
         <div className="feature-management-list-column">
@@ -281,6 +427,19 @@ export function FeatureManagementPage() {
             <span>{filteredDraft.filter(feature => feature.enabled).length} enabled</span>
           </div>
 
+          <BulkFeatureActions
+            disabled={editingDisabled || filteredDraft.length === 0}
+            selectedCount={checkedFeatureIds.size}
+            visibleCount={filteredDraft.length}
+            visibleSelectedCount={checkedVisibleCount}
+            selectedEnabledCount={checkedFeatures.filter(feature => feature.enabled).length}
+            allVisibleChecked={allVisibleChecked}
+            onToggleVisible={toggleVisibleFeatureSelection}
+            onClearSelection={() => setCheckedFeatureIds(new Set())}
+            onEnableSelected={() => setCheckedFeaturesEnabled(true)}
+            onDisableSelected={() => setCheckedFeaturesEnabled(false)}
+          />
+
           <div className="feature-management-list" aria-busy={loading}>
             {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
             {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
@@ -290,8 +449,11 @@ export function FeatureManagementPage() {
                 key={feature.id}
                 feature={feature}
                 selected={feature.id === selectedFeature?.id}
-                onSelect={() => setSelectedId(feature.id)}
+                checked={checkedFeatureIds.has(feature.id)}
+                disabled={editingDisabled}
+                onSelect={() => updateHostState(activeHost.id, state => ({ ...state, selectedId: feature.id }))}
                 onToggle={() => toggleFeature(feature)}
+                onCheckedChange={checked => toggleCheckedFeature(feature.id, checked)}
               />
             ))}
           </div>
@@ -299,7 +461,7 @@ export function FeatureManagementPage() {
 
         <FeatureInspector
           feature={selectedFeature}
-          disabled={applying || loading}
+          disabled={editingDisabled}
           dirty={dirty}
           onToggle={toggleFeature}
           onSettingChange={updateSetting}
@@ -308,6 +470,93 @@ export function FeatureManagementPage() {
         />
       </div>
     </section>
+  );
+}
+
+function HostTabs({
+  hosts,
+  activeHostId,
+  onSelect
+}: {
+  hosts: FeatureHostConfig[];
+  activeHostId: FeatureHostId;
+  onSelect(hostId: FeatureHostId): void;
+}) {
+  return (
+    <div className="feature-management-host-tabs" role="tablist" aria-label="Feature host">
+      {hosts.map(host => (
+        <button
+          key={host.id}
+          type="button"
+          role="tab"
+          aria-selected={host.id === activeHostId}
+          className={host.id === activeHostId ? "active" : ""}
+          onClick={() => onSelect(host.id)}
+        >
+          <span>{host.label}</span>
+          <small>{host.runtime}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BulkFeatureActions({
+  disabled,
+  selectedCount,
+  visibleCount,
+  visibleSelectedCount,
+  selectedEnabledCount,
+  allVisibleChecked,
+  onToggleVisible,
+  onClearSelection,
+  onEnableSelected,
+  onDisableSelected
+}: {
+  disabled: boolean;
+  selectedCount: number;
+  visibleCount: number;
+  visibleSelectedCount: number;
+  selectedEnabledCount: number;
+  allVisibleChecked: boolean;
+  onToggleVisible(): void;
+  onClearSelection(): void;
+  onEnableSelected(): void;
+  onDisableSelected(): void;
+}) {
+  return (
+    <div className="feature-management-bulk-actions" aria-label="Bulk feature actions">
+      <label>
+        <input
+          type="checkbox"
+          checked={allVisibleChecked}
+          disabled={disabled}
+          onChange={onToggleVisible}
+          aria-label={allVisibleChecked ? "Clear visible feature selection" : "Select visible features"}
+        />
+        <span>{visibleSelectedCount}/{visibleCount} visible</span>
+      </label>
+      <div>
+        <span title={`${selectedEnabledCount} enabled`}>{selectedCount} selected</span>
+        <button
+          type="button"
+          aria-label="Enable selected features"
+          disabled={disabled || selectedCount === 0 || selectedEnabledCount === selectedCount}
+          onClick={onEnableSelected}
+        >
+          Enable
+        </button>
+        <button
+          type="button"
+          aria-label="Disable selected features"
+          disabled={disabled || selectedCount === 0 || selectedEnabledCount === 0}
+          onClick={onDisableSelected}
+        >
+          Disable
+        </button>
+        <button type="button" aria-label="Clear selected features" disabled={disabled || selectedCount === 0} onClick={onClearSelection}>Clear</button>
+      </div>
+    </div>
   );
 }
 
@@ -343,31 +592,49 @@ function CategoryFilter({
 function FeatureCard({
   feature,
   selected,
+  checked,
+  disabled,
   onSelect,
-  onToggle
+  onToggle,
+  onCheckedChange
 }: {
   feature: DraftFeature;
   selected: boolean;
+  checked: boolean;
+  disabled: boolean;
   onSelect(): void;
   onToggle(): void;
+  onCheckedChange(checked: boolean): void;
 }) {
+  const displayName = feature.displayName || feature.id;
+  const showTechnicalName = !sameText(displayName, feature.id);
+
   return (
     <article className={selected ? "feature-management-card selected" : "feature-management-card"}>
+      <input
+        type="checkbox"
+        className="feature-management-row-checkbox"
+        checked={checked}
+        disabled={disabled}
+        aria-label={`Select ${feature.displayName || feature.id}`}
+        onChange={event => onCheckedChange(event.target.checked)}
+      />
       <button
         type="button"
         className={feature.enabled ? "feature-management-switch enabled" : "feature-management-switch"}
         onClick={onToggle}
+        disabled={disabled}
         role="switch"
         aria-checked={feature.enabled}
         aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.displayName || feature.id}`}
       />
       <button type="button" className="feature-management-feature-button" onClick={onSelect}>
         <span className="feature-management-card-title">
-          <strong>{feature.displayName || feature.id}</strong>
+          <strong>{displayName}</strong>
           {feature.experimental ? <em>Experimental</em> : null}
           {feature.advanced ? <em>Advanced</em> : null}
         </span>
-        <code>{feature.id}</code>
+        {showTechnicalName ? <code>{feature.id}</code> : null}
         {feature.description ? <small>{feature.description}</small> : null}
         <span className="feature-management-card-meta">
           <span>{feature.sourceKind}</span>
@@ -402,14 +669,14 @@ function FeatureInspector({
   }
 
   const settingGroups = getSettingGroups(feature.settings);
+  const displayName = feature.displayName || feature.id;
 
   return (
     <aside className="feature-management-inspector">
       <div className="feature-management-inspector-heading">
         <div>
           <span>{feature.sourceKind}</span>
-          <h3>{feature.displayName || feature.id}</h3>
-          <code>{feature.id}</code>
+          <h3>{displayName}</h3>
         </div>
         <button type="button" onClick={() => onToggle(feature)} disabled={disabled}>
           {feature.enabled ? "Disable" : "Enable"}
@@ -418,19 +685,8 @@ function FeatureInspector({
 
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
-      {feature.packageId ? <p className="feature-management-muted">{feature.packageId} {feature.packageVersion}</p> : null}
-      {feature.categories.length > 0 ? (
-        <div className="feature-management-inspector-tags">
-          {feature.categories.map(category => <span key={category}>{category}</span>)}
-        </div>
-      ) : null}
 
-      <dl className="feature-management-metadata">
-        <div><dt>Source</dt><dd>{feature.sourceKind}</dd></div>
-        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
-        {feature.manifestHash ? <div><dt>Manifest</dt><dd>{feature.manifestHash}</dd></div> : null}
-        {feature.manifestPath ? <div><dt>Path</dt><dd>{feature.manifestPath}</dd></div> : null}
-      </dl>
+      <FeatureMetadata feature={feature} displayName={displayName} />
 
       {feature.settings.length === 0 ? (
         <p className="feature-management-muted">No configurable settings.</p>
@@ -468,6 +724,33 @@ function FeatureInspector({
         </div>
       </div>
     </aside>
+  );
+}
+
+function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; displayName: string }) {
+  const categories = feature.categories.length > 0 ? feature.categories.join(", ") : "Uncategorized";
+  const packageName = feature.packageId
+    ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
+    : "Not package-backed";
+
+  return (
+    <section className="feature-management-metadata" aria-label="Feature metadata">
+      <h4>Metadata</h4>
+      <dl className="feature-management-detail-list">
+        <div><dt>Display name</dt><dd>{displayName}</dd></div>
+        <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
+        <div><dt>Status</dt><dd>{feature.enabled ? "Enabled" : "Disabled"}</dd></div>
+        <div><dt>Source</dt><dd>{feature.sourceKind}</dd></div>
+        <div><dt>Categories</dt><dd>{categories}</dd></div>
+        <div><dt>Package</dt><dd>{packageName}</dd></div>
+        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
+        <div><dt>Advanced</dt><dd>{feature.advanced ? "Yes" : "No"}</dd></div>
+        <div><dt>Experimental</dt><dd>{feature.experimental ? "Yes" : "No"}</dd></div>
+        {feature.description ? <div><dt>Description</dt><dd>{feature.description}</dd></div> : null}
+        {feature.manifestHash ? <div><dt>Manifest hash</dt><dd>{feature.manifestHash}</dd></div> : null}
+        {feature.manifestPath ? <div><dt>Manifest path</dt><dd>{feature.manifestPath}</dd></div> : null}
+      </dl>
+    </section>
   );
 }
 
@@ -651,6 +934,10 @@ function includesHint(setting: StudioSettingDescriptor, value: string) {
 
 function normalizeType(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function sameText(left?: string | null, right?: string | null) {
+  return (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
 }
 
 function canonicalize(features: FeatureCatalogItem[] | DraftFeature[]) {

@@ -33,11 +33,12 @@ export async function loadStudioModules(
     }
 
     try {
+      const moduleVersion = manifest.version;
       for (const style of manifest.styles) {
-        await loadStyle(style);
+        await loadStyle(addModuleVersion(style, moduleVersion));
       }
 
-      const module = await importModule(manifest.entry);
+      const module = await importModule(addModuleVersion(manifest.entry, moduleVersion));
       await module.register(api);
       diagnostics.push(addDiagnostic(api, manifest.id, "loaded", "Module activated."));
     } catch (error) {
@@ -62,6 +63,18 @@ export function isVersionRangeCompatible(range: string, actual: string): boolean
 
 function major(version: string): string {
   return version.split(".")[0] ?? version;
+}
+
+export function addModuleVersion(asset: string, version: string): string {
+  if (!asset || !version || asset.includes("studioModuleVersion=")) {
+    return asset;
+  }
+
+  const hashIndex = asset.indexOf("#");
+  const pathAndQuery = hashIndex === -1 ? asset : asset.slice(0, hashIndex);
+  const hash = hashIndex === -1 ? "" : asset.slice(hashIndex);
+  const separator = pathAndQuery.includes("?") ? "&" : "?";
+  return `${pathAndQuery}${separator}studioModuleVersion=${encodeURIComponent(version)}${hash}`;
 }
 
 function addDiagnostic(
@@ -93,4 +106,3 @@ async function defaultLoadStyle(href: string): Promise<void> {
     document.head.appendChild(link);
   });
 }
-

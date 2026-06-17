@@ -270,7 +270,11 @@ function withJsonAccept(init?: RequestInit): RequestInit | undefined {
     headers.set("Accept", "application/json");
   }
 
-  return init ? { ...init, headers } : { headers };
+  return {
+    ...init,
+    cache: init?.cache ?? "no-store",
+    headers
+  };
 }
 
 function withJsonContentTypeAndAccept(headers?: HeadersInit) {

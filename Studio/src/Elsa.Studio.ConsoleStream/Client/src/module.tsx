@@ -1,7 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
+
+type ConsoleHostId = "server" | "studio";
+
+interface ConsoleTarget {
+  id: ConsoleHostId;
+  label: string;
+  context: StudioEndpointContext;
+  endpointPrefix: string;
+}
+
+interface ConsoleLogSource {
+  id: string;
+  displayName?: string | null;
+  serviceName?: string | null;
+  processId?: number | null;
+  machineName?: string | null;
+  podName?: string | null;
+  containerName?: string | null;
+  namespace?: string | null;
+  nodeName?: string | null;
+  lastSeen?: string | null;
+  health?: number | string | null;
+}
 
 interface ConsoleLogLine {
   id?: string;
@@ -10,6 +33,7 @@ interface ConsoleLogLine {
   sequence?: number;
   stream?: number | string;
   text?: string;
+  source?: ConsoleLogSource | null;
 }
 
 interface ConsoleDroppedSummary {
@@ -20,11 +44,13 @@ interface ConsoleStreamItem {
   line?: ConsoleLogLine;
   droppedLines?: ConsoleDroppedSummary;
   dropped?: ConsoleDroppedSummary;
+  source?: ConsoleLogSource;
 }
 
 interface ConsoleRecentResponse {
   items?: ConsoleLogLine[];
   lines?: ConsoleLogLine[];
+  sources?: ConsoleLogSource[];
 }
 
 export interface ConsoleEntry {
@@ -33,6 +59,8 @@ export interface ConsoleEntry {
   sequence: number | null;
   stream: "stdout" | "stderr";
   text: string;
+  sourceId: string | null;
+  sourceLabel: string | null;
 }
 
 export interface AnsiSegment {
@@ -47,9 +75,10 @@ interface AnsiState {
   background: string;
 }
 
-const endpointPrefix = "/_elsa/studio/diagnostics/console-logs";
-const recentPath = `${endpointPrefix}/recent`;
-const hubPath = `${endpointPrefix}/hub`;
+const consoleTargetDefinitions: Record<ConsoleHostId, Pick<ConsoleTarget, "id" | "label" | "endpointPrefix">> = {
+  server: { id: "server", label: "Server", endpointPrefix: "/diagnostics/console-logs" },
+  studio: { id: "studio", label: "Studio", endpointPrefix: "/_elsa/studio/diagnostics/console-logs" }
+};
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
 const consoleStreamServerTimeoutInMilliseconds = 120_000;
@@ -108,6 +137,10 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
+  const [hostId, setHostId] = useState<ConsoleHostId>("server");
+  const [sources, setSources] = useState<ConsoleLogSource[]>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [sourcesState, setSourcesState] = useState<"loading" | "ready" | "failed">("loading");
   const [lines, setLines] = useState<ConsoleEntry[]>([]);
   const [lineCount, setLineCount] = useState(0);
   const [connected, setConnected] = useState(false);
@@ -120,6 +153,11 @@ export function ConsoleStreamPanel() {
 
   const visibleLines = paused ? pausedLines ?? lines : lines;
   const queuedLineCount = paused ? Math.max(0, lineCount - pausedLineCount) : 0;
+  const target = useMemo(() => createConsoleTarget(hostId), [hostId]);
+  const selectedSource = useMemo(
+    () => sources.find(source => source.id === selectedSourceId) ?? null,
+    [selectedSourceId, sources]);
+  const sourceFilter = selectedSourceId || null;
 
   const addEntries = useCallback((entries: ConsoleEntry[]) => {
     const uniqueEntries: ConsoleEntry[] = [];
@@ -146,10 +184,40 @@ export function ConsoleStreamPanel() {
   }, [addEntries]);
 
   const loadRecentLines = useCallback(async () => {
-    const response = await moduleApi.backend.http.getJson<ConsoleRecentResponse>(`${recentPath}?limit=${consoleReplayLimit}`);
+    const response = await target.context.http.getJson<ConsoleRecentResponse>(createRecentPath(target, sourceFilter));
+    if (response.sources) {
+      setSources(response.sources);
+    }
+
     const recentLines = response.items ?? response.lines ?? [];
     addEntries(recentLines.map(createConsoleEntryFromLine));
-  }, [addEntries]);
+  }, [addEntries, sourceFilter, target]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSourcesState("loading");
+    setSelectedSourceId("");
+
+    async function loadSources() {
+      try {
+        const response = await target.context.http.getJson<ConsoleLogSource[]>(`${target.endpointPrefix}/sources`);
+        if (!cancelled) {
+          setSources(response);
+          setSourcesState("ready");
+        }
+      } catch {
+        if (!cancelled) {
+          setSources([]);
+          setSourcesState("failed");
+        }
+      }
+    }
+
+    void loadSources();
+    return () => {
+      cancelled = true;
+    };
+  }, [target]);
 
   useEffect(() => {
     window.localStorage.setItem(autoScrollStorageKey, String(autoScroll));
@@ -169,8 +237,13 @@ export function ConsoleStreamPanel() {
   useEffect(() => {
     let cancelled = false;
     let subscription: signalR.ISubscription<ConsoleStreamItem> | null = null;
+    seenLineIds.current.clear();
+    setLines([]);
+    setLineCount(0);
+    setPausedLines(null);
+    setPausedLineCount(0);
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(resolveBackendUrl(hubPath))
+      .withUrl(resolveTargetUrl(target, `${target.endpointPrefix}/hub`))
       .withAutomaticReconnect()
       .build();
     connection.serverTimeoutInMilliseconds = consoleStreamServerTimeoutInMilliseconds;
@@ -194,13 +267,15 @@ export function ConsoleStreamPanel() {
       }
 
       disposeSubscription();
-      subscription = connection.stream<ConsoleStreamItem>("StreamAsync", { limit: consoleReplayLimit }).subscribe({
+      subscription = connection.stream<ConsoleStreamItem>("StreamAsync", createConsoleFilter(sourceFilter)).subscribe({
         next: item => {
           if (item?.line) {
             addEntries([createConsoleEntryFromLine(item.line)]);
           } else if (item?.droppedLines || item?.dropped) {
             const dropped = item.droppedLines ?? item.dropped;
             addLine("stderr", `${dropped?.count ?? 0} console lines were dropped.`);
+          } else if (item?.source) {
+            setSources(current => upsertConsoleSource(current, item.source!));
           }
         },
         error: error => {
@@ -245,7 +320,7 @@ export function ConsoleStreamPanel() {
       disposeSubscription();
       void connection.stop();
     };
-  }, [addEntries, addLine, loadRecentLines]);
+  }, [addEntries, addLine, loadRecentLines, sourceFilter, target]);
 
   const renderedLines = useMemo(
     () => visibleLines.map(line => ({ ...line, renderedText: renderConsoleText(line.text) })),
@@ -276,10 +351,31 @@ export function ConsoleStreamPanel() {
     <section className="console-stream-panel">
       <header className="console-stream-header">
         <div>
-          <h2>Backend console</h2>
-          {queuedLineCount > 0 ? <p>{queuedLineCount} buffered while paused</p> : null}
+          <h2>{target.label} console</h2>
+          <p>{getConsolePanelDetail(selectedSource, sourcesState, queuedLineCount)}</p>
         </div>
         <div className="console-stream-tools">
+          <div className="console-stream-hosts" role="group" aria-label="Console host">
+            {Object.values(consoleTargetDefinitions).map(host => (
+              <button
+                type="button"
+                className={host.id === hostId ? "active" : ""}
+                aria-pressed={host.id === hostId}
+                onClick={() => setHostId(host.id)}
+                key={host.id}>
+                {host.label}
+              </button>
+            ))}
+          </div>
+          <select
+            aria-label="Console source"
+            value={selectedSourceId}
+            onChange={event => setSelectedSourceId(event.target.value)}>
+            <option value="">All sources</option>
+            {sources.map(source => (
+              <option value={source.id} key={source.id}>{formatConsoleSourceLabel(source)}</option>
+            ))}
+          </select>
           <span className={connected ? "console-stream-status online" : "console-stream-status"} />
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>
@@ -297,12 +393,14 @@ export function ConsoleStreamPanel() {
         {renderedLines.length === 0 ? (
           <div className="console-stream-line stdout">
             <span>{new Date().toLocaleTimeString()}</span>
+            <small>{selectedSource ? formatConsoleSourceLabel(selectedSource) : "All sources"}</small>
             <code>Console stream is ready.</code>
           </div>
         ) : null}
         {renderedLines.map(line => (
           <div className={`console-stream-line ${line.stream}`} key={line.id}>
             <span>{new Date(line.timestamp).toLocaleTimeString()}</span>
+            <small>{line.sourceLabel ?? "local"}</small>
             <code>{line.renderedText}</code>
           </div>
         ))}
@@ -334,7 +432,9 @@ export function createConsoleEntry(stream: "stdout" | "stderr", text: string): C
     timestamp: new Date().toISOString(),
     sequence: null,
     stream,
-    text
+    text,
+    sourceId: null,
+    sourceLabel: null
   };
 }
 
@@ -344,8 +444,27 @@ export function createConsoleEntryFromLine(line: ConsoleLogLine): ConsoleEntry {
     timestamp: line.timestamp ?? line.receivedAt ?? new Date().toISOString(),
     sequence: line.sequence ?? null,
     stream: getConsoleStreamName(line.stream),
-    text: line.text ?? ""
+    text: line.text ?? "",
+    sourceId: line.source?.id ?? null,
+    sourceLabel: line.source ? formatConsoleSourceLabel(line.source) : null
   };
+}
+
+export function formatConsoleSourceLabel(source: ConsoleLogSource): string {
+  if (source.podName) {
+    return [source.namespace, source.podName, source.containerName].filter(Boolean).join(" / ");
+  }
+
+  const name = source.displayName || source.serviceName || source.id;
+  if (source.machineName && source.processId) {
+    return `${name} · ${source.machineName}:${source.processId}`;
+  }
+
+  return name;
+}
+
+export function createConsoleFilter(sourceId: string | null) {
+  return sourceId ? { limit: consoleReplayLimit, sourceId } : { limit: consoleReplayLimit };
 }
 
 export function parseAnsiSegments(text: string): AnsiSegment[] {
@@ -440,6 +559,50 @@ export function isRecoverableConsoleStreamError(error: unknown) {
   return getErrorMessage(error) === consoleStreamTimeoutMessage;
 }
 
-function resolveBackendUrl(path: string) {
-  return new URL(path, moduleApi.backend.baseUrl).toString();
+function createConsoleTarget(hostId: ConsoleHostId): ConsoleTarget {
+  const definition = consoleTargetDefinitions[hostId];
+  return {
+    ...definition,
+    context: hostId === "server" ? moduleApi.backend : moduleApi.host
+  };
+}
+
+function createRecentPath(target: ConsoleTarget, sourceId: string | null) {
+  const query = new URLSearchParams({ limit: String(consoleReplayLimit) });
+  if (sourceId) {
+    query.set("sourceId", sourceId);
+  }
+
+  return `${target.endpointPrefix}/recent?${query}`;
+}
+
+function resolveTargetUrl(target: ConsoleTarget, path: string) {
+  return new URL(path, target.context.baseUrl).toString();
+}
+
+function upsertConsoleSource(sources: ConsoleLogSource[], source: ConsoleLogSource) {
+  const index = sources.findIndex(candidate => candidate.id === source.id);
+  if (index === -1) {
+    return [...sources, source].sort(compareConsoleSources);
+  }
+
+  const next = [...sources];
+  next[index] = source;
+  return next.sort(compareConsoleSources);
+}
+
+function compareConsoleSources(left: ConsoleLogSource, right: ConsoleLogSource) {
+  return formatConsoleSourceLabel(left).localeCompare(formatConsoleSourceLabel(right));
+}
+
+function getConsolePanelDetail(source: ConsoleLogSource | null, sourcesState: "loading" | "ready" | "failed", queuedLineCount: number) {
+  if (queuedLineCount > 0) {
+    return `${queuedLineCount} buffered while paused`;
+  }
+
+  if (source) {
+    return source.podName ? [source.namespace, source.nodeName].filter(Boolean).join(" / ") : source.id;
+  }
+
+  return sourcesState === "loading" ? "Loading sources" : sourcesState === "failed" ? "Sources unavailable" : "Merged source stream";
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   appendConsoleEntries,
+  createConsoleFilter,
   createConsoleEntryFromLine,
+  formatConsoleSourceLabel,
   getConsoleStreamName,
   parseAnsiSegments,
   isRecoverableConsoleStreamError,
@@ -42,7 +44,15 @@ describe("console stream module", () => {
       receivedAt: "2026-06-15T00:00:00.000Z",
       sequence: 5,
       stream: 1,
-      text: "failed"
+      text: "failed",
+      source: {
+        id: "pod-source",
+        displayName: "Elsa.Server",
+        serviceName: "elsa-server",
+        podName: "elsa-server-7d9f",
+        containerName: "server",
+        namespace: "prod"
+      }
     });
 
     expect(entry).toEqual({
@@ -50,7 +60,9 @@ describe("console stream module", () => {
       timestamp: "2026-06-15T00:00:00.000Z",
       sequence: 5,
       stream: "stderr",
-      text: "failed"
+      text: "failed",
+      sourceId: "pod-source",
+      sourceLabel: "prod / elsa-server-7d9f / server"
     });
   });
 
@@ -75,6 +87,27 @@ describe("console stream module", () => {
     expect(isRecoverableConsoleStreamError(new Error("Server timeout elapsed without receiving a message from the server."))).toBe(true);
     expect(isRecoverableConsoleStreamError(new Error("Something else"))).toBe(false);
   });
+
+  it("formats process and pod source labels", () => {
+    expect(formatConsoleSourceLabel({
+      id: "machine:123",
+      displayName: "Elsa.Server",
+      machineName: "machine",
+      processId: 123
+    })).toBe("Elsa.Server · machine:123");
+
+    expect(formatConsoleSourceLabel({
+      id: "pod-source",
+      podName: "elsa-server-7d9f",
+      containerName: "server",
+      namespace: "prod"
+    })).toBe("prod / elsa-server-7d9f / server");
+  });
+
+  it("omits sourceId when all sources are selected", () => {
+    expect(createConsoleFilter(null)).toEqual({ limit: 2000 });
+    expect(createConsoleFilter("source-1")).toEqual({ limit: 2000, sourceId: "source-1" });
+  });
 });
 
 function entry(sequence: number): ConsoleEntry {
@@ -83,6 +116,8 @@ function entry(sequence: number): ConsoleEntry {
     timestamp: new Date(sequence).toISOString(),
     sequence,
     stream: "stdout",
-    text: `line ${sequence}`
+    text: `line ${sequence}`,
+    sourceId: null,
+    sourceLabel: null
   };
 }

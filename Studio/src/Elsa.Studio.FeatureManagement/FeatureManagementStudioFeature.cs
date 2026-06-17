@@ -1,8 +1,13 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.FeatureManagement;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
+[ManifestFeatureCategory("Studio")]
+[ManifestFeatureCategory("Settings")]
+[ManifestFeatureCategory("Features")]
 [ShellFeature(
     name: "FeatureManagement",
     DisplayName = "Feature management module",

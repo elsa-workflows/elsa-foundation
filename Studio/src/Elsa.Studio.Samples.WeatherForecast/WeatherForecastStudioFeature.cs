@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Studio.Samples.WeatherForecast.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +8,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Studio.Samples.WeatherForecast;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
+[ManifestFeatureCategory("Studio")]
+[ManifestFeatureCategory("Samples")]
+[ManifestFeatureCategory("Weather")]
 [ShellFeature(
     name: "WeatherForecastSample",
     DisplayName = "Weather forecast sample module",

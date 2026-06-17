@@ -6,6 +6,20 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Admin" />
+    <PackageReference Include="Nuplane.Loading" />
+    <PackageReference Include="Nuplane.Sources.Directory" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="packages\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="nuplane-management.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
