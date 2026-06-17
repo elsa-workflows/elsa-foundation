@@ -85,7 +85,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Activities flowchart (runtime composite activity contracts + gateway policies) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
+| Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`src/Elsa/Activities/Sequence/EXTENSION_POINTS.md`](src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) |
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |

@@ -1,15 +1,22 @@
 # Elsa.Activities.Flowchart Extension Points
 
+## Scoped execution seam
+
+`FlowchartExecutionEngine` is the activity-owned scoped execution seam. It owns Flowchart runtime state mutation, child scheduling metadata, arrival recording, implicit join evaluation, loop/race scope creation, diagnostics, and deferred composite completion.
+
+The scoped execution model is intentionally not an extension point directly: custom gateway behavior crosses the public policy contract below, and `FlowchartExecutionEngine` remains the authority that validates and applies policy commands.
+
 ## Implementable contributor interfaces
 
 ### `IFlowchartPolicy`
 
 - **Kind:** Contributor (policy decision provider)
 - **Contract:** `Elsa.Activities.Flowchart.Contracts.IFlowchartPolicy`
+- **Policy contract:** policies receive `IFlowchartPolicyContext` and return `FlowchartPolicyDecision` commands for `FlowchartExecutionEngine` to validate and apply.
 - **Registration:** Register one or more implementations with DI as `IFlowchartPolicy`.
 - **Aggregation:** `IFlowchartPolicyRegistry` resolves all registered policy implementations by stable `PolicyKind`.
 - **Selection:** Flowchart structure metadata can assign a policy kind to a node through `FlowchartStructure.NodeMetadata`.
-- **Decision boundary:** Policies receive `IFlowchartPolicyContext`, which exposes read-only graph/state/trigger information. Policies return `FlowchartPolicyDecision` commands; the Flowchart execution engine validates and applies those commands.
+- **Decision boundary:** Policies receive `IFlowchartPolicyContext`, which exposes read-only graph/state/trigger information. Policies return `FlowchartPolicyDecision` commands; `FlowchartExecutionEngine` validates and applies those commands.
 
 Known implementations:
 

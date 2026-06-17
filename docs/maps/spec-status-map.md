@@ -91,4 +91,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [071-activity-owned-composite-structure](../../specs/071-activity-owned-composite-structure/spec.md) | Activity-Owned Composite Structure | Draft | - | 0 | 0 | - |
 | [071-groundwork-host-configurable-runtime-store-poc](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
 | [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Draft | - | 19 | 0 | out of scope |
-| [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 39 | 28 | - |
+| [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |

@@ -1,6 +1,6 @@
 # Elsa.Activities.Flowchart
 
-The Flowchart activity is a scoped composite activity. It schedules child activities through Flowchart-owned execution state that tracks execution scopes, execution paths, arrivals, active children, and diagnostics.
+The Flowchart activity is a scoped composite activity. `FlowchartExecutionEngine` schedules child activities through Flowchart-owned execution state that tracks execution scopes, execution paths, arrivals, active children, and diagnostics.
 
 ## Scoped execution model
 
@@ -10,8 +10,10 @@ The Flowchart activity is a scoped composite activity. It schedules child activi
 - Loopbacks create loop-iteration scopes so arrivals from one iteration cannot satisfy joins in another iteration.
 - Flowchart decisions are recorded as diagnostics for scheduling, waiting, joining, loop iteration creation, policy failures, and completion.
 
-## Policy extension point
+`FlowchartExecutionEngine` is the scoped execution seam: it owns runtime mutation, validates policy commands, records arrivals, evaluates implicit joins, creates loop/race scopes, and persists Flowchart state before deferring composite completion.
 
-Gateway behavior is extensible through `IFlowchartPolicy`. Policies receive a read-only `IFlowchartPolicyContext` and return `FlowchartPolicyDecision` commands. The Flowchart execution engine validates and applies those commands, keeping mutation and scheduling authority inside the Flowchart runtime.
+## Policy contract extension point
+
+Gateway behavior is extensible through the public `IFlowchartPolicy` policy contract. Policies receive a read-only `IFlowchartPolicyContext` and return `FlowchartPolicyDecision` commands. `FlowchartExecutionEngine` validates and applies those commands, keeping mutation and scheduling authority inside the Flowchart runtime.
 
 Built-in policy kinds are defined in `FlowchartPolicyKinds` and registered by `ActivitiesFlowchartFeature`.
