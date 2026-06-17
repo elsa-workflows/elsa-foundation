@@ -389,6 +389,7 @@ const maxConsoleHeight = 560;
 const minWorkspaceHeight = 260;
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
+const consoleLogsEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
 const activityCatalogReadyAttempts = 12;
 const activityCatalogReadyDelay = 500;
 const featureReadinessActivities = {
@@ -1200,7 +1201,7 @@ export function App() {
   }, []);
 
   const loadRecentConsoleLines = useCallback(async () => {
-    const result = await request(`/diagnostics/console-logs/recent?limit=${consoleReplayLimit}`);
+    const result = await request(`${consoleLogsEndpointPrefix}/recent?limit=${consoleReplayLimit}`);
     const lines = result.items ?? result.lines ?? [];
     addConsoleEntries(lines.map(createConsoleEntryFromLine));
   }, [addConsoleEntries, request]);
@@ -1237,7 +1238,7 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl("/diagnostics/console-logs/hub")
+      .withUrl(`${consoleLogsEndpointPrefix}/hub`)
       .withAutomaticReconnect()
       .build();
 

@@ -189,10 +189,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             return;
         }
 
-        if (!context.CompositeCompletionRequested)
-            throw new InvalidOperationException($"Composite activity execution '{payload.ActivityExecutionId}' did not request completion or child activity scheduling after child execution '{completedChildActivityExecutionId}' completed.");
+        if (!context.CompositeCompletionRequested && context.CompositeCompletionDeferred)
+            return;
 
-        var completedParentState = CompleteParentActivity(workItem, payload, parentState, context.CompositeCompletionOutcomeNames);
+        if (!context.CompositeCompletionRequested)
+            throw new InvalidOperationException($"Composite activity execution '{payload.ActivityExecutionId}' did not request completion, child activity scheduling, or deferred completion after child execution '{completedChildActivityExecutionId}' completed.");
+
+        var latestParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
+                                ?? parentState;
+        var completedParentState = CompleteParentActivity(workItem, payload, latestParentState, context.CompositeCompletionOutcomeNames);
         await activityExecutionStateStore.SaveAsync(completedParentState, cancellationToken);
         await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, payload, completedParentState, cancellationToken);
     }

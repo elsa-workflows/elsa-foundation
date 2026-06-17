@@ -9,7 +9,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | Spec | Title | Status | Plan verdict | Tasks done | Tasks open | Notes |
 |---|---|---|---|---:|---:|---|
 | [001-activity-identity-catalog](../../specs/001-activity-identity-catalog/spec.md) | Activity Identity & Catalog as Source-of-Truth | Draft | - | 147 | 5 | superseded, deferred, out of scope |
-| [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | - |
+| [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | deferred |
 | [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
@@ -90,4 +90,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 14 | 0 | superseded |
 | [071-activity-owned-composite-structure](../../specs/071-activity-owned-composite-structure/spec.md) | Activity-Owned Composite Structure | Draft | - | 0 | 0 | - |
 | [071-groundwork-host-configurable-runtime-store-poc](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
-| [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Draft | - | 0 | 19 | out of scope |
+| [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Draft | - | 19 | 0 | out of scope |
+| [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |

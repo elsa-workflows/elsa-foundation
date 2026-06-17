@@ -45,6 +45,7 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 EndpointSecurityOptions.DisableSecurity();
 
 const string studioCorsPolicy = "ElsaStudio";
+const string consoleLogsEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
 
 var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
@@ -75,9 +76,9 @@ builder.Services.AddConsoleLogStreamingHost(options =>
 });
 builder.Services.AddConsoleLogStreamingAspNetCore(options =>
 {
-    options.RecentPath = "/_elsa/studio/diagnostics/console-logs/recent";
-    options.SourcesPath = "/_elsa/studio/diagnostics/console-logs/sources";
-    options.HubPath = "/_elsa/studio/diagnostics/console-logs/hub";
+    options.RecentPath = $"{consoleLogsEndpointPrefix}/recent";
+    options.SourcesPath = $"{consoleLogsEndpointPrefix}/sources";
+    options.HubPath = $"{consoleLogsEndpointPrefix}/hub";
 });
 builder.Services.AddNuplaneAdmin();
 builder.Services.AddSingleton<DemoPackageEventStore>();
@@ -92,7 +93,6 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 
-new EventsFeature().ConfigureServices(builder.Services);
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
@@ -154,6 +154,7 @@ app.UseCors(studioCorsPolicy);
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
 app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
+app.MapElsaModuleManagementApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
 app.MapFallbackToFile("/demo", "index.html");

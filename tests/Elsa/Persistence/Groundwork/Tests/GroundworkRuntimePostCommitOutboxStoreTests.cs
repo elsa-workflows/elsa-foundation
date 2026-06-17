@@ -1,0 +1,178 @@
+using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Store;
+using Xunit;
+
+namespace Elsa.Persistence.Groundwork.Tests;
+
+// Behavioral assertions for the document-backed post-commit outbox bridge. The bridge reproduces the
+// authoritative in-memory lifecycle (pending -> delivered / retryable / final) durably, so the same
+// assertions run against both the real Groundwork SQLite provider and the in-memory document store.
+public sealed class GroundworkRuntimePostCommitOutboxStoreTests
+{
+    private static readonly DateTimeOffset Now = DateTimeOffset.UnixEpoch;
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SavePending_Then_GetDeliverable_Returns_Item(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1"));
+
+        var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
+        Assert.Equal(new[] { "item-1" }, deliverable.Select(x => x.OutboxItemId));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SavePending_Is_Idempotent_For_Same_Intent(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1"));
+        await store.SavePendingAsync(Pending("item-1", "wf-1")); // no throw
+
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SavePending_With_Conflicting_Intent_Throws(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1", kind: "a"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await store.SavePendingAsync(Pending("item-1", "wf-1", kind: "b")));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task RecordDelivered_Makes_Item_Terminal_And_Undeliverable(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1"));
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now));
+
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+        // A second result on a terminal item is rejected.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task RetryableFailure_Becomes_Deliverable_After_Delay_Then_Final(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        var retry = new RuntimePostCommitRetryPolicy(maxAttempts: 2, delay: TimeSpan.FromMinutes(5));
+        await store.SavePendingAsync(Pending("item-1", "wf-1", retryPolicy: retry));
+
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.FailedRetryable, Now, "boom"));
+
+        // Not yet available (within the retry delay).
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10)));
+        // Available again after the delay window.
+        var afterDelay = Now.AddMinutes(6);
+        Assert.Single(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(afterDelay, 10)));
+
+        // Exhausting the retry budget promotes the failure to final and removes it from the deliverable set.
+        await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.FailedRetryable, afterDelay, "boom again"));
+        Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(afterDelay.AddMinutes(10), 10)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task GetDeliverable_Filters_By_Workflow_Execution(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1"));
+        await store.SavePendingAsync(Pending("item-2", "wf-2"));
+
+        var forWf1 = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10, workflowExecutionId: "wf-1"));
+        Assert.Equal(new[] { "item-1" }, forWf1.Select(x => x.OutboxItemId));
+    }
+
+    [Fact]
+    public async Task Pending_Item_Survives_Restart()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-outbox-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var documentStore = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            {
+                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(documentStore);
+                await store.SavePendingAsync(Pending("item-1", "wf-1"));
+            }
+
+            await using (var documentStore = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            {
+                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(documentStore);
+                var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
+                Assert.Equal(new[] { "item-1" }, deliverable.Select(x => x.OutboxItemId));
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    private static RuntimePostCommitOutboxItem Pending(
+        string outboxItemId,
+        string workflowExecutionId,
+        string kind = "publish",
+        RuntimePostCommitRetryPolicy? retryPolicy = null) => new(
+        outboxItemId: outboxItemId,
+        intent: new RuntimePostCommitIntent(
+            intentId: $"intent-{outboxItemId}",
+            workflowExecutionId: workflowExecutionId,
+            kind: kind,
+            recordedAt: Now,
+            activityExecutionId: null,
+            idempotencyKey: null,
+            payload: null),
+        status: RuntimePostCommitOutboxStatus.Pending,
+        recordedAt: Now,
+        availableAt: Now,
+        retryPolicy: retryPolicy);
+
+    private static StoreFixture CreateStore(string provider) => provider switch
+    {
+        "sqlite" => new StoreFixture(new SqliteGroundworkDocumentStore("Data Source=:memory:", ElsaRuntimeStorageManifest.Create())),
+        "memory" => new StoreFixture(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create())),
+        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
+    };
+
+    private sealed class StoreFixture(IDocumentStore documentStore) : IAsyncDisposable
+    {
+        public IDocumentStore DocumentStore { get; } = documentStore;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (DocumentStore is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync();
+        }
+    }
+}

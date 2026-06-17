@@ -39,6 +39,7 @@ public sealed class SimpleActivityExecutionContext(
     public ExecutableNode ExecutableNode => executableNode ?? throw MissingRuntimeValue(nameof(ExecutableNode));
     public ActivityExecutionState ActivityExecutionState => activityExecutionState ?? throw MissingRuntimeValue(nameof(ActivityExecutionState));
     public bool CompositeCompletionRequested { get; private set; }
+    public bool CompositeCompletionDeferred { get; private set; }
     public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
 
     public TService GetRequiredService<TService>() where TService : notnull =>
@@ -113,8 +114,17 @@ public sealed class SimpleActivityExecutionContext(
             throw new InvalidOperationException("Composite completion outcome names cannot contain duplicates.");
 
         CompositeCompletionRequested = true;
+        CompositeCompletionDeferred = false;
         _compositeCompletionOutcomeNames.Clear();
         _compositeCompletionOutcomeNames.AddRange(outcomeSnapshot);
+    }
+
+    public void DeferCompositeCompletion()
+    {
+        if (CompositeCompletionRequested)
+            throw new InvalidOperationException("Composite completion cannot be deferred after completion was requested.");
+
+        CompositeCompletionDeferred = true;
     }
 
     public bool IsContainedWithinCompositeActivity() => false;

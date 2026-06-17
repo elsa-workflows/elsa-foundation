@@ -25,4 +25,8 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
 
     bool CompositeCompletionRequested { get; }
     IReadOnlyCollection<string> CompositeCompletionOutcomeNames { get; }
+
+    void DeferCompositeCompletion();
+
+    bool CompositeCompletionDeferred { get; }
 }
