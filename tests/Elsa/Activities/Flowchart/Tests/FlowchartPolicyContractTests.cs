@@ -34,6 +34,17 @@ public sealed class FlowchartPolicyContractTests
     }
 
     [Fact]
+    public void Registry_NormalizesRegisteredPolicyKind()
+    {
+        var registry = new FlowchartPolicyRegistry([new WhitespacePolicy()]);
+
+        var resolved = registry.GetRequired("test/whitespace");
+
+        Assert.IsType<WhitespacePolicy>(resolved);
+        Assert.Throws<FlowchartExecutionException>(() => registry.Register(new DuplicateWhitespacePolicy()));
+    }
+
+    [Fact]
     public void Registry_ThrowsForMissingPolicyKind()
     {
         var registry = new FlowchartPolicyRegistry([]);
@@ -89,6 +100,20 @@ public sealed class FlowchartPolicyContractTests
     {
         public string PolicyKind => FlowchartPolicyKinds.DirectContinuation;
         public string DisplayName => "Duplicate";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new();
+    }
+
+    private sealed class WhitespacePolicy : IFlowchartPolicy
+    {
+        public string PolicyKind => " test/whitespace ";
+        public string DisplayName => "Whitespace";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new();
+    }
+
+    private sealed class DuplicateWhitespacePolicy : IFlowchartPolicy
+    {
+        public string PolicyKind => "test/whitespace";
+        public string DisplayName => "Duplicate Whitespace";
         public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new();
     }
 

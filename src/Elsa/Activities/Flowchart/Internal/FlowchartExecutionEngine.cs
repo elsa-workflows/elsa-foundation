@@ -39,7 +39,7 @@ public sealed class FlowchartExecutionEngine(
         var state = LoadState(context.ActivityExecutionState) ?? CreateInitialState(startNode.ExecutableNodeId);
         var rootPath = state.ExecutionPaths.Single(path => path.ExecutionPathId == "path:root");
         state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
-        StoreState(context.ActivityExecutionState.Metadata, state);
+        SaveState(context, state);
     }
 
     public async ValueTask OnChildCompletedAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completionContext)
@@ -59,7 +59,7 @@ public sealed class FlowchartExecutionEngine(
         state = RemoveActiveChild(state, path.ExecutionPathId, completionContext.CompletedChildExecutableNodeId);
 
         var sourceMetadata = graph.GetNodeMetadata(completionContext.CompletedChildExecutableNodeId);
-        if (sourceMetadata.PolicyKind is { } policyKind)
+        if (sourceMetadata.PolicyKind is { } policyKind && !IsJoinPolicy(policyKind))
         {
             var policy = policyRegistry.GetRequired(policyKind);
             var policyContext = new FlowchartPolicyContext(
@@ -81,12 +81,14 @@ public sealed class FlowchartExecutionEngine(
                 throw;
             }
 
-            state = UpdatePath(state, path with
-            {
-                Status = ExecutionPathStatus.Completed,
-                CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
-                LastOutcomeNames = completionContext.OutcomeNames
-            });
+            var currentPath = state.ExecutionPaths.First(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, path.ExecutionPathId));
+            if (currentPath.Status == ExecutionPathStatus.Active)
+                state = UpdatePath(state, currentPath with
+                {
+                    Status = ExecutionPathStatus.Completed,
+                    CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
+                    LastOutcomeNames = completionContext.OutcomeNames
+                });
             await PersistAndMaybeCompleteAsync(context, state);
             return;
         }
@@ -104,6 +106,7 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = AddDiagnostic(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
+            state = ReleaseReadyWaitingJoins(context, state, graph);
 
             await PersistAndMaybeCompleteAsync(context, state);
             return;
@@ -146,6 +149,7 @@ public sealed class FlowchartExecutionEngine(
             CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
             LastOutcomeNames = completionContext.OutcomeNames
         });
+        state = ReleaseReadyWaitingJoins(context, state, graph);
 
         await PersistAndMaybeCompleteAsync(context, state);
     }
@@ -161,6 +165,37 @@ public sealed class FlowchartExecutionEngine(
         }
 
         await SaveStateAsync(context, state);
+        context.DeferCompositeCompletion();
+    }
+
+    private FlowchartExecutionState ReleaseReadyWaitingJoins(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, FlowchartGraph graph)
+    {
+        var groups = state.ExecutionPaths
+            .Where(path => path.Status == ExecutionPathStatus.Waiting && path.CurrentNodeId is not null)
+            .GroupBy(path => (path.CurrentNodeId!, path.ExecutionScopeId, path.IterationKey))
+            .ToArray();
+
+        foreach (var group in groups)
+        {
+            if (ShouldWaitForImplicitJoin(state, graph, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey))
+                continue;
+
+            var arrival = MatchingArrivals(state, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey).FirstOrDefault();
+            if (arrival is null)
+                continue;
+
+            state = FireJoinOrContinuation(
+                context,
+                state,
+                graph,
+                group.Key.Item1,
+                group.Key.ExecutionScopeId,
+                group.Key.IterationKey,
+                arrival.ProducingActivityExecutionId,
+                arrival.ConnectionId);
+        }
+
+        return state;
     }
 
     private FlowchartExecutionState FireJoinOrContinuation(
@@ -363,12 +398,14 @@ public sealed class FlowchartExecutionEngine(
         }
     }
 
-    private static void StoreState(IReadOnlyDictionary<string, string> metadata, FlowchartExecutionState state)
+    private void SaveState(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
     {
-        if (metadata is not IDictionary<string, string> mutableMetadata)
-            throw new FlowchartExecutionException("Flowchart execution state requires mutable activity execution metadata.");
-
-        mutableMetadata[StateMetadataKey] = JsonSerializer.Serialize(state, SerializerOptions);
+        var metadata = context.ActivityExecutionState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[StateMetadataKey] = JsonSerializer.Serialize(state, SerializerOptions);
+        activityExecutionStateStore.SaveAsync(context.ActivityExecutionState with { Metadata = metadata }, context.CancellationToken)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
     }
 
     private async ValueTask SaveStateAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
@@ -400,6 +437,11 @@ public sealed class FlowchartExecutionEngine(
 
         return path.ExecutionScopeId;
     }
+
+    private static bool IsJoinPolicy(string policyKind) =>
+        StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.ImplicitActivationJoin) ||
+        StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.ParallelJoin) ||
+        StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.InclusiveJoin);
 
     private static FlowchartExecutionState ScheduleNode(
         IRuntimeActivityExecutionContext context,

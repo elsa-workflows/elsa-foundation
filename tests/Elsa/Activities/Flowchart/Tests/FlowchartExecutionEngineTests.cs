@@ -44,6 +44,79 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task Start_PersistsInitialStateBeforeFirstChildCompletion()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a");
+
+        await fixture.ExecuteAsync(executable);
+
+        var state = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+    }
+
+    [Fact]
+    public async Task ExplicitJoinPolicy_UsesEngineJoinEvaluation()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d"),
+                fixture.NewConnection("node-c", "node-d")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-d"] = new(FlowchartPolicyKinds.ImplicitActivationJoin)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
+    }
+
+    [Fact]
+    public async Task WaitPolicy_RemainsWaitingInsteadOfBeingOverwrittenToCompleted()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
+            ["actexec-flowchart", "actexec-a"],
+            services => services.AddSingleton<IFlowchartPolicy, WaitPolicy>());
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(WaitPolicy.Kind)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var state = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(state.ExecutionPaths, path => path.CurrentNodeId == "node-a" && path.Status == ExecutionPathStatus.Waiting);
+    }
+
+    [Fact]
     public void BuiltInForkPolicies_ReturnExpectedScheduleCommands()
     {
         var context = NewPolicyContext(["Done"]);
@@ -100,5 +173,13 @@ public sealed class FlowchartExecutionEngineTests
         public string PolicyKind => Kind;
         public string DisplayName => "Invalid";
         public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode)]);
+    }
+
+    private sealed class WaitPolicy : IFlowchartPolicy
+    {
+        public const string Kind = "test/wait";
+        public string PolicyKind => Kind;
+        public string DisplayName => "Wait";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.WaitExecutionPath)]);
     }
 }

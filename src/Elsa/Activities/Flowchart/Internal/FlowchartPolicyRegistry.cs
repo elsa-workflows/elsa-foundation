@@ -44,12 +44,14 @@ public sealed class FlowchartPolicyRegistry : IFlowchartPolicyRegistry
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentException.ThrowIfNullOrWhiteSpace(policy.PolicyKind);
 
+        var policyKind = policy.PolicyKind.Trim();
+
         lock (_syncRoot)
         {
-            if (_policies.ContainsKey(policy.PolicyKind))
-                throw new FlowchartExecutionException($"Flowchart policy '{policy.PolicyKind}' is already registered.");
+            if (_policies.ContainsKey(policyKind))
+                throw new FlowchartExecutionException($"Flowchart policy '{policyKind}' is already registered.");
 
-            _policies[policy.PolicyKind] = policy;
+            _policies[policyKind] = policy;
         }
     }
 }
