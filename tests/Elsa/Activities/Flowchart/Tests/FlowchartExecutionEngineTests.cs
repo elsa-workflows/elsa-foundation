@@ -135,6 +135,87 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task PolicyScheduleNode_WithMissingConnectionId_RecordsPolicyFailure()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
+            ["actexec-flowchart", "actexec-a"],
+            services => services.AddSingleton<IFlowchartPolicy, MissingConnectionPolicy>());
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-c")
+            ],
+            connections: [fixture.NewConnection("node-a", "node-c")],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(MissingConnectionPolicy.Kind)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var state = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(state.Diagnostics, diagnostic =>
+            diagnostic.Kind == FlowchartDiagnosticKind.PolicyFailure &&
+            diagnostic.NodeId == "node-a" &&
+            diagnostic.Message.Contains("unknown connection id 'missing-connection'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PolicyScheduleNode_WithMissingTargetScope_RecordsPolicyFailure()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
+            ["actexec-flowchart", "actexec-a"],
+            services => services.AddSingleton<IFlowchartPolicy, MissingTargetScopePolicy>());
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-c")
+            ],
+            connections: [],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(MissingTargetScopePolicy.Kind)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var state = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(state.Diagnostics, diagnostic =>
+            diagnostic.Kind == FlowchartDiagnosticKind.PolicyFailure &&
+            diagnostic.NodeId == "node-a" &&
+            diagnostic.Message.Contains("unknown execution scope 'scope-missing'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PolicyScheduleNode_UsesTargetExecutionScopeIdForScheduling()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
+            ["actexec-flowchart", "actexec-a", "actexec-c"],
+            services => services.AddSingleton<IFlowchartPolicy, TargetScopePolicy>());
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-c")
+            ],
+            connections: [],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(TargetScopePolicy.Kind)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-c"));
+    }
+
+    [Fact]
     public async Task WaitPolicy_RemainsWaitingInsteadOfBeingOverwrittenToCompleted()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
@@ -212,6 +293,30 @@ public sealed class FlowchartExecutionEngineTests
         public string PolicyKind => Kind;
         public string DisplayName => "Invalid";
         public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode)]);
+    }
+
+    private sealed class MissingConnectionPolicy : IFlowchartPolicy
+    {
+        public const string Kind = "test/missing-connection";
+        public string PolicyKind => Kind;
+        public string DisplayName => "Missing Connection";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-c", connectionId: "missing-connection")]);
+    }
+
+    private sealed class MissingTargetScopePolicy : IFlowchartPolicy
+    {
+        public const string Kind = "test/missing-target-scope";
+        public string PolicyKind => Kind;
+        public string DisplayName => "Missing Target Scope";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-c", targetExecutionScopeId: "scope-missing")]);
+    }
+
+    private sealed class TargetScopePolicy : IFlowchartPolicy
+    {
+        public const string Kind = "test/target-scope";
+        public string PolicyKind => Kind;
+        public string DisplayName => "Target Scope";
+        public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.ScheduleNode, nodeId: "node-c", executionScopeId: "scope-missing", targetExecutionScopeId: "scope:root")]);
     }
 
     private sealed class WaitPolicy : IFlowchartPolicy
