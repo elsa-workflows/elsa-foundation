@@ -6,7 +6,7 @@ Status: draft feasibility report. Updated after re-assessment against the live G
 
 ## Outcome
 
-Groundwork is feasible as a provider-neutral persistence lane in `elsa-foundation`, with provider choice remaining host-owned via feature composition. A full all-in replacement for every runtime persistence surface is not yet proven.
+Groundwork is feasible — and now landed — as a provider-neutral persistence lane for the **entire workflow runtime** in `elsa-foundation`, with provider choice remaining host-owned via feature composition. All ten runtime persistence seams plus a durable checkpoint writer are implemented and tested over Groundwork's portable document store. **Design-time/definition persistence is out of scope for a Groundwork verdict today** — it is bound to an `IQueryable`/LINQ contract that Groundwork's equality-only portable query model cannot serve (see "Design-persistence scope"). The practical recommendation: treat Groundwork as the runtime persistence provider (opt-in), keep design persistence on EF Core, and gate any operational-hot-path or design-persistence expansion on Groundwork capability + benchmark evidence.
 
 ## Update — live re-assessment and landed bridge
 
@@ -75,7 +75,7 @@ The entire **runtime** persistence story is now provider-agnostic with only the 
 | Runtime low-risk artifact/document stores | High | Good first POC target for provider-neutral host switching. |
 | Runtime continuation-state stores | Medium / benchmark-gated | Possible, but requires evidence for latency/concurrency/recovery behavior. |
 | Runtime operational hot-path stores (outbox ordering, mailbox/ownership, locks/leases) | Unproven | Not rejected; requires explicit operational contracts beyond current document-store guarantees. |
-| Design-definition persistence | Medium | Possible future lane, but out of current POC scope. |
+| Design-definition persistence | Low (current Groundwork) | Architecturally bound to `IQueryable`/LINQ + relational navigation; not served by the portable document contract today. See "Design-persistence scope" below. |
 
 ## Answer to "can Groundwork support runtime hot-path stores?"
 
@@ -149,6 +149,27 @@ Wins:
 - **One source of truth** — the capability validator becomes the only compatibility authority; `BenchmarkGated`/`SpecializedProvider` becomes a computed `ProviderFit`, optionally combined with an explicit policy/evidence gate.
 
 Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and human readability; stop letting it (and a self-declared category) be the gate.
+
+## Design-persistence scope (Phase 4 finding)
+
+**Decision: a "de facto Groundwork persistence" verdict should be scoped to the runtime, with design-time/definition persistence staying on EF Core for now.** This is a capability conclusion, not a preference.
+
+Design persistence (`Elsa.Workflows.Design.Persistence`, `Elsa.Activities.Design.Persistence`) is built on a generic `IQueries<TEntity>` / `IFilter<TEntity>` abstraction (`Elsa.Persistence.Core`) that is a **full LINQ-provider contract**:
+
+- `IFilter<TEntity>.Apply(IQueryable<TEntity>) → IQueryable<TEntity>` — filters are arbitrary LINQ over `IQueryable`.
+- `IQueries<TEntity>` exposes `Expression<Func<TEntity,bool>>` predicates, `Func<IQueryable,IQueryable>` shaping, `OrderDefinition<TEntity,TProp>` arbitrary ordering, `Expression` projections/selectors, related-entity `Include`, `Page<TEntity>` paging, `Count`, and `Any`.
+- Concrete design filters use substring search (`Name.Contains(term)` case-insensitive, i.e. `LIKE %term%`), `IN` membership (`Ids.Contains(x.Id)`), multi-field equality, and computed sort keys (`SemVerSortKey`).
+- The design entities are a **related cluster** — `WorkflowDefinition` ↔ `WorkflowDefinitionVersion` ↔ `WorkflowDefinitionDraft` ↔ layouts/validation — with eager-loaded navigations.
+
+Groundwork's portable query contract (the one every provider must honor) is declared-index **equality only** (`PortableQueryOperation.Equal`, `QuerySortSupport.None`, offset paging). It has no substring/`LIKE`, no `IN`, no `ORDER BY`, no range/comparison, no joins/includes, and no `IQueryable` surface. Bridging `IQueries<TEntity>` onto it would force one of three bad outcomes:
+
+1. **Materialize-and-LINQ-in-memory** — load whole tables and run LINQ-to-Objects. Only viable for trivial datasets; defeats the purpose.
+2. **A LINQ→Groundwork translator** — impossible against an equality-only portable contract (no operators to translate `Contains`/ordering/joins into), and a major undertaking even partially.
+3. **Provider-specific raw queries** — breaks the portability promise that makes the bridge valuable.
+
+This is the mirror image of the runtime seams, which are narrow key/index access patterns (`Save`/`Load`/`Delete`/equality-`Query`) that map cleanly onto documents. **Runtime persistence fits Groundwork; design persistence does not — yet.**
+
+For design persistence to become a Groundwork lane, Groundwork would need to grow (a) a richer portable query capability (comparison, substring, `IN`, multi-field `ORDER BY`, paging) or a queryable provider surface, and (b) an aggregate/related-entity model for the design cluster. Those are **Groundwork roadmap items**, not bridge work, and should be evidence/benchmark-gated like the operational hot paths. Until then, design persistence stays EF Core, and the host still composes it independently — so the "only the host names a provider" property already holds for both lanes (EF Core for design, Groundwork for runtime).
 
 ## Recommended implementation route
 
