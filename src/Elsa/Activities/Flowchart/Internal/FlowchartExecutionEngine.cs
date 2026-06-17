@@ -57,6 +57,16 @@ public sealed class FlowchartExecutionEngine(
                     ?? throw new FlowchartExecutionException($"Flowchart execution scope '{scopeId}' was not found for completed child '{completionContext.CompletedChildExecutableNodeId}'.");
 
         state = RemoveActiveChild(state, path.ExecutionPathId, completionContext.CompletedChildExecutableNodeId);
+        if (path.Status == ExecutionPathStatus.Canceled || scope.Status == ExecutionScopeStatus.Canceled)
+        {
+            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, completionContext.CompletedChildExecutableNodeId, path.IncomingConnectionId, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart ignored completion for canceled path '{path.ExecutionPathId}'.");
+            await PersistAndMaybeCompleteAsync(context, state);
+            return;
+        }
+
+        if (scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Active)
+            state = CompleteRaceScope(state, scope, path);
+        var continuationScope = ResolveContinuationScope(state, scope);
 
         var sourceMetadata = graph.GetNodeMetadata(completionContext.CompletedChildExecutableNodeId);
         if (sourceMetadata.PolicyKind is { } policyKind && !IsJoinPolicy(policyKind))
@@ -72,7 +82,8 @@ public sealed class FlowchartExecutionEngine(
             try
             {
                 decision = policy.Execute(policyContext);
-                state = ApplyDecision(context, state, graph, decision, path, completionContext.CompletedChildActivityExecutionId, policyKind);
+                var defaultScheduleScopeId = StringComparer.Ordinal.Equals(continuationScope.ExecutionScopeId, path.ExecutionScopeId) ? null : continuationScope.ExecutionScopeId;
+                state = ApplyDecision(context, state, graph, decision, path, completionContext.CompletedChildActivityExecutionId, policyKind, defaultScheduleScopeId);
             }
             catch (FlowchartExecutionException exception)
             {
@@ -116,7 +127,7 @@ public sealed class FlowchartExecutionEngine(
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
-            var targetScope = ResolveTargetScope(state, graph, scope, connection);
+            var targetScope = ResolveTargetScope(state, graph, continuationScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, targetScope.ExecutionScopeId)))
                 state = AddScope(state, targetScope);
             var targetIterationKey = targetScope.LoopIterationKey ?? path.IterationKey;
@@ -132,7 +143,7 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
 
-            if (ShouldWaitForImplicitJoin(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
+            if (ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 state = AddDiagnostic(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");
@@ -177,7 +188,7 @@ public sealed class FlowchartExecutionEngine(
 
         foreach (var group in groups)
         {
-            if (ShouldWaitForImplicitJoin(state, graph, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey))
+            if (ShouldWaitForTarget(state, graph, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey))
                 continue;
 
             var arrival = MatchingArrivals(state, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey).FirstOrDefault();
@@ -240,24 +251,45 @@ public sealed class FlowchartExecutionEngine(
         FlowchartPolicyDecision decision,
         ExecutionPath currentPath,
         string schedulingActivityExecutionId,
-        string policyKind)
+        string policyKind,
+        string? defaultScheduleScopeId = null)
     {
         ArgumentNullException.ThrowIfNull(decision);
         var scheduledNodes = new HashSet<string>(StringComparer.Ordinal);
+        var firstWinsScopeId = ResolveFirstWinsScopeId(state, decision, currentPath, policyKind);
+        if (firstWinsScopeId is not null)
+        {
+            var parentScopeId = defaultScheduleScopeId ?? currentPath.ExecutionScopeId;
+            var scope = new ExecutionScope(
+                firstWinsScopeId,
+                ExecutionScopeKind.Race,
+                parentExecutionScopeId: parentScopeId,
+                createdByNodeId: currentPath.CurrentNodeId,
+                ownerNodeId: currentPath.CurrentNodeId);
+            state = AddScope(state, scope);
+        }
 
         foreach (var diagnostic in decision.Diagnostics)
             state = state with { Diagnostics = state.Diagnostics.Append(diagnostic).ToArray(), Sequence = state.Sequence + 1 };
 
         foreach (var command in decision.Commands)
         {
+            var effectiveCommand = command;
+            if (command.Kind == FlowchartPolicyCommandKind.ScheduleNode)
+            {
+                if (firstWinsScopeId is not null && string.IsNullOrWhiteSpace(command.TargetExecutionScopeId))
+                    effectiveCommand = command with { TargetExecutionScopeId = firstWinsScopeId };
+                else if (!string.IsNullOrWhiteSpace(defaultScheduleScopeId) && string.IsNullOrWhiteSpace(command.TargetExecutionScopeId) && string.IsNullOrWhiteSpace(command.ExecutionScopeId))
+                    effectiveCommand = command with { TargetExecutionScopeId = defaultScheduleScopeId };
+            }
             state = command.Kind switch
             {
-                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, command, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes),
-                FlowchartPolicyCommandKind.WriteDiagnostic => ApplyDiagnosticCommand(state, command, currentPath),
+                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes),
+                FlowchartPolicyCommandKind.WriteDiagnostic => ApplyDiagnosticCommand(state, effectiveCommand, currentPath),
                 FlowchartPolicyCommandKind.CompleteExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Completed }),
                 FlowchartPolicyCommandKind.WaitExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Waiting }),
                 FlowchartPolicyCommandKind.CancelExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Canceled }),
-                _ => throw NewInvalidPolicyCommand(policyKind, $"Policy command '{command.Kind}' is not supported by this Flowchart execution engine slice.")
+                _ => throw NewInvalidPolicyCommand(policyKind, $"Policy command '{effectiveCommand.Kind}' is not supported by this Flowchart execution engine slice.")
             };
         }
 
@@ -306,7 +338,7 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
 
-            if (ShouldWaitForImplicitJoin(state, graph, nodeId, executionScopeId, iterationKey))
+            if (ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 return AddDiagnostic(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");
@@ -370,6 +402,49 @@ public sealed class FlowchartExecutionEngine(
     private static FlowchartExecutionException NewInvalidPolicyCommand(string policyKind, string reason) =>
         new($"Flowchart policy '{policyKind}' returned an invalid command. {reason}");
 
+    private static string? ResolveFirstWinsScopeId(FlowchartExecutionState state, FlowchartPolicyDecision decision, ExecutionPath currentPath, string policyKind)
+    {
+        if (!StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.FirstWins))
+            return null;
+
+        if (decision.Commands.All(command => command.Kind != FlowchartPolicyCommandKind.ScheduleNode))
+            return null;
+
+        return NewId(state, "scope");
+    }
+
+    private static ExecutionScope ResolveContinuationScope(FlowchartExecutionState state, ExecutionScope scope)
+    {
+        if (scope.Kind != ExecutionScopeKind.Race || string.IsNullOrWhiteSpace(scope.ParentExecutionScopeId))
+            return scope;
+
+        return state.Scopes.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionScopeId, scope.ParentExecutionScopeId))
+               ?? throw new FlowchartExecutionException($"Flowchart race parent scope '{scope.ParentExecutionScopeId}' was not found.");
+    }
+
+    private static FlowchartExecutionState CompleteRaceScope(FlowchartExecutionState state, ExecutionScope raceScope, ExecutionPath winningPath)
+    {
+        foreach (var losingPath in state.ExecutionPaths
+                     .Where(path =>
+                         !StringComparer.Ordinal.Equals(path.ExecutionPathId, winningPath.ExecutionPathId) &&
+                         StringComparer.Ordinal.Equals(path.ExecutionScopeId, raceScope.ExecutionScopeId) &&
+                         (path.Status == ExecutionPathStatus.Active || path.Status == ExecutionPathStatus.Waiting))
+                     .ToArray())
+        {
+            state = UpdatePath(state, losingPath with { Status = ExecutionPathStatus.Canceled });
+            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, losingPath.CurrentNodeId, losingPath.IncomingConnectionId, losingPath.ExecutionPathId, losingPath.ExecutionScopeId, $"Flowchart first-wins race canceled losing path '{losingPath.ExecutionPathId}'.");
+        }
+
+        state = state with
+        {
+            ActiveChildren = state.ActiveChildren
+                .Where(child => !StringComparer.Ordinal.Equals(child.ExecutionScopeId, raceScope.ExecutionScopeId) || StringComparer.Ordinal.Equals(child.ExecutionPathId, winningPath.ExecutionPathId))
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+        return UpdateScope(state, raceScope with { Status = ExecutionScopeStatus.Completed });
+    }
+
     private ExecutionScope ResolveTargetScope(FlowchartExecutionState state, FlowchartGraph graph, ExecutionScope currentScope, FlowchartConnection connection)
     {
         if (!reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
@@ -409,6 +484,15 @@ public sealed class FlowchartExecutionEngine(
         }
 
         return false;
+    }
+
+    private static bool ShouldWaitForTarget(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
+    {
+        var policyKind = graph.GetNodeMetadata(targetNodeId).PolicyKind;
+        if (StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.Merge))
+            return false;
+
+        return ShouldWaitForImplicitJoin(state, graph, targetNodeId, executionScopeId, iterationKey);
     }
 
     private static IEnumerable<FlowchartArrival> MatchingArrivals(FlowchartExecutionState state, string targetNodeId, string executionScopeId, string? iterationKey) =>
@@ -566,6 +650,15 @@ public sealed class FlowchartExecutionEngine(
         {
             ExecutionPaths = state.ExecutionPaths
                 .Select(existing => StringComparer.Ordinal.Equals(existing.ExecutionPathId, path.ExecutionPathId) ? path : existing)
+                .ToArray(),
+            Sequence = state.Sequence + 1
+        };
+
+    private static FlowchartExecutionState UpdateScope(FlowchartExecutionState state, ExecutionScope scope) =>
+        state with
+        {
+            Scopes = state.Scopes
+                .Select(existing => StringComparer.Ordinal.Equals(existing.ExecutionScopeId, scope.ExecutionScopeId) ? scope : existing)
                 .ToArray(),
             Sequence = state.Sequence + 1
         };

@@ -9,5 +9,5 @@ public sealed class FirstWinsFlowchartPolicy : IFlowchartPolicy
     public string DisplayName => "First Wins";
 
     public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) =>
-        new(FlowchartPolicyConnectionSelector.ScheduleFirstMatchingOutbound(context));
+        new(FlowchartPolicyConnectionSelector.ScheduleMatchingOutbound(context));
 }

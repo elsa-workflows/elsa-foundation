@@ -216,6 +216,168 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task MergePolicy_DoesNotWaitForOtherActiveInboundBranches()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d1",
+            "actexec-d2"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d"),
+                fixture.NewConnection("node-c", "node-d")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-d"] = new(FlowchartPolicyKinds.Merge)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        Assert.Equal(2, states.Count(state => state.Execution.ExecutableNodeId == "node-d"));
+    }
+
+    [Fact]
+    public async Task FirstWinsPolicy_CancelsLosingSiblingPaths()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(FlowchartPolicyKinds.FirstWins)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var flowchartState = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(flowchartState.Scopes, scope => scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Completed);
+        Assert.Contains(flowchartState.ExecutionPaths, path => path.CurrentNodeId == "node-c" && path.Status == ExecutionPathStatus.Canceled);
+        Assert.Contains(flowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Canceled && diagnostic.NodeId == "node-c");
+    }
+
+    [Fact]
+    public async Task FirstWinsWinnerPolicyContinuation_UsesParentScope()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(FlowchartPolicyKinds.FirstWins),
+                ["node-b"] = new(FlowchartPolicyKinds.DirectContinuation)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var flowchartState = await fixture.GetFlowchartStateAsync();
+        Assert.Contains(flowchartState.ExecutionPaths, path =>
+            path.CurrentNodeId == "node-d" &&
+            path.ExecutionScopeId == flowchartState.RootExecutionScopeId &&
+            path.Status == ExecutionPathStatus.Completed);
+    }
+
+    [Fact]
+    public async Task NestedFirstWinsPolicy_ParentsInnerRaceToContinuationScope()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d",
+            "actexec-e",
+            "actexec-f"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d"),
+                fixture.NewProbeNode("node-e"),
+                fixture.NewProbeNode("node-f")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d"),
+                fixture.NewConnection("node-b", "node-e"),
+                fixture.NewConnection("node-d", "node-f")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-a"] = new(FlowchartPolicyKinds.FirstWins),
+                ["node-b"] = new(FlowchartPolicyKinds.FirstWins)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var flowchartState = await fixture.GetFlowchartStateAsync();
+        var raceScopes = flowchartState.Scopes.Where(scope => scope.Kind == ExecutionScopeKind.Race).ToArray();
+        Assert.Equal(2, raceScopes.Length);
+        Assert.All(raceScopes, scope => Assert.Equal(flowchartState.RootExecutionScopeId, scope.ParentExecutionScopeId));
+        Assert.Contains(flowchartState.ExecutionPaths, path =>
+            path.CurrentNodeId == "node-f" &&
+            path.ExecutionScopeId == flowchartState.RootExecutionScopeId &&
+            path.Status == ExecutionPathStatus.Completed);
+    }
+
+    [Fact]
     public async Task WaitPolicy_RemainsWaitingInsteadOfBeingOverwrittenToCompleted()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
