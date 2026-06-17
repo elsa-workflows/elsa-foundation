@@ -16,6 +16,7 @@
 .feature-management-actions button,
 .feature-management-inspector-heading button,
 .feature-management-sticky-actions button,
+.feature-management-bulk-actions button,
 .feature-management-feature-button {
   border: 1px solid var(--border);
   background: var(--studio-surface, var(--card));
@@ -42,7 +43,8 @@
 
 .feature-management-actions button:disabled,
 .feature-management-inspector-heading button:disabled,
-.feature-management-sticky-actions button:disabled {
+.feature-management-sticky-actions button:disabled,
+.feature-management-bulk-actions button:disabled {
   opacity: .55;
   cursor: not-allowed;
 }
@@ -167,6 +169,53 @@
   font-size: 12px;
 }
 
+.feature-management-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--studio-surface, var(--card)) 92%, var(--muted));
+  min-height: 38px;
+  padding: 6px 9px;
+}
+
+.feature-management-bulk-actions label,
+.feature-management-bulk-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.feature-management-bulk-actions label {
+  flex: 0 0 auto;
+}
+
+.feature-management-bulk-actions span {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.feature-management-bulk-actions > div {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.feature-management-bulk-actions > div > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feature-management-bulk-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
 .feature-management-list {
   display: flex;
   flex-direction: column;
@@ -175,7 +224,7 @@
 
 .feature-management-card {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  grid-template-columns: 20px 28px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 10px;
   border: 0;
@@ -192,6 +241,12 @@
 .feature-management-card.selected {
   background: color-mix(in srgb, var(--studio-accent, var(--primary)) 9%, var(--background));
   box-shadow: inset 2px 0 0 var(--studio-accent, var(--primary));
+}
+
+.feature-management-row-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--studio-accent, var(--primary));
 }
 
 .feature-management-card strong,
@@ -317,33 +372,26 @@
   line-height: 1.22;
 }
 
-.feature-management-metadata {
+.feature-management-detail-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-}
-
-.feature-management-metadata div {
-  display: grid;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 8px 9px;
-}
-
-.feature-management-metadata dt {
   color: var(--studio-text-muted, var(--muted-foreground));
   font-size: 12px;
+}
+
+.feature-management-detail-list div {
+  display: grid;
+  gap: 2px;
+}
+
+.feature-management-detail-list dt {
   font-weight: 700;
 }
 
-.feature-management-metadata dd {
+.feature-management-detail-list dd {
   margin: 0;
-  min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--studio-text, var(--foreground));
-  font-size: 13px;
 }
 
 .feature-management-settings {

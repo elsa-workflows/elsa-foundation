@@ -115,6 +115,60 @@ describe("feature management module", () => {
     await unmount();
   });
 
+  it("bulk disables selected features before apply", async () => {
+    let postPayload: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "rev-1",
+        features: [
+          feature("FeatureA", true, {}),
+          feature("FeatureB", true, {}),
+          feature("FeatureC", false, {})
+        ]
+      }),
+      postJson: async (_url: string, body: unknown) => {
+        postPayload = body;
+        return {
+          catalog: {
+            revision: "rev-2",
+            features: [
+              feature("FeatureA", false, {}),
+              feature("FeatureB", false, {}),
+              feature("FeatureC", false, {})
+            ]
+          },
+          featureDescriptorCount: 3,
+          reloadedShellCount: 1
+        };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Select FeatureA']"));
+    await click(container.querySelector("[aria-label='Select FeatureB']"));
+
+    expect(container.textContent).toContain("2 selected");
+
+    await click(buttonByText(container, "Disable"));
+
+    expect(container.textContent).toContain("Unsaved changes");
+    expect(postPayload).toBeNull();
+
+    await click(buttonByText(container, "Apply"));
+
+    expect(postPayload).toEqual({
+      revision: "rev-1",
+      features: [
+        { id: "FeatureA", enabled: false, configuration: {} },
+        { id: "FeatureB", enabled: false, configuration: {} },
+        { id: "FeatureC", enabled: false, configuration: {} }
+      ]
+    });
+
+    await unmount();
+  });
+
   it("shows conflict errors returned by apply", async () => {
     const api = stubApi({
       getJson: async () => ({
@@ -155,6 +209,24 @@ describe("feature management module", () => {
     expect(container.textContent).toContain("StorageA");
     expect(container.textContent).not.toContain("RuntimeA");
     expect(container.querySelector(".feature-management-card.selected")?.textContent).toContain("StorageA");
+
+    await unmount();
+  });
+
+  it("keeps low-value inspector metadata compact", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "rev-1",
+        features: [feature("RuntimeA", true, {}, ["Runtime"])]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    expect(container.querySelector(".feature-management-metadata")).toBeNull();
+    expect(container.querySelector(".feature-management-inspector-tags")?.textContent).toContain("runtime");
+    expect(container.querySelector(".feature-management-inspector-tags")?.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("No configurable settings.");
 
     await unmount();
   });

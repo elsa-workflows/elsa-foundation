@@ -130,6 +130,7 @@ export const themes: Theme[] = [
   createTheme('borealis', 'Borealis', 'Green-teal palette with a calm technical feel', oklchToVar(0.72, 0.14, 168), oklchToVar(0.62, 0.14, 168), 168),
   createTheme('ember', 'Ember', 'Warm amber palette for high-contrast highlights', oklchToVar(0.74, 0.17, 58), oklchToVar(0.64, 0.17, 58), 58),
   createTheme('orchid', 'Orchid', 'Refined violet palette for expressive workspaces', oklchToVar(0.66, 0.17, 292), oklchToVar(0.58, 0.16, 292), 292),
+  createTheme('hot-pink', 'Hot Pink', 'High-energy pink palette for bold workspaces', oklchToVar(0.7, 0.24, 340), oklchToVar(0.64, 0.22, 340), 340),
   createTheme('coral', 'Coral', 'Soft red-coral palette with readable emphasis', oklchToVar(0.68, 0.18, 24), oklchToVar(0.58, 0.17, 24), 24),
   createTheme('graphite', 'Graphite', 'Restrained neutral palette with a cool accent', oklchToVar(0.6, 0.04, 248), oklchToVar(0.52, 0.04, 248), 248),
 ];

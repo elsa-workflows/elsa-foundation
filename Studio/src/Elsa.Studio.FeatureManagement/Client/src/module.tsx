@@ -147,6 +147,7 @@ export function FeatureManagementPage() {
   const [catalog, setCatalog] = useState<FeatureCatalogResponse | null>(null);
   const [draft, setDraft] = useState<DraftFeature[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [checkedFeatureIds, setCheckedFeatureIds] = useState<Set<string>>(() => new Set());
   const [selectedCategory, setSelectedCategory] = useState(AllCategoriesId);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -168,6 +169,10 @@ export function FeatureManagementPage() {
   const dirty = isDirty(catalog, draft);
   const enabledCount = draft.filter(feature => feature.enabled).length;
   const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
+  const visibleFeatureIds = useMemo(() => new Set(filteredDraft.map(feature => feature.id)), [filteredDraft]);
+  const checkedVisibleCount = filteredDraft.filter(feature => checkedFeatureIds.has(feature.id)).length;
+  const allVisibleChecked = filteredDraft.length > 0 && checkedVisibleCount === filteredDraft.length;
+  const checkedFeatures = draft.filter(feature => checkedFeatureIds.has(feature.id));
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.id !== selectedId) {
@@ -181,6 +186,14 @@ export function FeatureManagementPage() {
     }
   }, [categories, selectedCategory]);
 
+  useEffect(() => {
+    setCheckedFeatureIds(current => {
+      const existingIds = new Set(draft.map(feature => feature.id));
+      const next = new Set(Array.from(current).filter(id => existingIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [draft]);
+
   async function refresh() {
     setLoading(true);
     setError(null);
@@ -188,6 +201,7 @@ export function FeatureManagementPage() {
       const response = await moduleApi.backend.http.getJson<FeatureCatalogResponse>("/modularity/features");
       setCatalog(response);
       setDraft(response.features.map(toDraftFeature));
+      setCheckedFeatureIds(new Set());
       setStatus(null);
     } catch (e) {
       setError(getErrorMessage(e));
@@ -224,6 +238,44 @@ export function FeatureManagementPage() {
 
   function toggleFeature(feature: DraftFeature) {
     updateFeature(feature.id, current => ({ ...current, enabled: !current.enabled }));
+  }
+
+  function toggleCheckedFeature(id: string, checked: boolean) {
+    setCheckedFeatureIds(current => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleVisibleFeatureSelection() {
+    setCheckedFeatureIds(current => {
+      const next = new Set(current);
+      if (allVisibleChecked) {
+        for (const id of visibleFeatureIds) {
+          next.delete(id);
+        }
+      } else {
+        for (const id of visibleFeatureIds) {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  }
+
+  function setCheckedFeaturesEnabled(enabled: boolean) {
+    if (checkedFeatureIds.size === 0) {
+      return;
+    }
+
+    setDraft(features => features.map(feature => checkedFeatureIds.has(feature.id)
+      ? { ...feature, enabled }
+      : feature));
   }
 
   function updateSetting(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown) {
@@ -281,6 +333,19 @@ export function FeatureManagementPage() {
             <span>{filteredDraft.filter(feature => feature.enabled).length} enabled</span>
           </div>
 
+          <BulkFeatureActions
+            disabled={loading || applying || filteredDraft.length === 0}
+            selectedCount={checkedFeatureIds.size}
+            visibleCount={filteredDraft.length}
+            visibleSelectedCount={checkedVisibleCount}
+            selectedEnabledCount={checkedFeatures.filter(feature => feature.enabled).length}
+            allVisibleChecked={allVisibleChecked}
+            onToggleVisible={toggleVisibleFeatureSelection}
+            onClearSelection={() => setCheckedFeatureIds(new Set())}
+            onEnableSelected={() => setCheckedFeaturesEnabled(true)}
+            onDisableSelected={() => setCheckedFeaturesEnabled(false)}
+          />
+
           <div className="feature-management-list" aria-busy={loading}>
             {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
             {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
@@ -290,8 +355,10 @@ export function FeatureManagementPage() {
                 key={feature.id}
                 feature={feature}
                 selected={feature.id === selectedFeature?.id}
+                checked={checkedFeatureIds.has(feature.id)}
                 onSelect={() => setSelectedId(feature.id)}
                 onToggle={() => toggleFeature(feature)}
+                onCheckedChange={checked => toggleCheckedFeature(feature.id, checked)}
               />
             ))}
           </div>
@@ -308,6 +375,65 @@ export function FeatureManagementPage() {
         />
       </div>
     </section>
+  );
+}
+
+function BulkFeatureActions({
+  disabled,
+  selectedCount,
+  visibleCount,
+  visibleSelectedCount,
+  selectedEnabledCount,
+  allVisibleChecked,
+  onToggleVisible,
+  onClearSelection,
+  onEnableSelected,
+  onDisableSelected
+}: {
+  disabled: boolean;
+  selectedCount: number;
+  visibleCount: number;
+  visibleSelectedCount: number;
+  selectedEnabledCount: number;
+  allVisibleChecked: boolean;
+  onToggleVisible(): void;
+  onClearSelection(): void;
+  onEnableSelected(): void;
+  onDisableSelected(): void;
+}) {
+  return (
+    <div className="feature-management-bulk-actions" aria-label="Bulk feature actions">
+      <label>
+        <input
+          type="checkbox"
+          checked={allVisibleChecked}
+          disabled={disabled}
+          onChange={onToggleVisible}
+          aria-label={allVisibleChecked ? "Clear visible feature selection" : "Select visible features"}
+        />
+        <span>{visibleSelectedCount}/{visibleCount} visible</span>
+      </label>
+      <div>
+        <span title={`${selectedEnabledCount} enabled`}>{selectedCount} selected</span>
+        <button
+          type="button"
+          aria-label="Enable selected features"
+          disabled={disabled || selectedCount === 0 || selectedEnabledCount === selectedCount}
+          onClick={onEnableSelected}
+        >
+          Enable
+        </button>
+        <button
+          type="button"
+          aria-label="Disable selected features"
+          disabled={disabled || selectedCount === 0 || selectedEnabledCount === 0}
+          onClick={onDisableSelected}
+        >
+          Disable
+        </button>
+        <button type="button" aria-label="Clear selected features" disabled={disabled || selectedCount === 0} onClick={onClearSelection}>Clear</button>
+      </div>
+    </div>
   );
 }
 
@@ -343,16 +469,27 @@ function CategoryFilter({
 function FeatureCard({
   feature,
   selected,
+  checked,
   onSelect,
-  onToggle
+  onToggle,
+  onCheckedChange
 }: {
   feature: DraftFeature;
   selected: boolean;
+  checked: boolean;
   onSelect(): void;
   onToggle(): void;
+  onCheckedChange(checked: boolean): void;
 }) {
   return (
     <article className={selected ? "feature-management-card selected" : "feature-management-card"}>
+      <input
+        type="checkbox"
+        className="feature-management-row-checkbox"
+        checked={checked}
+        aria-label={`Select ${feature.displayName || feature.id}`}
+        onChange={event => onCheckedChange(event.target.checked)}
+      />
       <button
         type="button"
         className={feature.enabled ? "feature-management-switch enabled" : "feature-management-switch"}
@@ -402,6 +539,9 @@ function FeatureInspector({
   }
 
   const settingGroups = getSettingGroups(feature.settings);
+  const packageLabel = feature.packageId
+    ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
+    : null;
 
   return (
     <aside className="feature-management-inspector">
@@ -418,19 +558,19 @@ function FeatureInspector({
 
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
-      {feature.packageId ? <p className="feature-management-muted">{feature.packageId} {feature.packageVersion}</p> : null}
-      {feature.categories.length > 0 ? (
-        <div className="feature-management-inspector-tags">
-          {feature.categories.map(category => <span key={category}>{category}</span>)}
-        </div>
-      ) : null}
 
-      <dl className="feature-management-metadata">
-        <div><dt>Source</dt><dd>{feature.sourceKind}</dd></div>
-        <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
-        {feature.manifestHash ? <div><dt>Manifest</dt><dd>{feature.manifestHash}</dd></div> : null}
-        {feature.manifestPath ? <div><dt>Path</dt><dd>{feature.manifestPath}</dd></div> : null}
-      </dl>
+      <div className="feature-management-inspector-tags">
+        <span>{feature.sourceKind}</span>
+        {packageLabel ? <span>{packageLabel}</span> : null}
+        {feature.categories.map(category => <span key={category}>{category}</span>)}
+      </div>
+
+      {feature.manifestHash || feature.manifestPath ? (
+        <dl className="feature-management-detail-list">
+          {feature.manifestHash ? <div><dt>Manifest</dt><dd>{feature.manifestHash}</dd></div> : null}
+          {feature.manifestPath ? <div><dt>Path</dt><dd>{feature.manifestPath}</dd></div> : null}
+        </dl>
+      ) : null}
 
       {feature.settings.length === 0 ? (
         <p className="feature-management-muted">No configurable settings.</p>

@@ -6,16 +6,32 @@ using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
+using Elsa.Studio.Web;
+using Nuplane;
+using Nuplane.Admin;
+using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Sources.Directory.Configuration;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("nuplane-management.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
+var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 builder.WebHost.UseStaticWebAssets();
+
+builder.Services.AddNuplaneAdmin();
+builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
+{
+    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
+    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
+});
+builder.Services.AddSingleton<StudioNuplaneAssemblyProvider>();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
+        .WithAssemblyProvider<StudioNuplaneAssemblyProvider>()
         .WithAssemblies(
             typeof(StudioApiFeature).Assembly,
             typeof(ConsoleStreamStudioFeature).Assembly,
@@ -45,6 +61,7 @@ app.MapGet("/studio-runtime.js", () =>
 
 app.UseStaticFiles();
 
+app.MapElsaModuleManagementApi();
 app.MapShells();
 app.MapFallbackToFile("studio/index.html");
 

@@ -1,0 +1,47 @@
+{
+  "Nuplane": {
+    "Setup": {
+      "AutomaticReconciliation": true,
+      "PollInterval": "00:01:00",
+      "Feeds": [
+        {
+          "Name": "studio-local-packages",
+          "DirectoryPath": "packages",
+          "IncludePatterns": [
+            "*"
+          ],
+          "Directory": {
+            "Watch": true,
+            "DebounceWindow": "00:00:01"
+          }
+        }
+      ]
+    },
+    "Loading": {
+      "Enabled": true,
+      "SharedAssemblies": [
+        {
+          "Name": "CShells.Abstractions",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        },
+        {
+          "Name": "CShells.AspNetCore.Abstractions",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        },
+        {
+          "Name": "Elsa.Studio.Core",
+          "PublicKeyToken": null,
+          "MajorVersion": 0
+        }
+      ]
+    },
+    "CleanupPolicy": {
+      "RetainLastNVersions": 3,
+      "RetainYoungerThanDays": 30,
+      "Mode": "Automatic",
+      "ProtectLastKnownGood": true
+    }
+  }
+}

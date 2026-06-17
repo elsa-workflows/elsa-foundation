@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  Boxes,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -11,6 +10,7 @@ import {
   LayoutDashboard,
   Maximize2,
   Minimize2,
+  PackagePlus,
   PackageSearch,
   Search,
   ShieldCheck
@@ -28,15 +28,30 @@ import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
+import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "failed";
+type NavigationSection = "workspace" | "settings";
 type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
+type HostHealthStatus = "checking" | "ok" | "attention" | "unavailable";
+
+interface HostHealthRegistry {
+  modules: Array<{ status?: string; diagnostics?: Array<{ status?: string }> }>;
+  diagnostics?: Array<{ status?: string }>;
+}
+
+interface HostHealthEntry {
+  status: HostHealthStatus;
+  attention: number;
+  detail: string;
+}
 
 const builtInNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
 ];
 
@@ -145,9 +160,10 @@ function AppContent() {
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
       {path === "/" ? <Home api={api!} /> : null}
       {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
+      {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/diagnostics/modules" ? (
+      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
         <div className="empty-state">No Studio route is registered for {path}.</div>
       ) : null}
     </ShellFrame>
@@ -171,6 +187,11 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const navigationSections = [
+    { id: "workspace", label: "Workspace", items: navigation.filter(item => getNavigationSection(item) === "workspace") },
+    { id: "settings", label: "Settings", items: navigation.filter(item => getNavigationSection(item) === "settings") }
+  ].filter(section => section.items.length > 0);
+
   return (
     <div className="studio-shell">
       <aside className="sidebar">
@@ -189,23 +210,25 @@ function ShellFrame({
           <input aria-label="Search modules" placeholder="Search modules" />
         </label>
 
-        <nav className="nav-section" aria-label="Studio">
-          <span className="nav-heading">Workspace</span>
-          {navigation.map(item => (
-            <a
-              key={item.id}
-              className={path === item.path ? "active" : ""}
-              href={item.path}
-              onClick={event => {
-                event.preventDefault();
-                onNavigate(item.path);
-              }}
-            >
-              <NavIconTile item={item} />
-              {item.label}
-            </a>
-          ))}
-        </nav>
+        {navigationSections.map(section => (
+          <nav key={section.id} className="nav-section" aria-label={section.label}>
+            <span className="nav-heading">{section.label}</span>
+            {section.items.map(item => (
+              <a
+                key={item.id}
+                className={path === item.path ? "active" : ""}
+                href={item.path}
+                onClick={event => {
+                  event.preventDefault();
+                  onNavigate(item.path);
+                }}
+              >
+                <NavIconTile item={item} />
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        ))}
 
         <div className="sidebar-footer">
           <ShieldCheck size={16} />
@@ -428,20 +451,12 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-function Home({ api }: { api: ElsaStudioModuleApi }) {
+export function Home({ api }: { api: ElsaStudioModuleApi }) {
   const widgets = api.dashboardWidgets.list().sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
-  const diagnostics = api.diagnostics.list();
-  const loaded = diagnostics.filter(x => x.status === "loaded").length;
-  const available = diagnostics.filter(x => x.status === "available").length;
-  const failed = diagnostics.filter(x => x.status === "failed").length;
 
   return (
     <section className="dashboard-view">
-      <div className="dashboard-metrics">
-        <MetricCard title="Available modules" value={available} icon={<Boxes size={20} />} />
-        <MetricCard title="Loaded modules" value={loaded} icon={<Activity size={20} />} />
-        <MetricCard title="Failed modules" value={failed} icon={<Gauge size={20} />} />
-      </div>
+      <HostHealthStrip api={api} />
 
       <div className="section-header">
         <div>
@@ -466,6 +481,119 @@ function Home({ api }: { api: ElsaStudioModuleApi }) {
   );
 }
 
+function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
+  const [studio, setStudio] = useState<HostHealthEntry>(checkingHostHealth("Checking Studio host."));
+  const [server, setServer] = useState<HostHealthEntry>(checkingHostHealth("Checking Server host."));
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function load() {
+      const [studioHealth, serverHealth] = await Promise.all([
+        readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
+        readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server")
+      ]);
+
+      if (!disposed) {
+        setStudio(studioHealth);
+        setServer(serverHealth);
+      }
+    }
+
+    void load();
+
+    return () => {
+      disposed = true;
+    };
+  }, [api]);
+
+  const unavailableHosts = [studio, server].filter(host => host.status === "unavailable").length;
+  const attention = studio.attention + server.attention + unavailableHosts;
+  const attentionStatus: HostHealthStatus = studio.status === "checking" || server.status === "checking"
+    ? "checking"
+    : attention === 0
+      ? "ok"
+      : "attention";
+  const backendStatus: HostHealthStatus = server.status === "checking" ? "checking" : server.status === "unavailable" ? "unavailable" : "ok";
+
+  return (
+    <div className="host-health-strip" aria-label="Host health">
+      <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
+      <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
+      <HostHealthTile title="Backend API" value={backendStatus === "ok" ? "Connected" : labelForHostStatus(backendStatus)} detail={api.backend.baseUrl} status={backendStatus} icon={<Activity size={18} />} />
+      <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
+    </div>
+  );
+}
+
+function HostHealthTile({
+  title,
+  value,
+  detail,
+  status,
+  icon
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  status: HostHealthStatus;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="host-health-tile" data-status={status}>
+      <span className="host-health-icon" aria-hidden="true">{icon}</span>
+      <span className="host-health-title">{title}</span>
+      <strong>{value}</strong>
+      <span className="host-health-detail">{detail}</span>
+    </div>
+  );
+}
+
+async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, hostLabel: string): Promise<HostHealthEntry> {
+  try {
+    const registry = await registryRequest;
+    const attention = countRegistryAttention(registry);
+
+    return {
+      status: attention === 0 ? "ok" : "attention",
+      attention,
+      detail: attention === 0 ? `${hostLabel} is reachable.` : `${attention} item${attention === 1 ? "" : "s"} need review.`
+    };
+  } catch {
+    return {
+      status: "unavailable",
+      attention: 0,
+      detail: `${hostLabel} module registry is unavailable.`
+    };
+  }
+}
+
+function checkingHostHealth(detail: string): HostHealthEntry {
+  return { status: "checking", attention: 0, detail };
+}
+
+function countRegistryAttention(registry: HostHealthRegistry) {
+  const attentionStatuses = new Set(["failed", "incompatible", "disabled"]);
+  const moduleStatuses = registry.modules.filter(module => module.status && attentionStatuses.has(module.status)).length;
+  const moduleDiagnostics = registry.modules.flatMap(module => module.diagnostics ?? []).filter(diagnostic => diagnostic.status && attentionStatuses.has(diagnostic.status)).length;
+  const hostDiagnostics = (registry.diagnostics ?? []).filter(diagnostic => diagnostic.status && attentionStatuses.has(diagnostic.status)).length;
+
+  return moduleStatuses + moduleDiagnostics + hostDiagnostics;
+}
+
+function labelForHostStatus(status: HostHealthStatus) {
+  if (status === "ok")
+    return "OK";
+
+  if (status === "attention")
+    return "Review";
+
+  if (status === "unavailable")
+    return "Unavailable";
+
+  return "Checking";
+}
+
 function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section>
@@ -488,16 +616,6 @@ function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
   );
 }
 
-function MetricCard({ title, value, icon }: { title: string; value: number; icon: React.ReactNode }) {
-  return (
-    <div className="metric-card">
-      <span className="metric-icon">{icon}</span>
-      <span>{title}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function NavIcon({ id }: { id: string }) {
   if (id.includes("dashboard")) {
     return <LayoutDashboard size={18} />;
@@ -513,6 +631,10 @@ function NavIcon({ id }: { id: string }) {
 
   if (id.includes("modules")) {
     return <PackageSearch size={18} />;
+  }
+
+  if (id.includes("feeds")) {
+    return <PackagePlus size={18} />;
   }
 
   return <Gauge size={18} />;
@@ -547,7 +669,20 @@ function getDefaultNavIconColor(id: string) {
     return "#8b5cf6";
   }
 
+  if (id.includes("feeds")) {
+    return "#f59e0b";
+  }
+
   return "var(--primary)";
+}
+
+export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {
+  const settingsPaths = new Set(["/modules", "/package-feeds", "/features"]);
+  if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "package-feeds" || item.id === "feature-management") {
+    return "settings";
+  }
+
+  return "workspace";
 }
 
 function normalizePath(path: string) {
