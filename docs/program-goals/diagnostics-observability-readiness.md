@@ -14,11 +14,11 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 
 ## In Scope
 
-- Backend `Elsa.Diagnostics.StructuredLogs` (capture via `ILoggerProvider`, in-memory live feed, CShells.FastEndpoints + SignalR hub) and its EFCore persistence (`*.Persistence.Core/.EFCore/.EFCore.Sqlite`).
-- Backend `Elsa.Diagnostics.OpenTelemetry` (OTLP HTTP/protobuf ingestion, in-memory live feed, query API + SignalR hub) and its EFCore persistence.
+- Backend `Elsa.Diagnostics.StructuredLogs` (capture via `ILoggerProvider`, in-memory live feed, `CShells.FastEndpoints` with an SSE `text/event-stream` live endpoint) and its EFCore persistence (`*.Persistence.Core/.EFCore/.EFCore.Sqlite`).
+- Backend `Elsa.Diagnostics.OpenTelemetry` (OTLP HTTP/protobuf ingestion, in-memory live feed, query API + live streaming) and its EFCore persistence.
 - Studio bottom-panel tabs (TypeScript module SDK) for Structured Logs and OTEL, siblings of the existing Console tab via `api.panels.add`.
 - Feature-registration and per-implementation unit tests, EXTENSION_POINTS catalog updates, and generated-map refreshes for the new domain.
-- Host wiring in `Elsa.Server` (and studio host) mirroring the existing console-logs endpoint/hub mapping.
+- Host wiring in `Elsa.Server` (and studio host); Structured Logs needs no explicit hub mapping (its SSE/HTTP endpoints auto-map via `app.MapShells()`).
 
 ## Out Of Scope
 
@@ -36,6 +36,7 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 4. Speckit slice: OpenTelemetry EFCore persistence (enhancement beyond source, which was in-memory only).
 5. Studio slice (elsa-foundation-studio): Structured Logs bottom-panel tab.
 6. Studio slice (elsa-foundation-studio): OTEL bottom-panel tab.
+7. Follow-up (evaluate): unify the Console tab onto the foundation-owned SSE transport — retire/replace the third-party `ConsoleLogStreaming` SignalR package — once SSE is proven on the Structured Logs slice.
 
 ## Linked Surfaces
 
@@ -48,6 +49,7 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 - Backend-first in `elsa-foundation`; studio panels follow in a separate `elsa-foundation-studio` session that consumes the backend hubs/endpoints.
 - Both sub-domains persist via the foundation EFCore base; OTEL persistence is a deliberate enhancement over the source.
 - Studio UX consolidates observability into the bottom panel (tabs) rather than separate nav pages.
+- **Live transport decision (Structured Logs, spec 073):** Server-Sent Events (SSE), not SignalR — the workload is one-way server→client browser streaming, SSE adds no dependency (no `@microsoft/signalr`, no shared-framework hub), and native `EventSource` gives auto-reconnect + `Last-Event-ID` resume. The Console tab keeps its third-party SignalR transport for now; unifying it onto SSE is objective 7. OTEL's transport is decided per-slice (SSE preferred for consistency).
 
 ## Drift / Review Notes
 

@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: none
+Current Speckit plan: specs/073-diagnostics-structured-logs/plan.md
 <!-- SPECKIT END -->
