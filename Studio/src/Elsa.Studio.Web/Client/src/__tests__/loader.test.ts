@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createStudioRegistry } from "../app/registry";
 import { createEndpointContext } from "../sdk";
-import { isVersionRangeCompatible, loadStudioModules } from "../app/loader";
+import { addModuleVersion, isVersionRangeCompatible, loadStudioModules } from "../app/loader";
 
 describe("studio module loader", () => {
   it("accepts exact, wildcard, and same-major caret ranges", () => {
@@ -30,7 +30,7 @@ describe("studio module loader", () => {
         sdkVersion: "1.0.0",
         loadStyle: async () => undefined,
         importModule: async entry => {
-          if (entry === "/bad.js") {
+          if (entry.startsWith("/bad.js?")) {
             throw new Error("boom");
           }
 
@@ -67,6 +67,39 @@ describe("studio module loader", () => {
     );
 
     expect(api.diagnostics.list()[0].status).toBe("incompatible");
+  });
+
+  it("adds module versions to imported scripts and styles", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const imported: string[] = [];
+    const styles: string[] = [];
+
+    await loadStudioModules(
+      [{ ...manifest("versioned", "/module.js?existing=1#main"), styles: ["/module.css"] }],
+      api,
+      {
+        hostVersion: "1.0.0",
+        sdkVersion: "1.0.0",
+        loadStyle: async href => {
+          styles.push(href);
+        },
+        importModule: async entry => {
+          imported.push(entry);
+          return { register() {} };
+        }
+      }
+    );
+
+    expect(imported).toEqual(["/module.js?existing=1&studioModuleVersion=1.0.0#main"]);
+    expect(styles).toEqual(["/module.css?studioModuleVersion=1.0.0"]);
+  });
+
+  it("does not duplicate existing module version query parameters", () => {
+    expect(addModuleVersion("/module.js?studioModuleVersion=1.0.0", "1.0.1")).toBe("/module.js?studioModuleVersion=1.0.0");
   });
 });
 

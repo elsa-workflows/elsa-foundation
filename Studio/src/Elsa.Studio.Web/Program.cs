@@ -62,6 +62,7 @@ app.MapGet("/studio-runtime.js", () =>
 app.UseStaticFiles();
 
 app.MapElsaModuleManagementApi();
+app.MapElsaFeatureManagementApi();
 app.MapShells();
 app.MapFallbackToFile("studio/index.html");
 

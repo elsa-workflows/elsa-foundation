@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.ConsoleStream.Options;
 using Microsoft.AspNetCore.Routing;
@@ -8,6 +9,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Studio.ConsoleStream;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
+[ManifestFeatureCategory("Studio")]
+[ManifestFeatureCategory("Diagnostics")]
+[ManifestFeatureCategory("Console")]
 [ShellFeature(
     name: "ConsoleStream",
     DisplayName = "Console stream",

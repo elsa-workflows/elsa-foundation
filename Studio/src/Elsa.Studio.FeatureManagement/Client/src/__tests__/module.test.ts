@@ -115,6 +115,35 @@ describe("feature management module", () => {
     await unmount();
   });
 
+  it("separates Studio and Server feature catalogs by host tab", async () => {
+    const api = stubApi({
+      hostGetJson: async () => ({
+        revision: "studio-rev",
+        features: [feature("StudioFeature", true, {}, ["Studio"])]
+      }),
+      getJson: async () => ({
+        revision: "server-rev",
+        features: [feature("ServerFeature", true, {}, ["Runtime"])]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    expect(container.textContent).toContain("Server: 1 enabled of 1 available");
+    expect(container.textContent).toContain("ServerFeature");
+    expect(container.textContent).not.toContain("StudioFeature");
+
+    await click(buttonContainingText(container, "Studio"));
+
+    expect(container.textContent).toContain("Studio: 1 enabled of 1 available");
+    expect(container.textContent).toContain("StudioFeature");
+    expect(container.textContent).not.toContain("ServerFeature");
+    expect((buttonByText(container, "Apply") as HTMLButtonElement).disabled).toBe(true);
+    expect((container.querySelector("[aria-label='Disable StudioFeature']") as HTMLButtonElement).disabled).toBe(true);
+
+    await unmount();
+  });
+
   it("bulk disables selected features before apply", async () => {
     let postPayload: unknown = null;
     const api = stubApi({
@@ -213,7 +242,7 @@ describe("feature management module", () => {
     await unmount();
   });
 
-  it("keeps low-value inspector metadata compact", async () => {
+  it("does not repeat technical ids in feature rows when display name matches", async () => {
     const api = stubApi({
       getJson: async () => ({
         revision: "rev-1",
@@ -222,11 +251,61 @@ describe("feature management module", () => {
     });
     register(api);
     const { container, unmount } = await renderFeatureManagementPage();
+    const selectedCard = container.querySelector(".feature-management-card.selected");
+    const metadata = container.querySelector(".feature-management-metadata");
 
-    expect(container.querySelector(".feature-management-metadata")).toBeNull();
-    expect(container.querySelector(".feature-management-inspector-tags")?.textContent).toContain("runtime");
-    expect(container.querySelector(".feature-management-inspector-tags")?.textContent).toContain("Runtime");
+    expect(selectedCard?.querySelector("strong")?.textContent).toBe("RuntimeA");
+    expect(selectedCard?.querySelector("code")).toBeNull();
+    expect(metadata?.textContent).toContain("Display name");
+    expect(metadata?.textContent).toContain("Technical name");
+    expect(metadata?.textContent).toContain("RuntimeA");
+    expect(metadata?.textContent).toContain("Runtime");
     expect(container.textContent).toContain("No configurable settings.");
+
+    await unmount();
+  });
+
+  it("shows full selected feature metadata when the backend provides it", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "rev-1",
+        features: [
+          feature("RuntimeA", true, {}, ["Runtime", "Workflows"], {
+            displayName: "Runtime A",
+            description: "Runs workflow activities.",
+            packageId: "Elsa.Runtime.Features",
+            packageVersion: "1.2.3",
+            advanced: true,
+            experimental: true,
+            manifestHash: "abc123",
+            manifestPath: "/packages/elsa-package.json",
+            settings: [setting({ name: "Timeout", displayName: "Timeout", jsonType: "number" })]
+          })
+        ]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+    const selectedCard = container.querySelector(".feature-management-card.selected");
+    const metadata = container.querySelector(".feature-management-metadata");
+
+    expect(selectedCard?.querySelector("strong")?.textContent).toBe("Runtime A");
+    expect(selectedCard?.querySelector("code")?.textContent).toBe("RuntimeA");
+    expect(container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Runtime A");
+    expect(metadata?.textContent).toContain("Display name");
+    expect(metadata?.textContent).toContain("Runtime A");
+    expect(metadata?.textContent).toContain("Technical name");
+    expect(metadata?.textContent).toContain("RuntimeA");
+    expect(metadata?.textContent).toContain("Description");
+    expect(metadata?.textContent).toContain("Runs workflow activities.");
+    expect(metadata?.textContent).toContain("Package");
+    expect(metadata?.textContent).toContain("Elsa.Runtime.Features 1.2.3");
+    expect(metadata?.textContent).toContain("Manifest hash");
+    expect(metadata?.textContent).toContain("abc123");
+    expect(metadata?.textContent).toContain("Manifest path");
+    expect(metadata?.textContent).toContain("/packages/elsa-package.json");
+    expect(metadata?.textContent).toContain("Advanced");
+    expect(metadata?.textContent).toContain("Experimental");
 
     await unmount();
   });
@@ -235,8 +314,16 @@ describe("feature management module", () => {
 function stubApi(http?: {
   getJson?: (url: string, init?: RequestInit) => Promise<unknown>;
   postJson?: (url: string, body: unknown, init?: RequestInit) => Promise<unknown>;
+  hostGetJson?: (url: string, init?: RequestInit) => Promise<unknown>;
+  hostPostJson?: (url: string, body: unknown, init?: RequestInit) => Promise<unknown>;
 }) {
   return {
+    host: {
+      http: {
+        getJson: http?.hostGetJson ?? (async () => ({ revision: "studio-rev", features: [] })),
+        postJson: http?.hostPostJson ?? (async () => ({ catalog: { revision: "studio-rev", features: [] }, featureDescriptorCount: 0, reloadedShellCount: 0 }))
+      }
+    },
     backend: {
       http: {
         getJson: http?.getJson ?? (async () => ({ revision: "rev", features: [] })),
@@ -277,7 +364,13 @@ function setting(overrides: Record<string, unknown>) {
   } as any;
 }
 
-function feature(id: string, enabled: boolean, configuration: Record<string, unknown>, categories: string[] = []) {
+function feature(
+  id: string,
+  enabled: boolean,
+  configuration: Record<string, unknown>,
+  categories: string[] = [],
+  overrides: Record<string, unknown> = {}
+) {
   return {
     id,
     displayName: id,
@@ -287,7 +380,8 @@ function feature(id: string, enabled: boolean, configuration: Record<string, unk
     configuration,
     advanced: false,
     experimental: false,
-    settings: []
+    settings: [],
+    ...overrides
   } as any;
 }
 

@@ -1,8 +1,13 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Studio.Samples.Dashboard;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
+[ManifestFeatureCategory("Studio")]
+[ManifestFeatureCategory("Dashboard")]
+[ManifestFeatureCategory("Samples")]
 [ShellFeature(
     name: "DashboardSample",
     DisplayName = "Dashboard sample module",
