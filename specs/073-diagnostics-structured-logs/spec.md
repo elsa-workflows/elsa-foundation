@@ -73,7 +73,7 @@ A developer investigating a specific problem wants to narrow logs by minimum lev
 - **Logging recursion**: Capturing logs must not itself emit logs that get captured in a feedback loop.
 - **High-volume burst**: Backpressure/eviction protects host memory and throughput; dropped-entry signaling is surfaced.
 - **Sensitive data**: Entries may contain whatever the host logs; the feature does not add redaction in this slice (documented assumption).
-- **Authorization**: Diagnostics endpoints/stream require the host's diagnostics authorization policy; unauthorized callers are rejected.
+- **Authorization**: Diagnostics endpoints/stream require the host's diagnostics authorization policy; when the host tightens that policy beyond the default-permissive baseline (FR-008), unauthorized callers are rejected.
 
 ## Requirements *(mandatory)*
 
@@ -90,14 +90,14 @@ A developer investigating a specific problem wants to narrow logs by minimum lev
 - **FR-009**: The system MUST expose configurable options including minimum capture level, buffer capacity (max retained entries), per-subscriber queue/replay limits, and the captured-property/scope size cap (FR-001), bound under the feature's stable name.
 - **FR-010**: Capture and streaming MUST NOT create an infinite logging feedback loop and MUST NOT throw out of the host's logging path on diagnostics failure.
 - **FR-011**: The capture, store, live-feed, and query surfaces MUST be defined behind contracts that a later persistence slice can implement durably without changing consumers (the in-memory store is the default implementation of those contracts).
-- **FR-012**: The system MUST expose its capability/feature presence so a remote diagnostics UI can detect whether structured logs are available on a given host.
+- **FR-012**: The system MUST expose its capability/feature presence so a remote diagnostics UI can detect whether structured logs are available on a given host. The feature's stable name (`DiagnosticsStructuredLogs`, §2.19) enumerated via the host's feature/modularity registry is the capability-detection key; no separate capability endpoint is required.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Structured Log Entry**: A single captured event — identity/sequence, timestamp, level, category, rendered message (and optionally message template), a bounded set of structured properties, a bounded scope chain, exception detail, and originating source reference.
 - **Log Source**: A logical origin of entries. In v1 this is the single local host describing itself (service/process/host metadata); the field and shape are retained so future remote sources fit without contract changes.
 - **Log Filter / Query**: Criteria for selecting entries — minimum level, category, source, and a maximum count for recent queries.
-- **Dropped-Entries Signal**: A marker indicating that some number of entries were not delivered to a subscriber due to backpressure/eviction.
+- **Dropped-Entries Signal**: A marker indicating that some number of entries were not delivered to a subscriber due to backpressure/eviction. On the live feed it travels in-band inside a stream envelope (either a log entry or a dropped-entries signal), so a slow consumer learns of loss without a separate channel.
 
 ## Success Criteria *(mandatory)*
 

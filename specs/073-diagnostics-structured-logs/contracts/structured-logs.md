@@ -101,6 +101,9 @@ tighten the policy use cookie auth or a token query-string parameter (see resear
   `InMemoryStructuredLogStore` (as `IStructuredLogStore` + `IStructuredLogLiveFeed` + `IStructuredLogSink`),
   `LocalStructuredLogSourceProvider`, the three FastEndpoints (`recent`, `sources`, `stream`), and the
   named authz policy (default-permissive).
+- Live-feed seam: `IStructuredLogLiveFeed.Subscribe` yields `StructuredLogStreamItem` envelopes
+  (`Entry` or `Dropped`); the `stream` endpoint maps `Entry`→`event: entry` and `Dropped`→`event:
+  dropped`. This is how drop signals reach the consumer in-band (see data-model.md).
 - **No host hub wiring.** All three endpoints are FastEndpoints, auto-mapped by the existing
   `app.MapShells()`; the host only adds the feature assembly to the CShells assembly list. There is
   no `MapStructuredLogStreaming()` extension (that was only needed under the rejected SignalR option).
@@ -117,4 +120,5 @@ Per `quickstart.md`, each surface has at least one test:
 - `recent` returns ≤ cap, newest-aligned, filter-honouring.
 - `sources` returns the local source.
 - `stream` (SSE) delivers entries to a subscriber and writes a `dropped` event under forced backpressure.
+- live-feed envelope (`StructuredLogStreamItem`) carries exactly one of `Entry`/`Dropped`, and the endpoint maps each to `event: entry` / `event: dropped`.
 - unauthorized request is rejected when the host tightens the policy (SC-006).

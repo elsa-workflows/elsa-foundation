@@ -106,7 +106,7 @@ specs/073-diagnostics-structured-logs/
 src/Elsa/Diagnostics/StructuredLogs/
 ├── Core/
 │   └── Elsa.Diagnostics.StructuredLogs.Core.csproj   # contracts, models, options, domain exceptions
-│       ├── Models/        StructuredLogEntry, LogSource, StructuredLogFilter, DroppedEntriesSignal
+│       ├── Models/        StructuredLogEntry, LogSource, StructuredLogFilter, DroppedEntriesSignal, StructuredLogStreamItem
 │       ├── Contracts/     IStructuredLogStore, IStructuredLogSink, IStructuredLogLiveFeed,
 │       │                  IStructuredLogSourceProvider
 │       ├── Options/       StructuredLogsOptions
@@ -117,7 +117,7 @@ src/Elsa/Diagnostics/StructuredLogs/
     ├── Capture/    StructuredLogCaptureProvider (ILoggerProvider) + StructuredLogCapturingLogger
     ├── Storage/    InMemoryStructuredLogStore (ring buffer; default IStructuredLogStore + live feed)
     ├── Sources/    LocalStructuredLogSourceProvider
-    └── Endpoints/  RecentEndpoint, SourcesEndpoint, StreamEndpoint (FastEndpoints; Stream = SSE)
+    └── Endpoints/  RecentEndpoint, SourcesEndpoint, StreamEndpoint (FastEndpoints; Stream = SSE), StructuredLogEntrySerializer
 
 tests/Elsa/Diagnostics/StructuredLogs/Tests/
 └── Elsa.Diagnostics.StructuredLogs.Tests.csproj

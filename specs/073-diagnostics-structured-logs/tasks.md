@@ -53,20 +53,20 @@ feature. Integration tests are out of scope (§2.23.6); end-to-end checks live i
 - [ ] T005 [P] Create models `StructuredLogEntry`, `LogProperty`, `LogScope`, `LogExceptionInfo` in `src/Elsa/Diagnostics/StructuredLogs/Core/Models/` per data-model.md (immutable/`public sealed`).
 - [ ] T006 [P] Create `LogSource` model in `src/Elsa/Diagnostics/StructuredLogs/Core/Models/LogSource.cs`.
 - [ ] T007 [P] Create `StructuredLogFilter` (with `bool Matches(StructuredLogEntry)`) and `DroppedEntriesSignal` in `src/Elsa/Diagnostics/StructuredLogs/Core/Models/`.
-- [ ] T008 [P] Create contracts `IStructuredLogStore`, `IStructuredLogLiveFeed`, `IStructuredLogSink`, `IStructuredLogSourceProvider` in `src/Elsa/Diagnostics/StructuredLogs/Core/Contracts/` per data-model.md.
+- [ ] T008 [P] Create contracts `IStructuredLogStore`, `IStructuredLogLiveFeed` (`Subscribe` yields `StructuredLogStreamItem` envelopes), `IStructuredLogSink`, `IStructuredLogSourceProvider` in `src/Elsa/Diagnostics/StructuredLogs/Core/Contracts/`, plus the `StructuredLogStreamItem` envelope (Entry|Dropped, factory helpers) in `Core/Models/` per data-model.md.
 - [ ] T009 [P] Create `StructuredLogsOptions` (MinimumLevel, BufferCapacity, SubscriberQueueCapacity, MaxRecentQuerySize, MaxCapturedProperties, MaxCapturedScopeDepth, MaxPropertyValueLength, RecentPath, SourcesPath, StreamPath) in `src/Elsa/Diagnostics/StructuredLogs/Core/Options/StructuredLogsOptions.cs`.
 - [ ] T010 [P] Create domain exception(s) `StructuredLogsException` (+ any specific subtype) in `src/Elsa/Diagnostics/StructuredLogs/Core/Exceptions/` for §2.23.5 boundary wrapping.
 
 ### Engine implementations (`...StructuredLogs`, all `public sealed`)
 
 - [ ] T011 Implement `InMemoryStructuredLogStore` in `src/Elsa/Diagnostics/StructuredLogs/Storage/InMemoryStructuredLogStore.cs` — ring buffer (`BufferCapacity` eviction), `Append`, `GetRecent(filter)` (newest-aligned, `MaxCount` clamped to `MaxRecentQuerySize`), implements `IStructuredLogStore` + `IStructuredLogSink`; thread-safe (depends on T005-T009).
-- [ ] T012 Extend `InMemoryStructuredLogStore` to implement `IStructuredLogLiveFeed.Subscribe(filter, ct)` — per-subscriber bounded channel (`SubscriberQueueCapacity`), drop-oldest on overflow with cumulative `DroppedEntriesSignal`, never blocks the producer (FR-006; depends on T011).
+- [ ] T012 Extend `InMemoryStructuredLogStore` to implement `IStructuredLogLiveFeed.Subscribe(filter, ct)` — per-subscriber bounded channel (`SubscriberQueueCapacity`), yields `StructuredLogStreamItem` envelopes: matching entries as `ForEntry`, and a `ForDropped(DroppedEntriesSignal)` with cumulative count when the channel overflows (drop-oldest); never blocks the producer (FR-006; depends on T011).
 - [ ] T013 [P] Implement `LocalStructuredLogSourceProvider` in `src/Elsa/Diagnostics/StructuredLogs/Sources/LocalStructuredLogSourceProvider.cs` (single local source: service/machine/process; `GetLocalSource`, `GetKnownSources`).
 - [ ] T014 Implement capture `StructuredLogCaptureProvider : ILoggerProvider` + `StructuredLogCapturingLogger` in `src/Elsa/Diagnostics/StructuredLogs/Capture/` — map level/category/timestamp/message/template/properties/scopes/exception into `StructuredLogEntry` with caps (MaxCapturedProperties/MaxCapturedScopeDepth/MaxPropertyValueLength), stamp `SourceId`, forward to `IStructuredLogSink`; ignore own category and swallow sink failures so it never throws or loops on the log path (FR-010; depends on T011, T013).
 
 ### Feature registration + authorization (`...StructuredLogs`)
 
-- [ ] T015 Implement `StructuredLogsFeature : IShellFeature` in `src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs` — `public` non-sealed, `[ShellFeature(name: "DiagnosticsStructuredLogs", ...)]` + `[Manifest*]` attrs; `ConfigureServices` binds `StructuredLogsOptions`, registers the store as `IStructuredLogStore`+`IStructuredLogLiveFeed`+`IStructuredLogSink` (singleton), `IStructuredLogSourceProvider`, the `ILoggerProvider`, and the named default-permissive `Diagnostics:StructuredLogs` authorization policy (depends on T011-T014).
+- [ ] T015 Implement `StructuredLogsFeature : IShellFeature` in `src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs` — `public` non-sealed, `[ShellFeature(name: "DiagnosticsStructuredLogs", ...)]` + `[Manifest*]` attrs (the stable name is also the FR-012 capability-detection key); `ConfigureServices` binds `StructuredLogsOptions`, registers the store as `IStructuredLogStore`+`IStructuredLogLiveFeed`+`IStructuredLogSink` (singleton), `IStructuredLogSourceProvider`, the `ILoggerProvider`, and the named default-permissive `Diagnostics:StructuredLogs` authorization policy (depends on T011-T014).
 
 ### Foundational tests (constitution-required)
 
@@ -93,11 +93,12 @@ confirm it resumes.
 
 - [ ] T021 [US1] Implement `StreamEndpoint` (SSE) in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/StreamEndpoint.cs` — FastEndpoint at `StreamPath`, sets `Content-Type: text/event-stream`, subscribes via `IStructuredLogLiveFeed`, writes each entry as `id: <sequence>\nevent: entry\ndata: <json>\n\n`, writes `event: dropped` for `DroppedEntriesSignal`, emits `: keep-alive` heartbeats, requires the `Diagnostics:StructuredLogs` policy (depends on T012, T015).
 - [ ] T022 [US1] Implement `Last-Event-ID` resume in `StreamEndpoint` — read the header, replay buffered entries after that sequence from the store before live streaming (Acceptance 1.2; depends on T021).
-- [ ] T023 [US1] Serialize `StructuredLogEntry` to the contract JSON shape (camelCase, properties/scopes/exception) used by `data` lines — shared serializer helper in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/` reused by US2 (depends on T005).
+- [ ] T023 [US1] Implement `StructuredLogEntrySerializer` (`public sealed`) in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/StructuredLogEntrySerializer.cs` — serializes `StructuredLogEntry` to the contract JSON shape (camelCase; properties/scopes/exception, including the null/empty branches for each) used by `data` lines, reused by US2 (depends on T005).
 
 ### Tests for User Story 1 (constitution-required)
 
 - [ ] T024 [P] [US1] §2.23.2 branch tests `StreamEndpointTests` — SSE framing (`id`/`event`/`data`), entry + dropped events, `Last-Event-ID` resume path, unauthorized rejected when policy tightened (depends on T021-T023).
+- [ ] T024a [P] [US1] §2.23.2 branch tests `StructuredLogEntrySerializerTests` — assert JSON shape/casing and each conditional branch (properties present/empty, scopes present/empty, exception present/absent, message template present/absent) (depends on T023).
 
 **Checkpoint**: Live SSE tail works and is branch-tested — MVP deliverable.
 

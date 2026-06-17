@@ -71,6 +71,19 @@ Delivered to a subscriber when backpressure forced eviction.
 | `DroppedCount` | `long` | Cumulative dropped for this subscriber. |
 | `Since` | `DateTimeOffset` | When dropping started/last signalled. |
 
+## StructuredLogStreamItem
+
+The live-feed envelope yielded by `IStructuredLogLiveFeed.Subscribe` so entries and drop signals share
+one ordered stream.
+
+| Field | Type | Notes |
+|---|---|---|
+| `Entry` | `StructuredLogEntry?` | Set when this item is a log entry. |
+| `Dropped` | `DroppedEntriesSignal?` | Set when this item is a backpressure drop notice. |
+
+Exactly one of `Entry`/`Dropped` is non-null. Construct via factory helpers
+(`StructuredLogStreamItem.ForEntry(...)` / `.ForDropped(...)`); `public sealed`.
+
 ## StructuredLogsOptions
 
 Bound under the feature name `DiagnosticsStructuredLogs` (§2.19).
@@ -91,7 +104,8 @@ Bound under the feature name `DiagnosticsStructuredLogs` (§2.19).
 ## Contracts (interfaces — `.Core`)
 
 - `IStructuredLogStore` — `void Append(StructuredLogEntry entry)`, `IReadOnlyList<StructuredLogEntry> GetRecent(StructuredLogFilter filter)`.
-- `IStructuredLogLiveFeed` — `IAsyncEnumerable<StructuredLogEntry> Subscribe(StructuredLogFilter filter, CancellationToken ct)` (drop signals surfaced via the same stream or an out-of-band callback — finalized in contracts/).
+- `IStructuredLogLiveFeed` — `IAsyncEnumerable<StructuredLogStreamItem> Subscribe(StructuredLogFilter filter, CancellationToken ct)`. The stream yields an **envelope** so drop signals travel in-band on the same sequence (resolves the "how do drops reach the consumer" seam):
+  - `StructuredLogStreamItem` is a discriminated shape carrying **either** an `Entry` (`StructuredLogEntry`) **or** a `Dropped` (`DroppedEntriesSignal`); exactly one is set. Consumers switch on which is present (the SSE endpoint maps `Entry`→`event: entry`, `Dropped`→`event: dropped`).
 - `IStructuredLogSink` — `void Emit(StructuredLogEntry entry)` (capture → store boundary; lets persistence interpose).
 - `IStructuredLogSourceProvider` — `LogSource GetLocalSource()`, `IReadOnlyList<LogSource> GetKnownSources()`.
 
