@@ -39,8 +39,9 @@ public sealed class FlowchartLoopIterationTests
         await fixture.ExecuteAsync(executable);
 
         var state = await fixture.GetFlowchartStateAsync();
+        var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         Assert.Contains(state.Scopes, scope => scope.Kind == ExecutionScopeKind.LoopIteration && scope.OwnerNodeId == "node-a");
-        Assert.Single(state.ExecutionPaths.Where(path => path.CurrentNodeId == "node-c"));
+        Assert.Single(activityStates.Where(activityState => activityState.Execution.ExecutableNodeId == "node-c"));
     }
 
     [Fact]

@@ -285,7 +285,11 @@ public sealed class FlowchartExecutionEngine(
             ? currentPath.ExecutionScopeId
             : command.ExecutionScopeId;
         var iterationKey = currentPath.IterationKey;
-        var connection = currentPath.CurrentNodeId is null ? null : graph.FindConnection(currentPath.CurrentNodeId, command.NodeId);
+        var connection = !string.IsNullOrWhiteSpace(command.ConnectionId)
+            ? graph.FindConnectionById(command.ConnectionId)
+            : currentPath.CurrentNodeId is null
+                ? null
+                : graph.FindConnection(currentPath.CurrentNodeId, command.NodeId);
         if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
         {
             var currentScope = state.Scopes.First(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId));
@@ -295,6 +299,22 @@ public sealed class FlowchartExecutionEngine(
             executionScopeId = loopScope.ExecutionScopeId;
             iterationKey = loopScope.LoopIterationKey;
             state = AddDiagnostic(state, FlowchartDiagnosticKind.LoopIteration, command.NodeId, graph.GetConnectionId(connection), currentPath.ExecutionPathId, executionScopeId, $"Flowchart created loop iteration scope '{executionScopeId}' for loopback to '{command.NodeId}'.");
+        }
+
+        if (connection is not null)
+        {
+            var connectionId = graph.GetConnectionId(connection);
+            var arrivalPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, command.NodeId, connectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
+            state = AddPath(state, arrivalPath);
+            state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
+
+            if (ShouldWaitForImplicitJoin(state, graph, command.NodeId, executionScopeId, iterationKey))
+            {
+                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
+                return AddDiagnostic(state, FlowchartDiagnosticKind.Waiting, command.NodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{command.NodeId}'.");
+            }
+
+            return FireJoinOrContinuation(context, state, graph, command.NodeId, executionScopeId, iterationKey, schedulingActivityExecutionId, connectionId);
         }
 
         var scheduledPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, command.NodeId, command.ConnectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);

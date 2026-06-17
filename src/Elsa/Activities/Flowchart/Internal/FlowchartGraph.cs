@@ -142,6 +142,12 @@ public sealed class FlowchartGraph
             (normalizedPort is null || StringComparer.Ordinal.Equals(connection.Source.Port, normalizedPort)));
     }
 
+    public FlowchartConnection? FindConnectionById(string connectionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
+        return _connections.FirstOrDefault(connection => StringComparer.Ordinal.Equals(GetConnectionId(connection), connectionId));
+    }
+
     public string GetConnectionId(FlowchartConnection connection)
     {
         ArgumentNullException.ThrowIfNull(connection);

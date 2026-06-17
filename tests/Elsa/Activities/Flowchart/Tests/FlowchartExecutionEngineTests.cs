@@ -96,6 +96,45 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task PolicyContinuation_RespectsImplicitJoinBeforeSchedulingTarget()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d"),
+                fixture.NewConnection("node-c", "node-d")
+            ],
+            startNodeId: "node-a",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata>
+            {
+                ["node-b"] = new(FlowchartPolicyKinds.DirectContinuation)
+            });
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var flowchartState = await fixture.GetFlowchartStateAsync();
+        Assert.Single(states.Where(state => state.Execution.ExecutableNodeId == "node-d"));
+        Assert.Contains(flowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Waiting && diagnostic.NodeId == "node-d");
+    }
+
+    [Fact]
     public async Task WaitPolicy_RemainsWaitingInsteadOfBeingOverwrittenToCompleted()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(
