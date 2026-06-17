@@ -14,19 +14,22 @@ public static class ElsaRuntimeStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
 
+    // Shared index identities and field names. Index identities only need to be unique within a unit,
+    // so the same strings are reused across units that expose the same logical access pattern.
+    public const string ByWorkflowExecutionIndex = "by-workflow-execution";
+    public const string ByCollectionIndex = "by-collection";
+    public const string WorkflowExecutionIdField = "workflowExecutionId";
+    public const string CollectionField = "collection";
+
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
     /// <summary>Index used by <c>IBookmarkStateStore.ListAsync(workflowExecutionId)</c>.</summary>
-    public const string BookmarkStateByWorkflowExecution = "by-workflow-execution";
-
-    public const string WorkflowExecutionIdField = "workflowExecutionId";
+    public const string BookmarkStateByWorkflowExecution = ByWorkflowExecutionIndex;
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";
 
     /// <summary>Index used by <c>IWorkflowExecutableStore.ListAsync()</c> to enumerate every executable.</summary>
-    public const string WorkflowExecutableByCollection = "by-collection";
-
-    public const string CollectionField = "collection";
+    public const string WorkflowExecutableByCollection = ByCollectionIndex;
 
     /// <summary>
     /// Constant partition value stamped on every workflow executable document so the unfiltered
@@ -35,56 +38,103 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowExecutableCollection = "workflowExecutable";
 
+    public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
+    public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
+    public const string DurableValueStateDocumentKind = "durableValueState";
+    public const string SchedulerStateDocumentKind = "schedulerState";
+    public const string OperationalStateDocumentKind = "operationalState";
+    public const string ControlPlaneStateDocumentKind = "controlPlaneState";
+    public const string IncidentStateDocumentKind = "incidentState";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
         new StorageManifestVersion(SchemaVersion),
         [
-            new StorageUnit(
-                new StorageUnitIdentity(BookmarkStateDocumentKind),
+            Unit(
+                BookmarkStateDocumentKind,
                 "Bookmark state",
-                StorageIntent.PortableDocument(),
-                LifecyclePolicy.Mutable,
-                IdentityPolicy.StringId(),
-                TenancyPolicy.None,
-                ConcurrencyPolicy.Optimistic(),
-                SerializationPolicy.Json(),
-                [
-                    Keyword(BookmarkStateByWorkflowExecution, WorkflowExecutionIdField)
-                ],
-                [
-                    new PortableQueryDeclaration(
-                        "list-by-workflow-execution",
-                        BookmarkStateByWorkflowExecution,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-                        QuerySortSupport.None,
-                        QueryPagingSupport.Offset)
-                ],
-                PhysicalizationPolicy.Portable),
-            new StorageUnit(
-                new StorageUnitIdentity(WorkflowExecutableDocumentKind),
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                WorkflowExecutableDocumentKind,
                 "Workflow executable",
-                StorageIntent.PortableDocument(),
-                LifecyclePolicy.Mutable,
-                IdentityPolicy.StringId(),
-                TenancyPolicy.None,
-                ConcurrencyPolicy.Optimistic(),
-                SerializationPolicy.Json(),
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                ActivityExecutionStateDocumentKind,
+                "Activity execution state",
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                WorkflowExecutionStateDocumentKind,
+                "Workflow execution state",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                DurableValueStateDocumentKind,
+                "Durable value state",
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                SchedulerStateDocumentKind,
+                "Scheduler state",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                OperationalStateDocumentKind,
+                "Operational state",
                 [
-                    Keyword(WorkflowExecutableByCollection, CollectionField)
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByCollectionIndex, CollectionField)
                 ],
                 [
-                    new PortableQueryDeclaration(
-                        "list-all",
-                        WorkflowExecutableByCollection,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-                        QuerySortSupport.None,
-                        QueryPagingSupport.Offset)
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-all", ByCollectionIndex)
+                ]),
+            Unit(
+                ControlPlaneStateDocumentKind,
+                "Control plane state",
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByCollectionIndex, CollectionField)
                 ],
-                PhysicalizationPolicy.Portable)
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-all", ByCollectionIndex)
+                ]),
+            Unit(
+                IncidentStateDocumentKind,
+                "Incident state",
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);
+
+    private static StorageUnit Unit(
+        string documentKind,
+        string label,
+        IndexDeclaration[] indexes,
+        PortableQueryDeclaration[] queries) => new(
+        new StorageUnitIdentity(documentKind),
+        label,
+        StorageIntent.PortableDocument(),
+        LifecyclePolicy.Mutable,
+        IdentityPolicy.StringId(),
+        TenancyPolicy.None,
+        ConcurrencyPolicy.Optimistic(),
+        SerializationPolicy.Json(),
+        indexes,
+        queries,
+        PhysicalizationPolicy.Portable);
+
+    private static PortableQueryDeclaration Query(string name, string indexName) => new(
+        name,
+        indexName,
+        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        QuerySortSupport.None,
+        QueryPagingSupport.Offset);
 
     private static IndexDeclaration Keyword(string identity, string field) => new(
         identity,
