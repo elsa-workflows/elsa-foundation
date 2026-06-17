@@ -107,7 +107,6 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> DeleteDropFolderPackageAsync(
         string fileName,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
         [FromServices] IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
@@ -122,14 +121,13 @@ internal static class ElsaModuleManagementApi
             return Results.NotFound(new ModuleManagementErrorResponse($"Package '{safeFileName}' was not found in the drop folder."));
 
         File.Delete(path);
-        var reconcile = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
 
         return Results.Ok(new ModuleManagementDeleteResponse(
             safeFileName,
             path,
-            ModuleManagementReconcileResponse.FromOutcome(reconcile),
+            ModuleManagementReconcileResponse.Deferred("Package was deleted from the drop folder. Reconcile or restart the host to update active Nuplane state."),
             RequiresReload: true,
-            RequiresRestart: false));
+            RequiresRestart: true));
     }
 
     private static async Task<IResult> TriggerReconcileAsync([FromServices] INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
@@ -708,6 +706,9 @@ internal sealed record ModuleManagementReconcileResponse(
             outcome.ReasonCode,
             outcome.RunResult?.IsDegraded,
             outcome.RunResult?.FailedPackages ?? []);
+
+    public static ModuleManagementReconcileResponse Deferred(string reason) =>
+        new("Deferred", "", reason, null, []);
 }
 
 internal sealed record ModuleManagementPruneRequest(bool DryRun = true);

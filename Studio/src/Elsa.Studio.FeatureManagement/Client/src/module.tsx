@@ -54,7 +54,6 @@ interface SettingGroupItem {
 
 type FeatureHostId = "studio" | "server";
 type FeatureEndpointContext = Pick<ElsaStudioModuleApi["host"], "http">;
-type FeatureInspectorTab = "details" | "settings";
 
 interface FeatureHostConfig {
   id: FeatureHostId;
@@ -463,11 +462,8 @@ export function FeatureManagementPage() {
         <FeatureInspector
           feature={selectedFeature}
           disabled={editingDisabled}
-          dirty={dirty}
           onToggle={toggleFeature}
           onSettingChange={updateSetting}
-          onReset={reset}
-          onApply={apply}
         />
       </div>
     </section>
@@ -651,34 +647,23 @@ function FeatureCard({
 function FeatureInspector({
   feature,
   disabled,
-  dirty,
   onToggle,
-  onSettingChange,
-  onReset,
-  onApply
+  onSettingChange
 }: {
   feature: DraftFeature | null;
   disabled: boolean;
-  dirty: boolean;
   onToggle(feature: DraftFeature): void;
   onSettingChange(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown): void;
-  onReset(): void;
-  onApply(): void;
 }) {
-  const featureId = feature?.id ?? null;
-  const [selectedTab, setSelectedTab] = useState<{ featureId: string | null; tab: FeatureInspectorTab }>(() => ({
-    featureId,
-    tab: getDefaultFeatureInspectorTab(feature)
-  }));
-  const activeTab = selectedTab.featureId === featureId ? selectedTab.tab : getDefaultFeatureInspectorTab(feature);
-  const selectTab = (tab: FeatureInspectorTab) => setSelectedTab({ featureId, tab });
+  const [settingsDialogFeatureId, setSettingsDialogFeatureId] = useState<string | null>(null);
 
   if (!feature) {
     return <aside className="feature-management-inspector"><p className="feature-management-muted">Select a feature.</p></aside>;
   }
 
-  const settingGroups = getSettingGroups(feature.settings);
   const displayName = feature.displayName || feature.id;
+  const editSettingsDisabled = disabled || !feature.enabled;
+  const settingsDialogOpen = settingsDialogFeatureId === feature.id;
 
   return (
     <aside className="feature-management-inspector">
@@ -695,77 +680,41 @@ function FeatureInspector({
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
 
-      <div className="feature-management-inspector-tabs" role="tablist" aria-label="Feature inspector">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "details"}
-          className={activeTab === "details" ? "active" : ""}
-          onClick={() => selectTab("details")}
-        >
-          Details
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "settings"}
-          className={activeTab === "settings" ? "active" : ""}
-          onClick={() => selectTab("settings")}
-        >
-          Settings <span>{feature.settings.length}</span>
-        </button>
-      </div>
+      <section className="feature-management-inspector-section" aria-label="Feature metadata">
+        <FeatureMetadata feature={feature} displayName={displayName} />
+      </section>
 
-      {activeTab === "details" ? (
-        <section className="feature-management-inspector-section" aria-label="Feature metadata">
-          <FeatureMetadata feature={feature} displayName={displayName} />
-        </section>
-      ) : (
-        <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
+      <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
+        <div className="feature-management-section-heading">
           <h4>Settings</h4>
-          {feature.settings.length === 0 ? (
-            <p className="feature-management-muted">No configurable settings.</p>
-          ) : (
-            <div className="feature-management-settings">
-              {settingGroups.map(group => (
-                <section key={group.id} className="feature-management-setting-group">
-                  <h5>{group.label}</h5>
-                  <div>
-                    {group.settings.map(setting => {
-                      const Editor = selectSettingEditor(moduleApi, setting).component;
-
-                      return (
-                        <SettingField key={setting.name} setting={setting}>
-                          <Editor
-                            setting={setting}
-                            value={getSettingValue(feature, setting)}
-                            disabled={disabled || !feature.enabled}
-                            onChange={value => onSettingChange(feature, setting, value)}
-                          />
-                        </SettingField>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <div className="feature-management-sticky-actions">
-        <span>{dirty ? "Unsaved changes" : "No pending changes"}</span>
-        <div>
-          <button type="button" onClick={onReset} disabled={!dirty || disabled}>Reset</button>
-          <button type="button" className="primary" onClick={onApply} disabled={!dirty || disabled}>Apply</button>
+          {feature.settings.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSettingsDialogFeatureId(feature.id)}
+              disabled={editSettingsDisabled}
+              title={!feature.enabled ? "Enable the feature before editing settings." : undefined}
+            >
+              Edit settings
+            </button>
+          ) : null}
         </div>
-      </div>
+        {feature.settings.length === 0 ? (
+          <p className="feature-management-muted">No configurable settings.</p>
+        ) : (
+          <FeatureSettingsSummary feature={feature} />
+        )}
+      </section>
+
+      {settingsDialogOpen ? (
+        <FeatureSettingsDialog
+          feature={feature}
+          disabled={editSettingsDisabled}
+          onSettingChange={onSettingChange}
+          onClose={() => setSettingsDialogFeatureId(null)}
+        />
+      ) : null}
     </aside>
   );
-}
-
-function getDefaultFeatureInspectorTab(feature: DraftFeature | null): FeatureInspectorTab {
-  return feature?.settings.length ? "settings" : "details";
 }
 
 function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; displayName: string }) {
@@ -795,28 +744,170 @@ function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; disp
   );
 }
 
-function SettingField({ setting, children }: { setting: StudioSettingDescriptor; children: React.ReactNode }) {
+function FeatureSettingsSummary({ feature }: { feature: DraftFeature }) {
+  const settingGroups = getSettingGroups(feature.settings);
+
   return (
-    <label className="feature-management-setting">
-      <span className="feature-management-setting-label">
-        <span>
+    <div className="feature-management-settings-summary">
+      {settingGroups.map(group => (
+        <section key={group.id} className="feature-management-setting-summary-group">
+          <h5>{group.label}</h5>
+          <div className="feature-management-setting-summary-list">
+            {group.settings.map(setting => (
+              <div key={setting.name} className="feature-management-setting-summary-row">
+                <span className="feature-management-setting-summary-meta">
+                  <span>
+                    <strong>{setting.displayName || setting.name}</strong>
+                    {setting.required ? <em>Required</em> : null}
+                    {setting.restartRequired ? <em>Reload</em> : null}
+                    {setting.advanced ? <em>Advanced</em> : null}
+                  </span>
+                  {setting.description ? <small>{setting.description}</small> : null}
+                  <code>{setting.name}</code>
+                </span>
+                <span className="feature-management-setting-summary-value">
+                  {formatSettingPreview(setting, getSettingValue(feature, setting))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function FeatureSettingsDialog({
+  feature,
+  disabled,
+  onSettingChange,
+  onClose
+}: {
+  feature: DraftFeature;
+  disabled: boolean;
+  onSettingChange(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown): void;
+  onClose(): void;
+}) {
+  const [values, setValues] = useState<Record<string, unknown>>(() => getFeatureSettingValues(feature));
+  const settingGroups = getSettingGroups(feature.settings);
+
+  useEffect(() => {
+    setValues(getFeatureSettingValues(feature));
+  }, [feature.id]);
+
+  function updateSettingValue(setting: StudioSettingDescriptor, value: unknown) {
+    setValues(current => ({
+      ...current,
+      [setting.name]: value
+    }));
+  }
+
+  function resetDialogChanges() {
+    setValues(getFeatureSettingValues(feature));
+  }
+
+  function saveDraft() {
+    for (const setting of feature.settings) {
+      onSettingChange(feature, setting, values[setting.name]);
+    }
+
+    onClose();
+  }
+
+  return (
+    <div className="feature-management-dialog-backdrop" role="presentation">
+      <section
+        className="feature-management-settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feature-management-settings-dialog-title"
+      >
+        <div className="feature-management-dialog-heading">
+          <div>
+            <span>Settings</span>
+            <h3 id="feature-management-settings-dialog-title">{feature.displayName || feature.id}</h3>
+          </div>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="feature-management-dialog-body">
+          <div className="feature-management-settings">
+            {settingGroups.map(group => (
+              <section key={group.id} className="feature-management-setting-group">
+                <h5>{group.label}</h5>
+                <div>
+                  {group.settings.map(setting => {
+                    const Editor = selectSettingEditor(moduleApi, setting).component;
+
+                    return (
+                      <SettingField key={setting.name} setting={setting}>
+                        <Editor
+                          setting={setting}
+                          value={values[setting.name]}
+                          disabled={disabled}
+                          onChange={value => updateSettingValue(setting, value)}
+                        />
+                      </SettingField>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+
+        <div className="feature-management-dialog-actions">
+          <span>Save draft keeps changes local until the page Apply action runs.</span>
+          <div>
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="button" onClick={resetDialogChanges} disabled={disabled}>Reset changes</button>
+            <button type="button" className="primary" onClick={saveDraft} disabled={disabled}>Save draft</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SettingField({ setting, children }: { setting: StudioSettingDescriptor; children: React.ReactNode }) {
+  const booleanSetting = isBooleanSetting(setting);
+
+  return (
+    <label className={booleanSetting ? "feature-management-setting boolean" : "feature-management-setting"}>
+      <span className="feature-management-setting-main">
+        <span className="feature-management-setting-title">
           <strong>{setting.displayName || setting.name}</strong>
           {setting.required ? <em>Required</em> : null}
           {setting.restartRequired ? <em>Reload</em> : null}
           {setting.advanced ? <em>Advanced</em> : null}
         </span>
-        {setting.description ? <small>{setting.description}</small> : null}
-        <code>{setting.name}</code>
+        {booleanSetting ? (
+          <span className="feature-management-setting-control">
+            {children}
+          </span>
+        ) : null}
       </span>
-      <span className="feature-management-setting-control">
-        {children}
-      </span>
+      {!booleanSetting ? (
+        <span className="feature-management-setting-control">
+          {children}
+        </span>
+      ) : null}
+      {setting.description ? <small>{setting.description}</small> : null}
+      <code>{setting.name}</code>
     </label>
   );
 }
 
 function BooleanSettingEditor({ value, disabled, onChange }: StudioSettingEditorProps) {
-  return <input type="checkbox" checked={Boolean(value)} disabled={disabled} onChange={event => onChange(event.target.checked)} />;
+  return (
+    <input
+      type="checkbox"
+      className="feature-management-setting-switch-input"
+      checked={Boolean(value)}
+      disabled={disabled}
+      onChange={event => onChange(event.target.checked)}
+    />
+  );
 }
 
 function TextSettingEditor({ value, disabled, onChange }: StudioSettingEditorProps) {
@@ -896,6 +987,31 @@ function getSettingValue(feature: DraftFeature, setting: StudioSettingDescriptor
   return Object.prototype.hasOwnProperty.call(feature.configuration, setting.name)
     ? feature.configuration[setting.name]
     : setting.defaultValue ?? defaultSettingValue(setting);
+}
+
+function getFeatureSettingValues(feature: DraftFeature) {
+  return Object.fromEntries(feature.settings.map(setting => [setting.name, getSettingValue(feature, setting)]));
+}
+
+function isBooleanSetting(setting: StudioSettingDescriptor) {
+  return normalizeType(setting.jsonType) === "boolean";
+}
+
+function formatSettingPreview(setting: StudioSettingDescriptor, value: unknown) {
+  if (setting.secret || setting.sensitive) {
+    return value == null || value === "" ? "Not set" : "********";
+  }
+
+  if (normalizeType(setting.jsonType) === "boolean") {
+    return Boolean(value) ? "Enabled" : "Disabled";
+  }
+
+  if (value == null || value === "") {
+    return "Not set";
+  }
+
+  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return text.length > 96 ? `${text.slice(0, 93)}...` : text;
 }
 
 function defaultSettingValue(setting: StudioSettingDescriptor) {

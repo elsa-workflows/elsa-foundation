@@ -1162,6 +1162,78 @@ textarea:focus {
   gap: 8px;
 }
 
+.modules-inline-upload {
+  display: grid;
+  gap: 12px;
+}
+
+.modules-upload-dropzone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border: 1px dashed color-mix(in srgb, var(--studio-border) 82%, var(--studio-text-muted));
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+  padding: 10px;
+}
+
+.modules-upload-dropzone.dragging {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent-soft);
+}
+
+.modules-upload-dropzone > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modules-upload-dropzone strong {
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  line-height: 1.25;
+}
+
+.modules-upload-dropzone small {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  line-height: 1.35;
+}
+
+.modules-upload-dropzone > .studio-button {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.modules-staged-uploads {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 10px;
+}
+
+.modules-staged-uploads-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modules-staged-uploads-heading h4 {
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.modules-staged-uploads-heading span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
 .modules-dialog-actions {
   display: flex;
   align-items: center;
@@ -1212,20 +1284,20 @@ textarea:focus {
 
 .modules-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(350px, 420px);
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(350px, 420px);
   gap: 14px;
   align-items: start;
 }
 
 @media (min-width: 1280px) {
   .modules-workbench {
-    grid-template-columns: minmax(0, 1fr) minmax(430px, 500px);
+    grid-template-columns: minmax(190px, 230px) minmax(0, 1fr) minmax(430px, 500px);
   }
 }
 
 @media (min-width: 1600px) {
   .modules-workbench {
-    grid-template-columns: minmax(0, 1fr) minmax(500px, 34vw);
+    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(500px, 34vw);
   }
 }
 
@@ -1264,13 +1336,6 @@ textarea:focus {
 .package-feeds-panel-heading > div {
   display: grid;
   gap: 2px;
-}
-
-.package-feeds-panel-heading span {
-  color: var(--studio-text-muted);
-  font-size: var(--studio-label-size);
-  font-weight: 700;
-  text-transform: uppercase;
 }
 
 .package-feeds-panel-heading h3,
@@ -1318,7 +1383,179 @@ textarea:focus {
 }
 
 .modules-grid-panel {
+  container-type: inline-size;
+  display: grid;
+  gap: 10px;
   min-width: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 14px;
+}
+
+.modules-source-nav {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 12px;
+}
+
+.modules-source-nav-heading,
+.modules-grid-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.modules-source-nav-heading {
+  margin-bottom: 2px;
+}
+
+.modules-source-nav-heading span,
+.modules-source-group > span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.modules-source-nav-heading strong {
+  color: var(--studio-text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.modules-source-button,
+.modules-source-group button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius);
+  background: transparent;
+  color: var(--studio-text);
+  cursor: pointer;
+  min-height: 42px;
+  padding: 8px 9px;
+  text-align: left;
+}
+
+.modules-source-button:hover,
+.modules-source-button.active,
+.modules-source-group button:hover,
+.modules-source-group button.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 44%, var(--studio-border));
+  background: var(--studio-accent-soft);
+}
+
+.modules-source-button > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modules-source-button strong {
+  margin: 0;
+  overflow: hidden;
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modules-source-button small {
+  overflow: hidden;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modules-source-button em,
+.modules-source-group em {
+  color: var(--studio-text-muted);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.modules-source-group {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--studio-border);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.modules-source-group button {
+  min-height: 30px;
+  padding: 6px 8px 6px 14px;
+}
+
+.modules-source-group button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modules-grid-heading > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modules-grid-heading h3 {
+  margin: 0;
+  color: var(--studio-text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.modules-grid-heading p {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+  line-height: 1.45;
+}
+
+.modules-grid-heading > .studio-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@container (max-width: 380px) {
+  .modules-grid-heading {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .modules-grid-heading > .studio-button {
+    justify-self: start;
+  }
+
+  .modules-upload-dropzone {
+    grid-template-columns: 1fr;
+  }
+
+  .modules-upload-dropzone > .studio-button {
+    justify-self: start;
+  }
+}
+
+.modules-grid-panel > .modules-muted {
+  margin: 0;
 }
 
 .modules-name-cell {
@@ -1688,6 +1925,7 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .modules-source-nav,
   .modules-inspector,
   .package-feeds-side-column {
     position: static;

@@ -260,13 +260,12 @@ describe("feature management module", () => {
     expect(metadata?.textContent).toContain("Technical name");
     expect(metadata?.textContent).toContain("RuntimeA");
     expect(metadata?.textContent).toContain("Runtime");
-    expect(container.querySelector("[aria-label='Feature settings']")).toBeNull();
-
-    await click(inspectorTabByText(container, "Settings"));
 
     const settingsSection = container.querySelector("[aria-label='Feature settings']");
     expect(settingsSection?.textContent).toContain("Settings");
     expect(settingsSection?.textContent).toContain("No configurable settings.");
+    expect(container.querySelector(".feature-management-inspector-tabs")).toBeNull();
+    expect(container.querySelector(".feature-management-sticky-actions")).toBeNull();
 
     await unmount();
   });
@@ -276,7 +275,7 @@ describe("feature management module", () => {
       getJson: async () => ({
         revision: "rev-1",
         features: [
-          feature("RuntimeA", true, {}, ["Runtime", "Workflows"], {
+          feature("RuntimeA", true, { Timeout: 5, IncludeTimestamp: true }, ["Runtime", "Workflows"], {
             displayName: "Runtime A",
             description: "Runs workflow activities.",
             packageId: "Elsa.Runtime.Features",
@@ -285,7 +284,10 @@ describe("feature management module", () => {
             experimental: true,
             manifestHash: "abc123",
             manifestPath: "/packages/elsa-package.json",
-            settings: [setting({ name: "Timeout", displayName: "Timeout", jsonType: "number" })]
+            settings: [
+              setting({ name: "IncludeTimestamp", displayName: "Include timestamp", jsonType: "boolean" }),
+              setting({ name: "Timeout", displayName: "Timeout", jsonType: "number" })
+            ]
           })
         ]
       })
@@ -298,11 +300,6 @@ describe("feature management module", () => {
     expect(selectedCard?.querySelector("strong")?.textContent).toBe("Runtime A");
     expect(selectedCard?.querySelector("code")?.textContent).toBe("RuntimeA");
     expect(container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Runtime A");
-    expect(settingsSection).toBeTruthy();
-    expect(settingsSection?.textContent).toContain("Timeout");
-    expect(container.querySelector("[aria-label='Feature metadata']")).toBeNull();
-
-    await click(inspectorTabByText(container, "Details"));
 
     const metadata = container.querySelector(".feature-management-metadata");
     const metadataSection = container.querySelector("[aria-label='Feature metadata']");
@@ -323,6 +320,28 @@ describe("feature management module", () => {
     expect(metadata?.textContent).toContain("/packages/elsa-package.json");
     expect(metadata?.textContent).toContain("Advanced");
     expect(metadata?.textContent).toContain("Experimental");
+    expect(settingsSection).toBeTruthy();
+    expect(settingsSection?.textContent).toContain("Timeout");
+    expect(settingsSection?.textContent).toContain("5");
+    expect(container.querySelector(".feature-management-inspector-tabs")).toBeNull();
+    expect(container.querySelector(".feature-management-sticky-actions")).toBeNull();
+
+    await click(buttonByText(container, "Edit settings"));
+
+    const dialog = container.querySelector(".feature-management-settings-dialog");
+    const timeoutInput = dialog?.querySelector("input[type='number']") as HTMLInputElement | null;
+    const timestampSwitch = dialog?.querySelector(".feature-management-setting.boolean .feature-management-setting-switch-input") as HTMLInputElement | null;
+    expect(dialog?.textContent).toContain("Save draft");
+    expect(timestampSwitch?.checked).toBe(true);
+    expect(timeoutInput?.value).toBe("5");
+
+    await changeInput(timeoutInput, "12");
+    await click(buttonByText(dialog!, "Save draft"));
+
+    const updatedSettingsSection = container.querySelector("[aria-label='Feature settings']");
+    expect(container.querySelector(".feature-management-settings-dialog")).toBeNull();
+    expect(container.textContent).toContain("Unsaved changes");
+    expect(updatedSettingsSection?.textContent).toContain("12");
 
     await unmount();
   });
@@ -460,13 +479,18 @@ function buttonContainingText(container: Element, text: string) {
   return button;
 }
 
-function inspectorTabByText(container: Element, text: string) {
-  const tablist = container.querySelector(".feature-management-inspector-tabs");
-  if (!tablist) {
-    throw new Error("Could not find feature inspector tabs.");
+async function changeInput(input: HTMLInputElement | null, value: string) {
+  if (!input) {
+    throw new Error("Expected input to exist.");
   }
 
-  return buttonContainingText(tablist, text);
+  flushSync(() => {
+    const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set;
+    valueSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flushPromises();
 }
 
 async function flushPromises() {

@@ -169,7 +169,6 @@ function PackageFeedsWorkbench({
       <section className="package-feeds-panel" aria-label={`${host.label} feeds`}>
         <div className="package-feeds-panel-heading">
           <div>
-            <span>{host.label} host</span>
             <h3>Feeds</h3>
           </div>
           <strong>{registry.feeds.length}</strong>
@@ -229,7 +228,6 @@ function PackageFeedsWorkbench({
         <section className="package-feeds-panel" aria-label={`${host.label} feed operations`}>
           <div className="package-feeds-panel-heading">
             <div>
-              <span>{host.label} host</span>
               <h3>Operations</h3>
             </div>
           </div>
@@ -249,7 +247,6 @@ function PackageFeedsWorkbench({
         <section className="package-feeds-panel" aria-label={`${host.label} retention settings`}>
           <div className="package-feeds-panel-heading">
             <div>
-              <span>{host.label} host</span>
               <h3>Retention</h3>
             </div>
           </div>
@@ -321,7 +318,6 @@ function FeedDialog({
       <section className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title">
         <div className="modules-upload-dialog-heading">
           <div>
-            <span>{host.label} host</span>
             <h3 id="package-feed-dialog-title">{title}</h3>
             {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
           </div>

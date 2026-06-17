@@ -5,7 +5,6 @@ using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
-using Elsa.Studio.Samples.WeatherForecast;
 using Elsa.Studio.Web;
 using Nuplane;
 using Nuplane.Admin;
@@ -36,8 +35,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(StudioApiFeature).Assembly,
             typeof(ConsoleStreamStudioFeature).Assembly,
             typeof(FeatureManagementStudioFeature).Assembly,
-            typeof(DashboardStudioFeature).Assembly,
-            typeof(WeatherForecastStudioFeature).Assembly)
+            typeof(DashboardStudioFeature).Assembly)
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {
