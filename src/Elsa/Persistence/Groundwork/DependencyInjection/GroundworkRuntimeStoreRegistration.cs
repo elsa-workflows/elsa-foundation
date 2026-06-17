@@ -34,6 +34,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IControlPlaneStateStore, GroundworkControlPlaneStateStore>();
         services.RemoveAll<IIncidentStateStore>();
         services.AddSingleton<IIncidentStateStore, GroundworkIncidentStateStore>();
+
+        // Durable checkpoint writer. It orchestrates the Groundwork-backed seam stores above and records a
+        // restart-safe per-CommitId marker, replacing the in-memory writer registered by the runtime feature.
+        services.RemoveAll<IRuntimeCheckpointWriter>();
+        services.AddSingleton<IRuntimeCheckpointWriter, GroundworkRuntimeCheckpointWriter>();
+
         return services;
     }
 }

@@ -46,6 +46,11 @@ public static class ElsaRuntimeStorageManifest
     public const string ControlPlaneStateDocumentKind = "controlPlaneState";
     public const string IncidentStateDocumentKind = "incidentState";
 
+    // Durable idempotency ledger for the checkpoint writer. A marker document keyed by CommitId records
+    // that a checkpoint commit has been fully applied, so an at-least-once redelivery of the same commit
+    // is skipped. This survives process restarts, unlike the in-memory writer's in-process dedup set.
+    public const string CheckpointCommitDocumentKind = "checkpointCommit";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -107,7 +112,12 @@ public static class ElsaRuntimeStorageManifest
                 IncidentStateDocumentKind,
                 "Incident state",
                 [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
-                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)])
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                CheckpointCommitDocumentKind,
+                "Checkpoint commit ledger",
+                [],
+                [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

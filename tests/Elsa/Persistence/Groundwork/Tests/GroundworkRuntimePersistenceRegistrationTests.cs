@@ -38,6 +38,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
         services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
+        services.TryAddSingleton<IRuntimeCheckpointWriter, InMemoryRuntimeCheckpointWriter>();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
 
         services.AddGroundworkRuntimeStores();
@@ -53,6 +54,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<GroundworkControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
+        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
     }
 
     [Fact]
