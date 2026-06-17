@@ -61,7 +61,7 @@ internal static class ElsaModuleManagementApi
             features.Features.Select(ModuleManagementModule.FromFeature).ToArray(),
             packages.Packages.Select(ModuleManagementPackage.FromActivePackage).ToArray(),
             ListDropFolderPackages(dropFolder),
-            ReadFeeds(config),
+            ReadRegistryFeeds(config),
             ReadRetentionPolicy(config, cleanupOptions.Value),
             new(
                 CanUploadPackages: true,
@@ -293,7 +293,7 @@ internal static class ElsaModuleManagementApi
                 (string?)feed["Name"] ?? "",
                 (string?)feed["ServiceIndex"],
                 (string?)feed["DirectoryPath"],
-                null,
+                (string?)feed["Credentials"],
                 (bool?)feed["IncludeAll"] ?? false,
                 feed["IncludePatterns"]?.AsArray().Select(x => (string?)x).Where(x => !string.IsNullOrWhiteSpace(x)).Cast<string>().ToArray() ?? [],
                 new(
@@ -301,6 +301,11 @@ internal static class ElsaModuleManagementApi
                     (string?)feed["Directory"]?["DebounceWindow"] ?? "00:00:01")))
             .Where(feed => !string.IsNullOrWhiteSpace(feed.Name))
             .OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static ModuleManagementFeed[] ReadRegistryFeeds(ManagementConfiguration config) =>
+        ReadFeeds(config)
+            .Select(feed => feed with { Credentials = null })
             .ToArray();
 
     private static ModuleManagementRetentionPolicy ReadRetentionPolicy(ManagementConfiguration config, CleanupPolicyOptions fallback)
