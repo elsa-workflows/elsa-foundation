@@ -190,7 +190,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         }
 
         if (!context.CompositeCompletionRequested)
-            throw new InvalidOperationException($"Composite activity execution '{payload.ActivityExecutionId}' did not request completion or child activity scheduling after child execution '{completedChildActivityExecutionId}' completed.");
+            return;
 
         var completedParentState = CompleteParentActivity(workItem, payload, parentState, context.CompositeCompletionOutcomeNames);
         await activityExecutionStateStore.SaveAsync(completedParentState, cancellationToken);

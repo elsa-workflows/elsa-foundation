@@ -1,8 +1,35 @@
 # Elsa.Activities.Flowchart Extension Points
 
-This module does not expose replaceable service contracts in v1. Its activity-owned contracts are:
+## Implementable contributor interfaces
+
+### `IFlowchartPolicy`
+
+- **Kind:** Contributor (policy decision provider)
+- **Contract:** `Elsa.Activities.Flowchart.Contracts.IFlowchartPolicy`
+- **Registration:** Register one or more implementations with DI as `IFlowchartPolicy`.
+- **Aggregation:** `IFlowchartPolicyRegistry` resolves all registered policy implementations by stable `PolicyKind`.
+- **Selection:** Flowchart structure metadata can assign a policy kind to a node through `FlowchartStructure.NodeMetadata`.
+- **Decision boundary:** Policies receive `IFlowchartPolicyContext`, which exposes read-only graph/state/trigger information. Policies return `FlowchartPolicyDecision` commands; the Flowchart execution engine validates and applies those commands.
+
+Known implementations:
+
+- `DirectContinuationFlowchartPolicy` *(intra-domain — default)*
+- `ImplicitActivationJoinFlowchartPolicy` *(intra-domain — default)*
+- `DecisionFlowchartPolicy` *(intra-domain — default)*
+- `ParallelForkFlowchartPolicy` *(intra-domain — default)*
+- `ParallelJoinFlowchartPolicy` *(intra-domain — default)*
+- `InclusiveForkFlowchartPolicy` *(intra-domain — default)*
+- `InclusiveJoinFlowchartPolicy` *(intra-domain — default)*
+- `FirstWinsFlowchartPolicy` *(intra-domain — default)*
+- `MergeFlowchartPolicy` *(intra-domain — default)*
+
+## Activity-owned structure contracts
+
+This module also exposes these activity-owned contracts:
 
 - `Flowchart.Activities` child slot
 - `elsa.flowchart.structure` structure payload with schema version `1.0.0`
 - `FlowchartStructure.Connections` containing `FlowchartConnection[]`
 - `FlowchartStructure.StartNodeId` optional start-node selection
+- `FlowchartStructure.NodeMetadata` optional node policy metadata
+- `FlowchartStructure.ConnectionMetadata` optional connection policy metadata

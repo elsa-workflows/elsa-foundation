@@ -9,11 +9,15 @@ public sealed class FlowchartAuthoredStructure
     public FlowchartAuthoredStructure(
         IReadOnlyCollection<ActivityNode>? activities = null,
         IReadOnlyCollection<FlowchartConnection>? connections = null,
-        string? startNodeId = null)
+        string? startNodeId = null,
+        IReadOnlyDictionary<string, FlowchartNodeMetadata>? nodeMetadata = null,
+        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null)
     {
         Activities = activities ?? [];
         Connections = connections ?? [];
         StartNodeId = startNodeId;
+        NodeMetadata = nodeMetadata ?? new Dictionary<string, FlowchartNodeMetadata>();
+        ConnectionMetadata = connectionMetadata ?? new Dictionary<string, FlowchartConnectionMetadata>();
     }
 
     [JsonPropertyName("activities")]
@@ -24,4 +28,10 @@ public sealed class FlowchartAuthoredStructure
 
     [JsonPropertyName("startNodeId")]
     public string? StartNodeId { get; }
+
+    [JsonPropertyName("nodeMetadata")]
+    public IReadOnlyDictionary<string, FlowchartNodeMetadata> NodeMetadata { get; }
+
+    [JsonPropertyName("connectionMetadata")]
+    public IReadOnlyDictionary<string, FlowchartConnectionMetadata> ConnectionMetadata { get; }
 }
