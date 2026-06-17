@@ -23,6 +23,45 @@ This confirms the central goal: runtime/domain code depends only on Elsa's seam 
 - **Unfiltered list via a constant partition.** `IWorkflowExecutableStore.ListAsync()` has no filter, but Groundwork's portable query contract is declared-index equality (no "scan all"). The bridge stamps a constant `collection` value on each executable document and lists via an equality query on it, so enumeration stays inside the portable contract every provider supports rather than depending on a provider-specific full scan.
 - **Don't persist derived projections.** `WorkflowExecutable` recomputes `Nodes`/`NodesById` from `RootActivity` in its constructor. A bridge-local `JsonTypeInfo` modifier drops those two properties from serialization (the constructor rebuilds them on load), avoiding storing the executable graph three times. This is a serialization concern owned by the bridge, not a domain-model change.
 
+## Update 2 — full runtime seam coverage, durable checkpoint writer, outbox
+
+The bridge has since been extended from two seams to **all ten runtime persistence seams**, plus a durable checkpoint writer. Everything below is landed and tested in `Elsa.Persistence.Groundwork` against both the real Groundwork SQLite provider and an in-memory document store.
+
+### Seam coverage (10/10)
+
+`IBookmarkStateStore`, `IWorkflowExecutableStore`, `IActivityExecutionStateStore`, `IWorkflowExecutionStateStore`, `IDurableValueStateStore`, `ISchedulerStateStore`, `IOperationalStateStore`, `IControlPlaneStateStore`, `IIncidentStateStore`, and `IRuntimePostCommitOutboxStore` are all implemented over the portable `IDocumentStore`. The host swaps the in-memory defaults by composing `AddGroundworkRuntimeStores()` (driven by the `Elsa.Persistence.Groundwork.Sqlite` feature); a registration test asserts every seam plus the checkpoint writer is replaced.
+
+### Durable checkpoint writer — and the atomicity finding
+
+`GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter` orchestrates the bridged seam stores for a `RuntimeCheckpointCommit` (which spans up to seven document kinds) and records a **durable per-`CommitId` marker document** for restart-safe idempotency.
+
+The important architectural finding: **Groundwork's preview document store is autonomous per operation — there is no cross-document transaction.** Each `SaveAsync`/`DeleteAsync` commits independently; the relational document store is constructed over a bare `DbConnection` and does not enlist in a unit of work. Groundwork's atomic `IOperationalUnitOfWork` covers only the operational stores (Outbox/Leases/WorkQueue), not documents.
+
+This is **not** a blocker, because the checkpoint contract does not require cross-store atomicity. The reference `InMemoryRuntimeCheckpointWriter` is itself sequential and non-transactional — it applies the seam stores one by one behind a write gate and relies on **idempotent redelivery keyed by `CommitId`**. The Groundwork writer matches that model and strengthens it: the dedup marker is durable (survives restart, unlike the in-memory dedup set), and the incident append is applied idempotently so an at-least-once redelivery of a partially-applied commit completes safely. A test proves multi-seam state survives a real SQLite connection close/reopen ("restart").
+
+If a future requirement genuinely needs all-or-nothing cross-document commit, that is a **Groundwork capability request** (a document store that can enlist in `IOperationalUnitOfWork` / share a `DbTransaction`), not something the bridge can synthesize.
+
+### Outbox bridged over documents, not the operational outbox — and why
+
+`IRuntimePostCommitOutboxStore` is bridged over `IDocumentStore`, deliberately **not** over Groundwork's operational `IOutboxStore`. The two contracts are structurally incompatible:
+
+| Concern | Groundwork `IOutboxStore` | Elsa `IRuntimePostCommitOutboxStore` |
+|---|---|---|
+| Identity | server-generated `MessageId` + `Sequence` (not returned from append) | caller-supplied deterministic `OutboxItemId` (`commitId:intentId`) |
+| Claim model | lease token + `LeaseExpiresAt` returned by `GetDeliverable` | no lease; ownership is an optional item field the in-memory store doesn't even implement |
+| Ack | `RecordDeliveryResult` **requires** a valid `LeaseToken` | records by `OutboxItemId` + status, no token |
+| Inline path | n/a | committer records `Delivered` immediately after `SavePending`, with no preceding `GetDeliverable` (so no lease could exist) |
+
+Modelling each outbox item as a document reproduces the authoritative in-memory lifecycle (pending → delivering → delivered / retryable / final, with retry policy, attempt counts, and availability windows) durably, on the same portable substrate as every other seam. Groundwork's operational outbox remains a candidate for a future **transport-level** outbox, but it does not fit the runtime post-commit outbox contract.
+
+### Provider primitive finding — no atomic insert-only
+
+The SQLite provider has no portable atomic insert-only primitive: `ExpectedVersion = 0` on an absent document returns `NotFound` (not a create sentinel), and the in-memory test double diverges by treating it as a create. `IIncidentStateStore.TryAddAsync` is therefore implemented as read-then-create with a documented race window. This is a provider capability gap worth raising with Groundwork.
+
+### Net effect on scope
+
+The entire **runtime** persistence story is now provider-agnostic with only the host naming a provider. What remains for a "de facto Groundwork persistence" verdict is a product decision on **design-time/definition persistence** (currently EF Core), plus optional benchmark evidence before moving operational hot paths onto Groundwork's operational layer.
+
 ## What the current codebase already gives us
 
 - Runtime persistence seams already exist as replacement contracts in `Elsa.Workflows.Runtime.Core` (`IWorkflowExecutableStore`, `IWorkflowExecutionStateStore`, `IBookmarkStateStore`, `IDurableValueStateStore`, `IIncidentStateStore`, `IOperationalStateStore`, `ISchedulerStateStore`, `IRuntimePostCommitOutboxStore`).
@@ -114,9 +153,11 @@ Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and huma
 ## Recommended implementation route
 
 1. ✅ **Done.** Opt-in `Elsa.Persistence.Groundwork` bridge with the provider adapter resolved at host composition time (`Elsa.Persistence.Groundwork.Sqlite`).
-2. ✅ **Done (two seams).** Two runtime stores landed behind existing replacement contracts — `IBookmarkStateStore` and `IWorkflowExecutableStore` — over Groundwork's `IDocumentStore`, each with provider-neutral and registration tests. `IWorkflowExecutionStateStore` / `IDurableValueStateStore` / `IIncidentStateStore` remain candidate document-shaped seams.
-3. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
-4. ⏳ **Open.** Add a hot-path viability matrix/checklist before migrating operational seams (outbox, scheduler work queue, leases) onto Groundwork's operational layer, gated on benchmark evidence rather than capability.
+2. ✅ **Done (all ten runtime seams).** Every runtime store now has a Groundwork bridge over `IDocumentStore` — `IBookmarkStateStore`, `IWorkflowExecutableStore`, `IActivityExecutionStateStore`, `IWorkflowExecutionStateStore`, `IDurableValueStateStore`, `ISchedulerStateStore`, `IOperationalStateStore`, `IControlPlaneStateStore`, `IIncidentStateStore`, `IRuntimePostCommitOutboxStore` — each with provider-neutral and registration tests. See "Update 2" above.
+3. ✅ **Done.** A durable `GroundworkRuntimeCheckpointWriter` orchestrates the seam stores for atomic-by-idempotent-replay checkpoint commits, proven across a simulated SQLite restart.
+4. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
+5. ⏳ **Open (product decision).** Decide whether design-time/definition persistence (currently EF Core) is in scope for a "de facto Groundwork" verdict.
+6. ⏳ **Open (evidence-gated).** Add a hot-path viability matrix/benchmark before migrating operational seams onto Groundwork's *operational* layer (leases/work queue/transport outbox), gated on evidence rather than capability.
 
 ## POC acceptance criteria
 
