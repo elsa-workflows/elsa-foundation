@@ -6,10 +6,10 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 29
-- Source catalogs discovered: 28
+- Catalog files discovered: 30
+- Source catalogs discovered: 29
 - Source catalogs indexed from root: 28
-- Discovered source catalogs not linked from root index: 28
+- Discovered source catalogs not linked from root index: 29
 - Root-indexed catalogs missing on disk: 28
 
 ## Catalogs
@@ -33,6 +33,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/elsa/Http/EXTENSION_POINTS.md](../../src/elsa/Http/EXTENSION_POINTS.md) | Elsa.Http | Elsa.Http | Implementable contributor interfaces | `IDownloadableContentHandler` *(Core — `Elsa.Http.Core`)* | Contributor (handles a specific content type for download — priority-ordered multi-implementation). | 1 | no |
 | [src/elsa/Locking/FileSystem/EXTENSION_POINTS.md](../../src/elsa/Locking/FileSystem/EXTENSION_POINTS.md) | Elsa.Locking.FileSystem | Elsa.Locking | Overridable contracts | `IDistributedLockProvider` *(Core — `Elsa.Locking.Core`)* | 0 | no |  |
 | [src/elsa/Mediator/EXTENSION_POINTS.md](../../src/elsa/Mediator/EXTENSION_POINTS.md) | Elsa.Mediator | Elsa.Mediator | Implementable contributor interfaces<br>Implementable pipeline middleware | `ICommandHandler<TCommand>` / `ICommandHandler<TCommand, TResult>` *(Core — `Elsa.Mediator.Core`)*<br>`IRequestHandler<TRequest, TResponse>` *(Core — `Elsa.Mediator.Core`)*<br>`ICommandMiddleware` *(Core — `Elsa.Mediator.Core`)*<br>`IRequestMiddleware` *(Core — `Elsa.Mediator.Core`)* | Contributor (handles a specific command type — one handler per command).<br>Contributor (handles a specific request type — one handler per request, returns a response).<br>Pipeline middleware for the command pipeline.<br>Pipeline middleware for the request pipeline. | 2 | no |
+| [src/elsa/Modularity/Api/EXTENSION_POINTS.md](../../src/elsa/Modularity/Api/EXTENSION_POINTS.md) | Elsa.Modularity.Api | Elsa.Modularity | Overridable contracts<br>Implementable contributor interfaces | 0 | no |  |  |
 | [src/elsa/Persistence/EFCore/EXTENSION_POINTS.md](../../src/elsa/Persistence/EFCore/EXTENSION_POINTS.md) | Elsa.Persistence.EFCore | Elsa.Persistence | Overridable contracts<br>Implementable contributor interfaces<br>Writing a persistence feature (`EFCorePersistenceShellFeatureBase<TDbContext>`)<br>Events | `IQueries<TEntity>` *(Core — `Elsa.Persistence.Core`)*<br>`IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IElsaDbContextSchema` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntitySavingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntityLoadingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>Out-of-band hooks (NOT event-dispatched)<br>OnEntitySaving<br>OnEntityLoading | entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).<br>entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`). | 2 | no |
 | [src/elsa/Pipelines/Core/EXTENSION_POINTS.md](../../src/elsa/Pipelines/Core/EXTENSION_POINTS.md) | Elsa.Pipelines.Core | Elsa.Pipelines | Implementable contributor interfaces | `IMiddleware` *(Core — `Elsa.Pipelines.Core`)* | Contributor (pipeline middleware step). | 1 | no |
 | [src/elsa/Serialization/SystemText/EXTENSION_POINTS.md](../../src/elsa/Serialization/SystemText/EXTENSION_POINTS.md) | Elsa.Serialization.SystemText | Elsa.Serialization | Implementable contributor interfaces<br>Events | `IJsonConverterSource` *(Core — `Elsa.Serialization.Core`)*<br>OnJsonPayloadConvertersInitializing | Source (returns values — pull pattern). | 1 | no |
@@ -66,6 +67,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | discovered but not root-indexed | [src/elsa/Http/EXTENSION_POINTS.md](../../src/elsa/Http/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/elsa/Locking/FileSystem/EXTENSION_POINTS.md](../../src/elsa/Locking/FileSystem/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/elsa/Mediator/EXTENSION_POINTS.md](../../src/elsa/Mediator/EXTENSION_POINTS.md) |
+| discovered but not root-indexed | [src/elsa/Modularity/Api/EXTENSION_POINTS.md](../../src/elsa/Modularity/Api/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/elsa/Persistence/EFCore/EXTENSION_POINTS.md](../../src/elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/elsa/Pipelines/Core/EXTENSION_POINTS.md](../../src/elsa/Pipelines/Core/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/elsa/Serialization/SystemText/EXTENSION_POINTS.md](../../src/elsa/Serialization/SystemText/EXTENSION_POINTS.md) |

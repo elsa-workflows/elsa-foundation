@@ -8,7 +8,8 @@ The Modularity API feature owns the shell feature-management surface.
 |---|---|---|
 | `IShellFeatureConfigurationStore` | `JsonShellFeatureConfigurationStore` (`Elsa.Modularity.Api`) | The host stores shell configuration somewhere other than `shells.json`. |
 | `IShellReloader` | `ShellReloader` (`Elsa.Modularity.Api`) | The host needs custom reload semantics or shell inference. |
-| `IRuntimeFeatureCatalogRefresher` | `RuntimeFeatureCatalogRefresher` (`Elsa.Modularity.Nuplane`) | CShells exposes a direct public refresh contract or another catalog source is used. |
+| `IRuntimeFeatureCatalogAccessor` | `RuntimeFeatureCatalogAccessor` (`Elsa.Modularity.Nuplane`) | The host uses another runtime catalog source instead of CShells feature assembly providers. |
+| `IRuntimeFeatureCatalogRefresher` | `RuntimeFeatureCatalogRefresher` (`Elsa.Modularity.Nuplane`) | The host needs custom refresh/reload reporting semantics. |
 
 ## Implementable contributor interfaces
 
@@ -18,5 +19,5 @@ The Modularity API feature owns the shell feature-management surface.
 
 Known default contributors:
 
-- `RuntimeFeatureCatalogContributor` - merges CShells runtime feature descriptors.
+- `RuntimeFeatureCatalogContributor` - merges CShells runtime feature descriptors discovered from public feature assembly providers.
 - `PackageManifestFeatureCatalogContributor` - merges Nuplane package manifest metadata and feature settings.

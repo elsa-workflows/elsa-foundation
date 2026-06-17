@@ -1,11 +1,12 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.IO.Compression;
+using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
+using Elsa.Modularity.Nuplane.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
@@ -67,49 +68,14 @@ internal static class ElsaDemoApi
     private static IResult GetPackageEvents(DemoPackageEventStore events, long? afterSequence) =>
         Results.Ok(events.GetEvents(afterSequence));
 
-    private static async Task<IResult> ReloadShellsAsync(IServiceProvider serviceProvider, IShellRegistry shellRegistry, CancellationToken cancellationToken)
+    private static async Task<IResult> ReloadShellsAsync(IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog, IShellRegistry shellRegistry, CancellationToken cancellationToken)
     {
-        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
-        var featureDescriptorCount = GetFeatureDescriptorCount(snapshot);
+        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        var featureDescriptorCount = snapshot.FeatureDescriptors.Count;
         var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
         Console.WriteLine($"Demo shells reloaded after refreshing {featureDescriptorCount} feature descriptor(s) and reloading {reloadResults.Count} active shell(s).");
 
         return Results.Ok(new DemoReloadShellsResponse(featureDescriptorCount, reloadResults.Count));
-    }
-
-    private static async Task<object> RefreshFeatureCatalogAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
-    {
-        // CShells does not currently expose feature-catalog refresh through a public contract.
-        // The demo reload endpoint needs newly loaded Nuplane feature assemblies to be discoverable before shell reload.
-        var catalogType = AppDomain.CurrentDomain
-            .GetAssemblies()
-            .Select(assembly => assembly.GetType("CShells.Features.RuntimeFeatureCatalog", throwOnError: false))
-            .FirstOrDefault(type => type is not null);
-
-        if (catalogType is null)
-            throw new InvalidOperationException("Could not find the CShells runtime feature catalog type.");
-
-        var catalog = serviceProvider.GetRequiredService(catalogType);
-        var refreshMethod = catalogType.GetMethod("RefreshAsync", BindingFlags.Public | BindingFlags.Instance)
-            ?? throw new InvalidOperationException("Could not find RuntimeFeatureCatalog.RefreshAsync.");
-
-        var refreshTask = refreshMethod.Invoke(catalog, [cancellationToken]) as Task
-            ?? throw new InvalidOperationException("RuntimeFeatureCatalog.RefreshAsync did not return a task.");
-
-        await refreshTask.ConfigureAwait(false);
-
-        var snapshot = refreshTask.GetType().GetProperty("Result")?.GetValue(refreshTask)
-            ?? throw new InvalidOperationException("RuntimeFeatureCatalog.RefreshAsync did not return a snapshot.");
-
-        return snapshot;
-    }
-
-    private static int GetFeatureDescriptorCount(object snapshot)
-    {
-        var featureDescriptors = snapshot.GetType().GetProperty("FeatureDescriptors")?.GetValue(snapshot)
-            ?? throw new InvalidOperationException("The runtime feature catalog snapshot did not expose feature descriptors.");
-
-        return Convert.ToInt32(featureDescriptors.GetType().GetProperty("Count")?.GetValue(featureDescriptors));
     }
 
     private static async Task<IResult> TriggerPackageReconcileAsync(INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
@@ -128,7 +94,7 @@ internal static class ElsaDemoApi
     }
 
     private static async Task<IResult> ListFeaturesAsync(
-        IServiceProvider serviceProvider,
+        IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
         CancellationToken cancellationToken)
@@ -150,20 +116,18 @@ internal static class ElsaDemoApi
             });
         }
 
-        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
-        foreach (var descriptor in EnumerateFeatureDescriptors(snapshot))
+        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        foreach (var descriptor in snapshot.FeatureDescriptors)
         {
-            var featureName = GetStringProperty(descriptor, "FeatureName")
-                ?? GetStringProperty(descriptor, "Name")
-                ?? GetStringProperty(descriptor, "Id");
+            var featureName = descriptor.Id;
             if (string.IsNullOrWhiteSpace(featureName))
                 continue;
 
             UpsertFeature(items, featureName, "{}", builder =>
             {
                 builder.SourceKind = builder.SourceKind == "manifest" ? builder.SourceKind : "runtime";
-                builder.DisplayName = GetStringProperty(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
-                builder.Description = GetStringProperty(descriptor, "Description") ?? builder.Description;
+                builder.DisplayName = GetDescriptorMetadata(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
+                builder.Description = GetDescriptorMetadata(descriptor, "Description") ?? builder.Description;
             });
         }
 
@@ -248,7 +212,7 @@ internal static class ElsaDemoApi
         Results.Ok(ClearPackageDropFolder(environment));
 
     private static async Task<IResult> ResetDemoAsync(
-        IServiceProvider serviceProvider,
+        IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog,
         IShellRegistry shellRegistry,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
@@ -269,8 +233,8 @@ internal static class ElsaDemoApi
 
         var packages = ClearPackageDropFolder(environment);
         var reconcile = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
-        var snapshot = await RefreshFeatureCatalogAsync(serviceProvider, cancellationToken);
-        var featureDescriptorCount = GetFeatureDescriptorCount(snapshot);
+        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        var featureDescriptorCount = snapshot.FeatureDescriptors.Count;
         var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
 
         Console.WriteLine(
@@ -478,18 +442,9 @@ internal static class ElsaDemoApi
         return features ?? [];
     }
 
-    private static IEnumerable<object> EnumerateFeatureDescriptors(object snapshot)
+    private static string? GetDescriptorMetadata(ShellFeatureDescriptor descriptor, string key)
     {
-        var featureDescriptors = snapshot.GetType().GetProperty("FeatureDescriptors")?.GetValue(snapshot);
-        return featureDescriptors is System.Collections.IEnumerable enumerable
-            ? enumerable.Cast<object>()
-            : [];
-    }
-
-    private static string? GetStringProperty(object source, string propertyName)
-    {
-        var value = source.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(source);
-        return value?.ToString();
+        return descriptor.Metadata.TryGetValue(key, out var value) ? value?.ToString() : null;
     }
 
     private static void UpsertFeature(

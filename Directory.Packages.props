@@ -7,10 +7,11 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
-    <PackageVersion Include="CShells.Abstractions" Version="0.0.28" />
-    <PackageVersion Include="CShells.FastEndpoints" Version="0.0.28" />
-    <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.28" />
-    <PackageVersion Include="CShells.Management.Api" Version="0.0.28" />
+    <PackageVersion Include="CShells" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells.FastEndpoints" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells.Management.Api" Version="0.0.29-preview.143" />
     <PackageVersion Include="DistributedLock.FileSystem" Version="1.0.3" />
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />

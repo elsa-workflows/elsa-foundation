@@ -1,19 +1,17 @@
-using System.Reflection;
+using CShells.Features;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 
 namespace Elsa.Modularity.Nuplane.Services;
 
-public sealed class RuntimeFeatureCatalogContributor(IServiceProvider serviceProvider) : IFeatureCatalogContributor
+public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog) : IFeatureCatalogContributor
 {
     public async Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
     {
-        var snapshot = await RuntimeFeatureCatalogReflection.RefreshAsync(serviceProvider, cancellationToken);
-        foreach (var descriptor in RuntimeFeatureCatalogReflection.EnumerateFeatureDescriptors(snapshot))
+        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        foreach (var descriptor in snapshot.FeatureDescriptors)
         {
-            var featureName = GetStringProperty(descriptor, "FeatureName")
-                ?? GetStringProperty(descriptor, "Name")
-                ?? GetStringProperty(descriptor, "Id");
+            var featureName = descriptor.Id;
 
             if (string.IsNullOrWhiteSpace(featureName))
                 continue;
@@ -22,14 +20,13 @@ public sealed class RuntimeFeatureCatalogContributor(IServiceProvider servicePro
             if (builder.SourceKind is not FeatureSourceKinds.Manifest)
                 builder.SourceKind = builder.SourceKind is FeatureSourceKinds.Shell ? FeatureSourceKinds.Runtime : builder.SourceKind;
 
-            builder.DisplayName = GetStringProperty(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
-            builder.Description = GetStringProperty(descriptor, "Description") ?? builder.Description;
+            builder.DisplayName = GetMetadataString(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
+            builder.Description = GetMetadataString(descriptor, "Description") ?? builder.Description;
         }
     }
 
-    private static string? GetStringProperty(object source, string propertyName)
+    private static string? GetMetadataString(ShellFeatureDescriptor descriptor, string key)
     {
-        var value = source.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(source);
-        return value?.ToString();
+        return descriptor.Metadata.TryGetValue(key, out var value) ? value?.ToString() : null;
     }
 }

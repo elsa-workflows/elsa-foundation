@@ -4,39 +4,40 @@
       "default": {
         "Name": "default",
         "Features": {
-          "Primitives": {},
-          "FileSystemDistributedLocking": {},
-          "Serialization": {},
-          "Tasks": {},
-          "MemoryCache": {},
-          "Mediator": {},
-          "ModularityApi": {},
-          "Events": {},
-          "Expressions": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
-          "WorkflowsDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignApi": {},
-          "ActivitiesRuntime": {},
-          "ActivitiesPrimitives": {},
-          "ActivitiesSequence": {},
-          "ActivitiesCompositionRuntime": {},
+          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesSequence": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
             }
           },
-          "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {},
+          "Events": {},
+          "Expressions": {},
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
-          "SampleNuplaneActivities": {}
+          "FileSystemDistributedLocking": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "ModularityApi": {},
+          "Primitives": {},
+          "SampleNuplaneActivities": {
+            "IncludeTimestamp": true
+          },
+          "Serialization": {},
+          "Tasks": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowsDesignPersistenceEFCoreSqlite": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsRuntimeApi": {}
         },
         "Configuration": {
           "WebRouting": {
-            "Path": "default"
+            "Path": ""
           }
         }
       }
