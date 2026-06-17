@@ -18,10 +18,18 @@ namespace Elsa.Samples.Nuplane.Activities;
 )]
 public sealed class SampleNuplaneActivitiesFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Message template", Description = "Console message template. Use {recipient} for the activity input value.", Category = "Output", DefaultValue = "Hello {recipient} from a Nuplane-loaded activity.", RestartRequired = true)]
+    [ManifestSetting(
+        DisplayName = "Message template",
+        Description = "Console message template. Use {recipient} for the activity input value.",
+        Category = "General",
+        DefaultValue = "Hello {recipient} from a Nuplane-loaded activity.")]
     public string MessageTemplate { get; set; } = "Hello {recipient} from a Nuplane-loaded activity.";
 
-    [ManifestSetting(DisplayName = "Include timestamp", Description = "Prefixes the console message with the current local time.", Category = "Output", DefaultValue = "false", RestartRequired = true)]
+    [ManifestSetting(
+        DisplayName = "Include timestamp", 
+        Description = "Prefixes the console message with the current local time.", 
+        Category = "General",
+        DefaultValue = "false")]
     public bool IncludeTimestamp { get; set; }
 
     public void ConfigureServices(IServiceCollection services)
