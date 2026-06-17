@@ -76,3 +76,9 @@ Open:
 - `/_elsa/studio/diagnostics/console-logs/sources`
 - `/_elsa/studio/diagnostics/console-logs/hub`
 - `/_elsa/studio/samples/weather-forecast`
+
+When `Studio:BackendBaseUrl` points at an Elsa Server backend, the console panel expects that backend to expose its own console stream under:
+
+- `/_elsa/server/diagnostics/console-logs/recent`
+- `/_elsa/server/diagnostics/console-logs/sources`
+- `/_elsa/server/diagnostics/console-logs/hub`

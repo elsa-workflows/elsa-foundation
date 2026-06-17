@@ -169,6 +169,14 @@ export async function addFeed(context: StudioEndpointContext, feed: ModuleManage
   return postJson(context, "/_elsa/module-management/feeds", feed);
 }
 
+export async function updateFeed(context: StudioEndpointContext, feedName: string, feed: ModuleManagementFeed) {
+  return requestJson(context, `/_elsa/module-management/feeds/${encodeURIComponent(feedName)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(feed)
+  });
+}
+
 export async function saveRetentionPolicy(context: StudioEndpointContext, policy: ModuleManagementRetentionPolicy) {
   return requestJson(context, "/_elsa/module-management/retention-policy", {
     method: "PUT",

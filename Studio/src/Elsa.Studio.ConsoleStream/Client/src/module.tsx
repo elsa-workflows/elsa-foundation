@@ -76,9 +76,10 @@ interface AnsiState {
 }
 
 const consoleTargetDefinitions: Record<ConsoleHostId, Pick<ConsoleTarget, "id" | "label" | "endpointPrefix">> = {
-  server: { id: "server", label: "Server", endpointPrefix: "/diagnostics/console-logs" },
+  server: { id: "server", label: "Server", endpointPrefix: "/_elsa/server/diagnostics/console-logs" },
   studio: { id: "studio", label: "Studio", endpointPrefix: "/_elsa/studio/diagnostics/console-logs" }
 };
+const defaultConsoleHostId: ConsoleHostId = "studio";
 const consoleReplayLimit = 2_000;
 const maxConsoleLines = 2_000;
 const consoleStreamServerTimeoutInMilliseconds = 120_000;
@@ -137,7 +138,7 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
-  const [hostId, setHostId] = useState<ConsoleHostId>("server");
+  const [hostId, setHostId] = useState<ConsoleHostId>(defaultConsoleHostId);
   const [sources, setSources] = useState<ConsoleLogSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
   const [sourcesState, setSourcesState] = useState<"loading" | "ready" | "failed">("loading");
@@ -307,6 +308,11 @@ export function ConsoleStreamPanel() {
         await loadRecentLines();
       } catch (error) {
         setConnected(false);
+        if (isConsoleStreamEndpointNotFoundError(error)) {
+          addLine("stderr", createConsoleEndpointNotFoundMessage(target));
+          return;
+        }
+
         addLine("stderr", `Console stream connection failed: ${getErrorMessage(error)}`);
         await loadRecentLines().catch(recentError =>
           addLine("stderr", `Recent console lines failed: ${getErrorMessage(recentError)}`));
@@ -559,6 +565,10 @@ export function isRecoverableConsoleStreamError(error: unknown) {
   return getErrorMessage(error) === consoleStreamTimeoutMessage;
 }
 
+export function isConsoleStreamEndpointNotFoundError(error: unknown) {
+  return /\b404\b/.test(getErrorMessage(error));
+}
+
 function createConsoleTarget(hostId: ConsoleHostId): ConsoleTarget {
   const definition = consoleTargetDefinitions[hostId];
   return {
@@ -578,6 +588,10 @@ function createRecentPath(target: ConsoleTarget, sourceId: string | null) {
 
 function resolveTargetUrl(target: ConsoleTarget, path: string) {
   return new URL(path, target.context.baseUrl).toString();
+}
+
+function createConsoleEndpointNotFoundMessage(target: ConsoleTarget) {
+  return `Console stream endpoint was not found at ${resolveTargetUrl(target, target.endpointPrefix)}. Make sure ${target.label} maps console streaming or choose another host.`;
 }
 
 function upsertConsoleSource(sources: ConsoleLogSource[], source: ConsoleLogSource) {

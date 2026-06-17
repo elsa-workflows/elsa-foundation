@@ -6,6 +6,7 @@ import {
   formatConsoleSourceLabel,
   getConsoleStreamName,
   parseAnsiSegments,
+  isConsoleStreamEndpointNotFoundError,
   isRecoverableConsoleStreamError,
   register,
   type ConsoleEntry
@@ -86,6 +87,11 @@ describe("console stream module", () => {
   it("treats stream timeout errors as recoverable", () => {
     expect(isRecoverableConsoleStreamError(new Error("Server timeout elapsed without receiving a message from the server."))).toBe(true);
     expect(isRecoverableConsoleStreamError(new Error("Something else"))).toBe(false);
+  });
+
+  it("detects missing console stream endpoints", () => {
+    expect(isConsoleStreamEndpointNotFoundError(new Error("Status code '404'"))).toBe(true);
+    expect(isConsoleStreamEndpointNotFoundError(new Error("Status code '500'"))).toBe(false);
   });
 
   it("formats process and pod source labels", () => {

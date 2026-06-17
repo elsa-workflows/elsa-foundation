@@ -260,7 +260,13 @@ describe("feature management module", () => {
     expect(metadata?.textContent).toContain("Technical name");
     expect(metadata?.textContent).toContain("RuntimeA");
     expect(metadata?.textContent).toContain("Runtime");
-    expect(container.textContent).toContain("No configurable settings.");
+    expect(container.querySelector("[aria-label='Feature settings']")).toBeNull();
+
+    await click(inspectorTabByText(container, "Settings"));
+
+    const settingsSection = container.querySelector("[aria-label='Feature settings']");
+    expect(settingsSection?.textContent).toContain("Settings");
+    expect(settingsSection?.textContent).toContain("No configurable settings.");
 
     await unmount();
   });
@@ -287,11 +293,22 @@ describe("feature management module", () => {
     register(api);
     const { container, unmount } = await renderFeatureManagementPage();
     const selectedCard = container.querySelector(".feature-management-card.selected");
-    const metadata = container.querySelector(".feature-management-metadata");
+    const settingsSection = container.querySelector("[aria-label='Feature settings']");
 
     expect(selectedCard?.querySelector("strong")?.textContent).toBe("Runtime A");
     expect(selectedCard?.querySelector("code")?.textContent).toBe("RuntimeA");
     expect(container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Runtime A");
+    expect(settingsSection).toBeTruthy();
+    expect(settingsSection?.textContent).toContain("Timeout");
+    expect(container.querySelector("[aria-label='Feature metadata']")).toBeNull();
+
+    await click(inspectorTabByText(container, "Details"));
+
+    const metadata = container.querySelector(".feature-management-metadata");
+    const metadataSection = container.querySelector("[aria-label='Feature metadata']");
+
+    expect(metadataSection).toBeTruthy();
+    expect(metadataSection?.textContent).not.toContain("Timeout");
     expect(metadata?.textContent).toContain("Display name");
     expect(metadata?.textContent).toContain("Runtime A");
     expect(metadata?.textContent).toContain("Technical name");
@@ -441,6 +458,15 @@ function buttonContainingText(container: Element, text: string) {
   }
 
   return button;
+}
+
+function inspectorTabByText(container: Element, text: string) {
+  const tablist = container.querySelector(".feature-management-inspector-tabs");
+  if (!tablist) {
+    throw new Error("Could not find feature inspector tabs.");
+  }
+
+  return buttonContainingText(tablist, text);
 }
 
 async function flushPromises() {

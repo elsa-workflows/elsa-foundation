@@ -1162,6 +1162,13 @@ textarea:focus {
   gap: 8px;
 }
 
+.modules-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .modules-drop-folder-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1210,6 +1217,18 @@ textarea:focus {
   align-items: start;
 }
 
+@media (min-width: 1280px) {
+  .modules-workbench {
+    grid-template-columns: minmax(0, 1fr) minmax(430px, 500px);
+  }
+}
+
+@media (min-width: 1600px) {
+  .modules-workbench {
+    grid-template-columns: minmax(0, 1fr) minmax(500px, 34vw);
+  }
+}
+
 .package-feeds-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
@@ -1227,9 +1246,12 @@ textarea:focus {
   padding: 16px;
 }
 
-.package-feeds-side-panel {
+.package-feeds-side-column {
+  display: grid;
+  gap: 14px;
   position: sticky;
   top: 12px;
+  align-self: start;
 }
 
 .package-feeds-panel-heading {
@@ -1277,11 +1299,22 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.package-feed-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .package-feeds-form-block {
   display: grid;
   gap: 10px;
   border-top: 1px solid var(--studio-border);
   padding-top: 14px;
+}
+
+.package-feeds-add-button {
+  justify-self: start;
 }
 
 .modules-grid-panel {
@@ -1656,7 +1689,7 @@ textarea:focus {
   }
 
   .modules-inspector,
-  .package-feeds-side-panel {
+  .package-feeds-side-column {
     position: static;
     max-height: none;
   }

@@ -484,19 +484,22 @@ export function Home({ api }: { api: ElsaStudioModuleApi }) {
 function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
   const [studio, setStudio] = useState<HostHealthEntry>(checkingHostHealth("Checking Studio host."));
   const [server, setServer] = useState<HostHealthEntry>(checkingHostHealth("Checking Server host."));
+  const [backend, setBackend] = useState<HostHealthEntry>(checkingHostHealth("Checking backend API."));
 
   useEffect(() => {
     let disposed = false;
 
     async function load() {
-      const [studioHealth, serverHealth] = await Promise.all([
+      const [studioHealth, serverHealth, backendHealth] = await Promise.all([
         readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
-        readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server")
+        readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server"),
+        readBackendHealth(api.backend.baseUrl)
       ]);
 
       if (!disposed) {
         setStudio(studioHealth);
         setServer(serverHealth);
+        setBackend(backendHealth);
       }
     }
 
@@ -514,13 +517,12 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
     : attention === 0
       ? "ok"
       : "attention";
-  const backendStatus: HostHealthStatus = server.status === "checking" ? "checking" : server.status === "unavailable" ? "unavailable" : "ok";
 
   return (
     <div className="host-health-strip" aria-label="Host health">
       <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
       <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
-      <HostHealthTile title="Backend API" value={backendStatus === "ok" ? "Connected" : labelForHostStatus(backendStatus)} detail={api.backend.baseUrl} status={backendStatus} icon={<Activity size={18} />} />
+      <HostHealthTile title="Backend API" value={backend.status === "ok" ? "Connected" : labelForHostStatus(backend.status)} detail={backend.detail} status={backend.status} icon={<Activity size={18} />} />
       <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
     </div>
   );
@@ -559,17 +561,38 @@ async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, host
       attention,
       detail: attention === 0 ? `${hostLabel} is reachable.` : `${attention} item${attention === 1 ? "" : "s"} need review.`
     };
-  } catch {
+  } catch (e) {
     return {
       status: "unavailable",
       attention: 0,
-      detail: `${hostLabel} module registry is unavailable.`
+      detail: `${hostLabel} module registry is unavailable: ${getHealthErrorMessage(e)}`
+    };
+  }
+}
+
+async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
+  try {
+    await fetch(baseUrl, { cache: "no-store", mode: "no-cors" });
+    return {
+      status: "ok",
+      attention: 0,
+      detail: baseUrl
+    };
+  } catch (e) {
+    return {
+      status: "unavailable",
+      attention: 0,
+      detail: `${baseUrl} (${getHealthErrorMessage(e)})`
     };
   }
 }
 
 function checkingHostHealth(detail: string): HostHealthEntry {
   return { status: "checking", attention: 0, detail };
+}
+
+function getHealthErrorMessage(error: unknown) {
+  return error instanceof Error && error.message.length > 0 ? error.message : "request failed";
 }
 
 function countRegistryAttention(registry: HostHealthRegistry) {

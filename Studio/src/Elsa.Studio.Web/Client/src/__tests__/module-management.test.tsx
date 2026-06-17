@@ -130,6 +130,46 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Retention");
     expect(container.textContent).toContain("Reconcile");
     expect(container.textContent).toContain("Prune old versions");
+    const operationsPanel = container.querySelector("[aria-label='Studio feed operations']");
+    const retentionPanel = container.querySelector("[aria-label='Studio retention settings']");
+    expect(operationsPanel?.textContent).toContain("Reconcile");
+    expect(operationsPanel?.textContent).toContain("Prune old versions");
+    expect(operationsPanel?.textContent).not.toContain("Retention");
+    expect(retentionPanel?.textContent).toContain("Retention");
+    expect(retentionPanel?.textContent).toContain("Save retention");
+    expect(container.querySelector("[aria-label='Feed name']")).toBeNull();
+
+    const editFeedButton = container.querySelector("[aria-label='Edit studio-local-packages']");
+    expect(editFeedButton).toBeTruthy();
+
+    flushSync(() => {
+      editFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Feed name']")?.value).toBe("studio-local-packages");
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Directory path']")?.value).toBe("packages");
+    expect(container.textContent).toContain("Save feed");
+
+    const closeEditFeedButton = container.querySelector("[aria-label='Close edit feed']");
+    expect(closeEditFeedButton).toBeTruthy();
+
+    flushSync(() => {
+      closeEditFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    const addFeedButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Add feed");
+    expect(addFeedButton).toBeTruthy();
+
+    flushSync(() => {
+      addFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Feed name']")).toBeTruthy();
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     expect(serverTab).toBeTruthy();

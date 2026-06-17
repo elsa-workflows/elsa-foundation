@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Boxes, PackagePlus, RefreshCcw, Scissors, Trash2 } from "lucide-react";
+import { Boxes, PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -12,6 +12,7 @@ import {
   numberOrNull,
   postJson,
   saveRetentionPolicy,
+  updateFeed,
   type HostId,
   type HostModel,
   type ModuleManagementFeed,
@@ -26,6 +27,13 @@ interface HostRegistryState {
   error: string | null;
   status: string | null;
   operationBusy: boolean;
+}
+
+interface FeedDraft {
+  name: string;
+  serviceIndex: string;
+  directoryPath: string;
+  includePatterns: string;
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
@@ -104,6 +112,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
           registry={activeState.registry}
           busy={activeState.operationBusy}
           onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
+          onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onDeleteFeed={feedName => runHostOperation(() => deleteFeed(activeHost.context, feedName), `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
           onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
@@ -121,6 +130,7 @@ function PackageFeedsWorkbench({
   registry,
   busy,
   onAddFeed,
+  onUpdateFeed,
   onDeleteFeed,
   onSaveRetention,
   onReconcile,
@@ -130,29 +140,28 @@ function PackageFeedsWorkbench({
   registry: ModuleManagementRegistryResponse;
   busy: boolean;
   onAddFeed(feed: ModuleManagementFeed): void;
+  onUpdateFeed(feedName: string, feed: ModuleManagementFeed): void;
   onDeleteFeed(feedName: string): void;
   onSaveRetention(policy: ModuleManagementRetentionPolicy): void;
   onReconcile(): void;
   onPrune(): void;
 }) {
-  const [feedDraft, setFeedDraft] = useState({ name: "", serviceIndex: "", includePatterns: "*" });
+  const [addFeedDialogOpen, setAddFeedDialogOpen] = useState(false);
+  const [editingFeed, setEditingFeed] = useState<ModuleManagementFeed | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<ModuleManagementRetentionPolicy>(() => registry.retentionPolicy ?? defaultRetentionPolicy());
 
   useEffect(() => {
     setRetentionDraft(registry.retentionPolicy ?? defaultRetentionPolicy());
   }, [registry.retentionPolicy]);
 
-  function addDraftFeed() {
-    onAddFeed({
-      name: feedDraft.name.trim(),
-      serviceIndex: feedDraft.serviceIndex.trim() || null,
-      directoryPath: null,
-      credentials: null,
-      includeAll: feedDraft.includePatterns.trim() === "*",
-      includePatterns: feedDraft.includePatterns.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean),
-      directory: { watch: true, debounceWindow: "00:00:01" }
-    });
-    setFeedDraft({ name: "", serviceIndex: "", includePatterns: "*" });
+  function addDraftFeed(feedDraft: FeedDraft) {
+    onAddFeed(createFeedFromDraft(feedDraft));
+    setAddFeedDialogOpen(false);
+  }
+
+  function updateDraftFeed(feedName: string, feedDraft: FeedDraft) {
+    onUpdateFeed(feedName, createFeedFromDraft(feedDraft));
+    setEditingFeed(null);
   }
 
   return (
@@ -175,49 +184,75 @@ function PackageFeedsWorkbench({
                 <code>{feed.serviceIndex ?? feed.directoryPath ?? "no source"}</code>
                 <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
               </span>
-              <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} onClick={() => onDeleteFeed(feed.name)}>
-                <Trash2 size={14} />
-              </button>
+              <div className="package-feed-row-actions">
+                <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
+                  <Pencil size={14} />
+                </button>
+                <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="package-feeds-form-block">
-          <h4>Add feed</h4>
-          <div className="modules-form">
-            <input aria-label="Feed name" placeholder="Feed name" value={feedDraft.name} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
-            <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
-            <textarea aria-label="Include patterns" placeholder="Include patterns" value={feedDraft.includePatterns} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
-            <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canManageFeeds || !feedDraft.name.trim()} onClick={addDraftFeed}>
-              <PackagePlus size={15} />
-              Add feed
-            </button>
-          </div>
-          {registry.capabilities.feedChangesRequireRestart ? <p className="modules-muted">Feed registration changes require a host restart before Nuplane can use them.</p> : null}
-        </div>
+        <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
+          <PackagePlus size={15} />
+          Add feed
+        </button>
+
+        {addFeedDialogOpen ? (
+          <FeedDialog
+            mode="add"
+            host={host}
+            busy={busy}
+            feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
+            onClose={() => setAddFeedDialogOpen(false)}
+            onSubmit={addDraftFeed}
+          />
+        ) : null}
+
+        {editingFeed ? (
+          <FeedDialog
+            mode="edit"
+            host={host}
+            busy={busy}
+            feed={editingFeed}
+            feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
+            onClose={() => setEditingFeed(null)}
+            onSubmit={feedDraft => updateDraftFeed(editingFeed.name, feedDraft)}
+          />
+        ) : null}
       </section>
 
-      <aside className="package-feeds-panel package-feeds-side-panel" aria-label={`${host.label} feed operations`}>
-        <div className="package-feeds-panel-heading">
-          <div>
-            <span>{host.label} host</span>
-            <h3>Operations</h3>
+      <aside className="package-feeds-side-column" aria-label={`${host.label} package feed controls`}>
+        <section className="package-feeds-panel" aria-label={`${host.label} feed operations`}>
+          <div className="package-feeds-panel-heading">
+            <div>
+              <span>{host.label} host</span>
+              <h3>Operations</h3>
+            </div>
           </div>
-        </div>
 
-        <div className="modules-operation-grid">
-          <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canReconcile} onClick={onReconcile}>
-            <RefreshCcw size={15} />
-            Reconcile
-          </button>
-          <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canPrunePackages} onClick={onPrune}>
-            <Scissors size={15} />
-            Prune old versions
-          </button>
-        </div>
+          <div className="modules-operation-grid">
+            <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canReconcile} onClick={onReconcile}>
+              <RefreshCcw size={15} />
+              Reconcile
+            </button>
+            <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canPrunePackages} onClick={onPrune}>
+              <Scissors size={15} />
+              Prune old versions
+            </button>
+          </div>
+        </section>
 
-        <div className="package-feeds-form-block">
-          <h4>Retention</h4>
+        <section className="package-feeds-panel" aria-label={`${host.label} retention settings`}>
+          <div className="package-feeds-panel-heading">
+            <div>
+              <span>{host.label} host</span>
+              <h3>Retention</h3>
+            </div>
+          </div>
           <div className="modules-form two-column">
             <label>
               <span>Last versions</span>
@@ -254,10 +289,87 @@ function PackageFeedsWorkbench({
             </label>
             <button type="button" className="studio-button" disabled={busy} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
           </div>
-        </div>
+        </section>
       </aside>
     </div>
   );
+}
+
+function FeedDialog({
+  mode,
+  host,
+  busy,
+  feed,
+  feedChangesRequireRestart,
+  onClose,
+  onSubmit
+}: {
+  mode: "add" | "edit";
+  host: HostModel;
+  busy: boolean;
+  feed?: ModuleManagementFeed;
+  feedChangesRequireRestart: boolean;
+  onClose(): void;
+  onSubmit(feedDraft: FeedDraft): void;
+}) {
+  const [feedDraft, setFeedDraft] = useState<FeedDraft>(() => createFeedDraft(feed));
+  const title = mode === "edit" ? "Edit Feed" : "Add Feed";
+  const submitLabel = mode === "edit" ? "Save feed" : "Add feed";
+
+  return (
+    <div className="modules-dialog-backdrop" role="presentation">
+      <section className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title">
+        <div className="modules-upload-dialog-heading">
+          <div>
+            <span>{host.label} host</span>
+            <h3 id="package-feed-dialog-title">{title}</h3>
+            {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
+          </div>
+          <button type="button" className="studio-icon-button" aria-label={`Close ${mode} feed`} onClick={onClose}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="modules-form">
+          <input aria-label="Feed name" placeholder="Feed name" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
+          <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
+          <input aria-label="Directory path" placeholder="Directory path" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} />
+          <textarea aria-label="Include patterns" placeholder="Include patterns" value={feedDraft.includePatterns} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
+        </div>
+
+        <div className="modules-dialog-actions">
+          <button type="button" className="studio-button" onClick={onClose}>Cancel</button>
+          <button type="button" className="studio-button" disabled={busy || !feedDraft.name.trim()} onClick={() => onSubmit(feedDraft)}>
+            <PackagePlus size={15} />
+            {submitLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function createFeedDraft(feed?: ModuleManagementFeed): FeedDraft {
+  return {
+    name: feed?.name ?? "",
+    serviceIndex: feed?.serviceIndex ?? "",
+    directoryPath: feed?.directoryPath ?? "",
+    includePatterns: feed ? feed.includePatterns.join(", ") || "*" : "*"
+  };
+}
+
+function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
+  const includePatterns = feedDraft.includePatterns.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean);
+
+  return {
+    name: feedDraft.name.trim(),
+    serviceIndex: feedDraft.serviceIndex.trim() || null,
+    directoryPath: feedDraft.directoryPath.trim() || null,
+    credentials: null,
+    includeAll: feedDraft.includePatterns.trim() === "*",
+    includePatterns,
+    directory: { watch: true, debounceWindow: "00:00:01" }
+  };
 }
 
 function createInitialHostState(): HostRegistryState {

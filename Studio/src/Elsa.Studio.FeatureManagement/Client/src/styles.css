@@ -408,7 +408,45 @@
   line-height: 1.22;
 }
 
-.feature-management-metadata {
+.feature-management-inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--studio-surface, var(--card)) 92%, var(--muted));
+  padding: 4px;
+}
+
+.feature-management-inspector-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--studio-text-muted, var(--muted-foreground));
+  cursor: pointer;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.feature-management-inspector-tabs button.active {
+  border-color: color-mix(in srgb, var(--studio-accent, var(--primary)) 44%, var(--border));
+  background: var(--studio-surface, var(--card));
+  color: var(--studio-text, var(--foreground));
+}
+
+.feature-management-inspector-tabs span {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feature-management-inspector-section {
   display: grid;
   gap: 9px;
   border: 1px solid var(--border);
@@ -417,11 +455,21 @@
   padding: 11px;
 }
 
+.feature-management-settings-panel {
+  gap: 13px;
+}
+
+.feature-management-inspector-section > h4,
 .feature-management-metadata h4 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
   font-size: 13px;
   font-weight: 720;
+}
+
+.feature-management-metadata {
+  display: grid;
+  gap: 9px;
 }
 
 .feature-management-detail-list {
@@ -463,29 +511,42 @@
   gap: 10px;
 }
 
-.feature-management-setting-group h4 {
+.feature-management-setting-group h5 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 720;
 }
 
 .feature-management-setting-group > div {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .feature-management-setting {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: minmax(150px, 38%) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 14px;
+  background: color-mix(in srgb, var(--studio-surface, var(--card)) 96%, var(--muted));
+  border-bottom: 1px solid var(--border);
+  padding: 11px;
 }
 
-.feature-management-setting span {
+.feature-management-setting:last-child {
+  border-bottom: 0;
+}
+
+.feature-management-setting-label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.feature-management-setting-label > span {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -505,6 +566,13 @@
   color: var(--studio-text-muted, var(--muted-foreground));
 }
 
+.feature-management-setting-control {
+  display: grid;
+  align-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+
 .feature-management-setting input[type="text"],
 .feature-management-setting input[type="password"],
 .feature-management-setting input[type="number"],
@@ -517,6 +585,14 @@
   color: var(--studio-text, var(--foreground));
   padding: 7px 9px;
   font: inherit;
+}
+
+.feature-management-setting input[type="checkbox"] {
+  justify-self: start;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--studio-accent, var(--primary));
 }
 
 .feature-management-setting textarea {
@@ -563,6 +639,10 @@
   .feature-management-category-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .feature-management-setting {
+    grid-template-columns: 1fr;
   }
 }
 

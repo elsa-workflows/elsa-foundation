@@ -496,17 +496,11 @@ internal sealed record ModuleManagementPackageManifest(string Kind, string Path,
         {
             var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
             if (File.Exists(elsaManifestPath))
-            {
-                var text = File.ReadAllText(elsaManifestPath);
-                try
-                {
-                    return new("elsa-package", elsaManifestPath, JsonNode.Parse(text), null);
-                }
-                catch (JsonException)
-                {
-                    return new("elsa-package", elsaManifestPath, null, text);
-                }
-            }
+                return ReadJsonManifest(elsaManifestPath);
+
+            var buildManifestPath = System.IO.Path.Combine(installPath, "build", "elsa-package.json");
+            if (File.Exists(buildManifestPath))
+                return ReadJsonManifest(buildManifestPath);
 
             var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
             return nuspecPath is null
@@ -516,6 +510,19 @@ internal sealed record ModuleManagementPackageManifest(string Kind, string Path,
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new("manifest-error", installPath, null, ex.Message);
+        }
+    }
+
+    private static ModuleManagementPackageManifest ReadJsonManifest(string path)
+    {
+        var text = File.ReadAllText(path);
+        try
+        {
+            return new("elsa-package", path, JsonNode.Parse(text), null);
+        }
+        catch (JsonException)
+        {
+            return new("elsa-package", path, null, text);
         }
     }
 }
@@ -533,6 +540,10 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
             var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
             if (File.Exists(elsaManifestPath))
                 dependencies.AddRange(ReadElsaPackageDependencies(elsaManifestPath));
+
+            var buildManifestPath = System.IO.Path.Combine(installPath, "build", "elsa-package.json");
+            if (File.Exists(buildManifestPath))
+                dependencies.AddRange(ReadElsaPackageDependencies(buildManifestPath));
 
             var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
             if (nuspecPath is not null)

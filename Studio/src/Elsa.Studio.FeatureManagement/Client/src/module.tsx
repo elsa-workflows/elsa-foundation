@@ -54,6 +54,7 @@ interface SettingGroupItem {
 
 type FeatureHostId = "studio" | "server";
 type FeatureEndpointContext = Pick<ElsaStudioModuleApi["host"], "http">;
+type FeatureInspectorTab = "details" | "settings";
 
 interface FeatureHostConfig {
   id: FeatureHostId;
@@ -664,6 +665,14 @@ function FeatureInspector({
   onReset(): void;
   onApply(): void;
 }) {
+  const featureId = feature?.id ?? null;
+  const [selectedTab, setSelectedTab] = useState<{ featureId: string | null; tab: FeatureInspectorTab }>(() => ({
+    featureId,
+    tab: getDefaultFeatureInspectorTab(feature)
+  }));
+  const activeTab = selectedTab.featureId === featureId ? selectedTab.tab : getDefaultFeatureInspectorTab(feature);
+  const selectTab = (tab: FeatureInspectorTab) => setSelectedTab({ featureId, tab });
+
   if (!feature) {
     return <aside className="feature-management-inspector"><p className="feature-management-muted">Select a feature.</p></aside>;
   }
@@ -686,34 +695,62 @@ function FeatureInspector({
       {feature.description ? <p>{feature.description}</p> : null}
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
 
-      <FeatureMetadata feature={feature} displayName={displayName} />
+      <div className="feature-management-inspector-tabs" role="tablist" aria-label="Feature inspector">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "details"}
+          className={activeTab === "details" ? "active" : ""}
+          onClick={() => selectTab("details")}
+        >
+          Details
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "settings"}
+          className={activeTab === "settings" ? "active" : ""}
+          onClick={() => selectTab("settings")}
+        >
+          Settings <span>{feature.settings.length}</span>
+        </button>
+      </div>
 
-      {feature.settings.length === 0 ? (
-        <p className="feature-management-muted">No configurable settings.</p>
+      {activeTab === "details" ? (
+        <section className="feature-management-inspector-section" aria-label="Feature metadata">
+          <FeatureMetadata feature={feature} displayName={displayName} />
+        </section>
       ) : (
-        <div className="feature-management-settings">
-          {settingGroups.map(group => (
-            <section key={group.id} className="feature-management-setting-group">
-              <h4>{group.label}</h4>
-              <div>
-                {group.settings.map(setting => {
-                  const Editor = selectSettingEditor(moduleApi, setting).component;
+        <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
+          <h4>Settings</h4>
+          {feature.settings.length === 0 ? (
+            <p className="feature-management-muted">No configurable settings.</p>
+          ) : (
+            <div className="feature-management-settings">
+              {settingGroups.map(group => (
+                <section key={group.id} className="feature-management-setting-group">
+                  <h5>{group.label}</h5>
+                  <div>
+                    {group.settings.map(setting => {
+                      const Editor = selectSettingEditor(moduleApi, setting).component;
 
-                  return (
-                    <SettingField key={setting.name} setting={setting}>
-                      <Editor
-                        setting={setting}
-                        value={getSettingValue(feature, setting)}
-                        disabled={disabled || !feature.enabled}
-                        onChange={value => onSettingChange(feature, setting, value)}
-                      />
-                    </SettingField>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
+                      return (
+                        <SettingField key={setting.name} setting={setting}>
+                          <Editor
+                            setting={setting}
+                            value={getSettingValue(feature, setting)}
+                            disabled={disabled || !feature.enabled}
+                            onChange={value => onSettingChange(feature, setting, value)}
+                          />
+                        </SettingField>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <div className="feature-management-sticky-actions">
@@ -725,6 +762,10 @@ function FeatureInspector({
       </div>
     </aside>
   );
+}
+
+function getDefaultFeatureInspectorTab(feature: DraftFeature | null): FeatureInspectorTab {
+  return feature?.settings.length ? "settings" : "details";
 }
 
 function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; displayName: string }) {
@@ -757,15 +798,19 @@ function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; disp
 function SettingField({ setting, children }: { setting: StudioSettingDescriptor; children: React.ReactNode }) {
   return (
     <label className="feature-management-setting">
-      <span>
-        <strong>{setting.displayName || setting.name}</strong>
-        {setting.required ? <em>Required</em> : null}
-        {setting.restartRequired ? <em>Reload</em> : null}
-        {setting.advanced ? <em>Advanced</em> : null}
+      <span className="feature-management-setting-label">
+        <span>
+          <strong>{setting.displayName || setting.name}</strong>
+          {setting.required ? <em>Required</em> : null}
+          {setting.restartRequired ? <em>Reload</em> : null}
+          {setting.advanced ? <em>Advanced</em> : null}
+        </span>
+        {setting.description ? <small>{setting.description}</small> : null}
+        <code>{setting.name}</code>
       </span>
-      {setting.description ? <small>{setting.description}</small> : null}
-      {children}
-      <code>{setting.name}</code>
+      <span className="feature-management-setting-control">
+        {children}
+      </span>
     </label>
   );
 }
