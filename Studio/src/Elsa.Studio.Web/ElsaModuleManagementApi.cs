@@ -492,14 +492,31 @@ internal sealed record ModuleManagementPackageManifest(string Kind, string Path,
         if (string.IsNullOrWhiteSpace(installPath) || !Directory.Exists(installPath))
             return null;
 
-        var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
-        if (File.Exists(elsaManifestPath))
-            return new("elsa-package", elsaManifestPath, JsonNode.Parse(File.ReadAllText(elsaManifestPath)), null);
+        try
+        {
+            var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
+            if (File.Exists(elsaManifestPath))
+            {
+                var text = File.ReadAllText(elsaManifestPath);
+                try
+                {
+                    return new("elsa-package", elsaManifestPath, JsonNode.Parse(text), null);
+                }
+                catch (JsonException)
+                {
+                    return new("elsa-package", elsaManifestPath, null, text);
+                }
+            }
 
-        var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
-        return nuspecPath is null
-            ? null
-            : new("nuspec", nuspecPath, null, File.ReadAllText(nuspecPath));
+            var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            return nuspecPath is null
+                ? null
+                : new("nuspec", nuspecPath, null, File.ReadAllText(nuspecPath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new("manifest-error", installPath, null, ex.Message);
+        }
     }
 }
 
@@ -510,34 +527,47 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
         if (string.IsNullOrWhiteSpace(installPath) || !Directory.Exists(installPath))
             return [];
 
-        var dependencies = new List<ModuleManagementPackageDependency>();
-        var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
-        if (File.Exists(elsaManifestPath))
-            dependencies.AddRange(ReadElsaPackageDependencies(elsaManifestPath));
+        try
+        {
+            var dependencies = new List<ModuleManagementPackageDependency>();
+            var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
+            if (File.Exists(elsaManifestPath))
+                dependencies.AddRange(ReadElsaPackageDependencies(elsaManifestPath));
 
-        var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
-        if (nuspecPath is not null)
-            dependencies.AddRange(ReadNuspecDependencies(nuspecPath));
+            var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            if (nuspecPath is not null)
+                dependencies.AddRange(ReadNuspecDependencies(nuspecPath));
 
-        return dependencies
-            .GroupBy(x => (x.Id, x.VersionRange, x.Group, x.Source))
-            .Select(x => x.First())
-            .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.VersionRange, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            return dependencies
+                .GroupBy(x => (x.Id, x.VersionRange, x.Group, x.Source))
+                .Select(x => x.First())
+                .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.VersionRange, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
-    private static IEnumerable<ModuleManagementPackageDependency> ReadElsaPackageDependencies(string path)
+    private static IReadOnlyList<ModuleManagementPackageDependency> ReadElsaPackageDependencies(string path)
     {
-        var manifest = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
-        if (manifest?["dependencies"] is not JsonArray dependencies)
-            yield break;
-
-        foreach (var dependency in dependencies)
+        try
         {
-            var parsed = ParseElsaDependency(dependency);
-            if (parsed is not null)
-                yield return parsed;
+            var manifest = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
+            if (manifest?["dependencies"] is not JsonArray dependencies)
+                return [];
+
+            return dependencies
+                .Select(ParseElsaDependency)
+                .Where(x => x is not null)
+                .Cast<ModuleManagementPackageDependency>()
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            return [];
         }
     }
 
@@ -563,17 +593,29 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
             "elsa-package");
     }
 
-    private static IEnumerable<ModuleManagementPackageDependency> ReadNuspecDependencies(string path)
+    private static IReadOnlyList<ModuleManagementPackageDependency> ReadNuspecDependencies(string path)
     {
-        var document = XDocument.Load(path);
-        foreach (var dependency in document.Descendants().Where(x => x.Name.LocalName == "dependency"))
+        try
         {
-            var id = dependency.Attribute("id")?.Value;
-            if (string.IsNullOrWhiteSpace(id))
-                continue;
+            var document = XDocument.Load(path);
+            return document.Descendants()
+                .Where(x => x.Name.LocalName == "dependency")
+                .Select(dependency =>
+                {
+                    var id = dependency.Attribute("id")?.Value;
+                    if (string.IsNullOrWhiteSpace(id))
+                        return null;
 
-            var group = dependency.Ancestors().FirstOrDefault(x => x.Name.LocalName == "group")?.Attribute("targetFramework")?.Value;
-            yield return new(id, dependency.Attribute("version")?.Value ?? "", group, "nuspec");
+                    var group = dependency.Ancestors().FirstOrDefault(x => x.Name.LocalName == "group")?.Attribute("targetFramework")?.Value;
+                    return new ModuleManagementPackageDependency(id, dependency.Attribute("version")?.Value ?? "", group, "nuspec");
+                })
+                .Where(x => x is not null)
+                .Cast<ModuleManagementPackageDependency>()
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return [];
         }
     }
 
