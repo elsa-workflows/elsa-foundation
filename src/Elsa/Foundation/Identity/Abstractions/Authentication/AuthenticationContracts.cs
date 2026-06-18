@@ -40,6 +40,11 @@ public interface ITokenService
     ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default);
 }
 
+public interface IAuthSessionService
+{
+    ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);
+}
+
 public sealed record AuthenticationProviderDescriptor(
     string Id,
     string DisplayName,
@@ -47,7 +52,24 @@ public sealed record AuthenticationProviderDescriptor(
     ProviderCapabilities Capabilities,
     string? TenantId = null,
     bool Enabled = true,
-    bool IsDefault = false);
+    bool IsDefault = false,
+    AuthenticationChallengeMetadata? Challenge = null);
+
+public sealed record AuthenticationChallengeMetadata(
+    string Url,
+    string Method = "GET",
+    string? Scheme = null,
+    IReadOnlyDictionary<string, string>? Parameters = null);
+
+public sealed record AuthSession(
+    string Status,
+    string? Subject,
+    string? DisplayName,
+    string? TenantId,
+    IReadOnlySet<string> Roles,
+    IReadOnlySet<string> Permissions,
+    string TokenFreshness,
+    string? Provider);
 
 public sealed record PrincipalFactoryContext(
     string TenantId,
