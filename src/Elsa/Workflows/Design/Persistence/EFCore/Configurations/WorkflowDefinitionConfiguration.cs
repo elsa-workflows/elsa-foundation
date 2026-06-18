@@ -16,5 +16,6 @@ internal sealed class WorkflowDefinitionConfiguration : IEntityTypeConfiguration
         // cardinality.
 
         builder.HasIndex(x => x.Name).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.Name)}");
+        builder.HasIndex(x => x.DeletedAt).HasDatabaseName($"IX_{nameof(WorkflowDefinition)}_{nameof(WorkflowDefinition.DeletedAt)}");
     }
 }

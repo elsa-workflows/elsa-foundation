@@ -12,6 +12,7 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
+using Elsa.Activities.Flowchart;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
@@ -55,7 +56,8 @@ if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
     studioCorsOrigins =
     [
         "https://localhost:7030",
-        "http://localhost:5089"
+        "http://localhost:5089",
+        "http://localhost:5092"
     ];
 }
 
@@ -121,6 +123,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
+            typeof(ActivitiesFlowchartFeature).Assembly,
             typeof(ActivitiesCompositionRuntimeFeature).Assembly,
 
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
@@ -159,6 +162,7 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-serve
 app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
 app.MapElsaModuleManagementApi();
+app.MapElsaWorkflowManagementApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
 app.MapFallbackToFile("/demo", "index.html");

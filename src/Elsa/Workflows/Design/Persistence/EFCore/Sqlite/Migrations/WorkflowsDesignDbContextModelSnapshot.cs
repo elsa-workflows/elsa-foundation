@@ -27,6 +27,12 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedReason")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
 
@@ -45,6 +51,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.HasIndex("Name")
                         .HasDatabaseName("IX_WorkflowDefinition_Name");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_WorkflowDefinition_DeletedAt");
 
                     b.HasIndex("TenantId");
 
