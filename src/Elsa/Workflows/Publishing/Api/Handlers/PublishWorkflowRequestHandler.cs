@@ -4,9 +4,8 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Extensions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -21,7 +20,7 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class PublishWorkflowRequestHandler(
     IWorkflowDefinitionVersionStore workflowVersions,
-    IQueries<ActivityDefinitionVersion> activityVersions,
+    IActivityDefinitionVersionStore activityVersions,
     IWorkflowExecutableStore executableStore,
     IActivityStructureService activityStructureService)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
@@ -44,7 +43,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
         foreach (var activityVersionId in activities.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
-            activityRows[activityVersionId] = await activityVersions.GetVersionInlcudingDefinition(activityVersionId, cancellationToken);
+            activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
         var compiledRoot = CompileNode(rootActivity, activityRows);
         var artifactHash = ComputeHash(version, compiledRoot);

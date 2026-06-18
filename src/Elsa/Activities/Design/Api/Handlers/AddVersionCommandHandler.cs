@@ -4,7 +4,7 @@ using Elsa.Activities.Design.Api.Projections;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Extensions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 
@@ -13,14 +13,14 @@ namespace Elsa.Activities.Design.Api.Handlers;
 public sealed class AddVersionCommandHandler(
     IActivityDefinitionVersionFactory versionFactory,
     IAddCommand<ActivityDefinitionVersion> addCommand,
-    IQueries<ActivityDefinitionVersion> queries,
-    IQueries<ActivityDefinition> definitionQueries)
+    IActivityDefinitionVersionStore versionStore,
+    IActivityDefinitionStore definitionStore)
 
     : ICommandHandler<AddVersion, ActivityDefinitionVersionDetailsView>
 {
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
-        var definition = await definitionQueries.Get(command.DefinitionId, cancellationToken);
+        var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
 
         // A version added through the API is API-sourced; provenance is keyed on the definition's
         // stable type key (the AddVersion command carries no source fields).
@@ -38,7 +38,7 @@ public sealed class AddVersionCommandHandler(
 
         await addCommand.Add(ActivityDefinitionVersion.From(version), cancellationToken);
 
-        var addedVersion = await queries.GetVersionInlcudingDefinition(version.Id, cancellationToken);
+        var addedVersion = await versionStore.GetWithDefinitionAsync(version.Id, cancellationToken);
         return addedVersion.ToDetailsView();
     }
 }

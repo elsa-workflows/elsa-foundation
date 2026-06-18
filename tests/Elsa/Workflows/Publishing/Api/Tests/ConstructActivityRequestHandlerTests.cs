@@ -21,7 +21,7 @@ public sealed class ConstructActivityRequestHandlerTests
         var payload = JsonSerializer.SerializeToElement(new { TypeName = "WriteLine" });
         var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.TypeInformation", payload: payload);
         var factory = new FakeActivityFactory(new StubActivity());
-        var handler = new ConstructActivityRequestHandler(new FakeVersionQueries([version]), factory);
+        var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), factory);
 
         await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 
@@ -40,7 +40,7 @@ public sealed class ConstructActivityRequestHandlerTests
             payload: JsonSerializer.SerializeToElement(new { }),
             inputs: [new InputDefinition("text", "Text", TypeInformation.String, null, "Text", null)],
             outputs: [new OutputDefinition("result", "Result", TypeInformation.Object, null, "Result", null)]);
-        var handler = new ConstructActivityRequestHandler(new FakeVersionQueries([version]), new FakeActivityFactory(new StubActivity()));
+        var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), new FakeActivityFactory(new StubActivity()));
 
         var view = await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 

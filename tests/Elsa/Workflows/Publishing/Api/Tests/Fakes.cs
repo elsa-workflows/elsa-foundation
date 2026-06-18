@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
@@ -50,44 +51,22 @@ internal sealed class FakeActivityFactory(IActivity result) : IActivityFactory
     }
 }
 
-/// <summary>Minimal in-memory queries: only the two routes the bridge uses are real; the rest fail loudly.</summary>
-internal sealed class FakeVersionQueries(List<ActivityDefinitionVersion> items) : IQueries<ActivityDefinitionVersion>
+/// <summary>Minimal in-memory activity version read port: only the routes the bridge uses are real.</summary>
+internal sealed class FakeActivityVersionStore(List<ActivityDefinitionVersion> items) : IActivityDefinitionVersionStore
 {
-    private const string Msg = "FakeVersionQueries: only Find(filter, include) and List are supported.";
+    public Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(items.Single(x => x.Id == versionId));
 
-    public Task<ActivityDefinitionVersion?> Find<TProperty>(IFilter<ActivityDefinitionVersion> filter, Expression<Func<ActivityDefinitionVersion, TProperty>> include, CancellationToken cancellationToken = default)
-    {
-        var queryable = filter.Apply(items.AsQueryable());
-        return Task.FromResult(queryable.FirstOrDefault());
-    }
+    public Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(items.FirstOrDefault(x => x.Id == versionId)
+            ?? throw new ArgumentException($"Activity definition version with id '{versionId}' does not exist"));
 
-    public Task<IEnumerable<ActivityDefinitionVersion>> List(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IEnumerable<ActivityDefinitionVersion>>(items);
+    public Task<ActivityDefinitionVersion?> FindByDefinitionAndSortKeyAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
+        Task.FromResult(items.FirstOrDefault(x => x.DefinitionId == definitionId && x.SemVerSortKey == semVerSortKey));
 
-    public Task<ActivityDefinitionVersion?> Find(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<ActivityDefinitionVersion?> Find(IFilter<ActivityDefinitionVersion> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<ActivityDefinitionVersion?> Find<TProperty>(IFilter<ActivityDefinitionVersion> filter, IEnumerable<Expression<Func<ActivityDefinitionVersion, TProperty>>> include, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<ActivityDefinitionVersion?> Find(Expression<Func<ActivityDefinitionVersion, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> FindMany(Expression<Func<ActivityDefinitionVersion, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> FindMany(IFilter<ActivityDefinitionVersion> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> FindMany<TProp>(Expression<Func<ActivityDefinitionVersion, bool>> predicate, OrderDefinition<ActivityDefinitionVersion, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<Page<ActivityDefinitionVersion>> FindMany(Expression<Func<ActivityDefinitionVersion, bool>>? predicate, PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<Page<ActivityDefinitionVersion>> FindMany(IFilter<ActivityDefinitionVersion> filter, PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<Page<ActivityDefinitionVersion>> FindMany<TProp>(Expression<Func<ActivityDefinitionVersion, bool>>? predicate, OrderDefinition<ActivityDefinitionVersion, TProp> order, PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> Query(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> Query(IFilter<ActivityDefinitionVersion> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> Query<TProp>(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, OrderDefinition<ActivityDefinitionVersion, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<TResult>> Query<TResult>(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, Expression<Func<ActivityDefinitionVersion, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<TResult>> Query<TResult>(IFilter<ActivityDefinitionVersion> filter, Expression<Func<ActivityDefinitionVersion, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<ActivityDefinitionVersion>> Query<TProperty>(IFilter<ActivityDefinitionVersion> filter, OrderDefinition<ActivityDefinitionVersion, TProperty> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<TResult>> Query<TResult, TProp>(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, Expression<Func<ActivityDefinitionVersion, TResult>> selector, OrderDefinition<ActivityDefinitionVersion, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<IEnumerable<TResult>> Query<TResult, TProp>(IFilter<ActivityDefinitionVersion> filter, Expression<Func<ActivityDefinitionVersion, TResult>> selector, OrderDefinition<ActivityDefinitionVersion, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<long> Count(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<bool> Any(Expression<Func<ActivityDefinitionVersion, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<bool> Any(Func<IQueryable<ActivityDefinitionVersion>, IQueryable<ActivityDefinitionVersion>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<bool> Any(IFilter<ActivityDefinitionVersion> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<long> Count(Expression<Func<ActivityDefinitionVersion, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<long> Count(IFilter<ActivityDefinitionVersion> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<long> Count<TProperty>(IFilter<ActivityDefinitionVersion> filter, Expression<Func<ActivityDefinitionVersion, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    public Task<long> Count<TProperty>(Expression<Func<ActivityDefinitionVersion, bool>> predicate, Expression<Func<ActivityDefinitionVersion, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(items.Where(x => x.DefinitionId == definitionId).ToList());
+
+    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(items);
 }

@@ -1,25 +1,23 @@
-﻿using Elsa.Activities.Design.Api.Constants;
-using Elsa.Activities.Design.Api.Models;
+﻿using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Projections;
 using Elsa.Activities.Design.Api.Requests;
-using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Filters;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
-public sealed class GetDefinitionRequestHandler(IQueries<ActivityDefinitionVersion> versionQueries, IQueries<ActivityDefinition> defQueries)
+public sealed class GetDefinitionRequestHandler(IActivityDefinitionVersionStore versionStore, IActivityDefinitionStore definitionStore)
     : IRequestHandler<GetDefinition, ActivityDefinitionDetailsView>
 {
     public async Task<ActivityDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
-        var definitionTask = defQueries.Get(request.Id, cancellationToken);
-        var filter = new ActivityDefinitionVersionFilter { DefinitionId = request.Id };
-        var versionsTask = versionQueries.Query(filter, Expressions.VersionInfoSelector, cancellationToken);
+        var definitionTask = definitionStore.GetAsync(request.Id, cancellationToken);
+        var versionsTask = versionStore.ListByDefinitionAsync(request.Id, cancellationToken);
 
         var definition = await definitionTask;
-        var versions = await versionsTask;
+        var versionRows = await versionsTask;
+        var versions = versionRows.Select(e => new ActivityDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
 
         return new ActivityDefinitionDetailsView(definition.ToView(), versions);
     }

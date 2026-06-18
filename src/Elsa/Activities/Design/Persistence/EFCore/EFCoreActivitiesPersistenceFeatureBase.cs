@@ -2,6 +2,7 @@ using System.Reflection;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Services;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Activities.Design.Persistence.EFCore.Services;
 using Elsa.Persistence.EFCore;
@@ -29,6 +30,10 @@ public abstract class EFCoreActivitiesPersistenceFeatureBase : EFCorePersistence
             services.AddScoped<IAddActivityDefinitionCommand, AddActivityDefinitionCommand>();
 
         if (UseQueries)
+        {
+            services.AddScoped<IActivityDefinitionStore, EFCoreActivityDefinitionStore>();
+            services.AddScoped<IActivityDefinitionVersionStore, EFCoreActivityDefinitionVersionStore>();
             services.AddScoped<IActivityDefinitionLookup, ActivityDefinitionLookup>();
+        }
     }
 }
