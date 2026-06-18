@@ -31,6 +31,11 @@ public static class WorkflowsDesignStorageManifest
     /// <summary>Constant partition value stamped on every workflow-definition document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionCollection = "workflowDefinition";
 
+    public const string WorkflowDefinitionVersionDocumentKind = "workflowDefinitionVersion";
+
+    /// <summary>Constant partition value stamped on every workflow-definition-version document (see <see cref="ByCollectionIndex"/>).</summary>
+    public const string WorkflowDefinitionVersionCollection = "workflowDefinitionVersion";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
@@ -39,6 +44,11 @@ public static class WorkflowsDesignStorageManifest
             Unit(
                 WorkflowDefinitionDocumentKind,
                 "Workflow definition",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowDefinitionVersionDocumentKind,
+                "Workflow definition version",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)])
         ],

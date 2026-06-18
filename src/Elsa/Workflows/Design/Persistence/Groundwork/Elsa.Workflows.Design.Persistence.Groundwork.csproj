@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork.Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
+    <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
 </Project>
