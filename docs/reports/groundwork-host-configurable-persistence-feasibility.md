@@ -62,6 +62,39 @@ The SQLite provider has no portable atomic insert-only primitive: `ExpectedVersi
 
 The entire **runtime** persistence story is now provider-agnostic with only the host naming a provider. What remains for a "de facto Groundwork persistence" verdict is a product decision on **design-time/definition persistence** (currently EF Core), plus optional benchmark evidence before moving operational hot paths onto Groundwork's operational layer.
 
+## Update 3 — Path B: closed query contract unblocks the universal provider
+
+The Phase 4 finding below ("Design-persistence scope") concluded design persistence could **not**
+become a Groundwork lane because it was bound to a full `IQueryable`/LINQ read surface
+(`IQueries<TEntity>` / `IFilter<TEntity>`). That blocker has now been **removed in Elsa** (Path B /
+Option 2 — chosen because the requirement is "one DB configured once at the host backs every module"):
+
+- **A closed, provider-neutral query spec.** `Query<TEntity>` (`Elsa.Persistence.Core/Queries`) is a
+  finite operation set — field `Equal` / `In` / `Contains` (case-insensitive), AND-of-OR composition,
+  a single `OrderBy`/`OrderByDescending`, optional tenant-agnostic flag — covering the *entire* design-lane
+  query vocabulary inventoried for this work. No `IQueryable`, no arbitrary expression trees.
+- **Named per-aggregate read ports.** Every design aggregate exposes a small intent-revealing read
+  port (`IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`,
+  `IWorkflowDefinitionVersionLayoutStore`, `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`)
+  with closed methods. Related-entity loads are explicit second reads (`GetWithDefinitionAsync`), so a
+  non-relational provider needs no joins; `SemVer` knowledge stays out of the store (callers pass a
+  precomputed sort key).
+- **EF Core implements the same contract.** A generic `EFCoreReadStore<TDbContext, TEntity>` translates
+  `Query<TEntity>` to LINQ (`EFCoreQueryTranslator`), preserving tenant filters + the `OnEntityLoading`
+  hydration pipeline. Relational users are unaffected.
+- **The legacy surface is gone.** `IQueries<TEntity>`, `IFilter<TEntity>`, `EFCoreQueries<,>`, and
+  `ConfigureQueries<>` have been deleted; all design consumers (lookups, reconcilers, publishing, the
+  clone command, the API handlers) now speak only the named ports.
+
+**Consequence:** the design lanes are no longer LINQ-bound. The remaining work for a single universal
+provider is now bounded and additive: (a) a **Groundwork adapter** implementing the named read ports
+over Groundwork's portable query (native where available, in-adapter fallback until Groundwork ships the
+scoped query uplift — `IN`, substring-contains, OR-composition, single-field `ORDER BY`, total-count),
+and (b) **single-provider host composition** that wires every lane to one provider. A Groundwork
+**capability spec** (the bounded query uplift, NOT a full ORM) will be handed off to
+`valence-works/groundwork`. The "Recommended implementation route" item 5 is therefore reclassified from
+a product decision to **in-progress engineering**.
+
 ## What the current codebase already gives us
 
 - Runtime persistence seams already exist as replacement contracts in `Elsa.Workflows.Runtime.Core` (`IWorkflowExecutableStore`, `IWorkflowExecutionStateStore`, `IBookmarkStateStore`, `IDurableValueStateStore`, `IIncidentStateStore`, `IOperationalStateStore`, `ISchedulerStateStore`, `IRuntimePostCommitOutboxStore`).
@@ -150,7 +183,12 @@ Wins:
 
 Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and human readability; stop letting it (and a self-declared category) be the gate.
 
-## Design-persistence scope (Phase 4 finding)
+## Design-persistence scope (Phase 4 finding — SUPERSEDED by Update 3)
+
+> **Superseded.** This finding concluded design persistence could not become a Groundwork lane while it
+> was bound to the `IQueries<TEntity>` / `IFilter<TEntity>` `IQueryable` surface. That surface has since
+> been replaced by the closed `Query<TEntity>` spec + named read ports (see **Update 3**), so the blocker
+> below no longer holds. The section is retained for historical context.
 
 **Decision: a "de facto Groundwork persistence" verdict should be scoped to the runtime, with design-time/definition persistence staying on EF Core for now.** This is a capability conclusion, not a preference.
 
@@ -177,7 +215,7 @@ For design persistence to become a Groundwork lane, Groundwork would need to gro
 2. ✅ **Done (all ten runtime seams).** Every runtime store now has a Groundwork bridge over `IDocumentStore` — `IBookmarkStateStore`, `IWorkflowExecutableStore`, `IActivityExecutionStateStore`, `IWorkflowExecutionStateStore`, `IDurableValueStateStore`, `ISchedulerStateStore`, `IOperationalStateStore`, `IControlPlaneStateStore`, `IIncidentStateStore`, `IRuntimePostCommitOutboxStore` — each with provider-neutral and registration tests. See "Update 2" above.
 3. ✅ **Done.** A durable `GroundworkRuntimeCheckpointWriter` orchestrates the seam stores for atomic-by-idempotent-replay checkpoint commits, proven across a simulated SQLite restart.
 4. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
-5. ⏳ **Open (product decision).** Decide whether design-time/definition persistence (currently EF Core) is in scope for a "de facto Groundwork" verdict.
+5. 🚧 **In progress (Path B — see Update 3).** Design-time/definition persistence is being unbound from the `IQueryable`/LINQ surface so a single host-selected provider can back every lane. Done: closed `Query<TEntity>` spec, named per-aggregate read ports, EF Core adapter on the same contract, and deletion of `IQueries<T>`/`IFilter<T>`. Remaining: Groundwork design adapter, single-provider host composition, and the Groundwork capability spec handoff.
 6. ⏳ **Open (evidence-gated).** Add a hot-path viability matrix/benchmark before migrating operational seams onto Groundwork's *operational* layer (leases/work queue/transport outbox), gated on evidence rather than capability.
 
 ## POC acceptance criteria
