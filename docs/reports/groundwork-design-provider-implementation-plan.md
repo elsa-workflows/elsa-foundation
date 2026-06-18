@@ -192,3 +192,72 @@ runtime **and** both design lanes, that store's manifest must be the **union** o
 The merge belongs at the host/composition layer (which references all three). Confirm whether Groundwork's
 materializer can host multiple manifests' kinds in one database, or whether a neutral
 `StorageManifest`-composition helper is needed — also pending the Groundwork session's materialization findings.
+
+---
+
+## Resolved dependencies + concrete write design (2026-06-18)
+
+The Groundwork capability-uplift session (branch `sfmskywalker/feature-closed-query-capability`) answered both
+open dependencies above.
+
+### Cross-document atomicity — RESOLVED (UoW being added)
+Today `IDocumentStore` has **no** cross-document transaction; each `SaveAsync`/`DeleteAsync` is its own
+DB transaction (so a single document + its index rows + projection is atomic, but multiple documents are not).
+Groundwork *does* have an atomic-commit shape in the **operational** lane
+(`IOperationalSessionFactory.BeginAsync -> IOperationalUnitOfWork` with `CommitAsync`/`RollbackAsync`,
+dispose-without-commit = rollback; providers without cross-unit atomicity throw `UnsupportedAtomicCommitException`).
+**Authorized** a symmetric **document-lane** UoW: `IDocumentSessionFactory.BeginAsync(scope) -> IDocumentUnitOfWork`
+(`Save<T>`/`Delete<T>` staging + `CommitAsync`/`RollbackAsync`), relational = one shared `DbTransaction`,
+Mongo = `IClientSessionHandle` multi-document transaction on a replica set else loud `UnsupportedAtomicCommitException`.
+The neutral write port binds to this; implementation in elsa-foundation waits for the real Groundwork types.
+
+### Host manifest union — RESOLVED (helper shipped)
+Groundwork added `StorageManifestComposition.Union(identity, owner, version, params StorageManifest[])`
+(commit `7644ab3`): merges `StorageUnits`, unions `RequiredCapabilities`, de-dups compatibility notes, throws
+`StorageManifestCompositionException` on overlapping storage-unit identity, output passes the manifest validator.
+The single-provider host feature will compose `Union("elsa.documents", runtime + workflows-design +
+activities-design manifests)` behind one `IDocumentStore` (kinds are disjoint). Use a **stable** composite
+identity so schema-history is stable (materialization/planning is per-manifest-identity).
+
+### Document aggregate boundaries (the key write-model decision)
+The manifest declares **four** workflow-design document kinds — `workflowDefinition`, `workflowDefinitionVersion`,
+`workflowDefinitionDraft`, `workflowDefinitionVersionLayout` — and the read ports expose only these. There is
+**no** document kind or read port for `WorkflowDefinitionDraftLayout` or `WorkflowDefinitionDraftValidation`
+(in EF they are FK siblings of the draft with cascade delete). Decision: in the document model the draft's
+**layout records and validation errors EMBED into the `workflowDefinitionDraft` document** (the draft aggregate
+carries `State` + layout records + validation errors). Consequences:
+- `CreateDraft`, `UpdateDraft`, `DiscardDraft` each touch **one** document (the draft) → atomic with a plain
+  `SaveAsync`/`DeleteAsync`, **no UoW required**.
+- `PromoteDraftToVersion` reads the draft (embedded layout + validation), gates on embedded error count, then
+  writes `workflowDefinitionVersion` + `workflowDefinitionVersionLayout` = **2 docs** → needs the UoW. Last-version
+  lookup (`OrderByDescending(SemVerSortKey)`) maps to the new single-field ORDER BY + `Take(1)` closed-query op.
+- `AddWorkflowDefinition` writes `workflowDefinition` + `workflowDefinitionDraft` = **2 docs** → UoW.
+- `SubmitWorkflowDefinition` writes `workflowDefinition` + `workflowDefinitionDraft` (embedded layout+validation)
+  + `workflowDefinitionVersion` + `workflowDefinitionVersionLayout` = **4 docs** → UoW.
+- Activities `AddActivityDefinitionCommand` = `activityDefinition` + `activityDefinitionVersion` = **2 docs** → UoW.
+
+The version+layout read adapters already exist; embedding draft layout/validation means the draft read adapter
+must serialize those embedded sections (currently it serializes the bare entity — extend the draft document shape
+on the write slice, keeping the read store's projection in sync).
+
+### Neutral write port + orchestration lift (per command)
+Command **contracts** are already provider-neutral in `Core/Contracts` (`IAddWorkflowDefinitionCommand`,
+`ICreateDraftCommand`, `IUpdateDraftCommand`, `IPromoteDraftToVersionCommand`, `IDiscardDraftCommand`,
+`ICloneDraftFromVersionCommand`, `ISubmitWorkflowDefinitionCommand`). Only the **implementations** in
+`EFCore/Commands` carry EF coupling. Plan:
+1. Add a neutral `Core/Stores` write surface (e.g. `IDesignDocumentWriter` / per-aggregate write ports) +
+   a neutral `IDesignUnitOfWork` (stage Save/Delete across aggregates, `CommitAsync` atomic).
+2. Move each command implementation **into `Core`**, depending only on neutral deps it already uses
+   (`IIdentityGenerator`, `IDistributedLockProvider`, `IEventPublisher`, `IDraftStateDiffEngine`, `SemVer`,
+   `IActivityStructureService`) + the neutral write surface/UoW. The lock keys, validation gate
+   (`OnDraftValidating` sequential), diff stream, SemVer bump, and lifecycle events are all already neutral.
+3. EF write-port impl: wraps `IDbContextFactory` + `SaveChangesAsync`; keeps `OnEntityLoading` hydration and the
+   `*Source` shadow serialization **internal** to the EF impl (the neutral layer never sees hydration).
+4. Groundwork write-port impl: maps Save/Delete onto `IDocumentStore` (single-doc commands) and `IDocumentUnitOfWork`
+   (multi-doc commands); no hydration (the document projection *is* the content).
+5. `CloneDraftFromVersion` already delegates to `ICreateDraftCommand` via read ports — provider-neutral as-is.
+6. Tests: re-run the existing EF command tests against the lifted Core implementation (behavior parity), then add
+   Groundwork write tests mirroring the read-test doubles.
+
+**Sequencing:** implement once the Groundwork `IDocumentUnitOfWork` types are published/consumable, so the
+Groundwork write adapter binds to real types in one pass (EF parity refactor can land first if desired).
