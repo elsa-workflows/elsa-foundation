@@ -90,10 +90,11 @@ Option 2 — chosen because the requirement is "one DB configured once at the ho
 provider is now bounded and additive: (a) a **Groundwork adapter** implementing the named read ports
 over Groundwork's portable query (native where available, in-adapter fallback until Groundwork ships the
 scoped query uplift — `IN`, substring-contains, OR-composition, single-field `ORDER BY`, total-count),
-and (b) **single-provider host composition** that wires every lane to one provider. A Groundwork
-**capability spec** (the bounded query uplift, NOT a full ORM) will be handed off to
-`valence-works/groundwork`. The "Recommended implementation route" item 5 is therefore reclassified from
-a product decision to **in-progress engineering**.
+and (b) **single-provider host composition** that wires every lane to one provider. The bounded query
+uplift (NOT a full ORM) is specified for the Groundwork maintainers in the
+[Groundwork closed-query capability spec](groundwork-closed-query-capability-spec.md). The "Recommended
+implementation route" item 5 is therefore reclassified from a product decision to **in-progress
+engineering**.
 
 ## What the current codebase already gives us
 

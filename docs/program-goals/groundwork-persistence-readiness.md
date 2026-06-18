@@ -68,6 +68,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork Runtime Evaluation And Hardening spec](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md)
 - [Groundwork Runtime Evaluation And Hardening plan](../../specs/020-groundwork-runtime-evaluation-hardening/plan.md)
 - [Groundwork host-configurable persistence feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md)
+- [Groundwork closed-query capability spec](../reports/groundwork-closed-query-capability-spec.md)
 - [Groundwork host-configurable runtime store POC spec](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md)
 - [Groundwork host-configurable runtime store POC plan](../../specs/071-groundwork-host-configurable-runtime-store-poc/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
