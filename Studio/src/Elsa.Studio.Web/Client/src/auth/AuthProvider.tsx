@@ -101,9 +101,16 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
-      const nextCapabilities = await manager.getCapabilities();
-      if (shouldCommit(operation)) {
-        setCapabilities(nextCapabilities);
+      try {
+        const nextCapabilities = await manager.getCapabilities();
+        if (shouldCommit(operation)) {
+          setCapabilities(nextCapabilities);
+        }
+      } catch (error) {
+        if (shouldCommit(operation)) {
+          console.error("Auth capabilities request failed.", error);
+          setCapabilities(null);
+        }
       }
     } else {
       setCapabilities(null);

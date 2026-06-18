@@ -3,7 +3,7 @@ const S = {
   status: "anonymous",
   roles: [],
   permissions: []
-}, q = {
+}, L = {
   status: "unknown",
   roles: [],
   permissions: []
@@ -24,7 +24,7 @@ class B {
   adapters = /* @__PURE__ */ new Map();
   activeAdapter = null;
   pendingLoginProviderId = null;
-  session = q;
+  session = L;
   getSession() {
     return this.session;
   }
@@ -109,10 +109,10 @@ function F(t) {
     login: (s) => {
       const i = t.challenge;
       if (!i || i.type === "none")
-        throw new g(`Provider '${t.id}' does not expose a redirect challenge.`);
+        throw new A(`Provider '${t.id}' does not expose a redirect challenge.`);
       const o = "method" in i ? i.method.toUpperCase() : "GET";
       if (o !== "GET")
-        throw new g(`Provider '${t.id}' exposes an unsupported ${o} challenge.`);
+        throw new A(`Provider '${t.id}' exposes an unsupported ${o} challenge.`);
       const c = new URL(Y(i), m(t)), a = s?.returnUrl ?? t.location?.href ?? window.location.href;
       return c.searchParams.set("returnUrl", Q(a, s?.providerId ?? t.id, t)), (t.location ?? window.location).assign(c.toString()), Promise.resolve();
     },
@@ -120,7 +120,7 @@ function F(t) {
     logout: async () => {
       const s = await e(k(n, t), { method: "POST", credentials: "include" });
       if (!s.ok)
-        throw new g(`Sign-out failed with ${s.status}.`);
+        throw new A(`Sign-out failed with ${s.status}.`);
     },
     getAccessToken: async () => {
       if (!t.tokenEndpoint)
@@ -129,7 +129,7 @@ function F(t) {
       if (s.status === 401)
         return null;
       if (!s.ok)
-        throw new g(`Access-token request failed with ${s.status}.`);
+        throw new A(`Access-token request failed with ${s.status}.`);
       const i = await s.json();
       return typeof i.accessToken == "string" ? i.accessToken : null;
     },
@@ -149,7 +149,7 @@ function F(t) {
       if (o.status === 401)
         return S;
       if (!o.ok)
-        throw new g(`Session refresh failed with ${o.status}.`);
+        throw new A(`Session refresh failed with ${o.status}.`);
       const c = await o.json();
       return c.status ? H(c) : v(e, r, t);
     }
@@ -160,7 +160,7 @@ async function v(t, e, r) {
   if (n.status === 401)
     return S;
   if (!n.ok)
-    throw new g(`Session request failed with ${n.status}.`);
+    throw new A(`Session request failed with ${n.status}.`);
   return D(n);
 }
 async function D(t) {
@@ -205,7 +205,7 @@ function W(t) {
     return !0;
   }
 }
-class g extends Error {
+class A extends Error {
   constructor(e) {
     super(e), this.name = "AuthAdapterError";
   }
@@ -236,10 +236,10 @@ async function $(t, e, r) {
     throw new Error(`Auth discovery request failed with ${n.status}.`);
   return await n.json();
 }
-var C = { exports: {} }, A = {};
+var C = { exports: {} }, g = {};
 var j;
 function X() {
-  if (j) return A;
+  if (j) return g;
   j = 1;
   var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
   function r(n, s, i) {
@@ -257,7 +257,7 @@ function X() {
       props: i
     };
   }
-  return A.Fragment = e, A.jsx = r, A.jsxs = r, A;
+  return g.Fragment = e, g.jsx = r, g.jsxs = r, g;
 }
 var U;
 function Z() {
@@ -271,17 +271,17 @@ function x() {
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return t;
 }
-function gt({ manager: t, children: e }) {
-  const [r, n] = u.useState(() => t.getSession() ?? q), [s, i] = u.useState(null), o = u.useRef(!1), c = u.useRef(0), a = u.useCallback((d) => o.current && c.current === d, []);
+function At({ manager: t, children: e }) {
+  const [r, n] = u.useState(() => t.getSession() ?? L), [s, i] = u.useState(null), o = u.useRef(!1), c = u.useRef(0), a = u.useCallback((d) => o.current && c.current === d, []);
   u.useLayoutEffect(() => {
     o.current = !0;
     const d = ++c.current;
-    async function l() {
+    async function h() {
       try {
-        const h = await t.initialize();
+        const l = await t.initialize();
         if (!a(d))
           return;
-        if (n(h), h.status !== "authenticated") {
+        if (n(l), l.status !== "authenticated") {
           i(null);
           return;
         }
@@ -291,25 +291,25 @@ function gt({ manager: t, children: e }) {
         } catch (p) {
           a(d) && (console.error("Auth capabilities request failed.", p), i(null));
         }
-      } catch (h) {
-        a(d) && (console.error("Auth initialization failed.", h), n(S), i(null));
+      } catch (l) {
+        a(d) && (console.error("Auth initialization failed.", l), n(S), i(null));
       }
     }
-    return l(), () => {
+    return h(), () => {
       o.current = !1, c.current += 1;
     };
   }, [t, a]);
   const w = u.useCallback(async (d) => {
-    const l = ++c.current;
-    if (await t.login(d), !a(l))
+    const h = ++c.current;
+    if (await t.login(d), !a(h))
       return;
-    const h = t.getSession();
-    if (n(h), h.status === "authenticated")
+    const l = t.getSession();
+    if (n(l), l.status === "authenticated")
       try {
         const p = await t.getCapabilities();
-        a(l) && i(p);
+        a(h) && i(p);
       } catch (p) {
-        a(l) && (console.error("Auth capabilities request failed.", p), i(null));
+        a(h) && (console.error("Auth capabilities request failed.", p), i(null));
       }
     else
       i(null);
@@ -317,15 +317,19 @@ function gt({ manager: t, children: e }) {
     const d = ++c.current;
     await t.logout(), a(d) && (n(t.getSession()), i(null));
   }, [t, a]), T = u.useCallback(async () => {
-    const d = ++c.current, l = await t.refresh();
+    const d = ++c.current, h = await t.refresh();
     if (!a(d))
-      return l;
-    if (n(l), l.status === "authenticated") {
-      const h = await t.getCapabilities();
-      a(d) && i(h);
-    } else
+      return h;
+    if (n(h), h.status === "authenticated")
+      try {
+        const l = await t.getCapabilities();
+        a(d) && i(l);
+      } catch (l) {
+        a(d) && (console.error("Auth capabilities request failed.", l), i(null));
+      }
+    else
       i(null);
-    return l;
+    return h;
   }, [t, a]), M = u.useMemo(() => ({
     session: r,
     capabilities: s,
@@ -349,7 +353,7 @@ function tt() {
     };
   }, [t]);
 }
-function At() {
+function gt() {
   return x().capabilities;
 }
 function yt({ requires: t, requireAll: e = !0, fallback: r = null, children: n }) {
@@ -467,10 +471,10 @@ function Pt(t, e = {}) {
 function ot(t, e) {
   return {
     async getJson(r, n) {
-      return L(t, r, P(e, lt(n)));
+      return q(t, r, P(e, lt(n)));
     },
     async postJson(r, n, s) {
-      return L(t, r, P(e, {
+      return q(t, r, P(e, {
         ...s,
         method: "POST",
         headers: ht(s?.headers),
@@ -489,7 +493,7 @@ function ct(t, e) {
   const r = new Headers(t);
   return new Headers(e).forEach((n, s) => r.set(s, n)), r;
 }
-async function L(t, e, r) {
+async function q(t, e, r) {
   const n = dt(t, e), s = await fetch(n, r);
   if (!s.ok)
     throw new b(s.status, await _(s));
@@ -550,10 +554,10 @@ class b extends Error {
   status;
 }
 export {
-  g as AuthAdapterError,
+  A as AuthAdapterError,
   y as AuthConfigurationError,
   yt as AuthGuard,
-  gt as AuthProvider,
+  At as AuthProvider,
   vt as RequireAuth,
   b as StudioHttpError,
   N as createAuthProviderManager,
@@ -566,7 +570,7 @@ export {
   F as createRedirectAuthAdapter,
   it as createSignalRAccessTokenFactory,
   _ as readStudioHttpErrorMessage,
-  At as useAuthCapabilities,
+  gt as useAuthCapabilities,
   x as useAuthContext,
   K as useAuthSession,
   tt as usePermissions,

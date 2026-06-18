@@ -7,6 +7,7 @@ import {
   AuthProvider,
   RequireAuth,
   useAuthCapabilities,
+  useAuthContext,
   useAuthSession,
   usePermissions,
   type AuthCapabilities,
@@ -221,6 +222,26 @@ describe("auth React SDK", () => {
     await unmount();
   });
 
+  it("keeps refreshed session when capabilities fail after refresh", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const manager = stubManager(authenticatedSession());
+    manager.getCapabilities = vi.fn()
+      .mockResolvedValueOnce(capabilities())
+      .mockRejectedValueOnce(new Error("capabilities unavailable"));
+    const { container, unmount } = renderWithAuth(manager, <RefreshProbe />);
+
+    await flushPromises();
+    expect(container.textContent).toContain("foundation-owned");
+
+    await flushPromises();
+    await flushPromises();
+
+    expect(container.textContent).toContain("authenticated");
+    expect(container.textContent).not.toContain("foundation-owned");
+
+    await unmount();
+  });
+
   it("ignores inline login results after the provider unmounts", async () => {
     let currentSession: AuthSession = { status: "anonymous", roles: [], permissions: [] };
     const manager = stubManager(currentSession);
@@ -290,6 +311,24 @@ function AuthProbe() {
 function SessionProbe() {
   const session = useAuthSession();
   return <span>{session.status}</span>;
+}
+
+function RefreshProbe() {
+  const session = useAuthSession();
+  const capabilities = useAuthCapabilities();
+  const { refresh } = useAuthContext();
+  const refreshedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!capabilities || refreshedRef.current) {
+      return;
+    }
+
+    refreshedRef.current = true;
+    void refresh();
+  }, [capabilities, refresh]);
+
+  return <span>{session.status}{capabilities?.ownershipMode}</span>;
 }
 
 function renderWithAuth(manager: AuthProviderManager, children: React.ReactNode) {
