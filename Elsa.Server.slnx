@@ -135,6 +135,9 @@
     <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Workflows/Design/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Workflows/Design/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
