@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 
+export * from "../auth";
+
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 
 export interface StudioModuleManifest {
