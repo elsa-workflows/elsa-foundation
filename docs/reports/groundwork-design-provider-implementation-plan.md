@@ -261,3 +261,18 @@ Command **contracts** are already provider-neutral in `Core/Contracts` (`IAddWor
 
 **Sequencing:** implement once the Groundwork `IDocumentUnitOfWork` types are published/consumable, so the
 Groundwork write adapter binds to real types in one pass (EF parity refactor can land first if desired).
+
+### RESUME TRIGGER (single remaining gate)
+Everything above is committed + pushed. The remaining write-side + single-provider-host work is gated on making
+the Groundwork build consumable here:
+- **Action (owner):** publish `0.0.1-preview.closedquery` (the 10 nupkgs in the Groundwork worktree
+  `artifacts/packages/`, branch `sfmskywalker/feature-closed-query-capability`, PR open) to feedz — or merge the
+  Groundwork PR and let CI publish a preview. (A local NuGet source works for local-only validation but must not
+  be committed.)
+- **Then, in one pass** (bind to real types): bump the central Groundwork package version; build the neutral
+  write port + EF adapter + Groundwork write adapter (over `IDocumentTransaction`) + lift command orchestration;
+  build the single-provider host feature using `StorageManifestComposition.Union("elsa.documents", runtime +
+  workflows-design + activities-design)`; add the end-to-end "one document DB backs runtime + design" test; then
+  `gw-fallback-cleanup` (drop the `GroundworkReadStore` in-memory operator fallback where
+  `ClosedQueryNativeSupport.Evaluate` reports native support); refresh the extension-point map; close the
+  feasibility report.
