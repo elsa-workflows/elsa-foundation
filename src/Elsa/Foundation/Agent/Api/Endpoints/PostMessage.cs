@@ -29,6 +29,13 @@ internal sealed class PostMessage(
             return;
         }
 
+        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
+        {
+            var error = new AgentError("agent.session.forbidden", "The agent session is not available to the current principal.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
         var availability = await policyEvaluator.EvaluateAvailabilityAsync(session.Policy, ct);
         if (!availability.Allowed)
         {

@@ -25,6 +25,13 @@ internal sealed class GetSession(IAgentSessionService sessions)
             return;
         }
 
+        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
+        {
+            var error = new AgentError("agent.session.forbidden", "The agent session is not available to the current principal.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentSessionDetailsResponse>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
         var context = await sessions.ListContextAsync(req.SessionId, ct);
         var messages = await sessions.ListMessagesAsync(req.SessionId, ct);
         await Send.OkAsync(AgentApiResponse<AgentSessionDetailsResponse>.Success(new(

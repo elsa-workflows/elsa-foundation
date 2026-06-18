@@ -153,6 +153,7 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
             NewId(),
             request.Title,
             request.TenantId,
+            request.ActorId,
             request.ConversationId,
             request.ProviderId,
             request.Mode,
@@ -171,7 +172,7 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
             NewId(),
             AgentAuditEventKind.SessionCreated,
             session.Id,
-            null,
+            session.ActorId,
             "Agent session created.",
             now,
             new Dictionary<string, string> { ["providerId"] = session.ProviderId }), cancellationToken);
@@ -283,6 +284,7 @@ public sealed class InMemoryAgentProposalService(
     IAgentAuditSink auditSink) : IAgentProposalService
 {
     private readonly ConcurrentDictionary<string, AgentActionProposal> _proposals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, object> _proposalLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<AgentActionProposal> AddAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
     {
@@ -307,18 +309,24 @@ public sealed class InMemoryAgentProposalService(
 
     public async Task<AgentResult<AgentActionProposal>> ApproveAsync(string proposalId, string actorId, string? expectedRevision = null, string? comment = null, CancellationToken cancellationToken = default)
     {
-        if (!_proposals.TryGetValue(proposalId, out var proposal))
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
-
-        if (proposal.Status is not AgentActionProposalStatus.AwaitingApproval and not AgentActionProposalStatus.Edited)
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", $"Proposal '{proposalId}' cannot be approved from status {proposal.Status}.", 409);
-
-        if (!RevisionMatches(proposal, expectedRevision))
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
-
+        AgentActionProposal approved;
+        AgentActionProposal proposal;
         var now = DateTimeOffset.UtcNow;
-        var approved = proposal with { Status = AgentActionProposalStatus.Approved, ApprovedBy = actorId, ApprovedAt = now, UpdatedAt = now };
-        _proposals[proposalId] = approved;
+
+        lock (GetProposalLock(proposalId))
+        {
+            if (!_proposals.TryGetValue(proposalId, out proposal!))
+                return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
+
+            if (proposal.Status is not AgentActionProposalStatus.AwaitingApproval and not AgentActionProposalStatus.Edited)
+                return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", $"Proposal '{proposalId}' cannot be approved from status {proposal.Status}.", 409);
+
+            if (!RevisionMatches(proposal, expectedRevision))
+                return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
+
+            approved = proposal with { Status = AgentActionProposalStatus.Approved, ApprovedBy = actorId, ApprovedAt = now, UpdatedAt = now };
+            _proposals[proposalId] = approved;
+        }
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -334,15 +342,21 @@ public sealed class InMemoryAgentProposalService(
 
     public async Task<AgentResult<AgentActionProposal>> DenyAsync(string proposalId, string actorId, string? reason, CancellationToken cancellationToken = default)
     {
-        if (!_proposals.TryGetValue(proposalId, out var proposal))
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
-
-        if (IsTerminal(proposal.Status))
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
-
+        AgentActionProposal denied;
+        AgentActionProposal proposal;
         var now = DateTimeOffset.UtcNow;
-        var denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = now };
-        _proposals[proposalId] = denied;
+
+        lock (GetProposalLock(proposalId))
+        {
+            if (!_proposals.TryGetValue(proposalId, out proposal!))
+                return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
+
+            if (IsTerminal(proposal.Status))
+                return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
+
+            denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = now };
+            _proposals[proposalId] = denied;
+        }
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -358,27 +372,44 @@ public sealed class InMemoryAgentProposalService(
 
     public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(string proposalId, string actorId, string? expectedRevision = null, CancellationToken cancellationToken = default)
     {
-        if (!_proposals.TryGetValue(proposalId, out var proposal))
-            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
-
-        if (IsTerminal(proposal.Status))
-            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
-
-        if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
-            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", $"Proposal '{proposalId}' requires approval before execution.", 409);
-
-        if (!RevisionMatches(proposal, expectedRevision))
-            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
-
+        AgentActionProposal proposal;
+        AgentActionProposal reserved;
         var now = DateTimeOffset.UtcNow;
-        var executing = proposal with { Status = AgentActionProposalStatus.Executed, UpdatedAt = now };
-        _proposals[proposalId] = executing;
 
-        var result = await executor.ExecuteAsync(executing, cancellationToken);
+        lock (GetProposalLock(proposalId))
+        {
+            if (!_proposals.TryGetValue(proposalId, out proposal!))
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
+
+            if (IsTerminal(proposal.Status))
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
+
+            if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", $"Proposal '{proposalId}' requires approval before execution.", 409);
+
+            if (!RevisionMatches(proposal, expectedRevision))
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
+
+            reserved = proposal with { Status = AgentActionProposalStatus.Executed, UpdatedAt = now };
+            _proposals[proposalId] = reserved;
+        }
+
+        AgentResult<AgentProposalExecutionResult> result;
+        try
+        {
+            result = await executor.ExecuteAsync(reserved, cancellationToken);
+        }
+        catch (Exception)
+        {
+            result = AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.execution_exception", $"Proposal '{proposalId}' execution failed.", 500);
+        }
+
         if (!result.Succeeded)
         {
             var failedAt = DateTimeOffset.UtcNow;
-            _proposals[proposalId] = executing with { Status = AgentActionProposalStatus.Failed, UpdatedAt = failedAt };
+            lock (GetProposalLock(proposalId))
+                _proposals[proposalId] = reserved with { Status = AgentActionProposalStatus.Failed, UpdatedAt = failedAt };
+
             await auditSink.EmitAsync(new(
                 NewId(),
                 AgentAuditEventKind.ProposalFailed,
@@ -386,7 +417,7 @@ public sealed class InMemoryAgentProposalService(
                 actorId,
                 "Agent proposal execution failed.",
                 failedAt,
-                new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["code"] = result.Error?.Code ?? string.Empty }), cancellationToken);
+                new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["code"] = result.Error?.Code ?? string.Empty }), CancellationToken.None);
 
             return result;
         }
@@ -414,6 +445,9 @@ public sealed class InMemoryAgentProposalService(
             or AgentActionProposalStatus.Executed
             or AgentActionProposalStatus.Failed
             or AgentActionProposalStatus.Cancelled;
+
+    private object GetProposalLock(string proposalId)
+        => _proposalLocks.GetOrAdd(proposalId, _ => new object());
 }
 
 public sealed class NoopAgentActionProposalExecutor : IAgentActionProposalExecutor

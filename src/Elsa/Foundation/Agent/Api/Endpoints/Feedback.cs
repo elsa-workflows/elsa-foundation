@@ -25,6 +25,13 @@ internal sealed class Feedback(IAgentFeedbackService feedback, IAgentSessionServ
             return;
         }
 
+        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
+        {
+            var error = new AgentError("agent.session.forbidden", "The agent session is not available to the current principal.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentFeedback>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(req.MessageId) && await sessions.FindMessageAsync(req.SessionId, req.MessageId, ct) is null)
         {
             var error = new AgentError("agent.message.not_found", $"Agent message '{req.MessageId}' was not found in session '{req.SessionId}'.", 404);

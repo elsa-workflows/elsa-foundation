@@ -72,6 +72,7 @@ public sealed class AgentFeatureRegistrationTests
             "session-1",
             "Test session",
             "tenant-1",
+            "actor-1",
             "conversation-1",
             DeterministicAgentProvider.Id,
             "explain",
@@ -102,6 +103,7 @@ public sealed class AgentFeatureRegistrationTests
         var streaming = new DefaultAgentStreamingService(sessions, new DefaultAgentProviderRegistry([provider]));
         var session = await sessions.CreateAsync(new(
             "tenant-1",
+            "actor-1",
             "conversation-1",
             provider.ProviderId,
             "explain",

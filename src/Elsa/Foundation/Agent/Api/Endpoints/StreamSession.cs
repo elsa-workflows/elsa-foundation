@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Foundation.Agent.Api.Endpoints;
 
-internal sealed class StreamSession(IAgentStreamingService streaming)
+internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSessionService sessions)
     : ElsaEndpoint<AgentSessionRouteRequest>
 {
     public override void Configure()
@@ -26,10 +26,26 @@ internal sealed class StreamSession(IAgentStreamingService streaming)
         response.Headers.Connection = "keep-alive";
         response.Headers["X-Accel-Buffering"] = "no";
 
-        await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
+        var session = await sessions.FindAsync(req.SessionId, ct);
+        if (session is null)
         {
-            await response.WriteAsync($"data: {JsonSerializer.Serialize(item)}\n\n", ct);
-            await response.Body.FlushAsync(ct);
+            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404), DateTimeOffset.UtcNow), ct);
+            return;
         }
+
+        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
+        {
+            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.forbidden", "The agent session is not available to the current principal.", 403), DateTimeOffset.UtcNow), ct);
+            return;
+        }
+
+        await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
+            await WriteAsync(response, item, ct);
+    }
+
+    private static async Task WriteAsync(HttpResponse response, AgentStreamEvent item, CancellationToken ct)
+    {
+        await response.WriteAsync($"data: {JsonSerializer.Serialize(item)}\n\n", ct);
+        await response.Body.FlushAsync(ct);
     }
 }

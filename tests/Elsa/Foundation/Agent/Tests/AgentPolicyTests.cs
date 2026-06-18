@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Elsa.Foundation.Agent.Abstractions.Models;
 using Elsa.Foundation.Agent.Abstractions.Services;
+using Elsa.Foundation.Agent.Api.Endpoints;
 
 namespace Elsa.Foundation.Agent.Tests;
 
@@ -63,6 +65,22 @@ public sealed class AgentPolicyTests
         Assert.Equal(AgentContextSensitivity.SecretRedacted, attachment.Sensitivity);
         Assert.Null(attachment.Content);
         Assert.All(attachment.References.Values, value => Assert.Equal("[redacted]", value));
+    }
+
+    [Fact]
+    public void Agent_endpoint_actor_resolves_claim_owned_actor_and_tenant()
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "user-1"),
+            new Claim("elsa.identity.tenant_id", "tenant-1")
+        ], "test"));
+
+        Assert.Equal("user-1", AgentEndpointActor.Resolve(principal));
+        Assert.Equal("tenant-1", AgentEndpointActor.ResolveTenant(principal));
+        Assert.True(AgentEndpointActor.CanAccess("user-1", "tenant-1", principal));
+        Assert.False(AgentEndpointActor.CanAccess("user-2", "tenant-1", principal));
+        Assert.False(AgentEndpointActor.CanAccess("user-1", "tenant-2", principal));
     }
 
     private static AgentContextAttachment CreateAttachment(string source, string contentType, AgentContextSensitivity sensitivity, object? content = null)

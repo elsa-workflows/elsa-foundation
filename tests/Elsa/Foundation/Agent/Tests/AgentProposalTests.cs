@@ -1,6 +1,7 @@
 using Elsa.Foundation.Agent.Abstractions.Contracts;
 using Elsa.Foundation.Agent.Abstractions.Extensions;
 using Elsa.Foundation.Agent.Abstractions.Models;
+using Elsa.Foundation.Agent.Abstractions.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Agent.Tests;
@@ -110,6 +111,38 @@ public sealed class AgentProposalTests
     }
 
     [Fact]
+    public async Task Proposal_execution_is_reserved_atomically()
+    {
+        var executor = new CountingExecutor();
+        var audit = new InMemoryAgentAuditStore();
+        var proposals = new InMemoryAgentProposalService(executor, audit);
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1")));
+
+        Assert.Single(results, x => x.Succeeded);
+        Assert.Equal(1, executor.Count);
+        Assert.All(results.Where(x => !x.Succeeded), x => Assert.Equal("agent.proposal.closed", x.Error?.Code));
+    }
+
+    [Fact]
+    public async Task Proposal_execution_exception_marks_failed_and_emits_audit()
+    {
+        var audit = new InMemoryAgentAuditStore();
+        var proposals = new InMemoryAgentProposalService(new ThrowingExecutor(), audit);
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
+
+        var result = await proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1");
+        var stored = await proposals.FindAsync(proposal.Id);
+        var events = await audit.ListAsync("session-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("agent.proposal.execution_exception", result.Error?.Code);
+        Assert.Equal(AgentActionProposalStatus.Failed, stored?.Status);
+        Assert.Contains(events, x => x.Kind == AgentAuditEventKind.ProposalFailed && x.ActorId == "reviewer");
+    }
+
+    [Fact]
     public async Task Feedback_emits_audit_event_with_message_linkage()
     {
         using var provider = BuildAgentProvider();
@@ -164,5 +197,25 @@ public sealed class AgentProposalTests
             null,
             now,
             now);
+    }
+
+    private sealed class CountingExecutor : IAgentActionProposalExecutor
+    {
+        private int _count;
+
+        public int Count => _count;
+
+        public async Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _count);
+            await Task.Delay(25, cancellationToken);
+            return AgentResult<AgentProposalExecutionResult>.Success(new(proposal.Id, true, proposal.ResourceType!, proposal.ResourceId!, "Executed once."));
+        }
+    }
+
+    private sealed class ThrowingExecutor : IAgentActionProposalExecutor
+    {
+        public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Simulated executor failure.");
     }
 }

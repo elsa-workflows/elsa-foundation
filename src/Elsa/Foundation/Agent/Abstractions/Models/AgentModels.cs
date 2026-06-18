@@ -141,6 +141,7 @@ public sealed record AgentSession(
     string Id,
     string? Title,
     string TenantId,
+    string ActorId,
     string ConversationId,
     string ProviderId,
     string Mode,
@@ -240,6 +241,7 @@ public sealed record AgentPolicyDecision(
 
 public sealed record AgentSessionCreateRequest(
     string TenantId,
+    string ActorId,
     string ConversationId,
     string ProviderId,
     string Mode,

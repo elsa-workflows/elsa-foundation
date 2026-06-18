@@ -20,6 +20,8 @@ internal sealed class CreateSession(
 
     public override async Task HandleAsync(AgentCreateSessionRequest req, CancellationToken ct)
     {
+        var actorId = AgentEndpointActor.Resolve(User);
+        var tenantId = AgentEndpointActor.ResolveTenant(User);
         var provider = providers.Find(req.ProviderId);
         if (provider is null)
         {
@@ -29,7 +31,8 @@ internal sealed class CreateSession(
         }
 
         var session = await sessions.CreateAsync(new(
-            req.TenantId,
+            tenantId,
+            actorId,
             string.IsNullOrWhiteSpace(req.ConversationId)
                 ? string.IsNullOrWhiteSpace(req.ActiveSurface.ResourceId) ? req.ActiveSurface.Route : req.ActiveSurface.ResourceId
                 : req.ConversationId,
