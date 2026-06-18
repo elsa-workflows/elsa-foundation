@@ -57,8 +57,14 @@ public interface IProviderConfigurationStore
 
     ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
 
-    async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, CancellationToken cancellationToken = default) =>
-        await FindForTenantAsync(tenantId, provider, cancellationToken) ?? await FindGlobalAsync(provider, cancellationToken);
+    async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default)
+    {
+        var tenantConfiguration = await FindForTenantAsync(tenantId, provider, cancellationToken);
+        if (tenantConfiguration is not null)
+            return tenantConfiguration;
+
+        return allowGlobalFallback ? await FindGlobalAsync(provider, cancellationToken) : null;
+    }
 }
 
 public interface ITenantMembershipStore
@@ -100,7 +106,7 @@ public interface ICredentialManager
 
 public interface IProviderManager
 {
-    ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
+    ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default);
 }

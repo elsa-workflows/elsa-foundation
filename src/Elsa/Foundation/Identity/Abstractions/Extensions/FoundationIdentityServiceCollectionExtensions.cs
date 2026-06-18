@@ -45,11 +45,16 @@ public static class FoundationIdentityServiceCollectionExtensions
         if (fallbackDescriptor is not null)
         {
             services.Remove(fallbackDescriptor);
-            services.AddSingleton<AuthorizationPolicyProviderFallback>(sp =>
-                new((IAuthorizationPolicyProvider)CreateFromDescriptor(sp, fallbackDescriptor)));
+            services.Add(ServiceDescriptor.Describe(
+                typeof(AuthorizationPolicyProviderFallback),
+                sp => new AuthorizationPolicyProviderFallback((IAuthorizationPolicyProvider)CreateFromDescriptor(sp, fallbackDescriptor)),
+                fallbackDescriptor.Lifetime));
         }
 
-        services.AddSingleton<IAuthorizationPolicyProvider, RequirePermissionPolicyProvider>();
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IAuthorizationPolicyProvider),
+            typeof(RequirePermissionPolicyProvider),
+            fallbackDescriptor?.Lifetime ?? ServiceLifetime.Singleton));
     }
 
     private static object CreateFromDescriptor(IServiceProvider serviceProvider, ServiceDescriptor descriptor)

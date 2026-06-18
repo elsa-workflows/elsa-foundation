@@ -111,6 +111,27 @@ public sealed class AuthorizationContractsTests
         Assert.Contains(policy.Requirements, x => x is TestRequirement);
     }
 
+    [Fact]
+    public async Task RequirePermissionPolicyProviderPreservesScopedFallbackProviderLifetime()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ScopedPolicyDependency>();
+        services.AddScoped<IAuthorizationPolicyProvider, ScopedPolicyProvider>();
+        services.AddFoundationIdentityAbstractions();
+        var descriptor = services.Last(x => x.ServiceType == typeof(IAuthorizationPolicyProvider));
+
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var policyProvider = scope.ServiceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
+
+        var policy = await policyProvider.GetPolicyAsync("scoped");
+
+        Assert.NotNull(policy);
+        Assert.Contains(policy.Requirements, x => x is TestRequirement);
+    }
+
     private sealed class TestPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
     {
         public IReadOnlyCollection<Permission> List() => permissions;
@@ -144,6 +165,23 @@ public sealed class AuthorizationContractsTests
     {
         public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName) =>
             Task.FromResult<AuthorizationPolicy?>(policyName == "custom"
+                ? new AuthorizationPolicyBuilder().AddRequirements(new TestRequirement()).Build()
+                : null);
+
+        public Task<AuthorizationPolicy> GetDefaultPolicyAsync() =>
+            new DefaultAuthorizationPolicyProvider(Options.Create(new AuthorizationOptions())).GetDefaultPolicyAsync();
+
+        public Task<AuthorizationPolicy?> GetFallbackPolicyAsync() => Task.FromResult<AuthorizationPolicy?>(null);
+    }
+
+    private sealed class ScopedPolicyDependency;
+
+    private sealed class ScopedPolicyProvider(ScopedPolicyDependency dependency) : IAuthorizationPolicyProvider
+    {
+        private readonly ScopedPolicyDependency _dependency = dependency;
+
+        public Task<AuthorizationPolicy?> GetPolicyAsync(string policyName) =>
+            Task.FromResult<AuthorizationPolicy?>(policyName == "scoped" && _dependency is not null
                 ? new AuthorizationPolicyBuilder().AddRequirements(new TestRequirement()).Build()
                 : null);
 
