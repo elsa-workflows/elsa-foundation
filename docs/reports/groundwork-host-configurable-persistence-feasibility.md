@@ -94,6 +94,38 @@ and (b) **single-provider host composition** that wires every lane to one provid
 uplift (NOT a full ORM) is specified for the Groundwork maintainers in the
 [Groundwork closed-query capability spec](groundwork-closed-query-capability-spec.md). The "Recommended
 implementation route" item 5 is therefore reclassified from a product decision to **in-progress
+
+### Update 3a — the document-backed read path is proven in code
+
+Two building blocks now turn the above from "designed" into "demonstrated", both committed with tests on
+the universal-provider branch:
+
+- **`InMemoryQueryEvaluator`** (`Elsa.Persistence.Core`) — evaluates the closed `Query<TEntity>` against
+  materialized entities with semantics byte-for-byte identical to `EFCoreQueryTranslator` (11 tests).
+  This is the provider-neutral fallback the capability spec promised.
+- **`GroundworkReadStore<TEntity>`** (`Elsa.Persistence.Groundwork.Querying`) — the document-store
+  analogue of `EFCoreReadStore`. It satisfies the full closed contract over Groundwork's `IDocumentStore`
+  (whose only native query is equality-on-index + offset paging) by pulling the candidate set through a
+  by-collection equality index and applying the evaluator, with a by-id point-read fast path. 11 tests
+  run every design-lane query shape against the manifest-driven in-memory document store and return the
+  **same result set as the EF Core provider** — concrete evidence that design persistence can run on a
+  **document** database, not just a relational one, with the choice made only at the host.
+
+**Direction confirmed (host decision):** Elsa does **not** adopt Groundwork's relational providers for
+the design lane; instead every Elsa lane must be able to run on **either** a relational database (EF
+Core) **or** a document database (Groundwork documents), selected once at the host. The document path is
+the Groundwork path.
+
+**Remaining productionization** (bounded, mechanical except where noted): per-aggregate read adapters
+binding each named port to `GroundworkReadStore<TEntity>`; a **design storage manifest** (document kinds
++ by-collection indexes); the **write side** (Groundwork create/update/delete for the design aggregates,
+replacing the EF write commands) — the larger piece, and where the one real design decision lives:
+serialize the **domain projection** (the logical entity incl. its `[NotMapped]` `State` /
+`DescriptorPayload` / layout `Records`, excluding EF shadow `*Source` strings and navigation properties,
+with related aggregates fetched via a second read); and **single-provider host composition** wiring every
+lane (runtime + design) to the chosen provider.
+
+
 engineering**.
 
 ## What the current codebase already gives us
