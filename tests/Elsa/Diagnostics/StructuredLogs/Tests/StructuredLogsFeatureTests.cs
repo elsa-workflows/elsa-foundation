@@ -20,8 +20,14 @@ public sealed class StructuredLogsFeatureTests
         using var provider = services.BuildServiceProvider();
 
         var store = provider.GetRequiredService<IStructuredLogStore>();
-        Assert.Same(store, provider.GetRequiredService<IStructuredLogLiveFeed>());
-        Assert.Same(store, provider.GetRequiredService<IStructuredLogSink>());
+        Assert.NotNull(store);
+        Assert.NotNull(provider.GetRequiredService<IStructuredLogLiveFeed>());
+        Assert.NotNull(provider.GetRequiredService<IStructuredLogLivePublisher>());
+        Assert.NotNull(provider.GetRequiredService<IStructuredLogSink>());
+        // The live feed and its publisher are the same instance.
+        Assert.Same(
+            provider.GetRequiredService<IStructuredLogLiveFeed>(),
+            provider.GetRequiredService<IStructuredLogLivePublisher>());
         Assert.NotNull(provider.GetRequiredService<IStructuredLogSourceProvider>());
         Assert.NotNull(provider.GetRequiredService<StructuredLogEntrySerializer>());
         Assert.NotNull(provider.GetRequiredService<StructuredLogSseFormatter>());

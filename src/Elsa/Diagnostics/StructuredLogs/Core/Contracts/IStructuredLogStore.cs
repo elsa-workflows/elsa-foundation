@@ -8,8 +8,14 @@ namespace Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 /// </summary>
 public interface IStructuredLogStore
 {
-    /// <summary>Appends an entry, assigning it a monotonic <see cref="StructuredLogEntry.Sequence"/>.</summary>
+    /// <summary>Appends an already-sequenced entry to durable history.</summary>
     void Append(StructuredLogEntry entry);
+
+    /// <summary>
+    /// Returns the highest <see cref="StructuredLogEntry.Sequence"/> currently retained, or 0 when empty.
+    /// Used to seed the sink's sequence counter so a persistent backend keeps increasing across restarts.
+    /// </summary>
+    long GetHighWaterMark();
 
     /// <summary>Returns the most-recent entries matching <paramref name="filter"/>, newest last.</summary>
     IReadOnlyList<StructuredLogEntry> GetRecent(StructuredLogFilter filter);

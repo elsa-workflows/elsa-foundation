@@ -4,6 +4,7 @@ using Elsa.Diagnostics.StructuredLogs.Capture;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
+using Elsa.Diagnostics.StructuredLogs.Live;
 using Elsa.Diagnostics.StructuredLogs.Sources;
 using Elsa.Diagnostics.StructuredLogs.Storage;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -54,9 +55,15 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
         });
 
         services.AddSingleton<InMemoryStructuredLogStore>();
-        services.AddSingleton<IStructuredLogStore>(sp => sp.GetRequiredService<InMemoryStructuredLogStore>());
-        services.AddSingleton<IStructuredLogLiveFeed>(sp => sp.GetRequiredService<InMemoryStructuredLogStore>());
-        services.AddSingleton<IStructuredLogSink>(sp => sp.GetRequiredService<InMemoryStructuredLogStore>());
+        services.TryAddSingleton<IStructuredLogStore>(sp => sp.GetRequiredService<InMemoryStructuredLogStore>());
+
+        services.AddSingleton<InMemoryStructuredLogLiveFeed>();
+        services.AddSingleton<IStructuredLogLiveFeed>(sp => sp.GetRequiredService<InMemoryStructuredLogLiveFeed>());
+        services.AddSingleton<IStructuredLogLivePublisher>(sp => sp.GetRequiredService<InMemoryStructuredLogLiveFeed>());
+
+        services.AddSingleton<IStructuredLogSink>(sp => new StructuredLogSink(
+            sp.GetRequiredService<IStructuredLogStore>(),
+            sp.GetRequiredService<IStructuredLogLivePublisher>()));
 
         services.AddSingleton<IStructuredLogSourceProvider>(_ => new LocalStructuredLogSourceProvider(ServiceName, SourceDisplayName));
 

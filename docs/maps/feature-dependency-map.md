@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 45
+- Feature classes: 47
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 42
+- Feature-bearing source projects: 44
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -41,6 +41,8 @@ No duplicate explicit feature IDs were discovered.
 | ActivitiesSequence | ActivitiesSequenceFeature | False | Elsa.Activities.Sequence | - | - | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | DiagnosticsStructuredLogs | StructuredLogsFeature | False | Elsa.Diagnostics.StructuredLogs | BufferCapacity: int<br>MinimumLevel: string<br>ServiceName: string?<br>SourceDisplayName: string? | - | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
+| - | EFCoreStructuredLogsPersistenceFeatureBase | True | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | - | code default | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
+| DiagnosticsStructuredLogsPersistenceEFCoreSqlite | SqliteStructuredLogsPersistenceShellFeature | False | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | - | code default<br>sensitive or deployment-specific value signal | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | JavaScriptExpressions | JavaScriptFeature | False | Elsa.Expressions.JavaScript | GetConfigurationFunction: ConfigurationAccessFunctionProviderOptions?<br>TypeDescriptors: IEnumerable<JavaScriptTypeDescriptor> | - | [JavaScriptFeature.cs](../../src/Elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
@@ -92,6 +94,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | ActivitiesSequence | Elsa.Activities.Sequence | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
 | DiagnosticsStructuredLogs | Elsa.Diagnostics.StructuredLogs | - | Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.StructuredLogs.Core | CShells.Abstractions 0.0.29-preview.143<br>CShells.FastEndpoints.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| DiagnosticsStructuredLogsPersistenceEFCoreSqlite | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore (EFCoreStructuredLogsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | JavaScriptExpressions | Elsa.Expressions.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |

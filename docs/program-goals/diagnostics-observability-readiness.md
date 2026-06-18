@@ -31,7 +31,7 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 ## Active Objectives
 
 1. ✅ **Done** — Speckit slice: `Elsa.Diagnostics.StructuredLogs` capture + live feed + in-memory store + SSE/HTTP API (spec 073). Shipped: capture `ILoggerProvider`, in-memory ring-buffer store, per-subscriber backpressure live feed, `recent`/`sources` HTTP + `stream` SSE endpoints (with `Last-Event-ID` resume), feature registration, 43 unit tests, EXTENSION_POINTS + README, host wiring. Host-wide capture validated against `Elsa.Server`.
-2. Speckit slice: Structured Logs EFCore persistence (Core/EFCore/Sqlite).
+2. ✅ **Done** — Speckit slice: Structured Logs EFCore persistence (EFCore/Sqlite). Shipped: decomposed the in-memory store into store (`IStructuredLogStore` history) + live feed (`IStructuredLogLiveFeed`/`IStructuredLogLivePublisher` fan-out) + sink (`IStructuredLogSink` sequencing); `EfCoreStructuredLogStore` durable override with non-blocking channel-buffered `Append`, async batch-draining writer, `NullLoggerFactory` feedback-loop break, auto-increment `Id` durable cursor, and retention pruning; `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature + initial migration; 56 unit tests (46 + 10), EXTENSION_POINTS + README updates, host wiring, maps refresh. Live-validated against `Elsa.Server` (logs persisted to SQLite, no feedback loop).
 3. Speckit slice: `Elsa.Diagnostics.OpenTelemetry` OTLP ingestion + live feed + in-memory store + API/hub.
 4. Speckit slice: OpenTelemetry EFCore persistence (enhancement beyond source, which was in-memory only).
 5. Studio slice (elsa-foundation-studio): Structured Logs bottom-panel tab.

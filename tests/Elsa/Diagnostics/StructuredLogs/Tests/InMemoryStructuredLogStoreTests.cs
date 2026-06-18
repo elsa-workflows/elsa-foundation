@@ -7,16 +7,26 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 public sealed class InMemoryStructuredLogStoreTests
 {
+    private static StructuredLogEntry Seq(long sequence, string message = "m", LogLevel level = LogLevel.Information) =>
+        TestEntries.Create(sequence: sequence, level: level, message: message);
+
     [Fact]
-    public void AppendAssignsMonotonicSequence()
+    public void AppendRetainsEntriesAndTracksHighWaterMark()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
 
-        store.Append(TestEntries.Create(message: "a"));
-        store.Append(TestEntries.Create(message: "b"));
+        store.Append(Seq(1, "a"));
+        store.Append(Seq(2, "b"));
 
         var recent = store.GetRecent(StructuredLogFilter.None);
         Assert.Equal(new[] { 1L, 2L }, recent.Select(e => e.Sequence));
+        Assert.Equal(2L, store.GetHighWaterMark());
+    }
+
+    [Fact]
+    public void HighWaterMarkIsZeroWhenEmpty()
+    {
+        Assert.Equal(0L, new InMemoryStructuredLogStore(TestOptions.Create()).GetHighWaterMark());
     }
 
     [Fact]
@@ -24,9 +34,9 @@ public sealed class InMemoryStructuredLogStoreTests
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create(o => o.BufferCapacity = 2));
 
-        store.Append(TestEntries.Create(message: "a"));
-        store.Append(TestEntries.Create(message: "b"));
-        store.Append(TestEntries.Create(message: "c"));
+        store.Append(Seq(1, "a"));
+        store.Append(Seq(2, "b"));
+        store.Append(Seq(3, "c"));
 
         var recent = store.GetRecent(StructuredLogFilter.None);
         Assert.Equal(new[] { "b", "c" }, recent.Select(e => e.Message));
@@ -37,7 +47,7 @@ public sealed class InMemoryStructuredLogStoreTests
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         for (var i = 0; i < 5; i++)
-            store.Append(TestEntries.Create(message: i.ToString()));
+            store.Append(Seq(i + 1, i.ToString()));
 
         var recent = store.GetRecent(new StructuredLogFilter { MaxCount = 2 });
 
@@ -49,19 +59,17 @@ public sealed class InMemoryStructuredLogStoreTests
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create(o => o.MaxRecentQuerySize = 2));
         for (var i = 0; i < 5; i++)
-            store.Append(TestEntries.Create(message: i.ToString()));
+            store.Append(Seq(i + 1, i.ToString()));
 
-        var recent = store.GetRecent(new StructuredLogFilter { MaxCount = 100 });
-
-        Assert.Equal(2, recent.Count);
+        Assert.Equal(2, store.GetRecent(new StructuredLogFilter { MaxCount = 100 }).Count);
     }
 
     [Fact]
     public void GetRecentAppliesFilter()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
-        store.Append(TestEntries.Create(level: LogLevel.Information));
-        store.Append(TestEntries.Create(level: LogLevel.Error));
+        store.Append(Seq(1, level: LogLevel.Information));
+        store.Append(Seq(2, level: LogLevel.Error));
 
         var recent = store.GetRecent(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
 
@@ -73,7 +81,7 @@ public sealed class InMemoryStructuredLogStoreTests
     public void GetRecentWithZeroTakeReturnsEmpty()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
-        store.Append(TestEntries.Create());
+        store.Append(Seq(1));
 
         Assert.Empty(store.GetRecent(new StructuredLogFilter { MaxCount = 0 }));
     }
@@ -83,52 +91,10 @@ public sealed class InMemoryStructuredLogStoreTests
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         for (var i = 0; i < 4; i++)
-            store.Append(TestEntries.Create(message: i.ToString()));
+            store.Append(Seq(i + 1, i.ToString()));
 
         var after = store.GetAfter(2, StructuredLogFilter.None);
 
         Assert.Equal(new[] { 3L, 4L }, after.Select(e => e.Sequence));
-    }
-
-    [Fact]
-    public async Task SubscribeDeliversMatchingEntries()
-    {
-        var store = new InMemoryStructuredLogStore(TestOptions.Create());
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        var enumerator = store.Subscribe(new StructuredLogFilter { MinimumLevel = LogLevel.Warning }, cts.Token)
-            .GetAsyncEnumerator(cts.Token);
-
-        store.Append(TestEntries.Create(level: LogLevel.Information, message: "skip"));
-        store.Append(TestEntries.Create(level: LogLevel.Error, message: "keep"));
-
-        Assert.True(await enumerator.MoveNextAsync());
-        Assert.NotNull(enumerator.Current.Entry);
-        Assert.Equal("keep", enumerator.Current.Entry!.Message);
-
-        await cts.CancelAsync();
-    }
-
-    [Fact]
-    public async Task BackpressureDropsAndEmitsDroppedSignalWithoutBlockingProducer()
-    {
-        var store = new InMemoryStructuredLogStore(TestOptions.Create(o => o.SubscriberQueueCapacity = 1));
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        var enumerator = store.Subscribe(StructuredLogFilter.None, cts.Token).GetAsyncEnumerator(cts.Token);
-
-        // Fill the single-slot queue and overflow it without any reader draining — must not block.
-        for (var i = 0; i < 5; i++)
-            store.Append(TestEntries.Create(message: i.ToString()));
-
-        // First item is the buffered entry; subsequent read surfaces the in-band drop signal.
-        Assert.True(await enumerator.MoveNextAsync());
-        Assert.True(enumerator.Current.IsEntry);
-
-        Assert.True(await enumerator.MoveNextAsync());
-        Assert.True(enumerator.Current.IsDropped);
-        Assert.True(enumerator.Current.Dropped!.DroppedCount > 0);
-
-        await cts.CancelAsync();
     }
 }

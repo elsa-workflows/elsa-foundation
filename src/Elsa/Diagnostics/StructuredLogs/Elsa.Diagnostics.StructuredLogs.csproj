@@ -27,6 +27,10 @@
     <Compile Remove="Core/**/*" />
     <EmbeddedResource Remove="Core/**/*" />
     <None Remove="Core/**/*" />
+    <!-- Nested Persistence projects (EFCore + Sqlite) also live under this domain root. -->
+    <Compile Remove="Persistence/**/*" />
+    <EmbeddedResource Remove="Persistence/**/*" />
+    <None Remove="Persistence/**/*" />
   </ItemGroup>
 
 </Project>

@@ -16,6 +16,7 @@
             }
           },
           "DiagnosticsStructuredLogs": {},
+          "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
           "Expressions": {},
           "FastEndpoints": {
