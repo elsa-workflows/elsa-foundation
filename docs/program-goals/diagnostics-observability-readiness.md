@@ -30,7 +30,7 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 
 ## Active Objectives
 
-1. Speckit slice: `Elsa.Diagnostics.StructuredLogs` capture + live feed + in-memory store + API/hub.
+1. ✅ **Done** — Speckit slice: `Elsa.Diagnostics.StructuredLogs` capture + live feed + in-memory store + SSE/HTTP API (spec 073). Shipped: capture `ILoggerProvider`, in-memory ring-buffer store, per-subscriber backpressure live feed, `recent`/`sources` HTTP + `stream` SSE endpoints (with `Last-Event-ID` resume), feature registration, 43 unit tests, EXTENSION_POINTS + README, host wiring. Host-wide capture validated against `Elsa.Server`.
 2. Speckit slice: Structured Logs EFCore persistence (Core/EFCore/Sqlite).
 3. Speckit slice: `Elsa.Diagnostics.OpenTelemetry` OTLP ingestion + live feed + in-memory store + API/hub.
 4. Speckit slice: OpenTelemetry EFCore persistence (enhancement beyond source, which was in-memory only).

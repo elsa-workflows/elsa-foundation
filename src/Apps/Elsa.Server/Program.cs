@@ -16,6 +16,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Caching.Memory;
+using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
@@ -131,7 +132,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
-            typeof(ModularityApiFeature).Assembly
+            typeof(ModularityApiFeature).Assembly,
+            typeof(StructuredLogsFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)
