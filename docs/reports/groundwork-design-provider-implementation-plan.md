@@ -276,3 +276,30 @@ the Groundwork build consumable here:
   `gw-fallback-cleanup` (drop the `GroundworkReadStore` in-memory operator fallback where
   `ClosedQueryNativeSupport.Evaluate` reports native support); refresh the extension-point map; close the
   feasibility report.
+
+### FINAL Groundwork document-UoW API (commit 0931f0a — supersedes the earlier prototype shape)
+The document UoW was reshaped to mirror the operational lane. Bind the Groundwork write adapter to THESE types:
+- `IDocumentStore : IDocumentSessionFactory` (the store IS the factory — no separate object to resolve).
+  - `TransactionBoundary TransactionBoundary { get; }` — runtime atomicity detection.
+  - `Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken ct = default)`.
+- `IDocumentUnitOfWork : IAsyncDisposable` — `SaveAsync(SaveDocumentRequest)`, `DeleteAsync(DeleteDocumentRequest)`,
+  `LoadAsync(kind, id)` (read-your-writes), `CommitAsync`, `RollbackAsync`. Dispose-without-commit = rollback;
+  ops after completion throw.
+- `DocumentCommitScope.Of(params string[] kinds)`; `Groundwork.Core.Transactions.TransactionBoundary`
+  `{ PerOperation, CrossUnitAtomic }`; `UnsupportedAtomicCommitException { IReadOnlyList<string> Units; string? Reason }`.
+- Namespaces: `Groundwork.Documents.UnitOfWork` (factory/UoW/scope), `Groundwork.Core.Transactions` (boundary/exception).
+
+Contract: staging Save/Delete return their normal `DocumentStoreWriteResult` immediately (NOT auto-committed) —
+**all-or-nothing is caller-enforced** (roll back on any non-success status or exception). Relational =
+`CrossUnitAtomic` (one `DbTransaction`, holds the single connection for the UoW lifetime; Postgres aborts the
+whole tx on first failed statement → rollback is the only valid next step). Mongo = `CrossUnitAtomic` only on a
+replica set/sharded deployment; on standalone `TransactionBoundary` reports `PerOperation` and `BeginAsync`
+throws `UnsupportedAtomicCommitException`.
+
+**Neutral-port mapping decision:** the neutral write port checks `store.TransactionBoundary` UP FRONT — if it is
+not `CrossUnitAtomic`, select a compensation path rather than assuming atomicity (no try/catch needed). We chose
+**runtime detection over a manifest-declared AtomicCommit capability** because the guarantee is deployment-
+dependent (Mongo standalone vs replica set), so a static manifest flag could not tell the truth. The neutral
+`IDesignUnitOfWork` should expose `Stage(Save/Delete)` + `LoadAsync` (read-your-writes) + `CommitAsync` and map
+1:1 onto `IDocumentUnitOfWork`; the EF adapter maps the same surface onto `DbContext` + `SaveChangesAsync`
+(inherently atomic, `TransactionBoundary.CrossUnitAtomic`).
