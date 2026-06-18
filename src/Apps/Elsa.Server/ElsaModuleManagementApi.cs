@@ -113,7 +113,10 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> DeleteDropFolderPackageAsync(
         string fileName,
+        [FromServices] IServiceScopeFactory scopeFactory,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IHostApplicationLifetime applicationLifetime,
+        [FromServices] ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var safeFileName = Path.GetFileName(fileName);
@@ -127,13 +130,54 @@ internal static class ElsaModuleManagementApi
             return Results.NotFound(new ModuleManagementErrorResponse($"Package '{safeFileName}' was not found in the drop folder."));
 
         File.Delete(path);
+        QueueReconciliation(
+            scopeFactory,
+            applicationLifetime,
+            loggerFactory.CreateLogger("Elsa.Server.ModuleManagementDelete"),
+            "package deletion");
 
         return Results.Ok(new ModuleManagementDeleteResponse(
             safeFileName,
             path,
-            ModuleManagementReconcileResponse.Deferred("Package was deleted from the drop folder. Reconcile or restart the host to update active Nuplane state."),
+            ModuleManagementReconcileResponse.Deferred("Package was deleted from the drop folder. Nuplane reconciliation is running in the background."),
             RequiresReload: true,
-            RequiresRestart: true));
+            RequiresRestart: false));
+    }
+
+    private static void QueueReconciliation(
+        IServiceScopeFactory scopeFactory,
+        IHostApplicationLifetime applicationLifetime,
+        ILogger logger,
+        string operation)
+    {
+        var stoppingToken = applicationLifetime.ApplicationStopping;
+
+        _ = Task.Run(async () =>
+        {
+            if (stoppingToken.IsCancellationRequested)
+                return;
+
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var nuplaneAdmin = scope.ServiceProvider.GetRequiredService<INuplaneAdminOperations>();
+                var outcome = await nuplaneAdmin.TriggerReconcileAsync(stoppingToken);
+
+                logger.LogInformation(
+                    "Background Nuplane reconciliation completed after {Operation}. Outcome={Outcome}, CorrelationId={CorrelationId}, ReasonCode={ReasonCode}.",
+                    operation,
+                    outcome.OutcomeCode,
+                    outcome.CorrelationId,
+                    outcome.ReasonCode);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Background Nuplane reconciliation failed after {Operation}.", operation);
+            }
+        });
     }
 
     private static async Task<IResult> TriggerReconcileAsync([FromServices] INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)

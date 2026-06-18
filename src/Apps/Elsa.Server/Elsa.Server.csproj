@@ -44,6 +44,7 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
