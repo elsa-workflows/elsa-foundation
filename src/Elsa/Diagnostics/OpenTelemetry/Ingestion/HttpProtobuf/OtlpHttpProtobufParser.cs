@@ -653,7 +653,10 @@ internal static class OtlpHttpProtobufParser
                     field = new ProtobufField(number, wireType, fixed64, default, BitConverter.Int64BitsToDouble((long)fixed64));
                     return true;
                 case ProtobufWireType.LengthDelimited:
-                    var length = checked((int)ReadVarint());
+                    var rawLength = ReadVarint();
+                    if (rawLength > int.MaxValue)
+                        throw new InvalidDataException("Invalid protobuf length-delimited field length.");
+                    var length = (int)rawLength;
                     EnsureAvailable(length);
                     var bytes = _remaining[..length];
                     _remaining = _remaining[length..];

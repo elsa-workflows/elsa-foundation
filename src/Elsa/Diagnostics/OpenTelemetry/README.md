@@ -7,11 +7,11 @@ Feature name (manifest / appsettings key): **`DiagnosticsOpenTelemetry`**.
 ## What this feature provides
 
 - **Decomposed roles** behind separate contracts (all registered with `TryAdd*` so a persistence/transport feature can replace just one):
-  - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, marks resources seen in the registry, writes to the store, then publishes to the live feed.
-  - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). Registered with `TryAddSingleton` so a persistence feature can override it.
+  - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, writes it to the store, then publishes it to the live feed.
+  - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
   - **`OpenTelemetryRedactor`** → `IOpenTelemetryRedactor` — strips sensitive attribute values (by name) and masks sensitive text patterns (by regex) on ingestion.
-  - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources.
+  - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
   - **`DefaultOpenTelemetryProvider`** → `IOpenTelemetryProvider` — the read facade the query endpoints call.
   - **`CollectorConfigurationProvider`** → `ICollectorConfigurationProvider` — surfaces the endpoint paths/auth shape a collector needs to push to this host.
 - **OTLP/HTTP protobuf collector** (FastEndpoints, auto-mapped via `app.MapShells()`): `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). The protobuf wire format is parsed by a self-contained, dependency-free hand-rolled parser (`OtlpHttpProtobufParser` + an internal `ProtobufReader`) — no protobuf NuGet package is required. These endpoints are authenticated by `OtlpIngestionSecurity` (API-key header or loopback), not by the studio permission model.

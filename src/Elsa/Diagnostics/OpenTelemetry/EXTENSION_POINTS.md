@@ -4,8 +4,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.OpenT
 
 The collect/serve pipeline is decomposed into single-responsibility roles so a durable backend or external transport can replace just one of them:
 
-- **`IOpenTelemetryIngestor`** is the write path: redact → mark resources seen → store → publish to the live feed (keeping history and the tail consistent).
-- **`IOpenTelemetryStore`** is pure history (`WriteAsync` + the `Query*`/`Get*` reads). Swap this to make telemetry durable.
+- **`IOpenTelemetryIngestor`** is the write path: redact → store → publish to the live feed (keeping history and the tail consistent).
+- **`IOpenTelemetryStore`** is pure history (`WriteAsync` + the `Query*`/`Get*` reads). On write it also populates the source registry (`MarkSeen`). Swap this to make telemetry durable.
 - **`IOpenTelemetryLiveFeed`** is the in-process fan-out to SSE subscribers. It stays in-process for every storage backend.
 - **`IOpenTelemetryRedactor`**, **`IOpenTelemetrySourceRegistry`**, **`IOpenTelemetryProvider`**, **`ICollectorConfigurationProvider`** round out the redaction, resource-tracking, read-facade, and collector-config roles.
 
@@ -17,8 +17,8 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 
 ### `IOpenTelemetryStore` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask WriteAsync(OpenTelemetryBatch batch, …)`, `ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(…)`, `ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(…)`, `ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, …)`, `ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(…)`, `ValueTask<OpenTelemetryLogResult> QueryLogsAsync(…)`, `ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(…)`.
-- **Default impl:** `InMemoryOpenTelemetryStore` — capacity-bounded ring buffers per signal (trace/span/metric-point/log-record/resource), bounds from `OpenTelemetryDiagnosticsOptions.*Capacity`. Stores normalized batches; oldest entries roll off and are counted as dropped.
-- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. (Planned shipped override: an EFCore store mirroring the Structured Logs persistence slice.)
+- **Default impl:** `InMemoryOpenTelemetryStore` — capacity-bounded ring buffers per signal (trace/span/metric-point/log-record/resource), bounds from `OpenTelemetryDiagnosticsOptions.*Capacity`. Stores normalized batches; oldest entries roll off and are counted as dropped. **It also populates the source registry** (`IOpenTelemetrySourceRegistry.MarkSeen`) for each resource it writes, and serves resource queries/storage diagnostics from that registry.
+- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. **Slice-4 gotcha:** the source registry is populated by the store (not the ingestor), so a durable override MUST also call `IOpenTelemetrySourceRegistry.MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty. (Planned shipped override: an EFCore store mirroring the Structured Logs persistence slice.)
 
 ### `IOpenTelemetryLiveFeed` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask PublishAsync(OpenTelemetryBatch batch, …)`, `IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken)`.
@@ -27,7 +27,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 
 ### `IOpenTelemetryIngestor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask IngestAsync(OpenTelemetryBatch batch, …)`.
-- **Default impl:** `OpenTelemetryIngestor` — redacts the batch (`IOpenTelemetryRedactor`), marks each resource seen (`IOpenTelemetrySourceRegistry`), writes to `IOpenTelemetryStore`, then publishes to `IOpenTelemetryLiveFeed`. This is the seam the OTLP collector endpoints write to.
+- **Default impl:** `OpenTelemetryIngestor` — redacts the batch (`IOpenTelemetryRedactor`), writes it to `IOpenTelemetryStore` (which in turn marks resources seen in the source registry), then publishes to `IOpenTelemetryLiveFeed`. This is the seam the OTLP collector endpoints write to.
 - **Override:** replace to tee ingested batches elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
 
 ### `IOpenTelemetryRedactor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
@@ -37,7 +37,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 
 ### `IOpenTelemetrySourceRegistry` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `void MarkSeen(TelemetryResource resource)`, `IReadOnlyCollection<TelemetryResource> List()`.
-- **Default impl:** `OpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources (services/instances).
+- **Default impl:** `OpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources (services/instances). Populated by `IOpenTelemetryStore` on write (`MarkSeen`), and read back by the store's resource queries and storage diagnostics.
 - **Override:** replace to enumerate sources from an external inventory in a multi-host deployment.
 
 ### `IOpenTelemetryProvider` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*

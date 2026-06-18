@@ -68,7 +68,10 @@ internal sealed class StreamEndpoint(
 
         while (true)
         {
-            var completed = await Task.WhenAny(moveNext, Task.Delay(HeartbeatInterval, ct));
+            // Linked CTS so the heartbeat delay can be cancelled the moment an item wins the race,
+            // releasing its timer instead of leaving it registered until it fires (no timer pile-up under load).
+            using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var completed = await Task.WhenAny(moveNext, Task.Delay(HeartbeatInterval, heartbeatCts.Token));
 
             if (completed != moveNext)
             {
@@ -76,6 +79,8 @@ internal sealed class StreamEndpoint(
                 await response.Body.FlushAsync(ct);
                 continue;
             }
+
+            await heartbeatCts.CancelAsync();
 
             if (!await moveNext)
                 break;

@@ -85,6 +85,16 @@ public class OtlpHttpProtobufParserTests
         Assert.Equal("0011223344556677", record.SpanId);
     }
 
+    [Fact(DisplayName = "OTLP payload with a length-delimited field length exceeding Int32 is rejected as invalid data")]
+    public void ParseTraces_OversizedLengthPrefix_ThrowsInvalidData()
+    {
+        // Field 1, length-delimited, with a length varint of 2^31 (> int.MaxValue): must surface as
+        // InvalidDataException (mapped to HTTP 400), not an unhandled OverflowException (HTTP 500).
+        var payload = Join([(byte)((1 << 3) | 2)], Varint(2147483648));
+
+        Assert.Throws<InvalidDataException>(() => OtlpHttpProtobufParser.ParseTraces(payload));
+    }
+
     private static byte[] Resource()
     {
         return Join(
