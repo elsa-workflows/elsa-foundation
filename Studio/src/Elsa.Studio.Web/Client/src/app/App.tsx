@@ -246,9 +246,12 @@ function ShellFrame({
           </nav>
         ))}
 
-        <div className="sidebar-footer">
-          <ShieldCheck size={16} />
-          <span>Backend API: {new URL(backendBaseUrl).host}</span>
+        <div className="sidebar-footer" aria-label="Backend API status">
+          <span className="sidebar-status-dot" aria-hidden="true" />
+          <span>
+            <strong>Backend API</strong>
+            <small>{new URL(backendBaseUrl).host}</small>
+          </span>
         </div>
       </aside>
 
@@ -279,7 +282,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
@@ -771,6 +774,15 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
+}
+
+function getInitialBottomPanelCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const value = window.localStorage.getItem(bottomPanelCollapsedStorageKey);
+  return value === null ? window.innerWidth <= 640 : value === "true";
 }
 
 function getInitialBoolean(storageKey: string, fallback: boolean) {

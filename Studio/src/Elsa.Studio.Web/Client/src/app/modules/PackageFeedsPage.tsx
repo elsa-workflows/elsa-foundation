@@ -34,6 +34,7 @@ interface FeedDraft {
   serviceIndex: string;
   directoryPath: string;
   includePatterns: string;
+  includeAllPackages: boolean;
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
@@ -149,9 +150,11 @@ function PackageFeedsWorkbench({
   const [addFeedDialogOpen, setAddFeedDialogOpen] = useState(false);
   const [editingFeed, setEditingFeed] = useState<ModuleManagementFeed | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<ModuleManagementRetentionPolicy>(() => registry.retentionPolicy ?? defaultRetentionPolicy());
+  const effectiveRetentionPolicy = registry.retentionPolicy ?? defaultRetentionPolicy();
+  const retentionDirty = !retentionPolicyEquals(retentionDraft, effectiveRetentionPolicy);
 
   useEffect(() => {
-    setRetentionDraft(registry.retentionPolicy ?? defaultRetentionPolicy());
+    setRetentionDraft(effectiveRetentionPolicy);
   }, [registry.retentionPolicy]);
 
   function addDraftFeed(feedDraft: FeedDraft) {
@@ -165,130 +168,177 @@ function PackageFeedsWorkbench({
   }
 
   return (
-    <div className="package-feeds-workbench">
-      <section className="package-feeds-panel" aria-label={`${host.label} feeds`}>
-        <div className="package-feeds-panel-heading">
-          <div>
-            <h3>Feeds</h3>
+    <div className="package-feeds-layout">
+      <div className="package-feeds-workbench">
+        <section className="package-feeds-panel" aria-label={`${host.label} feeds`}>
+          <div className="package-feeds-panel-heading">
+            <div>
+              <h3>Feeds</h3>
+            </div>
+            <strong>{registry.feeds.length}</strong>
           </div>
-          <strong>{registry.feeds.length}</strong>
-        </div>
 
-        <div className="modules-list package-feeds-list">
-          {registry.feeds.length === 0 ? <p className="modules-muted">No feeds are configured for this host.</p> : null}
-          {registry.feeds.map(feed => (
-            <div key={feed.name} className="modules-list-row package-feed-row">
-              <span>
-                <strong>{feed.name}</strong>
-                <code>{feed.serviceIndex ?? feed.directoryPath ?? "no source"}</code>
-                <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
-              </span>
-              <div className="package-feed-row-actions">
-                <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
-                  <Pencil size={14} />
-                </button>
-                <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
-                  <Trash2 size={14} />
-                </button>
+          <div className="modules-list package-feeds-list">
+            {registry.feeds.length === 0 ? <p className="modules-muted">No feeds are configured for this host.</p> : null}
+            {registry.feeds.map(feed => (
+              <div key={feed.name} className="modules-list-row package-feed-row">
+                <span>
+                  <strong>{feed.name}</strong>
+                  <code>{feed.serviceIndex ?? feed.directoryPath ?? "no source"}</code>
+                  <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
+                </span>
+                <div className="package-feed-row-actions">
+                  <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
+                    <Pencil size={14} />
+                  </button>
+                  <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
+            <PackagePlus size={15} />
+            Add feed
+          </button>
+
+          {addFeedDialogOpen ? (
+            <FeedDialog
+              mode="add"
+              host={host}
+              busy={busy}
+              feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
+              onClose={() => setAddFeedDialogOpen(false)}
+              onSubmit={addDraftFeed}
+            />
+          ) : null}
+
+          {editingFeed ? (
+            <FeedDialog
+              mode="edit"
+              host={host}
+              busy={busy}
+              feed={editingFeed}
+              feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
+              onClose={() => setEditingFeed(null)}
+              onSubmit={feedDraft => updateDraftFeed(editingFeed.name, feedDraft)}
+            />
+          ) : null}
+        </section>
+
+        <aside className="package-feeds-side-column" aria-label={`${host.label} package feed controls`}>
+          <section className="package-feeds-panel" aria-label={`${host.label} feed operations`}>
+            <div className="package-feeds-panel-heading">
+              <div>
+                <h3>Operations</h3>
               </div>
             </div>
-          ))}
-        </div>
 
-        <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
-          <PackagePlus size={15} />
-          Add feed
-        </button>
-
-        {addFeedDialogOpen ? (
-          <FeedDialog
-            mode="add"
-            host={host}
-            busy={busy}
-            feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
-            onClose={() => setAddFeedDialogOpen(false)}
-            onSubmit={addDraftFeed}
-          />
-        ) : null}
-
-        {editingFeed ? (
-          <FeedDialog
-            mode="edit"
-            host={host}
-            busy={busy}
-            feed={editingFeed}
-            feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
-            onClose={() => setEditingFeed(null)}
-            onSubmit={feedDraft => updateDraftFeed(editingFeed.name, feedDraft)}
-          />
-        ) : null}
-      </section>
-
-      <aside className="package-feeds-side-column" aria-label={`${host.label} package feed controls`}>
-        <section className="package-feeds-panel" aria-label={`${host.label} feed operations`}>
-          <div className="package-feeds-panel-heading">
-            <div>
-              <h3>Operations</h3>
+            <div className="modules-operation-grid">
+              <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canReconcile} onClick={onReconcile}>
+                <RefreshCcw size={15} />
+                Reconcile
+              </button>
+              <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canPrunePackages} onClick={onPrune}>
+                <Scissors size={15} />
+                Prune old versions
+              </button>
             </div>
-          </div>
+          </section>
 
-          <div className="modules-operation-grid">
-            <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canReconcile} onClick={onReconcile}>
-              <RefreshCcw size={15} />
-              Reconcile
-            </button>
-            <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canPrunePackages} onClick={onPrune}>
-              <Scissors size={15} />
-              Prune old versions
-            </button>
-          </div>
-        </section>
-
-        <section className="package-feeds-panel" aria-label={`${host.label} retention settings`}>
-          <div className="package-feeds-panel-heading">
-            <div>
-              <h3>Retention</h3>
+          <section className="package-feeds-panel" aria-label={`${host.label} retention settings`}>
+            <div className="package-feeds-panel-heading">
+              <div>
+                <h3>Retention</h3>
+              </div>
             </div>
-          </div>
-          <div className="modules-form two-column">
-            <label>
-              <span>Last versions</span>
-              <input
-                type="number"
-                min="0"
-                value={retentionDraft.retainLastNVersions ?? ""}
-                onChange={event => setRetentionDraft({ ...retentionDraft, retainLastNVersions: numberOrNull(event.target.value) })}
-              />
-            </label>
-            <label>
-              <span>Younger than days</span>
-              <input
-                type="number"
-                min="0"
-                value={retentionDraft.retainYoungerThanDays ?? ""}
-                onChange={event => setRetentionDraft({ ...retentionDraft, retainYoungerThanDays: numberOrNull(event.target.value) })}
-              />
-            </label>
-            <label>
-              <span>Mode</span>
-              <select value={retentionDraft.mode} onChange={event => setRetentionDraft({ ...retentionDraft, mode: event.target.value })}>
-                <option value="Automatic">Automatic</option>
-                <option value="ManualOnly">Manual only</option>
-              </select>
-            </label>
-            <label className="modules-checkbox">
-              <input
-                type="checkbox"
-                checked={retentionDraft.protectLastKnownGood}
-                onChange={event => setRetentionDraft({ ...retentionDraft, protectLastKnownGood: event.target.checked })}
-              />
-              Protect last-known-good
-            </label>
-            <button type="button" className="studio-button" disabled={busy} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
-          </div>
-        </section>
-      </aside>
+            <div className="modules-form two-column">
+              <label>
+                <span>Last versions</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={retentionDraft.retainLastNVersions ?? ""}
+                  onChange={event => setRetentionDraft({ ...retentionDraft, retainLastNVersions: numberOrNull(event.target.value) })}
+                />
+              </label>
+              <label>
+                <span>Younger than days</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={retentionDraft.retainYoungerThanDays ?? ""}
+                  onChange={event => setRetentionDraft({ ...retentionDraft, retainYoungerThanDays: numberOrNull(event.target.value) })}
+                />
+              </label>
+              <label>
+                <span>Mode</span>
+                <select value={retentionDraft.mode} onChange={event => setRetentionDraft({ ...retentionDraft, mode: event.target.value })}>
+                  <option value="Automatic">Automatic</option>
+                  <option value="ManualOnly">Manual only</option>
+                </select>
+              </label>
+              <label className="modules-checkbox">
+                <input
+                  type="checkbox"
+                  checked={retentionDraft.protectLastKnownGood}
+                  onChange={event => setRetentionDraft({ ...retentionDraft, protectLastKnownGood: event.target.checked })}
+                />
+                Protect last-known-good
+              </label>
+              <button type="button" className="studio-button" disabled={busy || !retentionDirty} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <ChangeLedger
+        host={host}
+        retentionDirty={retentionDirty}
+        feedChangesRequireRestart={registry.capabilities.feedChangesRequireRestart}
+        onDiscardRetention={() => setRetentionDraft(effectiveRetentionPolicy)}
+      />
     </div>
+  );
+}
+
+function ChangeLedger({
+  host,
+  retentionDirty,
+  feedChangesRequireRestart,
+  onDiscardRetention
+}: {
+  host: HostModel;
+  retentionDirty: boolean;
+  feedChangesRequireRestart: boolean;
+  onDiscardRetention(): void;
+}) {
+  return (
+    <section className="package-change-ledger" aria-label={`${host.label} change ledger`}>
+      <div className="package-change-ledger-header">
+        <div>
+          <h3>Change ledger</h3>
+          <span>Affects: {host.label}</span>
+        </div>
+        {retentionDirty ? (
+          <button type="button" className="studio-button" onClick={onDiscardRetention}>Discard local changes</button>
+        ) : null}
+      </div>
+      <div className="package-change-ledger-row">
+        <span className={retentionDirty ? "ledger-dot unsaved" : "ledger-dot"} aria-hidden="true" />
+        <strong>{retentionDirty ? "Updated retention policy" : "No unsaved retention changes"}</strong>
+        <span>{retentionDirty ? "Unsaved" : "Current"}</span>
+      </div>
+      {feedChangesRequireRestart ? (
+        <div className="package-change-ledger-row">
+          <span className="ledger-dot restart" aria-hidden="true" />
+          <strong>Feed registration changes require restart</strong>
+          <span>Host restart required after save</span>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -327,10 +377,31 @@ function FeedDialog({
         </div>
 
         <div className="modules-form">
-          <input aria-label="Feed name" placeholder="Feed name" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
-          <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
-          <input aria-label="Directory path" placeholder="Directory path" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} />
-          <textarea aria-label="Include patterns" placeholder="Include patterns" value={feedDraft.includePatterns} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
+          <label>
+            <span>Name</span>
+            <input aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
+          </label>
+          <label>
+            <span>Service index</span>
+            <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
+          </label>
+          <label>
+            <span>Directory path</span>
+            <input aria-label="Directory path" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} />
+          </label>
+          <label>
+            <span>Include patterns</span>
+            <textarea aria-label="Include patterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
+          </label>
+          <label className="modules-checkbox">
+            <input
+              type="checkbox"
+              aria-label="Include all packages"
+              checked={feedDraft.includeAllPackages}
+              onChange={event => setFeedDraft({ ...feedDraft, includeAllPackages: event.target.checked })}
+            />
+            Include all packages
+          </label>
         </div>
 
         <div className="modules-dialog-actions">
@@ -350,22 +421,32 @@ function createFeedDraft(feed?: ModuleManagementFeed): FeedDraft {
     name: feed?.name ?? "",
     serviceIndex: feed?.serviceIndex ?? "",
     directoryPath: feed?.directoryPath ?? "",
-    includePatterns: feed ? feed.includePatterns.join(", ") || "*" : "*"
+    includePatterns: feed ? feed.includePatterns.join("\n") || "*" : "*",
+    includeAllPackages: feed?.includeAll ?? false
   };
 }
 
 function createFeedFromDraft(feedDraft: FeedDraft): ModuleManagementFeed {
-  const includePatterns = feedDraft.includePatterns.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean);
+  const includePatterns = feedDraft.includeAllPackages
+    ? ["*"]
+    : feedDraft.includePatterns.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean);
 
   return {
     name: feedDraft.name.trim(),
     serviceIndex: feedDraft.serviceIndex.trim() || null,
     directoryPath: feedDraft.directoryPath.trim() || null,
     credentials: null,
-    includeAll: feedDraft.includePatterns.trim() === "*",
+    includeAll: feedDraft.includeAllPackages || feedDraft.includePatterns.trim() === "*",
     includePatterns,
     directory: { watch: true, debounceWindow: "00:00:01" }
   };
+}
+
+function retentionPolicyEquals(left: ModuleManagementRetentionPolicy, right: ModuleManagementRetentionPolicy) {
+  return left.retainLastNVersions === right.retainLastNVersions &&
+    left.retainYoungerThanDays === right.retainYoungerThanDays &&
+    left.mode === right.mode &&
+    left.protectLastKnownGood === right.protectLastKnownGood;
 }
 
 function createInitialHostState(): HostRegistryState {
