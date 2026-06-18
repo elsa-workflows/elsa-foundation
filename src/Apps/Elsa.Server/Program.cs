@@ -17,6 +17,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Caching.Memory;
+using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
@@ -138,7 +139,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(WorkflowsRuntimeApiFeature).Assembly,
             typeof(ModularityApiFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
-            typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly
+            typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
+            typeof(OpenTelemetryFeature).Assembly
         )
 
         .WithConfigurationProvider(configuration)

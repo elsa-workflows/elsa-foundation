@@ -122,6 +122,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Structured logs (log store, live feed, sink, source provider) | [`src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md) |
+| OpenTelemetry (telemetry store, live feed, ingestor, redactor, source registry, provider, collector config) | [`src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md) |
 
 ---
 

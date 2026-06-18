@@ -52,6 +52,7 @@
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
+		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Persistence\EFCore\Sqlite\Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
