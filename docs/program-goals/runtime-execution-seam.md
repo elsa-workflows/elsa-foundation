@@ -44,6 +44,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 6. Supersede graph-shaped workflow boundary specs with the root-activity contract and implement that contract before adding flowchart/sequence/state-machine behavior.
 7. Remove generic `ActivityComposition` / `ExecutableActivityComposition` assumptions. Composite child structure belongs to activity-specific contracts such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
 8. Keep `ActivityChildSlot` and `ExecutableChildSlot` as traversal projections only. Activity-owned relationship semantics belong to node/executable structure owned by the activity module, not slot metadata.
+9. Plan and implement [Flowchart scoped execution](../../specs/073-flowchart-scoped-execution/spec.md) as the clean-slate activity-owned execution model for advanced Flowchart joins, loops, races, and public gateway policies.
 
 ## Linked Surfaces
 
@@ -52,6 +53,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - [Unfinished work](../reports/unfinished-work.md)
 - [Test maturity and weak implementation report](../reports/test-maturity-and-weak-implementation-report.md)
 - [Activity construction seam spec](../../specs/006-activity-construction-seam/spec.md)
+- [Flowchart scoped execution spec](../../specs/073-flowchart-scoped-execution/spec.md)
 - [Elsa constitution](../../.specify/memory/constitution.md)
 - [Framework constitution](../../.specify/memory/constitution-framework.md)
 - [Skills catalog](../skills/catalog.md)

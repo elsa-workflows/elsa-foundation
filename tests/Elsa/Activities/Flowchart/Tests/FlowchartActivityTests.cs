@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -14,7 +15,7 @@ namespace Elsa.Activities.Flowchart.Tests;
 
 public sealed class FlowchartActivityTests : IDisposable
 {
-    private readonly ServiceProvider _serviceProvider = new ServiceCollection().BuildServiceProvider();
+    private readonly ServiceProvider _serviceProvider = NewServiceProvider();
 
     [Fact]
     public async Task ExecuteAsync_CompletesWhenSlotHasNoChildren()
@@ -154,6 +155,14 @@ public sealed class FlowchartActivityTests : IDisposable
     }
 
     public void Dispose() => _serviceProvider.Dispose();
+
+    private static ServiceProvider NewServiceProvider()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        return services.BuildServiceProvider();
+    }
 
     private ValueTask ExecuteAsync(SimpleActivityExecutionContext context) =>
         ((IActivity)new FlowchartActivity()).ExecuteAsync(context);

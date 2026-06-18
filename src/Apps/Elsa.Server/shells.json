@@ -27,9 +27,7 @@
           "MemoryCache": {},
           "ModularityApi": {},
           "Primitives": {},
-          "SampleNuplaneActivities": {
-            "IncludeTimestamp": true
-          },
+          "SampleNuplaneActivities": {},
           "Serialization": {},
           "Tasks": {},
           "WorkflowsDesignApi": {},

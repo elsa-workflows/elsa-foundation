@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <PackageId>Elsa.Samples.Nuplane.Activities</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Elsa Workflows</Authors>
     <Description>Sample Nuplane-loaded Elsa shell feature that contributes a custom activity.</Description>
     <PackageTags>elsa;cshells;nuplane;sample;activities</PackageTags>
