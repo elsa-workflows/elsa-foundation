@@ -30,6 +30,9 @@
     <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Activities/Design/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Activities/Design/Reconciliation/">
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj" />
@@ -203,6 +206,9 @@
     <Project Path="tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
     <Project Path="tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Runtime/">
     <Project Path="tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj" />
   </Folder>
@@ -235,6 +241,9 @@
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Design/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/" />
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
