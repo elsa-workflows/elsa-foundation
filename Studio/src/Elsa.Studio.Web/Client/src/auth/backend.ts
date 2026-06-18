@@ -6,6 +6,7 @@ export interface BackendAuthProviderManagerOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
   isCallback?: AuthProviderManagerOptions["isCallback"];
+  getCallbackProviderId?: AuthProviderManagerOptions["getCallbackProviderId"];
 }
 
 export function createBackendAuthProviderManager(options: BackendAuthProviderManagerOptions = {}): AuthProviderManager {
@@ -16,6 +17,7 @@ export function createBackendAuthProviderManager(options: BackendAuthProviderMan
     bootstrap: () => readJson<AuthBootstrap>(request, baseUrl, "/_elsa/identity/bootstrap"),
     capabilities: () => readJson<AuthCapabilities>(request, baseUrl, "/_elsa/identity/capabilities"),
     isCallback: options.isCallback,
+    getCallbackProviderId: options.getCallbackProviderId,
     adapterFactory: provider => createRedirectAuthAdapter({
       id: provider.id,
       kind: provider.kind,

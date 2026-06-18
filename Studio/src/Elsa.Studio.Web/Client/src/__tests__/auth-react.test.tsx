@@ -16,6 +16,7 @@ import {
 
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.restoreAllMocks();
 });
 
 describe("auth React SDK", () => {
@@ -69,6 +70,116 @@ describe("auth React SDK", () => {
 
     await unmount();
   });
+
+  it("falls back to anonymous when initialization fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const manager = stubManager({ status: "unknown", roles: [], permissions: [] });
+    manager.initialize = vi.fn(async () => {
+      throw new Error("bootstrap unavailable");
+    });
+    const { container, unmount } = renderWithAuth(manager, <SessionProbe />);
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("anonymous");
+
+    await unmount();
+  });
+
+  it("keeps authenticated session when capabilities fail after initialization", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const manager = stubManager(authenticatedSession());
+    manager.getCapabilities = vi.fn(async () => {
+      throw new Error("capabilities unavailable");
+    });
+    const { container, unmount } = renderWithAuth(manager, <SessionProbe />);
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("authenticated");
+
+    await unmount();
+  });
+
+  it("clears capabilities when initialization resolves to anonymous", async () => {
+    const authenticatedManager = stubManager(authenticatedSession());
+    const anonymousManager = stubManager({ status: "anonymous", roles: [], permissions: [] });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    flushSync(() => {
+      root.render(<AuthProvider manager={authenticatedManager}><AuthProbe /></AuthProvider>);
+    });
+    await flushPromises();
+    expect(container.textContent).toContain("foundation-owned");
+
+    flushSync(() => {
+      root.render(<AuthProvider manager={anonymousManager}><AuthProbe /></AuthProvider>);
+    });
+    await flushPromises();
+
+    expect(container.textContent).not.toContain("foundation-owned");
+
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+
+  it("starts login only once for an anonymous session with inline login options", async () => {
+    const manager = stubManager({ status: "anonymous", roles: [], permissions: [] });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    flushSync(() => {
+      root.render(
+        <AuthProvider manager={manager}>
+          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/first" }}>
+            <span>protected</span>
+          </RequireAuth>
+        </AuthProvider>
+      );
+    });
+    await flushPromises();
+    flushSync(() => {
+      root.render(
+        <AuthProvider manager={manager}>
+          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/second" }}>
+            <span>protected</span>
+          </RequireAuth>
+        </AuthProvider>
+      );
+    });
+    await flushPromises();
+
+    expect(manager.login).toHaveBeenCalledTimes(1);
+
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+
+  it("updates auth context after successful inline login", async () => {
+    let currentSession: AuthSession = { status: "anonymous", roles: [], permissions: [] };
+    const manager = stubManager(currentSession);
+    manager.getSession = vi.fn(() => currentSession);
+    manager.initialize = vi.fn(async () => currentSession);
+    manager.login = vi.fn(async () => {
+      currentSession = authenticatedSession();
+    });
+    const { container, unmount } = renderWithAuth(manager, (
+      <RequireAuth fallback={<span>signing-in</span>}>
+        <AuthProbe />
+      </RequireAuth>
+    ));
+
+    await flushPromises();
+    await flushPromises();
+
+    expect(container.textContent).toContain("Alice");
+    expect(container.textContent).toContain("foundation-owned");
+
+    await unmount();
+  });
 });
 
 function AuthProbe() {
@@ -83,6 +194,11 @@ function AuthProbe() {
       {capabilities?.ownershipMode}
     </span>
   );
+}
+
+function SessionProbe() {
+  const session = useAuthSession();
+  return <span>{session.status}</span>;
 }
 
 function renderWithAuth(manager: AuthProviderManager, children: React.ReactNode) {

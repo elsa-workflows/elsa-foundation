@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useAuthContext } from "../AuthContext";
 import type { LoginOptions } from "../types";
 
@@ -10,10 +10,21 @@ export interface RequireAuthProps {
 
 export function RequireAuth({ children, fallback = null, loginOptions }: RequireAuthProps) {
   const { session, login } = useAuthContext();
+  const loginStartedRef = useRef(false);
 
   useEffect(() => {
     if (session.status === "anonymous") {
-      void login(loginOptions);
+      if (loginStartedRef.current) {
+        return;
+      }
+
+      loginStartedRef.current = true;
+      void login(loginOptions).catch(error => {
+        loginStartedRef.current = false;
+        console.error("Auth login failed.", error);
+      });
+    } else {
+      loginStartedRef.current = false;
     }
   }, [login, loginOptions, session.status]);
 

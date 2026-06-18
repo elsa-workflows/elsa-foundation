@@ -73,7 +73,7 @@ export interface AuthProviderAdapter {
   id: string;
   kind: string;
   initialize(): Promise<AuthSession>;
-  login(options?: LoginOptions): Promise<void>;
+  login(options?: LoginOptions): Promise<AuthSession | void>;
   handleCallback(): Promise<AuthSession>;
   logout(): Promise<void>;
   getAccessToken(): Promise<string | null>;

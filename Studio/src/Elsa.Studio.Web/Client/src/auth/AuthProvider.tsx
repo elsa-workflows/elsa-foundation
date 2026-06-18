@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
+import { anonymousAuthSession, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
 
 export function AuthProvider({ manager, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession>(() => manager.getSession() ?? unknownAuthSession);
@@ -10,16 +10,34 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     let disposed = false;
 
     async function initialize() {
-      const nextSession = await manager.initialize();
-      if (disposed) {
-        return;
-      }
+      try {
+        const nextSession = await manager.initialize();
+        if (disposed) {
+          return;
+        }
 
-      setSession(nextSession);
-      if (nextSession.status === "authenticated") {
-        const nextCapabilities = await manager.getCapabilities();
+        setSession(nextSession);
+        if (nextSession.status !== "authenticated") {
+          setCapabilities(null);
+          return;
+        }
+
+        try {
+          const nextCapabilities = await manager.getCapabilities();
+          if (!disposed) {
+            setCapabilities(nextCapabilities);
+          }
+        } catch (error) {
+          if (!disposed) {
+            console.error("Auth capabilities request failed.", error);
+            setCapabilities(null);
+          }
+        }
+      } catch (error) {
         if (!disposed) {
-          setCapabilities(nextCapabilities);
+          console.error("Auth initialization failed.", error);
+          setSession(anonymousAuthSession);
+          setCapabilities(null);
         }
       }
     }
@@ -31,7 +49,21 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     };
   }, [manager]);
 
-  const login = useCallback((options?: LoginOptions) => manager.login(options), [manager]);
+  const login = useCallback(async (options?: LoginOptions) => {
+    await manager.login(options);
+    const nextSession = manager.getSession();
+    setSession(nextSession);
+    if (nextSession.status === "authenticated") {
+      try {
+        setCapabilities(await manager.getCapabilities());
+      } catch (error) {
+        console.error("Auth capabilities request failed.", error);
+        setCapabilities(null);
+      }
+    } else {
+      setCapabilities(null);
+    }
+  }, [manager]);
 
   const logout = useCallback(async () => {
     await manager.logout();

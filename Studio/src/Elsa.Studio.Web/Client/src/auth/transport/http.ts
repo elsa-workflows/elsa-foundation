@@ -1,7 +1,9 @@
-import { StudioHttpError, type StudioHttpClient } from "../../sdk";
+import { readStudioHttpErrorMessage, StudioHttpError, withDefaultHeaders, type StudioHttpClient } from "../../sdk";
 import type { AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
+  defaultHeaders?: HeadersInit;
+  headers?: HeadersInit;
   refreshOnUnauthorized?: boolean;
   fetch?: typeof fetch;
 }
@@ -35,13 +37,13 @@ async function requestJson<T>(
 ) {
   const request = options.fetch ?? fetch;
   const requestUrl = new URL(url, baseUrl).toString();
-  const firstResponse = await request(requestUrl, await withBearerToken(auth, init));
+  const firstResponse = await request(requestUrl, await withBearerToken(auth, withConfiguredDefaultHeaders(options, init)));
   const response = firstResponse.status === 401 && options.refreshOnUnauthorized !== false
-    ? await retryAfterRefresh(request, requestUrl, auth, init)
+    ? await retryAfterRefresh(request, requestUrl, auth, withConfiguredDefaultHeaders(options, init))
     : firstResponse;
 
   if (!response.ok) {
-    throw new StudioHttpError(response.status, await readErrorMessage(response));
+    throw new StudioHttpError(response.status, await readStudioHttpErrorMessage(response));
   }
 
   const text = await response.text();
@@ -80,11 +82,6 @@ async function withBearerToken(auth: Pick<AuthProviderManager, "getAccessToken">
   };
 }
 
-async function readErrorMessage(response: Response) {
-  const text = await response.text();
-  return text.trim() || `Request failed with ${response.status}.`;
-}
-
 function withJsonAccept(init?: RequestInit): RequestInit | undefined {
   const headers = new Headers(init?.headers);
   if (!headers.has("Accept")) {
@@ -108,4 +105,8 @@ function withJsonContentTypeAndAccept(headers?: HeadersInit) {
   }
 
   return result;
+}
+
+function withConfiguredDefaultHeaders(options: AuthenticatedHttpClientOptions, init?: RequestInit) {
+  return withDefaultHeaders(options.defaultHeaders ?? options.headers, init);
 }
