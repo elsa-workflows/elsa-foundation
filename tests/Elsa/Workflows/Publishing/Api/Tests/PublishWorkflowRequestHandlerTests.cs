@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -228,7 +229,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activityVersions) =>
         new(
-            new FakeQueries<WorkflowDefinitionVersion>([workflowVersion]),
+            new FakeVersionStore(workflowVersion),
             new FakeQueries<ActivityDefinitionVersion>(activityVersions.ToList()),
             _store,
             _activityStructureService);
@@ -315,6 +316,20 @@ public sealed class PublishWorkflowRequestHandlerTests
         new ActivitiesFlowchartFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
+    }
+
+    private sealed class FakeVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
+    {
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            version.Id == versionId
+                ? Task.FromResult(version)
+                : throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
+
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeQueries<TEntity>(List<TEntity> items) : IQueries<TEntity>

@@ -2,6 +2,7 @@ using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
@@ -23,14 +24,14 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// command, which opens its own tracked context under the per-Draft lock.
 /// </remarks>
 public sealed class CloneDraftFromVersion(
-    IQueries<WorkflowDefinitionVersion> versionQueries,
+    IWorkflowDefinitionVersionStore versionStore,
     IQueries<WorkflowDefinitionVersionLayout> layoutQueries,
     ICreateDraftCommand createDraftCommand
 ) : ICloneDraftFromVersionCommand
 {
     public async Task<string> Execute(string sourceVersionId, CancellationToken cancellationToken = default)
     {
-        var sourceVersion = await versionQueries.Find(v => v.Id == sourceVersionId, cancellationToken)
+        var sourceVersion = await versionStore.FindByIdAsync(sourceVersionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition version '{sourceVersionId}' not found");
 
         var sourceLayout = await layoutQueries.Find(l => l.WorkflowDefinitionVersionId == sourceVersionId, cancellationToken);

@@ -10,7 +10,7 @@ using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -20,7 +20,7 @@ using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class PublishWorkflowRequestHandler(
-    IQueries<WorkflowDefinitionVersion> workflowVersions,
+    IWorkflowDefinitionVersionStore workflowVersions,
     IQueries<ActivityDefinitionVersion> activityVersions,
     IWorkflowExecutableStore executableStore,
     IActivityStructureService activityStructureService)
@@ -34,7 +34,7 @@ public sealed class PublishWorkflowRequestHandler(
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
-        var version = await workflowVersions.GetVersionIncludingDefinition(request.VersionId, cancellationToken);
+        var version = await workflowVersions.GetWithDefinitionAsync(request.VersionId, cancellationToken);
         var state = version.State;
         var rootActivity = state.RootActivity
             ?? throw new ArgumentException("Workflow version has no root activity to publish.");

@@ -5,6 +5,7 @@ using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
@@ -62,6 +63,8 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton<IEventPublisher, StubEventPublisher>();
         services.AddSingleton<IQueries<WorkflowDefinition>, ThrowingQueries<WorkflowDefinition>>();
         services.AddSingleton<IQueries<WorkflowDefinitionVersion>, ThrowingQueries<WorkflowDefinitionVersion>>();
+        services.AddSingleton<IWorkflowDefinitionStore, ThrowingDefinitionStore>();
+        services.AddSingleton<IWorkflowDefinitionVersionStore, ThrowingVersionStore>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
         services.AddSingleton<IAddCommand<WorkflowDefinitionVersion>, StubAddCommand<WorkflowDefinitionVersion>>();
         // Entity factories are registered by the persistence feature in the host; the universal
@@ -94,6 +97,25 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
     private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity
     {
         public Task Add(TEntity entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingDefinitionStore : IWorkflowDefinitionStore
+    {
+        private const string Msg = "Registration smoke test: store should not have been called.";
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(Persistence.Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+    }
+
+    private sealed class ThrowingVersionStore : IWorkflowDefinitionVersionStore
+    {
+        private const string Msg = "Registration smoke test: store should not have been called.";
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
     }
 
     private sealed class ThrowingQueries<TEntity> : IQueries<TEntity> where TEntity : Entity

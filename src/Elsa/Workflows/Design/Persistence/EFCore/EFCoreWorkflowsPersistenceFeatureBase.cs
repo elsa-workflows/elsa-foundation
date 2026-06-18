@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
 using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
@@ -46,6 +47,8 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
 
         if (UseQueries)
         {
+            services.AddScoped<IWorkflowDefinitionStore, EFCoreWorkflowDefinitionStore>();
+            services.AddScoped<IWorkflowDefinitionVersionStore, EFCoreWorkflowDefinitionVersionStore>();
             services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
         }
     }

@@ -119,6 +119,11 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // hydration). CloneDraftFromVersionCommand reads the source Version + layout through these.
         services.ConfigureQueries<WorkflowsDesignDbContext>();
 
+        // Named read ports over the closed query spec. CloneDraftFromVersionCommand reads the source
+        // Version through IWorkflowDefinitionVersionStore; production registers these under UseQueries.
+        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionStore>();
+        services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionVersionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionVersionStore>();
+
         // All command implementations.
         RegisterCommands(services);
 

@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Queries;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -58,5 +59,29 @@ public class WorkflowDefinitionFilter : IFilter<WorkflowDefinition>
         if (Description != null) queryable = queryable.Where(x => x.Description == Description);
 
         return queryable;
+    }
+
+    /// <summary>
+    /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is
+    /// the shape every persistence provider can translate, replacing the <see cref="Apply"/> /
+    /// <see cref="IQueryable{T}"/> path for provider-agnostic stores.
+    /// </summary>
+    public Query<WorkflowDefinition> ToQuery()
+    {
+        var query = Query<WorkflowDefinition>.All();
+
+        if (Id != null) query.And(x => x.Id, QueryOp.Equal, Id);
+        if (Ids != null) query.And(x => x.Id, QueryOp.In, Ids);
+        if (Name != null) query.And(x => x.Name, QueryOp.Equal, Name);
+        if (Names != null) query.And(x => x.Name, QueryOp.In, Names);
+        if (!string.IsNullOrWhiteSpace(SearchTerm))
+            query.And(x => x.Name, QueryOp.Contains, SearchTerm)
+                .Or(x => x.Description, QueryOp.Contains, SearchTerm)
+                .Or(x => x.Id, QueryOp.Contains, SearchTerm);
+        if (Description != null) query.And(x => x.Description, QueryOp.Equal, Description);
+
+        if (TenantAgnostic == true) query.IgnoreTenant();
+
+        return query;
     }
 }

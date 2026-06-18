@@ -1,22 +1,16 @@
 ﻿using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
-public sealed class ListDefinitionVersionsRequestHandler(IQueries<WorkflowDefinitionVersion> queries)
+public sealed class ListDefinitionVersionsRequestHandler(IWorkflowDefinitionVersionStore store)
     : IRequestHandler<ListDefinitionVersions, IEnumerable<WorkflowDefinitionVersionInfo>>
 {
     public async Task<IEnumerable<WorkflowDefinitionVersionInfo>> Handle(ListDefinitionVersions request, CancellationToken cancellationToken)
     {
-        var filter = new WorkflowDefinitionVersionFilter
-        {
-            DefinitionId = request.DefinitionId
-        };
-
-        return await queries.Query(filter, Constants.Expressions.VersionSelector, cancellationToken);
+        var versions = await store.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
+        return versions.Select(e => new WorkflowDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt));
     }
 }
