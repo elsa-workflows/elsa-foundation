@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
