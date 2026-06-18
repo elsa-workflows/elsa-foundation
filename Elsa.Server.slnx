@@ -97,6 +97,9 @@
     <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Persistence/Groundwork.Querying/">
+    <Project Path="src/Elsa/Persistence/Groundwork.Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
   </Folder>
