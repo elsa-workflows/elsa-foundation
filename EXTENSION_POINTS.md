@@ -75,6 +75,12 @@ not automatic constitution violations.
 |---|---|
 | HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
+### Identity
+
+| Domain | Catalog |
+|---|---|
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+
 ### Persistence
 
 | Domain | Catalog |

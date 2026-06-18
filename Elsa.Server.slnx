@@ -68,6 +68,9 @@
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Foundation/Identity/">
+    <Project Path="src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Http/">
     <Project Path="src/Elsa/Http/Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa/Http/Elsa.Http.csproj" />
@@ -179,6 +182,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/">
+    <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />

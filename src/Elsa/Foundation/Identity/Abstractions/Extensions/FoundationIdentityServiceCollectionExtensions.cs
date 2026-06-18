@@ -1,0 +1,38 @@
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Ownership;
+using Elsa.Foundation.Identity.Abstractions.Security;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Foundation.Identity.Abstractions.Extensions;
+
+public static class FoundationIdentityServiceCollectionExtensions
+{
+    public static IServiceCollection AddFoundationIdentityAbstractions(this IServiceCollection services, Action<FoundationIdentityOptions>? configure = null)
+    {
+        if (configure is not null)
+            services.Configure(configure);
+
+        services.AddAuthorizationCore();
+
+        services.TryAddScoped<IAuthenticationProviderManager, DefaultAuthenticationProviderManager>();
+        services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
+        services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
+        services.TryAddScoped<IPermissionEvaluator, ClaimsPermissionEvaluator>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionAuthorizationHandler>());
+        services.TryAddSingleton<IPermissionPolicyNameFormatter, PermissionPolicyNameFormatter>();
+        services.Replace(ServiceDescriptor.Singleton<IAuthorizationPolicyProvider, RequirePermissionPolicyProvider>());
+        services.TryAddScoped<IClaimsNormalizer, DefaultClaimsNormalizer>();
+        services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
+        services.TryAddSingleton<IPermissionCatalog, DefaultIdentityPermissionCatalog>();
+        services.TryAddScoped<ISecurityDefaultGuardEvaluator, SecurityDefaultGuardEvaluator>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SigningKeySecurityDefaultGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
+
+        return services;
+    }
+}
