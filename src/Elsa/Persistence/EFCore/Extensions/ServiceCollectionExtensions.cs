@@ -43,26 +43,6 @@ public static class ServiceCollectionExtensions
     }
 
 
-    public static IServiceCollection ConfigureQueries<TDbContext>(this IServiceCollection services)
-        where TDbContext : DbContext
-    {
-        var dbContextType = typeof(TDbContext);
-        var dbSets = GetDbSetProperties<TDbContext>();
-
-        foreach (var dbSet in dbSets)
-        {
-            var entityType = dbSet.PropertyType.GetGenericArguments()[0];
-            var serviceDescriptor = new ServiceDescriptor(
-                typeof(IQueries<>).MakeGenericType(entityType),
-                typeof(EFCoreQueries<,>).MakeGenericType(dbContextType, entityType),
-                ServiceLifetime.Scoped
-            );
-            services.Add(serviceDescriptor);
-        }
-
-        return services;
-    }
-
     public static IServiceCollection ConfigureCommands<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {

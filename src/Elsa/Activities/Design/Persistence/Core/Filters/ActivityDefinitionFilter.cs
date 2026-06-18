@@ -1,10 +1,9 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Queries;
 
 namespace Elsa.Activities.Design.Persistence.Core.Filters;
 
-public class ActivityDefinitionFilter : IFilter<ActivityDefinition>
+public class ActivityDefinitionFilter
 {
     public bool? TenantAgnostic { get; init; }
 
@@ -22,30 +21,9 @@ public class ActivityDefinitionFilter : IFilter<ActivityDefinition>
 
     public string? Description { get; init; }
 
-    public IQueryable<ActivityDefinition> Apply(IQueryable<ActivityDefinition> queryable)
-    {
-        if (Id != null) queryable = queryable.Where(x => x.Id == Id);
-        if (Ids != null) queryable = queryable.Where(x => Ids.Contains(x.Id));
-        if (!string.IsNullOrWhiteSpace(SearchTerm))
-        {
-            queryable = queryable.Where(x =>
-                (x.DisplayName != null && x.DisplayName.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase))
-                || x.ActivityTypeKey.Contains(SearchTerm)
-                || (x.Category != null && x.Category.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase))
-                || (x.Description != null && x.Description.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase))
-                || x.Id.Contains(SearchTerm));
-        }
-        if (Category != null) queryable = queryable.Where(x => x.Category == Category);
-        if (Description != null) queryable = queryable.Where(x => x.Description!.Contains(Description));
-        if (ActivityTypeKey != null) queryable = queryable.Where(x => x.ActivityTypeKey == ActivityTypeKey);
-
-        return queryable;
-    }
-
     /// <summary>
     /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is
-    /// the shape every persistence provider can translate, replacing the <see cref="Apply"/> /
-    /// <see cref="IQueryable{T}"/> path for provider-agnostic stores.
+    /// the shape every persistence provider can translate.
     /// </summary>
     public Query<ActivityDefinition> ToQuery()
     {

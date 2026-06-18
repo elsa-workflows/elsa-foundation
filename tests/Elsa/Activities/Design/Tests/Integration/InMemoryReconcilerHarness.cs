@@ -12,6 +12,7 @@ using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.EFCore.Queries;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Persistence;
@@ -120,7 +121,7 @@ internal static class InMemoryReconcilerHarness
             Task.FromResult(items.Single(x => x.Id == id));
 
         public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult(filter.Apply(items.AsQueryable()).FirstOrDefault());
+            Task.FromResult(EFCoreQueryTranslator.Apply(items.AsQueryable(), filter.ToQuery()).FirstOrDefault());
 
         public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) =>
             Task.FromResult<ActivityDefinition?>(items.FirstOrDefault(x => x.Id == id || x.ActivityTypeKey == activityTypeKey));

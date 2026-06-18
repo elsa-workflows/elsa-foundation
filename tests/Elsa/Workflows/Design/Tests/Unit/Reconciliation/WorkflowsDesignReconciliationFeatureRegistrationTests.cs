@@ -61,8 +61,6 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddLogging();
         services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
         services.AddSingleton<IEventPublisher, StubEventPublisher>();
-        services.AddSingleton<IQueries<WorkflowDefinition>, ThrowingQueries<WorkflowDefinition>>();
-        services.AddSingleton<IQueries<WorkflowDefinitionVersion>, ThrowingQueries<WorkflowDefinitionVersion>>();
         services.AddSingleton<IWorkflowDefinitionStore, ThrowingDefinitionStore>();
         services.AddSingleton<IWorkflowDefinitionVersionStore, ThrowingVersionStore>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
@@ -116,38 +114,5 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-    }
-
-    private sealed class ThrowingQueries<TEntity> : IQueries<TEntity> where TEntity : Entity
-    {
-        private const string Msg = "Registration smoke test: query should not have been called.";
-        public Task<TEntity?> Find(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<TEntity?> Find(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<TEntity?> Find<TProperty>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> include, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<TEntity?> Find<TProperty>(IFilter<TEntity> filter, IEnumerable<System.Linq.Expressions.Expression<Func<TEntity, TProperty>>> include, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<TEntity?> Find(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> FindMany(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> FindMany(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> FindMany<TProp>(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany(System.Linq.Expressions.Expression<Func<TEntity, bool>>? predicate, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany(IFilter<TEntity> filter, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany<TProp>(System.Linq.Expressions.Expression<Func<TEntity, bool>>? predicate, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> List(CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> Query(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> Query(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> Query<TProp>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TResult>> Query<TResult>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TResult>> Query<TResult>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TEntity>> Query<TProperty>(IFilter<TEntity> filter, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProperty> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TResult>> Query<TResult, TProp>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<IEnumerable<TResult>> Query<TResult, TProp>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<long> Count(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<bool> Any(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<bool> Any(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<bool> Any(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<long> Count(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<long> Count(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<long> Count<TProperty>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
-        public Task<long> Count<TProperty>(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Msg);
     }
 }

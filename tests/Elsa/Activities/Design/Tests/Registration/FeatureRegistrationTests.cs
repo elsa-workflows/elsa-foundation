@@ -122,10 +122,6 @@ public sealed class FeatureRegistrationTests
         // Add-command for activity definitions resolves (UseCommands path).
         Assert.NotNull(scope.ServiceProvider.GetService<IAddActivityDefinitionCommand>());
 
-        // IQueries<> for each entity resolves via ConfigureQueries<TDbContext>.
-        Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinition>>());
-        Assert.NotNull(scope.ServiceProvider.GetService<IQueries<ActivityDefinitionVersion>>());
-
         // The migrated saving handler is a typed IEntitySavingHandler<,> contributor (the assembly
         // scan registers it); the single ApplyEntitySavingHandlers aggregator — registered once by
         // the EF Core base feature — is the sole IEventHandler<OnEntitySaving> that dispatches it.

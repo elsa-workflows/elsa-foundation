@@ -115,10 +115,6 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
             new TestDbContextFactory(sp.GetRequiredService<IServiceProvider>(), connection));
 
-        // IQueries<> per DbSet — the read path (AsNoTracking + loading-handler / OnEntityLoading
-        // hydration). CloneDraftFromVersionCommand reads the source Version + layout through these.
-        services.ConfigureQueries<WorkflowsDesignDbContext>();
-
         // Named read ports over the closed query spec. CloneDraftFromVersionCommand reads the source
         // Version + layout through these; production registers them under UseQueries.
         services.AddScoped<Persistence.Core.Stores.IWorkflowDefinitionStore, Persistence.EFCore.Services.EFCoreWorkflowDefinitionStore>();
