@@ -102,18 +102,20 @@ public sealed class DefaultEffectiveCapabilitiesResolver : IEffectiveCapabilitie
         var canManageUsers = ownership.UserAuthority == OwnershipAuthority.Foundation && providerCapabilities.SupportsLocalUserManagement;
         var canManageRoles = ownership.RoleAuthority == OwnershipAuthority.Foundation && providerCapabilities.SupportsLocalRoleManagement;
         var canManageApplications = ownership.ApplicationAuthority == OwnershipAuthority.Foundation && providerCapabilities.SupportsApplicationManagement;
-        var propagation = ownership.PermissionPropagation == PermissionPropagationMode.ImmediateServerSide
-            ? PermissionPropagationMode.ImmediateServerSide
-            : providerCapabilities.PermissionPropagation;
+        var canManageTokens = ownership.ApplicationAuthority == OwnershipAuthority.Foundation;
+        var propagation = ownership.PermissionPropagation == PermissionPropagationMode.TokenRefreshBoundary ||
+                          providerCapabilities.PermissionPropagation == PermissionPropagationMode.TokenRefreshBoundary
+            ? PermissionPropagationMode.TokenRefreshBoundary
+            : PermissionPropagationMode.ImmediateServerSide;
 
         return new EffectiveProviderCapabilities(
             canManageUsers,
             canManageRoles,
             canManageApplications,
             providerCapabilities.SupportsGroupSync,
-            providerCapabilities.SupportsTokenIssuance,
-            providerCapabilities.SupportsRefresh,
-            providerCapabilities.SupportsRevocation,
+            canManageTokens && providerCapabilities.SupportsTokenIssuance,
+            canManageTokens && providerCapabilities.SupportsRefresh,
+            canManageTokens && providerCapabilities.SupportsRevocation,
             propagation);
     }
 }

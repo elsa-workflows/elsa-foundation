@@ -48,6 +48,24 @@ public sealed class FoundationIdentityAbstractionsFeatureTests
         Assert.Equal("builtin", found?.Id);
     }
 
+    [Fact]
+    public async Task ProviderManagerRequiresExplicitGlobalFallbackForTenantLookup()
+    {
+        var manager = new DefaultAuthenticationProviderManager(
+        [
+            new TestProviderModule(new("entra", "Global Entra", "external-oidc", ProviderCapabilities.ExternalOidcDefault)),
+            new TestProviderModule(new("entra", "Tenant Entra", "external-oidc", ProviderCapabilities.ExternalOidcDefault, TenantId: "tenant-a"))
+        ]);
+
+        var tenantProvider = await manager.FindAsync("entra", "tenant-a");
+        var missingWithoutFallback = await manager.FindAsync("entra", "tenant-b");
+        var missingWithFallback = await manager.FindAsync("entra", "tenant-b", allowGlobalFallback: true);
+
+        Assert.Equal("Tenant Entra", tenantProvider?.DisplayName);
+        Assert.Null(missingWithoutFallback);
+        Assert.Equal("Global Entra", missingWithFallback?.DisplayName);
+    }
+
     private sealed class TestProviderModule(AuthenticationProviderDescriptor descriptor) : IAuthenticationProviderModule
     {
         public string ProviderId => descriptor.Id;

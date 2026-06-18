@@ -21,7 +21,7 @@ public interface IAuthenticationProviderManager
 {
     ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default);
 
-    ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, CancellationToken cancellationToken = default);
+    ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, bool allowGlobalFallback = false, CancellationToken cancellationToken = default);
 }
 
 public interface IPrincipalFactory
@@ -87,14 +87,19 @@ public sealed class DefaultAuthenticationProviderManager(IEnumerable<IAuthentica
             .ToList();
     }
 
-    public async ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, CancellationToken cancellationToken = default)
+    public async ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, bool allowGlobalFallback = false, CancellationToken cancellationToken = default)
     {
         var descriptors = await ListAsync(cancellationToken);
+        var matches = descriptors
+            .Where(x => string.Equals(x.Id, providerId, StringComparison.OrdinalIgnoreCase));
 
-        return descriptors
-            .Where(x => string.Equals(x.Id, providerId, StringComparison.OrdinalIgnoreCase))
-            .Where(x => tenantId is null || x.TenantId is null || string.Equals(x.TenantId, tenantId, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => string.Equals(x.TenantId, tenantId, StringComparison.OrdinalIgnoreCase))
-            .FirstOrDefault();
+        if (tenantId is null)
+            return matches.FirstOrDefault(x => x.TenantId is null) ?? matches.FirstOrDefault();
+
+        var tenantMatch = matches.FirstOrDefault(x => string.Equals(x.TenantId, tenantId, StringComparison.OrdinalIgnoreCase));
+        if (tenantMatch is not null)
+            return tenantMatch;
+
+        return allowGlobalFallback ? matches.FirstOrDefault(x => x.TenantId is null) : null;
     }
 }

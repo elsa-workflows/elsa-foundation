@@ -43,4 +43,37 @@ public sealed class SecurityDefaultGuardTests
 
         Assert.Empty(violations);
     }
+
+    [Fact]
+    public async Task SigningKeyGuardStillRequiresADevelopmentSigningKey()
+    {
+        var guard = new SigningKeySecurityDefaultGuard();
+
+        var violations = await guard.ValidateAsync(new(true, null, true, null));
+
+        Assert.Contains(violations, x => x.Code == "identity.signing_key.missing");
+    }
+
+    [Fact]
+    public async Task SecretHashGuardReportsViolationWhenAllowedAlgorithmsAreNull()
+    {
+        var guard = new SecretHashSecurityDefaultGuard(Options.Create(new FoundationIdentityOptions
+        {
+            AllowedSecretHashAlgorithms = null!
+        }));
+        var credential = new CredentialRecord(
+            "cred-1",
+            "tenant-a",
+            CredentialSubjectType.Application,
+            "app-1",
+            CredentialKind.ClientSecret,
+            "hash",
+            SecretHashAlgorithms.Pbkdf2Sha256,
+            CredentialStatus.Active,
+            null);
+
+        var violations = await guard.ValidateAsync(new(false, new string('x', 32), true, null, credential));
+
+        Assert.Contains(violations, x => x.Code == "identity.secret_hash.unsupported");
+    }
 }

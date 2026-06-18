@@ -24,7 +24,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IPermissionEvaluator, ClaimsPermissionEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionAuthorizationHandler>());
         services.TryAddSingleton<IPermissionPolicyNameFormatter, PermissionPolicyNameFormatter>();
-        services.Replace(ServiceDescriptor.Singleton<IAuthorizationPolicyProvider, RequirePermissionPolicyProvider>());
+        services.AddRequirePermissionPolicyProvider();
         services.TryAddScoped<IClaimsNormalizer, DefaultClaimsNormalizer>();
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
         services.TryAddSingleton<IPermissionCatalog, DefaultIdentityPermissionCatalog>();
@@ -34,5 +34,35 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
         return services;
+    }
+
+    private static void AddRequirePermissionPolicyProvider(this IServiceCollection services)
+    {
+        var fallbackDescriptor = services.LastOrDefault(x => x.ServiceType == typeof(IAuthorizationPolicyProvider));
+        if (fallbackDescriptor?.ImplementationType == typeof(RequirePermissionPolicyProvider))
+            return;
+
+        if (fallbackDescriptor is not null)
+        {
+            services.Remove(fallbackDescriptor);
+            services.AddSingleton<AuthorizationPolicyProviderFallback>(sp =>
+                new((IAuthorizationPolicyProvider)CreateFromDescriptor(sp, fallbackDescriptor)));
+        }
+
+        services.AddSingleton<IAuthorizationPolicyProvider, RequirePermissionPolicyProvider>();
+    }
+
+    private static object CreateFromDescriptor(IServiceProvider serviceProvider, ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is not null)
+            return descriptor.ImplementationInstance;
+
+        if (descriptor.ImplementationFactory is not null)
+            return descriptor.ImplementationFactory(serviceProvider);
+
+        if (descriptor.ImplementationType is not null)
+            return ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType);
+
+        throw new InvalidOperationException($"Unable to create fallback service for '{descriptor.ServiceType}'.");
     }
 }

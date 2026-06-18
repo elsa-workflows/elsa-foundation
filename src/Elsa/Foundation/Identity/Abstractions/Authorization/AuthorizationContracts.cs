@@ -129,30 +129,41 @@ public sealed class ClaimsPermissionEvaluator(IPermissionCatalog catalog) : IPer
 {
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
     {
-        var requested = Expand(context.Permission);
         var granted = context.Principal.Claims
             .Where(x => x.Type == IdentityClaimTypes.Permission)
             .Select(x => x.Value)
-            .SelectMany(Expand)
+            .SelectMany(ExpandGranted)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return ValueTask.FromResult(requested.Any(granted.Contains)
+        return ValueTask.FromResult(granted.Contains(context.Permission)
             ? PermissionEvaluationResult.Success
             : PermissionEvaluationResult.Denied($"Missing permission '{context.Permission}'."));
     }
 
-    private IEnumerable<string> Expand(string permission)
+    private IEnumerable<string> ExpandGranted(string permission)
     {
-        yield return permission;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var stack = new Stack<string>();
+        stack.Push(permission);
 
-        var catalogPermission = catalog.Find(permission);
-        if (catalogPermission?.Implies is null)
-            yield break;
+        while (stack.TryPop(out var current))
+        {
+            if (!visited.Add(current))
+                continue;
 
-        foreach (var implied in catalogPermission.Implies)
-            yield return implied;
+            yield return current;
+
+            var catalogPermission = catalog.Find(current);
+            if (catalogPermission?.Implies is null)
+                continue;
+
+            foreach (var implied in catalogPermission.Implies)
+                stack.Push(implied);
+        }
     }
 }
+
+public sealed record AuthorizationPolicyProviderFallback(IAuthorizationPolicyProvider Provider);
 
 public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatter
 {
@@ -186,17 +197,28 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;
 
-public sealed class RequirePermissionPolicyProvider(IOptions<AuthorizationOptions> options, IPermissionPolicyNameFormatter formatter) : DefaultAuthorizationPolicyProvider(options)
+public sealed class RequirePermissionPolicyProvider(
+    IOptions<AuthorizationOptions> options,
+    IPermissionPolicyNameFormatter formatter,
+    AuthorizationPolicyProviderFallback? fallback = null) : IAuthorizationPolicyProvider
 {
-    public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
+    private readonly DefaultAuthorizationPolicyProvider _defaultProvider = new(options);
+
+    public async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
         if (!formatter.TryParse(policyName, out var permission))
-            return await base.GetPolicyAsync(policyName);
+            return fallback is not null ? await fallback.Provider.GetPolicyAsync(policyName) : await _defaultProvider.GetPolicyAsync(policyName);
 
         return new AuthorizationPolicyBuilder()
             .AddRequirements(new PermissionAuthorizationRequirement(permission))
             .Build();
     }
+
+    public Task<AuthorizationPolicy> GetDefaultPolicyAsync() =>
+        fallback?.Provider.GetDefaultPolicyAsync() ?? _defaultProvider.GetDefaultPolicyAsync();
+
+    public Task<AuthorizationPolicy?> GetFallbackPolicyAsync() =>
+        fallback?.Provider.GetFallbackPolicyAsync() ?? _defaultProvider.GetFallbackPolicyAsync();
 }
 
 public sealed class PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
@@ -204,7 +226,9 @@ public sealed class PermissionAuthorizationHandler(IPermissionEvaluator evaluato
 {
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionAuthorizationRequirement requirement)
     {
-        var evaluationContext = new PermissionEvaluationContext(context.User, requirement.Permission, Resource: context.Resource);
+        var tenantId = ResolveTenantId(context);
+        var evaluationContext = new PermissionEvaluationContext(context.User, requirement.Permission, tenantId, context.Resource);
+        var resourceDenied = false;
 
         foreach (var resourceHandler in resourceHandlers)
         {
@@ -213,14 +237,31 @@ public sealed class PermissionAuthorizationHandler(IPermissionEvaluator evaluato
                 continue;
 
             if (resourceResult.Succeeded)
+            {
                 context.Succeed(requirement);
+                return;
+            }
 
-            return;
+            resourceDenied = true;
         }
 
         var result = await evaluator.EvaluateAsync(evaluationContext);
         if (result.Succeeded)
             context.Succeed(requirement);
+        else if (resourceDenied)
+            context.Fail();
+    }
+
+    private static string? ResolveTenantId(AuthorizationHandlerContext context)
+    {
+        if (context.Resource is not null)
+        {
+            var property = context.Resource.GetType().GetProperty("TenantId");
+            if (property?.GetValue(context.Resource) is string resourceTenantId && !string.IsNullOrWhiteSpace(resourceTenantId))
+                return resourceTenantId;
+        }
+
+        return context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value;
     }
 }
 
@@ -237,16 +278,17 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
     public ValueTask<ClaimsNormalizationResult> NormalizeAsync(ClaimsNormalizationContext context, CancellationToken cancellationToken = default)
     {
         var roles = context.Principal.Claims
-            .Where(x => x.Type is ClaimTypes.Role or IdentityClaimTypes.Role)
+            .Where(x => x.Type == ClaimTypes.Role)
             .Select(x => x.Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var permissions = context.Principal.Claims
-            .Where(x => x.Type == IdentityClaimTypes.Permission)
-            .Select(x => x.Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var permissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var rule in context.MappingRules.OrderBy(x => x.Order).ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase))
+        var effectiveRules = context.MappingRules
+            .Where(x => string.Equals(x.TenantId, context.TenantId, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.Equals(x.Provider, context.Provider, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var rule in effectiveRules.OrderBy(x => x.Order).ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase))
         {
             if (!evaluator.Matches(context.Principal, rule))
                 continue;
@@ -258,7 +300,9 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
                 break;
         }
 
-        var identity = new ClaimsIdentity(context.Principal.Claims, context.AuthenticationType);
+        var identity = new ClaimsIdentity(
+            context.Principal.Claims.Where(x => !IsInternalIdentityClaim(x.Type)),
+            context.AuthenticationType);
         identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, context.TenantId));
         identity.AddClaim(new Claim(IdentityClaimTypes.Provider, context.Provider));
 
@@ -270,4 +314,7 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
 
         return ValueTask.FromResult(new ClaimsNormalizationResult(new ClaimsPrincipal(identity), roles, permissions));
     }
+
+    private static bool IsInternalIdentityClaim(string claimType) =>
+        claimType is IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
 }

@@ -78,11 +78,11 @@ public sealed class SigningKeySecurityDefaultGuard : ISecurityDefaultGuard
 
     public ValueTask<IReadOnlyList<SecurityGuardViolation>> ValidateAsync(SecurityGuardContext context, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(context.SigningKey))
+            return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([new("identity.signing_key.missing", "A signing key is required.")]);
+
         if (context.IsDevelopmentOrDemo)
             return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([]);
-
-        if (string.IsNullOrWhiteSpace(context.SigningKey))
-            return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([new("identity.signing_key.missing", "A signing key is required outside development/demo environments.")]);
 
         if (context.SigningKey.Length < 32 || KnownWeakKeys.Contains(context.SigningKey))
             return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([new("identity.signing_key.weak", "The configured signing key is too short or a known development default.")]);
@@ -109,7 +109,8 @@ public sealed class SecretHashSecurityDefaultGuard(IOptions<FoundationIdentityOp
         if (context.Credential is null)
             return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([]);
 
-        if (options.Value.AllowedSecretHashAlgorithms.Contains(context.Credential.HashAlgorithm))
+        var allowedAlgorithms = options.Value.AllowedSecretHashAlgorithms;
+        if (allowedAlgorithms is not null && allowedAlgorithms.Contains(context.Credential.HashAlgorithm))
             return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([]);
 
         return ValueTask.FromResult<IReadOnlyList<SecurityGuardViolation>>([new("identity.secret_hash.unsupported", $"Credential '{context.Credential.Id}' uses unsupported hash algorithm '{context.Credential.HashAlgorithm}'.")]);
