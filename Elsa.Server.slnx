@@ -47,11 +47,25 @@
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Diagnostics/">
+    <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <Project Path="src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
+  </Folder>
+  <Folder Name="/src/elsa/Diagnostics/StructuredLogs/" />
+  <Folder Name="/src/elsa/Diagnostics/StructuredLogs/Core/" />
+  <Folder Name="/src/elsa/Diagnostics/StructuredLogs/Persistence/" />
+  <Folder Name="/src/elsa/Diagnostics/StructuredLogs/Persistence/EFCore/">
+    <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj" />
+  </Folder>
+  <Folder Name="/src/elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/">
+    <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Events/">
     <Project Path="src/Elsa/Events/Core/Elsa.Events.Core.csproj" />
     <Project Path="src/Elsa/Events/Elsa.Events.csproj" />
     <Project Path="src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Events/Core/" />
   <Folder Name="/src/elsa/Expressions/">
     <Project Path="src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj" />
     <Project Path="src/Elsa/Expressions/Elsa.Expressions.csproj" />
@@ -67,6 +81,13 @@
   <Folder Name="/src/elsa/Expressions/JavaScript/Rendering/">
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
+  </Folder>
+  <Folder Name="/src/elsa/Foundation/Identity/">
+    <Project Path="src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
   </Folder>
   <Folder Name="/src/elsa/Http/">
     <Project Path="src/Elsa/Http/Core/Elsa.Http.Core.csproj" />
@@ -93,6 +114,7 @@
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Persistence/EFCore/Sqlite/" />
   <Folder Name="/src/elsa/Persistence/Groundwork/">
     <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
@@ -120,6 +142,7 @@
     <Project Path="src/Elsa/Tasks/Elsa.Tasks.csproj" />
     <Project Path="src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Tasks/Core/" />
   <Folder Name="/src/elsa/Workflows/">
     <Project Path="src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
   </Folder>
@@ -185,6 +208,17 @@
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/">
+    <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/">
+    <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/" />
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/" />
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/">
+    <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />

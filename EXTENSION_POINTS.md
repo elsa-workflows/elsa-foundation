@@ -75,6 +75,12 @@ not automatic constitution violations.
 |---|---|
 | HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
+### Identity
+
+| Domain | Catalog |
+|---|---|
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+
 ### Persistence
 
 | Domain | Catalog |
@@ -110,6 +116,12 @@ not automatic constitution violations.
 |---|---|
 | Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md`](src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md) |
 | Elsa3 mapping (workflow definition import boundary) | [`src/Elsa3/Mapping/EXTENSION_POINTS.md`](src/Elsa3/Mapping/EXTENSION_POINTS.md) |
+
+### Diagnostics
+
+| Domain | Catalog |
+|---|---|
+| Structured logs (log store, live feed, sink, source provider) | [`src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md) |
 
 ---
 
