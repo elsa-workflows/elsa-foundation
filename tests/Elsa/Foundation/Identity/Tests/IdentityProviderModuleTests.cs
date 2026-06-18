@@ -1,0 +1,170 @@
+using System.Security.Claims;
+using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Api;
+using Elsa.Foundation.Identity.Api.Extensions;
+using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
+using Elsa.Foundation.Identity.Oidc;
+using Elsa.Foundation.Identity.Oidc.Extensions;
+using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Elsa.Foundation.Identity.Tests;
+
+public sealed class IdentityProviderModuleTests
+{
+    [Fact]
+    public void FeatureClassesRegisterOwnedServices()
+    {
+        var services = new ServiceCollection();
+
+        new FoundationIdentityApiFeature().ConfigureServices(services);
+        new AspNetCoreIdentityFeature().ConfigureServices(services);
+        new OidcAuthenticationFeature().ConfigureServices(services);
+        new OpenIddictIdentityFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetRequiredService<IAuthSessionService>());
+        Assert.NotNull(provider.GetRequiredService<IPrincipalFactory>());
+        Assert.NotNull(provider.GetRequiredService<ITokenService>());
+        Assert.Contains(provider.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == "oidc");
+        Assert.Contains(provider.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == "openiddict");
+    }
+
+    [Fact]
+    public async Task OidcAndOpenIddictProvidersAreExposedThroughSameProviderManager()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityOidc(options =>
+        {
+            options.ProviderId = "entra";
+            options.DisplayName = "Microsoft Entra";
+            options.AuthenticationScheme = "entra";
+            options.ChallengePath = "/_elsa/identity/challenge/entra";
+            options.IsDefault = true;
+        });
+        services.AddFoundationIdentityOpenIddict(options =>
+        {
+            options.ProviderId = "local";
+            options.DisplayName = "Local identity";
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<IAuthenticationProviderManager>();
+
+        var providers = await manager.ListAsync();
+
+        Assert.Collection(
+            providers,
+            x =>
+            {
+                Assert.Equal("entra", x.Id);
+                Assert.Equal("external-oidc", x.Kind);
+                Assert.Equal("/_elsa/identity/challenge/entra", x.Challenge?.Url);
+            },
+            x =>
+            {
+                Assert.Equal("local", x.Id);
+                Assert.Equal("openiddict", x.Kind);
+                Assert.True(x.Capabilities.SupportsTokenIssuance);
+            });
+    }
+
+    [Fact]
+    public async Task PrincipalFactoryLinksExternalIdentityAndProducesNormalizedSession()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityApi();
+        services.AddFoundationAspNetCoreIdentity();
+        using var provider = services.BuildServiceProvider();
+        var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
+        var sessionService = provider.GetRequiredService<IAuthSessionService>();
+        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Name, "Ada Lovelace"),
+            new Claim(ClaimTypes.Email, "ada@example.com"),
+            new Claim("groups", "admins")
+        ], "external"));
+
+        var principal = await principalFactory.CreateAsync(new PrincipalFactoryContext(
+            "tenant-a",
+            "entra",
+            "external-ada",
+            externalPrincipal,
+            [
+                new ClaimMappingRule("admins", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admin" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }, 1, false)
+            ],
+            []));
+        var session = await sessionService.GetAsync(principal);
+
+        Assert.Equal("authenticated", session.Status);
+        Assert.NotNull(session.Subject);
+        Assert.Equal("Ada Lovelace", session.DisplayName);
+        Assert.Equal("tenant-a", session.TenantId);
+        Assert.Equal("entra", session.Provider);
+        Assert.Contains("admin", session.Roles);
+        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, session.Permissions);
+
+        var externalIdentities = provider.GetRequiredService<IExternalIdentityStore>();
+        var linkedIdentity = await externalIdentities.FindBySubjectAsync("tenant-a", "entra", "external-ada");
+        Assert.Equal(session.Subject, linkedIdentity?.UserId);
+    }
+
+    [Fact]
+    public async Task DuplicateEmailAcrossProvidersCreatesSeparateLinkedUsers()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationAspNetCoreIdentity();
+        using var provider = services.BuildServiceProvider();
+        var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
+
+        var first = await principalFactory.CreateAsync(CreateContext("entra", "entra-subject", "same@example.com"));
+        var second = await principalFactory.CreateAsync(CreateContext("github", "github-subject", "same@example.com"));
+
+        Assert.NotEqual(
+            first.FindFirst(ClaimTypes.NameIdentifier)?.Value,
+            second.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    }
+
+    [Fact]
+    public async Task OpenIddictTokenServiceIssuesRefreshesValidatesAndRevokesContractTokens()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityOpenIddict(options => options.ProviderId = "local");
+        services.AddFoundationIdentityApi();
+        using var provider = services.BuildServiceProvider();
+        var tokenService = provider.GetRequiredService<ITokenService>();
+        var sessionService = provider.GetRequiredService<IAuthSessionService>();
+
+        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]));
+        var validated = await tokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
+        var session = await sessionService.GetAsync(validated.Principal!);
+        var refreshed = await tokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!));
+        var refreshedValidation = await tokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken));
+        await tokenService.RevokeAsync(new TokenRevocationRequest(refreshed.AccessToken));
+        var revokedValidation = await tokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken));
+
+        Assert.True(validated.Succeeded);
+        Assert.Equal("authenticated", session.Status);
+        Assert.Equal("user-1", session.Subject);
+        Assert.Equal("tenant-a", session.TenantId);
+        Assert.Equal("local", session.Provider);
+        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, session.Permissions);
+        Assert.True(refreshedValidation.Succeeded);
+        Assert.False(revokedValidation.Succeeded);
+    }
+
+    private static PrincipalFactoryContext CreateContext(string provider, string providerSubject, string email)
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Name, providerSubject),
+            new Claim(ClaimTypes.Email, email)
+        ], provider));
+
+        return new PrincipalFactoryContext("tenant-a", provider, providerSubject, principal, [], []);
+    }
+}

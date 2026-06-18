@@ -11,6 +11,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
 | `IPermissionCatalog` | `DefaultIdentityPermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application supplies a broader permission catalog while preserving the namespaced identity keys. |
 | `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. |
+| `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
 | `IClaimMappingRuleEvaluator` | `ClaimMappingRuleEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Mapping rules need richer matching than exact claim-type/value comparisons. |
 | `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host needs custom aggregation/reporting of security-default guard results. |
@@ -22,7 +23,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Kind:** Contributor (registered provider module; one implementation per configured provider family/profile).
 - **Register:** `services.AddScoped<IAuthenticationProviderModule, MyProviderModule>()`.
 - **Consumed by:** `DefaultAuthenticationProviderManager`, which composes enabled provider descriptors for sign-in and capability discovery.
-- **Known implementations:** none yet in this PR. Future OIDC/OpenIddict/legacy modules implement this contract *(cross-domain provider modules)*.
+- **Known implementations:** `OidcAuthenticationProviderModule` (`Elsa.Foundation.Identity.Oidc`) and `OpenIddictAuthenticationProviderModule` (`Elsa.Foundation.Identity.OpenIddict`) *(cross-domain provider modules)*.
 
 ### `IPermissionResourceHandler`
 
