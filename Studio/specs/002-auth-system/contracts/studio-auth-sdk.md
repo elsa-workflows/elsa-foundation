@@ -29,25 +29,46 @@ interface AuthSession {
   tenantId?: string;
   roles: string[];
   permissions: string[];      // normalized permission keys
-  tokenFreshness?: "fresh" | "stale" | "expired";
+  tokenFreshness?: "fresh" | "refreshing" | "expired";
   provider?: { id: string; kind: string };
 }
 ```
 
 ### `AuthCapabilities`
 
-Mirror of the backend capabilities endpoint, used to drive management UX:
+Typed projection of the backend `GET /_elsa/identity/capabilities` response. The
+shape mirrors the API payload exactly — top-level authorities, a nested
+`capabilities` object, and the `providers` list (including the default provider) —
+so a client can parse the response and select the active adapter from the backend
+default provider without an ad hoc mapping layer:
 
 ```ts
 interface AuthCapabilities {
   ownershipMode: "foundation-owned" | "external-owned" | "hybrid";
-  supportsLocalUserManagement: boolean;
-  supportsLocalRoleManagement: boolean;
-  supportsApplicationManagement: boolean;
-  supportsGroupSync: boolean;
-  supportsTokenIssuance: boolean;
+  userAuthority: "foundation" | "external";
+  roleAuthority: "foundation" | "external";
+  applicationAuthority: "foundation" | "external";
+  capabilities: {
+    supportsLocalUserManagement: boolean;
+    supportsLocalRoleManagement: boolean;
+    supportsApplicationManagement: boolean;
+    supportsGroupSync: boolean;
+    supportsTokenIssuance: boolean;
+    supportsRefresh: boolean;
+    supportsRevocation: boolean;
+  };
+  providers: Array<{
+    id: string;
+    kind: string;
+    isDefault: boolean;
+    enabled: boolean;
+  }>;
 }
 ```
+
+Provider/adapter selection on a fresh anonymous load uses the public
+`GET /_elsa/identity/bootstrap` payload (same `ownershipMode` + `providers`
+shape); `AuthCapabilities` is fetched once authenticated to drive management UX.
 
 ## Provider abstraction
 

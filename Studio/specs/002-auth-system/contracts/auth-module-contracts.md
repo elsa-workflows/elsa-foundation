@@ -119,10 +119,15 @@ startup; keys MUST be stable and namespaced.
 
 Rules:
 
-- In `external-owned`, local user/application creation MUST be disabled or
-  read-only; the system MUST NOT silently write local records the IdP owns.
+- In `external-owned`, local user/role/application creation **and updates** MUST be
+  disabled or read-only; the system MUST NOT silently write local records the IdP
+  owns. Role writes are gated by `roleAuthority` / `supportsLocalRoleManagement`
+  exactly as user writes are gated by `userAuthority`, so an external-owned
+  deployment cannot leave local role mutation enabled and drift from the IdP.
 - In `hybrid`, identity lifecycle is external while roles/permissions/apps may be
-  foundation-owned; the contract MUST make each authority explicit.
+  foundation-owned; the contract MUST make each authority (`userAuthority`,
+  `roleAuthority`, `applicationAuthority`) explicit, and every management write
+  MUST check the authority for the entity it mutates.
 - Effective capabilities MUST be discoverable via the management API so Studio can
   render correct affordances without hard-coded mode logic.
 
