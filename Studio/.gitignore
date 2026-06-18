@@ -2,9 +2,12 @@ bin/
 obj/
 node_modules/
 dist/
+build/
+coverage/
 .DS_Store
+*.log
+.env*
 *.user
 *.suo
 .idea/
 .vscode/
-

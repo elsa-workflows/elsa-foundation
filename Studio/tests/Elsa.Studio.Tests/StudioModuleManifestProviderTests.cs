@@ -40,7 +40,7 @@ public sealed class StudioModuleManifestProviderTests
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Equal("Feature management", module.DisplayName);
         Assert.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.js", module.Entry, StringComparison.Ordinal);
-        Assert.Contains("v=1.0.9", module.Entry);
+        Assert.Contains($"v={module.Version}", module.Entry);
         Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.css", StringComparison.Ordinal));
         Assert.Contains("navigation", module.Capabilities);
         Assert.Contains("routes", module.Capabilities);

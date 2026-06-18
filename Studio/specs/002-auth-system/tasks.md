@@ -12,10 +12,10 @@
 
 **Purpose**: Establish the abstractions package and capability/ownership scaffolding everything else depends on.
 
-- [ ] T001 Create `Elsa.Foundation.Identity.Abstractions` project with Authentication/Iam/Authorization/Ownership folders
-- [ ] T002 [P] Define `OwnershipMode`, `ProviderCapabilities`, and effective-capability computation
-- [ ] T003 [P] Define the shared `Permission` catalog contract (`IPermissionCatalog`) and namespaced default keys
-- [ ] T004 [P] Add Studio auth SDK workspace under `src/Elsa.Studio.Web/Client/src/auth/`
+- [X] T001 Create `Elsa.Foundation.Identity.Abstractions` project with Authentication/Iam/Authorization/Ownership folders
+- [X] T002 [P] Define `OwnershipMode`, `ProviderCapabilities`, and effective-capability computation
+- [X] T003 [P] Define the shared `Permission` catalog contract (`IPermissionCatalog`) and namespaced default keys
+- [X] T004 [P] Add Studio auth SDK workspace under `src/Elsa.Studio.Web/Client/src/auth/`
 
 ---
 
@@ -25,14 +25,14 @@
 
 **CRITICAL**: No provider or management implementation may bypass these seams.
 
-- [ ] T005 Define `IAuthenticationProviderModule`, `IAuthenticationProviderManager`, `IPrincipalFactory`, `ITokenService`
-- [ ] T006 Define IAM stores (`IUserStore`, `IRoleStore`, `IApplicationStore`, `ICredentialStore`, `IExternalIdentityStore`, `IClaimMappingStore`, `IProviderConfigurationStore`, `ITenantMembershipStore`)
-- [ ] T007 Define IAM managers (`IUserManager`, `IRoleManager`, `IApplicationManager`, `ICredentialManager`, `IProviderManager`, `IClaimMappingManager`) with invariants
-- [ ] T008 Define `IPermissionEvaluator`, `RequirePermission` policy provider, and resource-handler hook
-- [ ] T009 Implement claims normalization pipeline (`ClaimMappingRule` evaluation → normalized role/permission claims)
-- [ ] T010 Define `IOwnershipModeProvider` and effective-capabilities resolution
-- [ ] T011 [P] Add `AuthEvent` audit abstraction and security-default guards (key/HTTPS/secret-hash checks)
-- [ ] T012 Add contract tests for module composition, policy registration, and capability computation
+- [X] T005 Define `IAuthenticationProviderModule`, `IAuthenticationProviderManager`, `IPrincipalFactory`, `ITokenService`
+- [X] T006 Define IAM stores (`IUserStore`, `IRoleStore`, `IApplicationStore`, `ICredentialStore`, `IExternalIdentityStore`, `IClaimMappingStore`, `IProviderConfigurationStore`, `ITenantMembershipStore`)
+- [X] T007 Define IAM managers (`IUserManager`, `IRoleManager`, `IApplicationManager`, `ICredentialManager`, `IProviderManager`, `IClaimMappingManager`) with invariants
+- [X] T008 Define `IPermissionEvaluator`, `RequirePermission` policy provider, and resource-handler hook
+- [X] T009 Implement claims normalization pipeline (`ClaimMappingRule` evaluation → normalized role/permission claims)
+- [X] T010 Define `IOwnershipModeProvider` and effective-capabilities resolution
+- [X] T011 [P] Add `AuthEvent` audit abstraction and security-default guards (key/HTTPS/secret-hash checks)
+- [X] T012 Add contract tests for module composition, policy registration, and capability computation
 
 **Checkpoint**: Contracts compile and conformance tests pass without any concrete provider.
 
@@ -48,8 +48,8 @@
 - [ ] T014 [P] [US1] Implement OpenIddict reference provider (`Identity.OpenIddict`) for first-party token issuance
 - [ ] T015 [US1] Implement ASP.NET Core Identity substrate (`Identity.AspNetCoreIdentity`) for local users/roles
 - [ ] T016 [US1] Wire `IPrincipalFactory` to resolve/link `User` + `ExternalIdentity` on first sign-in
-- [ ] T017 [P] [US1] Implement Studio `AuthProvider`, `useAuthSession`, OIDC adapter, and redirect-callback handling
-- [ ] T018 [P] [US1] Implement HTTP + SignalR token injection with transparent refresh
+- [X] T017 [P] [US1] Implement Studio `AuthProvider`, `useAuthSession`, OIDC adapter, and redirect-callback handling
+- [X] T018 [P] [US1] Implement HTTP + SignalR token injection with transparent refresh
 - [ ] T019 [US1] Add integration tests: OIDC and OpenIddict sign-in both produce normalized principal/session
 
 **Checkpoint**: Sign-in works end-to-end under at least two providers behind one contract.
