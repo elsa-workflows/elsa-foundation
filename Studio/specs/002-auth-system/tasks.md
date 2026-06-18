@@ -94,7 +94,9 @@
 - [ ] T029 [P] [US4] Implement providers endpoints incl. settings validation and `test` connectivity check
 - [ ] T030 [US4] Implement claim/role mapping endpoints and ordered rule evaluation
 - [ ] T031 [P] [US4] Build Studio providers + mappings screens with write-only secret fields
-- [ ] T032 [US4] Add tests: provider settings validation, federated sign-in applies mapped grants
+- [ ] T032 [US4] Implement account-linking policy: tenant-scoped `(tenantId, provider, providerSubject)` resolution, handling of changed/reused external subjects, and explicit (non-silent) handling of duplicate emails across providers
+- [ ] T033 [US4] Add tests: provider settings validation, federated sign-in applies mapped grants
+- [ ] T034 [US4] Add account-linking tests: no silent merge on duplicate email across providers, changed-subject re-link requires explicit policy, cross-tenant subject collision never links to another tenant's user
 
 ---
 
@@ -104,10 +106,10 @@
 
 **Independent Test**: A user lacking a permission cannot perform the backend action even if the Studio control is forced; Studio hides/disables it by default.
 
-- [ ] T033 [US5] Apply `RequirePermission` policies across foundation management + feature endpoints
-- [ ] T034 [P] [US5] Implement Studio `usePermissions`, `AuthGuard`, `RequireAuth`
-- [ ] T035 [US5] Document permission-propagation timing per provider (immediate vs refresh)
-- [ ] T036 [US5] Add tests: backend denies despite forced UI; permission claims match evaluator
+- [ ] T035 [US5] Apply `RequirePermission` policies across foundation management + feature endpoints
+- [ ] T036 [P] [US5] Implement Studio `usePermissions`, `AuthGuard`, `RequireAuth`
+- [ ] T037 [US5] Document permission-propagation timing per provider (immediate vs refresh)
+- [ ] T038 [US5] Add tests: backend denies despite forced UI; permission claims match evaluator
 
 ---
 
@@ -115,10 +117,10 @@
 
 **Purpose**: Provide a supported path off legacy Elsa Identity / Studio Login without a hard cutover.
 
-- [ ] T037 [P] Implement `Identity.Legacy` compatibility adapter over existing Elsa Identity stores
-- [ ] T038 [P] Implement Studio legacy adapter (local-credential login via adapter only; no `Login` template)
-- [ ] T039 Implement optional import tooling for legacy users/roles/api-keys + external identity links
-- [ ] T040 Write profile migration playbooks (A↔B↔C↔D) with feature-flag staging and rollback
+- [ ] T039 [P] Implement `Identity.Legacy` compatibility adapter over existing Elsa Identity stores
+- [ ] T040 [P] Implement Studio legacy adapter (local-credential login via adapter only; no `Login` template)
+- [ ] T041 Implement optional import tooling for legacy users/roles/api-keys + external identity links
+- [ ] T042 Write profile migration playbooks (A↔B↔C↔D) with feature-flag staging and rollback
 
 ---
 

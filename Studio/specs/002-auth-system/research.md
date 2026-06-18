@@ -181,6 +181,24 @@ explicitly excluded.
 - Port the Blazor modules: wrong runtime and coupling.
 - Per-screen ad hoc auth: reproduces the drift the abstraction was built to avoid.
 
+## Decision: Elsa Identity / Studio Login becomes a compatibility path, not the default
+
+**Rationale**: Existing installs depend on `Elsa.Identity` (custom JWT issuer,
+login/refresh endpoints, API keys) and the deprecated `Elsa.Studio.Login`. Rather
+than a hard cutover, these are retained as a first-party compatibility profile
+(Profile D): a legacy provider/store adapter exposes existing users/roles/api-keys
+through the new contracts, with optional import tooling to move data into the
+reference stores on the operator's schedule. The deprecated `Login` UI is not
+carried into new Studio templates; local-credential sign-in flows only through the
+legacy or OpenIddict/local adapter.
+
+**Alternatives considered**:
+
+- Remove Elsa Identity outright: strands current deployments and breaks existing
+  API-key integrations.
+- Keep Elsa Identity as the default: perpetuates a bespoke token issuer instead of
+  standardizing on ASP.NET Core auth + OpenIddict.
+
 ## Open Questions (to resolve during design slices)
 
 - Effective-permission propagation: immediate vs token-refresh boundary, and

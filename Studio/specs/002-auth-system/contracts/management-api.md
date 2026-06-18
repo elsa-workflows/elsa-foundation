@@ -17,11 +17,44 @@ behavior through capabilities.
   `capabilityDisabled` reason), not a generic error.
 - Mutations emit `AuthEvent` audit records.
 
+## Bootstrap discovery (unauthenticated)
+
+### `GET /_elsa/identity/bootstrap`
+
+The minimum sign-in discovery payload, served **anonymously**. Studio calls this
+on a fresh load — before any session exists — to learn the ownership mode and the
+list of enabled providers so it can select the right adapter and start the correct
+challenge. It MUST NOT include management capabilities, secrets, provider settings,
+or any per-user data.
+
+```json
+{
+  "ownershipMode": "foundation-owned",
+  "providers": [
+    {
+      "id": "builtin",
+      "kind": "openiddict",
+      "displayName": "Elsa",
+      "isDefault": true,
+      "enabled": true,
+      "challenge": { "type": "redirect", "loginPath": "/_elsa/identity/challenge/builtin" }
+    }
+  ]
+}
+```
+
+Permission: **none** (public). This endpoint is the only unauthenticated identity
+surface and is deliberately limited to provider/challenge selection data. The
+full `providers` collection with settings remains under the authenticated
+`/_elsa/identity/providers` endpoint.
+
 ## Capabilities discovery
 
 ### `GET /_elsa/identity/capabilities`
 
 Returns the effective capability gates so Studio renders correct affordances.
+This endpoint is for authenticated management UX and is distinct from the public
+`/bootstrap` payload above.
 
 ```json
 {
@@ -54,12 +87,17 @@ Permission: `identity.read`.
   external identities, tenant memberships. Permission: `identity.users.read`.
 - `POST /_elsa/identity/users` — create (foundation-owned only). Permission:
   `identity.users.manage`.
-- `PUT /_elsa/identity/users/{id}` — update profile/status/roles. Permission:
+- `PUT /_elsa/identity/users/{id}` — update profile/status/roles (foundation-owned
+  only; in `external-owned`/hybrid modes where `userAuthority` is external,
+  profile/status are read-only and only foundation-owned attributes such as local
+  role assignments — when `roleAuthority` is foundation — may be edited).
+  Permission: `identity.users.manage`.
+- `POST /_elsa/identity/users/{id}/lock` / `.../unlock` — status changes
+  (foundation-owned only; gated by `userAuthority`). Permission:
   `identity.users.manage`.
-- `POST /_elsa/identity/users/{id}/lock` / `.../unlock` — status changes.
-  Permission: `identity.users.manage`.
-- `DELETE /_elsa/identity/users/{id}` — delete/deactivate with lockout safeguard.
-  Permission: `identity.users.manage`.
+- `DELETE /_elsa/identity/users/{id}` — delete/deactivate with lockout safeguard
+  (foundation-owned only; gated by `userAuthority`). Permission:
+  `identity.users.manage`.
 - `GET /_elsa/identity/users/{id}/effective-permissions` — resolved
   `EffectivePermissionSet` for a tenant. Permission: `identity.users.read`.
 
@@ -84,12 +122,18 @@ User payload (response):
 
 ## Roles & permissions
 
+Role writes are gated by `roleAuthority` / `supportsLocalRoleManagement`: when the
+active mode places role authority with an external IdP (typical in `external-owned`
+and possible in hybrid), the create/update/delete endpoints below are disabled or
+read-only and return `capabilityDisabled`, exactly as for users.
+
 - `GET /_elsa/identity/roles` — list. Permission: `identity.roles.read`.
-- `POST /_elsa/identity/roles` — create. Permission: `identity.roles.manage`.
-- `PUT /_elsa/identity/roles/{id}` — update name/description/permissions.
+- `POST /_elsa/identity/roles` — create (requires `supportsLocalRoleManagement`).
   Permission: `identity.roles.manage`.
-- `DELETE /_elsa/identity/roles/{id}` — delete (system roles protected).
-  Permission: `identity.roles.manage`.
+- `PUT /_elsa/identity/roles/{id}` — update name/description/permissions (requires
+  `supportsLocalRoleManagement`). Permission: `identity.roles.manage`.
+- `DELETE /_elsa/identity/roles/{id}` — delete (system roles protected; requires
+  `supportsLocalRoleManagement`). Permission: `identity.roles.manage`.
 - `GET /_elsa/identity/permissions` — the shared permission catalog (keys,
   categories, descriptions, implications). Permission: `identity.read`.
 - `POST /_elsa/identity/roles/{id}/preview` — preview effective permissions a role
@@ -109,16 +153,24 @@ User payload (response):
 
 ## Credentials & rotation
 
+All credential endpoints are scoped to a target application and therefore require
+**both** `identity.credentials.manage` **and** authority over the target
+application (`identity.apps.manage` plus resource ownership of `{id}`). A caller
+who can manage credentials in general but cannot manage/read the specific
+application MUST be denied, so credentials cannot be minted for applications the
+caller does not otherwise control.
+
 - `GET /_elsa/identity/applications/{id}/credentials` — list (metadata only, never
-  secrets). Permission: `identity.apps.read`.
+  secrets). Permission: `identity.apps.read` on the target application.
 - `POST /_elsa/identity/applications/{id}/credentials` — issue a new API
   key/client secret; plaintext returned **once** at creation. Permission:
-  `identity.credentials.manage`.
+  `identity.credentials.manage` + `identity.apps.manage` on `{id}`.
 - `POST /_elsa/identity/credentials/{credId}/rotate` — rotate with optional grace
   window; old credential invalidated per policy. Permission:
-  `identity.credentials.manage`.
+  `identity.credentials.manage` + `identity.apps.manage` on the owning application.
 - `POST /_elsa/identity/credentials/{credId}/revoke` — immediate revoke.
-  Permission: `identity.credentials.manage`.
+  Permission: `identity.credentials.manage` + `identity.apps.manage` on the owning
+  application.
 
 Rotation response:
 
@@ -145,7 +197,13 @@ Rotation response:
 - `POST /_elsa/identity/providers/{id}/test` — connectivity/metadata test (e.g.
   discovery document reachable). Permission: `identity.providers.manage`.
 - `DELETE /_elsa/identity/providers/{id}` — remove. Permission:
-  `identity.providers.manage`.
+  `identity.providers.manage`. The contract MUST reject deletion (and disabling)
+  that would leave the tenant with no enabled sign-in provider, and MUST reject
+  removing the default challenge provider without an explicit replacement: the
+  request fails with `lastProvider` / `defaultProviderRequired` unless the caller
+  first enables another provider and/or designates a new default in the same or a
+  prior request. This prevents an admin from deleting the only usable sign-in path
+  and locking everyone (including admins) out of Studio.
 
 Provider settings are secret-aware: secret fields are write-only and never
 returned; responses indicate presence (`hasClientSecret: true`).

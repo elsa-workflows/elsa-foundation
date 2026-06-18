@@ -28,12 +28,22 @@ shadow record when an external IdP owns identity.
 
 Federation link between an external provider subject and an internal user.
 
-- `provider`: `AuthenticationProvider` id.
+- `tenantId`: Owning tenant. External identities are tenant-scoped because provider
+  configuration is tenant-scoped: the same `provider` id and `providerSubject` can
+  legitimately exist under different tenants' provider configs.
+- `provider`: `AuthenticationProvider` id (resolved within the tenant).
 - `providerSubject`: The provider's stable subject (`sub`) for the user.
-- `userId`: Linked internal `User` id.
+- `userId`: Linked internal `User` id (a user in the same tenant).
 - `linkedAt`: When the link was established.
 - `lastSeenAt`: Last successful federated sign-in.
 - `linkPolicy`: How the link was created (`auto`, `admin`, `invite`).
+
+**Uniqueness / lookup**: the federation lookup key is the tuple
+`(tenantId, provider, providerSubject)`, and that tuple is unique. Resolution
+during sign-in MUST be constrained to the authenticating tenant so a federated
+login in tenant B can never resolve to tenant A's linked user. (If a future
+global-user model is adopted, the same isolation MUST be expressed via explicit
+tenant-membership checks rather than a tenant-agnostic subject lookup.)
 
 ### Role
 
