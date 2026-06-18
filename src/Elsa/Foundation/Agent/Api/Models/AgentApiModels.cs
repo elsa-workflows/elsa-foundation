@@ -40,7 +40,6 @@ public sealed class AgentCreateSessionRequest
     public string TenantId { get; init; } = "default";
     public string ConversationId { get; init; } = string.Empty;
     public string ProviderId { get; init; } = "github-copilot";
-    public AgentPolicy? Policy { get; init; }
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
     public string Mode { get; init; } = "explain";
     public AgentSurfaceRequest ActiveSurface { get; init; } = new();
@@ -295,7 +294,7 @@ internal static class AgentApiMapping
         _ => status.ToString().ToLowerInvariant()
     };
 
-    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity switch
+    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity.Trim().ToLowerInvariant() switch
     {
         "public" => AgentContextSensitivity.Public,
         "internal" => AgentContextSensitivity.Internal,

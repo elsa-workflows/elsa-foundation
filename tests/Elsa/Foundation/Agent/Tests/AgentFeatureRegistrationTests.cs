@@ -92,4 +92,59 @@ public sealed class AgentFeatureRegistrationTests
             delta => Assert.Equal(AgentStreamEventKind.MessageDelta, delta.Kind),
             completed => Assert.Equal(AgentStreamEventKind.Completed, completed.Kind));
     }
+
+    [Fact]
+    public async Task Streaming_service_sends_latest_user_message_to_provider()
+    {
+        var audit = new InMemoryAgentAuditStore();
+        var sessions = new InMemoryAgentSessionService(audit);
+        var provider = new CapturingAgentProvider();
+        var streaming = new DefaultAgentStreamingService(sessions, new DefaultAgentProviderRegistry([provider]));
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "conversation-1",
+            provider.ProviderId,
+            "explain",
+            "Test session",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Explain this workflow.",
+            AgentMessageStatus.Pending,
+            "workflow.explain",
+            ["ctx-1"],
+            [new("ctx-1", "workflow.definition", "wf-1", "Workflow", "workflow.definition", AgentContextSensitivity.Internal, "selection", "Workflow summary.", null, new Dictionary<string, string>())]));
+
+        await foreach (var _ in streaming.StreamAsync(session.Id))
+        {
+        }
+
+        Assert.NotNull(provider.LastMessage);
+        Assert.Equal("Explain this workflow.", provider.LastMessage.Content);
+        Assert.Single(provider.LastMessage.Context);
+    }
+
+    private sealed class CapturingAgentProvider : IAgentProvider
+    {
+        public string ProviderId => "capturing-test";
+
+        public AgentProviderMessage? LastMessage { get; private set; }
+
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>()));
+
+        public async IAsyncEnumerable<AgentStreamEvent> SendMessageAsync(AgentProviderMessage message, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            LastMessage = message;
+            yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+        }
+
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentToolApprovalResult(request.Approved, string.Empty));
+
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderDiagnostics(ProviderId, true, "available", new Dictionary<string, string>()));
+    }
 }

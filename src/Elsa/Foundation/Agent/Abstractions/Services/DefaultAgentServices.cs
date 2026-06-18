@@ -144,6 +144,7 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
 {
     private readonly ConcurrentDictionary<string, AgentSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, List<AgentMessage>> _messages = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, List<AgentContextAttachment>> _contexts = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -164,6 +165,7 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
 
         _sessions[session.Id] = session;
         _messages[session.Id] = [];
+        _contexts[session.Id] = [];
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -217,6 +219,63 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
 
         return message;
     }
+
+    public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default)
+    {
+        if (!_messages.TryGetValue(sessionId, out var messages))
+            return Task.FromResult<AgentMessage?>(null);
+
+        lock (messages)
+        {
+            return Task.FromResult(messages.LastOrDefault(x => role is null || x.Role == role));
+        }
+    }
+
+    public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (!_messages.TryGetValue(sessionId, out var messages))
+            return Task.FromResult<IReadOnlyCollection<AgentMessage>>([]);
+
+        lock (messages)
+            return Task.FromResult<IReadOnlyCollection<AgentMessage>>(messages.ToList());
+    }
+
+    public Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
+    {
+        if (!_messages.TryGetValue(sessionId, out var messages))
+            return Task.FromResult<AgentMessage?>(null);
+
+        lock (messages)
+            return Task.FromResult(messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
+    {
+        if (attachments.Count == 0)
+            return Task.CompletedTask;
+
+        if (!_sessions.ContainsKey(sessionId))
+            throw new InvalidOperationException($"Agent session '{sessionId}' was not found.");
+
+        var contexts = _contexts.GetOrAdd(sessionId, _ => []);
+        lock (contexts)
+        {
+            var existingIds = contexts.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var attachment in attachments.Where(x => existingIds.Add(x.Id)))
+                contexts.Add(attachment);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (!_contexts.TryGetValue(sessionId, out var contexts))
+            return Task.FromResult<IReadOnlyCollection<AgentContextAttachment>>([]);
+
+        lock (contexts)
+            return Task.FromResult<IReadOnlyCollection<AgentContextAttachment>>(contexts.ToList());
+    }
 }
 
 public sealed class InMemoryAgentProposalService(
@@ -251,8 +310,8 @@ public sealed class InMemoryAgentProposalService(
         if (!_proposals.TryGetValue(proposalId, out var proposal))
             return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
 
-        if (proposal.Status is AgentActionProposalStatus.Denied or AgentActionProposalStatus.Executed)
-            return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
+        if (proposal.Status is not AgentActionProposalStatus.AwaitingApproval and not AgentActionProposalStatus.Edited)
+            return AgentResult<AgentActionProposal>.Failure("agent.proposal.invalid_state", $"Proposal '{proposalId}' cannot be approved from status {proposal.Status}.", 409);
 
         if (!RevisionMatches(proposal, expectedRevision))
             return AgentResult<AgentActionProposal>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
@@ -278,6 +337,9 @@ public sealed class InMemoryAgentProposalService(
         if (!_proposals.TryGetValue(proposalId, out var proposal))
             return AgentResult<AgentActionProposal>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
 
+        if (IsTerminal(proposal.Status))
+            return AgentResult<AgentActionProposal>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
+
         var now = DateTimeOffset.UtcNow;
         var denied = proposal with { Status = AgentActionProposalStatus.Denied, UpdatedAt = now };
         _proposals[proposalId] = denied;
@@ -299,18 +361,35 @@ public sealed class InMemoryAgentProposalService(
         if (!_proposals.TryGetValue(proposalId, out var proposal))
             return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
 
+        if (IsTerminal(proposal.Status))
+            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.closed", $"Proposal '{proposalId}' is already {proposal.Status}.", 409);
+
         if (proposal.RequiresApproval && proposal.Status != AgentActionProposalStatus.Approved)
             return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.approval_required", $"Proposal '{proposalId}' requires approval before execution.", 409);
 
         if (!RevisionMatches(proposal, expectedRevision))
             return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.revision_conflict", $"Proposal '{proposalId}' targets revision '{proposal.BaseRevision}', not requested revision '{expectedRevision}'.", 409);
 
-        var result = await executor.ExecuteAsync(proposal, cancellationToken);
-        if (!result.Succeeded)
-            return result;
-
         var now = DateTimeOffset.UtcNow;
-        _proposals[proposalId] = proposal with { Status = AgentActionProposalStatus.Executed, UpdatedAt = now };
+        var executing = proposal with { Status = AgentActionProposalStatus.Executed, UpdatedAt = now };
+        _proposals[proposalId] = executing;
+
+        var result = await executor.ExecuteAsync(executing, cancellationToken);
+        if (!result.Succeeded)
+        {
+            var failedAt = DateTimeOffset.UtcNow;
+            _proposals[proposalId] = executing with { Status = AgentActionProposalStatus.Failed, UpdatedAt = failedAt };
+            await auditSink.EmitAsync(new(
+                NewId(),
+                AgentAuditEventKind.ProposalFailed,
+                proposal.SessionId,
+                actorId,
+                "Agent proposal execution failed.",
+                failedAt,
+                new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["code"] = result.Error?.Code ?? string.Empty }), cancellationToken);
+
+            return result;
+        }
 
         await auditSink.EmitAsync(new(
             NewId(),
@@ -325,7 +404,16 @@ public sealed class InMemoryAgentProposalService(
     }
 
     private static bool RevisionMatches(AgentActionProposal proposal, string? expectedRevision)
-        => string.IsNullOrWhiteSpace(expectedRevision) || string.Equals(proposal.BaseRevision, expectedRevision, StringComparison.Ordinal);
+        => string.IsNullOrWhiteSpace(proposal.BaseRevision)
+            ? string.IsNullOrWhiteSpace(expectedRevision)
+            : !string.IsNullOrWhiteSpace(expectedRevision) && string.Equals(proposal.BaseRevision, expectedRevision, StringComparison.Ordinal);
+
+    private static bool IsTerminal(AgentActionProposalStatus status)
+        => status is AgentActionProposalStatus.Denied
+            or AgentActionProposalStatus.Expired
+            or AgentActionProposalStatus.Executed
+            or AgentActionProposalStatus.Failed
+            or AgentActionProposalStatus.Cancelled;
 }
 
 public sealed class NoopAgentActionProposalExecutor : IAgentActionProposalExecutor
@@ -359,7 +447,14 @@ public sealed class DefaultAgentStreamingService(
             yield break;
         }
 
-        await foreach (var item in provider.SendMessageAsync(new(session.Id, string.Empty, []), cancellationToken))
+        var message = await sessions.FindLatestMessageAsync(session.Id, AgentRole.User, cancellationToken);
+        if (message is null)
+        {
+            yield return Error("agent.message.not_found", $"Agent session '{sessionId}' does not have a user message to stream.", 404);
+            yield break;
+        }
+
+        await foreach (var item in provider.SendMessageAsync(new(session.Id, message.Content, message.Context), cancellationToken))
             yield return item;
     }
 

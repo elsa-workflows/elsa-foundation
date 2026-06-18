@@ -17,7 +17,7 @@ internal sealed class DenyProposal(IAgentProposalService proposals)
 
     public override async Task HandleAsync(AgentProposalDecisionRequest req, CancellationToken ct)
     {
-        var result = await proposals.DenyAsync(req.ProposalId, req.ActorId, req.Comment ?? req.Reason, ct);
+        var result = await proposals.DenyAsync(req.ProposalId, AgentEndpointActor.Resolve(User), req.Comment ?? req.Reason, ct);
         if (!result.Succeeded)
         {
             await Send.ResponseAsync(AgentApiResponse<AgentActionProposal>.Failure(result.Error!), result.Error!.StatusCode, cancellation: ct);

@@ -6,8 +6,11 @@ using Elsa.Foundation.Agent.Api.Models;
 
 namespace Elsa.Foundation.Agent.Api.Endpoints;
 
-internal sealed class CreateSession(IAgentSessionService sessions, IAgentContextCollector contextCollector)
-    : ElsaEndpoint<AgentCreateSessionRequest, AgentApiResponse<AgentSession>>
+internal sealed class CreateSession(
+    IAgentSessionService sessions,
+    IAgentContextCollector contextCollector,
+    IAgentProviderRegistry providers)
+    : ElsaEndpoint<AgentCreateSessionRequest, AgentApiResponse<AgentCreateSessionResponse>>
 {
     public override void Configure()
     {
@@ -17,6 +20,14 @@ internal sealed class CreateSession(IAgentSessionService sessions, IAgentContext
 
     public override async Task HandleAsync(AgentCreateSessionRequest req, CancellationToken ct)
     {
+        var provider = providers.Find(req.ProviderId);
+        if (provider is null)
+        {
+            var error = new AgentError("agent.provider.not_found", $"Agent provider '{req.ProviderId}' is not registered.", 404);
+            await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), 404, cancellation: ct);
+            return;
+        }
+
         var session = await sessions.CreateAsync(new(
             req.TenantId,
             string.IsNullOrWhiteSpace(req.ConversationId)
@@ -25,12 +36,18 @@ internal sealed class CreateSession(IAgentSessionService sessions, IAgentContext
             req.ProviderId,
             GetMode(req),
             BuildTitle(req),
-            req.Policy ?? AgentPolicy.Default,
+            AgentPolicy.Default,
             BuildMetadata(req)), ct);
 
-        _ = await CollectInitialContextAsync(session, req, ct);
+        _ = await provider.CreateSessionAsync(session, ct);
+        var contextAttachments = await CollectInitialContextAsync(session, req, ct);
+        await sessions.AddContextAsync(session.Id, contextAttachments, ct);
 
-        await Send.OkAsync(AgentApiResponse<AgentSession>.Success(session), ct);
+        await Send.OkAsync(AgentApiResponse<AgentCreateSessionResponse>.Success(new(
+            session.Id,
+            session.Status.ToContractString(),
+            session.Title,
+            contextAttachments.Select(x => x.ToResponse()).ToList())), ct);
     }
 
     private async Task<IReadOnlyCollection<AgentContextAttachment>> CollectInitialContextAsync(AgentSession session, AgentCreateSessionRequest req, CancellationToken ct)

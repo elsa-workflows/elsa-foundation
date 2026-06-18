@@ -120,7 +120,7 @@ public sealed class DefaultWorkflowChangeProposalService(
     public async Task<AgentResult<AgentActionProposal>> ProposeAsync(WorkflowChangeProposalRequest request, CancellationToken cancellationToken = default)
     {
         var currentRevision = await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken);
-        if (!string.Equals(currentRevision, request.BaseRevision, StringComparison.Ordinal))
+        if (!string.Equals(currentRevision, "unknown", StringComparison.OrdinalIgnoreCase) && !string.Equals(currentRevision, request.BaseRevision, StringComparison.Ordinal))
             return AgentResult<AgentActionProposal>.Failure("agent.workflow.revision_conflict", $"Workflow '{request.WorkflowDefinitionId}' is at revision '{currentRevision}', not requested base revision '{request.BaseRevision}'.", 409);
 
         if (!await permissions.CanProposeChangeAsync(request.ActorId, request.WorkflowDefinitionId, cancellationToken))

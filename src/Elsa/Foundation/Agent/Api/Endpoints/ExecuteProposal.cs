@@ -17,7 +17,7 @@ internal sealed class ExecuteProposal(IAgentProposalService proposals)
 
     public override async Task HandleAsync(AgentProposalDecisionRequest req, CancellationToken ct)
     {
-        var result = await proposals.ExecuteAsync(req.ProposalId, req.ActorId, req.Revision, ct);
+        var result = await proposals.ExecuteAsync(req.ProposalId, AgentEndpointActor.Resolve(User), req.Revision, ct);
         if (!result.Succeeded)
         {
             await Send.ResponseAsync(AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!), result.Error!.StatusCode, cancellation: ct);

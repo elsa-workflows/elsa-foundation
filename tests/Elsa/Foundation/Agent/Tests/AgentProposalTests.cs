@@ -50,6 +50,66 @@ public sealed class AgentProposalTests
     }
 
     [Fact]
+    public async Task Proposal_approval_requires_expected_revision_when_base_revision_exists()
+    {
+        using var provider = BuildAgentProvider();
+        var proposals = provider.GetRequiredService<IAgentProposalService>();
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: true));
+
+        var approval = await proposals.ApproveAsync(proposal.Id, "reviewer");
+
+        Assert.False(approval.Succeeded);
+        Assert.Equal("agent.proposal.revision_conflict", approval.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Proposal_execution_rejects_denied_proposal_even_without_approval_requirement()
+    {
+        using var provider = BuildAgentProvider();
+        var proposals = provider.GetRequiredService<IAgentProposalService>();
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false) with
+        {
+            Status = AgentActionProposalStatus.Denied
+        });
+
+        var result = await proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("agent.proposal.closed", result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Proposal_denial_rejects_executed_proposal()
+    {
+        using var provider = BuildAgentProvider();
+        var proposals = provider.GetRequiredService<IAgentProposalService>();
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
+
+        var execution = await proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1");
+        var denial = await proposals.DenyAsync(proposal.Id, "reviewer", "Too late.");
+
+        Assert.True(execution.Succeeded);
+        Assert.False(denial.Succeeded);
+        Assert.Equal("agent.proposal.closed", denial.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Proposal_approval_rejects_invalid_non_reviewable_state()
+    {
+        using var provider = BuildAgentProvider();
+        var proposals = provider.GetRequiredService<IAgentProposalService>();
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: true) with
+        {
+            Status = AgentActionProposalStatus.Draft
+        });
+
+        var approval = await proposals.ApproveAsync(proposal.Id, "reviewer", "rev-1");
+
+        Assert.False(approval.Succeeded);
+        Assert.Equal("agent.proposal.invalid_state", approval.Error?.Code);
+    }
+
+    [Fact]
     public async Task Feedback_emits_audit_event_with_message_linkage()
     {
         using var provider = BuildAgentProvider();

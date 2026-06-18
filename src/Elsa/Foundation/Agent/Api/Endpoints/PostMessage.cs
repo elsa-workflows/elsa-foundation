@@ -9,6 +9,7 @@ namespace Elsa.Foundation.Agent.Api.Endpoints;
 internal sealed class PostMessage(
     IAgentSessionService sessions,
     IAgentPolicyEvaluator policyEvaluator,
+    IAgentContextSanitizer contextSanitizer,
     IAgentAuditSink auditSink)
     : ElsaEndpoint<AgentMessageRequest, AgentApiResponse<AgentMessageAcceptedResponse>>
 {
@@ -49,13 +50,26 @@ internal sealed class PostMessage(
             }
         }
 
+        var storedContext = await sessions.ListContextAsync(req.SessionId, ct);
+        var requestedStoredContext = req.ContextAttachmentIds.Count == 0
+            ? new List<AgentContextAttachment>()
+            : storedContext.Where(x => req.ContextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();
+        var requestContext = req.ContextAttachments.Select(x => x.ToDomain()).ToList();
+        var context = await contextSanitizer.SanitizeAsync(requestedStoredContext.Concat(requestContext).ToList(), ct);
+        var contextDecision = await policyEvaluator.EvaluateContextAsync(session.Policy, context, ct);
+        if (!contextDecision.Allowed)
+        {
+            await SendDeniedAsync(req.SessionId, contextDecision, ct);
+            return;
+        }
+
         var message = await sessions.AddMessageAsync(req.SessionId, new(
             AgentRole.User,
             string.IsNullOrWhiteSpace(req.Content) ? req.Message : req.Content,
             AgentMessageStatus.Pending,
             requestedCapabilities.FirstOrDefault(),
-            req.ContextAttachmentIds.Count > 0 ? req.ContextAttachmentIds : req.ContextAttachments.Select(x => x.Id).ToList(),
-            req.ContextAttachments.Select(x => x.ToDomain()).ToList()), ct);
+            context.Select(x => x.Id).ToList(),
+            context), ct);
 
         await Send.OkAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(message, [])), ct);
     }

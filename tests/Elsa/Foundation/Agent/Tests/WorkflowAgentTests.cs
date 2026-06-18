@@ -60,6 +60,17 @@ public sealed class WorkflowAgentTests
     }
 
     [Fact]
+    public async Task Workflow_change_proposal_allows_default_unknown_revision_seam()
+    {
+        using var provider = BuildWorkflowProvider("unknown", allowChanges: true);
+        var service = provider.GetRequiredService<IWorkflowChangeProposalService>();
+
+        var result = await service.ProposeAsync(CreateRequest(baseRevision: "rev-1"));
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
     public async Task Workflow_change_proposal_is_reviewable_and_requires_approval()
     {
         using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);

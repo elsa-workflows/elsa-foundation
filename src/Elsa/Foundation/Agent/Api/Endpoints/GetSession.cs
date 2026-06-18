@@ -7,7 +7,7 @@ using Elsa.Foundation.Agent.Api.Models;
 namespace Elsa.Foundation.Agent.Api.Endpoints;
 
 internal sealed class GetSession(IAgentSessionService sessions)
-    : ElsaEndpoint<AgentSessionRouteRequest, AgentApiResponse<AgentSession>>
+    : ElsaEndpoint<AgentSessionRouteRequest, AgentApiResponse<AgentSessionDetailsResponse>>
 {
     public override void Configure()
     {
@@ -21,10 +21,17 @@ internal sealed class GetSession(IAgentSessionService sessions)
         if (session is null)
         {
             var error = new AgentError("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404);
-            await Send.ResponseAsync(AgentApiResponse<AgentSession>.Failure(error), 404, cancellation: ct);
+            await Send.ResponseAsync(AgentApiResponse<AgentSessionDetailsResponse>.Failure(error), 404, cancellation: ct);
             return;
         }
 
-        await Send.OkAsync(AgentApiResponse<AgentSession>.Success(session), ct);
+        var context = await sessions.ListContextAsync(req.SessionId, ct);
+        var messages = await sessions.ListMessagesAsync(req.SessionId, ct);
+        await Send.OkAsync(AgentApiResponse<AgentSessionDetailsResponse>.Success(new(
+            session.Id,
+            session.Status.ToContractString(),
+            session.Title,
+            context.Select(x => x.ToResponse()).ToList(),
+            messages.Select(x => x.ToViewModel()).ToList())), ct);
     }
 }

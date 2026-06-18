@@ -17,7 +17,7 @@ internal sealed class ApproveProposal(IAgentProposalService proposals)
 
     public override async Task HandleAsync(AgentProposalDecisionRequest req, CancellationToken ct)
     {
-        var result = await proposals.ApproveAsync(req.ProposalId, req.ActorId, req.Revision, req.Comment, ct);
+        var result = await proposals.ApproveAsync(req.ProposalId, AgentEndpointActor.Resolve(User), req.Revision, req.Comment, ct);
         if (!result.Succeeded)
         {
             await Send.ResponseAsync(AgentApiResponse<AgentActionProposal>.Failure(result.Error!), result.Error!.StatusCode, cancellation: ct);
