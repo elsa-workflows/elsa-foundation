@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AuthConfigurationError,
+  createBackendAuthProviderManager,
   createAuthProviderManager,
   createOidcAuthAdapter,
   type AuthBootstrap,
@@ -54,6 +55,43 @@ describe("auth provider manager", () => {
 
     await expect(manager.initialize()).rejects.toBeInstanceOf(AuthConfigurationError);
   });
+
+  it("can build provider adapters dynamically from backend bootstrap metadata", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/_elsa/identity/bootstrap")) {
+        return jsonResponse({
+          ownershipMode: "foundation-owned",
+          providers: [
+            {
+              id: "oidc",
+              kind: "external-oidc",
+              displayName: "OIDC",
+              enabled: true,
+              isDefault: true,
+              challenge: {
+                url: "/_elsa/identity/challenge/oidc",
+                method: "GET",
+                scheme: "Elsa.Identity.Oidc",
+                parameters: { returnUrl: "optional" }
+              }
+            }
+          ]
+        });
+      }
+
+      if (url.endsWith("/_elsa/identity/session")) {
+        return jsonResponse(authenticatedSession("alice"));
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    const manager = createBackendAuthProviderManager({
+      baseUrl: "https://foundation.example/",
+      fetch: fetchMock
+    });
+
+    await expect(manager.initialize()).resolves.toMatchObject({ status: "authenticated", subject: "alice" });
+  });
 });
 
 describe("redirect OIDC auth adapter", () => {
@@ -61,7 +99,13 @@ describe("redirect OIDC auth adapter", () => {
     const assign = vi.fn();
     const adapter = createOidcAuthAdapter({
       id: "entra",
-      challenge: { type: "redirect", loginPath: "/_elsa/identity/challenge/entra" },
+      baseUrl: "https://foundation.example/",
+      challenge: {
+        url: "/_elsa/identity/challenge/entra",
+        method: "GET",
+        scheme: "Elsa.Identity.Oidc",
+        parameters: { returnUrl: "optional" }
+      },
       location: {
         assign,
         href: "https://studio.example/workflows",
@@ -71,7 +115,7 @@ describe("redirect OIDC auth adapter", () => {
 
     await adapter.login();
 
-    expect(assign).toHaveBeenCalledWith("https://studio.example/_elsa/identity/challenge/entra?returnUrl=https%3A%2F%2Fstudio.example%2Fworkflows");
+    expect(assign).toHaveBeenCalledWith("https://foundation.example/_elsa/identity/challenge/entra?returnUrl=https%3A%2F%2Fstudio.example%2Fworkflows");
   });
 
   it("probes session state with credentials and normalizes missing arrays", async () => {
@@ -81,6 +125,7 @@ describe("redirect OIDC auth adapter", () => {
     }), { status: 200 }));
     const adapter = createOidcAuthAdapter({
       id: "entra",
+      baseUrl: "https://foundation.example/",
       fetch: fetchMock,
       sessionEndpoint: "/session"
     });
@@ -88,7 +133,48 @@ describe("redirect OIDC auth adapter", () => {
     const session = await adapter.initialize();
 
     expect(session).toMatchObject({ status: "authenticated", subject: "alice", roles: [], permissions: [] });
-    expect(fetchMock.mock.calls[0]).toMatchObject(["/session", { credentials: "include", cache: "no-store" }]);
+    expect(fetchMock.mock.calls[0]).toMatchObject(["https://foundation.example/session", { credentials: "include", cache: "no-store" }]);
+  });
+
+  it("refreshes by probing session when the adapter does not own a refresh token", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(authenticatedSession("alice")));
+    const adapter = createOidcAuthAdapter({
+      id: "entra",
+      baseUrl: "https://foundation.example/",
+      fetch: fetchMock,
+      sessionEndpoint: "/_elsa/identity/session"
+    });
+
+    await expect(adapter.refresh()).resolves.toMatchObject({ status: "authenticated", subject: "alice" });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://foundation.example/_elsa/identity/session", {
+      credentials: "include",
+      cache: "no-store"
+    });
+  });
+
+  it("posts refresh tokens to the backend refresh contract when provided", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ accessToken: "new-token", expiresAt: "2026-06-18T01:00:00Z", refreshToken: "next-refresh" }))
+      .mockResolvedValueOnce(jsonResponse(authenticatedSession("alice")));
+    const adapter = createOidcAuthAdapter({
+      id: "entra",
+      baseUrl: "https://foundation.example/",
+      fetch: fetchMock,
+      sessionEndpoint: "/_elsa/identity/session",
+      refreshEndpoint: "/_elsa/identity/refresh",
+      getRefreshToken: () => "refresh-1"
+    });
+
+    await expect(adapter.refresh()).resolves.toMatchObject({ status: "authenticated", subject: "alice" });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://foundation.example/_elsa/identity/refresh");
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ refreshToken: "refresh-1" })
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://foundation.example/_elsa/identity/session");
   });
 });
 
@@ -143,4 +229,11 @@ function capabilities(): AuthCapabilities {
     },
     providers: []
   };
+}
+
+function jsonResponse(payload: unknown) {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { "content-type": "application/json" }
+  });
 }

@@ -2,6 +2,7 @@ import {
   anonymousAuthSession,
   unknownAuthSession,
   type AuthBootstrap,
+  type AuthBootstrapProvider,
   type AuthCapabilities,
   type AuthProviderAdapter,
   type AuthProviderManager,
@@ -12,7 +13,8 @@ import {
 export interface AuthProviderManagerOptions {
   bootstrap: () => Promise<AuthBootstrap>;
   capabilities: () => Promise<AuthCapabilities>;
-  adapters: AuthProviderAdapter[];
+  adapters?: AuthProviderAdapter[];
+  adapterFactory?: (provider: AuthBootstrapProvider) => AuthProviderAdapter;
   isCallback?: () => boolean;
 }
 
@@ -26,7 +28,7 @@ class DefaultAuthProviderManager implements AuthProviderManager {
   private session: AuthSession = unknownAuthSession;
 
   constructor(private readonly options: AuthProviderManagerOptions) {
-    for (const adapter of options.adapters) {
+    for (const adapter of options.adapters ?? []) {
       if (this.adapters.has(adapter.id)) {
         throw new AuthConfigurationError(`Duplicate auth provider adapter '${adapter.id}'.`);
       }
@@ -104,7 +106,7 @@ class DefaultAuthProviderManager implements AuthProviderManager {
       throw new AuthConfigurationError("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
     }
 
-    this.activeAdapter = this.requireAdapter(defaultProvider.id);
+    this.activeAdapter = this.resolveProviderAdapter(defaultProvider);
     return this.activeAdapter;
   }
 
@@ -114,6 +116,23 @@ class DefaultAuthProviderManager implements AuthProviderManager {
       throw new AuthConfigurationError(`No auth provider adapter is registered for '${providerId}'.`);
     }
 
+    this.activeAdapter = adapter;
+    return adapter;
+  }
+
+  private resolveProviderAdapter(provider: AuthBootstrapProvider) {
+    const registered = this.adapters.get(provider.id);
+    if (registered) {
+      this.activeAdapter = registered;
+      return registered;
+    }
+
+    if (!this.options.adapterFactory) {
+      throw new AuthConfigurationError(`No auth provider adapter is registered for '${provider.id}'.`);
+    }
+
+    const adapter = this.options.adapterFactory(provider);
+    this.adapters.set(provider.id, adapter);
     this.activeAdapter = adapter;
     return adapter;
   }
