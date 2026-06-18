@@ -136,3 +136,59 @@ a `*.Core` project — same rule the runtime bridge follows.)
 - No full ORM in Groundwork — only the bounded capability-spec uplift.
 - No `Include`/join — modeled as explicit second reads.
 - No SemVer logic in the store — precomputed `SemVerSortKey`.
+
+## Progress snapshot (2026-06-18)
+
+**Read side — done.** All six design read ports have a committed, tested Groundwork (document) adapter
+(`WorkflowDefinition`, `WorkflowDefinitionVersion`, `WorkflowDefinitionDraft`, `WorkflowDefinitionVersionLayout`,
+`ActivityDefinition`, `ActivityDefinitionVersion`) plus the two design manifests, the shared
+`GroundworkDocumentSerialization` builder, and per-lane DI registration
+(`AddGroundworkWorkflowsDesignStores` / `AddGroundworkActivitiesDesignStores`) with registration tests. A host
+can now select Groundwork to back **every design read**.
+
+## Write-side architecture decision (the central fork)
+
+Inventorying the EF write commands showed the design **write** surface is not pure persistence — it interleaves
+**provider-neutral domain orchestration** with **EF-specific persistence**, and the orchestration currently
+lives *inside* the EFCore command classes (`src/Elsa/Workflows/Design/Persistence/EFCore/Commands/`,
+`.../Activities/Design/Persistence/EFCore/Services/`):
+
+- **Neutral orchestration** (already on neutral services): `IIdentityGenerator`, `IDistributedLockProvider`
+  (`workflow-draft:{id}` per-draft lock), the validation gate (`OnDraftValidating`/`OnDraftValidated` events +
+  `ExecuteValidations`), `IDraftStateDiffEngine`, SemVer next-version computation, lifecycle event publishing.
+- **EF-specific persistence**: `IDbContextFactory<T>`, `DbSet.AddAsync`, `Entry(x).State = Modified`,
+  `SaveChangesAsync` (atomic across up to 6 entities), FK **cascade delete** (DiscardDraft), upsert via
+  `FirstOrDefault` + add/modify, and `OnEntityLoading` hydration of `*Source` shadows.
+
+Re-implementing each command in a Groundwork project would duplicate ~500 lines of orchestration per provider —
+wrong. **Decision:** introduce a small **provider-neutral write/unit-of-work port** and lift the command
+orchestration above it so the commands become provider-neutral and depend only on read ports + the write port +
+the (already neutral) collaborators. Shape (to refine):
+
+- `IDesignUnitOfWork` (or per-lane equivalent): stage `Add(entity)` / `Update(entity)` / `Delete<T>(id)` across
+  aggregates, then `CommitAsync()` for an **atomic** flush; plus explicit cascade on delete.
+- EF implementation wraps a `DbContext` + `SaveChangesAsync`. Groundwork implementation batches document
+  `SaveAsync`/`DeleteAsync`.
+- **Hydration is not needed on the neutral layer**: for documents the `GroundworkDocumentSerialization`
+  projection *is* the authored-content (de)serialization (no `*Source` shadows); the EF write-port impl keeps the
+  `OnEntitySaving`/`OnEntityLoading` handlers internally.
+
+### Open dependency — cross-document atomicity
+
+Several commands write 2–6 related documents in one logical transaction (`Submit` = 6; `CreateDraft` = 3;
+`PromoteDraftToVersion` = 2; `AddWorkflowDefinition`/`AddActivityDefinition` = 2). A document store has no
+cross-document transaction by default. The neutral write port's `CommitAsync()` atomicity therefore depends on
+whether Groundwork exposes a **multi-document transaction / batch** primitive (or whether we accept compensating
+writes / sibling eventual-consistency). This is being investigated by the Groundwork capability-uplift session
+(valence-works/Groundwork, branch `feature/closed-query-capability`); the write-side build should wait on that
+finding before committing to an atomicity strategy. Until then the design write path stays on EF Core (reads can
+already run on Groundwork independently).
+
+### Host store — manifest union
+
+A single registered `IDocumentStore` materializes from **one** `StorageManifest`. For one provider to back
+runtime **and** both design lanes, that store's manifest must be the **union** of `ElsaRuntimeStorageManifest`,
+`WorkflowsDesignStorageManifest`, and `ActivitiesDesignStorageManifest` (document kinds are already disjoint).
+The merge belongs at the host/composition layer (which references all three). Confirm whether Groundwork's
+materializer can host multiple manifests' kinds in one database, or whether a neutral
+`StorageManifest`-composition helper is needed — also pending the Groundwork session's materialization findings.
