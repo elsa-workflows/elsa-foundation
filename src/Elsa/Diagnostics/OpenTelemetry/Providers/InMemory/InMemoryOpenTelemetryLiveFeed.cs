@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 
-public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOptions> options) : IOpenTelemetryLiveFeed
+public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOptions> options, IOpenTelemetrySourceRegistry sourceRegistry) : IOpenTelemetryLiveFeed
 {
     private readonly OpenTelemetryDiagnosticsOptions _options = options.Value;
     private readonly object _subscribersLock = new();
@@ -25,13 +25,20 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
         return ValueTask.CompletedTask;
     }
 
-    public async IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default)
     {
-        var subscriber = new OpenTelemetrySubscriber(filter, _options.SubscriberChannelCapacity);
+        // Register eagerly (not inside the async iterator) so telemetry published between obtaining the
+        // enumerable and the first MoveNextAsync is still delivered — matching the structured-logs feed.
+        var subscriber = new OpenTelemetrySubscriber(filter, sourceRegistry, _options.SubscriberChannelCapacity);
 
         lock (_subscribersLock)
             _subscribers.Add(subscriber);
 
+        return Enumerate(subscriber, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<OpenTelemetryStreamItem> Enumerate(OpenTelemetrySubscriber subscriber, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         try
         {
             await foreach (var item in subscriber.Channel.Reader.ReadAllAsync(cancellationToken))
@@ -47,7 +54,7 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
         }
     }
 
-    private sealed class OpenTelemetrySubscriber(OpenTelemetryTraceFilter filter, int channelCapacity)
+    private sealed class OpenTelemetrySubscriber(OpenTelemetryTraceFilter filter, IOpenTelemetrySourceRegistry sourceRegistry, int channelCapacity)
     {
         private readonly object _lock = new();
         private readonly int _capacity = Math.Max(1, channelCapacity);
@@ -97,10 +104,6 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
             lock (_lock)
             {
                 _pendingItemCount = Math.Max(0, _pendingItemCount - 1);
-
-                if (item.DroppedItems != null)
-                    _droppedSinceLastSummary.Remove(item.DroppedItems.SignalType);
-
                 TryWriteDroppedSummary();
             }
         }
@@ -137,7 +140,12 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
 
             var dropped = _droppedSinceLastSummary.OrderBy(x => x.Key).First();
             if (Channel.Writer.TryWrite(new OpenTelemetryStreamItem { DroppedItems = new(dropped.Key, dropped.Value, "SubscriberQueueFull") }))
+            {
                 _pendingItemCount++;
+                // Clear the emitted signal as soon as it is queued so a write before the client reads the
+                // summary cannot enqueue the same drop count again (which would over-count drops).
+                _droppedSinceLastSummary.Remove(dropped.Key);
+            }
         }
 
         private static OpenTelemetrySignalType? GetSignalType(OpenTelemetryStreamItem item)
@@ -275,7 +283,12 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
             if (string.IsNullOrWhiteSpace(filter.ServiceName))
                 return null;
 
-            return resources
+            // Resolve service → resource ids from the shared source registry (same source the store queries
+            // use) so a later batch carrying spans/logs/metrics for a known service is not dropped just
+            // because it did not repeat the resource frame. Union with the current batch to honor resources
+            // published directly (without a store write) before the registry records them.
+            return sourceRegistry.List()
+                .Concat(resources)
                 .Where(x => EqualsIgnoreCase(x.ServiceName, filter.ServiceName))
                 .Select(x => x.Id)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);

@@ -14,7 +14,7 @@ Feature name (manifest / appsettings key): **`DiagnosticsOpenTelemetry`**.
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
   - **`DefaultOpenTelemetryProvider`** → `IOpenTelemetryProvider` — the read facade the query endpoints call.
   - **`CollectorConfigurationProvider`** → `ICollectorConfigurationProvider` — surfaces the endpoint paths/auth shape a collector needs to push to this host.
-- **OTLP/HTTP protobuf collector** (FastEndpoints, auto-mapped via `app.MapShells()`): `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). The protobuf wire format is parsed by a self-contained, dependency-free hand-rolled parser (`OtlpHttpProtobufParser` + an internal `ProtobufReader`) — no protobuf NuGet package is required. These endpoints are authenticated by `OtlpIngestionSecurity` (API-key header or loopback), not by the studio permission model.
+- **OTLP/HTTP protobuf collector** (FastEndpoints, auto-mapped via `app.MapShells()`): `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). The protobuf wire format is parsed by a self-contained, dependency-free hand-rolled parser (`OtlpHttpProtobufParser` + an internal `ProtobufReader`) — no protobuf NuGet package is required. `Content-Encoding: gzip` / `deflate` / `br` bodies are decompressed (size cap applied to the decompressed bytes). These endpoints are authenticated by `OtlpIngestionSecurity` (API-key header or loopback), not by the studio permission model.
 - **Query endpoints** (FastEndpoints):
   - `POST /diagnostics/opentelemetry/resources/search`
   - `POST /diagnostics/opentelemetry/traces/search`
@@ -58,7 +58,7 @@ Unlike the Structured Logs stream, OpenTelemetry stream items carry **no monoton
 `OpenTelemetryRedactor` runs on every ingested batch before storage:
 
 - **Sensitive attribute names** (`SensitiveNames`) — attribute values whose key matches are replaced with a redaction marker. Defaults cover `authorization`, `token`, `password`, `secret`, `api-key`/`apikey`, `cookie`, connection strings.
-- **Sensitive text patterns** (`SensitiveTextPatterns`) — regexes applied to free-text fields (e.g. log bodies) to mask bearer tokens, `key=value` secrets, and storage account keys. Pattern evaluation is bounded by `SensitiveTextPatternTimeout`.
+- **Sensitive text patterns** (`SensitiveTextPatterns`) — regexes applied to free-text fields (span/event names, span status descriptions, log bodies) to mask bearer tokens, `key=value` secrets, and storage account keys. Pattern evaluation is bounded by `SensitiveTextPatternTimeout`.
 
 Both lists are surfaced through options so a host can extend or replace them.
 

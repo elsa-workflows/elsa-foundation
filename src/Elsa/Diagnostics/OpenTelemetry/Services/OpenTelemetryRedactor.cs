@@ -35,7 +35,7 @@ public class OpenTelemetryRedactor(IOptions<OpenTelemetryDiagnosticsOptions> opt
             Name = RedactValue("span.name", span.Name) ?? string.Empty,
             StatusDescription = RedactValue("span.status.description", span.StatusDescription),
             Attributes = RedactDictionary(span.Attributes),
-            Events = span.Events.Select(x => x with { Attributes = RedactDictionary(x.Attributes) }).ToList(),
+            Events = span.Events.Select(x => x with { Name = RedactValue("span.event.name", x.Name) ?? string.Empty, Attributes = RedactDictionary(x.Attributes) }).ToList(),
             Links = span.Links.Select(x => x with { Attributes = RedactDictionary(x.Attributes) }).ToList()
         };
     }

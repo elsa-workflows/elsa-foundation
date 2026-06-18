@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.IO.Compression;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -54,6 +55,12 @@ internal abstract class OtlpIngestionEndpointBase(
             await Send.StringAsync(string.Empty, StatusCodes.Status413PayloadTooLarge, cancellation: ct);
             return;
         }
+        catch (InvalidDataException)
+        {
+            // A declared Content-Encoding whose bytes do not actually decompress is a client error.
+            await Send.StringAsync(string.Empty, StatusCodes.Status400BadRequest, cancellation: ct);
+            return;
+        }
 
         OpenTelemetryBatch batch;
         try
@@ -72,6 +79,11 @@ internal abstract class OtlpIngestionEndpointBase(
 
     private static async Task<ReadOnlyMemory<byte>> ReadBodyAsync(HttpContext httpContext, long maxBodySize, CancellationToken cancellationToken)
     {
+        // OTLP/HTTP exporters may gzip (or otherwise compress) the protobuf body; honor Content-Encoding so
+        // valid compressed telemetry is not rejected as malformed protobuf. The size cap is applied to the
+        // decompressed bytes, which also bounds decompression-bomb expansion.
+        var decompressor = CreateDecompressor(httpContext.Request);
+        var source = decompressor ?? httpContext.Request.Body;
         using var stream = new MemoryStream();
         var buffer = ArrayPool<byte>.Shared.Rent(81920);
         var totalBytes = 0L;
@@ -79,7 +91,7 @@ internal abstract class OtlpIngestionEndpointBase(
         try
         {
             int read;
-            while ((read = await httpContext.Request.Body.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
+            while ((read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
             {
                 totalBytes += read;
                 if (totalBytes > maxBodySize)
@@ -91,9 +103,30 @@ internal abstract class OtlpIngestionEndpointBase(
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+            if (decompressor != null)
+                await decompressor.DisposeAsync();
         }
 
         return stream.ToArray();
+    }
+
+    private static Stream? CreateDecompressor(HttpRequest request)
+    {
+        var encoding = request.Headers.ContentEncoding.ToString();
+
+        if (string.IsNullOrWhiteSpace(encoding))
+            return null;
+
+        if (encoding.Contains("gzip", StringComparison.OrdinalIgnoreCase) || encoding.Contains("x-gzip", StringComparison.OrdinalIgnoreCase))
+            return new GZipStream(request.Body, CompressionMode.Decompress, leaveOpen: true);
+
+        if (encoding.Contains("deflate", StringComparison.OrdinalIgnoreCase))
+            return new DeflateStream(request.Body, CompressionMode.Decompress, leaveOpen: true);
+
+        if (encoding.Contains("br", StringComparison.OrdinalIgnoreCase))
+            return new BrotliStream(request.Body, CompressionMode.Decompress, leaveOpen: true);
+
+        return null;
     }
 
     private sealed class RequestBodyTooLargeException : Exception;

@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
+using Elsa.Diagnostics.OpenTelemetry.Services;
 using OptionsFactory = Microsoft.Extensions.Options.Options;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 
@@ -12,7 +13,8 @@ public class InMemoryOpenTelemetryLiveFeedTests
     [Fact]
     public async Task SubscribeAsync_DeliversPublishedTraceMatchingFilter()
     {
-        var feed = new InMemoryOpenTelemetryLiveFeed(OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions()));
+        var options = OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions());
+        var feed = new InMemoryOpenTelemetryLiveFeed(options, new OpenTelemetrySourceRegistry(options));
         await using var enumerator = feed.SubscribeAsync(new OpenTelemetryTraceFilter()).GetAsyncEnumerator();
 
         // Starting the enumerator registers the subscriber before we publish.
@@ -28,7 +30,8 @@ public class InMemoryOpenTelemetryLiveFeedTests
     [Fact]
     public async Task SubscribeAsync_WhenFilterExcludesTrace_DoesNotDeliver()
     {
-        var feed = new InMemoryOpenTelemetryLiveFeed(OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions()));
+        var options = OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions());
+        var feed = new InMemoryOpenTelemetryLiveFeed(options, new OpenTelemetrySourceRegistry(options));
         using var cts = new CancellationTokenSource();
         var enumerator = feed.SubscribeAsync(new OpenTelemetryTraceFilter { TraceId = "other" }, cts.Token).GetAsyncEnumerator(cts.Token);
 

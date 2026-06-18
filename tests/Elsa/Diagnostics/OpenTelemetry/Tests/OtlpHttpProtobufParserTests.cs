@@ -95,6 +95,26 @@ public class OtlpHttpProtobufParserTests
         Assert.Throws<InvalidDataException>(() => OtlpHttpProtobufParser.ParseTraces(payload));
     }
 
+    [Fact(DisplayName = "OTLP resource encoded after its scope_spans still owns the spans (protobuf field order is not guaranteed)")]
+    public void ParseTraces_ResourceAfterScopeSpans_AttributesSpansToResource()
+    {
+        var scopeSpans = Message(2, Message(2,
+            Join(Bytes(1, TraceId),
+            Bytes(2, SpanId),
+            String(5, "Workflow/Approve"),
+            Varint(6, 1),
+            Varint(7, UnixNanos(Timestamp)),
+            Varint(8, UnixNanos(Timestamp.AddMilliseconds(25))))));
+
+        // Encode scope_spans (field 2) BEFORE the resource (field 1) within ResourceSpans.
+        var payload = Message(1, Join(scopeSpans, Message(1, Resource())));
+
+        var batch = OtlpHttpProtobufParser.ParseTraces(payload);
+        var span = Assert.Single(batch.Spans);
+
+        Assert.Equal("elsa-server:node-1", span.ResourceId);
+    }
+
     private static byte[] Resource()
     {
         return Join(

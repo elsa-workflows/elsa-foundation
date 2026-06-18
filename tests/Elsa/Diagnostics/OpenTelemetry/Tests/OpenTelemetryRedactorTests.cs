@@ -36,4 +36,19 @@ public class OpenTelemetryRedactorTests
         Assert.Single(attributes);
         Assert.Equal("[Redacted]", attributes["Password"]);
     }
+
+    [Fact]
+    public void Redact_WhenSpanEventNameContainsSensitiveText_MasksName()
+    {
+        var redactor = new OpenTelemetryRedactor(OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions()));
+        var spanEvent = new TelemetrySpanEvent("Bearer abcDEF123.token-value", DateTimeOffset.UtcNow, new Dictionary<string, string?>());
+        var span = new TelemetrySpan("1", "trace", "span", null, "resource", "op", "internal", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, SpanStatus.Ok, null, new Dictionary<string, string?>(), [spanEvent], []);
+        var batch = new OpenTelemetryBatch([], [], [span], [], [], []);
+
+        var result = redactor.Redact(batch);
+
+        var name = result.Spans.Single().Events.Single().Name;
+        Assert.DoesNotContain("abcDEF123", name);
+        Assert.Contains("[Redacted]", name);
+    }
 }

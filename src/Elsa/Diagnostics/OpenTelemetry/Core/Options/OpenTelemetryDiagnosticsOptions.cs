@@ -20,6 +20,14 @@ public class OpenTelemetryDiagnosticsOptions
     public bool EnableGrpc { get; set; }
     public string? ApiKey { get; set; }
     public string ApiKeyHeaderName { get; set; } = "x-otlp-api-key";
+
+    /// <summary>
+    /// When no <see cref="ApiKey"/> is configured, allows unauthenticated ingestion from loopback callers
+    /// (developer convenience). Security caveat: if a reverse proxy forwards external traffic to the app over
+    /// loopback without configuring forwarded-headers handling, the app sees the proxy's loopback address and
+    /// treats external callers as local. In proxied/production deployments, set an <see cref="ApiKey"/> (or
+    /// set this to <c>false</c>) so the anonymous collector endpoints are not reachable by external clients.
+    /// </summary>
     public bool AllowUnauthenticatedLoopback { get; set; } = true;
 
     public ICollection<string> SensitiveNames { get; set; } =

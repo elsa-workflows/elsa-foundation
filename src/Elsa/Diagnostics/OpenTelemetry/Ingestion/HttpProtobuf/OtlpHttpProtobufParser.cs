@@ -73,16 +73,21 @@ internal static class OtlpHttpProtobufParser
     {
         var resource = CreateResource(new Dictionary<string, string?>());
         var spans = new List<TelemetrySpan>();
-        var reader = new ProtobufReader(payload);
 
-        while (reader.TryReadField(out var field))
+        // Protobuf fields are not order-guaranteed, so resolve the resource (field 1) before parsing the
+        // scope_spans (field 2) that reference its id — otherwise out-of-order payloads attach spans to the
+        // default unknown_service resource.
+        var resourceReader = new ProtobufReader(payload);
+        while (resourceReader.TryReadField(out var field))
         {
-            if (field.WireType != ProtobufWireType.LengthDelimited)
-                continue;
-
-            if (field.Number == 1)
+            if (field.Number == 1 && field.WireType == ProtobufWireType.LengthDelimited)
                 resource = CreateResource(ParseResourceAttributes(field.Bytes));
-            else if (field.Number == 2)
+        }
+
+        var scopeReader = new ProtobufReader(payload);
+        while (scopeReader.TryReadField(out var field))
+        {
+            if (field.Number == 2 && field.WireType == ProtobufWireType.LengthDelimited)
                 spans.AddRange(ParseScopeSpans(field.Bytes, resource.Id));
         }
 
@@ -232,16 +237,20 @@ internal static class OtlpHttpProtobufParser
         var resource = CreateResource(new Dictionary<string, string?>());
         var instruments = new List<MetricInstrument>();
         var points = new List<MetricPoint>();
-        var reader = new ProtobufReader(payload);
 
-        while (reader.TryReadField(out var field))
+        // Resolve the resource (field 1) before the scope_metrics (field 2): protobuf field order is not
+        // guaranteed, so a resource encoded after its metrics must still own them.
+        var resourceReader = new ProtobufReader(payload);
+        while (resourceReader.TryReadField(out var field))
         {
-            if (field.WireType != ProtobufWireType.LengthDelimited)
-                continue;
-
-            if (field.Number == 1)
+            if (field.Number == 1 && field.WireType == ProtobufWireType.LengthDelimited)
                 resource = CreateResource(ParseResourceAttributes(field.Bytes));
-            else if (field.Number == 2)
+        }
+
+        var scopeReader = new ProtobufReader(payload);
+        while (scopeReader.TryReadField(out var field))
+        {
+            if (field.Number == 2 && field.WireType == ProtobufWireType.LengthDelimited)
                 ParseScopeMetrics(field.Bytes, resource.Id, instruments, points);
         }
 
@@ -385,16 +394,20 @@ internal static class OtlpHttpProtobufParser
     {
         var resource = CreateResource(new Dictionary<string, string?>());
         var logs = new List<OtlpLogRecord>();
-        var reader = new ProtobufReader(payload);
 
-        while (reader.TryReadField(out var field))
+        // Resolve the resource (field 1) before the scope_logs (field 2): protobuf field order is not
+        // guaranteed, so a resource encoded after its logs must still own them.
+        var resourceReader = new ProtobufReader(payload);
+        while (resourceReader.TryReadField(out var field))
         {
-            if (field.WireType != ProtobufWireType.LengthDelimited)
-                continue;
-
-            if (field.Number == 1)
+            if (field.Number == 1 && field.WireType == ProtobufWireType.LengthDelimited)
                 resource = CreateResource(ParseResourceAttributes(field.Bytes));
-            else if (field.Number == 2)
+        }
+
+        var scopeReader = new ProtobufReader(payload);
+        while (scopeReader.TryReadField(out var field))
+        {
+            if (field.Number == 2 && field.WireType == ProtobufWireType.LengthDelimited)
                 logs.AddRange(ParseScopeLogs(field.Bytes, resource.Id));
         }
 
