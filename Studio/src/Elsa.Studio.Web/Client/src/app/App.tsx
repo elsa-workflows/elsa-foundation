@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   Gauge,
+  GitBranch,
   Github,
   LayoutDashboard,
   Maximize2,
@@ -665,6 +666,10 @@ function NavIcon({ id }: { id: string }) {
 
   if (id.includes("diagnostics")) {
     return <FileText size={18} />;
+  }
+
+  if (id.includes("workflow")) {
+    return <GitBranch size={18} />;
   }
 
   if (id.includes("modules")) {

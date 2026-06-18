@@ -1,0 +1,14 @@
+{
+  "name": "@elsa-workflows/studio-workflows",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.10.2"
+  },
+  "devDependencies": {}
+}

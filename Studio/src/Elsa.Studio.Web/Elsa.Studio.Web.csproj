@@ -31,6 +31,7 @@
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
   </ItemGroup>
 
 </Project>
