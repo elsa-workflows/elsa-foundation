@@ -36,6 +36,16 @@ public static class WorkflowsDesignStorageManifest
     /// <summary>Constant partition value stamped on every workflow-definition-version document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string WorkflowDefinitionVersionCollection = "workflowDefinitionVersion";
 
+    public const string WorkflowDefinitionDraftDocumentKind = "workflowDefinitionDraft";
+
+    /// <summary>Constant partition value stamped on every workflow-definition-draft document (see <see cref="ByCollectionIndex"/>).</summary>
+    public const string WorkflowDefinitionDraftCollection = "workflowDefinitionDraft";
+
+    public const string WorkflowDefinitionVersionLayoutDocumentKind = "workflowDefinitionVersionLayout";
+
+    /// <summary>Constant partition value stamped on every workflow-definition-version-layout document (see <see cref="ByCollectionIndex"/>).</summary>
+    public const string WorkflowDefinitionVersionLayoutCollection = "workflowDefinitionVersionLayout";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
@@ -49,6 +59,16 @@ public static class WorkflowsDesignStorageManifest
             Unit(
                 WorkflowDefinitionVersionDocumentKind,
                 "Workflow definition version",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowDefinitionDraftDocumentKind,
+                "Workflow definition draft",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowDefinitionVersionLayoutDocumentKind,
+                "Workflow definition version layout",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)])
         ],
