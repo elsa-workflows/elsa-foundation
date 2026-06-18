@@ -1,4 +1,4 @@
-function g() {
+function y() {
   const t = [];
   return {
     add(e) {
@@ -9,65 +9,76 @@ function g() {
     }
   };
 }
-function w(t) {
+function m(t, e = {}) {
   return {
     baseUrl: t,
-    http: u(t)
+    headers: e.headers,
+    http: u(t, e.headers)
   };
 }
-function u(t) {
+function u(t, e) {
   return {
-    async getJson(e, n) {
-      return i(t, e, p(n));
+    async getJson(r, n) {
+      return i(t, r, o(e, w(n)));
     },
-    async postJson(e, n, r) {
-      return i(t, e, {
-        ...r,
+    async postJson(r, n, s) {
+      return i(t, r, o(e, {
+        ...s,
         method: "POST",
-        headers: d(r?.headers),
+        headers: g(s?.headers),
         body: JSON.stringify(n)
-      });
+      }));
     }
   };
 }
-async function i(t, e, n) {
-  const r = f(t, e), s = await fetch(r, n);
+function o(t, e = {}) {
+  return t ? {
+    ...e,
+    headers: h(t, e.headers)
+  } : e;
+}
+function h(t, e) {
+  const r = new Headers(t);
+  return new Headers(e).forEach((n, s) => r.set(s, n)), r;
+}
+async function i(t, e, r) {
+  const n = p(t, e), s = await fetch(n, r);
   if (!s.ok)
-    throw new c(s.status, await a(s));
-  const o = await s.text();
+    throw new a(s.status, await f(s));
+  const c = await s.text();
   try {
-    return JSON.parse(o);
+    return JSON.parse(c);
   } catch {
-    throw new c(
+    throw new a(
       s.status,
-      `Expected JSON from ${r}, but received ${l(s, o)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+      `Expected JSON from ${n}, but received ${l(s, c)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
-async function a(t) {
+async function f(t) {
   if ((t.headers.get("content-type") ?? "").includes("application/json"))
     try {
-      const r = await t.json();
-      return h(r) ?? `Request failed with ${t.status}.`;
+      const n = await t.json();
+      return d(n) ?? `Request failed with ${t.status}.`;
     } catch {
       return `Request failed with ${t.status}.`;
     }
   return (await t.text()).trim() || `Request failed with ${t.status}.`;
 }
-function h(t) {
+function d(t) {
   if (typeof t.detail == "string" && t.detail.length > 0) return t.detail;
   if (typeof t.title == "string" && t.title.length > 0) return t.title;
   if (Array.isArray(t.errors) && t.errors.length > 0) return t.errors.map(String).join(" ");
   if (t.errors && typeof t.errors == "object") {
-    const e = Object.values(t.errors).flatMap((n) => Array.isArray(n) ? n : [n]).map(String);
+    const e = Object.values(t.errors).flatMap((r) => Array.isArray(r) ? r : [r]).map(String);
     if (e.length > 0) return e.join(" ");
   }
   return null;
 }
-function f(t, e) {
+function p(t, e) {
   return new URL(e, t).toString();
 }
-function p(t) {
+function w(t) {
   const e = new Headers(t?.headers);
   return e.has("Accept") || e.set("Accept", "application/json"), {
     ...t,
@@ -75,23 +86,24 @@ function p(t) {
     headers: e
   };
 }
-function d(t) {
+function g(t) {
   const e = new Headers(t);
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
 function l(t, e) {
-  const n = t.headers.get("content-type") ?? "an unknown content type", r = e.trim(), s = r.length > 0 ? `: ${r.slice(0, 80)}` : "";
-  return `${n}${s}`;
+  const r = t.headers.get("content-type") ?? "an unknown content type", n = e.trim(), s = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
+  return `${r}${s}`;
 }
-class c extends Error {
-  constructor(e, n) {
-    super(n), this.status = e, this.name = "StudioHttpError";
+class a extends Error {
+  constructor(e, r) {
+    super(r), this.status = e, this.name = "StudioHttpError";
   }
   status;
 }
 export {
-  c as StudioHttpError,
-  g as createContributionRegistry,
-  w as createEndpointContext,
-  u as createHttpClient
+  a as StudioHttpError,
+  y as createContributionRegistry,
+  m as createEndpointContext,
+  u as createHttpClient,
+  o as withDefaultHeaders
 };

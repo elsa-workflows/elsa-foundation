@@ -139,7 +139,7 @@ describe("feature management module", () => {
     expect(container.textContent).toContain("StudioFeature");
     expect(container.textContent).not.toContain("ServerFeature");
     expect((buttonByText(container, "Apply") as HTMLButtonElement).disabled).toBe(true);
-    expect((container.querySelector("[aria-label='Disable StudioFeature']") as HTMLButtonElement).disabled).toBe(true);
+    expect((container.querySelector("[aria-label='Disable StudioFeature']") as HTMLButtonElement).disabled).toBe(false);
 
     await unmount();
   });

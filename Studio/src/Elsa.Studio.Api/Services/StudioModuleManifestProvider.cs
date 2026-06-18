@@ -1,14 +1,17 @@
+using CShells;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Events;
 using Elsa.Studio.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Studio.Api.Services;
 
 public sealed class StudioModuleManifestProvider(
     IEnumerable<IStudioEventHandler<OnStudioModuleManifestsCollecting>> handlers,
+    IServiceProvider serviceProvider,
     IOptions<StudioApiOptions> options) : IStudioModuleManifestProvider
 {
     public async Task<StudioModulesResponse> GetModules(CancellationToken cancellationToken)
@@ -34,7 +37,7 @@ public sealed class StudioModuleManifestProvider(
             .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .Select(manifest =>
             {
-                var disabled = disabledIds.Contains(manifest.Id);
+                var disabled = disabledIds.Contains(manifest.Id) || !IsShellFeatureActive(manifest, result.ShellSettings);
                 var diagnostics = diagnosticsByModule.GetValueOrDefault(manifest.Id, []);
                 var status = disabled
                     ? StudioModuleDiagnosticStatuses.Disabled
@@ -73,6 +76,7 @@ public sealed class StudioModuleManifestProvider(
             await handler.Handle(collection, cancellationToken);
 
         var studioOptions = options.Value;
+        var shellSettings = serviceProvider.GetService<ShellSettings>();
         var modules = new List<StudioModuleManifest>();
         var diagnostics = new List<StudioModuleDiagnostic>();
 
@@ -87,6 +91,15 @@ public sealed class StudioModuleManifestProvider(
                 continue;
             }
 
+            if (!IsShellFeatureActive(manifest, shellSettings))
+            {
+                diagnostics.Add(new StudioModuleDiagnostic(
+                    manifest.Id,
+                    StudioModuleDiagnosticStatuses.Disabled,
+                    $"Module owner feature '{manifest.ShellFeatureName}' is not enabled in the active shell."));
+                continue;
+            }
+
             modules.Add(manifest);
             diagnostics.Add(new StudioModuleDiagnostic(
                 manifest.Id,
@@ -94,8 +107,13 @@ public sealed class StudioModuleManifestProvider(
                 "Module manifest accepted."));
         }
 
-        return new CollectionResult(studioOptions, collection.Manifests.ToArray(), modules, diagnostics);
+        return new CollectionResult(studioOptions, shellSettings, collection.Manifests.ToArray(), modules, diagnostics);
     }
+
+    private static bool IsShellFeatureActive(StudioModuleManifest manifest, ShellSettings? shellSettings) =>
+        string.IsNullOrWhiteSpace(manifest.ShellFeatureName) ||
+        shellSettings is null ||
+        shellSettings.EnabledFeatures.Contains(manifest.ShellFeatureName, StringComparer.OrdinalIgnoreCase);
 
     private static string GetSourceKind(StudioModuleManifest manifest)
     {
@@ -169,6 +187,7 @@ public sealed class StudioModuleManifestProvider(
 
     private sealed record CollectionResult(
         StudioApiOptions Options,
+        ShellSettings? ShellSettings,
         IReadOnlyCollection<StudioModuleManifest> CollectedManifests,
         IReadOnlyCollection<StudioModuleManifest> Modules,
         IReadOnlyCollection<StudioModuleDiagnostic> Diagnostics);

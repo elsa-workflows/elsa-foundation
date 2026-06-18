@@ -36,6 +36,5 @@ public sealed class StudioApiFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaStudioApi();
     }
 }

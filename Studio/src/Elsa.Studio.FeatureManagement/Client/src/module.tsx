@@ -77,6 +77,7 @@ interface FeatureHostState {
 
 const AllCategoriesId = "__all";
 const UncategorizedId = "__uncategorized";
+const ModulesChangedEventName = "elsa-studio:modules-changed";
 
 let moduleApi: ElsaStudioModuleApi;
 
@@ -173,7 +174,7 @@ function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
       label: "Studio",
       runtime: "Elsa.Studio.Web",
       context: api.host,
-      writable: false
+      writable: true
     },
     {
       id: "server",
@@ -297,6 +298,10 @@ export function FeatureManagementPage() {
         status: `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`,
         applying: false
       }));
+
+      if (activeHost.id === "studio") {
+        window.dispatchEvent(new Event(ModulesChangedEventName));
+      }
     } catch (e) {
       updateHostState(activeHost.id, state => ({ ...state, error: getErrorMessage(e), applying: false }));
     }
@@ -409,8 +414,6 @@ export function FeatureManagementPage() {
 
       {error ? <div className="feature-management-error">{error}</div> : null}
       {status ? <div className="feature-management-status">{status}</div> : null}
-      {readOnly ? <div className="feature-management-status">Studio features are shown from the Studio host runtime. Feature toggles are available for backend features on the Server tab.</div> : null}
-
       <div className="feature-management-layout">
         <CategoryFilter
           categories={categories}

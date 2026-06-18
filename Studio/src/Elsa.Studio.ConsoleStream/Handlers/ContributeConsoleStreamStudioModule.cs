@@ -15,7 +15,8 @@ public sealed class ContributeConsoleStreamStudioModule : IStudioEventHandler<On
             ["/_content/Elsa.Studio.ConsoleStream/studio/modules/console-stream/module.css"],
             "^1.0.0",
             "^1.0.0",
-            ["panels", "console-stream", "signalr"]));
+            ["panels", "console-stream", "signalr"],
+            "ConsoleStream"));
 
         return Task.CompletedTask;
     }

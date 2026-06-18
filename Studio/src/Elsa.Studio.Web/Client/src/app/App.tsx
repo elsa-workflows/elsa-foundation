@@ -23,7 +23,7 @@ import type {
 } from "../sdk";
 import { createStudioRegistry } from "./registry";
 import { createEndpointContext } from "../sdk";
-import { getStudioRuntimeConfig } from "./runtime";
+import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
@@ -55,6 +55,7 @@ const builtInNavigation: StudioNavigationContribution[] = [
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
 ];
 
+const ModulesChangedEventName = "elsa-studio:modules-changed";
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
 const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
@@ -69,9 +70,11 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
   const [path, setPath] = useState(normalizePath(window.location.pathname));
+  const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
+  const backendHeaders = createBackendHeaders(runtimeConfig);
 
   useEffect(() => {
     const onPopState = () => setPath(normalizePath(window.location.pathname));
@@ -80,10 +83,17 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    const onModulesChanged = () => setModuleRegistryRevision(revision => revision + 1);
+    window.addEventListener(ModulesChangedEventName, onModulesChanged);
+    return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
 
     async function boot() {
       try {
+        setState("loading");
         const response = await fetch("/_elsa/studio/modules");
         if (!response.ok) {
           throw new Error(`Manifest request failed with ${response.status}.`);
@@ -94,7 +104,7 @@ function AppContent() {
           hostVersion: manifestResponse.hostVersion,
           sdkVersion: manifestResponse.sdkVersion,
           ...createEndpointContext(shellBaseUrl)
-        }, backendBaseUrl);
+        }, backendBaseUrl, backendHeaders);
 
         for (const diagnostic of manifestResponse.diagnostics) {
           registry.diagnostics.add(diagnostic);
@@ -122,7 +132,7 @@ function AppContent() {
     return () => {
       disposed = true;
     };
-  }, [backendBaseUrl, shellBaseUrl]);
+  }, [backendBaseUrl, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
@@ -168,6 +178,11 @@ function AppContent() {
       ) : null}
     </ShellFrame>
   );
+}
+
+function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit | undefined {
+  const moduleManagementApiKey = runtimeConfig.backendModuleManagementApiKey?.trim();
+  return moduleManagementApiKey ? { "X-Elsa-Module-Management-Key": moduleManagementApiKey } : undefined;
 }
 
 function ShellFrame({

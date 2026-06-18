@@ -60,6 +60,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     server: createInitialHostState()
   }));
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const refreshTimerIds = useRef<number[]>([]);
   const [uploadDragActive, setUploadDragActive] = useState(false);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeState = stateByHost[activeHost.id];
@@ -83,6 +84,11 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => {
     void refreshHost("studio");
     void refreshHost("server");
+
+    return () => {
+      refreshTimerIds.current.forEach(window.clearTimeout);
+      refreshTimerIds.current = [];
+    };
   }, []);
 
   useEffect(() => {
@@ -91,16 +97,21 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }, [activeHost.id, activeState.packageSourceFilter, packageSourceOptions]);
 
-  async function refreshHost(hostId: HostId) {
+  async function refreshHost(hostId: HostId, options?: { silent?: boolean }) {
     const host = hosts.find(item => item.id === hostId);
     if (!host) return;
 
-    patchHostState(hostId, { state: "loading", error: null });
+    if (!options?.silent) {
+      patchHostState(hostId, { state: "loading", error: null });
+    }
+
     try {
       const registry = await host.context.http.getJson<ModuleManagementRegistryResponse>("/_elsa/module-management/registry");
       patchHostState(hostId, { state: "ready", registry, status: null, error: null });
     } catch (e) {
-      patchHostState(hostId, { state: "failed", error: getErrorMessage(e) });
+      if (!options?.silent) {
+        patchHostState(hostId, { state: "failed", error: getErrorMessage(e) });
+      }
     }
   }
 
@@ -116,15 +127,26 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function runHostOperation<T>(operation: () => Promise<T>, success: string) {
-    patchHostState(activeHost.id, { operationBusy: true, error: null, status: null });
+    const hostId = activeHost.id;
+    patchHostState(hostId, { operationBusy: true, error: null, status: null });
     try {
       await operation();
-      await refreshHost(activeHost.id);
-      patchHostState(activeHost.id, { status: success });
+      await refreshHost(hostId);
+      scheduleFollowUpRefreshes(hostId);
+      patchHostState(hostId, { status: success });
     } catch (e) {
-      patchHostState(activeHost.id, { error: getErrorMessage(e) });
+      patchHostState(hostId, { error: getErrorMessage(e) });
     } finally {
-      patchHostState(activeHost.id, { operationBusy: false });
+      patchHostState(hostId, { operationBusy: false });
+    }
+  }
+
+  function scheduleFollowUpRefreshes(hostId: HostId) {
+    for (const delay of [500, 1500, 3000, 6000]) {
+      const timerId = window.setTimeout(() => {
+        void refreshHost(hostId, { silent: true });
+      }, delay);
+      refreshTimerIds.current.push(timerId);
     }
   }
 
@@ -205,7 +227,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
                 uploadInputRef={uploadInputRef}
                 onUploadFiles={uploadSelectedFiles}
                 onDragActiveChange={setUploadDragActive}
-                onDeleteDropFolderPackage={fileName => runHostOperation(() => deleteDropFolderPackage(activeHost.context, fileName), `Deleted ${fileName} from ${activeHost.label}. Reconcile or restart may be required.`)}
+                onDeleteDropFolderPackage={fileName => runHostOperation(() => deleteDropFolderPackage(activeHost.context, fileName), `Deleted ${fileName} from ${activeHost.label}. Nuplane reconciliation is running.`)}
               />
             ) : null}
             {visibleRows.length === 0 ? (

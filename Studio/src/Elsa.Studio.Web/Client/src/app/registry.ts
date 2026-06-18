@@ -6,8 +6,8 @@ import {
   type StudioModuleDiagnostic
 } from "../sdk";
 
-export function createStudioRegistry(host: ElsaStudioHostContext, backendBaseUrl?: string): ElsaStudioModuleApi {
-  const backend = createEndpointContext(backendBaseUrl ?? host.baseUrl);
+export function createStudioRegistry(host: ElsaStudioHostContext, backendBaseUrl?: string, backendHeaders?: HeadersInit): ElsaStudioModuleApi {
+  const backend = createEndpointContext(backendBaseUrl ?? host.baseUrl, { headers: backendHeaders });
 
   return {
     host,

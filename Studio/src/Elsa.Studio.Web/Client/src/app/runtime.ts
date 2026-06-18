@@ -1,5 +1,6 @@
 export interface StudioRuntimeConfig {
   backendBaseUrl?: string;
+  backendModuleManagementApiKey?: string;
 }
 
 declare global {

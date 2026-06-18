@@ -71,6 +71,7 @@ export interface StudioHttpClient {
 
 export interface StudioEndpointContext {
   baseUrl: string;
+  headers?: HeadersInit;
   http: StudioHttpClient;
 }
 
@@ -191,27 +192,44 @@ export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
   };
 }
 
-export function createEndpointContext(baseUrl: string): StudioEndpointContext {
+export function createEndpointContext(baseUrl: string, options: { headers?: HeadersInit } = {}): StudioEndpointContext {
   return {
     baseUrl,
-    http: createHttpClient(baseUrl)
+    headers: options.headers,
+    http: createHttpClient(baseUrl, options.headers)
   };
 }
 
-export function createHttpClient(baseUrl: string): StudioHttpClient {
+export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit): StudioHttpClient {
   return {
     async getJson<T>(url: string, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withJsonAccept(init));
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
     async postJson<T>(url: string, body: unknown, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, {
         ...init,
         method: "POST",
         headers: withJsonContentTypeAndAccept(init?.headers),
         body: JSON.stringify(body)
-      });
+      }));
     }
   };
+}
+
+export function withDefaultHeaders(defaultHeaders: HeadersInit | undefined, init: RequestInit = {}): RequestInit {
+  if (!defaultHeaders)
+    return init;
+
+  return {
+    ...init,
+    headers: mergeHeaders(defaultHeaders, init.headers)
+  };
+}
+
+function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit) {
+  const headers = new Headers(defaultHeaders);
+  new Headers(requestHeaders).forEach((value, key) => headers.set(key, value));
+  return headers;
 }
 
 async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) {

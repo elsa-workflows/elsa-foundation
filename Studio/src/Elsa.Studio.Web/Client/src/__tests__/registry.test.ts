@@ -48,6 +48,23 @@ describe("studio registry", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://foundation.example/api/workflows");
   });
 
+  it("applies configured backend headers to backend client requests", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/", { "X-Elsa-Module-Management-Key": "secret" });
+
+    await api.backend.http.getJson("/_elsa/module-management/registry");
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
+    expect(headers.get("Accept")).toBe("application/json");
+  });
+
   it("posts json through the backend client", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
