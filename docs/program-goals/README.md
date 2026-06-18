@@ -34,6 +34,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Code Reality And Test Maturity](code-reality-and-test-maturity.md) | Active | Codebase verification / tests / weak implementations | Joey plus active engineers/agents | Route hard code/test verification findings into focused units |
 | [Feature Composition Readiness](feature-composition-readiness.md) | Active | Feature composition / CShells and Nuplane shell readiness | Joey plus active architects/agents | Classify bounded feature/settings slices before generator work |
 | [Workspace Split Readiness](workspace-split-readiness.md) | Active | Future `elsa-workspace` extraction / portable feature-development flow | Joey plus active architects/agents | Keep feature-development flows portable without blocking launch |
+| [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Active | Diagnostics observability port (structured logs + OpenTelemetry) across foundation + studio | Joey plus active architects/agents | Port structured logs and OTEL to foundation architecture (EFCore persistence, studio bottom-panel tabs) |
 
 ## Goal File Rules
 

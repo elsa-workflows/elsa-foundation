@@ -117,6 +117,12 @@ not automatic constitution violations.
 | Elsa3 activities import (JSON source for legacy activity definitions) | [`src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md`](src/Elsa3/Activities/Design/Import/EXTENSION_POINTS.md) |
 | Elsa3 mapping (workflow definition import boundary) | [`src/Elsa3/Mapping/EXTENSION_POINTS.md`](src/Elsa3/Mapping/EXTENSION_POINTS.md) |
 
+### Diagnostics
+
+| Domain | Catalog |
+|---|---|
+| Structured logs (log store, live feed, sink, source provider) | [`src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`](src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md) |
+
 ---
 
 ## Constitutional basis

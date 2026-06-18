@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.FastEndpoints.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Nested Core project lives under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Core/**/*" />
+    <EmbeddedResource Remove="Core/**/*" />
+    <None Remove="Core/**/*" />
+    <!-- Nested Persistence projects (EFCore + Sqlite) also live under this domain root. -->
+    <Compile Remove="Persistence/**/*" />
+    <EmbeddedResource Remove="Persistence/**/*" />
+    <None Remove="Persistence/**/*" />
+  </ItemGroup>
+
+</Project>
