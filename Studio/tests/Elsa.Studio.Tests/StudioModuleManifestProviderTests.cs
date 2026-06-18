@@ -1,3 +1,4 @@
+using CShells;
 using Elsa.Studio.Api.Contracts;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
@@ -73,6 +74,26 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_FiltersModulesOwnedByInactiveShellFeatures()
+    {
+        using var provider = CreateProvider(
+            shellFeatures:
+            [
+                "ConsoleStream",
+                "FeatureManagement",
+                "DashboardSample",
+                "StudioApi"
+            ]);
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
     public async Task GetModules_CanCollectMultipleContributors()
     {
         var provider = CreateProvider();
@@ -112,7 +133,7 @@ public sealed class StudioModuleManifestProviderTests
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
-    private static ServiceProvider CreateProvider(Action<StudioApiOptions>? configure = null)
+    private static ServiceProvider CreateProvider(Action<StudioApiOptions>? configure = null, IReadOnlyList<string>? shellFeatures = null)
     {
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
@@ -123,6 +144,9 @@ public sealed class StudioModuleManifestProviderTests
 
         if (configure is not null)
             services.PostConfigure(configure);
+
+        if (shellFeatures is not null)
+            services.AddSingleton(new ShellSettings(new("Default"), shellFeatures));
 
         return services.BuildServiceProvider();
     }

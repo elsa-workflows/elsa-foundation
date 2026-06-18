@@ -1,4 +1,4 @@
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "../../sdk";
+import { withDefaultHeaders, type ElsaStudioModuleApi, type StudioEndpointContext } from "../../sdk";
 
 export type HostId = "studio" | "server";
 export type RegistryState = "loading" | "ready" | "failed";
@@ -194,7 +194,7 @@ export async function postJson(context: StudioEndpointContext, url: string, body
 }
 
 export async function requestJson(context: StudioEndpointContext, url: string, init?: RequestInit) {
-  const response = await fetch(new URL(url, context.baseUrl).toString(), init);
+  const response = await fetch(new URL(url, context.baseUrl).toString(), withDefaultHeaders(context.headers, init));
   if (!response.ok) {
     throw new Error(await response.text() || `Request failed with ${response.status}.`);
   }

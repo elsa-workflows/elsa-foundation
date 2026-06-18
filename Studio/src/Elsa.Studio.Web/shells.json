@@ -1,0 +1,23 @@
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "ConsoleStream": {
+            "EndpointPrefix": "/_elsa/studio/diagnostics/console-logs",
+            "RecentCapacity": 2000,
+            "MaxRecentQuerySize": 2000,
+            "PreserveAnsi": true
+          },
+          "FeatureManagement": {},
+          "StudioApi": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

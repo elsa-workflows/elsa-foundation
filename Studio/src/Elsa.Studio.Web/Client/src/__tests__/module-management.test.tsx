@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import type { ElsaStudioModuleApi } from "../sdk";
+import { requestJson } from "../app/modules/moduleManagementApi";
+import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
 
 describe("module management page", () => {
   afterEach(() => {
@@ -277,6 +278,8 @@ describe("module management page", () => {
       "https://studio.example/_elsa/module-management/packages/drop-folder/Elsa.Studio.FeatureManagement.1.0.1.nupkg",
       expect.objectContaining({ method: "DELETE" })
     );
+    expect(container.textContent).toContain("Nuplane reconciliation is running.");
+    expect(container.textContent).not.toContain("Reconcile or restart may be required.");
 
     await unmount();
   });
@@ -425,6 +428,17 @@ describe("module management page", () => {
     expect(container.textContent).toContain("local-packages");
 
     await unmount();
+  });
+
+  it("includes endpoint context headers in module management operations", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const context = createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Module-Management-Key": "secret" } });
+    await requestJson(context, "/_elsa/module-management/registry");
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
   });
 });
 

@@ -5,7 +5,7 @@ namespace Elsa.Studio.FeatureManagement.Handlers;
 
 public sealed class ContributeFeatureManagementStudioModule : IStudioEventHandler<OnStudioModuleManifestsCollecting>
 {
-    private const string ModuleVersion = "1.0.7";
+    private const string ModuleVersion = "1.0.9";
 
     public Task Handle(OnStudioModuleManifestsCollecting @event, CancellationToken cancellationToken)
     {
@@ -17,7 +17,8 @@ public sealed class ContributeFeatureManagementStudioModule : IStudioEventHandle
             [$"/_content/Elsa.Studio.FeatureManagement/studio/modules/features/module.css?v={ModuleVersion}"],
             "^1.0.0",
             "^1.0.0",
-            ["navigation", "routes", "http", "setting-editors"]));
+            ["navigation", "routes", "http", "setting-editors"],
+            "FeatureManagement"));
 
         return Task.CompletedTask;
     }
