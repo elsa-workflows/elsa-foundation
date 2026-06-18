@@ -123,7 +123,9 @@ replacing the EF write commands) — the larger piece, and where the one real de
 serialize the **domain projection** (the logical entity incl. its `[NotMapped]` `State` /
 `DescriptorPayload` / layout `Records`, excluding EF shadow `*Source` strings and navigation properties,
 with related aggregates fetched via a second read); and **single-provider host composition** wiring every
-lane (runtime + design) to the chosen provider.
+lane (runtime + design) to the chosen provider. This productionization is captured as an executable,
+per-aggregate plan in the
+[Groundwork design persistence provider implementation plan](groundwork-design-provider-implementation-plan.md).
 
 
 engineering**.
