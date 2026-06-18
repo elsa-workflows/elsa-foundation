@@ -20,7 +20,7 @@ export function withAuthenticatedSignalROptions<TOptions extends Record<string, 
   auth: Pick<AuthProviderManager, "getAccessToken">
 ): TOptions & { accessTokenFactory: () => Promise<string> } {
   const fallbackAccessTokenFactory = isAccessTokenFactory(options.accessTokenFactory)
-    ? options.accessTokenFactory
+    ? options.accessTokenFactory.bind(options)
     : undefined;
 
   return {

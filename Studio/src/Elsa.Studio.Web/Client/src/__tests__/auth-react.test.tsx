@@ -125,7 +125,7 @@ describe("auth React SDK", () => {
     container.remove();
   });
 
-  it("starts login only once for an anonymous session with inline login options", async () => {
+  it("starts login only once for an anonymous session with equivalent inline login options", async () => {
     const manager = stubManager({ status: "anonymous", roles: [], permissions: [] });
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -144,7 +144,7 @@ describe("auth React SDK", () => {
     flushSync(() => {
       root.render(
         <AuthProvider manager={manager}>
-          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/second" }}>
+          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/first" }}>
             <span>protected</span>
           </RequireAuth>
         </AuthProvider>
@@ -154,6 +154,46 @@ describe("auth React SDK", () => {
 
     expect(manager.login).toHaveBeenCalledTimes(1);
 
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+
+  it("restarts anonymous login when inline login options change", async () => {
+    const manager = stubManager({ status: "anonymous", roles: [], permissions: [] });
+    const loginDeferred = deferred<void>();
+    manager.login = vi.fn(() => loginDeferred.promise);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    flushSync(() => {
+      root.render(
+        <AuthProvider manager={manager}>
+          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/first" }}>
+            <span>protected</span>
+          </RequireAuth>
+        </AuthProvider>
+      );
+    });
+    await flushPromises();
+
+    flushSync(() => {
+      root.render(
+        <AuthProvider manager={manager}>
+          <RequireAuth fallback={<span>signing-in</span>} loginOptions={{ returnUrl: "/second" }}>
+            <span>protected</span>
+          </RequireAuth>
+        </AuthProvider>
+      );
+    });
+    await flushPromises();
+
+    expect(manager.login).toHaveBeenCalledTimes(2);
+    expect(manager.login).toHaveBeenNthCalledWith(1, { returnUrl: "/first" });
+    expect(manager.login).toHaveBeenNthCalledWith(2, { returnUrl: "/second" });
+
+    loginDeferred.resolve();
+    await flushPromises();
     flushSync(() => root.unmount());
     container.remove();
   });
@@ -177,6 +217,57 @@ describe("auth React SDK", () => {
 
     expect(container.textContent).toContain("Alice");
     expect(container.textContent).toContain("foundation-owned");
+
+    await unmount();
+  });
+
+  it("ignores inline login results after the provider unmounts", async () => {
+    let currentSession: AuthSession = { status: "anonymous", roles: [], permissions: [] };
+    const manager = stubManager(currentSession);
+    const loginDeferred = deferred<void>();
+    manager.getSession = vi.fn(() => currentSession);
+    manager.initialize = vi.fn(async () => currentSession);
+    manager.login = vi.fn(async () => {
+      await loginDeferred.promise;
+      currentSession = authenticatedSession();
+    });
+    const { unmount } = renderWithAuth(manager, (
+      <RequireAuth fallback={<span>signing-in</span>}>
+        <AuthProbe />
+      </RequireAuth>
+    ));
+
+    await flushPromises();
+    await unmount();
+    loginDeferred.resolve();
+    await flushPromises();
+
+    expect(manager.getCapabilities).not.toHaveBeenCalled();
+  });
+
+  it("does not let stale initialization overwrite a completed login", async () => {
+    let currentSession: AuthSession = { status: "anonymous", roles: [], permissions: [] };
+    const initializeDeferred = deferred<AuthSession>();
+    const manager = stubManager(currentSession);
+    manager.getSession = vi.fn(() => currentSession);
+    manager.initialize = vi.fn(() => initializeDeferred.promise);
+    manager.login = vi.fn(async () => {
+      currentSession = authenticatedSession();
+    });
+    const { container, unmount } = renderWithAuth(manager, (
+      <RequireAuth fallback={<SessionProbe />}>
+        <SessionProbe />
+      </RequireAuth>
+    ));
+
+    await flushPromises();
+    await flushPromises();
+    expect(container.textContent).toContain("authenticated");
+
+    initializeDeferred.resolve({ status: "anonymous", roles: [], permissions: [] });
+    await flushPromises();
+
+    expect(container.textContent).toContain("authenticated");
 
     await unmount();
   });
@@ -270,4 +361,15 @@ function capabilities(): AuthCapabilities {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
 }

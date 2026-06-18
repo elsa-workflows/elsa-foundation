@@ -147,7 +147,7 @@ function addCallbackProviderToReturnUrl(
   providerId: string,
   options?: Pick<RedirectAuthAdapterOptions, "baseUrl" | "location">
 ) {
-  const result = new URL(returnUrl, options?.location?.origin ?? resolveBaseUrl(options));
+  const result = new URL(returnUrl, resolveReturnUrlBase(options));
   result.searchParams.set("authProviderId", providerId);
 
   return isRelativeUrl(returnUrl)
@@ -155,8 +155,20 @@ function addCallbackProviderToReturnUrl(
     : result.toString();
 }
 
+function resolveReturnUrlBase(options?: Pick<RedirectAuthAdapterOptions, "baseUrl" | "location">) {
+  return options?.location?.href
+    ?? (typeof window !== "undefined" ? window.location.href : undefined)
+    ?? options?.location?.origin
+    ?? resolveBaseUrl(options);
+}
+
 function isRelativeUrl(url: string) {
-  return url.startsWith("/");
+  try {
+    new URL(url);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 export class AuthAdapterError extends Error {

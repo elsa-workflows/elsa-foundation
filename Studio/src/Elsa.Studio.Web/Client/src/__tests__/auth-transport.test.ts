@@ -79,6 +79,18 @@ describe("SignalR auth transport", () => {
     await expect(options.accessTokenFactory()).resolves.toBe("hub-token");
     expect(fallbackAccessTokenFactory).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves the receiver for an existing SignalR accessTokenFactory", async () => {
+    const auth = stubAuth();
+    const options = withAuthenticatedSignalROptions({
+      hubToken: "hub-token",
+      accessTokenFactory(this: { hubToken: string }) {
+        return this.hubToken;
+      }
+    }, auth);
+
+    await expect(options.accessTokenFactory()).resolves.toBe("hub-token");
+  });
 });
 
 function stubAuth(...tokens: string[]) {

@@ -10,21 +10,26 @@ export interface RequireAuthProps {
 
 export function RequireAuth({ children, fallback = null, loginOptions }: RequireAuthProps) {
   const { session, login } = useAuthContext();
-  const loginStartedRef = useRef(false);
+  const loginStartedRef = useRef<{ key: string; login: typeof login } | null>(null);
 
   useEffect(() => {
     if (session.status === "anonymous") {
-      if (loginStartedRef.current) {
+      const loginKey = getLoginKey(loginOptions);
+      const currentLogin = loginStartedRef.current;
+      if (currentLogin?.key === loginKey && currentLogin.login === login) {
         return;
       }
 
-      loginStartedRef.current = true;
+      const loginAttempt = { key: loginKey, login };
+      loginStartedRef.current = loginAttempt;
       void login(loginOptions).catch(error => {
-        loginStartedRef.current = false;
+        if (loginStartedRef.current === loginAttempt) {
+          loginStartedRef.current = null;
+        }
         console.error("Auth login failed.", error);
       });
     } else {
-      loginStartedRef.current = false;
+      loginStartedRef.current = null;
     }
   }, [login, loginOptions, session.status]);
 
@@ -33,4 +38,8 @@ export function RequireAuth({ children, fallback = null, loginOptions }: Require
   }
 
   return <>{children}</>;
+}
+
+function getLoginKey(options?: LoginOptions) {
+  return `${options?.providerId ?? ""}\n${options?.returnUrl ?? ""}`;
 }

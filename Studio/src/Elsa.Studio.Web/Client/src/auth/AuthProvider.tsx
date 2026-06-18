@@ -1,18 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
 import { anonymousAuthSession, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
 
 export function AuthProvider({ manager, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession>(() => manager.getSession() ?? unknownAuthSession);
   const [capabilities, setCapabilities] = useState<AuthCapabilities | null>(null);
+  const mountedRef = useRef(false);
+  const authOperationRef = useRef(0);
 
-  useEffect(() => {
-    let disposed = false;
+  const shouldCommit = useCallback((operation: number) => mountedRef.current && authOperationRef.current === operation, []);
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    const operation = ++authOperationRef.current;
 
     async function initialize() {
       try {
         const nextSession = await manager.initialize();
-        if (disposed) {
+        if (!shouldCommit(operation)) {
           return;
         }
 
@@ -24,17 +29,17 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
         try {
           const nextCapabilities = await manager.getCapabilities();
-          if (!disposed) {
+          if (shouldCommit(operation)) {
             setCapabilities(nextCapabilities);
           }
         } catch (error) {
-          if (!disposed) {
+          if (shouldCommit(operation)) {
             console.error("Auth capabilities request failed.", error);
             setCapabilities(null);
           }
         }
       } catch (error) {
-        if (!disposed) {
+        if (shouldCommit(operation)) {
           console.error("Auth initialization failed.", error);
           setSession(anonymousAuthSession);
           setCapabilities(null);
@@ -45,42 +50,66 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     void initialize();
 
     return () => {
-      disposed = true;
+      mountedRef.current = false;
+      authOperationRef.current += 1;
     };
-  }, [manager]);
+  }, [manager, shouldCommit]);
 
   const login = useCallback(async (options?: LoginOptions) => {
+    const operation = ++authOperationRef.current;
     await manager.login(options);
+    if (!shouldCommit(operation)) {
+      return;
+    }
+
     const nextSession = manager.getSession();
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
       try {
-        setCapabilities(await manager.getCapabilities());
+        const nextCapabilities = await manager.getCapabilities();
+        if (shouldCommit(operation)) {
+          setCapabilities(nextCapabilities);
+        }
       } catch (error) {
-        console.error("Auth capabilities request failed.", error);
-        setCapabilities(null);
+        if (shouldCommit(operation)) {
+          console.error("Auth capabilities request failed.", error);
+          setCapabilities(null);
+        }
       }
     } else {
       setCapabilities(null);
     }
-  }, [manager]);
+  }, [manager, shouldCommit]);
 
   const logout = useCallback(async () => {
+    const operation = ++authOperationRef.current;
     await manager.logout();
+    if (!shouldCommit(operation)) {
+      return;
+    }
+
     setSession(manager.getSession());
     setCapabilities(null);
-  }, [manager]);
+  }, [manager, shouldCommit]);
 
   const refresh = useCallback(async () => {
+    const operation = ++authOperationRef.current;
     const nextSession = await manager.refresh();
+    if (!shouldCommit(operation)) {
+      return nextSession;
+    }
+
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
-      setCapabilities(await manager.getCapabilities());
+      const nextCapabilities = await manager.getCapabilities();
+      if (shouldCommit(operation)) {
+        setCapabilities(nextCapabilities);
+      }
     } else {
       setCapabilities(null);
     }
     return nextSession;
-  }, [manager]);
+  }, [manager, shouldCommit]);
 
   const value = useMemo(() => ({
     session,

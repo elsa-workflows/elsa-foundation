@@ -189,6 +189,35 @@ describe("redirect OIDC auth adapter", () => {
     expect(assign).toHaveBeenCalledWith("https://foundation.example/_elsa/identity/challenge/entra?returnUrl=https%3A%2F%2Fstudio.example%2Fworkflows%3FauthProviderId%3Dentra");
   });
 
+  it.each([
+    ["workflows", "/studio/workflows?authProviderId=entra"],
+    ["./workflows", "/studio/workflows?authProviderId=entra"],
+    ["?tab=overview", "/studio/dashboard?tab=overview&authProviderId=entra"],
+    ["#details", "/studio/dashboard?view=list&authProviderId=entra#details"]
+  ])("resolves relative return URL %s against the Studio location", async (returnUrl, expectedReturnUrl) => {
+    const assign = vi.fn();
+    const adapter = createOidcAuthAdapter({
+      id: "entra",
+      baseUrl: "https://foundation.example/",
+      challenge: {
+        url: "/_elsa/identity/challenge/entra",
+        method: "GET",
+        scheme: "Elsa.Identity.Oidc",
+        parameters: { returnUrl: "optional" }
+      },
+      location: {
+        assign,
+        href: "https://studio.example/studio/dashboard?view=list#top",
+        origin: "https://studio.example"
+      }
+    });
+
+    await adapter.login({ returnUrl });
+
+    const destination = new URL(assign.mock.calls[0]?.[0]);
+    expect(destination.searchParams.get("returnUrl")).toBe(expectedReturnUrl);
+  });
+
   it("probes session state with credentials and normalizes missing arrays", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       status: "authenticated",
