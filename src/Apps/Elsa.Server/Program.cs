@@ -37,10 +37,9 @@ using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
 
-ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled();
-
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
+ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(builder.Configuration);
 var configuration = builder.Configuration;
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 

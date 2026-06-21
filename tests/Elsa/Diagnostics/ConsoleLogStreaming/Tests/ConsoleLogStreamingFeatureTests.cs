@@ -2,8 +2,10 @@ using ConsoleLogStreaming.AspNetCore;
 using ConsoleLogStreaming.Core.Hosting;
 using ConsoleLogStreaming.Core.Options;
 using CShells.AspNetCore.Features;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Text;
 using Xunit;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming.Tests;
@@ -15,7 +17,7 @@ public sealed class ConsoleLogStreamingFeatureTests
     {
         var services = new ServiceCollection();
 
-        new ConsoleLogStreamingFeature().ConfigureServices(services);
+        new ConsoleLogStreamingFeature(() => { }).ConfigureServices(services);
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ConsoleLogStreamingHostRegistration));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogOptions>));
@@ -27,7 +29,7 @@ public sealed class ConsoleLogStreamingFeatureTests
     {
         var services = new ServiceCollection();
 
-        new ConsoleLogStreamingFeature
+        new ConsoleLogStreamingFeature(() => { })
         {
             ServiceName = "custom-service",
             SourceDisplayName = "Custom Source",
@@ -56,7 +58,7 @@ public sealed class ConsoleLogStreamingFeatureTests
     {
         var services = new ServiceCollection();
 
-        new ConsoleLogStreamingFeature
+        new ConsoleLogStreamingFeature(() => { })
         {
             RecentPath = "diagnostics/recent",
             SourcesPath = "/diagnostics/sources",
@@ -74,7 +76,7 @@ public sealed class ConsoleLogStreamingFeatureTests
     [Fact]
     public void ExposesWebFeatureEndpointMapping()
     {
-        var feature = new ConsoleLogStreamingFeature();
+        var feature = new ConsoleLogStreamingFeature(() => { });
 
         Assert.IsAssignableFrom<IWebShellFeature>(feature);
     }
@@ -84,20 +86,37 @@ public sealed class ConsoleLogStreamingFeatureTests
     {
         ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
         var installCount = 0;
-        var disabledPath = WriteShellsJson("""
-            {
-              "CShells": {
-                "Shells": {
-                  "default": {
-                    "Features": {
-                      "DiagnosticsStructuredLogs": {}
-                    }
-                  }
-                }
-              }
-            }
-            """);
-        var enabledPath = WriteShellsJson("""
+        var disabledConfiguration = BuildConfiguration("DiagnosticsStructuredLogs");
+        var enabledConfiguration = BuildConfiguration(ConsoleLogStreamingFeature.FeatureName);
+
+        try
+        {
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(disabledConfiguration, () => installCount++);
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledConfiguration, () => installCount++);
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledConfiguration, () => installCount++);
+
+            Assert.Equal(1, installCount);
+        }
+        finally
+        {
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        }
+    }
+
+    [Fact]
+    public void DoesNotEnableConsoleStreamHookWhenFeatureIsMissingFromConfiguration()
+    {
+        var configuration = BuildConfiguration();
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
+    public void DetectsEnabledFeatureFromEmptyObjectJsonShape()
+    {
+        var configuration = BuildJsonConfiguration("""
             {
               "CShells": {
                 "Shells": {
@@ -111,36 +130,46 @@ public sealed class ConsoleLogStreamingFeatureTests
             }
             """);
 
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public void InstallsConsoleStreamHookWhenFeatureActivatesAtRuntime()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var services = new ServiceCollection();
+
         try
         {
-            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(disabledPath, () => installCount++);
-            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledPath, () => installCount++);
-            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledPath, () => installCount++);
+            new ConsoleLogStreamingFeature(() => installCount++).ConfigureServices(services);
+            new ConsoleLogStreamingFeature(() => installCount++).ConfigureServices(new ServiceCollection());
 
             Assert.Equal(1, installCount);
         }
         finally
         {
             ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
-            File.Delete(disabledPath);
-            File.Delete(enabledPath);
         }
     }
 
-    [Fact]
-    public void DoesNotEnableConsoleStreamHookWhenShellsJsonIsMissing()
+    private static IConfiguration BuildConfiguration(params string[] featureNames)
     {
-        var missingPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+        var values = featureNames
+            .Select(featureName => new KeyValuePair<string, string?>($"CShells:Shells:default:Features:{featureName}:Enabled", "true"));
 
-        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(missingPath);
-
-        Assert.False(enabled);
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
     }
 
-    private static string WriteShellsJson(string content)
+    private static IConfiguration BuildJsonConfiguration(string json)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
-        File.WriteAllText(path, content);
-        return path;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
     }
 }
