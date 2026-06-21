@@ -26,6 +26,7 @@ public sealed class OpenTelemetryFeatureTests
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetryRedactor>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetryStreamItemSerializer>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseFormatter>());
+        Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseStreamWriter>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetryTraceFilterBinder>());
         Assert.NotNull(provider.GetRequiredService<IOptions<OpenTelemetryDiagnosticsOptions>>().Value);
     }

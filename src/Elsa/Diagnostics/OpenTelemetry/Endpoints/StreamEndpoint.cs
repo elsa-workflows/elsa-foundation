@@ -19,11 +19,9 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 internal sealed class StreamEndpoint(
     IOpenTelemetryLiveFeed feed,
     OpenTelemetryTraceFilterBinder binder,
-    OpenTelemetrySseFormatter formatter,
+    OpenTelemetrySseStreamWriter streamWriter,
     IOptions<OpenTelemetryDiagnosticsOptions> options) : ElsaEndpointWithoutRequest
 {
-    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
-
     public override void Configure()
     {
         Get(options.Value.StreamPath);
@@ -63,32 +61,7 @@ internal sealed class StreamEndpoint(
 
     private async Task StreamLiveAsync(HttpResponse response, OpenTelemetryTraceFilter filter, CancellationToken ct)
     {
-        await using var enumerator = feed.SubscribeAsync(filter, ct).GetAsyncEnumerator(ct);
-        var moveNext = enumerator.MoveNextAsync().AsTask();
-
-        while (true)
-        {
-            // Linked CTS so the heartbeat delay can be cancelled the moment an item wins the race,
-            // releasing its timer instead of leaving it registered until it fires (no timer pile-up under load).
-            using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var completed = await Task.WhenAny(moveNext, Task.Delay(HeartbeatInterval, heartbeatCts.Token));
-
-            if (completed != moveNext)
-            {
-                await response.WriteAsync(formatter.Heartbeat(), ct);
-                await response.Body.FlushAsync(ct);
-                continue;
-            }
-
-            await heartbeatCts.CancelAsync();
-
-            if (!await moveNext)
-                break;
-
-            await response.WriteAsync(formatter.Format(enumerator.Current), ct);
-            await response.Body.FlushAsync(ct);
-            moveNext = enumerator.MoveNextAsync().AsTask();
-        }
+        await streamWriter.StreamAsync(response, feed.SubscribeAsync(filter, ct), ct);
     }
 
     private static Dictionary<string, StringValues> BuildQuery(IQueryCollection query)

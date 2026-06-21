@@ -69,6 +69,7 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
 
         services.AddSingleton<StructuredLogEntrySerializer>();
         services.AddSingleton<StructuredLogSseFormatter>();
+        services.AddSingleton<StructuredLogSseStreamWriter>();
         services.AddSingleton<StructuredLogFilterBinder>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, StructuredLogCaptureProvider>());
