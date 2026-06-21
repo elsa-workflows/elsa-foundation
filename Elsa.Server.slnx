@@ -48,6 +48,7 @@
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
   <Folder Name="/src/elsa/Diagnostics/">
+    <Project Path="src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
@@ -222,11 +223,14 @@
     <Project Path="tests/Elsa/Foundation/Agent/Tests/Elsa.Foundation.Agent.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/">
+    <Project Path="tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj" />
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj" />
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/" />
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Tests/" />
+  <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/" />
+  <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/" />
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/" />
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/" />
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/">
