@@ -78,4 +78,69 @@ public sealed class ConsoleLogStreamingFeatureTests
 
         Assert.IsAssignableFrom<IWebShellFeature>(feature);
     }
+
+    [Fact]
+    public void InstallsConsoleStreamHookOnlyWhenFeatureIsEnabled()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var disabledPath = WriteShellsJson("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": {
+                      "DiagnosticsStructuredLogs": {}
+                    }
+                  }
+                }
+              }
+            }
+            """);
+        var enabledPath = WriteShellsJson("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": {
+                      "DiagnosticsConsoleLogStreaming": {}
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        try
+        {
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(disabledPath, () => installCount++);
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledPath, () => installCount++);
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(enabledPath, () => installCount++);
+
+            Assert.Equal(1, installCount);
+        }
+        finally
+        {
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+            File.Delete(disabledPath);
+            File.Delete(enabledPath);
+        }
+    }
+
+    [Fact]
+    public void DoesNotEnableConsoleStreamHookWhenShellsJsonIsMissing()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(missingPath);
+
+        Assert.False(enabled);
+    }
+
+    private static string WriteShellsJson(string content)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, content);
+        return path;
+    }
 }

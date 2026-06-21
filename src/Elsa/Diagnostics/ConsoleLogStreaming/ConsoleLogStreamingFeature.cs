@@ -7,6 +7,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming;
 
@@ -23,7 +24,10 @@ namespace Elsa.Diagnostics.ConsoleLogStreaming;
 )]
 public sealed class ConsoleLogStreamingFeature : IWebShellFeature
 {
+    internal const string FeatureName = "DiagnosticsConsoleLogStreaming";
     private const string DefaultEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
+    private static readonly object ConsoleStreamHookLock = new();
+    private static bool _consoleStreamHookInstalled;
 
     [ManifestSetting(DisplayName = "Service name", Description = "Identifies the local console log source.", Category = "Diagnostics", DefaultValue = "elsa-server")]
     public string ServiceName { get; set; } = "elsa-server";
@@ -53,9 +57,51 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     public string? HubPath { get; set; }
 
     /// <summary>
-    /// Installs the console stream hook before the host builder is created so early startup output is not lost.
+    /// Installs the console stream hook before the host builder is created when the feature is enabled in shells.json.
     /// </summary>
-    public static void InstallConsoleStreamHook() => ConsoleStreamHook.Install();
+    public static void InstallConsoleStreamHookIfEnabled(string? shellsJsonPath = null) =>
+        InstallConsoleStreamHookIfEnabled(shellsJsonPath, ConsoleStreamHook.Install);
+
+    internal static void InstallConsoleStreamHookIfEnabled(string? shellsJsonPath, Action install)
+    {
+        if (!IsFeatureEnabled(shellsJsonPath ?? "shells.json"))
+            return;
+
+        lock (ConsoleStreamHookLock)
+        {
+            if (_consoleStreamHookInstalled)
+                return;
+
+            install();
+            _consoleStreamHookInstalled = true;
+        }
+    }
+
+    internal static void ResetConsoleStreamHookInstallStateForTests()
+    {
+        lock (ConsoleStreamHookLock)
+            _consoleStreamHookInstalled = false;
+    }
+
+    internal static bool IsFeatureEnabled(string shellsJsonPath)
+    {
+        if (!File.Exists(shellsJsonPath))
+            return false;
+
+        using var document = JsonDocument.Parse(File.ReadAllBytes(shellsJsonPath));
+        if (!TryGetProperty(document.RootElement, "CShells", out var cShells) ||
+            !TryGetProperty(cShells, "Shells", out var shells))
+            return false;
+
+        foreach (var shell in shells.EnumerateObject())
+        {
+            if (TryGetProperty(shell.Value, "Features", out var features) &&
+                TryGetProperty(features, FeatureName, out _))
+                return true;
+        }
+
+        return false;
+    }
 
     public void ConfigureServices(IServiceCollection services)
     {
@@ -96,4 +142,13 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     }
 
     private static string EnsureLeadingSlash(string path) => path.StartsWith('/') ? path : $"/{path}";
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out value))
+            return true;
+
+        value = default;
+        return false;
+    }
 }

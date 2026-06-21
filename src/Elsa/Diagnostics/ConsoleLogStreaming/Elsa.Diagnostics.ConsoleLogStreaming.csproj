@@ -18,4 +18,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Diagnostics.ConsoleLogStreaming.Tests" />
+  </ItemGroup>
+
 </Project>

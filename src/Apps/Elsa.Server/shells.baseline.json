@@ -27,6 +27,7 @@
               "FolderPath": ""
             }
           },
+          "DiagnosticsConsoleLogStreaming": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
           "FastEndpoints": {
