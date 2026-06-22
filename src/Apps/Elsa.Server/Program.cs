@@ -2,9 +2,6 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
-using ConsoleLogStreaming.AspNetCore.DependencyInjection;
-using ConsoleLogStreaming.Core.Capture;
-using ConsoleLogStreaming.Core.DependencyInjection;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
 using Elsa.Activities.Composition.Runtime;
@@ -17,6 +14,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Caching.Memory;
+using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
@@ -39,17 +37,17 @@ using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
 
-ConsoleStreamHook.Install();
+ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
+ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(builder.Configuration);
 var configuration = builder.Configuration;
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
 
 const string studioCorsPolicy = "ElsaStudio";
-const string consoleLogsEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
 
 var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
@@ -71,20 +69,6 @@ builder.Services.AddCors(options =>
         .AllowCredentials());
 });
 
-builder.Services.AddConsoleLogStreamingHost(options =>
-{
-    options.ServiceName = "elsa-server";
-    options.SourceDisplayName = "Elsa.Server";
-    options.RecentCapacity = 2_000;
-    options.MaxRecentQuerySize = 2_000;
-    options.PreserveAnsi = true;
-});
-builder.Services.AddConsoleLogStreamingAspNetCore(options =>
-{
-    options.RecentPath = $"{consoleLogsEndpointPrefix}/recent";
-    options.SourcesPath = $"{consoleLogsEndpointPrefix}/sources";
-    options.HubPath = $"{consoleLogsEndpointPrefix}/hub";
-});
 builder.Services.AddNuplaneAdmin();
 builder.Services.AddSingleton<DemoPackageEventStore>();
 builder.Services.AddSingleton<DemoNuplaneObserver>();
@@ -138,6 +122,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
             typeof(ModularityApiFeature).Assembly,
+            typeof(ConsoleLogStreamingFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly
@@ -161,7 +146,6 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
-app.MapConsoleLogStreaming();
 app.MapElsaDemoApi();
 app.MapElsaModuleManagementApi();
 app.MapElsaWorkflowManagementApi();

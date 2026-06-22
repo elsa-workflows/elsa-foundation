@@ -6,15 +6,15 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 94
-- Test projects: 24
-- Direct project references: 384
+- Source projects: 95
+- Test projects: 25
+- Direct project references: 386
 
 ## Projects
 
 | Project | Kind | Domain | Target | Packable | Direct project references |
 |---|---|---|---|---|---|
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | net10.0 | default | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | source | Elsa.Server | net10.0 | default | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Sequence<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Diagnostics.ConsoleLogStreaming<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Mediator.Core<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Composition.Runtime](../../src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Events.Core<br>Elsa.Primitives |
@@ -38,6 +38,7 @@ Records direct project references only.
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | Elsa.Api | net10.0 | default | Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | net10.0 | default | - |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | net10.0 | default | Elsa.Caching.Core |
+| [Elsa.Diagnostics.ConsoleLogStreaming](../../src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | net10.0 | default | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | net10.0 | default | - |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | net10.0 | default | Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.StructuredLogs.Core](../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj) | source | Elsa.Diagnostics | net10.0 | default | - |
@@ -117,6 +118,7 @@ Records direct project references only.
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Tests](../../tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj) | test | Elsa.Agent | net10.0 | false | Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | net10.0 | false | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
+| [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
@@ -142,7 +144,7 @@ Records direct project references only.
 | Elsa.Api | 1 | 0 |
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Caching | 2 | 0 |
-| Elsa.Diagnostics | 6 | 3 |
+| Elsa.Diagnostics | 7 | 4 |
 | Elsa.Events | 3 | 0 |
 | Elsa.Expressions | 10 | 0 |
 | Elsa.Foundation | 5 | 1 |
