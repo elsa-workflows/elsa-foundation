@@ -74,6 +74,20 @@ public class GroundworkReadStoreTests
     }
 
     [Fact]
+    public async Task Malformed_document_reports_kind_and_id()
+    {
+        var documentStore = new InMemoryDocumentStore(BuildManifest());
+        await documentStore.SaveAsync(new SaveDocumentRequest(DocumentKind, "bad", SchemaVersion, "null"));
+        var store = new GroundworkReadStore<Doc>(documentStore, DocumentKind, CollectionIndex, CollectionValue, Json);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.FirstOrDefaultAsync(Query<Doc>.Where(x => x.Id, QueryOp.Equal, "bad")));
+
+        Assert.Contains(DocumentKind, exception.Message);
+        Assert.Contains("bad", exception.Message);
+    }
+
+    [Fact]
     public async Task Equal_matches_exact_field()
     {
         var store = await SeededStoreAsync(Sample());

@@ -11,12 +11,13 @@ namespace Elsa.Persistence.Core.Queries;
 /// (e.g. Groundwork) uses for any operator it cannot yet push down to the store natively: fetch a
 /// candidate set via the store's declared indexes, then apply the remaining predicate/order here.
 /// <para>
-/// Its semantics are deliberately identical to <c>EFCoreQueryTranslator</c> so a host that swaps
-/// providers gets the same result set: <see cref="QueryOp.Equal"/> is value equality (a null value
-/// matches a null field); <see cref="QueryOp.In"/> is set membership; <see cref="QueryOp.Contains"/> is
-/// a <b>case-insensitive, null-field-safe</b> substring; clauses combine with <c>AND</c> and the
+/// Its semantics are deliberately aligned with <c>EFCoreQueryTranslator</c>: <see cref="QueryOp.Equal"/>
+/// is value equality (a null value matches a null field; strings compare ordinally in the fallback);
+/// <see cref="QueryOp.In"/> is set membership; <see cref="QueryOp.Contains"/> is a
+/// <b>case-insensitive, null-field-safe</b> substring; clauses combine with <c>AND</c> and the
 /// comparisons inside a clause combine with <c>OR</c>; ordering is a single field, ascending or
-/// descending.
+/// descending. EF providers may still apply database collation to equality; provider selection should
+/// configure collation explicitly when case-insensitive equality is required.
 /// </para>
 /// </summary>
 public static class InMemoryQueryEvaluator
@@ -63,14 +64,14 @@ public static class InMemoryQueryEvaluator
         switch (comparison.Operator)
         {
             case QueryOp.Equal:
-                return Equals(fieldValue, comparison.Value);
+                return ValuesEqual(fieldValue, comparison.Value);
 
             case QueryOp.In:
                 if (comparison.Value is not IEnumerable set || comparison.Value is string)
                     return false;
                 foreach (var candidate in set)
                 {
-                    if (Equals(candidate, fieldValue))
+                    if (ValuesEqual(candidate, fieldValue))
                         return true;
                 }
                 return false;
@@ -100,6 +101,11 @@ public static class InMemoryQueryEvaluator
 
     private static object? GetFieldValue<TEntity>(TEntity entity, LambdaExpression selector)
         => CompiledSelectorCache<TEntity>.Get(selector)(entity);
+
+    private static bool ValuesEqual(object? left, object? right) =>
+        left is string leftText && right is string rightText
+            ? string.Equals(leftText, rightText, StringComparison.Ordinal)
+            : Equals(left, right);
 
     /// <summary>
     /// Caches compiled field selectors per entity type + member so evaluation does not recompile the

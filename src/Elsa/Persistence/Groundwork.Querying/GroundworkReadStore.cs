@@ -86,8 +86,12 @@ public class GroundworkReadStore<TEntity> where TEntity : Entity
         return envelopes.Select(Deserialize).ToList();
     }
 
-    private TEntity Deserialize(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, _jsonOptions)!.Entity;
+    private TEntity Deserialize(DocumentEnvelope envelope)
+    {
+        var document = JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, _jsonOptions);
+        return document?.Entity
+            ?? throw new InvalidOperationException($"Document '{envelope.Id}' of kind '{_documentKind}' could not be deserialized as {typeof(TEntity).Name}.");
+    }
 
     // A query is a pure by-id read when it is a single equality comparison on the Id field, with no
     // disjunction, no extra clauses and no ordering.

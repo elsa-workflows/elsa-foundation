@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
@@ -15,6 +16,7 @@ namespace Elsa.Persistence.EFCore.Queries;
 /// </summary>
 public static class EFCoreQueryTranslator
 {
+    private static readonly NullabilityInfoContext NullabilityContext = new();
     private static readonly System.Reflection.MethodInfo ContainsStringMethod =
         typeof(string).GetMethod(nameof(string.Contains), [typeof(string), typeof(StringComparison)])!;
 
@@ -87,7 +89,9 @@ public static class EFCoreQueryTranslator
                         ContainsStringMethod,
                         Expression.Constant(comparison.Value, typeof(string)),
                         Expression.Constant(StringComparison.CurrentCultureIgnoreCase));
-                    return Expression.AndAlso(Expression.NotEqual(field, Expression.Constant(null, field.Type)), call);
+                    return RequiresNullGuard(field)
+                        ? Expression.AndAlso(Expression.NotEqual(field, Expression.Constant(null, field.Type)), call)
+                        : call;
                 }
 
             default:
@@ -108,6 +112,25 @@ public static class EFCoreQueryTranslator
             .MakeGenericMethod(typeof(TEntity), keyType);
 
         return (IQueryable<TEntity>)method.Invoke(null, [source, order.FieldSelector])!;
+    }
+
+    private static bool RequiresNullGuard(Expression field)
+    {
+        var memberExpression = UnwrapMemberExpression(field);
+        return memberExpression?.Member switch
+        {
+            PropertyInfo property => NullabilityContext.Create(property).ReadState != NullabilityState.NotNull,
+            FieldInfo fieldInfo => NullabilityContext.Create(fieldInfo).ReadState != NullabilityState.NotNull,
+            _ => true
+        };
+    }
+
+    private static MemberExpression? UnwrapMemberExpression(Expression expression)
+    {
+        if (expression is UnaryExpression { NodeType: ExpressionType.Convert } unary)
+            expression = unary.Operand;
+
+        return expression as MemberExpression;
     }
 
     private sealed class ParameterReplacer(ParameterExpression replacement) : ExpressionVisitor

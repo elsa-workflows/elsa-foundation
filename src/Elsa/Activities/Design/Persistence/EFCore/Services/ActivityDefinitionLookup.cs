@@ -1,6 +1,5 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
@@ -14,22 +13,8 @@ public sealed class ActivityDefinitionLookup(
 {
     public async Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
     {
-        var idFilter = new ActivityDefinitionFilter
-        {
-            Id = idOrActivityTypeKey
-        };
-        var typeKeyFilter = new ActivityDefinitionFilter
-        {
-            ActivityTypeKey = idOrActivityTypeKey
-        };
-
-        var idTask = definitionStore.FindAsync(idFilter, cancellationToken);
-        var typeKeyTask = definitionStore.FindAsync(typeKeyFilter, cancellationToken);
-
-        var defById = await idTask;
-        var defByTypeKey = await typeKeyTask;
-
-        return defById ?? defByTypeKey ?? throw new ArgumentException($"Activity definition could not be found for activity-type-key/id '{idOrActivityTypeKey}'");
+        return await definitionStore.FindByIdOrActivityTypeKeyAsync(idOrActivityTypeKey, idOrActivityTypeKey, cancellationToken)
+            ?? throw new ArgumentException($"Activity definition could not be found for activity-type-key/id '{idOrActivityTypeKey}'");
     }
 
     public async Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)

@@ -36,6 +36,14 @@ public class InMemoryQueryEvaluatorTests
     }
 
     [Fact]
+    public void Equal_uses_exact_string_equality()
+    {
+        var q = Query<Doc>.Where(x => x.Category, QueryOp.Equal, "FINANCE");
+        var result = InMemoryQueryEvaluator.Apply(Sample(), q).ToList();
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public void Equal_with_null_value_matches_null_field()
     {
         var q = Query<Doc>.Where(x => x.Description, QueryOp.Equal, null);
@@ -49,6 +57,14 @@ public class InMemoryQueryEvaluatorTests
         var q = Query<Doc>.Where(x => x.Id, QueryOp.In, new[] { "a", "c" });
         var result = InMemoryQueryEvaluator.Apply(Sample(), q).ToList();
         Assert.Equal(["a", "c"], result.Select(x => x.Id).OrderBy(x => x));
+    }
+
+    [Fact]
+    public void In_uses_exact_string_equality()
+    {
+        var q = Query<Doc>.Where(x => x.Id, QueryOp.In, new[] { "A", "C" });
+        var result = InMemoryQueryEvaluator.Apply(Sample(), q).ToList();
+        Assert.Empty(result);
     }
 
     [Fact]
