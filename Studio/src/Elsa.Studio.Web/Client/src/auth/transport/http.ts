@@ -2,7 +2,9 @@ import { readStudioHttpErrorMessage, StudioHttpError, withDefaultHeaders, type S
 import type { AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
+  /** Default headers applied to every request before per-request RequestInit.headers are merged. */
   defaultHeaders?: HeadersInit;
+  /** Alias for defaultHeaders retained for callers that pass fetch-like client options. */
   headers?: HeadersInit;
   refreshOnUnauthorized?: boolean;
   fetch?: typeof fetch;

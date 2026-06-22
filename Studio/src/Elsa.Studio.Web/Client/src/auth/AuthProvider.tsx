@@ -51,6 +51,7 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
 
     return () => {
       mountedRef.current = false;
+      // Invalidate operations from this manager before the next synchronous effect setup mints a fresh token.
       authOperationRef.current += 1;
     };
   }, [manager, shouldCommit]);
