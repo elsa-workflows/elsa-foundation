@@ -242,6 +242,36 @@ describe("feature management module", () => {
     await unmount();
   });
 
+  it("filters features by search text", async () => {
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "rev-1",
+        features: [
+          feature("ActivitiesRuntime", true, {}, ["Runtime"], { description: "Runs workflow activities." }),
+          feature("DiagnosticsStructuredLogs", true, {}, ["Diagnostics"], { packageId: "Elsa.Diagnostics.StructuredLogs" }),
+          feature("StorageSqlite", true, {}, ["Storage"], { settings: [setting({ name: "ConnectionString", displayName: "Connection string" })] })
+        ]
+      })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+    const filter = container.querySelector("[aria-label='Filter features']") as HTMLInputElement | null;
+
+    await changeInput(filter, "structured");
+
+    expect(container.textContent).toContain("1 feature");
+    expect(container.textContent).toContain("DiagnosticsStructuredLogs");
+    expect(container.textContent).not.toContain("ActivitiesRuntime");
+    expect(container.textContent).not.toContain("StorageSqlite");
+
+    await changeInput(filter, "connection");
+
+    expect(container.textContent).toContain("StorageSqlite");
+    expect(container.textContent).not.toContain("DiagnosticsStructuredLogs");
+
+    await unmount();
+  });
+
   it("does not repeat technical ids in feature rows when display name matches", async () => {
     const api = stubApi({
       getJson: async () => ({

@@ -354,6 +354,8 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Retention");
     expect(container.textContent).toContain("Reconcile");
     expect(container.textContent).toContain("Prune old versions");
+    expect(container.textContent).toContain("Change ledger");
+    expect(container.textContent).toContain("Feed registration changes require restart");
     const operationsPanel = container.querySelector("[aria-label='Studio feed operations']");
     const retentionPanel = container.querySelector("[aria-label='Studio retention settings']");
     expect(operationsPanel?.textContent).toContain("Reconcile");
@@ -394,6 +396,7 @@ describe("module management page", () => {
 
     expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
     expect(container.querySelector("[aria-label='Feed name']")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Include all packages']")).toBeTruthy();
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     expect(serverTab).toBeTruthy();

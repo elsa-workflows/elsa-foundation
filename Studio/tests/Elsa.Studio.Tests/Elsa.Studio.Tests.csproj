@@ -16,7 +16,10 @@
     <ProjectReference Include="..\..\src\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
   </ItemGroup>

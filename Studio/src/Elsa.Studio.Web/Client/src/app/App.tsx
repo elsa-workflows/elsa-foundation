@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   Gauge,
+  GitBranch,
   Github,
   LayoutDashboard,
   Maximize2,
@@ -164,7 +165,7 @@ function AppContent() {
 
   const activeRoute = routes.find(route => route.path === path);
   const ActiveComponent = activeRoute?.component;
-  const pageTitle = navigation.find(item => item.path === path)?.label ?? activeRoute?.label ?? "Studio";
+  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? "Studio";
 
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
@@ -202,9 +203,20 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
+  for (const item of navigation) {
+    if (!item.parentId) {
+      continue;
+    }
+
+    const children = childrenByParentId.get(item.parentId) ?? [];
+    children.push(item);
+    childrenByParentId.set(item.parentId, children);
+  }
+
   const navigationSections = [
-    { id: "workspace", label: "Workspace", items: navigation.filter(item => getNavigationSection(item) === "workspace") },
-    { id: "settings", label: "Settings", items: navigation.filter(item => getNavigationSection(item) === "settings") }
+    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
+    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
   ].filter(section => section.items.length > 0);
 
   return (
@@ -228,26 +240,51 @@ function ShellFrame({
         {navigationSections.map(section => (
           <nav key={section.id} className="nav-section" aria-label={section.label}>
             <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => (
-              <a
-                key={item.id}
-                className={path === item.path ? "active" : ""}
-                href={item.path}
-                onClick={event => {
-                  event.preventDefault();
-                  onNavigate(item.path);
-                }}
-              >
-                <NavIconTile item={item} />
-                {item.label}
-              </a>
-            ))}
+            {section.items.map(item => {
+              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              return (
+                <div className="nav-item-group" key={item.id}>
+                  <a
+                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    href={item.path}
+                    onClick={event => {
+                      event.preventDefault();
+                      onNavigate(item.path);
+                    }}
+                  >
+                    <NavIconTile item={item} />
+                    {item.label}
+                  </a>
+                  {childItems.length > 0 ? (
+                    <div className="nav-children">
+                      {childItems.map(child => (
+                        <a
+                          key={child.id}
+                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
+                          href={child.path}
+                          onClick={event => {
+                            event.preventDefault();
+                            onNavigate(child.path);
+                          }}
+                        >
+                          {child.label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
         ))}
 
-        <div className="sidebar-footer">
-          <ShieldCheck size={16} />
-          <span>Backend API: {new URL(backendBaseUrl).host}</span>
+        <div className="sidebar-footer" aria-label="Backend API status">
+          <span className="sidebar-status-dot" aria-hidden="true" />
+          <span>
+            <strong>Backend API</strong>
+            <small>{new URL(backendBaseUrl).host}</small>
+          </span>
         </div>
       </aside>
 
@@ -278,7 +315,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
@@ -667,6 +704,10 @@ function NavIcon({ id }: { id: string }) {
     return <FileText size={18} />;
   }
 
+  if (id.includes("workflow")) {
+    return <GitBranch size={18} />;
+  }
+
   if (id.includes("modules")) {
     return <PackageSearch size={18} />;
   }
@@ -714,6 +755,12 @@ function getDefaultNavIconColor(id: string) {
   return "var(--primary)";
 }
 
+function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
+  if (path === item.path) return true;
+  if (!item.activePathPrefix) return false;
+  return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
+}
+
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {
   const settingsPaths = new Set(["/modules", "/package-feeds", "/features"]);
   if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "package-feeds" || item.id === "feature-management") {
@@ -721,6 +768,11 @@ export function getNavigationSection(item: Pick<StudioNavigationContribution, "i
   }
 
   return "workspace";
+}
+
+export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
+  const ids = new Set(navigation.map(item => item.id));
+  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
 }
 
 function normalizePath(path: string) {
@@ -766,6 +818,15 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
+}
+
+function getInitialBottomPanelCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const value = window.localStorage.getItem(bottomPanelCollapsedStorageKey);
+  return value === null ? window.innerWidth <= 640 : value === "true";
 }
 
 function getInitialBoolean(storageKey: string, fallback: boolean) {

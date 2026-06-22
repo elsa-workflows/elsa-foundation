@@ -3,7 +3,10 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
+using Elsa.Studio.Diagnostics.OpenTelemetry;
+using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
+using Elsa.Studio.Workflows;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Web;
 using Nuplane;
@@ -39,7 +42,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithAssemblies(
             typeof(StudioApiFeature).Assembly,
             typeof(ConsoleStreamStudioFeature).Assembly,
+            typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
+            typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,
             typeof(FeatureManagementStudioFeature).Assembly,
+            typeof(WorkflowsStudioFeature).Assembly,
             typeof(DashboardStudioFeature).Assembly)
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>

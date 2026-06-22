@@ -135,6 +135,39 @@
   text-transform: uppercase;
 }
 
+.feature-management-filter {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.feature-management-filter span {
+  color: var(--studio-text-muted, var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.feature-management-filter input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--input, var(--studio-surface, var(--card)));
+  color: var(--studio-text, var(--foreground));
+  font-size: 13px;
+  padding: 6px 9px;
+}
+
+.feature-management-filter input::placeholder {
+  color: var(--studio-text-muted, var(--muted-foreground));
+}
+
+.feature-management-filter input:focus {
+  border-color: var(--studio-accent, var(--primary));
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-accent, var(--primary)) 16%, transparent);
+}
+
 .feature-management-category-list {
   display: flex;
   flex-direction: column;
