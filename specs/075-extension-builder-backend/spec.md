@@ -164,10 +164,13 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 - **FR-026**: The Extension Builder backend MUST reuse and extend the existing module-management/Nuplane surface (registry, package upload/publish, feeds, reconcile, retention/prune) rather than introducing a parallel, divergent package-management mechanism.
 - **FR-027**: Pipeline operations that change running state (promote, rollback, retry) MUST report whether the change requires reload and/or restart so callers can inform the user.
 - **FR-028**: The system MUST NOT implement hostile-code sandboxing, per-tenant build/runtime isolation, package signing, resource quotas, dependency allowlist *enforcement* as a security boundary, or build/runtime audit logging in v1; these are explicitly deferred (see Assumptions and Out of Scope).
+- **FR-029**: The system MUST determine and enforce, server-side at every `/_elsa/extension-builder` operation, whether the caller is a **trusted user/admin**, and MUST reject workspace creation, file editing, build submission, and promotion from callers who lack that trust. Trust enforcement MUST NOT be delegated to the frontend. [NEEDS CLARIFICATION: exact trust mechanism — authenticated admin/trusted *role claim*, the existing module-management API key, or a dedicated authorization policy? Default assumption: v1 requires an authenticated admin/trusted role enforced at the `/_elsa/extension-builder` endpoints, consistent with (and no weaker than) the existing module-management authorization.]
+- **FR-030**: The system MUST expose the caller's effective Extension Builder permissions to the frontend as a **capability/permission flag** (e.g., can-create-workspace, can-build, can-promote), so the Studio UI can show/hide or enable/disable actions without re-deriving authorization rules. This capability signal is advisory for UX only; server-side enforcement per FR-029 remains authoritative. (Mirrors the existing module-management `Capabilities` pattern — `CanUploadPackages`, `CanManageFeeds`, `CanReconcile`, etc.)
+- **FR-031**: The system MUST persist `ExtensionWorkspace` and `ExtensionProject` source server-side so that authoring state survives across requests and process restarts, and MUST associate each workspace with an **owner** (its trusted creator). [NEEDS CLARIFICATION: is a workspace strictly per-user (owner-only access) or shared across trusted teammates, and what are the concurrent-edit semantics? Default assumption: server-side persistence; a workspace is owned by its creating trusted user with no concurrent multi-editor guarantees in v1 (last-write-wins on file edits, no real-time co-editing).]
 
 ### Key Entities *(include if feature involves data)*
 
-- **ExtensionWorkspace**: A trusted-caller-owned container for one or more projects. Attributes: identity, owner/trust context, display name, created/updated timestamps, contained projects.
+- **ExtensionWorkspace**: A trusted-caller-owned container for one or more projects. Attributes: identity, **owner/creator** (trusted user), trust context, display name, created/updated timestamps, contained projects.
 - **ExtensionProject**: A single .NET project within a workspace. Attributes: identity, template kind (Elsa-activity/module | generic .NET), package id, package version, target framework, manifest metadata, file set, current source revision reference.
 - **ProjectFile**: A file within a project. Attributes: relative path, content, kind, last-modified metadata.
 - **ExtensionTemplate**: A named project starting point. Attributes: id, kind (Elsa-activity/module primary; generic .NET), description, default file/manifest content.
@@ -178,6 +181,7 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 - **PackagePromotionRequest**: A request to promote a build artifact into the feed. Attributes: build/artifact reference, target feed reference.
 - **PackagePromotionResult**: The outcome of a promotion. Attributes: accepted/rejected status, rejection reason category (duplicate | invalid-manifest | dependency-policy | malformed-package) where applicable, published package reference, reconcile outcome (accepted/deferred/failed + reason), requires-reload/requires-restart flags.
 - **ExtensionRuntimeStatus**: The live state of a project's promoted packages. Attributes: per-package state (`Loaded` | `PendingRestart` | `FailedReconciliation`), active version, contributed features/activities, available rollback versions, last reconcile outcome/reason.
+- **ExtensionBuilderCapabilities**: The caller's effective Extension Builder permissions, surfaced for UX gating. Attributes: per-action capability flags (e.g., can-create-workspace, can-edit-files, can-build, can-promote, can-rollback). Advisory only; server-side enforcement is authoritative.
 
 ---
 
@@ -194,6 +198,7 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 - `GetWorkspace` — `GET /_elsa/extension-builder/workspaces/{workspaceId}`
 - `DeleteWorkspace` — `DELETE /_elsa/extension-builder/workspaces/{workspaceId}`
 - `ListTemplates` — `GET /_elsa/extension-builder/templates`
+- `GetCapabilities` — `GET /_elsa/extension-builder/capabilities` (returns the caller's effective permission/capability flags for UX gating; server-side enforcement remains per-operation)
 - `CreateProject` — `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects`
 - `GetProject` — `GET /_elsa/extension-builder/projects/{projectId}`
 - `DeleteProject` — `DELETE /_elsa/extension-builder/projects/{projectId}`
@@ -217,7 +222,7 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 - `RollbackPackage` — `POST /_elsa/extension-builder/projects/{projectId}/rollback`
 - `RetryReconciliation` — `POST /_elsa/extension-builder/projects/{projectId}/retry-reconcile` (delegates to existing module-management reconcile)
 
-**Canonical entity names** (for the Studio spec to reuse): `ExtensionWorkspace`, `ExtensionProject`, `ProjectFile`, `ExtensionTemplate`, `BuildRequest`, `BuildResult`, `BuildDiagnostic`, `BuildArtifact`, `PackagePromotionRequest`, `PackagePromotionResult`, `ExtensionRuntimeStatus`.
+**Canonical entity names** (for the Studio spec to reuse): `ExtensionWorkspace`, `ExtensionProject`, `ProjectFile`, `ExtensionTemplate`, `BuildRequest`, `BuildResult`, `BuildDiagnostic`, `BuildArtifact`, `PackagePromotionRequest`, `PackagePromotionResult`, `ExtensionRuntimeStatus`, `ExtensionBuilderCapabilities`.
 
 ---
 
@@ -244,7 +249,8 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 - **AI/agentic authoring deferred**: v1 is manual edit + build + load. The design must not preclude a later AI authoring layer, but ships no AI in v1.
 - **Builds run server-side**: Building uses the host's .NET build toolchain to compile the project source into a `.nupkg` on the server. (Exact in-process vs out-of-process build execution is an implementation/planning decision; v1 trusted model permits in-process server-side builds.)
 - **Reuse existing surface**: Promotion, reconciliation, feeds, and runtime catalog integration extend the existing `/_elsa/module-management` endpoints and the Nuplane runtime package-loading wiring (`NuplaneAssemblyProvider`, `FeatureManagementService`, `RuntimeFeatureCatalog*`, `PackageManifestFeatureCatalogContributor`, `PackageFeatureManifest`, `ModularityApiFeature`, `ShellReloader`, `shells.json`). The proven sample path (`samples/Elsa.Samples.Nuplane.Activities`) and its tests are the reference for a package-contributed activity.
-- **Authorization reuse**: Access control reuses the existing module-management authorization mechanism (the management API key / management authorization filter); the Extension Builder does not introduce a weaker publishing path.
+- **Authorization reuse**: Access control reuses the existing module-management authorization mechanism (the management API key / management authorization filter) as the baseline; v1 additionally requires an authenticated admin/trusted role and exposes a per-caller capability flag for UX gating (FR-029/FR-030). The Extension Builder does not introduce a weaker publishing path.
+- **Source persistence & ownership**: `ExtensionWorkspace`/`ExtensionProject` source is persisted server-side and survives process restarts. A workspace is owned by its creating trusted user; v1 makes no concurrent multi-editor guarantee (last-write-wins on file edits, no real-time co-editing). Per-user-only vs team-shared access is an open clarification (FR-031).
 - **Dependency policy in v1 is validation, not security**: The promotion dependency check is a correctness/conformance gate, not a security boundary; enforced allowlisting as a security control is deferred to the pre-public-SaaS unit.
 - **Restart semantics**: Some package loads may require a host restart (mirroring the existing `RequiresRestart`/`FeedChangesRequireRestart` signals); the pipeline surfaces this rather than guaranteeing hot-load for every change.
 - **Single-host scope**: v1 targets a single Nuplane-enabled Elsa host (matching `src/Apps/Elsa.Server`); multi-host/cluster promotion fan-out is out of scope.
@@ -268,6 +274,8 @@ A developer creates a project from a generic .NET template (e.g., a plain class 
 
 ## Open Clarifications
 
-1. **Concurrent builds per project** (FR/Edge): queue, reject, or isolate? Default assumed: serialize per project.
+1. **Concurrent builds per project** (Edge): queue, reject, or isolate? Default assumed: serialize per project.
 2. **Project deletion vs promoted packages** (Edge): does deleting a project unpublish/unload its packages, or only remove authoring state? Default assumed: authoring state only.
 3. **Source revision model** (FR-006): explicit immutable snapshot per build vs current-files-at-submission. Default assumed: snapshot identifier per build, no full editable history in v1.
+4. **Trust/auth mechanism** (FR-029): authenticated admin/trusted role claim vs existing module-management API key vs dedicated authorization policy. Default assumed: authenticated admin/trusted role enforced at the endpoints, no weaker than existing module-management authorization.
+5. **Workspace ownership model** (FR-031): per-user (owner-only) vs shared across trusted teammates, and concurrent-edit semantics. Default assumed: server-side persistence, owner-scoped, no concurrent multi-editor guarantees (last-write-wins) in v1.

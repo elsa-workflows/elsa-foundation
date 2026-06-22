@@ -24,7 +24,7 @@
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
 
-> Three intentional [NEEDS CLARIFICATION] markers remain (concurrent builds, project-deletion vs promoted packages, source-revision model). Each has a documented default assumption so the spec is actionable without blocking, per coordinator instruction "do not block waiting for me." They are tracked in the spec's Open Clarifications section.
+> Five intentional [NEEDS CLARIFICATION] markers remain (concurrent builds, project-deletion vs promoted packages, source-revision model, trust/auth mechanism, workspace ownership model). Each has a documented default assumption so the spec is actionable without blocking, per coordinator instruction "do not block waiting for me." They are tracked in the spec's Open Clarifications section.
 
 ## Feature Readiness
 
@@ -36,4 +36,4 @@
 ## Notes
 
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
-- The single unchecked item ("No [NEEDS CLARIFICATION] markers remain") is intentional: the three markers carry default assumptions and are surfaced for the coordinator. Resolve via `/speckit-clarify` if desired before planning.
+- The single unchecked item ("No [NEEDS CLARIFICATION] markers remain") is intentional: the five markers carry default assumptions and are surfaced for the coordinator. Resolve via `/speckit-clarify` if desired before planning.
