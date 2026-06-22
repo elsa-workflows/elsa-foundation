@@ -240,7 +240,7 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
   const requestUrl = resolveStudioUrl(baseUrl, url);
   const response = await fetch(requestUrl, init);
   if (!response.ok) {
-    throw new StudioHttpError(response.status, await readErrorMessage(response));
+    throw new StudioHttpError(response.status, await readStudioHttpErrorMessage(response));
   }
 
   const text = await response.text();
@@ -253,9 +253,9 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
   }
 }
 
-async function readErrorMessage(response: Response) {
+export async function readStudioHttpErrorMessage(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
+  if (contentType.includes("application/json") || contentType.includes("+json")) {
     try {
       const payload = await response.json() as Record<string, unknown>;
       return getProblemDetailsMessage(payload) ?? `Request failed with ${response.status}.`;
