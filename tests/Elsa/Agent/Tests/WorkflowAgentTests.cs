@@ -6,7 +6,7 @@ using Elsa.Agent.Workflows.Extensions;
 using Elsa.Agent.Workflows.Models;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Foundation.Agent.Tests;
+namespace Elsa.Agent.Tests;
 
 public sealed class WorkflowAgentTests
 {

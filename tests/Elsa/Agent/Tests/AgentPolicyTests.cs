@@ -3,7 +3,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.Api.Endpoints;
 
-namespace Elsa.Foundation.Agent.Tests;
+namespace Elsa.Agent.Tests;
 
 public sealed class AgentPolicyTests
 {

@@ -9,7 +9,7 @@ using Elsa.Agent.Workflows;
 using Elsa.Agent.Workflows.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Foundation.Agent.Tests;
+namespace Elsa.Agent.Tests;
 
 public sealed class AgentFeatureRegistrationTests
 {

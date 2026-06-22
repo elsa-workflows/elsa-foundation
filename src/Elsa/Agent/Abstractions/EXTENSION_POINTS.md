@@ -1,7 +1,7 @@
 # Agent Foundation extension points
 
-Owner project: `Elsa.Foundation.Agent.Abstractions`  
-Domain: `Elsa.Foundation`
+Owner project: `Elsa.Agent.Core`
+Domain: `Elsa.Agent`
 
 ## Overridable contracts
 
@@ -57,7 +57,7 @@ Kind: Source (returns minimized context attachments for a scope).
 
 Known implementations:
 
-- `DefaultWorkflowAgentContextProvider` (`Elsa.Foundation.Workflows.Agent`) *(cross-domain)* — supplies workflow definition context for workflow explain/troubleshoot/change proposal capabilities.
+- `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)* — supplies workflow definition context for workflow explain/troubleshoot/change proposal capabilities.
 
 ### `IAgentCapabilityProvider`
 
@@ -65,7 +65,7 @@ Kind: Source (returns provider-agnostic capability descriptors).
 
 Known implementations:
 
-- `WorkflowAgentCapabilityProvider` (`Elsa.Foundation.Workflows.Agent`) *(cross-domain)* — contributes `workflow.explain`, `workflow.troubleshoot`, and `workflow.propose-change`.
+- `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)* — contributes `workflow.explain`, `workflow.troubleshoot`, and `workflow.propose-change`.
 
 ## Provider bridge contracts
 
@@ -75,5 +75,5 @@ Kind: Bridge/adapter (provider facade for external agent-provider SDK sessions, 
 
 Known implementations:
 
-- `GitHubCopilotAgentProvider` (`Elsa.Foundation.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — registers the GitHub Copilot provider seam and reports unavailable diagnostics until the SDK binding is configured.
-- `DeterministicAgentProvider` (`Elsa.Foundation.Agent.Abstractions`) *(intra-domain — test/default seam)* — deterministic provider implementation for backend contract validation without an external SDK.
+- `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — registers the GitHub Copilot provider seam and reports unavailable diagnostics until the SDK binding is configured.
+- `DeterministicAgentProvider` (`Elsa.Agent.Core`) *(intra-domain — test/default seam)* — deterministic provider implementation for backend contract validation without an external SDK.

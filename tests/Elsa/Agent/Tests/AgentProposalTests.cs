@@ -4,7 +4,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Foundation.Agent.Tests;
+namespace Elsa.Agent.Tests;
 
 public sealed class AgentProposalTests
 {

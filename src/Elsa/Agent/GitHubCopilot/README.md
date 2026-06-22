@@ -1,7 +1,7 @@
 # GitHub Copilot agent provider
 
-`Elsa.Foundation.Agent.GitHubCopilot` owns the provider-specific bridge between the
-provider-neutral agent contracts in `Elsa.Foundation.Agent.Abstractions` and the
+`Elsa.Agent.GitHubCopilot` owns the provider-specific bridge between the
+provider-neutral agent contracts in `Elsa.Agent.Core` and the
 GitHub Copilot SDK.
 
 ## Current MVP status
@@ -31,5 +31,5 @@ When the SDK surface is selected, replace the stub implementation behind
    revision validation, permission checks, and audit.
 
 For deterministic backend contract validation without the real SDK, register
-`DeterministicAgentProvider` from `Elsa.Foundation.Agent.Abstractions.Services` in
+`DeterministicAgentProvider` from `Elsa.Agent.Core.Services` in
 test hosts.

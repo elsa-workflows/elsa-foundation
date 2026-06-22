@@ -1,11 +1,11 @@
 # Workflow Agent extension points
 
-Owner project: `Elsa.Foundation.Workflows.Agent`  
-Domain: `Elsa.Foundation`
+Owner project: `Elsa.Agent.Workflows`
+Domain: `Elsa.Agent.Workflows`
 
 ## Contributions to other domains
 
-### `IAgentCapabilityProvider` *(Agent Foundation contract — `Elsa.Foundation.Agent.Abstractions`)*
+### `IAgentCapabilityProvider` *(Agent core contract — `Elsa.Agent.Core`)*
 
 Kind: Source (returns workflow capability descriptors).
 
@@ -13,7 +13,7 @@ Known implementation:
 
 - `WorkflowAgentCapabilityProvider` *(cross-domain)* — contributes `workflow.explain`, `workflow.troubleshoot`, and `workflow.propose-change`.
 
-### `IAgentContextProvider` *(Agent Foundation contract — `Elsa.Foundation.Agent.Abstractions`)*
+### `IAgentContextProvider` *(Agent core contract — `Elsa.Agent.Core`)*
 
 Kind: Source (returns minimized workflow context attachments).
 
