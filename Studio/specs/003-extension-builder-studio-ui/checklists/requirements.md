@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -35,9 +35,9 @@
   `elsa-foundation` `075-extension-builder-backend` surface (`/_elsa/extension-builder`),
   including the runtime state enum and promotion rejection categories. The first
   backend-contract clarification is therefore resolved.
-- Two [NEEDS CLARIFICATION] markers remain by design — both are backend-policy items the
-  coordinator can confirm: the trusted-user authorization signal (FR-027 / SC-008) and
-  whether an `ExtensionWorkspace` is per-user or shared (concurrency/persistence). They do
-  not block planning of the UI's user-facing behavior.
+- Trusted-user authorization and workspace sharing/persistence defaults were resolved by
+  coordinator instruction: role determination is backend-owned, UI gates on
+  `ExtensionBuilderCapabilities`, and workspaces are server-side owner-scoped with
+  last-write-wins semantics for v1.
 - The spec deliberately keeps the editor technology (Monaco-style) as an assumption, not
   a requirement, to avoid leaking implementation detail into requirements.

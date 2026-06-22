@@ -3,6 +3,7 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Hammer,
   ExternalLink,
   FileText,
   Gauge,
@@ -30,6 +31,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
+import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import elsaLogo from "../assets/images/icon.png";
 import "./styles.css";
 
@@ -51,6 +53,7 @@ interface HostHealthEntry {
 
 const builtInNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
@@ -170,11 +173,12 @@ function AppContent() {
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
       {path === "/" ? <Home api={api!} /> : null}
+      {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
       {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
       {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
+      {!ActiveComponent && path !== "/" && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
         <div className="empty-state">No Studio route is registered for {path}.</div>
       ) : null}
     </ShellFrame>
@@ -708,6 +712,10 @@ function NavIcon({ id }: { id: string }) {
     return <GitBranch size={18} />;
   }
 
+  if (id.includes("extension-builder")) {
+    return <Hammer size={18} />;
+  }
+
   if (id.includes("modules")) {
     return <PackageSearch size={18} />;
   }
@@ -750,6 +758,10 @@ function getDefaultNavIconColor(id: string) {
 
   if (id.includes("feeds")) {
     return "#f59e0b";
+  }
+
+  if (id.includes("extension-builder")) {
+    return "#ec4899";
   }
 
   return "var(--primary)";

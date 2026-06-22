@@ -470,15 +470,10 @@ All views first resolve `GetCapabilities` and gate their actions on the returned
   `elsa-foundation` `075-extension-builder-backend` surface (see FR-029 and the capability
   table). Runtime states (`Loaded`/`PendingRestart`/`FailedReconciliation`) and rejection
   categories (`duplicate`/`invalid-manifest`/`dependency-policy`/`malformed-package`) are aligned.
-- **Partially resolved (UI binding done; mechanism open)**: The UI binds permission gating
-  to `GetCapabilities` + `ExtensionBuilderCapabilities` advisory flags (FR-027/FR-027a) and
-  treats workspaces as owner-scoped (last-write-wins). Backend defaults per coordinator:
-  server-side-enforced admin/trusted role + owner-scoped workspaces. The following remain
-  open and are routed through the backend spec:
-- [NEEDS CLARIFICATION: The exact mechanism by which "trusted user" / admin role is
-  determined server-side and reflected in `ExtensionBuilderCapabilities` — so FR-027 and
-  SC-008 can bind to the concrete authorization signal beyond the advisory flags.]
-- [NEEDS CLARIFICATION: The final workspace sharing model — whether owner-scoped workspaces
-  remain strictly per-user or gain a team-sharing model later, and where project source is
-  persisted — which determines whether the UI ever needs to surface shared/again-edited
-  state beyond v1's last-write-wins.]
+- ✅ **Resolved by implementation default**: Trusted/admin role determination is backend-owned.
+  Studio gates access and per-action affordances only from `GetCapabilities` +
+  `ExtensionBuilderCapabilities` advisory flags; server-side enforcement remains
+  authoritative.
+- ✅ **Resolved by implementation default**: Workspace source is server-side, owner-scoped,
+  last-write-wins, and v1 does not present concurrent multi-editor or team-sharing semantics.
+  Future team-sharing can extend the browser metadata without changing the v1 UI contract.
