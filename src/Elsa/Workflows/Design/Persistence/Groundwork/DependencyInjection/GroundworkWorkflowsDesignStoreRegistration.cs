@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +34,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
 
         services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
         services.AddScoped<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>();
+
+        services.RemoveAll<IAddWorkflowDefinitionCommand>();
+        services.AddScoped<IAddWorkflowDefinitionCommand, GroundworkAddWorkflowDefinitionCommand>();
 
         return services;
     }

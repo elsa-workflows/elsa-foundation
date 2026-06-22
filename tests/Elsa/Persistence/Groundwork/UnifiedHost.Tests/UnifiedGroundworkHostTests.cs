@@ -6,6 +6,8 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
@@ -112,6 +114,38 @@ public class UnifiedGroundworkHostTests
 
         Assert.NotNull(result);
         Assert.Equal("Acme.SendEmail", result!.ActivityTypeKey);
+    }
+
+    [Fact]
+    public async Task Design_writes_and_reads_run_off_the_one_database()
+    {
+        await using var provider = BuildHost();
+
+        using var scope = provider.CreateScope();
+        var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
+
+        var definition = new WorkflowDefinition { Id = "wf-write", Name = "Invoicing" };
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-write",
+            WorkflowDefinitionId = "wf-write",
+            State = new WorkflowDefinitionState([], null, [], [], null, null),
+        };
+
+        // Write through the neutral command; it is backed by the single host-selected Groundwork store.
+        await add.Execute(definition, draft, CancellationToken.None);
+
+        // Read back through the neutral read ports — same database, no provider-specific code.
+        var definitionStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
+        var draftStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
+
+        var readDefinition = await definitionStore.FindByIdAsync("wf-write");
+        var readDraft = await draftStore.FindByWorkflowDefinitionIdAsync("wf-write");
+
+        Assert.NotNull(readDefinition);
+        Assert.Equal("Invoicing", readDefinition!.Name);
+        Assert.NotNull(readDraft);
+        Assert.Equal("draft-write", readDraft!.Id);
     }
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
