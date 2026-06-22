@@ -9,6 +9,7 @@
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
     <PackageVersion Include="CShells" Version="0.0.29-preview.143" />
     <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.143" />
     <PackageVersion Include="CShells.FastEndpoints" Version="0.0.29-preview.143" />
     <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.29-preview.143" />
     <PackageVersion Include="CShells.Management.Api" Version="0.0.29-preview.143" />
