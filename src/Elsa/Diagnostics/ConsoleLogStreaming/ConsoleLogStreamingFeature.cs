@@ -121,15 +121,19 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     private static bool IsEnabledFeatureEntry(IConfigurationSection feature)
     {
         if (string.Equals(feature.Key, FeatureName, StringComparison.OrdinalIgnoreCase))
-            return !string.Equals(feature.Value, bool.FalseString, StringComparison.OrdinalIgnoreCase);
+            return !IsDisabledFeatureEntry(feature);
 
         if (string.Equals(feature.Value, FeatureName, StringComparison.OrdinalIgnoreCase))
             return true;
 
         var configuredName = GetChildValue(feature, "Name") ?? GetChildValue(feature, "Id");
         return string.Equals(configuredName, FeatureName, StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(GetChildValue(feature, "Enabled"), bool.FalseString, StringComparison.OrdinalIgnoreCase);
+               !IsDisabledFeatureEntry(feature);
     }
+
+    private static bool IsDisabledFeatureEntry(IConfigurationSection feature) =>
+        string.Equals(feature.Value, bool.FalseString, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(GetChildValue(feature, "Enabled"), bool.FalseString, StringComparison.OrdinalIgnoreCase);
 
     private static string? GetChildValue(IConfigurationSection section, string key) =>
         section.GetChildren()
@@ -185,7 +189,19 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             }
         }
 
-        return Directory.GetCurrentDirectory();
+        return ResolveConfiguredContentRootPath() ?? Directory.GetCurrentDirectory();
+    }
+
+    private static string? ResolveConfiguredContentRootPath()
+    {
+        foreach (var variable in new[] { "ASPNETCORE_CONTENTROOT", "DOTNET_CONTENTROOT", "CONTENTROOT", "CONTENTROOTPATH" })
+        {
+            var value = Environment.GetEnvironmentVariable(variable);
+            if (!string.IsNullOrWhiteSpace(value))
+                return Path.GetFullPath(value);
+        }
+
+        return null;
     }
 
     private void ConfigureHostOptions(ConsoleLogOptions options)

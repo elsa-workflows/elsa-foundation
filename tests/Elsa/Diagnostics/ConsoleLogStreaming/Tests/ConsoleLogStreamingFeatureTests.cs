@@ -234,6 +234,30 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
     }
 
     [Fact]
+    public void DoesNotEnableConsoleStreamHookWhenObjectFeatureIsDisabled()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": {
+                      "DiagnosticsConsoleLogStreaming": {
+                        "Enabled": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
     public void DetectsEnabledFeatureCaseInsensitively()
     {
         var configuration = BuildJsonConfiguration("""
@@ -360,6 +384,48 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
         finally
         {
             Directory.SetCurrentDirectory(originalCurrentDirectory);
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+            contentRoot.Delete(recursive: true);
+            otherDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InstallsConsoleStreamHookFromEnvironmentContentRootBeforeBuilderCreation()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var contentRoot = Directory.CreateTempSubdirectory();
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var originalContentRoot = Environment.GetEnvironmentVariable("DOTNET_CONTENTROOT");
+        var otherDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(contentRoot.FullName, "shells.json"), """
+                {
+                  "CShells": {
+                    "Shells": {
+                      "default": {
+                        "Features": {
+                          "DiagnosticsConsoleLogStreaming": {}
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+            Directory.SetCurrentDirectory(otherDirectory.FullName);
+            Environment.SetEnvironmentVariable("DOTNET_CONTENTROOT", contentRoot.FullName);
+
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled([], () => installCount++);
+
+            Assert.Equal(1, installCount);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            Environment.SetEnvironmentVariable("DOTNET_CONTENTROOT", originalContentRoot);
             ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
             contentRoot.Delete(recursive: true);
             otherDirectory.Delete(recursive: true);
