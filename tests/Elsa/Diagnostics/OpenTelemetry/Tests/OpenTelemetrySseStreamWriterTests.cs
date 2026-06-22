@@ -27,6 +27,14 @@ public sealed class OpenTelemetrySseStreamWriterTests
     }
 
     [Fact]
+    public void Constructor_WhenPendingMoveNextCleanupTimeoutIsNotPositive_Throws()
+    {
+        var formatter = new OpenTelemetrySseFormatter(new OpenTelemetryStreamItemSerializer());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new OpenTelemetrySseStreamWriter(formatter, TimeSpan.FromMilliseconds(10), TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task StreamAsync_WhenResponseIsNull_Throws()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() => _writer.StreamAsync(null!, SingleTraceStream(), CancellationToken.None));
@@ -85,6 +93,28 @@ public sealed class OpenTelemetrySseStreamWriterTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask);
         Assert.True(stream.MoveNextCompleted);
         Assert.True(stream.Disposed);
+    }
+
+    [Fact]
+    public async Task StreamAsync_WhenPendingMoveNextIgnoresCancellation_BoundsCleanupWait()
+    {
+        var writer = new OpenTelemetrySseStreamWriter(
+            new OpenTelemetrySseFormatter(new OpenTelemetryStreamItemSerializer()),
+            TimeSpan.FromMilliseconds(10),
+            TimeSpan.FromMilliseconds(10));
+        var responseBody = new CapturingResponseBody();
+        var response = CreateResponse(responseBody);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var stream = new BlockingStream(observeCancellation: false);
+
+        var streamTask = writer.StreamAsync(response, stream, cts.Token);
+        await stream.MoveNextStarted.WaitAsync(cts.Token);
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.False(stream.MoveNextCompleted);
+        Assert.False(stream.Disposed);
     }
 
     private static async IAsyncEnumerable<OpenTelemetryStreamItem> SingleTraceStream()
@@ -211,7 +241,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
         private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class BlockingStream : IAsyncEnumerable<OpenTelemetryStreamItem>, IAsyncEnumerator<OpenTelemetryStreamItem>
+    private sealed class BlockingStream(bool observeCancellation = true) : IAsyncEnumerable<OpenTelemetryStreamItem>, IAsyncEnumerator<OpenTelemetryStreamItem>
     {
         private CancellationToken _cancellationToken;
         private int _moveNextPending;
@@ -249,7 +279,8 @@ public sealed class OpenTelemetrySseStreamWriterTests
         {
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationToken);
+                var cancellationToken = observeCancellation ? _cancellationToken : CancellationToken.None;
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                 return false;
             }
             finally

@@ -28,6 +28,14 @@ public sealed class StructuredLogSseStreamWriterTests
     }
 
     [Fact]
+    public void Constructor_WhenPendingMoveNextCleanupTimeoutIsNotPositive_Throws()
+    {
+        var formatter = new StructuredLogSseFormatter(new StructuredLogEntrySerializer());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StructuredLogSseStreamWriter(formatter, TimeSpan.FromMilliseconds(10), TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task StreamAsync_WhenResponseIsNull_Throws()
     {
         await Assert.ThrowsAsync<ArgumentNullException>(() => _writer.StreamAsync(null!, SingleEntryStream(), CancellationToken.None));
@@ -87,6 +95,28 @@ public sealed class StructuredLogSseStreamWriterTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask);
         Assert.True(stream.MoveNextCompleted);
         Assert.True(stream.Disposed);
+    }
+
+    [Fact]
+    public async Task StreamAsync_WhenPendingMoveNextIgnoresCancellation_BoundsCleanupWait()
+    {
+        var writer = new StructuredLogSseStreamWriter(
+            new StructuredLogSseFormatter(new StructuredLogEntrySerializer()),
+            TimeSpan.FromMilliseconds(10),
+            TimeSpan.FromMilliseconds(10));
+        var responseBody = new CapturingResponseBody();
+        var response = CreateResponse(responseBody);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var stream = new BlockingStream(observeCancellation: false);
+
+        var streamTask = writer.StreamAsync(response, stream, cts.Token);
+        await stream.MoveNextStarted.WaitAsync(cts.Token);
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.False(stream.MoveNextCompleted);
+        Assert.False(stream.Disposed);
     }
 
     private static async IAsyncEnumerable<StructuredLogStreamItem> SingleEntryStream()
@@ -210,7 +240,7 @@ public sealed class StructuredLogSseStreamWriterTests
         private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    private sealed class BlockingStream : IAsyncEnumerable<StructuredLogStreamItem>, IAsyncEnumerator<StructuredLogStreamItem>
+    private sealed class BlockingStream(bool observeCancellation = true) : IAsyncEnumerable<StructuredLogStreamItem>, IAsyncEnumerator<StructuredLogStreamItem>
     {
         private CancellationToken _cancellationToken;
         private int _moveNextPending;
@@ -248,7 +278,8 @@ public sealed class StructuredLogSseStreamWriterTests
         {
             try
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationToken);
+                var cancellationToken = observeCancellation ? _cancellationToken : CancellationToken.None;
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                 return false;
             }
             finally

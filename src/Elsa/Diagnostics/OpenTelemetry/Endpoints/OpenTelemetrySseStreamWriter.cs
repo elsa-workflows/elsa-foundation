@@ -9,21 +9,30 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 public sealed class OpenTelemetrySseStreamWriter
 {
     private static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultPendingMoveNextCleanupTimeout = TimeSpan.FromSeconds(5);
     private readonly OpenTelemetrySseFormatter _formatter;
     private readonly TimeSpan _heartbeatInterval;
+    private readonly TimeSpan _pendingMoveNextCleanupTimeout;
 
     public OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter formatter) : this(formatter, DefaultHeartbeatInterval)
     {
     }
 
-    public OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter formatter, TimeSpan heartbeatInterval)
+    public OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter formatter, TimeSpan heartbeatInterval) : this(formatter, heartbeatInterval, DefaultPendingMoveNextCleanupTimeout)
+    {
+    }
+
+    public OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter formatter, TimeSpan heartbeatInterval, TimeSpan pendingMoveNextCleanupTimeout)
     {
         ArgumentNullException.ThrowIfNull(formatter);
         if (heartbeatInterval <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(heartbeatInterval), heartbeatInterval, "Heartbeat interval must be positive.");
+        if (pendingMoveNextCleanupTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(pendingMoveNextCleanupTimeout), pendingMoveNextCleanupTimeout, "Pending MoveNext cleanup timeout must be positive.");
 
         _formatter = formatter;
         _heartbeatInterval = heartbeatInterval;
+        _pendingMoveNextCleanupTimeout = pendingMoveNextCleanupTimeout;
     }
 
     public async Task StreamAsync(HttpResponse response, IAsyncEnumerable<OpenTelemetryStreamItem> stream, CancellationToken cancellationToken)
@@ -63,18 +72,24 @@ public sealed class OpenTelemetrySseStreamWriter
         }
         finally
         {
-            await DisposeAfterPendingMoveNextAsync(enumerator, moveNext, streamCts);
+            await DisposeAfterPendingMoveNextAsync(enumerator, moveNext, streamCts, _pendingMoveNextCleanupTimeout);
         }
     }
 
     private static async Task DisposeAfterPendingMoveNextAsync(
         IAsyncEnumerator<OpenTelemetryStreamItem> enumerator,
         Task<bool>? moveNext,
-        CancellationTokenSource streamCts)
+        CancellationTokenSource streamCts,
+        TimeSpan pendingMoveNextCleanupTimeout)
     {
         if (moveNext is { IsCompleted: false })
         {
             await streamCts.CancelAsync();
+            var completed = await Task.WhenAny(moveNext, Task.Delay(pendingMoveNextCleanupTimeout));
+            if (completed != moveNext)
+                // Disposing an async iterator while MoveNextAsync is still pending can throw NotSupportedException.
+                return;
+
             try
             {
                 await moveNext;
