@@ -19,8 +19,8 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Sparkles, Trash2 } from "lucide-react";
+import type { ElsaStudioModuleApi, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -96,25 +96,25 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => <WorkflowManagementPage context={api.backend} />
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} />
       },
       {
         id: "workflows-executables",
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => <WorkflowExecutablesPage context={api.backend} />
+        component: () => <WorkflowExecutablesPage context={api.backend} ai={api.ai} />
       },
       {
         id: "workflows-instances",
         path: "/workflows/instances",
         label: "Workflow instances",
-        component: () => <WorkflowInstancesPage />
+        component: () => <WorkflowInstancesPage ai={api.ai} />
       }
     ]
   });
 }
 
-function WorkflowManagementPage({ context }: { context: StudioEndpointContext }) {
+function WorkflowManagementPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
 
   useEffect(() => {
@@ -130,15 +130,15 @@ function WorkflowManagementPage({ context }: { context: StudioEndpointContext })
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
-        <WorkflowDefinitions context={context} onOpen={openDefinition} />
+        <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
       </WorkflowsPageFrame>
     );
 }
 
-function WorkflowExecutablesPage({ context }: { context: StudioEndpointContext }) {
+function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -149,16 +149,22 @@ function WorkflowExecutablesPage({ context }: { context: StudioEndpointContext }
 
   return (
     <WorkflowsPageFrame activePath="/workflows/executables" title="Executables">
-      <WorkflowExecutables context={context} definitionFilter={definitionFilter} />
+      <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} />
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowInstancesPage() {
+function WorkflowInstancesPage({ ai }: { ai: StudioAiContributionApi }) {
+  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   return (
     <WorkflowsPageFrame activePath="/workflows/instances" title="Instances">
       <div className="wf-empty">
         Workflow instance history will appear here when the runtime exposes an instance query endpoint.
+        {instanceAction ? (
+          <button type="button" className="wf-ai-inline-action" onClick={() => dispatchAiAction(ai, instanceAction, { scope: "workflow-instances" })}>
+            <Sparkles size={13} /> Ask Weaver about instances
+          </button>
+        ) : null}
       </div>
     </WorkflowsPageFrame>
   );
@@ -196,7 +202,7 @@ function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
 }
 
-function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointContext; onOpen(id: string): void }) {
+function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
   const [search, setSearch] = useState("");
   const [listState, setListState] = useState<DefinitionListState>("active");
   const [page, setPage] = useState(1);
@@ -213,6 +219,8 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
+  const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
+  const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
@@ -462,6 +470,9 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
                     <>
                       <button type="button" onClick={event => { event.stopPropagation(); onOpen(definition.id); }}>Open</button>
                       <button type="button" onClick={event => { event.stopPropagation(); openDefinitionArtifacts(definition.id); }}>Artifacts</button>
+                      {explainDefinitionAction ? (
+                        <button type="button" onClick={() => dispatchAiAction(ai, explainDefinitionAction, definition)}><Sparkles size={13} /> Explain</button>
+                      ) : null}
                       <button type="button" className="danger" onClick={() => void softDelete(definition)}><Trash2 size={13} /> Delete</button>
                     </>
                   ) : (
@@ -492,6 +503,8 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
           activities={catalog}
           catalogState={catalogState}
           creating={creating}
+          suggestMetadataAction={suggestMetadataAction}
+          onSuggestMetadata={suggestMetadataAction ? () => dispatchAiAction(ai, suggestMetadataAction, { draft: createDraft, activities: catalog }) : undefined}
           onChange={nextDraft => setCreateDraft(nextDraft)}
           onClose={() => setCreateDraft(null)}
           onSubmit={submitCreate}
@@ -501,11 +514,13 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
   );
 }
 
-function CreateWorkflowDialog({ draft, activities, catalogState, creating, onChange, onClose, onSubmit }: {
+function CreateWorkflowDialog({ draft, activities, catalogState, creating, suggestMetadataAction, onSuggestMetadata, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
   activities: ActivityCatalogItem[];
   catalogState: "idle" | "loading" | "ready" | "failed";
   creating: boolean;
+  suggestMetadataAction?: StudioAiPromptActionContribution | null;
+  onSuggestMetadata?: () => void;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;
   onSubmit(): void;
@@ -538,6 +553,11 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
         >
           <div className="wf-dialog-heading">
             <h3 id="workflow-create-title">Create Workflow</h3>
+            {suggestMetadataAction ? (
+              <button type="button" className="wf-ai-action" onClick={onSuggestMetadata} title={suggestMetadataAction.description ?? suggestMetadataAction.label}>
+                <Sparkles size={13} /> {suggestMetadataAction.label}
+              </button>
+            ) : null}
           </div>
           <label className="wf-form-field">
             <span>Display name</span>
@@ -593,7 +613,7 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
   );
 }
 
-function WorkflowExecutables({ context, definitionFilter }: { context: StudioEndpointContext; definitionFilter: string | null }) {
+function WorkflowExecutables({ context, ai, definitionFilter }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -604,6 +624,7 @@ function WorkflowExecutables({ context, definitionFilter }: { context: StudioEnd
       : executables,
     [definitionFilter, executables]
   );
+  const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
   const load = useCallback(async () => {
     setState("loading");
@@ -664,6 +685,9 @@ function WorkflowExecutables({ context, definitionFilter }: { context: StudioEnd
               <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
               <span className="wf-row-actions">
                 <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
+                {explainExecutableAction ? (
+                  <button type="button" onClick={() => dispatchAiAction(ai, explainExecutableAction, executable)}><Sparkles size={13} /> Explain</button>
+                ) : null}
               </span>
             </div>
           ))}
@@ -714,6 +738,15 @@ function pageItems<T>(items: T[], page: number, pageSize: number) {
 
 function getTotalPages(totalCount: number, pageSize: number) {
   return Math.max(1, Math.ceil(totalCount / pageSize));
+}
+
+function findAiAction(ai: StudioAiContributionApi, id: string) {
+  return ai.promptActions.list().find(action => action.id === id) ?? null;
+}
+
+function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioAiPromptActionContribution<TContext>, context: TContext) {
+  const prompt = action.createPrompt(context);
+  if (prompt) ai.dispatchPrompt(prompt);
 }
 
 function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
@@ -816,7 +849,7 @@ function formatActivityTypeName(typeName: string) {
   return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
 }
 
-function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndpointContext; definitionId: string; onBack(): void }) {
+function WorkflowEditor({ context, definitionId, ai, onBack }: { context: StudioEndpointContext; definitionId: string; ai: StudioAiContributionApi; onBack(): void }) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
@@ -847,6 +880,8 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
   const selectedNode = useMemo(() => scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null, [scope, selectedNodeId]);
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
+  const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
+  const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
 
   const load = useCallback(async () => {
     setError("");
@@ -1225,6 +1260,12 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
             <input type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
             <span>Autosave</span>
           </label>
+          {findRisksAction ? (
+            <button type="button" onClick={() => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })}><Sparkles size={15} /> Risks</button>
+          ) : null}
+          {proposeUpdateAction ? (
+            <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
+          ) : null}
           <button type="button" onClick={() => void save()}><Save size={15} /> Save</button>
           <button type="button" onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
           <button type="button" disabled={!publishedArtifactId} onClick={() => void run()}><Play size={15} /> Run</button>

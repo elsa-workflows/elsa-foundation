@@ -354,7 +354,12 @@ function testApi(): ElsaStudioModuleApi {
     },
     featureAreas: featureAreaRegistry(navigation, routes),
     navigation,
-    routes
+    routes,
+    ai: {
+      promptActions: registry(),
+      dispatchPrompt: vi.fn(),
+      onPrompt: vi.fn(() => () => {})
+    }
   } as ElsaStudioModuleApi;
 }
 

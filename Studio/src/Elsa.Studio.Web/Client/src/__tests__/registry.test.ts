@@ -77,6 +77,31 @@ describe("studio registry", () => {
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");
   });
 
+  it("tracks AI contributions and dispatches prompts", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const listener = vi.fn();
+
+    api.ai.promptActions.add({
+      id: "explain-resource",
+      label: "Explain",
+      placement: "selection",
+      contextKind: "resource",
+      createPrompt: () => ({ message: "Explain this resource." })
+    });
+    const unsubscribe = api.ai.onPrompt(listener);
+    api.ai.dispatchPrompt({ message: "Explain this workflow." });
+    unsubscribe();
+    api.ai.dispatchPrompt({ message: "This should not be observed." });
+
+    expect(api.ai.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
+  });
+
   it("selects the most specific feature area owner for nested paths", () => {
     const parent = featureArea("workflows", ["/workflows"]);
     const child = featureArea("workflow-instances", ["/workflows/instances"]);

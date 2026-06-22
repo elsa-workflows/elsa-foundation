@@ -1,7 +1,11 @@
-import { createStudioHttpError, StudioHttpError, type StudioHttpClient } from "../../sdk";
+import { createStudioHttpError, StudioHttpError, withDefaultHeaders, type StudioHttpClient } from "../../sdk";
 import type { AuthProviderManager } from "../types";
 
 export interface AuthenticatedHttpClientOptions {
+  /** Default headers applied to every request before per-request RequestInit.headers are merged. */
+  defaultHeaders?: HeadersInit;
+  /** Alias for defaultHeaders retained for callers that pass fetch-like client options. */
+  headers?: HeadersInit;
   refreshOnUnauthorized?: boolean;
   fetch?: typeof fetch;
 }
@@ -61,9 +65,9 @@ async function requestJson<T>(
 ) {
   const request = options.fetch ?? fetch;
   const requestUrl = new URL(url, baseUrl).toString();
-  const firstResponse = await request(requestUrl, await withBearerToken(auth, init));
+  const firstResponse = await request(requestUrl, await withBearerToken(auth, withConfiguredDefaultHeaders(options, init)));
   const response = firstResponse.status === 401 && options.refreshOnUnauthorized !== false
-    ? await retryAfterRefresh(request, requestUrl, auth, init)
+    ? await retryAfterRefresh(request, requestUrl, auth, withConfiguredDefaultHeaders(options, init))
     : firstResponse;
 
   if (!response.ok) {
@@ -147,4 +151,8 @@ function withJsonContentTypeAndAccept(headers?: HeadersInit) {
   }
 
   return result;
+}
+
+function withConfiguredDefaultHeaders(options: AuthenticatedHttpClientOptions, init?: RequestInit) {
+  return withDefaultHeaders(options.defaultHeaders ?? options.headers, init);
 }
