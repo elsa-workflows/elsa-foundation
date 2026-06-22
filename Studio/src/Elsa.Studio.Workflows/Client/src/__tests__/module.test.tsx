@@ -205,6 +205,88 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("opens the canvas activity picker and inserts an activity into an empty flowchart", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    expect(inputByLabel(container, "Search activities")).toBeTruthy();
+    await click(optionByText(container, "Write Line"));
+    await flushPromises();
+
+    expect(container.querySelector(".wf-node")?.textContent).toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("filters the canvas activity picker with keyboard search", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" }),
+        activity({ activityVersionId: "send-email-v1", activityTypeKey: "Elsa.Activities.SendEmail", category: "Email", displayName: "Send Email" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    await fill(inputByLabel(container, "Search activities"), "email");
+
+    expect(container.querySelector(".wf-connect-menu")?.textContent).toContain("Send Email");
+    expect(container.querySelector(".wf-connect-menu")?.textContent).not.toContain("Write Line");
+
+    await unmount();
+  });
+
   it("opens a filtered executable artifacts view for a definition", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({ definitions: [definition()] })));
     const { container, unmount } = await renderRegisteredRoute();
@@ -518,6 +600,26 @@ function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function flowchartRoot(activities: unknown[]) {
+  return {
+    nodeId: "root",
+    activityVersionId: "flowchart-v1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.flowchart.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        activities,
+        connections: [],
+        startNodeId: null,
+        nodeMetadata: {},
+        connectionMetadata: {}
+      }
+    }
+  };
+}
+
 function activity(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     activityVersionId: "activity-1",
@@ -577,6 +679,11 @@ function dialog(container: HTMLElement) {
   const element = container.querySelector<HTMLElement>(".wf-dialog");
   if (!element) throw new Error("Dialog not found");
   return element;
+}
+
+function optionByText(container: HTMLElement, text: string) {
+  return Array.from(container.querySelectorAll<HTMLElement>("[role='option']"))
+    .find(option => option.textContent?.includes(text)) ?? null;
 }
 
 function rowByLabel(container: HTMLElement, label: string) {

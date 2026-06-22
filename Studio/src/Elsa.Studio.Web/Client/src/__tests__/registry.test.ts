@@ -4,6 +4,7 @@ import { createEndpointContext, describeApiError, StudioHttpError, tryExtractVal
 
 describe("studio registry", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -140,6 +141,20 @@ describe("studio registry", () => {
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
     expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
     expect(headers.get("Accept")).toBe("application/json");
+  });
+
+  it("times out stalled backend client requests with a configuration-focused error", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    })));
+    const client = createEndpointContext("https://foundation.example/").http;
+
+    const request = client.getJson("/_elsa/workflow-management/definitions");
+    const expectation = expect(request).rejects.toThrow("backend API is responding");
+    await vi.advanceTimersByTimeAsync(10000);
+
+    await expectation;
   });
 
   it("posts json through the backend client", async () => {

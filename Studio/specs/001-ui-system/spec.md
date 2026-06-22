@@ -71,6 +71,14 @@ As a frequent Studio user, I want the shell to provide consistent global search,
 1. **Given** the user is on any Studio route, **When** they inspect the top command bar, **Then** global search, backend/environment status, theme, and source actions appear consistently.
 2. **Given** a page has local actions, **When** the page renders, **Then** local actions appear in the page toolbar rather than creating a competing shell-level command group.
 
+### Follow-up Story - Workflow Designer Upgrade (Backlog)
+
+As a workflow author, I want the React Flow designer to support mature flowchart editing interactions so that I can create, connect, insert, move, delete, reconnect, and persist activities without losing source ports, layout, vertices, or existing workflow JSON metadata.
+
+**Why this is follow-up**: The current UI-system scope remains focused on shared Workbench primitives, Feature Management, Module Management, and shell command behavior. The workflow designer is already implemented in the Workflows module and should evolve as an interaction-quality follow-up rather than displacing the existing priority order.
+
+**Independent Test**: A draft flowchart can round-trip through designer operations including connect existing nodes, connect-to-create, edge insert/splice, palette drop on edge, delete/reconnect edge, save/autosave, and keyboard picker selection while preserving workflow JSON as the canonical model.
+
 ### Edge Cases
 
 - Module-provided UI loads before every optional shared primitive is available.

@@ -30,6 +30,7 @@ export interface StudioModulesResponse {
 
 export type StudioModuleRegistryStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed" | "pending" | "unknown";
 export type StudioModuleRegistryCompatibility = "compatible" | "warning" | "incompatible" | "unknown";
+const requestTimeoutMs = 10000;
 
 export interface StudioModuleRegistryResponse {
   hostVersion: string;
@@ -438,7 +439,25 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
 
 async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) {
   const requestUrl = resolveStudioUrl(baseUrl, url);
-  const response = await fetch(requestUrl, init);
+  const timeout = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => timeout.abort(), requestTimeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      ...init,
+      signal: combineAbortSignals(init?.signal, timeout.signal)
+    });
+  } catch (error) {
+    if (timeout.signal.aborted && !init?.signal?.aborted) {
+      throw new Error(`Request to ${requestUrl} timed out after ${requestTimeoutMs / 1000} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`);
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
     throw await createStudioHttpError(response);
   }
@@ -455,6 +474,27 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
       response.status,
       `Expected JSON from ${requestUrl}, but received ${describeResponseContent(response, text)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`);
   }
+}
+
+function combineAbortSignals(requestSignal: AbortSignal | null | undefined, timeoutSignal: AbortSignal) {
+  if (!requestSignal) {
+    return timeoutSignal;
+  }
+
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([requestSignal, timeoutSignal]);
+  }
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (requestSignal.aborted || timeoutSignal.aborted) {
+    controller.abort();
+  } else {
+    requestSignal.addEventListener("abort", abort, { once: true });
+    timeoutSignal.addEventListener("abort", abort, { once: true });
+  }
+
+  return controller.signal;
 }
 
 export async function readStudioHttpErrorMessage(response: Response) {
