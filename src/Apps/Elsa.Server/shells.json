@@ -32,6 +32,7 @@
           "SampleNuplaneActivities": {},
           "Serialization": {},
           "Tasks": {},
+          "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},

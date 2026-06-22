@@ -96,8 +96,8 @@ public sealed class UpdateDraft(
         // Hydrate the already-tracked draft by publishing OnEntityLoading on the same context that
         // will SaveChangesAsync — the single ApplyEntityLoadingHandlers aggregator runs every
         // registered IEntityLoadingHandler<,>. Sequential so hydration completes before we read State.
-        // (We deliberately do NOT route through IQueries.Find, which returns an AsNoTracking entity
-        // that this command could not save without re-attaching.)
+        // (We deliberately do NOT route through a named read store, which returns an AsNoTracking
+        // entity that this command could not save without re-attaching.)
         await eventPublisher.Publish(new OnEntityLoading(dbContext, draft), EventPublishingStrategy.Sequential, cancellationToken);
 
         return draft;

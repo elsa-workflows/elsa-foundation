@@ -26,8 +26,8 @@ public sealed class ActivityDefinitionLookupTests
         }
 
         var lookup = new ActivityDefinitionLookup(
-            new ThrowingQueries<ActivityDefinitionVersion>(),
-            new ThrowingQueries<ActivityDefinition>(),
+            new ThrowingActivityDefinitionVersionStore(),
+            new ThrowingActivityDefinitionStore(),
             new TestDbContextFactory(host));
 
         var results = await lookup.ListDefinitions(searchTerm: "WriteLine");

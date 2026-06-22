@@ -128,7 +128,6 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
         }
         if (UseQueries)
         {
-            services.ConfigureQueries<TDbContext>();
             foreach (var assembly in handlerAssemblies)
                 services.AddEntityLoadingHandlersFrom(assembly);
         }

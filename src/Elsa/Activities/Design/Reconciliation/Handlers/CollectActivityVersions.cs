@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
@@ -21,7 +22,7 @@ namespace Elsa.Activities.Design.Reconciliation.Handlers;
 /// a CLR type (that happens only in the runtime feature that owns the type). No per-kind branch.
 /// </summary>
 public sealed class CollectActivityVersions(
-    IQueries<ActivityDefinition> definitionQueries,
+    IActivityDefinitionStore definitionStore,
     IActivityDefinitionFactory definitionFactory,
     IActivityDefinitionVersionFactory versionFactory,
     IPayloadSerializer payloadSerializer,
@@ -66,7 +67,7 @@ public sealed class CollectActivityVersions(
             return null;
 
         var filter = new ActivityDefinitionFilter { Id = definitionId };
-        return await definitionQueries.Find(filter, cancellationToken);
+        return await definitionStore.FindAsync(filter, cancellationToken);
     }
 
     /// <summary>

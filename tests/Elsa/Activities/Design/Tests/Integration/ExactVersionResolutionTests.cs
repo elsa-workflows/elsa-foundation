@@ -1,6 +1,8 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Tests.Unit;
+using Elsa.Persistence.Core.Queries;
+using Elsa.Persistence.EFCore.Queries;
+using Elsa.Primitives.Versioning;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -10,7 +12,8 @@ namespace Elsa.Activities.Design.Tests.Integration;
 /// US4 exact-resolution test (SC-006, FR-013). Resolution by <c>(DefinitionId, exact semver)</c>
 /// returns the one record or none, and build-metadata-equivalent strings resolve as the same
 /// logical version: a lookup for <c>1.0.0</c> resolves a row persisted as <c>1.0.0+build</c>.
-/// The match runs DB-side via the filter's <c>SemVerSortKey</c> equality.
+/// The match runs DB-side on the precomputed <c>SemVerSortKey</c> via the closed query spec — the
+/// same path the production version store uses.
 /// </summary>
 public sealed class ExactVersionResolutionTests
 {
@@ -39,9 +42,18 @@ public sealed class ExactVersionResolutionTests
 
     private static async Task<ActivityDefinitionVersion?> Resolve(ActivitiesDesignTestHost host, string definitionId, string version)
     {
+        // The caller normalises the version to its sort key (build metadata excluded), exactly as the
+        // production reconciler does before calling FindByDefinitionAndSortKeyAsync. An unparseable
+        // version can never match a (valid) persisted row.
+        if (!SemVer.TryParse(version, out var semVer))
+            return null;
+
+        var sortKey = semVer.ToSortKey();
+        var query = Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
+            .And(x => x.SemVerSortKey, QueryOp.Equal, sortKey);
+
         await using var ctx = host.CreateContext();
-        var filter = new ActivityDefinitionVersionFilter { DefinitionId = definitionId, Version = version };
-        return await filter.Apply(ctx.Set<ActivityDefinitionVersion>()).SingleOrDefaultAsync();
+        return await EFCoreQueryTranslator.Apply(ctx.Set<ActivityDefinitionVersion>(), query).SingleOrDefaultAsync();
     }
 
     private static async Task<string?> ResolveVersion(ActivitiesDesignTestHost host, string definitionId, string version) =>

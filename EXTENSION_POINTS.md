@@ -75,13 +75,13 @@ not automatic constitution violations.
 |---|---|
 | HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
-### Foundation
+### Agent and Identity
 
 | Domain | Catalog |
 |---|---|
-| Foundation Agent (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Foundation/Agent/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Agent/Abstractions/EXTENSION_POINTS.md) |
-| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
-| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Foundation/Workflows/Agent/EXTENSION_POINTS.md`](src/Elsa/Foundation/Workflows/Agent/EXTENSION_POINTS.md) |
+| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Agent/Abstractions/EXTENSION_POINTS.md) |
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Identity/Abstractions/EXTENSION_POINTS.md) |
+| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/Agent/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/Agent/EXTENSION_POINTS.md) |
 
 ### Persistence
 
