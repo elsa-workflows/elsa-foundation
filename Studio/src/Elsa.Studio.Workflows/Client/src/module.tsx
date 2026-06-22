@@ -42,7 +42,7 @@ import {
   restoreDefinition,
   runExecutable,
   updateDraft
-} from "./workflowsApi";
+} from "./api/workflows";
 import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary } from "./workflowTypes";
 import {
   buildCanvas,
@@ -76,6 +76,7 @@ interface CreateWorkflowDraft {
   name: string;
   description: string;
   rootKind: CreateWorkflowKind;
+  rootActivityVersionId?: string | null;
 }
 
 interface ActivityPaletteGroup {
@@ -99,34 +100,45 @@ interface WorkflowEdgeActions {
 const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
 
 export function register(api: ElsaStudioModuleApi) {
-  api.navigation.add({
+  api.featureAreas.add({
     id: "workflows",
-    label: "Workflows",
-    path: "/workflows/definitions",
-    activePathPrefix: "/workflows",
+    title: "Workflows",
+    description: "Design, publish and run workflow definitions and inspect instances.",
+    navGroup: "Workspace",
+    ownedPaths: ["/workflows"],
+    required: true,
+    defaultEnabled: true,
     order: 20,
-    iconColor: "#0ea5e9"
-  });
-
-  api.routes.add({
-    id: "workflows-definitions",
-    path: "/workflows/definitions",
-    label: "Workflow definitions",
-    component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} />
-  });
-
-  api.routes.add({
-    id: "workflows-executables",
-    path: "/workflows/executables",
-    label: "Workflow executables",
-    component: () => <WorkflowExecutablesPage context={api.backend} ai={api.ai} />
-  });
-
-  api.routes.add({
-    id: "workflows-instances",
-    path: "/workflows/instances",
-    label: "Workflow instances",
-    component: () => <WorkflowInstancesPage ai={api.ai} />
+    nav: {
+      title: "Workflows",
+      path: "/workflows/definitions",
+      iconColor: "#0ea5e9",
+      items: [
+        { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
+        { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
+        { title: "Instances", path: "/workflows/instances", iconColor: "#0ea5e9" }
+      ]
+    },
+    routes: [
+      {
+        id: "workflows-definitions",
+        path: "/workflows/definitions",
+        label: "Workflow definitions",
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-executables",
+        path: "/workflows/executables",
+        label: "Workflow executables",
+        component: () => <WorkflowExecutablesPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-instances",
+        path: "/workflows/instances",
+        label: "Workflow instances",
+        component: () => <WorkflowInstancesPage ai={api.ai} />
+      }
+    ]
   });
 }
 
@@ -302,7 +314,8 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        rootKind: createDraft.rootKind
+        rootKind: createDraft.rootKind,
+        rootActivityVersionId: getCreateRootActivityVersionId(createDraft, catalog)
       });
       setCreateDraft(null);
       onOpen(details.definition.id);
@@ -541,6 +554,21 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
   onSubmit(): void;
 }) {
   const groupedActivities = useMemo(() => groupCreateRootActivities(activities), [activities]);
+  const selectedRootValue = getSelectedRootValue(draft, activities);
+
+  const changeRootActivity = (value: string) => {
+    if (value.startsWith("kind:")) {
+      onChange({ ...draft, rootKind: value.slice(5) as CreateWorkflowKind, rootActivityVersionId: null });
+      return;
+    }
+
+    const selectedActivity = activities.find(activity => activity.activityVersionId === value);
+    onChange({
+      ...draft,
+      rootKind: getRootKind(selectedActivity) ?? draft.rootKind,
+      rootActivityVersionId: value
+    });
+  };
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
@@ -581,8 +609,8 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
             <span>Root activity</span>
             <select
               aria-label="Root activity"
-              value={draft.rootKind}
-              onChange={event => onChange({ ...draft, rootKind: event.target.value as CreateWorkflowKind })}
+              value={selectedRootValue}
+              onChange={event => changeRootActivity(event.target.value)}
               disabled={catalogState === "loading"}
             >
               <optgroup label="Composite roots">
@@ -593,7 +621,7 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
               {groupedActivities.otherCategories.map(category => (
                 <optgroup key={category.name} label={category.name}>
                   {category.activities.map(activity => (
-                    <option key={activity.activityVersionId} value={`unsupported:${activity.activityVersionId}`} disabled>
+                    <option key={activity.activityVersionId} value={activity.activityVersionId}>
                       {getActivityDisplay(activity)}
                     </option>
                   ))}
@@ -750,9 +778,11 @@ function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioA
 }
 
 function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
+  const flowchartActivity = findRootKindActivity(activities, "flowchart");
+  const sequenceActivity = findRootKindActivity(activities, "sequence");
   const compositeRoots = [
-    { value: "flowchart" as const, label: "Flowchart" },
-    { value: "sequence" as const, label: "Sequence" }
+    { value: flowchartActivity?.activityVersionId ?? "kind:flowchart", label: "Flowchart" },
+    { value: sequenceActivity?.activityVersionId ?? "kind:sequence", label: "Sequence" }
   ];
   const categories = new Map<string, ActivityCatalogItem[]>();
 
@@ -772,6 +802,34 @@ function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
   return { compositeRoots, otherCategories };
 }
 
+function getSelectedRootValue(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? `kind:${draft.rootKind}`;
+}
+
+function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? null;
+}
+
+function findRootKindActivity(activities: ActivityCatalogItem[], rootKind: CreateWorkflowKind) {
+  return activities.find(activity => getRootKind(activity) === rootKind);
+}
+
+function getRootKind(activity: ActivityCatalogItem | undefined) {
+  if (!activity) {
+    return null;
+  }
+
+  if (isFlowchartActivity(activity)) {
+    return "flowchart";
+  }
+
+  if (isSequenceActivity(activity)) {
+    return "sequence";
+  }
+
+  return null;
+}
+
 function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPaletteGroup[] {
   const categories = new Map<string, ActivityCatalogItem[]>();
 
@@ -789,8 +847,17 @@ function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPalett
 }
 
 function isCompositeRootActivity(activity: ActivityCatalogItem) {
+  return isFlowchartActivity(activity) || isSequenceActivity(activity);
+}
+
+function isFlowchartActivity(activity: ActivityCatalogItem) {
   const displayName = getActivityDisplay(activity);
-  return displayName === "Flowchart" || displayName === "Sequence" || activity.activityTypeKey.endsWith(".Flowchart") || activity.activityTypeKey.endsWith(".Sequence");
+  return displayName === "Flowchart" || activity.activityTypeKey.endsWith(".Flowchart");
+}
+
+function isSequenceActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "Sequence" || activity.activityTypeKey.endsWith(".Sequence");
 }
 
 function isActivityBrowsable(activity: ActivityCatalogItem) {

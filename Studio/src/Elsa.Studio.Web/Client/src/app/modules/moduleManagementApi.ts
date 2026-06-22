@@ -1,4 +1,4 @@
-import { withDefaultHeaders, type ElsaStudioModuleApi, type StudioEndpointContext } from "../../sdk";
+import type { ElsaStudioModuleApi, StudioEndpointContext } from "../../sdk";
 
 export type HostId = "studio" | "server";
 export type RegistryState = "loading" | "ready" | "failed";
@@ -129,6 +129,13 @@ export const hostTabs = [
   { id: "server", label: "Server" }
 ];
 
+export const moduleManagementKeys = {
+  all: ["module-management"] as const,
+  registry: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "registry"] as const,
+  packages: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "packages"] as const,
+  feeds: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "feeds"] as const
+};
+
 export function createModuleManagementHosts(api: ElsaStudioModuleApi): HostModel[] {
   return [
     { id: "studio", label: "Studio", runtime: "Elsa.Studio.Web", context: api.host },
@@ -154,52 +161,31 @@ export function formatFileSize(bytes: number) {
 export async function uploadPackage(context: StudioEndpointContext, file: File) {
   const body = new FormData();
   body.append("package", file);
-  return requestJson(context, "/_elsa/module-management/packages/upload", { method: "POST", body });
+  return context.http.postForm("/_elsa/module-management/packages/upload", body);
 }
 
 export async function deleteDropFolderPackage(context: StudioEndpointContext, fileName: string) {
-  return requestJson(context, `/_elsa/module-management/packages/drop-folder/${encodeURIComponent(fileName)}`, { method: "DELETE" });
+  return context.http.deleteJson(`/_elsa/module-management/packages/drop-folder/${encodeURIComponent(fileName)}`);
 }
 
 export async function deleteFeed(context: StudioEndpointContext, feedName: string) {
-  return requestJson(context, `/_elsa/module-management/feeds/${encodeURIComponent(feedName)}`, { method: "DELETE" });
+  return context.http.deleteJson(`/_elsa/module-management/feeds/${encodeURIComponent(feedName)}`);
 }
 
 export async function addFeed(context: StudioEndpointContext, feed: ModuleManagementFeed) {
-  return postJson(context, "/_elsa/module-management/feeds", feed);
+  return context.http.postJson("/_elsa/module-management/feeds", feed);
 }
 
 export async function updateFeed(context: StudioEndpointContext, feedName: string, feed: ModuleManagementFeed) {
-  return requestJson(context, `/_elsa/module-management/feeds/${encodeURIComponent(feedName)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(feed)
-  });
+  return context.http.putJson(`/_elsa/module-management/feeds/${encodeURIComponent(feedName)}`, feed);
 }
 
 export async function saveRetentionPolicy(context: StudioEndpointContext, policy: ModuleManagementRetentionPolicy) {
-  return requestJson(context, "/_elsa/module-management/retention-policy", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(policy)
-  });
+  return context.http.putJson("/_elsa/module-management/retention-policy", policy);
 }
 
 export async function postJson(context: StudioEndpointContext, url: string, body: unknown) {
-  return requestJson(context, url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(body)
-  });
-}
-
-export async function requestJson(context: StudioEndpointContext, url: string, init?: RequestInit) {
-  const response = await fetch(new URL(url, context.baseUrl).toString(), withDefaultHeaders(context.headers, init));
-  if (!response.ok) {
-    throw new Error(await response.text() || `Request failed with ${response.status}.`);
-  }
-  const text = await response.text();
-  return text ? JSON.parse(text) : {};
+  return context.http.postJson(url, body);
 }
 
 export function numberOrNull(value: string) {

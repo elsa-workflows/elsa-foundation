@@ -231,13 +231,11 @@ describe("auth React SDK", () => {
     const { container, unmount } = renderWithAuth(manager, <RefreshProbe />);
 
     await flushPromises();
-    expect(container.textContent).toContain("foundation-owned");
-
-    await flushPromises();
     await flushPromises();
 
     expect(container.textContent).toContain("authenticated");
     expect(container.textContent).not.toContain("foundation-owned");
+    expect(manager.getCapabilities).toHaveBeenCalledTimes(2);
 
     await unmount();
   });
