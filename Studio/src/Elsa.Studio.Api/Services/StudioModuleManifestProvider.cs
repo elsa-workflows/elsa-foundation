@@ -129,7 +129,7 @@ public sealed class StudioModuleManifestProvider(
     private static string GetScope(StudioModuleManifest manifest)
     {
         var capabilities = manifest.Capabilities;
-        var hasFrontend = capabilities.Any(x => x is "navigation" or "routes" or "dashboard-widgets" or "panels" or "setting-editors");
+        var hasFrontend = capabilities.Any(x => x is "navigation" or "routes" or "dashboard-widgets" or "panels" or "setting-editors" or "ai-surfaces" or "ai-context-providers" or "ai-prompt-actions" or "ai-proposal-renderers");
         var hasBackend = capabilities.Any(x => x is "http" or "signalr" or "console-stream");
 
         return (hasFrontend, hasBackend) switch
@@ -180,6 +180,14 @@ public sealed class StudioModuleManifestProvider(
             "console-stream" => "Console stream",
             "http" => "HTTP endpoints",
             "signalr" => "SignalR hub",
+            "ai-capabilities" => "AI capabilities",
+            "ai-context-providers" => "AI context providers",
+            "ai-prompt-actions" => "AI prompt actions",
+            "ai-proposal-renderers" => "AI proposal renderers",
+            "ai-surfaces" => "AI surfaces",
+            "ai-tools" => "AI tools",
+            "weaver-chat" => "Weaver chat",
+            "weaver-workflows" => "Weaver workflows",
             _ => string.Join(' ', capability.Split('-', StringSplitOptions.RemoveEmptyEntries)
                 .Select(part => char.ToUpperInvariant(part[0]) + part[1..]))
         };
