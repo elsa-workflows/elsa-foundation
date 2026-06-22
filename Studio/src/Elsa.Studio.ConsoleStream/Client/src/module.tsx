@@ -129,6 +129,23 @@ let moduleApi: ElsaStudioModuleApi;
 export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
 
+  api.navigation.add({
+    id: "console",
+    label: "Console",
+    path: "/diagnostics/console",
+    activePathPrefix: "/diagnostics/console",
+    parentId: "diagnostics",
+    order: 840,
+    iconColor: "#10b981"
+  });
+
+  api.routes.add({
+    id: "console",
+    label: "Console",
+    path: "/diagnostics/console",
+    component: ConsoleStreamPage
+  });
+
   api.panels.add({
     id: "console-stream",
     title: "Console",
@@ -138,6 +155,14 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
+  return <ConsoleStreamView />;
+}
+
+export function ConsoleStreamPage() {
+  return <ConsoleStreamView page />;
+}
+
+function ConsoleStreamView({ page = false }: { page?: boolean }) {
   const [hostId, setHostId] = useState<ConsoleHostId>(defaultConsoleHostId);
   const [sources, setSources] = useState<ConsoleLogSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
@@ -353,8 +378,12 @@ export function ConsoleStreamPanel() {
     seenLineIds.current.clear();
   }
 
+  function download() {
+    downloadConsoleEntries(visibleLines);
+  }
+
   return (
-    <section className="console-stream-panel">
+    <section className={page ? "console-stream-page" : "console-stream-panel"}>
       <header className="console-stream-header">
         <div>
           <h2>{target.label} console</h2>
@@ -392,6 +421,7 @@ export function ConsoleStreamPanel() {
           <button type="button" className={autoScroll ? "active" : ""} onClick={() => setAutoScroll(current => !current)} aria-pressed={autoScroll}>
             Autoscroll
           </button>
+          <button type="button" onClick={download} disabled={visibleLines.length === 0}>Download</button>
           <button type="button" onClick={clear}>Clear</button>
         </div>
       </header>
@@ -473,6 +503,15 @@ export function createConsoleFilter(sourceId: string | null) {
   return sourceId ? { limit: consoleReplayLimit, sourceId } : { limit: consoleReplayLimit };
 }
 
+export function createConsoleExportContent(entries: ConsoleEntry[]) {
+  return entries.map(formatConsoleExportLine).join("\n");
+}
+
+export function createConsoleExportFilename(date = new Date()) {
+  const stamp = date.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[:.]/g, "-");
+  return `console-log-${stamp}.log`;
+}
+
 export function parseAnsiSegments(text: string): AnsiSegment[] {
   if (!text.includes("\x1b[")) {
     return [{ text, className: "" }];
@@ -504,6 +543,32 @@ export function parseAnsiSegments(text: string): AnsiSegment[] {
 function renderConsoleText(text: string) {
   return parseAnsiSegments(text).map((segment, index) =>
     segment.className ? <span className={segment.className} key={index}>{segment.text}</span> : segment.text);
+}
+
+function downloadConsoleEntries(entries: ConsoleEntry[]) {
+  if (entries.length === 0 || typeof document === "undefined") {
+    return;
+  }
+
+  const blob = new Blob([createConsoleExportContent(entries)], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = createConsoleExportFilename();
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function formatConsoleExportLine(entry: ConsoleEntry) {
+  const source = entry.sourceLabel ?? entry.sourceId ?? "local";
+  return `${entry.timestamp} ${entry.stream} ${source} ${stripAnsi(entry.text)}`;
+}
+
+function stripAnsi(text: string) {
+  return text.replace(ansiEscapePattern, "");
 }
 
 function createAnsiState(): AnsiState {

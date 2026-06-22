@@ -138,6 +138,61 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("renders the activity palette as a category tree with activity descriptions", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        }),
+        activity({
+          activityVersionId: "flowchart-v1",
+          activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          category: "Composition",
+          displayName: "Flowchart",
+          description: "Runs activities as a graph."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+
+    const tree = container.querySelector("[role='tree'][aria-label='Available activities']");
+    expect(tree).toBeTruthy();
+    expect(tree?.textContent).toContain("Composition");
+    expect(tree?.textContent).toContain("Primitives");
+    expect(tree?.textContent).toContain("Write Line");
+    expect(tree?.textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+
+    const writeLine = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
+      .find(button => button.textContent?.includes("Write Line"));
+    expect(writeLine?.getAttribute("role")).toBe("treeitem");
+    expect(writeLine?.getAttribute("title")).toBe("Writes a line to the console.");
+    expect(writeLine?.textContent).toContain("Writes a line to the console.");
+
+    const primitives = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-category-toggle"))
+      .find(button => button.textContent?.includes("Primitives"));
+    expect(primitives?.getAttribute("aria-expanded")).toBe("true");
+    await click(primitives ?? null);
+
+    expect(primitives?.getAttribute("aria-expanded")).toBe("false");
+    expect(tree?.textContent).not.toContain("Write Line");
+
+    await unmount();
+  });
+
   it("opens a filtered executable artifacts view for a definition", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({ definitions: [definition()] })));
     const { container, unmount } = await renderRegisteredRoute();
@@ -345,6 +400,23 @@ function executable(overrides: Partial<Record<string, unknown>> = {}) {
     rootActivityVersion: "1.0.0",
     nodeCount: 3,
     resumeTargetCount: 0,
+    ...overrides
+  };
+}
+
+function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "draft-1",
+    definitionId: "definition-1",
+    sourceVersionId: null,
+    state: {
+      variables: [],
+      rootActivity: null,
+      inputs: [],
+      outputs: []
+    },
+    layout: [],
+    validationErrors: [],
     ...overrides
   };
 }

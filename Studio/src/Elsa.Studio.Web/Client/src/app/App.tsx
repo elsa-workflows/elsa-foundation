@@ -203,9 +203,20 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
+  for (const item of navigation) {
+    if (!item.parentId) {
+      continue;
+    }
+
+    const children = childrenByParentId.get(item.parentId) ?? [];
+    children.push(item);
+    childrenByParentId.set(item.parentId, children);
+  }
+
   const navigationSections = [
-    { id: "workspace", label: "Workspace", items: navigation.filter(item => getNavigationSection(item) === "workspace") },
-    { id: "settings", label: "Settings", items: navigation.filter(item => getNavigationSection(item) === "settings") }
+    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
+    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
   ].filter(section => section.items.length > 0);
 
   return (
@@ -229,20 +240,42 @@ function ShellFrame({
         {navigationSections.map(section => (
           <nav key={section.id} className="nav-section" aria-label={section.label}>
             <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => (
-              <a
-                key={item.id}
-                className={isNavigationItemActive(item, path) ? "active" : ""}
-                href={item.path}
-                onClick={event => {
-                  event.preventDefault();
-                  onNavigate(item.path);
-                }}
-              >
-                <NavIconTile item={item} />
-                {item.label}
-              </a>
-            ))}
+            {section.items.map(item => {
+              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              return (
+                <div className="nav-item-group" key={item.id}>
+                  <a
+                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    href={item.path}
+                    onClick={event => {
+                      event.preventDefault();
+                      onNavigate(item.path);
+                    }}
+                  >
+                    <NavIconTile item={item} />
+                    {item.label}
+                  </a>
+                  {childItems.length > 0 ? (
+                    <div className="nav-children">
+                      {childItems.map(child => (
+                        <a
+                          key={child.id}
+                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
+                          href={child.path}
+                          onClick={event => {
+                            event.preventDefault();
+                            onNavigate(child.path);
+                          }}
+                        >
+                          {child.label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
         ))}
 
@@ -735,6 +768,11 @@ export function getNavigationSection(item: Pick<StudioNavigationContribution, "i
   }
 
   return "workspace";
+}
+
+export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
+  const ids = new Set(navigation.map(item => item.id));
+  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
 }
 
 function normalizePath(path: string) {

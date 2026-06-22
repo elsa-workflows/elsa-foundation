@@ -1,10 +1,17 @@
-.console-stream-panel {
+.console-stream-panel,
+.console-stream-page {
   height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: #080d0f;
   color: #d9e5e8;
+}
+
+.console-stream-page {
+  border: 1px solid #223036;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .console-stream-header {

@@ -3,6 +3,7 @@ import {
   buildCanvas,
   createActivityNode,
   flowchartStructureKind,
+  getActivityDisplay,
   getChildSlots,
   sequenceStructureKind,
   syncCanvasToScope,
@@ -33,6 +34,14 @@ const sequenceActivity: ActivityCatalogItem = {
 };
 
 describe("workflow adapter", () => {
+  it("uses friendly activity display names and falls back from fully-qualified names", () => {
+    expect(getActivityDisplay(writeLine)).toBe("Write Line");
+    expect(getActivityDisplay({
+      ...writeLine,
+      displayName: "Elsa.Activities.Primitives.Activities.WriteLine"
+    })).toBe("Write Line");
+  });
+
   it("discovers generic embedded activity arrays without activity-name hardcoding", () => {
     const activity: ActivityNode = {
       nodeId: "custom",

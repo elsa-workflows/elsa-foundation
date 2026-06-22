@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   appendConsoleEntries,
+  createConsoleExportContent,
+  createConsoleExportFilename,
   createConsoleFilter,
   createConsoleEntryFromLine,
   formatConsoleSourceLabel,
@@ -14,15 +16,35 @@ import {
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 describe("console stream module", () => {
-  it("registers a bottom panel contribution", () => {
+  it("registers navigation, route, and bottom panel contributions", () => {
+    const navigation: unknown[] = [];
+    const routes: unknown[] = [];
     const panels: unknown[] = [];
     const api = {
       host: { http: { getJson: async () => ({}) } },
+      backend: { http: { getJson: async () => ({}) } },
+      navigation: { add: (item: unknown) => navigation.push(item) },
+      routes: { add: (route: unknown) => routes.push(route) },
       panels: { add: (panel: unknown) => panels.push(panel) }
     } as ElsaStudioModuleApi;
 
     register(api);
 
+    expect(navigation).toHaveLength(1);
+    expect(navigation[0]).toMatchObject({
+      id: "console",
+      label: "Console",
+      path: "/diagnostics/console",
+      activePathPrefix: "/diagnostics/console",
+      parentId: "diagnostics",
+      order: 840
+    });
+    expect(routes).toHaveLength(1);
+    expect(routes[0]).toMatchObject({
+      id: "console",
+      label: "Console",
+      path: "/diagnostics/console"
+    });
     expect(panels).toHaveLength(1);
     expect(panels[0]).toMatchObject({
       id: "console-stream",
@@ -113,6 +135,19 @@ describe("console stream module", () => {
   it("omits sourceId when all sources are selected", () => {
     expect(createConsoleFilter(null)).toEqual({ limit: 2000 });
     expect(createConsoleFilter("source-1")).toEqual({ limit: 2000, sourceId: "source-1" });
+  });
+
+  it("exports visible console entries as plain text", () => {
+    const entries = [
+      { ...entry(1), stream: "stdout" as const, text: "\x1b[32mready\x1b[0m", sourceLabel: "Elsa Studio · machine:123" },
+      { ...entry(2), stream: "stderr" as const, text: "failed", sourceId: "server" }
+    ];
+
+    expect(createConsoleExportContent(entries)).toBe([
+      `${entries[0].timestamp} stdout Elsa Studio · machine:123 ready`,
+      `${entries[1].timestamp} stderr server failed`
+    ].join("\n"));
+    expect(createConsoleExportFilename(new Date("2026-06-22T01:02:03.456Z"))).toBe("console-log-2026-06-22T01-02-03Z.log");
   });
 });
 

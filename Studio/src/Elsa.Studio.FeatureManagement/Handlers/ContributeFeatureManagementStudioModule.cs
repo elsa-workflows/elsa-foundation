@@ -5,7 +5,7 @@ namespace Elsa.Studio.FeatureManagement.Handlers;
 
 public sealed class ContributeFeatureManagementStudioModule : IStudioEventHandler<OnStudioModuleManifestsCollecting>
 {
-    private const string ModuleVersion = "1.0.9";
+    private const string ModuleVersion = "1.0.10";
 
     public Task Handle(OnStudioModuleManifestsCollecting @event, CancellationToken cancellationToken)
     {

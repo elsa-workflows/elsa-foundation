@@ -666,12 +666,61 @@
   display: flex;
   max-height: calc(100% - 40px);
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   overflow: auto;
-  padding: 10px;
+  padding: 8px;
 }
 
-.wf-palette-list button,
+.wf-palette-category {
+  min-width: 0;
+}
+
+.wf-palette-category-toggle {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0 7px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.wf-palette-category-toggle:hover {
+  background: var(--wf-accent-soft);
+  color: var(--wf-text);
+}
+
+.wf-palette-category-toggle span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-palette-category-toggle small {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
+.wf-palette-activities {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 16px;
+}
+
+.wf-palette-activity,
 .wf-slot-list button {
   display: block;
   width: 100%;
@@ -685,14 +734,14 @@
   text-align: left;
 }
 
-.wf-palette-list button:hover,
+.wf-palette-activity:hover,
 .wf-slot-list button:hover {
   background: var(--wf-accent-soft);
   border-color: color-mix(in srgb, var(--wf-accent) 45%, var(--wf-border));
 }
 
-.wf-palette-list strong,
-.wf-palette-list small,
+.wf-palette-activity strong,
+.wf-palette-activity small,
 .wf-slot-list small {
   display: block;
   overflow: hidden;
@@ -700,7 +749,7 @@
   white-space: nowrap;
 }
 
-.wf-palette-list small,
+.wf-palette-activity small,
 .wf-slot-list small,
 .wf-muted {
   color: var(--wf-muted-text);
