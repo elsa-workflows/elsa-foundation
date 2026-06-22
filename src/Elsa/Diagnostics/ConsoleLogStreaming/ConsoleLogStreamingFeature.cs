@@ -1,4 +1,5 @@
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
+using ConsoleLogStreaming.Core;
 using ConsoleLogStreaming.Core.Capture;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Features;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using ConsoleLogOptions = ConsoleLogStreaming.Core.Options.ConsoleLogOptions;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming;
 
@@ -67,10 +69,24 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     public string? HubPath { get; set; }
 
     /// <summary>
+    /// Installs the console stream hook before the host builder is created when the feature is enabled in shells.json.
+    /// </summary>
+    public static void InstallConsoleStreamHookIfEnabled(string[] args) =>
+        InstallConsoleStreamHookIfEnabled(args, ConsoleStreamHook.Install);
+
+    /// <summary>
     /// Installs the console stream hook during startup when the feature is enabled in shell configuration.
     /// </summary>
     public static void InstallConsoleStreamHookIfEnabled(IConfiguration configuration) =>
         InstallConsoleStreamHookIfEnabled(configuration, ConsoleStreamHook.Install);
+
+    internal static void InstallConsoleStreamHookIfEnabled(string[] args, Action install)
+    {
+        if (!IsFeatureEnabled(ResolveShellsJsonPath(args)))
+            return;
+
+        InstallConsoleStreamHook(install);
+    }
 
     internal static void InstallConsoleStreamHookIfEnabled(IConfiguration configuration, Action install)
     {
@@ -90,25 +106,101 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     {
         foreach (var shell in configuration.GetSection("CShells:Shells").GetChildren())
         {
-            if (shell.GetSection("Features").GetChildren().Any(feature => feature.Key == FeatureName))
-                return true;
+            foreach (var feature in shell.GetSection("Features").GetChildren())
+            {
+                if (IsEnabledFeatureEntry(feature))
+                    return true;
+            }
         }
 
         return false;
+    }
+
+    private static bool IsEnabledFeatureEntry(IConfigurationSection feature)
+    {
+        if (string.Equals(feature.Key, FeatureName, StringComparison.OrdinalIgnoreCase))
+            return !string.Equals(feature.Value, bool.FalseString, StringComparison.OrdinalIgnoreCase);
+
+        if (string.Equals(feature.Value, FeatureName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var configuredName = GetChildValue(feature, "Name") ?? GetChildValue(feature, "Id");
+        return string.Equals(configuredName, FeatureName, StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(GetChildValue(feature, "Enabled"), bool.FalseString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetChildValue(IConfigurationSection section, string key) =>
+        section.GetChildren()
+            .FirstOrDefault(child => string.Equals(child.Key, key, StringComparison.OrdinalIgnoreCase))
+            ?.Value;
+
+    internal static bool IsFeatureEnabled(string shellsJsonPath)
+    {
+        if (!File.Exists(shellsJsonPath))
+            return false;
+
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile(shellsJsonPath, optional: false)
+            .Build();
+
+        return IsFeatureEnabled(configuration);
+    }
+
+    internal static string ResolveShellsJsonPath(string[] args)
+    {
+        var contentRoot = ResolveContentRootPath(args);
+        return Path.Combine(contentRoot, "shells.json");
+    }
+
+    private static string ResolveContentRootPath(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (string.Equals(arg, "--contentRoot", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(arg, "--contentRootPath", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < args.Length)
+                    return Path.GetFullPath(args[i + 1]);
+
+                continue;
+            }
+
+            const string contentRootPrefix = "--contentRoot=";
+            if (arg.StartsWith(contentRootPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg[contentRootPrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(value))
+                    return Path.GetFullPath(value);
+            }
+
+            const string contentRootPathPrefix = "--contentRootPath=";
+            if (arg.StartsWith(contentRootPathPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg[contentRootPathPrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(value))
+                    return Path.GetFullPath(value);
+            }
+        }
+
+        return Directory.GetCurrentDirectory();
+    }
+
+    private void ConfigureHostOptions(ConsoleLogOptions options)
+    {
+        options.ServiceName = ServiceName;
+        options.SourceDisplayName = SourceDisplayName;
+        options.RecentCapacity = Math.Max(1, RecentCapacity);
+        options.MaxRecentQuerySize = Math.Max(1, MaxRecentQuerySize);
+        options.PreserveAnsi = PreserveAnsi;
     }
 
     public void ConfigureServices(IServiceCollection services)
     {
         InstallConsoleStreamHook(_installConsoleStreamHook);
 
-        services.AddConsoleLogStreamingHost(options =>
-        {
-            options.ServiceName = ServiceName;
-            options.SourceDisplayName = SourceDisplayName;
-            options.RecentCapacity = RecentCapacity;
-            options.MaxRecentQuerySize = MaxRecentQuerySize;
-            options.PreserveAnsi = PreserveAnsi;
-        });
+        ConsoleLogStreamingHost.Configure(ConfigureHostOptions);
+        services.AddConsoleLogStreamingHost(ConfigureHostOptions);
 
         services.AddConsoleLogStreamingAspNetCore(options =>
         {
@@ -116,6 +208,8 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             options.SourcesPath = ResolvePath(SourcesPath, "sources");
             options.HubPath = ResolvePath(HubPath, "hub");
         });
+
+        services.PostConfigure<ConsoleLogOptions>(ConfigureHostOptions);
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => endpoints.MapConsoleLogStreaming();

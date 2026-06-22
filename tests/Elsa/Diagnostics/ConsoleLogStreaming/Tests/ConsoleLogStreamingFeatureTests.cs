@@ -1,4 +1,6 @@
 using ConsoleLogStreaming.AspNetCore;
+using ConsoleLogStreaming.Core;
+using ConsoleLogStreaming.Core.Capture;
 using ConsoleLogStreaming.Core.Hosting;
 using ConsoleLogStreaming.Core.Options;
 using CShells.AspNetCore.Features;
@@ -10,8 +12,22 @@ using Xunit;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming.Tests;
 
-public sealed class ConsoleLogStreamingFeatureTests
+public sealed class ConsoleLogStreamingFeatureTests : IDisposable
 {
+    public ConsoleLogStreamingFeatureTests()
+    {
+        ConsoleLogStreamingHost.ShutdownAsync(CancellationToken.None).GetAwaiter().GetResult();
+        ConsoleStreamHook.Uninstall();
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+    }
+
+    public void Dispose()
+    {
+        ConsoleLogStreamingHost.ShutdownAsync(CancellationToken.None).GetAwaiter().GetResult();
+        ConsoleStreamHook.Uninstall();
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+    }
+
     [Fact]
     public void RegistersResolvableDiagnosticsServices()
     {
@@ -51,6 +67,24 @@ public sealed class ConsoleLogStreamingFeatureTests
         Assert.Equal("/custom/console/recent", aspNetCoreOptions.RecentPath);
         Assert.Equal("/custom/console/sources", aspNetCoreOptions.SourcesPath);
         Assert.Equal("/custom/console/hub", aspNetCoreOptions.HubPath);
+    }
+
+    [Fact]
+    public void ClampsConfiguredHostLimits()
+    {
+        var services = new ServiceCollection();
+
+        new ConsoleLogStreamingFeature(() => { })
+        {
+            RecentCapacity = 0,
+            MaxRecentQuerySize = -1
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var hostOptions = provider.GetRequiredService<IOptions<ConsoleLogOptions>>().Value;
+
+        Assert.Equal(1, hostOptions.RecentCapacity);
+        Assert.Equal(1, hostOptions.MaxRecentQuerySize);
     }
 
     [Fact]
@@ -133,6 +167,161 @@ public sealed class ConsoleLogStreamingFeatureTests
         var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
 
         Assert.True(enabled);
+    }
+
+    [Fact]
+    public void DoesNotEnableConsoleStreamHookWhenFeatureIsBooleanFalse()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": {
+                      "DiagnosticsConsoleLogStreaming": false
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
+    public void DetectsEnabledFeatureCaseInsensitively()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": {
+                      "diagnosticsconsolelogstreaming": {}
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public void DetectsEnabledFeatureFromArrayJsonShape()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": [
+                      "DiagnosticsConsoleLogStreaming"
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public void DetectsEnabledFeatureFromArrayObjectJsonShape()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": [
+                      {
+                        "Name": "DiagnosticsConsoleLogStreaming",
+                        "EndpointPrefix": "/diagnostics/console"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.True(enabled);
+    }
+
+    [Fact]
+    public void DoesNotEnableConsoleStreamHookWhenArrayObjectFeatureIsDisabled()
+    {
+        var configuration = BuildJsonConfiguration("""
+            {
+              "CShells": {
+                "Shells": {
+                  "default": {
+                    "Features": [
+                      {
+                        "Name": "DiagnosticsConsoleLogStreaming",
+                        "Enabled": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            """);
+
+        var enabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+
+        Assert.False(enabled);
+    }
+
+    [Fact]
+    public void InstallsConsoleStreamHookFromContentRootBeforeBuilderCreation()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var contentRoot = Directory.CreateTempSubdirectory();
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var otherDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(contentRoot.FullName, "shells.json"), """
+                {
+                  "CShells": {
+                    "Shells": {
+                      "default": {
+                        "Features": {
+                          "DiagnosticsConsoleLogStreaming": {}
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+            Directory.SetCurrentDirectory(otherDirectory.FullName);
+
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
+
+            Assert.Equal(1, installCount);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+            contentRoot.Delete(recursive: true);
+            otherDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
