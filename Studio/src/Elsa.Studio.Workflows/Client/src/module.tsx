@@ -19,7 +19,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -28,13 +28,14 @@ import {
   getDefinition,
   listActivities,
   listDefinitions,
+  listExecutables,
   promoteDraft,
   publishVersion,
   restoreDefinition,
   runExecutable,
   updateDraft
 } from "./workflowsApi";
-import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary } from "./workflowTypes";
 import {
   buildCanvas,
   createActivityNode,
@@ -55,12 +56,21 @@ const nodeTypes = { workflowActivity: WorkflowActivityNode };
 const activityDragDataType = "application/x-elsa-activity-version-id";
 const pointerDragThreshold = 6;
 const autosaveDelayMs = 1200;
+const definitionPageSizes = [10, 25, 50];
+const defaultDefinitionPageSize = 10;
+type CreateWorkflowKind = "sequence" | "flowchart";
+interface CreateWorkflowDraft {
+  name: string;
+  description: string;
+  rootKind: CreateWorkflowKind;
+}
 
 export function register(api: ElsaStudioModuleApi) {
   api.navigation.add({
     id: "workflows",
     label: "Workflows",
     path: "/workflows/definitions",
+    activePathPrefix: "/workflows",
     order: 20,
     iconColor: "#0ea5e9"
   });
@@ -70,6 +80,20 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/workflows/definitions",
     label: "Workflow definitions",
     component: () => <WorkflowManagementPage context={api.backend} />
+  });
+
+  api.routes.add({
+    id: "workflows-executables",
+    path: "/workflows/executables",
+    label: "Workflow executables",
+    component: () => <WorkflowExecutablesPage context={api.backend} />
+  });
+
+  api.routes.add({
+    id: "workflows-instances",
+    path: "/workflows/instances",
+    label: "Workflow instances",
+    component: () => <WorkflowInstancesPage />
   });
 }
 
@@ -90,43 +114,210 @@ function WorkflowManagementPage({ context }: { context: StudioEndpointContext })
 
   return definitionId
     ? <WorkflowEditor context={context} definitionId={definitionId} onBack={() => openDefinition(null)} />
-    : <WorkflowDefinitions context={context} onOpen={openDefinition} />;
+    : (
+      <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
+        <WorkflowDefinitions context={context} onOpen={openDefinition} />
+      </WorkflowsPageFrame>
+    );
+}
+
+function WorkflowExecutablesPage({ context }: { context: StudioEndpointContext }) {
+  const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
+
+  useEffect(() => {
+    const syncFromLocation = () => setDefinitionFilter(readExecutableDefinitionFilterFromUrl());
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
+
+  return (
+    <WorkflowsPageFrame activePath="/workflows/executables" title="Executables">
+      <WorkflowExecutables context={context} definitionFilter={definitionFilter} />
+    </WorkflowsPageFrame>
+  );
+}
+
+function WorkflowInstancesPage() {
+  return (
+    <WorkflowsPageFrame activePath="/workflows/instances" title="Instances">
+      <div className="wf-empty">
+        Workflow instance history will appear here when the runtime exposes an instance query endpoint.
+      </div>
+    </WorkflowsPageFrame>
+  );
+}
+
+function WorkflowsPageFrame({ activePath, title, children }: { activePath: string; title: string; children: React.ReactNode }) {
+  const navigate = (path: string) => {
+    window.history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  return (
+    <section className="wf-page">
+      <div className="wf-page-header">
+        <div>
+          <span className="wf-kicker">Workflow management</span>
+          <h2>{title}</h2>
+        </div>
+      </div>
+      <nav className="wf-section-tabs" aria-label="Workflow views">
+        <a className={activePath === "/workflows/definitions" ? "active" : ""} href="/workflows/definitions" onClick={event => { event.preventDefault(); navigate("/workflows/definitions"); }}>Definitions</a>
+        <a className={activePath === "/workflows/executables" ? "active" : ""} href="/workflows/executables" onClick={event => { event.preventDefault(); navigate("/workflows/executables"); }}>Executables</a>
+        <a className={activePath === "/workflows/instances" ? "active" : ""} href="/workflows/instances" onClick={event => { event.preventDefault(); navigate("/workflows/instances"); }}>Instances</a>
+      </nav>
+      {children}
+    </section>
+  );
 }
 
 function readDefinitionIdFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
 }
 
+function readExecutableDefinitionFilterFromUrl() {
+  return new URLSearchParams(window.location.search).get("definition");
+}
+
 function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointContext; onOpen(id: string): void }) {
   const [search, setSearch] = useState("");
   const [listState, setListState] = useState<DefinitionListState>("active");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(defaultDefinitionPageSize);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [definitions, setDefinitions] = useState<WorkflowDefinitionDetails["definition"][]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<Set<string>>(() => new Set());
+  const [createDraft, setCreateDraft] = useState<CreateWorkflowDraft | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
+  const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const selectVisibleRef = useRef<HTMLInputElement | null>(null);
+  const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
+  const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
+  const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
   const load = useCallback(async () => {
     setState("loading");
     setError("");
     try {
-      const response = await listDefinitions(context, search, listState);
-      setDefinitions(response.definitions);
+      const response = await listDefinitions(context, { search, state: listState, page, pageSize });
+      const backendPaged = typeof response.totalCount === "number";
+      const effectiveTotalCount = response.totalCount ?? response.definitions.length;
+      const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
+
+      if (effectiveTotalCount > 0 && page > effectiveTotalPages) {
+        setPage(effectiveTotalPages);
+        return;
+      }
+
+      setDefinitions(backendPaged ? response.definitions : pageItems(response.definitions, page, pageSize));
+      setTotalCount(effectiveTotalCount);
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }
-  }, [context, search, listState]);
+  }, [context, search, listState, page, pageSize]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const create = async (rootKind: "sequence" | "flowchart") => {
-    const name = window.prompt("Workflow name", rootKind === "sequence" ? "Sequence workflow" : "Flowchart workflow");
-    if (!name?.trim()) return;
-    const details = await createDefinition(context, { name, description: null, rootKind });
-    onOpen(details.definition.id);
+  useEffect(() => {
+    if (selectVisibleRef.current) {
+      selectVisibleRef.current.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
+    }
+  }, [allVisibleSelected, selectedVisibleCount]);
+
+  const loadCatalog = useCallback(async () => {
+    if (catalogState === "loading" || catalogState === "ready") return;
+    setCatalogState("loading");
+    try {
+      const response = await listActivities(context);
+      setCatalog(response.activities ?? []);
+      setCatalogState("ready");
+    } catch (e) {
+      setCatalogState("failed");
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [catalogState, context]);
+
+  const openCreateDialog = () => {
+    setError("");
+    setStatus("");
+    setCreateDraft({ name: "", description: "", rootKind: "flowchart" });
+    void loadCatalog();
+  };
+
+  const submitCreate = async () => {
+    if (!createDraft?.name.trim()) return;
+    setCreating(true);
+    setError("");
+    setStatus("");
+    try {
+      const details = await createDefinition(context, {
+        name: createDraft.name.trim(),
+        description: createDraft.description.trim() || null,
+        rootKind: createDraft.rootKind
+      });
+      setCreateDraft(null);
+      onOpen(details.definition.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const openDefinitionArtifacts = (definitionId: string) => {
+    window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const refreshAfterMutation = async () => {
+    if (definitions.length === 1 && page > 1) {
+      setPage(page - 1);
+      return;
+    }
+
+    await load();
+  };
+
+  const clearSelection = () => setSelectedDefinitionIds(new Set());
+
+  const toggleDefinitionSelection = (definitionId: string, selected: boolean) => {
+    setSelectedDefinitionIds(current => {
+      const next = new Set(current);
+      if (selected) next.add(definitionId);
+      else next.delete(definitionId);
+      return next;
+    });
+  };
+
+  const toggleVisibleSelection = (selected: boolean) => {
+    setSelectedDefinitionIds(current => {
+      const next = new Set(current);
+      for (const definitionId of visibleDefinitionIds) {
+        if (selected) next.add(definitionId);
+        else next.delete(definitionId);
+      }
+      return next;
+    });
+  };
+
+  const changeListState = (nextState: DefinitionListState) => {
+    setListState(nextState);
+    setPage(1);
+    clearSelection();
+  };
+
+  const changeSearch = (value: string) => {
+    setSearch(value);
+    setPage(1);
+    clearSelection();
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
@@ -135,8 +326,9 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
     setError("");
     try {
       await deleteDefinition(context, definition.id);
+      toggleDefinitionSelection(definition.id, false);
       setStatus(`Deleted ${definition.name}`);
-      await load();
+      await refreshAfterMutation();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -147,8 +339,9 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
     setError("");
     try {
       await restoreDefinition(context, definition.id);
+      toggleDefinitionSelection(definition.id, false);
       setStatus(`Restored ${definition.name}`);
-      await load();
+      await refreshAfterMutation();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -160,79 +353,379 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
     setError("");
     try {
       await deleteDefinitionPermanently(context, definition.id);
+      toggleDefinitionSelection(definition.id, false);
       setStatus(`Permanently deleted ${definition.name}`);
-      await load();
+      await refreshAfterMutation();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
   return (
-    <section className="wf-page">
-      <div className="wf-page-header">
-        <div>
-          <span className="wf-kicker">Workflow management</span>
-          <h2>Definitions</h2>
-        </div>
-        <div className="wf-actions">
-          <button type="button" onClick={() => void create("sequence")}><Plus size={15} /> Sequence</button>
-          <button type="button" onClick={() => void create("flowchart")}><GitBranch size={15} /> Flowchart</button>
-        </div>
-      </div>
-
+    <>
       <div className="wf-toolbar">
         <div className="wf-segmented" role="tablist" aria-label="Definition state">
-          <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => setListState("active")}>Active</button>
-          <button type="button" className={listState === "deleted" ? "active" : ""} aria-selected={listState === "deleted"} onClick={() => setListState("deleted")}>Deleted</button>
+          <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => changeListState("active")}>Active</button>
+          <button type="button" className={listState === "deleted" ? "active" : ""} aria-selected={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
         </div>
         <label className="wf-search">
           <Search size={15} />
-          <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search definitions" />
+          <input value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
         </label>
         <button type="button" onClick={() => void load()}>Refresh</button>
+        <div className="wf-actions">
+          <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
+        </div>
       </div>
 
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state !== "failed" && error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
+      {selectedDefinitionIds.size > 0 ? (
+        <div className="wf-selection-bar" aria-live="polite">
+          <span>{selectedDefinitionIds.size} selected</span>
+          <button type="button" onClick={clearSelection}>Clear selection</button>
+        </div>
+      ) : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow definitions...</div> : null}
       {state === "ready" && definitions.length === 0 ? <div className="wf-empty">No {listState} workflow definitions found.</div> : null}
       {state === "ready" && definitions.length > 0 ? (
-        <div className="wf-grid" role="table" aria-label="Workflow definitions">
+        <>
+          <div className="wf-grid" role="table" aria-label="Workflow definitions">
+            <div className="wf-grid-head" role="row">
+              <label className="wf-row-select">
+                <input
+                  ref={selectVisibleRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={event => toggleVisibleSelection(event.target.checked)}
+                  aria-label="Select visible workflow definitions"
+                />
+              </label>
+              <span>Name</span>
+              <span>Latest version</span>
+              <span>{listState === "deleted" ? "Deleted" : "Draft"}</span>
+              <span>Modified</span>
+              <span>Actions</span>
+            </div>
+            {definitions.map(definition => (
+              <div
+                className="wf-grid-row"
+                role="row"
+                aria-label={`Open workflow definition ${definition.name}`}
+                aria-selected={selectedDefinitionIds.has(definition.id)}
+                tabIndex={0}
+                onClick={() => onOpen(definition.id)}
+                onKeyDown={event => {
+                  if (event.currentTarget !== event.target) return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  onOpen(definition.id);
+                }}
+                key={definition.id}
+              >
+                <label className="wf-row-select" onClick={event => event.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedDefinitionIds.has(definition.id)}
+                    onChange={event => toggleDefinitionSelection(definition.id, event.target.checked)}
+                    aria-label={`Select workflow definition ${definition.name}`}
+                  />
+                </label>
+                <span>
+                  <strong>{definition.name}</strong>
+                  <small>{definition.description || definition.id}</small>
+                </span>
+                <span>{definition.latestVersion ?? "No version"}</span>
+                <span>{listState === "deleted" ? formatDate(definition.deletedAt) : (definition.draftId ? "Draft" : "None")}</span>
+                <span>{formatDate(definition.lastModifiedAt)}</span>
+                <span className="wf-row-actions" onClick={event => event.stopPropagation()}>
+                  {listState === "active" ? (
+                    <>
+                      <button type="button" onClick={event => { event.stopPropagation(); onOpen(definition.id); }}>Open</button>
+                      <button type="button" onClick={event => { event.stopPropagation(); openDefinitionArtifacts(definition.id); }}>Artifacts</button>
+                      <button type="button" className="danger" onClick={() => void softDelete(definition)}><Trash2 size={13} /> Delete</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => void restore(definition)}><RotateCcw size={13} /> Restore</button>
+                      <button type="button" className="danger" onClick={() => void permanentDelete(definition)}><Trash2 size={13} /> Delete permanently</button>
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <DefinitionPager
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={setPage}
+            onPageSizeChange={value => {
+              setPageSize(value);
+              setPage(1);
+            }}
+          />
+        </>
+      ) : null}
+      {createDraft ? (
+        <CreateWorkflowDialog
+          draft={createDraft}
+          activities={catalog}
+          catalogState={catalogState}
+          creating={creating}
+          onChange={nextDraft => setCreateDraft(nextDraft)}
+          onClose={() => setCreateDraft(null)}
+          onSubmit={submitCreate}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function CreateWorkflowDialog({ draft, activities, catalogState, creating, onChange, onClose, onSubmit }: {
+  draft: CreateWorkflowDraft;
+  activities: ActivityCatalogItem[];
+  catalogState: "idle" | "loading" | "ready" | "failed";
+  creating: boolean;
+  onChange(draft: CreateWorkflowDraft): void;
+  onClose(): void;
+  onSubmit(): void;
+}) {
+  const groupedActivities = useMemo(() => groupCreateRootActivities(activities), [activities]);
+
+  return (
+    <div className="wf-dialog-backdrop" role="presentation">
+      <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
+        <form
+          onSubmit={event => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
+          <div className="wf-dialog-heading">
+            <h3 id="workflow-create-title">Create Workflow</h3>
+          </div>
+          <label className="wf-form-field">
+            <span>Display name</span>
+            <input
+              autoFocus
+              aria-label="Display name"
+              value={draft.name}
+              onChange={event => onChange({ ...draft, name: event.target.value })}
+            />
+          </label>
+          <label className="wf-form-field">
+            <span>Description</span>
+            <textarea
+              aria-label="Description"
+              rows={3}
+              value={draft.description}
+              onChange={event => onChange({ ...draft, description: event.target.value })}
+            />
+          </label>
+          <label className="wf-form-field">
+            <span>Root activity</span>
+            <select
+              aria-label="Root activity"
+              value={draft.rootKind}
+              onChange={event => onChange({ ...draft, rootKind: event.target.value as CreateWorkflowKind })}
+              disabled={catalogState === "loading"}
+            >
+              <optgroup label="Composite roots">
+                {groupedActivities.compositeRoots.map(activity => (
+                  <option key={activity.value} value={activity.value}>{activity.label}</option>
+                ))}
+              </optgroup>
+              {groupedActivities.otherCategories.map(category => (
+                <optgroup key={category.name} label={category.name}>
+                  {category.activities.map(activity => (
+                    <option key={activity.activityVersionId} value={`unsupported:${activity.activityVersionId}`} disabled>
+                      {getActivityDisplay(activity)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          {catalogState === "loading" ? <div className="wf-dialog-note">Loading activity catalog...</div> : null}
+          {catalogState === "failed" ? <div className="wf-dialog-note">Activity catalog could not be loaded. Composite roots remain available.</div> : null}
+          <div className="wf-dialog-actions">
+            <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
+            <button type="submit" disabled={creating || !draft.name.trim()}>{creating ? "Creating..." : "Create"}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function WorkflowExecutables({ context, definitionFilter }: { context: StudioEndpointContext; definitionFilter: string | null }) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [executables, setExecutables] = useState<WorkflowExecutableSummary[]>([]);
+  const visibleExecutables = useMemo(
+    () => definitionFilter
+      ? executables.filter(executable => executable.definitionId === definitionFilter || executable.sourceId === definitionFilter)
+      : executables,
+    [definitionFilter, executables]
+  );
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setError("");
+    try {
+      setExecutables(await listExecutables(context));
+      setState("ready");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setState("failed");
+    }
+  }, [context]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const run = async (executable: WorkflowExecutableSummary) => {
+    setStatus("");
+    setError("");
+    try {
+      await runExecutable(context, executable.artifactId);
+      setStatus(`Started ${executable.artifactId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <>
+      <div className="wf-toolbar">
+        <button type="button" onClick={() => void load()}>Refresh</button>
+        {definitionFilter ? <span className="wf-filter-chip">Definition {definitionFilter}</span> : null}
+      </div>
+      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow executables...</div> : null}
+      {state === "ready" && visibleExecutables.length === 0 ? <div className="wf-empty">{definitionFilter ? "No workflow executables found for this definition." : "No workflow executables found. Publish a workflow definition to create one."}</div> : null}
+      {state === "ready" && visibleExecutables.length > 0 ? (
+        <div className="wf-grid wf-executable-grid" role="table" aria-label="Workflow executables">
           <div className="wf-grid-head" role="row">
-            <span>Name</span>
-            <span>Latest version</span>
-            <span>{listState === "deleted" ? "Deleted" : "Draft"}</span>
-            <span>Modified</span>
+            <span>Artifact</span>
+            <span>Version</span>
+            <span>Source</span>
+            <span>Root</span>
+            <span>Published</span>
             <span>Actions</span>
           </div>
-          {definitions.map(definition => (
-            <div className="wf-grid-row" role="row" key={definition.id}>
+          {visibleExecutables.map(executable => (
+            <div className="wf-grid-row" role="row" key={executable.artifactId}>
               <span>
-                <strong>{definition.name}</strong>
-                <small>{definition.description || definition.id}</small>
+                <strong>{executable.artifactId}</strong>
+                <small>{executable.artifactHash}</small>
               </span>
-              <span>{definition.latestVersion ?? "No version"}</span>
-              <span>{listState === "deleted" ? formatDate(definition.deletedAt) : (definition.draftId ? "Draft" : "None")}</span>
-              <span>{formatDate(definition.lastModifiedAt)}</span>
+              <span>{executable.artifactVersion}</span>
+              <span>{formatExecutableSource(executable)}</span>
+              <span>{formatExecutableRoot(executable)}</span>
+              <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
               <span className="wf-row-actions">
-                {listState === "active" ? (
-                  <>
-                    <button type="button" onClick={() => onOpen(definition.id)}>Open</button>
-                    <button type="button" className="danger" onClick={() => void softDelete(definition)}><Trash2 size={13} /> Delete</button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => void restore(definition)}><RotateCcw size={13} /> Restore</button>
-                    <button type="button" className="danger" onClick={() => void permanentDelete(definition)}><Trash2 size={13} /> Delete permanently</button>
-                  </>
-                )}
+                <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
               </span>
             </div>
           ))}
         </div>
       ) : null}
-    </section>
+    </>
   );
+}
+
+function DefinitionPager({ page, pageSize, totalCount, onPageChange, onPageSizeChange }: {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  onPageChange(page: number): void;
+  onPageSizeChange(pageSize: number): void;
+}) {
+  const totalPages = getTotalPages(totalCount, pageSize);
+  const firstItem = totalCount === 0 ? 0 : ((page - 1) * pageSize) + 1;
+  const lastItem = Math.min(page * pageSize, totalCount);
+
+  return (
+    <div className="wf-pagination" aria-label="Workflow definition pagination">
+      <span className="wf-pagination-summary" aria-live="polite">
+        Showing {firstItem}-{lastItem} of {totalCount}
+      </span>
+      <label className="wf-page-size">
+        Rows
+        <select value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))}>
+          {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
+        </select>
+      </label>
+      <div className="wf-page-controls">
+        <button type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label="Previous page" title="Previous page">
+          <ChevronLeft size={14} /> Previous
+        </button>
+        <span>Page {page} of {totalPages}</span>
+        <button type="button" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages} aria-label="Next page" title="Next page">
+          Next <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function pageItems<T>(items: T[], page: number, pageSize: number) {
+  return items.slice((page - 1) * pageSize, page * pageSize);
+}
+
+function getTotalPages(totalCount: number, pageSize: number) {
+  return Math.max(1, Math.ceil(totalCount / pageSize));
+}
+
+function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
+  const compositeRoots = [
+    { value: "flowchart" as const, label: "Flowchart" },
+    { value: "sequence" as const, label: "Sequence" }
+  ];
+  const categories = new Map<string, ActivityCatalogItem[]>();
+
+  for (const activity of activities) {
+    if (isCompositeRootActivity(activity)) continue;
+    const category = activity.category || "Uncategorized";
+    categories.set(category, [...(categories.get(category) ?? []), activity]);
+  }
+
+  const otherCategories = Array.from(categories.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, categoryActivities]) => ({
+      name,
+      activities: categoryActivities.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
+    }));
+
+  return { compositeRoots, otherCategories };
+}
+
+function isCompositeRootActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "Flowchart" || displayName === "Sequence" || activity.activityTypeKey.endsWith(".Flowchart") || activity.activityTypeKey.endsWith(".Sequence");
+}
+
+function formatExecutableSource(executable: WorkflowExecutableSummary) {
+  if (executable.sourceKind || executable.sourceId || executable.sourceVersion) {
+    return [executable.sourceKind, executable.sourceId, executable.sourceVersion].filter(Boolean).join(" / ");
+  }
+
+  return executable.definitionId;
+}
+
+function formatExecutableRoot(executable: WorkflowExecutableSummary) {
+  const rootName = formatActivityTypeName(executable.rootActivityType);
+  return rootName || executable.rootActivityType;
+}
+
+function formatActivityTypeName(typeName: string) {
+  return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
 }
 
 function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndpointContext; definitionId: string; onBack(): void }) {
@@ -275,7 +768,7 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
     setDetails(nextDetails);
     lastSavedDraftSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
     setDraft(nextDraft);
-    setCatalog(nextCatalog.activities);
+    setCatalog(nextCatalog.activities ?? []);
     setFrames([]);
     setSelectedNodeId(null);
   }, [context, definitionId]);
@@ -300,8 +793,52 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   };
 
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition) => {
-    if (!draft?.state.rootActivity || !scope) return;
     const next = createActivityNode(activity, createNodeId(activity));
+    if (!draft?.state.rootActivity) {
+      setRoot(next);
+      setSelectedNodeId(next.nodeId);
+      return;
+    }
+
+    if (!scope) {
+      const childSlot = getChildSlots(next)[0];
+      if (!childSlot) {
+        setStatus("");
+        setError("The current root activity does not accept child activities. Drop Flowchart or Sequence to wrap it in a composite root.");
+        return;
+      }
+
+      setDraft(current => {
+        if (!current?.state.rootActivity) return current;
+
+        const existingRoot = current.state.rootActivity;
+        const wrappedRoot = updateScopeActivities(next, [], [existingRoot]);
+        const layout = position
+          ? [
+              ...current.layout.filter(record => record.nodeId !== existingRoot.nodeId),
+              {
+                nodeId: existingRoot.nodeId,
+                x: Math.round(position.x),
+                y: Math.round(position.y)
+              }
+            ]
+          : current.layout;
+
+        return {
+          ...current,
+          layout,
+          state: {
+            ...current.state,
+            rootActivity: wrappedRoot
+          }
+        };
+      });
+      setSelectedNodeId(draft.state.rootActivity.nodeId);
+      setError("");
+      setStatus(`Wrapped root in ${getActivityDisplay(activity)}`);
+      return;
+    }
+
     setDraft(current => {
       if (!current?.state.rootActivity) return current;
 
@@ -333,13 +870,17 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   }, [draft?.state.rootActivity, frames, scope]);
 
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
-    if (!reactFlowInstance || !canvasRef.current) return null;
+    if (!canvasRef.current) return null;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    return reactFlowInstance.screenToFlowPosition({
-      x: clientX - canvasRect.left,
-      y: clientY - canvasRect.top
-    });
+    if (!reactFlowInstance) {
+      return {
+        x: clientX - canvasRect.left,
+        y: clientY - canvasRect.top
+      };
+    }
+
+    return reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY });
   }, [reactFlowInstance]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
@@ -373,7 +914,7 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
     const onPointerUp = (event: PointerEvent) => {
       const drag = pointerDragRef.current;
       pointerDragRef.current = null;
-      if (!drag?.dragging || !reactFlowInstance || !canvasRef.current) return;
+      if (!drag?.dragging || !canvasRef.current) return;
 
       const canvasRect = canvasRef.current.getBoundingClientRect();
       const isOverCanvas =

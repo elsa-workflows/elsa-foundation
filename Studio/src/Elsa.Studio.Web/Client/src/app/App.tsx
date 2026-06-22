@@ -165,7 +165,7 @@ function AppContent() {
 
   const activeRoute = routes.find(route => route.path === path);
   const ActiveComponent = activeRoute?.component;
-  const pageTitle = navigation.find(item => item.path === path)?.label ?? activeRoute?.label ?? "Studio";
+  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? "Studio";
 
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
@@ -232,7 +232,7 @@ function ShellFrame({
             {section.items.map(item => (
               <a
                 key={item.id}
-                className={path === item.path ? "active" : ""}
+                className={isNavigationItemActive(item, path) ? "active" : ""}
                 href={item.path}
                 onClick={event => {
                   event.preventDefault();
@@ -720,6 +720,12 @@ function getDefaultNavIconColor(id: string) {
   }
 
   return "var(--primary)";
+}
+
+function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
+  if (path === item.path) return true;
+  if (!item.activePathPrefix) return false;
+  return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {

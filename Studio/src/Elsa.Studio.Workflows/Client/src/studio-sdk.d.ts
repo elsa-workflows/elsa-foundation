@@ -15,6 +15,7 @@ declare module "@elsa-workflows/studio-sdk" {
     id: string;
     label: string;
     path: string;
+    activePathPrefix?: string;
     order?: number;
     iconColor?: string;
   }

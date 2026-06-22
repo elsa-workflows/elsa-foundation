@@ -88,6 +88,7 @@ export interface StudioNavigationContribution {
   id: string;
   label: string;
   path: string;
+  activePathPrefix?: string;
   order?: number;
   iconColor?: string;
 }

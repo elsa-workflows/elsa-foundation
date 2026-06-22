@@ -1,5 +1,8 @@
 export interface WorkflowDefinitionsResponse {
   definitions: WorkflowDefinitionSummary[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
 }
 
 export interface WorkflowDefinitionSummary {
@@ -112,4 +115,21 @@ export interface PublishedWorkflowResponse {
   artifactHash: string;
   rootActivityId: string;
   nodeCount: number;
+}
+
+export interface WorkflowExecutableSummary {
+  artifactId: string;
+  artifactVersion: string;
+  artifactHash: string;
+  definitionId: string;
+  definitionVersionId: string;
+  createdAt: string;
+  publishedAt?: string | null;
+  sourceKind?: string | null;
+  sourceId?: string | null;
+  sourceVersion?: string | null;
+  rootActivityType: string;
+  rootActivityVersion: string;
+  nodeCount: number;
+  resumeTargetCount: number;
 }

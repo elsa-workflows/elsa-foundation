@@ -5,6 +5,7 @@ import type {
   DefinitionListState,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
+  WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
   WorkflowDefinitionsResponse,
   WorkflowDraft
@@ -12,9 +13,22 @@ import type {
 
 const basePath = "/_elsa/workflow-management";
 
-export async function listDefinitions(context: StudioEndpointContext, search: string, state: DefinitionListState = "active") {
-  const parameters = new URLSearchParams({ state });
-  if (search.trim()) parameters.set("search", search.trim());
+export interface DefinitionListRequest {
+  search: string;
+  state?: DefinitionListState;
+  page: number;
+  pageSize: number;
+}
+
+export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
+  const parameters = new URLSearchParams({
+    state: request.state ?? "active",
+    page: request.page.toString(),
+    pageSize: request.pageSize.toString()
+  });
+  const search = request.search.trim();
+
+  if (search) parameters.set("search", search);
   return requestJson<WorkflowDefinitionsResponse>(context, `${basePath}/definitions?${parameters.toString()}`);
 }
 
@@ -60,6 +74,10 @@ export async function publishVersion(context: StudioEndpointContext, versionId: 
 
 export async function runExecutable(context: StudioEndpointContext, artifactId: string) {
   return postJson<unknown>(context, `${basePath}/executables/${encodeURIComponent(artifactId)}/run`, {});
+}
+
+export async function listExecutables(context: StudioEndpointContext) {
+  return requestJson<WorkflowExecutableSummary[]>(context, "/_demo/workflows/executables");
 }
 
 export async function listActivities(context: StudioEndpointContext) {
