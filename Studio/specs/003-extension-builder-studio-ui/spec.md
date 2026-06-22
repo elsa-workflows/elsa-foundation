@@ -211,7 +211,9 @@ plus the same build/promote/runtime operations as P1.
   with an already-loaded package.
 - Rollback target version no longer present in the feed (e.g., pruned by retention).
 - Network/stream interruption during a long build or while streaming logs.
-- Concurrent edits to the same project from two trusted sessions/users.
+- Concurrent edits to the same owner-scoped workspace from two sessions → last-write-wins;
+  v1 makes no concurrent multi-editor guarantee, so the UI should not imply real-time
+  co-editing.
 - Very large file trees, very large individual files, or long-running builds.
 - A workspace exists but contains no projects, or a project has no built artifact yet.
 - The `/_elsa/extension-builder` capability is unavailable or returns an unexpected
@@ -306,7 +308,16 @@ plus the same build/promote/runtime operations as P1.
   and accessible labeling, and present disabled/loading/validation states.
 - **FR-027**: The Extension Builder MUST be available only to trusted users
   (teams/admins) in v1; it MUST be hidden or access-denied for users lacking the trusted
-  capability, and MUST present a clear unauthorized state rather than a broken screen.
+  capability, and MUST present a clear unauthorized state rather than a broken screen. The
+  UI MUST drive this gating from `GetCapabilities`
+  (`GET /_elsa/extension-builder/capabilities`) and the returned `ExtensionBuilderCapabilities`
+  advisory flags. Server-side enforcement is authoritative; these flags are advisory hints
+  for UX only and MUST NOT be treated as a security boundary.
+- **FR-027a**: The UI MUST gate individual actions on the corresponding
+  `ExtensionBuilderCapabilities` flags — `can-create-workspace`, `can-edit-files`,
+  `can-build`, `can-promote`, `can-rollback` — by hiding or disabling the action (with an
+  explanation) when its flag is false, while still relying on the server to reject
+  unauthorized requests.
 - **FR-028**: Every long-running or failure-prone action (build, promote, reconcile,
   rollback) MUST surface progress, success, and failure states with actionable messaging,
   and MUST degrade gracefully if the `/_elsa/extension-builder` capability is unavailable
@@ -321,6 +332,7 @@ Endpoint root: `/_elsa/extension-builder` (extends `/_elsa/module-management` + 
 
 | Group | Operations |
 |-------|------------|
+| Permissions / gating | `GetCapabilities` (`GET /_elsa/extension-builder/capabilities`) → `ExtensionBuilderCapabilities` advisory flags |
 | Workspace / project | `CreateWorkspace`, `ListWorkspaces`, `GetWorkspace`, `DeleteWorkspace`, `ListTemplates`, `CreateProject`, `GetProject`, `DeleteProject`, `ListProjectFiles`, `ReadProjectFile`, `WriteProjectFile`, `DeleteProjectFile` |
 | Build | `SubmitBuild`, `GetBuild`, `GetBuildLog`, `GetBuildArtifact` |
 | Promote | `PromoteBuild` (validate + publish to Nuplane feed + reconcile) |
@@ -330,13 +342,16 @@ Runtime state enum (`ExtensionRuntimeStatus`, per package): `Loaded` | `PendingR
 
 Promotion rejection categories (`PackagePromotionResult`): `duplicate` | `invalid-manifest` | `dependency-policy` | `malformed-package`.
 
+Capability flags (`ExtensionBuilderCapabilities`, advisory for UI gating only — server enforcement is authoritative): `can-create-workspace` | `can-edit-files` | `can-build` | `can-promote` | `can-rollback`.
+
 ### Key Entities *(include if feature involves data)*
 
 Names mirror the authoritative backend spec.
 
-- **ExtensionWorkspace**: Top-level container owned by a trusted user/team; holds one or
-  more projects. Listed/created/deleted via `ListWorkspaces`/`CreateWorkspace`/
-  `GetWorkspace`/`DeleteWorkspace`.
+- **ExtensionWorkspace**: Top-level container owned by a trusted user; holds one or
+  more projects. Carries an explicit owner/creator attribute and is owner-scoped, with
+  last-write-wins semantics and no concurrent multi-editor guarantees in v1. Listed/
+  created/deleted via `ListWorkspaces`/`CreateWorkspace`/`GetWorkspace`/`DeleteWorkspace`.
 - **ExtensionProject**: A .NET project workspace within an `ExtensionWorkspace`. Key
   attributes: name, template kind, package identity (id + version), current revision,
   latest build status, runtime/loaded status. Has many `ProjectFile`s and many builds.
@@ -360,22 +375,31 @@ Names mirror the authoritative backend spec.
   (`GetRuntimeStatus`): `Loaded` | `PendingRestart` | `FailedReconciliation`, the loaded
   version, contributed capabilities, the rollback/version history, and failure
   reason/diagnostics when failed.
+- **ExtensionBuilderCapabilities**: Per-user advisory permission flags from
+  `GetCapabilities` used solely for UI gating — `can-create-workspace`, `can-edit-files`,
+  `can-build`, `can-promote`, `can-rollback`. Server-side enforcement remains authoritative;
+  these flags only inform which actions the UI shows/enables.
 
 ### Studio Views *(UI surfaces this feature introduces)* — view → capability mapping
 
+All views first resolve `GetCapabilities` and gate their actions on the returned
+`ExtensionBuilderCapabilities` flags (advisory; server enforcement is authoritative).
+
 - **Workspace & Project Browser** (workbench resource list): create-from-template entry
-  point; at-a-glance build/runtime status. → `ListWorkspaces`, `CreateWorkspace`,
+  point; at-a-glance build/runtime status; workspaces scoped to the current owner. →
+  `GetCapabilities` (gate `can-create-workspace`), `ListWorkspaces`, `CreateWorkspace`,
   `GetWorkspace`, `DeleteWorkspace`, `ListTemplates`, `CreateProject`, `GetProject`,
   `DeleteProject`, `GetRuntimeStatus` (status badges).
 - **Project Workspace (Editor view)**: file-tree + code editor split, build action, inline
-  diagnostics. → `ListProjectFiles`, `ReadProjectFile`, `WriteProjectFile`,
-  `DeleteProjectFile`, `SubmitBuild`.
+  diagnostics. → `GetCapabilities` (gate `can-edit-files`, `can-build`), `ListProjectFiles`,
+  `ReadProjectFile`, `WriteProjectFile`, `DeleteProjectFile`, `SubmitBuild`.
 - **Build Panel (Logs & Diagnostics)**: streaming status, log output, structured
   diagnostics with navigation to source, build history. → `GetBuild`, `GetBuildLog`,
   `GetBuildArtifact`.
 - **Promote & Runtime Inspector**: promotion action + outcome (incl. rejection category),
-  runtime/reconcile status, contributed capabilities, version history, recovery actions.
-  → `PromoteBuild`, `GetRuntimeStatus`, `RetryReconciliation`, `RollbackPackage`.
+  runtime/reconcile status, contributed capabilities, version history, recovery actions. →
+  `GetCapabilities` (gate `can-promote`, `can-rollback`), `PromoteBuild`, `GetRuntimeStatus`,
+  `RetryReconciliation`, `RollbackPackage`.
 
 ## Success Criteria *(mandatory)*
 
@@ -402,7 +426,9 @@ Names mirror the authoritative backend spec.
 - **SC-007**: All primary actions (create workspace/project, edit/save, build, promote,
   retry, rollback) are fully operable by keyboard with visible focus and accessible labels.
 - **SC-008**: Non-trusted users never reach an interactive builder surface; they always
-  see a clear unauthorized/hidden state, in 100% of access checks.
+  see a clear unauthorized/hidden state, in 100% of access checks. Per-action controls are
+  shown/enabled strictly according to the `ExtensionBuilderCapabilities` advisory flags
+  from `GetCapabilities`, and disabled/hidden when the corresponding flag is false.
 - **SC-009**: A generic (non-Elsa) .NET project completes the same build → promote →
   runtime path as an Elsa project, with the runtime view honestly reflecting its
   contributed capabilities (including none).
@@ -421,6 +447,10 @@ Names mirror the authoritative backend spec.
   their API/entity contracts — are owned by `elsa-foundation`
   `specs/075-extension-builder-backend/spec.md`. This UI consumes that surface at
   `/_elsa/extension-builder` using the canonical names listed above (FR-029).
+- **Owner-scoped workspaces, advisory gating**: An `ExtensionWorkspace` carries an explicit
+  owner/creator and is owner-scoped with last-write-wins and no concurrent multi-editor
+  guarantees in v1. The UI gates actions using the advisory `ExtensionBuilderCapabilities`
+  flags from `GetCapabilities`, while server-side enforcement remains authoritative.
 - **Two-level model**: An `ExtensionWorkspace` contains one or more `ExtensionProject`s;
   the browser reflects both levels.
 - **Consumes existing Studio surfaces**: This repo already provides a module/route
@@ -440,9 +470,15 @@ Names mirror the authoritative backend spec.
   `elsa-foundation` `075-extension-builder-backend` surface (see FR-029 and the capability
   table). Runtime states (`Loaded`/`PendingRestart`/`FailedReconciliation`) and rejection
   categories (`duplicate`/`invalid-manifest`/`dependency-policy`/`malformed-package`) are aligned.
-- [NEEDS CLARIFICATION: How "trusted user" is determined and surfaced to the Studio
-  frontend in v1 (capability flag, role, or backend-provided permission) so FR-027 and
-  SC-008 can bind to a concrete authorization signal.]
-- [NEEDS CLARIFICATION: Whether an `ExtensionWorkspace` is per-user or shared across
-  trusted teammates, and where project source is persisted — this drives the concurrent-edit
-  behavior referenced in the edge cases.]
+- **Partially resolved (UI binding done; mechanism open)**: The UI binds permission gating
+  to `GetCapabilities` + `ExtensionBuilderCapabilities` advisory flags (FR-027/FR-027a) and
+  treats workspaces as owner-scoped (last-write-wins). Backend defaults per coordinator:
+  server-side-enforced admin/trusted role + owner-scoped workspaces. The following remain
+  open and are routed through the backend spec:
+- [NEEDS CLARIFICATION: The exact mechanism by which "trusted user" / admin role is
+  determined server-side and reflected in `ExtensionBuilderCapabilities` — so FR-027 and
+  SC-008 can bind to the concrete authorization signal beyond the advisory flags.]
+- [NEEDS CLARIFICATION: The final workspace sharing model — whether owner-scoped workspaces
+  remain strictly per-user or gain a team-sharing model later, and where project source is
+  persisted — which determines whether the UI ever needs to surface shared/again-edited
+  state beyond v1's last-write-wins.]
