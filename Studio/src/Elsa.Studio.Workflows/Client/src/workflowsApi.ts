@@ -12,6 +12,7 @@ import type {
 } from "./workflowTypes";
 
 const basePath = "/_elsa/workflow-management";
+const requestTimeoutMs = 10000;
 
 export interface DefinitionListRequest {
   search: string;
@@ -93,7 +94,25 @@ async function postJson<T>(context: StudioEndpointContext, url: string, body: un
 }
 
 async function requestJson<T>(context: StudioEndpointContext, url: string, init?: RequestInit) {
-  const response = await fetch(new URL(url, context.baseUrl).toString(), init);
+  const requestUrl = new URL(url, context.baseUrl).toString();
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      ...init,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Request to ${requestUrl} timed out after ${requestTimeoutMs / 1000} seconds. Check Studio:BackendBaseUrl and make sure the backend workflow-management API is responding.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
   const text = await response.text();
   if (!response.ok) {
     throw new Error(readError(text) || `Request failed with ${response.status}.`);
