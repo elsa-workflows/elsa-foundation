@@ -1066,6 +1066,22 @@
   text-transform: uppercase;
 }
 
+.wf-ai-action,
+.wf-ai-inline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--wf-accent) 38%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-accent) 8%, var(--wf-surface));
+  color: var(--wf-text);
+}
+
+.wf-ai-inline-action {
+  justify-self: center;
+  margin-top: 10px;
+  padding: 7px 10px;
+}
+
 @media (max-width: 900px) {
   .wf-grid-head,
   .wf-grid-row {

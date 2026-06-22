@@ -32,6 +32,31 @@ describe("studio registry", () => {
     expect(api.navigation.list()[0]).toMatchObject({ iconColor: "#14b8a6" });
   });
 
+  it("tracks AI contributions and dispatches prompts", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const listener = vi.fn();
+
+    api.ai.promptActions.add({
+      id: "explain-resource",
+      label: "Explain",
+      placement: "selection",
+      contextKind: "resource",
+      createPrompt: () => ({ message: "Explain this resource." })
+    });
+    const unsubscribe = api.ai.onPrompt(listener);
+    api.ai.dispatchPrompt({ message: "Explain this workflow." });
+    unsubscribe();
+    api.ai.dispatchPrompt({ message: "This should not be observed." });
+
+    expect(api.ai.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
+  });
+
   it("creates a backend client that can target a separate base url", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

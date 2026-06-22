@@ -428,7 +428,11 @@ function testApi(): ElsaStudioModuleApi {
       }
     },
     navigation: registry(),
-    routes: registry()
+    routes: registry(),
+    ai: {
+      promptActions: registry(),
+      dispatchPrompt: vi.fn()
+    }
   };
 }
 

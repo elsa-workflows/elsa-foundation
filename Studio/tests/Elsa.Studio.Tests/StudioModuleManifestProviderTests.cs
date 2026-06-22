@@ -9,6 +9,8 @@ using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
+using Elsa.Studio.Weaver.Chat;
+using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -33,7 +35,34 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsWeaverManifestsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var chat = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Equal("Weaver chat", chat.DisplayName);
+        Assert.Equal("WeaverChatStudio", chat.ShellFeatureName);
+        Assert.StartsWith("/_content/Elsa.Studio.Weaver.Chat/studio/modules/weaver-chat/module.js", chat.Entry, StringComparison.Ordinal);
+        Assert.Contains("weaver-chat", chat.Capabilities);
+        Assert.Contains("ai-capabilities", chat.Capabilities);
+        Assert.Contains("ai-surfaces", chat.Capabilities);
+
+        var workflows = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
+        Assert.Equal("Weaver workflows", workflows.DisplayName);
+        Assert.Equal("WeaverWorkflowsStudio", workflows.ShellFeatureName);
+        Assert.Contains("weaver-workflows", workflows.Capabilities);
+        Assert.Contains("ai-context-providers", workflows.Capabilities);
+        Assert.Contains("ai-prompt-actions", workflows.Capabilities);
+        Assert.Contains("ai-proposal-renderers", workflows.Capabilities);
+        Assert.Contains("ai-tools", workflows.Capabilities);
     }
 
     [Fact]
@@ -181,6 +210,10 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Diagnostics, x =>
             x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Weaver.Chat" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
     [Fact]
@@ -207,6 +240,10 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(featureManagement.Contributions, x => x.Type == "http" && x.Label == "HTTP endpoints");
         Assert.Contains(featureManagement.Contributions, x => x.Type == "setting-editors");
         Assert.Contains(featureManagement.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+
+        var weaver = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
+        Assert.Contains(weaver.Contributions, x => x.Type == "ai-context-providers" && x.Label == "AI context providers");
+        Assert.Contains(weaver.Contributions, x => x.Type == "ai-prompt-actions" && x.Label == "AI prompt actions");
     }
 
     [Fact]
@@ -231,6 +268,8 @@ public sealed class StudioModuleManifestProviderTests
         services.AddDiagnosticsOpenTelemetryStudio();
         services.AddDiagnosticsStructuredLogsStudio();
         services.AddFeatureManagementStudio();
+        services.AddWeaverChatStudio();
+        services.AddWeaverWorkflowsStudio();
         services.AddWorkflowsStudio();
         services.AddDashboardStudioSample();
         services.AddWeatherForecastStudioSample();
