@@ -192,6 +192,27 @@ describe("auth provider manager", () => {
     expect(localAdapter.getAccessToken).not.toHaveBeenCalled();
   });
 
+  it("preserves the previous session when a returned provider cannot be resolved", async () => {
+    const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
+    oidcAdapter.refresh = vi.fn(async () => ({
+      ...authenticatedSession("charlie"),
+      subject: "charlie",
+      provider: { id: "missing", kind: "external-oidc" }
+    }));
+    const manager = createAuthProviderManager({
+      bootstrap: async () => bootstrap("entra"),
+      capabilities: async () => capabilities(),
+      adapters: [oidcAdapter]
+    });
+
+    await manager.initialize();
+    await expect(manager.refresh()).rejects.toBeInstanceOf(AuthConfigurationError);
+    await manager.getAccessToken();
+
+    expect(manager.getSession()).toMatchObject({ subject: "alice", provider: { id: "entra" } });
+    expect(oidcAdapter.getAccessToken).toHaveBeenCalledTimes(1);
+  });
+
   it("fails fast when backend selects a provider without a registered adapter", async () => {
     const manager = createAuthProviderManager({
       bootstrap: async () => bootstrap("missing"),

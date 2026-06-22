@@ -179,10 +179,11 @@ class DefaultAuthProviderManager implements AuthProviderManager {
   }
 
   private async applySession(session: AuthSession, fallbackAdapter: AuthProviderAdapter) {
-    this.session = session;
-    this.activeAdapter = session.provider?.id
+    const nextAdapter = session.provider?.id
       ? await this.getProviderAdapter(session.provider.id)
       : fallbackAdapter;
+    this.session = session;
+    this.activeAdapter = nextAdapter;
   }
 }
 

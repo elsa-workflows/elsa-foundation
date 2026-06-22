@@ -95,7 +95,8 @@ class B {
     return e || (this.pendingLoginProviderId ? this.pendingLoginProviderId : typeof window > "u" ? null : new URLSearchParams(window.location.search).get("authProviderId"));
   }
   async applySession(e, r) {
-    this.session = e, this.activeAdapter = e.provider?.id ? await this.getProviderAdapter(e.provider.id) : r;
+    const n = e.provider?.id ? await this.getProviderAdapter(e.provider.id) : r;
+    this.session = e, this.activeAdapter = n;
   }
 }
 class y extends Error {
