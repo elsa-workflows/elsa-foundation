@@ -32,9 +32,43 @@ declare module "@elsa-workflows/studio-sdk" {
     list(): T[];
   }
 
+  export interface StudioAiPromptRequest {
+    message: string;
+    agent?: string | null;
+    mode?: "enqueue" | "steer";
+    attachments?: Array<{
+      id?: string;
+      kind: string;
+      referenceId?: string | null;
+      scope?: string | null;
+      activityId?: string | null;
+      metadata?: Record<string, unknown>;
+    }>;
+    source?: {
+      moduleId?: string;
+      actionId?: string;
+      label?: string;
+    };
+  }
+
+  export interface StudioAiPromptActionContribution<TContext = unknown> {
+    id: string;
+    label: string;
+    description?: string;
+    placement: "shell" | "toolbar" | "inspector" | "empty-state" | "field-adornment" | "selection";
+    contextKind: string;
+    createPrompt(context: TContext): StudioAiPromptRequest | null;
+  }
+
+  export interface StudioAiContributionApi {
+    readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
+    dispatchPrompt(request: StudioAiPromptRequest): void;
+  }
+
   export interface ElsaStudioModuleApi {
     readonly backend: StudioEndpointContext;
     readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
+    readonly ai: StudioAiContributionApi;
   }
 }

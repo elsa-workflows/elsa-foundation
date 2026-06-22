@@ -148,9 +148,118 @@ export interface StudioSettingEditorContribution {
   component: ComponentType<StudioSettingEditorProps>;
 }
 
+export type StudioAiPromptMode = "enqueue" | "steer";
+export type StudioAiPromptPlacement = "shell" | "toolbar" | "inspector" | "empty-state" | "field-adornment" | "selection";
+export type StudioAiToolMutability = "read-only" | "proposal" | "administrative";
+export type StudioAiToolDangerLevel = "low" | "medium" | "high" | "critical";
+export type StudioAiTenantBehavior = "tenant-scoped" | "host-scoped" | "cross-tenant-denied";
+export type StudioAiProposalStatus = "draft" | "validated" | "blocked" | "approved" | "rejected" | "applied" | "expired";
+
+export interface StudioAiContextAttachment {
+  id?: string;
+  kind: string;
+  referenceId?: string | null;
+  scope?: string | null;
+  activityId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StudioAiPromptRequest {
+  message: string;
+  agent?: string | null;
+  mode?: StudioAiPromptMode;
+  attachments?: StudioAiContextAttachment[];
+  source?: {
+    moduleId?: string;
+    actionId?: string;
+    label?: string;
+  };
+}
+
+export interface StudioAiContextProviderContribution {
+  id: string;
+  kind: string;
+  label: string;
+  description?: string;
+  moduleId?: string;
+  order?: number;
+  createAttachment(reference: unknown): StudioAiContextAttachment | null;
+}
+
+export interface StudioAiPromptActionContribution<TContext = unknown> {
+  id: string;
+  label: string;
+  description?: string;
+  moduleId?: string;
+  order?: number;
+  placement: StudioAiPromptPlacement;
+  contextKind: string;
+  createPrompt(context: TContext): StudioAiPromptRequest | null;
+}
+
+export interface StudioAiToolContribution {
+  name: string;
+  displayName: string;
+  description?: string;
+  mutability: StudioAiToolMutability;
+  dangerLevel: StudioAiToolDangerLevel;
+  tenantBehavior?: StudioAiTenantBehavior;
+  permissions?: string[];
+  agentScopes?: string[];
+  moduleId?: string;
+}
+
+export interface StudioAiProposalRendererProps {
+  proposal: StudioAiProposalSummary;
+}
+
+export interface StudioAiProposalSummary {
+  id: string;
+  kind: string;
+  status: StudioAiProposalStatus | string;
+  conversationId?: string | null;
+  rationale?: string | null;
+  warnings?: string[];
+  diagnostics?: Array<{ code?: string; message: string; severity?: string; path?: string | null }>;
+  graphDiff?: {
+    addedActivityIds?: string[];
+    removedActivityIds?: string[];
+    changedActivityIds?: string[];
+    data?: Record<string, unknown>;
+  } | null;
+}
+
+export interface StudioAiProposalRendererContribution {
+  id: string;
+  kind: string;
+  moduleId?: string;
+  component: ComponentType<StudioAiProposalRendererProps>;
+}
+
+export interface StudioAiSurfaceContribution {
+  id: string;
+  title: string;
+  placement: "route" | "panel" | "drawer" | "inline";
+  moduleId?: string;
+  order?: number;
+}
+
 export interface StudioContributionRegistry<T> {
   add(contribution: T): void;
   list(): T[];
+}
+
+export interface StudioAiPromptDispatcher {
+  dispatchPrompt(request: StudioAiPromptRequest): void;
+  onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
+}
+
+export interface StudioAiContributionApi extends StudioAiPromptDispatcher {
+  readonly contextProviders: StudioContributionRegistry<StudioAiContextProviderContribution>;
+  readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
+  readonly tools: StudioContributionRegistry<StudioAiToolContribution>;
+  readonly proposalRenderers: StudioContributionRegistry<StudioAiProposalRendererContribution>;
+  readonly surfaces: StudioContributionRegistry<StudioAiSurfaceContribution>;
 }
 
 export interface ElsaStudioHostContext extends StudioEndpointContext {
@@ -176,6 +285,7 @@ export interface ElsaStudioModuleApi {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
   };
+  readonly ai: StudioAiContributionApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
@@ -192,6 +302,27 @@ export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
     },
     list() {
       return [...contributions];
+    }
+  };
+}
+
+export function createAiContributionApi(): StudioAiContributionApi {
+  const listeners = new Set<(request: StudioAiPromptRequest) => void>();
+
+  return {
+    contextProviders: createContributionRegistry(),
+    promptActions: createContributionRegistry(),
+    tools: createContributionRegistry(),
+    proposalRenderers: createContributionRegistry(),
+    surfaces: createContributionRegistry(),
+    dispatchPrompt(request) {
+      for (const listener of listeners) {
+        listener(request);
+      }
+    },
+    onPrompt(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     }
   };
 }

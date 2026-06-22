@@ -1,5 +1,6 @@
 import {
   createEndpointContext,
+  createAiContributionApi,
   createContributionRegistry,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
@@ -24,6 +25,7 @@ export function createStudioRegistry(host: ElsaStudioHostContext, backendBaseUrl
       nodeRenderers: createContributionRegistry(),
       toolboxItems: createContributionRegistry()
     },
+    ai: createAiContributionApi(),
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>()
   };
 }
