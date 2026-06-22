@@ -31,11 +31,13 @@
 
 ## Notes
 
-- Three [NEEDS CLARIFICATION] markers remain by design: they are backend-contract
-  alignment items owned by the authoritative `elsa-foundation` backend spec and the
-  coordinator. They concern canonical capability/entity names (FR-028), the trusted-user
-  authorization signal (FR-026 / SC-008), and workspace persistence/concurrency. They do
-  not block planning of the UI's user-facing behavior; the UI consumes a single
-  capability surface and binds names later.
+- Canonical backend capability/entity names are now bound to the authoritative
+  `elsa-foundation` `075-extension-builder-backend` surface (`/_elsa/extension-builder`),
+  including the runtime state enum and promotion rejection categories. The first
+  backend-contract clarification is therefore resolved.
+- Two [NEEDS CLARIFICATION] markers remain by design — both are backend-policy items the
+  coordinator can confirm: the trusted-user authorization signal (FR-027 / SC-008) and
+  whether an `ExtensionWorkspace` is per-user or shared (concurrency/persistence). They do
+  not block planning of the UI's user-facing behavior.
 - The spec deliberately keeps the editor technology (Monaco-style) as an assumption, not
   a requirement, to avoid leaking implementation detail into requirements.
