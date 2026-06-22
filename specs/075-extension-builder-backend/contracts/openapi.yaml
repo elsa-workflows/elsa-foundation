@@ -1,0 +1,271 @@
+openapi: 3.1.0
+info:
+  title: Elsa Extension Builder Backend API
+  version: 0.1.0
+servers:
+  - url: /_elsa/extension-builder
+security:
+  - moduleManagementKey: []
+paths:
+  /capabilities:
+    get:
+      operationId: GetCapabilities
+      responses:
+        "200":
+          description: Caller capability flags for Studio UX gating.
+  /templates:
+    get:
+      operationId: ListTemplates
+      responses:
+        "200":
+          description: Available project templates.
+  /workspaces:
+    get:
+      operationId: ListWorkspaces
+      responses:
+        "200":
+          description: Owner-visible workspaces.
+    post:
+      operationId: CreateWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "200":
+          description: Created workspace.
+  /workspaces/{workspaceId}:
+    get:
+      operationId: GetWorkspace
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Workspace.
+        "404":
+          description: Workspace not found.
+    delete:
+      operationId: DeleteWorkspace
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      responses:
+        "200":
+          description: Authoring workspace deleted; promoted packages are unchanged.
+        "404":
+          description: Workspace not found.
+  /workspaces/{workspaceId}/projects:
+    post:
+      operationId: CreateProject
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "200":
+          description: Created project.
+        "404":
+          description: Workspace not found.
+  /projects/{projectId}:
+    get:
+      operationId: GetProject
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project metadata.
+        "404":
+          description: Project not found.
+    delete:
+      operationId: DeleteProject
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Authoring project deleted; promoted packages are unchanged.
+        "404":
+          description: Project not found.
+  /projects/{projectId}/files:
+    get:
+      operationId: ListProjectFiles
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project file tree.
+  /projects/{projectId}/files/{path}:
+    get:
+      operationId: ReadProjectFile
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FilePath"
+      responses:
+        "200":
+          description: File content and metadata.
+        "404":
+          description: Project or file not found.
+    put:
+      operationId: WriteProjectFile
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FilePath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WriteProjectFileRequest"
+      responses:
+        "200":
+          description: Written file.
+    delete:
+      operationId: DeleteProjectFile
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FilePath"
+      responses:
+        "200":
+          description: File deleted.
+        "404":
+          description: Project or file not found.
+  /projects/{projectId}/builds:
+    post:
+      operationId: SubmitBuild
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Submitted build result.
+  /builds/{buildId}:
+    get:
+      operationId: GetBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Build result.
+        "404":
+          description: Build not found.
+  /builds/{buildId}/log:
+    get:
+      operationId: GetBuildLog
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Plain-text build log.
+  /builds/{buildId}/artifact:
+    get:
+      operationId: GetBuildArtifact
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: `.nupkg` artifact stream.
+  /builds/{buildId}/promote:
+    post:
+      operationId: PromoteBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          description: Promotion accepted or rejected with machine-classifiable reason.
+  /projects/{projectId}/runtime-status:
+    get:
+      operationId: GetRuntimeStatus
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Runtime package status.
+  /projects/{projectId}/rollback:
+    post:
+      operationId: RollbackPackage
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RollbackPackageRequest"
+      responses:
+        "200":
+          description: Rollback result.
+  /projects/{projectId}/retry-reconcile:
+    post:
+      operationId: RetryReconciliation
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Reconciliation retry result.
+components:
+  securitySchemes:
+    moduleManagementKey:
+      type: apiKey
+      in: header
+      name: X-Elsa-Module-Management-Key
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+    BuildId:
+      name: buildId
+      in: path
+      required: true
+      schema:
+        type: string
+    FilePath:
+      name: path
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    CreateWorkspaceRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+    CreateProjectRequest:
+      type: object
+      required: [templateId, packageId]
+      properties:
+        templateId:
+          type: string
+        packageId:
+          type: string
+        packageVersion:
+          type: string
+          default: 0.1.0
+        targetFramework:
+          type: string
+          default: net10.0
+    WriteProjectFileRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+    RollbackPackageRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
