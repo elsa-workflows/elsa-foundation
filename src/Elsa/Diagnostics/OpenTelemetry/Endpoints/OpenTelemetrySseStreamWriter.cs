@@ -86,19 +86,25 @@ public sealed class OpenTelemetrySseStreamWriter
         {
             await streamCts.CancelAsync();
             var completed = await Task.WhenAny(moveNext, Task.Delay(pendingMoveNextCleanupTimeout));
-            if (completed != moveNext)
-                // Disposing an async iterator while MoveNextAsync is still pending can throw NotSupportedException.
-                return;
-
-            try
+            if (completed == moveNext)
             {
-                await moveNext;
-            }
-            catch (OperationCanceledException) when (streamCts.IsCancellationRequested)
-            {
+                try
+                {
+                    await moveNext;
+                }
+                catch (OperationCanceledException) when (streamCts.IsCancellationRequested)
+                {
+                }
             }
         }
 
-        await enumerator.DisposeAsync();
+        try
+        {
+            await enumerator.DisposeAsync();
+        }
+        catch (NotSupportedException) when (moveNext is { IsCompleted: false })
+        {
+            // Some async iterators reject DisposeAsync while MoveNextAsync is still pending.
+        }
     }
 }

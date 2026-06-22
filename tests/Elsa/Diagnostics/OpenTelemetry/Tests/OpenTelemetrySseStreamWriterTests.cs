@@ -114,6 +114,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask.WaitAsync(TimeSpan.FromSeconds(1)));
         Assert.False(stream.MoveNextCompleted);
+        Assert.True(stream.DisposeAttempted);
         Assert.False(stream.Disposed);
     }
 
@@ -248,6 +249,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
 
         public TaskCompletionSource MoveNextStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool MoveNextCompleted { get; private set; }
+        public bool DisposeAttempted { get; private set; }
         public bool Disposed { get; private set; }
         public OpenTelemetryStreamItem Current => throw new InvalidOperationException("The blocking stream never yields an item.");
 
@@ -268,6 +270,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
 
         public ValueTask DisposeAsync()
         {
+            DisposeAttempted = true;
             if (Volatile.Read(ref _moveNextPending) == 1)
                 throw new NotSupportedException("DisposeAsync was called while MoveNextAsync was still pending.");
 
