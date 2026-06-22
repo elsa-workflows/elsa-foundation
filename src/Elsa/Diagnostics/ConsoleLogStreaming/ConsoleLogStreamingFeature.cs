@@ -84,7 +84,7 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
 
     internal static void InstallConsoleStreamHookIfEnabled(string[] args, Action install)
     {
-        if (!IsFeatureEnabled(ResolveShellsJsonPath(args)))
+        if (!IsFeatureEnabled(ResolveShellsJsonPath(args), args))
             return;
 
         InstallConsoleStreamHook(install);
@@ -140,13 +140,17 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             .FirstOrDefault(child => string.Equals(child.Key, key, StringComparison.OrdinalIgnoreCase))
             ?.Value;
 
-    internal static bool IsFeatureEnabled(string shellsJsonPath)
+    internal static bool IsFeatureEnabled(string shellsJsonPath) => IsFeatureEnabled(shellsJsonPath, []);
+
+    internal static bool IsFeatureEnabled(string shellsJsonPath, string[] args)
     {
         if (!File.Exists(shellsJsonPath))
             return false;
 
         var configuration = new ConfigurationBuilder()
             .AddJsonFile(shellsJsonPath, optional: false)
+            .AddEnvironmentVariables()
+            .AddCommandLine(args)
             .Build();
 
         return IsFeatureEnabled(configuration);
@@ -221,7 +225,7 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             return;
 
         services.AddSingleton<ConsoleLogStreamingFeatureRegistrationMarker>();
-        services.AddConsoleLogStreaming(ConfigureHostOptions);
+        services.AddConsoleLogStreaming();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ConsoleLogCaptureHostedService>());
 
         services.AddConsoleLogStreamingAspNetCore(options =>

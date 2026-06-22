@@ -38,7 +38,7 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConsoleLogCapture));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogOptions>));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPostConfigureOptions<ConsoleLogOptions>));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogStreamingAspNetCoreOptions>));
     }
 
@@ -429,6 +429,82 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
             ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
             contentRoot.Delete(recursive: true);
             otherDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DoesNotInstallConsoleStreamHookWhenEnvironmentDisablesShellsJsonFeature()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var contentRoot = Directory.CreateTempSubdirectory();
+        var originalDisableValue = Environment.GetEnvironmentVariable("CShells__Shells__default__Features__DiagnosticsConsoleLogStreaming");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(contentRoot.FullName, "shells.json"), """
+                {
+                  "CShells": {
+                    "Shells": {
+                      "default": {
+                        "Features": {
+                          "DiagnosticsConsoleLogStreaming": {}
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+            Environment.SetEnvironmentVariable("CShells__Shells__default__Features__DiagnosticsConsoleLogStreaming", "false");
+
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
+
+            Assert.Equal(0, installCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CShells__Shells__default__Features__DiagnosticsConsoleLogStreaming", originalDisableValue);
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+            contentRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DoesNotInstallConsoleStreamHookWhenCommandLineDisablesShellsJsonFeature()
+    {
+        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+        var installCount = 0;
+        var contentRoot = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(contentRoot.FullName, "shells.json"), """
+                {
+                  "CShells": {
+                    "Shells": {
+                      "default": {
+                        "Features": {
+                          "DiagnosticsConsoleLogStreaming": {}
+                        }
+                      }
+                    }
+                  }
+                }
+                """);
+
+            ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(
+                [
+                    "--contentRoot", contentRoot.FullName,
+                    "--CShells:Shells:default:Features:DiagnosticsConsoleLogStreaming=false"
+                ],
+                () => installCount++);
+
+            Assert.Equal(0, installCount);
+        }
+        finally
+        {
+            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
+            contentRoot.Delete(recursive: true);
         }
     }
 
