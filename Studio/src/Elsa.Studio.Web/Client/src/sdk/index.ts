@@ -66,9 +66,15 @@ export interface StudioModuleContributionSummary {
   status: string;
 }
 
+export type StudioValidationErrors = Record<string, string[]>;
+
 export interface StudioHttpClient {
+  requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;
   postJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
+  putJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
+  deleteJson<T>(url: string, init?: RequestInit): Promise<T>;
+  postForm<T>(url: string, body: FormData, init?: RequestInit): Promise<T>;
 }
 
 export interface StudioEndpointContext {
@@ -106,6 +112,44 @@ export interface StudioPanelContribution {
   title: string;
   order?: number;
   component: ComponentType;
+}
+
+export interface StudioFeatureAreaNavLeaf {
+  id?: string;
+  title: string;
+  path: string;
+  iconColor?: string;
+  placeholder?: boolean;
+}
+
+export interface StudioFeatureAreaNavParent {
+  id?: string;
+  title: string;
+  path: string;
+  iconColor?: string;
+  items: StudioFeatureAreaNavLeaf[];
+}
+
+export type StudioFeatureAreaNavContribution = StudioFeatureAreaNavLeaf | StudioFeatureAreaNavParent;
+
+export interface StudioFeatureAreaRouteContribution {
+  id: string;
+  path: string;
+  label: string;
+  component: ComponentType;
+}
+
+export interface StudioFeatureAreaContribution {
+  id: string;
+  title: string;
+  description?: string;
+  navGroup?: string;
+  ownedPaths: string[];
+  required?: boolean;
+  defaultEnabled?: boolean;
+  order?: number;
+  nav: StudioFeatureAreaNavContribution;
+  routes: StudioFeatureAreaRouteContribution[];
 }
 
 export interface StudioSettingDescriptor {
@@ -164,6 +208,7 @@ export interface ElsaStudioBackendContext extends StudioEndpointContext {
 export interface ElsaStudioModuleApi {
   readonly host: ElsaStudioHostContext;
   readonly backend: ElsaStudioBackendContext;
+  readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
@@ -206,6 +251,9 @@ export function createEndpointContext(baseUrl: string, options: { headers?: Head
 
 export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit): StudioHttpClient {
   return {
+    requestJson<T>(url: string, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
+    },
     async getJson<T>(url: string, init?: RequestInit) {
       return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
@@ -216,6 +264,27 @@ export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit):
         headers: withJsonContentTypeAndAccept(init?.headers),
         body: JSON.stringify(body)
       }));
+    },
+    async putJson<T>(url: string, body: unknown, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, {
+        ...init,
+        method: "PUT",
+        headers: withJsonContentTypeAndAccept(init?.headers),
+        body: JSON.stringify(body)
+      }));
+    },
+    async deleteJson<T>(url: string, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+        ...init,
+        method: "DELETE"
+      })));
+    },
+    async postForm<T>(url: string, body: FormData, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+        ...init,
+        method: "POST",
+        body
+      })));
     }
   };
 }
@@ -240,10 +309,14 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
   const requestUrl = resolveStudioUrl(baseUrl, url);
   const response = await fetch(requestUrl, init);
   if (!response.ok) {
-    throw new StudioHttpError(response.status, await readErrorMessage(response));
+    throw await createStudioHttpError(response);
   }
 
   const text = await response.text();
+  if (!text.trim()) {
+    return {} as T;
+  }
+
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -254,18 +327,72 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
 }
 
 async function readErrorMessage(response: Response) {
+  return (await readError(response)).message;
+}
+
+export async function createStudioHttpError(response: Response) {
+  const error = await readError(response);
+  return new StudioHttpError(response.status, error.message, error.validationErrors);
+}
+
+async function readError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null }> {
   const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
+  if (isJsonContentType(contentType)) {
     try {
       const payload = await response.json() as Record<string, unknown>;
-      return getProblemDetailsMessage(payload) ?? `Request failed with ${response.status}.`;
+      const validationErrors = extractValidationErrors(payload);
+      return {
+        message: getProblemDetailsMessage(payload) ?? getValidationErrorMessage(validationErrors) ?? `Request failed with ${response.status}.`,
+        validationErrors
+      };
     } catch {
-      return `Request failed with ${response.status}.`;
+      return { message: `Request failed with ${response.status}.`, validationErrors: null };
     }
   }
 
   const text = await response.text();
-  return text.trim() || `Request failed with ${response.status}.`;
+  return { message: text.trim() || `Request failed with ${response.status}.`, validationErrors: null };
+}
+
+function isJsonContentType(contentType: string) {
+  return contentType.toLowerCase().includes("json");
+}
+
+export async function describeApiError(error: unknown): Promise<string> {
+  if (error instanceof StudioHttpError) {
+    return error.message;
+  }
+
+  if (isResponseLikeError(error)) {
+    try {
+      return await readErrorMessage(error.response.clone());
+    } catch {
+      return error.response.statusText || "Request failed.";
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error.";
+}
+
+export async function tryExtractValidationErrors(error: unknown): Promise<StudioValidationErrors | null> {
+  if (error instanceof StudioHttpError) {
+    return error.validationErrors;
+  }
+
+  if (!isResponseLikeError(error)) {
+    return null;
+  }
+
+  try {
+    const payload = await error.response.clone().json() as Record<string, unknown>;
+    return extractValidationErrors(payload);
+  } catch {
+    return null;
+  }
 }
 
 function getProblemDetailsMessage(payload: Record<string, unknown>) {
@@ -280,6 +407,35 @@ function getProblemDetailsMessage(payload: Record<string, unknown>) {
   }
 
   return null;
+}
+
+function extractValidationErrors(payload: Record<string, unknown>): StudioValidationErrors | null {
+  const errors = payload.errors;
+  if (!errors || typeof errors !== "object" || Array.isArray(errors)) {
+    return null;
+  }
+
+  const result: StudioValidationErrors = {};
+  for (const [key, value] of Object.entries(errors as Record<string, unknown>)) {
+    const messages = Array.isArray(value) ? value.map(String) : [String(value)];
+    if (messages.length > 0) {
+      result[key] = messages;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function getValidationErrorMessage(errors: StudioValidationErrors | null) {
+  if (!errors) {
+    return null;
+  }
+
+  return Object.values(errors).flat().join(" ");
+}
+
+function isResponseLikeError(error: unknown): error is { response: Response } {
+  return typeof error === "object" && error !== null && "response" in error && (error as { response?: unknown }).response instanceof Response;
 }
 
 function resolveStudioUrl(baseUrl: string, url: string) {
@@ -321,7 +477,8 @@ function describeResponseContent(response: Response, text: string) {
 export class StudioHttpError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    public readonly validationErrors: StudioValidationErrors | null = null
   ) {
     super(message);
     this.name = "StudioHttpError";

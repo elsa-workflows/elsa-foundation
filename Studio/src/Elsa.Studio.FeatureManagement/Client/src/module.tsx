@@ -80,6 +80,11 @@ const AllCategoriesId = "__all";
 const UncategorizedId = "__uncategorized";
 const ModulesChangedEventName = "elsa-studio:modules-changed";
 
+export const featureKeys = {
+  all: ["features"] as const,
+  catalog: (hostId: FeatureHostId) => [...featureKeys.all, hostId, "catalog"] as const
+};
+
 let moduleApi: ElsaStudioModuleApi;
 
 export function register(api: ElsaStudioModuleApi) {

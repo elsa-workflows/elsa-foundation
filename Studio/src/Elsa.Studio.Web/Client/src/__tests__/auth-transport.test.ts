@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthenticatedHttpClient, createSignalRAccessTokenFactory, withAuthenticatedSignalROptions, type AuthSession } from "../auth";
+import { describeApiError, tryExtractValidationErrors } from "../sdk";
 
 describe("authenticated HTTP transport", () => {
   it("attaches bearer tokens through the provider manager", async () => {
@@ -26,6 +27,39 @@ describe("authenticated HTTP transport", () => {
     expect(auth.refresh).toHaveBeenCalledTimes(1);
     const retryInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
     expect(new Headers(retryInit.headers).get("Authorization")).toBe("Bearer token-2");
+  });
+
+  it("shares one refresh across concurrent unauthorized responses for the same origin", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("expired", { status: 401 }))
+      .mockResolvedValueOnce(new Response("expired", { status: 401 }))
+      .mockImplementation(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const auth = stubAuth("token-1", "token-2");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    await expect(Promise.all([
+      client.getJson("/_elsa/workflows"),
+      client.postJson("/_elsa/workflows", { name: "Workflow" })
+    ])).resolves.toEqual([{ ok: true }, { ok: true }]);
+
+    expect(auth.refresh).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const retryHeaders = [fetchMock.mock.calls[2]?.[1], fetchMock.mock.calls[3]?.[1]]
+      .map(init => new Headers((init as RequestInit).headers).get("Authorization"));
+    expect(retryHeaders).toEqual(["Bearer token-2", "Bearer token-2"]);
+  });
+
+  it("uses shared problem-details parsing for authenticated request failures", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ errors: { Name: ["Name is required."] } }),
+      { status: 422, headers: { "content-type": "application/json" } }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const error = await client.postJson("/_elsa/workflows", {}).catch(e => e);
+
+    await expect(describeApiError(error)).resolves.toContain("Name is required.");
+    await expect(tryExtractValidationErrors(error)).resolves.toEqual({ Name: ["Name is required."] });
   });
 });
 
