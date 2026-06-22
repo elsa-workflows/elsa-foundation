@@ -200,3 +200,4 @@
 - Keep unrelated existing worktree changes intact.
 - Do not export shared UI to module authors until props and token usage are proven by real screens.
 - Feature Management and Module Management are the first two requested follow-up screens after the initial Spec Kit foundation.
+- Workflow Designer Upgrade is a follow-up Workflows module story: preserve workflow JSON as canonical state, commit React Flow changes only on settled gestures, add named activity ports, connect-to-create, reusable picker, edge splice/delete/reconnect, palette drop-on-edge, and persistence tests.
