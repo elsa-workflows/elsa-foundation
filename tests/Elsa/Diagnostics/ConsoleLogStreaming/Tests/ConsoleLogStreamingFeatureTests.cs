@@ -6,6 +6,7 @@ using ConsoleLogStreaming.Core.Options;
 using CShells.AspNetCore.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Text;
 using Xunit;
@@ -35,9 +36,50 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
 
         new ConsoleLogStreamingFeature(() => { }).ConfigureServices(services);
 
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ConsoleLogStreamingHostRegistration));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConsoleLogCapture));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogOptions>));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogStreamingAspNetCoreOptions>));
+    }
+
+    [Fact]
+    public void RegistersHostLevelServicesOnlyOnce()
+    {
+        var services = new ServiceCollection();
+
+        new ConsoleLogStreamingFeature(() => { })
+        {
+            ServiceName = "first-service",
+            RecentCapacity = 10,
+            EndpointPrefix = "/first"
+        }.ConfigureServices(services);
+        new ConsoleLogStreamingFeature(() => { })
+        {
+            ServiceName = "second-service",
+            RecentCapacity = 20,
+            EndpointPrefix = "/second"
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var hostOptions = provider.GetRequiredService<IOptions<ConsoleLogOptions>>().Value;
+        var aspNetCoreOptions = provider.GetRequiredService<IOptions<ConsoleLogStreamingAspNetCoreOptions>>().Value;
+
+        Assert.Equal("first-service", hostOptions.ServiceName);
+        Assert.Equal(10, hostOptions.RecentCapacity);
+        Assert.Equal("/first/recent", aspNetCoreOptions.RecentPath);
+    }
+
+    [Fact]
+    public void ConfigureServicesDoesNotInstallRealConsoleStreamHookWhenHookDelegateIsInjected()
+    {
+        var services = new ServiceCollection();
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+
+        new ConsoleLogStreamingFeature(() => { }).ConfigureServices(services);
+
+        Assert.Same(originalOut, Console.Out);
+        Assert.Same(originalError, Console.Error);
     }
 
     [Fact]

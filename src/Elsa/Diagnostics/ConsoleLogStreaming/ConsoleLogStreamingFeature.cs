@@ -8,7 +8,9 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using ConsoleLogOptions = ConsoleLogStreaming.Core.Options.ConsoleLogOptions;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming;
@@ -199,8 +201,12 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
     {
         InstallConsoleStreamHook(_installConsoleStreamHook);
 
-        ConsoleLogStreamingHost.Configure(ConfigureHostOptions);
-        services.AddConsoleLogStreamingHost(ConfigureHostOptions);
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ConsoleLogStreamingFeatureRegistrationMarker)))
+            return;
+
+        services.AddSingleton<ConsoleLogStreamingFeatureRegistrationMarker>();
+        services.AddConsoleLogStreaming(ConfigureHostOptions);
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ConsoleLogCaptureHostedService>());
 
         services.AddConsoleLogStreamingAspNetCore(options =>
         {
@@ -244,4 +250,38 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             _consoleStreamHookInstalled = true;
         }
     }
+
+    private sealed class ConsoleLogCaptureHostedService(IConsoleLogCapture capture, IOptions<ConsoleLogOptions> options) : BackgroundService
+    {
+        public override async Task StartAsync(CancellationToken cancellationToken)
+        {
+            await capture.StartAsync(cancellationToken);
+            await base.StartAsync(cancellationToken);
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            using var timer = new PeriodicTimer(options.Value.IdleFlushTimeout);
+
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stoppingToken))
+                    await capture.FlushIdleAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            await base.StopAsync(cancellationToken);
+            await capture.StopAsync(cancellationToken);
+
+            if (capture is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync();
+        }
+    }
+
+    private sealed class ConsoleLogStreamingFeatureRegistrationMarker;
 }
