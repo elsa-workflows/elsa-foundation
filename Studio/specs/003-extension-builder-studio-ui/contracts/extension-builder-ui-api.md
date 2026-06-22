@@ -10,7 +10,7 @@ The Studio UI consumes these backend operations through `extensionBuilderApi.ts`
 |-----------|-------------|----------|
 | `GetCapabilities` | `GET /_elsa/extension-builder/capabilities` | `ExtensionBuilderCapabilities` |
 
-Required advisory flags: `can-create-workspace`, `can-edit-files`, `can-build`, `can-promote`, `can-rollback`.
+Required advisory flags: `canCreateWorkspace`, `canEditFiles`, `canBuild`, `canPromote`, `canRollback`.
 
 ## Workspace and project
 
@@ -22,8 +22,8 @@ Required advisory flags: `can-create-workspace`, `can-edit-files`, `can-build`, 
 | `DeleteWorkspace` | `DELETE /_elsa/extension-builder/workspaces/{workspaceId}` |
 | `ListTemplates` | `GET /_elsa/extension-builder/templates` |
 | `CreateProject` | `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects` |
-| `GetProject` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}` |
-| `DeleteProject` | `DELETE /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}` |
+| `GetProject` | `GET /_elsa/extension-builder/projects/{projectId}` |
+| `DeleteProject` | `DELETE /_elsa/extension-builder/projects/{projectId}` |
 
 UI requirements: browser rows show workspace/project owner scope, package id/version, latest build status, and runtime status. Project creation validates name/package id/version before submission.
 
@@ -31,31 +31,31 @@ UI requirements: browser rows show workspace/project owner scope, package id/ver
 
 | Operation | Method/path |
 |-----------|-------------|
-| `ListProjectFiles` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/files` |
-| `ReadProjectFile` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/files/{path}` |
-| `WriteProjectFile` | `PUT /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/files/{path}` |
-| `DeleteProjectFile` | `DELETE /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/files/{path}` |
+| `ListProjectFiles` | `GET /_elsa/extension-builder/projects/{projectId}/files` |
+| `ReadProjectFile` | `GET /_elsa/extension-builder/projects/{projectId}/files/{path}` |
+| `WriteProjectFile` | `PUT /_elsa/extension-builder/projects/{projectId}/files/{path}` |
+| `DeleteProjectFile` | `DELETE /_elsa/extension-builder/projects/{projectId}/files/{path}` |
 
-UI requirements: create/edit/delete affordances are gated by `can-edit-files`; dirty editor buffers are explicit and protected from silent loss.
+UI requirements: create/edit/delete affordances are gated by `canEditFiles`; dirty editor buffers are explicit and protected from silent loss.
 
 ## Build
 
 | Operation | Method/path |
 |-----------|-------------|
-| `SubmitBuild` | `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/builds` |
-| `GetBuild` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/builds/{buildId}` |
-| `GetBuildLog` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/builds/{buildId}/log` |
-| `GetBuildArtifact` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/builds/{buildId}/artifact` |
+| `SubmitBuild` | `POST /_elsa/extension-builder/projects/{projectId}/builds` |
+| `GetBuild` | `GET /_elsa/extension-builder/builds/{buildId}` |
+| `GetBuildLog` | `GET /_elsa/extension-builder/builds/{buildId}/log` |
+| `GetBuildArtifact` | `GET /_elsa/extension-builder/builds/{buildId}/artifact` |
 
-UI requirements: `queued` and `running` builds poll for status/log updates; duplicate build submission is disabled while a build is active.
+UI requirements: `SubmitBuild` is project-scoped and the backend snapshots the current project sources; `Pending` and `Running` builds poll for status/log updates; duplicate build submission is disabled while a build is active. Artifact metadata is read from `BuildResult.Artifact`; `GetBuildArtifact` is a package-file download endpoint and is not required for promotion gating.
 
 ## Promote and runtime
 
 | Operation | Method/path |
 |-----------|-------------|
-| `PromoteBuild` | `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/builds/{buildId}/promote` |
-| `GetRuntimeStatus` | `GET /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/runtime-status` |
-| `RollbackPackage` | `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/runtime-status/rollback` |
-| `RetryReconciliation` | `POST /_elsa/extension-builder/workspaces/{workspaceId}/projects/{projectId}/runtime-status/retry-reconciliation` |
+| `PromoteBuild` | `POST /_elsa/extension-builder/builds/{buildId}/promote` |
+| `GetRuntimeStatus` | `GET /_elsa/extension-builder/projects/{projectId}/runtime-status` |
+| `RollbackPackage` | `POST /_elsa/extension-builder/projects/{projectId}/rollback` |
+| `RetryReconciliation` | `POST /_elsa/extension-builder/projects/{projectId}/retry-reconcile` |
 
-UI requirements: promotion is gated by `can-promote`; rollback is gated by `can-rollback`; rejection categories render distinct guidance for `duplicate`, `invalid-manifest`, `dependency-policy`, and `malformed-package`; runtime states render `Loaded`, `PendingRestart`, and `FailedReconciliation` distinctly.
+UI requirements: promotion is gated by `canPromote`; rollback is gated by `canRollback`; rejection categories render distinct guidance for `Duplicate`, `InvalidManifest`, `DependencyPolicy`, and `MalformedPackage`; runtime states render `Loaded`, `PendingRestart`, and `FailedReconciliation` distinctly.

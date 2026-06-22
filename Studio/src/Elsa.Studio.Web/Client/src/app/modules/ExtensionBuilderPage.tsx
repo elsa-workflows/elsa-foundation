@@ -9,7 +9,6 @@ import {
   deleteProjectFile,
   deleteWorkspace,
   getBuild,
-  getBuildArtifact,
   getBuildLog,
   getCapabilities,
   getProject,
@@ -74,7 +73,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
-  const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "1.0.0", templateId: "" });
+  const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
   const [newFilePath, setNewFilePath] = useState("");
   const [operationBusy, setOperationBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -89,8 +88,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
   const latestArtifact = activeBuild?.artifact ?? null;
-  const canBuild = !!capabilities?.["can-build"] && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
-  const canPromote = !!capabilities?.["can-promote"] && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
+  const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
+  const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
 
   function clearBuildPoll() {
     if (pollTimerId.current) {
@@ -117,7 +116,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       ...current,
       templateId: primary.id,
       name: current.name || defaultProjectName(primary),
-      packageId: current.packageId || defaultPackageId(primary)
+      packageId: current.packageId || defaultPackageId(primary),
+      packageVersion: current.packageVersion || primary.defaultPackageVersion || "1.0.0"
     }));
   }, [templates, projectDraft.templateId]);
 
@@ -245,6 +245,24 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function refreshProjectMetadata(workspaceId: string, projectId: string) {
+    try {
+      const refreshedProject = await getProject(context, workspaceId, projectId);
+      if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return null;
+      setWorkspaces(current => patchProject(current, workspaceId, refreshedProject));
+      return refreshedProject;
+    } catch (e) {
+      setError(getErrorMessage(e));
+      return null;
+    }
+  }
+
+  function clearSourceDependentState() {
+    setActiveBuild(null);
+    setBuildLog("");
+    setPromotionResult(null);
+  }
+
   async function runOperation<T>(operation: () => Promise<T>, success: string) {
     setOperationBusy(true);
     setError(null);
@@ -306,17 +324,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (saved) {
       setSavedEditorText(editorText);
       setFiles(current => upsertFile(current, saved));
-      setActiveBuild(null);
-      setBuildLog("");
-      setPromotionResult(null);
+      clearSourceDependentState();
       if (selectedWorkspace && selectedProject) {
-        try {
-          const refreshedProject = await getProject(context, selectedWorkspace.id, selectedProject.id);
-          setWorkspaces(current => patchProject(current, selectedWorkspace.id, refreshedProject));
-          setBuildHistory(refreshedProject.builds ?? []);
-        } catch (e) {
-          setError(getErrorMessage(e));
-        }
+        const refreshedProject = await refreshProjectMetadata(selectedWorkspace.id, selectedProject.id);
+        if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
       }
     }
   }
@@ -331,6 +342,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (saved) {
       setNewFilePath("");
       setFiles(current => upsertFile(current, saved));
+      clearSourceDependentState();
+      const refreshedProject = await refreshProjectMetadata(selectedWorkspace.id, selectedProject.id);
+      if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
       await openFile(selectedWorkspace.id, selectedProject.id, saved.path, { force: true });
     }
   }
@@ -340,6 +354,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     const deleted = await runOperation(() => deleteProjectFile(context, selectedWorkspace.id, selectedProject.id, path), `Deleted ${path}.`);
     if (!deleted) return;
     setFiles(current => current.filter(file => file.path !== path));
+    clearSourceDependentState();
+    const refreshedProject = await refreshProjectMetadata(selectedWorkspace.id, selectedProject.id);
+    if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     if (path === activeFilePath) {
       setActiveFilePath("");
       setEditorText("");
@@ -361,6 +378,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     );
     if (build) {
       const revisionedBuild = { ...build, revision: build.revision ?? requestedRevision };
+      if (revisionedBuild.revision) {
+        setWorkspaces(current => patchProject(current, selectedWorkspace.id, { ...selectedProject, currentRevision: revisionedBuild.revision }));
+      }
       setActiveBuild(revisionedBuild);
       setBuildHistory(current => mergeBuildHistory(current, revisionedBuild));
       setBuildLog("");
@@ -376,9 +396,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         getBuildLog(context, workspaceId, projectId, buildId).catch(() => "")
       ]);
       if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
-      const artifact = build.status === "succeeded" && !build.artifact
-        ? await getBuildArtifact(context, workspaceId, projectId, build.id).catch(() => null)
-        : build.artifact ?? null;
+      const artifact = build.artifact ?? null;
       if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       const nextBuild = { ...build, revision: build.revision ?? activeBuild?.revision ?? null, artifact };
       setActiveBuild(nextBuild);
@@ -399,7 +417,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     const workspaceId = selectedWorkspace.id;
     const projectId = selectedProject.id;
     const result = await runOperation(
-      () => promoteBuild(context, workspaceId, projectId, activeBuild.id, { buildId: activeBuild.id, artifactId: latestArtifact.id }),
+      () => promoteBuild(context, workspaceId, projectId, activeBuild.id, { buildId: activeBuild.id }),
       `Promotion completed for ${latestArtifact.packageId} ${latestArtifact.version}.`
     );
     if (result && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
@@ -633,7 +651,7 @@ function WorkspaceBrowser({
   onDeleteProject(): void;
 }) {
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? null;
-  const canCreate = capabilities["can-create-workspace"];
+  const canCreate = capabilities.canCreateWorkspace;
 
   return (
     <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder workspaces">
@@ -646,7 +664,7 @@ function WorkspaceBrowser({
           <span>Workspace name</span>
           <input aria-label="Workspace name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
         </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create workspace" : "Requires can-create-workspace"} onClick={onCreateWorkspace}>
+        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create workspace" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
           Create workspace
         </button>
@@ -692,7 +710,7 @@ function WorkspaceBrowser({
             <span>Initial version</span>
             <input aria-label="Initial version" value={projectDraft.packageVersion} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageVersion: event.target.value })} />
           </label>
-          <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create project" : "Requires can-create-workspace"} onClick={onCreateProject}>
+          <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create project" : "Requires canCreateWorkspace"} onClick={onCreateProject}>
             <PackageCheck size={15} />
             Create project
           </button>
@@ -753,7 +771,7 @@ function ProjectWorkspace({
   onSaveFile(): void;
   onSubmitBuild(): void;
 }) {
-  const canEdit = capabilities["can-edit-files"];
+  const canEdit = capabilities.canEditFiles;
 
   if (!workspace || !project) {
     return (
@@ -772,11 +790,11 @@ function ProjectWorkspace({
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath || !editorDirty} title={!canEdit ? "Requires can-edit-files" : undefined} onClick={onSaveFile}>
+            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath || !editorDirty} title={!canEdit ? "Requires canEditFiles" : undefined} onClick={onSaveFile}>
               <Save size={15} />
               {editorDirty ? "Save" : "Saved"}
             </button>
-            <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities["can-build"] ? "Requires can-build" : undefined} onClick={onSubmitBuild}>
+            <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
               <Play size={15} />
               Build
             </button>
@@ -788,7 +806,7 @@ function ProjectWorkspace({
         <aside className="extension-builder-file-tree" aria-label="Project files">
           <div className="extension-builder-file-create">
             <input aria-label="New file path" placeholder="src/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} />
-            <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires can-edit-files"} aria-label="Create file" onClick={onCreateFile}>
+            <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires canEditFiles"} aria-label="Create file" onClick={onCreateFile}>
               <FilePlus2 size={14} />
             </button>
           </div>
@@ -994,9 +1012,9 @@ function PromotePanel({
   canPromote: boolean;
   onPromote(): void;
 }) {
-  const promoteReason = !capabilities["can-promote"]
-    ? "Requires can-promote"
-    : activeBuild?.status !== "succeeded"
+  const promoteReason = !capabilities.canPromote
+    ? "Requires canPromote"
+    : !isBuildSucceeded(activeBuild)
       ? "A succeeded build is required"
       : !artifact
         ? "A build artifact is required"
@@ -1085,7 +1103,7 @@ function RuntimePanel({
                 key={version.version}
                 version={version}
                 busy={busy}
-                canRollback={capabilities["can-rollback"]}
+                canRollback={capabilities.canRollback}
                 currentVersion={runtimeStatus.version}
                 onRollback={onRollback}
               />
@@ -1130,7 +1148,7 @@ function RuntimeVersionRow({
         <strong>{version.version}</strong>
         <small>{version.available ? formatDate(version.promotedAt) : "Rollback target unavailable"}</small>
       </span>
-      <button type="button" className="studio-button" disabled={disabled} title={!canRollback ? "Requires can-rollback" : !version.available ? "Rollback target is unavailable" : undefined} onClick={() => onRollback(version.version)}>
+      <button type="button" className="studio-button" disabled={disabled} title={!canRollback ? "Requires canRollback" : !version.available ? "Rollback target is unavailable" : undefined} onClick={() => onRollback(version.version)}>
         <RotateCcw size={15} />
         Rollback
       </button>
@@ -1184,7 +1202,8 @@ function applyTemplateDefaults(draft: ProjectDraft, template?: ExtensionTemplate
   return {
     ...draft,
     name: draft.name || defaultProjectName(template),
-    packageId: draft.packageId || defaultPackageId(template)
+    packageId: draft.packageId || defaultPackageId(template),
+    packageVersion: draft.packageVersion || template.defaultPackageVersion || "1.0.0"
   };
 }
 
@@ -1193,6 +1212,7 @@ function defaultProjectName(template: ExtensionTemplate) {
 }
 
 function defaultPackageId(template: ExtensionTemplate) {
+  if (template.defaultPackageId) return template.defaultPackageId;
   return /generic/i.test(`${template.name} ${template.id}`) ? "Company.Extensions.Generic" : "Company.Extensions.ElsaActivity";
 }
 
@@ -1201,12 +1221,16 @@ function fileSortKey(file: ProjectFile) {
 }
 
 function isBuildRunning(build: BuildResult | null) {
-  return build?.status === "queued" || build?.status === "running";
+  return build?.status === "queued" || build?.status === "running" || build?.status === "Pending" || build?.status === "Running";
 }
 
 function isBuildForCurrentRevision(build: BuildResult | null, project: ExtensionProject | null) {
-  if (!build || !project || build.status !== "succeeded") return false;
+  if (!build || !project || !isBuildSucceeded(build)) return false;
   return !project.currentRevision || build.revision === project.currentRevision;
+}
+
+function isBuildSucceeded(build: BuildResult | null) {
+  return build?.status === "succeeded" || build?.status === "Succeeded";
 }
 
 function capabilityCount(capabilities: ExtensionBuilderCapabilities | null) {
@@ -1215,9 +1239,9 @@ function capabilityCount(capabilities: ExtensionBuilderCapabilities | null) {
 }
 
 function buildTone(status?: string | null): StudioStatusTone {
-  if (status === "succeeded") return "success";
-  if (status === "failed") return "danger";
-  if (status === "queued" || status === "running") return "warning";
+  if (status === "succeeded" || status === "Succeeded") return "success";
+  if (status === "failed" || status === "Failed") return "danger";
+  if (status === "queued" || status === "running" || status === "Pending" || status === "Running") return "warning";
   return "neutral";
 }
 
@@ -1229,9 +1253,9 @@ function runtimeTone(status?: string | null): StudioStatusTone {
 }
 
 function diagnosticTone(severity?: string | null): StudioStatusTone {
-  if (severity === "error") return "danger";
-  if (severity === "warning") return "warning";
-  if (severity === "info") return "accent";
+  if (severity === "error" || severity === "Error") return "danger";
+  if (severity === "warning" || severity === "Warning") return "warning";
+  if (severity === "info" || severity === "Info") return "accent";
   return "neutral";
 }
 
@@ -1251,10 +1275,10 @@ function runtimeMessage(status: ExtensionRuntimeStatus) {
 
 function promotionMessage(result: PackagePromotionResult) {
   if (result.accepted) return result.message ?? "Package validation passed and promotion was accepted.";
-  if (result.category === "duplicate") return result.message ?? "Duplicate package id and version rejected. Bump the version before promoting; existing packages are never silently overwritten.";
-  if (result.category === "invalid-manifest") return result.message ?? "Package manifest validation failed. Fix the manifest metadata and rebuild.";
-  if (result.category === "dependency-policy") return result.message ?? "Package dependencies violate policy. Review the rejected dependency and rebuild with an allowed version.";
-  if (result.category === "malformed-package") return result.message ?? "The package artifact is malformed or corrupt. Rebuild the project before promoting.";
+  if (result.category === "Duplicate") return result.message ?? "Duplicate package id and version rejected. Bump the version before promoting; existing packages are never silently overwritten.";
+  if (result.category === "InvalidManifest") return result.message ?? "Package manifest validation failed. Fix the manifest metadata and rebuild.";
+  if (result.category === "DependencyPolicy") return result.message ?? "Package dependencies violate policy. Review the rejected dependency and rebuild with an allowed version.";
+  if (result.category === "MalformedPackage") return result.message ?? "The package artifact is malformed or corrupt. Rebuild the project before promoting.";
   return result.message ?? "Promotion was rejected by server-side validation.";
 }
 

@@ -55,7 +55,7 @@ in the runtime status — with no other user story implemented.
    affordance to build.
 2. **Given** a project workspace is open, **When** the user edits a source file
    (`WriteProjectFile`) and triggers a build (`SubmitBuild`), **Then** the UI streams
-   build status (queued → running → succeeded/failed) via `GetBuild` and shows build
+   build status (`Pending` → `Running` → `Succeeded`/`Failed`) via `GetBuild` and shows build
    logs via `GetBuildLog`.
 3. **Given** a build has succeeded and produced a `BuildArtifact`, **When** the user
    promotes it (`PromoteBuild`), **Then** the UI shows the `PackagePromotionResult`
@@ -115,7 +115,7 @@ but it depends on the P1 promote path existing.
 
 **Independent Test**: Given built packages that trigger each rejection category, the
 user attempts promotion and sees a distinct, actionable message for each of
-`duplicate`, `invalid-manifest`, `dependency-policy`, and `malformed-package`, with no
+`Duplicate`, `InvalidManifest`, `DependencyPolicy`, and `MalformedPackage`, with no
 silent overwrite — verified without the editor or runtime stories.
 
 **Backend capabilities used**: `PromoteBuild` (returns `PackagePromotionResult` with a
@@ -124,16 +124,16 @@ rejection category), `GetBuildArtifact`.
 **Acceptance Scenarios**:
 
 1. **Given** a package whose id + version already exists in the feed, **When** the user
-   attempts to promote, **Then** the UI surfaces the `duplicate` rejection, never
+   attempts to promote, **Then** the UI surfaces the `Duplicate` rejection, never
    overwrites, and guides the user to bump the version.
 2. **Given** a package with manifest problems, **When** promotion is rejected with
-   `invalid-manifest`, **Then** the UI explains the manifest issue and points the user at
+   `InvalidManifest`, **Then** the UI explains the manifest issue and points the user at
    what to correct.
 3. **Given** a package that violates dependency policy, **When** promotion is rejected
-   with `dependency-policy`, **Then** the UI communicates which dependency/policy was
+   with `DependencyPolicy`, **Then** the UI communicates which dependency/policy was
    violated.
 4. **Given** a corrupt or malformed artifact, **When** promotion is rejected with
-   `malformed-package`, **Then** the UI explains the artifact is unusable and suggests
+   `MalformedPackage`, **Then** the UI explains the artifact is unusable and suggests
    re-building.
 
 ---
@@ -200,11 +200,11 @@ plus the same build/promote/runtime operations as P1.
 ### Edge Cases
 
 - Promotion of a package whose id + version duplicates an existing feed entry →
-  `duplicate` rejection; never a silent overwrite.
+  `Duplicate` rejection; never a silent overwrite.
 - A build is triggered while a previous build for the same project is still running.
 - A build succeeds but produces a `BuildArtifact` that contributes nothing loadable.
-- Promotion rejected after a successful build for `invalid-manifest`,
-  `dependency-policy`, or `malformed-package` reasons.
+- Promotion rejected after a successful build for `InvalidManifest`,
+  `DependencyPolicy`, or `MalformedPackage` reasons.
 - Reconciliation fails after a successful promotion (`FailedReconciliation`); the
   runtime keeps the prior version while surfacing the failure.
 - A package loads but contributes nothing visible, or contributes items that conflict
@@ -256,8 +256,8 @@ plus the same build/promote/runtime operations as P1.
 
 - **FR-010**: Users MUST be able to trigger a build of the current project revision
   (`SubmitBuild`, producing a `BuildRequest`/`BuildResult`).
-- **FR-011**: The UI MUST show build lifecycle status (e.g., queued, running, succeeded,
-  failed) via `GetBuild` and update it without requiring a manual page refresh.
+- **FR-011**: The UI MUST show build lifecycle status (e.g., `Pending`, `Running`,
+  `Succeeded`, `Failed`) via `GetBuild` and update it without requiring a manual page refresh.
 - **FR-012**: The UI MUST stream/show build logs (`GetBuildLog`) and present a structured
   list of `BuildDiagnostic`s (errors and warnings) with severity, message, and location
   when available.
@@ -273,10 +273,10 @@ plus the same build/promote/runtime operations as P1.
   (`PromoteBuild`, sending a `PackagePromotionRequest`), which server-side validates and
   publishes to the Nuplane feed and reconciles.
 - **FR-016**: The UI MUST display the `PackagePromotionResult`, including validation
-  pass/fail and, on failure, the rejection category — one of `duplicate`,
-  `invalid-manifest`, `dependency-policy`, or `malformed-package` — with category-specific,
+  pass/fail and, on failure, the rejection category — one of `Duplicate`,
+  `InvalidManifest`, `DependencyPolicy`, or `MalformedPackage` — with category-specific,
   actionable guidance.
-- **FR-017**: On a `duplicate` rejection, the UI MUST never silently overwrite and MUST
+- **FR-017**: On a `Duplicate` rejection, the UI MUST never silently overwrite and MUST
   guide the user to bump the version.
 - **FR-018**: The UI MUST only enable promote when a valid `BuildArtifact` exists for the
   project's current revision; otherwise the action is unavailable with an explanation.
@@ -314,8 +314,8 @@ plus the same build/promote/runtime operations as P1.
   advisory flags. Server-side enforcement is authoritative; these flags are advisory hints
   for UX only and MUST NOT be treated as a security boundary.
 - **FR-027a**: The UI MUST gate individual actions on the corresponding
-  `ExtensionBuilderCapabilities` flags — `can-create-workspace`, `can-edit-files`,
-  `can-build`, `can-promote`, `can-rollback` — by hiding or disabling the action (with an
+  `ExtensionBuilderCapabilities` flags — `canCreateWorkspace`, `canEditFiles`,
+  `canBuild`, `canPromote`, `canRollback` — by hiding or disabling the action (with an
   explanation) when its flag is false, while still relying on the server to reject
   unauthorized requests.
 - **FR-028**: Every long-running or failure-prone action (build, promote, reconcile,
@@ -340,9 +340,9 @@ Endpoint root: `/_elsa/extension-builder` (extends `/_elsa/module-management` + 
 
 Runtime state enum (`ExtensionRuntimeStatus`, per package): `Loaded` | `PendingRestart` | `FailedReconciliation`.
 
-Promotion rejection categories (`PackagePromotionResult`): `duplicate` | `invalid-manifest` | `dependency-policy` | `malformed-package`.
+Promotion rejection categories (`PackagePromotionResult`): `Duplicate` | `InvalidManifest` | `DependencyPolicy` | `MalformedPackage`.
 
-Capability flags (`ExtensionBuilderCapabilities`, advisory for UI gating only — server enforcement is authoritative): `can-create-workspace` | `can-edit-files` | `can-build` | `can-promote` | `can-rollback`.
+Capability flags (`ExtensionBuilderCapabilities`, advisory for UI gating only — server enforcement is authoritative): `canCreateWorkspace` | `canEditFiles` | `canBuild` | `canPromote` | `canRollback`.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -361,23 +361,23 @@ Names mirror the authoritative backend spec.
   offers the Elsa activity/module template (primary) and a generic .NET template; each
   seeds an initial file tree and package identity defaults.
 - **BuildRequest**: A submitted request to build a project revision (`SubmitBuild`).
-- **BuildResult**: The outcome of a build (`GetBuild`): status (queued/running/succeeded/
-  failed), timestamps, diagnostics, and (on success) a produced `BuildArtifact`.
-- **BuildDiagnostic**: A single compiler/build message with severity (error/warning/info),
+- **BuildResult**: The outcome of a build (`GetBuild`): status (`Pending`/`Running`/
+  `Succeeded`/`Failed`), timestamps, diagnostics, and (on success) a produced `BuildArtifact`.
+- **BuildDiagnostic**: A single compiler/build message with severity (`Error`/`Warning`/`Info`),
   message text, and optional file + line/column location.
-- **BuildArtifact**: The NuGet package produced by a successful build
-  (`GetBuildArtifact`), identified by package id + version, eligible for promotion.
+- **BuildArtifact**: The NuGet package metadata produced by a successful build and returned on
+  `BuildResult.Artifact`, identified by package id + version, eligible for promotion.
 - **PackagePromotionRequest**: The request to promote a `BuildArtifact` (`PromoteBuild`).
 - **PackagePromotionResult**: The validation/publish outcome: pass, or a rejection
-  category (`duplicate` | `invalid-manifest` | `dependency-policy` | `malformed-package`),
+  category (`Duplicate` | `InvalidManifest` | `DependencyPolicy` | `MalformedPackage`),
   plus resulting runtime state.
 - **ExtensionRuntimeStatus**: The current runtime state of a project's loaded package
   (`GetRuntimeStatus`): `Loaded` | `PendingRestart` | `FailedReconciliation`, the loaded
   version, contributed capabilities, the rollback/version history, and failure
   reason/diagnostics when failed.
 - **ExtensionBuilderCapabilities**: Per-user advisory permission flags from
-  `GetCapabilities` used solely for UI gating — `can-create-workspace`, `can-edit-files`,
-  `can-build`, `can-promote`, `can-rollback`. Server-side enforcement remains authoritative;
+  `GetCapabilities` used solely for UI gating — `canCreateWorkspace`, `canEditFiles`,
+  `canBuild`, `canPromote`, `canRollback`. Server-side enforcement remains authoritative;
   these flags only inform which actions the UI shows/enables.
 
 ### Studio Views *(UI surfaces this feature introduces)* — view → capability mapping
@@ -387,18 +387,18 @@ All views first resolve `GetCapabilities` and gate their actions on the returned
 
 - **Workspace & Project Browser** (workbench resource list): create-from-template entry
   point; at-a-glance build/runtime status; workspaces scoped to the current owner. →
-  `GetCapabilities` (gate `can-create-workspace`), `ListWorkspaces`, `CreateWorkspace`,
+  `GetCapabilities` (gate `canCreateWorkspace`), `ListWorkspaces`, `CreateWorkspace`,
   `GetWorkspace`, `DeleteWorkspace`, `ListTemplates`, `CreateProject`, `GetProject`,
   `DeleteProject`, `GetRuntimeStatus` (status badges).
 - **Project Workspace (Editor view)**: file-tree + code editor split, build action, inline
-  diagnostics. → `GetCapabilities` (gate `can-edit-files`, `can-build`), `ListProjectFiles`,
+  diagnostics. → `GetCapabilities` (gate `canEditFiles`, `canBuild`), `ListProjectFiles`,
   `ReadProjectFile`, `WriteProjectFile`, `DeleteProjectFile`, `SubmitBuild`.
 - **Build Panel (Logs & Diagnostics)**: streaming status, log output, structured
   diagnostics with navigation to source, build history. → `GetBuild`, `GetBuildLog`,
   `GetBuildArtifact`.
 - **Promote & Runtime Inspector**: promotion action + outcome (incl. rejection category),
   runtime/reconcile status, contributed capabilities, version history, recovery actions. →
-  `GetCapabilities` (gate `can-promote`, `can-rollback`), `PromoteBuild`, `GetRuntimeStatus`,
+  `GetCapabilities` (gate `canPromote`, `canRollback`), `PromoteBuild`, `GetRuntimeStatus`,
   `RetryReconciliation`, `RollbackPackage`.
 
 ## Success Criteria *(mandatory)*
@@ -415,7 +415,7 @@ All views first resolve `GetCapabilities` and gate their actions on the returned
   manually refreshing, and the final outcome (success/failure) is unambiguous in 100% of
   observed builds.
 - **SC-004**: 100% of promote attempts that would duplicate an existing package id +
-  version are blocked with the `duplicate` rejection; none silently overwrite. Each of the
+  version are blocked with the `Duplicate` rejection; none silently overwrite. Each of the
   four rejection categories renders a distinct, actionable message.
 - **SC-005**: For a `FailedReconciliation`, a user can reach a working recovery action
   (`RetryReconciliation` or `RollbackPackage` to a prior loaded version) within the
@@ -469,7 +469,7 @@ All views first resolve `GetCapabilities` and gate their actions on the returned
   promotion, feed/runtime status, and rollback — now bound to the authoritative
   `elsa-foundation` `075-extension-builder-backend` surface (see FR-029 and the capability
   table). Runtime states (`Loaded`/`PendingRestart`/`FailedReconciliation`) and rejection
-  categories (`duplicate`/`invalid-manifest`/`dependency-policy`/`malformed-package`) are aligned.
+  categories (`Duplicate`/`InvalidManifest`/`DependencyPolicy`/`MalformedPackage`) are aligned.
 - ✅ **Resolved by implementation default**: Trusted/admin role determination is backend-owned.
   Studio gates access and per-action affordances only from `GetCapabilities` +
   `ExtensionBuilderCapabilities` advisory flags; server-side enforcement remains

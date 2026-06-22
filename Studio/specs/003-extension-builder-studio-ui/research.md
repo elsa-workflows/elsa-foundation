@@ -26,12 +26,12 @@
 
 ## Decision: Poll build/runtime state with explicit logs and diagnostics refresh
 
-**Rationale**: The canonical contract lists `GetBuild` and `GetBuildLog`, not a streaming transport. Timed polling for queued/running builds and follow-up runtime refreshes matches existing module-management follow-up refresh patterns.
+**Rationale**: The canonical contract lists `GetBuild` and `GetBuildLog`, not a streaming transport. Timed polling for `Pending`/`Running` builds and follow-up runtime refreshes matches existing module-management follow-up refresh patterns.
 
 **Alternatives considered**: SignalR/SSE streaming is not in the provided contract. Manual refresh only would fail SC-003.
 
 ## Decision: Treat capabilities as advisory UX gating
 
-**Rationale**: Defaults resolve authorization as backend-owned. UI reads `GET /_elsa/extension-builder/capabilities` before showing interactive builder state and disables/hides individual actions according to `can-create-workspace`, `can-edit-files`, `can-build`, `can-promote`, and `can-rollback` while relying on server enforcement.
+**Rationale**: Defaults resolve authorization as backend-owned. UI reads `GET /_elsa/extension-builder/capabilities` before showing interactive builder state and disables/hides individual actions according to `canCreateWorkspace`, `canEditFiles`, `canBuild`, `canPromote`, and `canRollback` while relying on server enforcement.
 
 **Alternatives considered**: Mapping to local roles would invent client-side security policy outside the contract. Ignoring flags would fail FR-027/FR-027a.

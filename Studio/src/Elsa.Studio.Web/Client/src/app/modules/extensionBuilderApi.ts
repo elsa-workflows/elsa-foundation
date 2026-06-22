@@ -2,18 +2,18 @@ import { withDefaultHeaders, type StudioEndpointContext } from "../../sdk";
 
 const root = "/_elsa/extension-builder";
 
-export type BuildStatus = "queued" | "running" | "succeeded" | "failed" | string;
+export type BuildStatus = "Pending" | "Running" | "Succeeded" | "Failed" | "queued" | "running" | "succeeded" | "failed" | string;
 export type RuntimeState = "Loaded" | "PendingRestart" | "FailedReconciliation" | string;
-export type PromotionRejectionCategory = "duplicate" | "invalid-manifest" | "dependency-policy" | "malformed-package" | string;
-export type ProjectFileType = "file" | "folder" | string;
-export type DiagnosticSeverity = "error" | "warning" | "info" | string;
+export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | string;
+export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manifest" | "Configuration" | "Other" | string;
+export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
 
 export interface ExtensionBuilderCapabilities {
-  "can-create-workspace": boolean;
-  "can-edit-files": boolean;
-  "can-build": boolean;
-  "can-promote": boolean;
-  "can-rollback": boolean;
+  canCreateWorkspace: boolean;
+  canEditFiles: boolean;
+  canBuild: boolean;
+  canPromote: boolean;
+  canRollback: boolean;
 }
 
 export interface ExtensionWorkspace {
@@ -44,6 +44,9 @@ export interface ExtensionTemplate {
   description?: string | null;
   tags?: string[];
   primary?: boolean;
+  defaultPackageId?: string | null;
+  defaultPackageVersion?: string | null;
+  defaultTargetFramework?: string | null;
 }
 
 export interface ProjectFile {
@@ -89,7 +92,7 @@ export interface BuildArtifact {
 
 export interface PackagePromotionRequest {
   buildId: string;
-  artifactId?: string | null;
+  targetFeed?: string | null;
 }
 
 export interface PackagePromotionResult {
@@ -97,9 +100,13 @@ export interface PackagePromotionResult {
   category?: PromotionRejectionCategory | null;
   message?: string | null;
   runtimeStatus?: ExtensionRuntimeStatus | null;
+  publishedPackage?: PublishedPackage | null;
+  requiresReload?: boolean;
+  requiresRestart?: boolean;
 }
 
 export interface ExtensionRuntimeStatus {
+  projectId?: string;
   packageId: string;
   version?: string | null;
   state: RuntimeState;
@@ -112,6 +119,7 @@ export interface RuntimeFeature {
   id: string;
   label: string;
   type?: string | null;
+  status?: string | null;
 }
 
 export interface RuntimeVersion {
@@ -125,6 +133,13 @@ export interface RuntimeDiagnostic {
   severity?: DiagnosticSeverity | null;
   message: string;
   source?: string | null;
+}
+
+export interface PublishedPackage {
+  packageId: string;
+  version: string;
+  feedName: string;
+  path: string;
 }
 
 export interface CreateWorkspaceRequest {
@@ -147,16 +162,17 @@ export async function getCapabilities(context: StudioEndpointContext) {
 }
 
 export async function listWorkspaces(context: StudioEndpointContext) {
-  const response = await context.http.getJson<ExtensionWorkspace[] | { workspaces: ExtensionWorkspace[] }>(`${root}/workspaces`);
-  return Array.isArray(response) ? response : response.workspaces;
+  const response = await context.http.getJson<RawExtensionWorkspace[] | { workspaces: RawExtensionWorkspace[] }>(`${root}/workspaces`);
+  const workspaces = Array.isArray(response) ? response : response.workspaces;
+  return Promise.all(workspaces.map(workspace => hydrateWorkspace(context, workspace)));
 }
 
 export async function createWorkspace(context: StudioEndpointContext, request: CreateWorkspaceRequest) {
-  return context.http.postJson<ExtensionWorkspace>(`${root}/workspaces`, request);
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/workspaces`, { displayName: request.name }), []);
 }
 
 export async function getWorkspace(context: StudioEndpointContext, workspaceId: string) {
-  return context.http.getJson<ExtensionWorkspace>(`${root}/workspaces/${segment(workspaceId)}`);
+  return hydrateWorkspace(context, await context.http.getJson<RawExtensionWorkspace>(`${root}/workspaces/${segment(workspaceId)}`));
 }
 
 export async function deleteWorkspace(context: StudioEndpointContext, workspaceId: string) {
@@ -164,53 +180,60 @@ export async function deleteWorkspace(context: StudioEndpointContext, workspaceI
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
-  const response = await context.http.getJson<ExtensionTemplate[] | { templates: ExtensionTemplate[] }>(`${root}/templates`);
-  return Array.isArray(response) ? response : response.templates;
+  const response = await context.http.getJson<RawExtensionTemplate[] | { templates: RawExtensionTemplate[] }>(`${root}/templates`);
+  const templates = Array.isArray(response) ? response : response.templates;
+  return templates.map(normalizeTemplate);
 }
 
 export async function createProject(context: StudioEndpointContext, workspaceId: string, request: CreateProjectRequest) {
-  return context.http.postJson<ExtensionProject>(`${root}/workspaces/${segment(workspaceId)}/projects`, request);
+  return normalizeProject(await context.http.postJson<RawExtensionProject>(`${root}/workspaces/${segment(workspaceId)}/projects`, {
+    templateId: request.templateId,
+    packageId: request.packageId,
+    packageVersion: request.packageVersion,
+    displayName: request.name
+  }));
 }
 
-export async function getProject(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  return context.http.getJson<ExtensionProject>(`${root}/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}`);
+export async function getProject(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
+  return normalizeProject(await context.http.getJson<RawExtensionProject>(`${root}/projects/${segment(projectId)}`));
 }
 
-export async function deleteProject(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  return requestJson(context, `${root}/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}`, { method: "DELETE" });
+export async function deleteProject(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
+  return requestJson(context, `${root}/projects/${segment(projectId)}`, { method: "DELETE" });
 }
 
-export async function listProjectFiles(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  const response = await context.http.getJson<ProjectFile[] | { files: ProjectFile[] }>(`${projectRoot(workspaceId, projectId)}/files`);
-  return Array.isArray(response) ? response : response.files;
+export async function listProjectFiles(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
+  const response = await context.http.getJson<RawProjectFile[] | { files: RawProjectFile[] }>(`${projectRoot(projectId)}/files`);
+  const files = Array.isArray(response) ? response : response.files;
+  return files.map(normalizeProjectFile);
 }
 
-export async function readProjectFile(context: StudioEndpointContext, workspaceId: string, projectId: string, path: string) {
-  return context.http.getJson<ProjectFile>(`${projectRoot(workspaceId, projectId)}/files/${filePath(path)}`);
+export async function readProjectFile(context: StudioEndpointContext, _workspaceId: string, projectId: string, path: string) {
+  return normalizeProjectFile(await context.http.getJson<RawProjectFile>(`${projectRoot(projectId)}/files/${filePath(path)}`));
 }
 
-export async function writeProjectFile(context: StudioEndpointContext, workspaceId: string, projectId: string, path: string, request: WriteProjectFileRequest) {
-  return requestJson<ProjectFile>(context, `${projectRoot(workspaceId, projectId)}/files/${filePath(path)}`, {
+export async function writeProjectFile(context: StudioEndpointContext, _workspaceId: string, projectId: string, path: string, request: WriteProjectFileRequest) {
+  return normalizeProjectFile(await requestJson<RawProjectFile>(context, `${projectRoot(projectId)}/files/${filePath(path)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify(request)
-  });
+  }));
 }
 
-export async function deleteProjectFile(context: StudioEndpointContext, workspaceId: string, projectId: string, path: string) {
-  return requestJson(context, `${projectRoot(workspaceId, projectId)}/files/${filePath(path)}`, { method: "DELETE" });
+export async function deleteProjectFile(context: StudioEndpointContext, _workspaceId: string, projectId: string, path: string) {
+  return requestJson(context, `${projectRoot(projectId)}/files/${filePath(path)}`, { method: "DELETE" });
 }
 
-export async function submitBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, request: BuildRequest = {}) {
-  return context.http.postJson<BuildResult>(`${projectRoot(workspaceId, projectId)}/builds`, request);
+export async function submitBuild(context: StudioEndpointContext, _workspaceId: string, projectId: string, _request: BuildRequest = {}) {
+  return normalizeBuild(await context.http.postJson<RawBuildResult>(`${projectRoot(projectId)}/builds`, {}));
 }
 
-export async function getBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, buildId: string) {
-  return context.http.getJson<BuildResult>(`${projectRoot(workspaceId, projectId)}/builds/${segment(buildId)}`);
+export async function getBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string) {
+  return normalizeBuild(await context.http.getJson<RawBuildResult>(`${root}/builds/${segment(buildId)}`));
 }
 
-export async function getBuildLog(context: StudioEndpointContext, workspaceId: string, projectId: string, buildId: string) {
-  const response = await fetch(new URL(`${projectRoot(workspaceId, projectId)}/builds/${segment(buildId)}/log`, context.baseUrl).toString(), withDefaultHeaders(context.headers, {
+export async function getBuildLog(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string) {
+  const response = await fetch(new URL(`${root}/builds/${segment(buildId)}/log`, context.baseUrl).toString(), withDefaultHeaders(context.headers, {
     cache: "no-store",
     headers: { "Accept": "text/plain, application/json" }
   }));
@@ -223,24 +246,25 @@ export async function getBuildLog(context: StudioEndpointContext, workspaceId: s
   return text;
 }
 
-export async function getBuildArtifact(context: StudioEndpointContext, workspaceId: string, projectId: string, buildId: string) {
-  return context.http.getJson<BuildArtifact>(`${projectRoot(workspaceId, projectId)}/builds/${segment(buildId)}/artifact`);
-}
-
 export async function promoteBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, buildId: string, request: PackagePromotionRequest) {
-  return context.http.postJson<PackagePromotionResult>(`${projectRoot(workspaceId, projectId)}/builds/${segment(buildId)}/promote`, request);
+  const result = normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
+  return result.accepted
+    ? { ...result, runtimeStatus: await getRuntimeStatus(context, workspaceId, projectId).catch(() => null) }
+    : result;
 }
 
-export async function getRuntimeStatus(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  return context.http.getJson<ExtensionRuntimeStatus>(`${projectRoot(workspaceId, projectId)}/runtime-status`);
+export async function getRuntimeStatus(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
+  return normalizeRuntimeStatus(await context.http.getJson<RawExtensionRuntimeStatus>(`${projectRoot(projectId)}/runtime-status`));
 }
 
 export async function rollbackPackage(context: StudioEndpointContext, workspaceId: string, projectId: string, version: string) {
-  return context.http.postJson<ExtensionRuntimeStatus>(`${projectRoot(workspaceId, projectId)}/runtime-status/rollback`, { version });
+  await context.http.postJson<RawPackagePromotionResult>(`${projectRoot(projectId)}/rollback`, { version });
+  return getRuntimeStatus(context, workspaceId, projectId);
 }
 
 export async function retryReconciliation(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  return context.http.postJson<ExtensionRuntimeStatus>(`${projectRoot(workspaceId, projectId)}/runtime-status/retry-reconciliation`, {});
+  await context.http.postJson<RawExtensionBuilderOperationResponse>(`${projectRoot(projectId)}/retry-reconcile`, {});
+  return getRuntimeStatus(context, workspaceId, projectId);
 }
 
 export function isTrusted(capabilities: ExtensionBuilderCapabilities | null) {
@@ -249,11 +273,11 @@ export function isTrusted(capabilities: ExtensionBuilderCapabilities | null) {
 
 function normalizeCapabilities(value: Partial<ExtensionBuilderCapabilities>): ExtensionBuilderCapabilities {
   return {
-    "can-create-workspace": value["can-create-workspace"] ?? false,
-    "can-edit-files": value["can-edit-files"] ?? false,
-    "can-build": value["can-build"] ?? false,
-    "can-promote": value["can-promote"] ?? false,
-    "can-rollback": value["can-rollback"] ?? false
+    canCreateWorkspace: value.canCreateWorkspace ?? false,
+    canEditFiles: value.canEditFiles ?? false,
+    canBuild: value.canBuild ?? false,
+    canPromote: value.canPromote ?? false,
+    canRollback: value.canRollback ?? false
   };
 }
 
@@ -264,8 +288,169 @@ async function requestJson<T = Record<string, never>>(context: StudioEndpointCon
   return (text ? JSON.parse(text) : {}) as T;
 }
 
-function projectRoot(workspaceId: string, projectId: string) {
-  return `${root}/workspaces/${segment(workspaceId)}/projects/${segment(projectId)}`;
+async function hydrateWorkspace(context: StudioEndpointContext, workspace: RawExtensionWorkspace) {
+  const projects = await Promise.all((workspace.projectIds ?? []).map(projectId => getProject(context, workspace.id, projectId).catch(() => null)));
+  return normalizeWorkspace(workspace, projects.filter((project): project is ExtensionProject => project !== null));
+}
+
+function normalizeWorkspace(workspace: RawExtensionWorkspace, projects: ExtensionProject[]): ExtensionWorkspace {
+  return {
+    id: workspace.id,
+    name: workspace.name ?? workspace.displayName,
+    owner: workspace.owner ?? workspace.ownerId ?? workspace.trustContext,
+    createdAt: workspace.createdAt,
+    updatedAt: workspace.updatedAt,
+    projects
+  };
+}
+
+function normalizeProject(project: RawExtensionProject): ExtensionProject {
+  return {
+    id: project.id,
+    workspaceId: project.workspaceId,
+    name: project.name ?? project.displayName ?? project.manifest?.displayName ?? project.packageId,
+    templateId: project.templateId,
+    packageId: project.packageId,
+    packageVersion: project.packageVersion,
+    currentRevision: project.currentRevision ?? project.currentSourceRevisionId,
+    latestBuildStatus: project.latestBuildStatus == null ? project.latestBuildStatus : normalizeBuildStatus(project.latestBuildStatus),
+    runtimeStatus: project.runtimeStatus == null ? project.runtimeStatus : normalizeRuntimeState(project.runtimeStatus),
+    builds: project.builds?.map(normalizeBuild)
+  };
+}
+
+function normalizeTemplate(template: RawExtensionTemplate): ExtensionTemplate {
+  const kind = normalizeTemplateKind(template.kind);
+  return {
+    id: template.id,
+    name: template.name ?? template.displayName,
+    description: template.description,
+    tags: template.tags ?? [kind],
+    primary: template.primary ?? kind === "ElsaActivityModule",
+    defaultPackageId: template.defaultPackageId,
+    defaultPackageVersion: template.defaultPackageVersion,
+    defaultTargetFramework: template.defaultTargetFramework
+  };
+}
+
+function normalizeProjectFile(file: RawProjectFile): ProjectFile {
+  return {
+    path: file.path,
+    type: file.type ?? "file",
+    size: file.size,
+    updatedAt: file.updatedAt,
+    content: file.content
+  };
+}
+
+function normalizeBuild(build: RawBuildResult): BuildResult {
+  return {
+    id: build.id,
+    projectId: build.projectId,
+    revision: build.revision ?? build.sourceRevisionId,
+    status: normalizeBuildStatus(build.status),
+    startedAt: build.startedAt ?? build.createdAt,
+    finishedAt: build.finishedAt ?? build.completedAt,
+    diagnostics: (build.diagnostics ?? []).map(diagnostic => ({
+      severity: normalizeDiagnosticSeverity(diagnostic.severity),
+      message: diagnostic.message,
+      filePath: diagnostic.filePath ?? diagnostic.file,
+      line: diagnostic.line,
+      column: diagnostic.column
+    })),
+    artifact: build.artifact
+  };
+}
+
+function normalizePromotionResult(result: RawPackagePromotionResult): PackagePromotionResult {
+  const status = normalizePromotionStatus(result.status);
+  return {
+    accepted: (result.accepted ?? status === "Accepted") === true,
+    category: result.category ?? normalizePromotionRejection(result.rejectionReason),
+    message: result.message ?? result.reconcileOutcome?.reason ?? null,
+    publishedPackage: result.publishedPackage,
+    requiresReload: result.requiresReload,
+    requiresRestart: result.requiresRestart
+  };
+}
+
+function normalizeRuntimeStatus(status: RawExtensionRuntimeStatus): ExtensionRuntimeStatus {
+  if ("state" in status && "features" in status && "history" in status && "diagnostics" in status) {
+    const normalized = status as RuntimeStatusShape;
+    return {
+      ...normalized,
+      state: normalizeRuntimeState(normalized.state) ?? "PendingRestart",
+      history: (normalized.history ?? []).map(version => ({
+        ...version,
+        state: normalizeRuntimeState(version.state) ?? null
+      })),
+      diagnostics: (normalized.diagnostics ?? []).map(diagnostic => ({
+        ...diagnostic,
+        severity: diagnostic.severity == null ? diagnostic.severity : normalizeDiagnosticSeverity(diagnostic.severity)
+      }))
+    };
+  }
+
+  const activePackage = status.packages.find(packageStatus => packageStatus.version === status.activeVersion) ?? status.packages[0] ?? null;
+  const activeState = normalizeRuntimeState(activePackage?.state);
+  return {
+    projectId: status.projectId,
+    packageId: status.packageId,
+    version: status.activeVersion ?? activePackage?.version ?? null,
+    state: activeState ?? "PendingRestart",
+    features: activePackage?.contributions.map(contribution => ({
+      id: contribution.id,
+      label: contribution.label,
+      type: contribution.type,
+      status: contribution.status
+    })) ?? [],
+    history: status.availableRollbackVersions.map(version => ({
+      version,
+      state: normalizeRuntimeState(status.packages.find(packageStatus => packageStatus.version === version)?.state) ?? null,
+      available: true
+    })),
+    diagnostics: [
+      ...status.packages.filter(packageStatus => packageStatus.reason).map(packageStatus => ({
+        severity: normalizeRuntimeState(packageStatus.state) === "FailedReconciliation" ? "error" : "warning",
+        message: packageStatus.reason!,
+        source: `${packageStatus.packageId} ${packageStatus.version}`
+      })),
+      ...(status.lastReconcileReason ? [{ severity: "warning", message: status.lastReconcileReason, source: status.lastReconcileOutcome?.correlationId ?? "reconcile" }] : [])
+    ]
+  };
+}
+
+function normalizeBuildStatus(value: BuildStatus | number): BuildStatus {
+  return enumName(value, ["Pending", "Running", "Succeeded", "Failed"]);
+}
+
+function normalizeDiagnosticSeverity(value?: DiagnosticSeverity | number): DiagnosticSeverity {
+  return enumName(value, ["Info", "Warning", "Error"]);
+}
+
+function normalizePromotionStatus(value?: string | number | null) {
+  return enumName(value, ["Accepted", "Rejected"]);
+}
+
+function normalizePromotionRejection(value?: PromotionRejectionCategory | number | null): PromotionRejectionCategory | null | undefined {
+  return value == null ? value : enumName(value, ["Duplicate", "InvalidManifest", "DependencyPolicy", "MalformedPackage"]);
+}
+
+function normalizeRuntimeState(value?: RuntimeState | number | null): RuntimeState | null | undefined {
+  return value == null ? value : enumName(value, ["Loaded", "PendingRestart", "FailedReconciliation"]);
+}
+
+function normalizeTemplateKind(value?: string | number | null) {
+  return enumName(value, ["ElsaActivityModule", "GenericDotNet"]);
+}
+
+function enumName<T extends string>(value: T | number | null | undefined, names: readonly T[]): T {
+  if (typeof value === "number") return names[value] ?? (String(value) as T);
+  return (value ?? "") as T;
+}
+
+function projectRoot(projectId: string) {
+  return `${root}/projects/${segment(projectId)}`;
 }
 
 function segment(value: string) {
@@ -275,3 +460,130 @@ function segment(value: string) {
 function filePath(path: string) {
   return encodeURIComponent(path);
 }
+
+interface RawExtensionWorkspace {
+  id: string;
+  name?: string;
+  displayName: string;
+  owner?: string | null;
+  ownerId?: string | null;
+  trustContext?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  projectIds?: string[];
+}
+
+interface RawExtensionProject {
+  id: string;
+  workspaceId?: string | null;
+  name?: string;
+  displayName?: string;
+  templateId?: string | null;
+  packageId: string;
+  packageVersion: string;
+  currentRevision?: string | null;
+  currentSourceRevisionId?: string | null;
+  latestBuildStatus?: BuildStatus | number | null;
+  runtimeStatus?: RuntimeState | number | null;
+  manifest?: { displayName?: string | null };
+  builds?: RawBuildResult[];
+}
+
+interface RawExtensionTemplate {
+  id: string;
+  kind?: string | number;
+  name?: string;
+  displayName: string;
+  description?: string | null;
+  defaultPackageId?: string | null;
+  defaultPackageVersion?: string | null;
+  defaultTargetFramework?: string | null;
+  tags?: string[];
+  primary?: boolean;
+}
+
+interface RawProjectFile {
+  path: string;
+  type?: ProjectFileType;
+  kind?: ProjectFileType | number;
+  size?: number | null;
+  updatedAt?: string | null;
+  content?: string | null;
+}
+
+interface RawBuildResult {
+  id: string;
+  projectId?: string;
+  revision?: string | null;
+  sourceRevisionId?: string | null;
+  status: BuildStatus | number;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  diagnostics?: RawBuildDiagnostic[];
+  artifact?: BuildArtifact | null;
+}
+
+interface RawPackagePromotionResult {
+  status?: "Accepted" | "Rejected" | string | number;
+  accepted?: boolean;
+  category?: PromotionRejectionCategory | null;
+  rejectionReason?: PromotionRejectionCategory | number | null;
+  message?: string | null;
+  publishedPackage?: PublishedPackage | null;
+  reconcileOutcome?: RawReconcileOutcome | null;
+  requiresReload?: boolean;
+  requiresRestart?: boolean;
+}
+
+interface RawExtensionRuntimeStatus {
+  projectId?: string;
+  packageId: string;
+  activeVersion?: string | null;
+  packages: RawExtensionRuntimePackageStatus[];
+  availableRollbackVersions: string[];
+  lastReconcileOutcome?: RawReconcileOutcome | null;
+  lastReconcileReason?: string | null;
+}
+
+interface RawExtensionRuntimePackageStatus {
+  packageId: string;
+  version: string;
+  state: RuntimeState | number;
+  contributions: RuntimeFeature[];
+  requiresReload?: boolean;
+  requiresRestart?: boolean;
+  reason?: string | null;
+}
+
+interface RawBuildDiagnostic {
+  severity?: DiagnosticSeverity | number;
+  message: string;
+  filePath?: string | null;
+  file?: string | null;
+  line?: number | null;
+  column?: number | null;
+}
+
+interface RawReconcileOutcome {
+  outcome: string;
+  correlationId: string;
+  reason?: string | null;
+  isDegraded?: boolean;
+  failedPackages?: string[];
+}
+
+interface RawExtensionBuilderOperationResponse {
+  operation: string;
+  reconcileOutcome: RawReconcileOutcome;
+  requiresReload: boolean;
+  requiresRestart: boolean;
+  message: string;
+}
+
+type RuntimeStatusShape = Omit<ExtensionRuntimeStatus, "state" | "history" | "diagnostics"> & {
+  state: RuntimeState | number;
+  history?: Array<RuntimeVersion & { state?: RuntimeState | number | null }>;
+  diagnostics?: Array<RuntimeDiagnostic & { severity?: DiagnosticSeverity | number | null }>;
+};

@@ -76,7 +76,7 @@
 
 ### Implementation for User Story 2
 
-- [X] T016 [US2] Add create/delete file controls scoped by `can-edit-files` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T016 [US2] Add create/delete file controls scoped by `canEditFiles` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 - [X] T017 [US2] Add structured diagnostics list, severity chips, source-location navigation, and editor line hinting in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 - [X] T018 [US2] Add build history selection and log/diagnostic replay for previous builds in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
@@ -92,7 +92,7 @@
 
 ### Tests for User Story 3
 
-- [X] T019 [P] [US3] Test `duplicate`, `invalid-manifest`, `dependency-policy`, and `malformed-package` guidance in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
+- [X] T019 [P] [US3] Test `Duplicate`, `InvalidManifest`, `DependencyPolicy`, and `MalformedPackage` guidance in `src/Elsa.Studio.Web/Client/src/__tests__/extension-builder.test.tsx`
 
 ### Implementation for User Story 3
 
@@ -116,7 +116,7 @@
 ### Implementation for User Story 4
 
 - [X] T023 [US4] Implement runtime inspector states and contributed capability list in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
-- [X] T024 [US4] Implement retry reconciliation and rollback actions gated by `can-rollback` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
+- [X] T024 [US4] Implement retry reconciliation and rollback actions gated by `canRollback` in `src/Elsa.Studio.Web/Client/src/app/modules/ExtensionBuilderPage.tsx`
 
 **Checkpoint**: Runtime recovery is independently testable.
 

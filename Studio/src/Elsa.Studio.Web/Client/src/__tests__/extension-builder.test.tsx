@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
-import type { BuildResult, ExtensionRuntimeStatus, ExtensionWorkspace, PackagePromotionResult, ProjectFile } from "../app/modules/extensionBuilderApi";
+import type { ExtensionRuntimeStatus, ProjectFile } from "../app/modules/extensionBuilderApi";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
@@ -65,22 +65,22 @@ describe("extension builder page", () => {
     await clickButton(container, "Save");
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/projects/proj-1/files/Activities%2FHelloActivity.cs",
+      "https://foundation.example/_elsa/extension-builder/projects/proj-1/files/Activities%2FHelloActivity.cs",
       expect.objectContaining({ method: "PUT" })
     );
 
     await clickButton(container, "Build");
     await flushPromises();
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/projects/proj-1/builds", expect.objectContaining({ projectId: "proj-1", revision: "rev-1" }));
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/builds", {});
     expect(container.textContent).toContain("Build submitted");
-    expect(container.textContent).toContain("succeeded");
+    expect(container.textContent).toContain("Succeeded");
 
     await clickTab(container, "Promote");
     await clickButton(container, "Promote build");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/projects/proj-1/builds/build-1/promote", { buildId: "build-1", artifactId: "artifact-1" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/promote", {});
     expect(container.textContent).toContain("is loaded at runtime");
 
     await unmount();
@@ -115,10 +115,10 @@ describe("extension builder page", () => {
 
   it("renders distinct promotion rejection guidance", async () => {
     for (const [category, expected] of [
-      ["duplicate", "never silently overwritten"],
-      ["invalid-manifest", "manifest"],
-      ["dependency-policy", "dependency"],
-      ["malformed-package", "malformed"]
+      ["Duplicate", "never silently overwritten"],
+      ["InvalidManifest", "manifest"],
+      ["DependencyPolicy", "dependency"],
+      ["MalformedPackage", "malformed"]
     ] as const) {
       const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(category) : {});
       const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
@@ -136,7 +136,7 @@ describe("extension builder page", () => {
 
   it("supports retry reconciliation, rollback gating, and generic template no-contributions messaging", async () => {
     const postJson = vi.fn(async (url: string) => {
-      if (url.endsWith("/retry-reconciliation")) return loadedRuntime({ features: [] });
+      if (url.endsWith("/retry-reconcile")) return loadedRuntime({ features: [] });
       if (url.endsWith("/rollback")) return loadedRuntime({ version: "0.9.0", features: [] });
       return {};
     });
@@ -163,11 +163,11 @@ describe("extension builder page", () => {
 
     await clickButton(container, "Retry reconciliation");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/projects/proj-1/runtime-status/retry-reconciliation", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/retry-reconcile", {});
 
     await clickButton(container, "Rollback");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/projects/proj-1/runtime-status/rollback", { version: "0.9.0" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/rollback", { version: "0.9.0" });
 
     await unmount();
   });
@@ -194,7 +194,6 @@ async function defaultGetJson(url: string): Promise<unknown> {
   if (url.endsWith("/templates")) return templates();
   if (url.endsWith("/files")) return projectFiles();
   if (url.endsWith("/runtime-status")) return loadedRuntime();
-  if (url.includes("/builds/build-1/artifact")) return artifact();
   if (url.includes("/builds/build-1")) return succeededBuild();
   if (url.endsWith("Activities%2FHelloActivity.cs")) return projectFiles()[0];
   if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
@@ -272,30 +271,31 @@ async function flushPromises() {
 
 function trustedCapabilities() {
   return {
-    "can-create-workspace": true,
-    "can-edit-files": true,
-    "can-build": true,
-    "can-promote": true,
-    "can-rollback": true
+    canCreateWorkspace: true,
+    canEditFiles: true,
+    canBuild: true,
+    canPromote: true,
+    canRollback: true
   };
 }
 
 function deniedCapabilities() {
   return {
-    "can-create-workspace": false,
-    "can-edit-files": false,
-    "can-build": false,
-    "can-promote": false,
-    "can-rollback": false
+    canCreateWorkspace: false,
+    canEditFiles: false,
+    canBuild: false,
+    canPromote: false,
+    canRollback: false
   };
 }
 
-function workspaceWithProject(options?: { project?: ReturnType<typeof project> }): ExtensionWorkspace {
+function workspaceWithProject(_options?: { project?: ReturnType<typeof project> }) {
   return {
     id: "ws-1",
-    name: "Team Extensions",
-    owner: "alice",
-    projects: [options?.project ?? project()]
+    displayName: "Team Extensions",
+    ownerId: "alice",
+    trustContext: "trusted-team",
+    projectIds: ["proj-1"]
   };
 }
 
@@ -307,8 +307,8 @@ function project() {
     templateId: "elsa-activity",
     packageId: "Company.Extensions.Hello",
     packageVersion: "1.0.0",
-    currentRevision: "rev-1",
-    latestBuildStatus: "succeeded",
+    currentSourceRevisionId: "rev-1",
+    latestBuildStatus: "Succeeded",
     runtimeStatus: "Loaded"
   };
 }
@@ -347,28 +347,28 @@ function artifact() {
   };
 }
 
-function succeededBuild(): BuildResult {
+function succeededBuild() {
   return {
     id: "build-1",
     projectId: "proj-1",
-    revision: "rev-1",
-    status: "succeeded",
+    sourceRevisionId: "rev-1",
+    status: "Succeeded",
     startedAt: new Date().toISOString(),
-    finishedAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
     diagnostics: [],
     artifact: artifact()
   };
 }
 
-function failedBuild(): BuildResult {
+function failedBuild() {
   return {
     id: "build-failed",
     projectId: "proj-1",
-    revision: "rev-1",
-    status: "failed",
+    sourceRevisionId: "rev-1",
+    status: "Failed",
     startedAt: new Date().toISOString(),
-    finishedAt: new Date().toISOString(),
-    diagnostics: [{ severity: "error", message: "CS1002 Expected ;", filePath: "Activities/HelloActivity.cs", line: 7, column: 18 }],
+    completedAt: new Date().toISOString(),
+    diagnostics: [{ severity: "Error", message: "CS1002 Expected ;", file: "Activities/HelloActivity.cs", line: 7, column: 18 }],
     artifact: null
   };
 }
@@ -396,18 +396,19 @@ function failedRuntime(overrides?: Partial<ExtensionRuntimeStatus>): ExtensionRu
   };
 }
 
-function acceptedPromotion(): PackagePromotionResult {
+function acceptedPromotion() {
   return {
-    accepted: true,
-    message: "Package validation passed.",
-    runtimeStatus: loadedRuntime()
+    status: "Accepted",
+    reconcileOutcome: { outcome: "Succeeded", correlationId: "corr-1", reason: "Package validation passed.", isDegraded: false, failedPackages: [] },
+    publishedPackage: { packageId: "Company.Extensions.Hello", version: "1.0.0", feedName: "Nuplane", path: "/packages/Company.Extensions.Hello.1.0.0.nupkg" },
+    requiresReload: false,
+    requiresRestart: false
   };
 }
 
-function rejectedPromotion(category: string): PackagePromotionResult {
+function rejectedPromotion(category: string) {
   return {
-    accepted: false,
-    category,
-    message: null
+    status: "Rejected",
+    rejectionReason: category
   };
 }

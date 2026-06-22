@@ -2,11 +2,11 @@
 
 ## ExtensionBuilderCapabilities
 
-- `can-create-workspace`: advisory flag for workspace/project creation.
-- `can-edit-files`: advisory flag for create/edit/delete file affordances.
-- `can-build`: advisory flag for build submission.
-- `can-promote`: advisory flag for promotion.
-- `can-rollback`: advisory flag for rollback.
+- `canCreateWorkspace`: advisory flag for workspace/project creation.
+- `canEditFiles`: advisory flag for create/edit/delete file affordances.
+- `canBuild`: advisory flag for build submission.
+- `canPromote`: advisory flag for promotion.
+- `canRollback`: advisory flag for rollback.
 
 Validation: Missing or false flags disable the corresponding UI. Server rejection remains authoritative.
 
@@ -44,6 +44,9 @@ Validation: Project name, package id, and version are required before project cr
 - `description`
 - `tags`
 - `primary`
+- `defaultPackageId`
+- `defaultPackageVersion`
+- `defaultTargetFramework`
 
 Validation: Elsa activity/module template is primary/pre-selected when available; generic .NET template remains selectable.
 
@@ -61,25 +64,24 @@ State transitions: unopened -> loaded -> dirty -> saved; dirty buffers must be a
 
 ## BuildRequest
 
-- `workspaceId`
-- `projectId`
-- `revision`
+The UI invokes project-scoped `SubmitBuild`; the backend snapshots current project sources and records the resulting `BuildResult`.
 
 ## BuildResult
 
 - `id`
 - `projectId`
-- `status`: `queued`, `running`, `succeeded`, `failed`
+- `sourceRevisionId`
+- `status`: `Pending`, `Running`, `Succeeded`, `Failed`
 - `startedAt`
 - `finishedAt`
 - `diagnostics`: `BuildDiagnostic[]`
 - `artifact`: `BuildArtifact | null`
 
-State transitions: queued -> running -> succeeded/failed. Running builds disable duplicate submission.
+State transitions: Pending -> Running -> Succeeded/Failed. Running builds disable duplicate submission.
 
 ## BuildDiagnostic
 
-- `severity`: `error`, `warning`, or `info`
+- `severity`: `Error`, `Warning`, or `Info`
 - `message`
 - `filePath`
 - `line`
@@ -100,13 +102,12 @@ Validation: Promotion is only enabled for a successful build with an artifact.
 
 ## PackagePromotionRequest
 
-- `buildId`
-- `artifactId`
+- `targetFeed` (optional)
 
 ## PackagePromotionResult
 
 - `accepted`
-- `category`: `duplicate`, `invalid-manifest`, `dependency-policy`, `malformed-package`, or null
+- `category`: `Duplicate`, `InvalidManifest`, `DependencyPolicy`, `MalformedPackage`, or null
 - `message`
 - `runtimeStatus`
 
