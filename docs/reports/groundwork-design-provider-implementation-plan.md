@@ -303,3 +303,57 @@ dependent (Mongo standalone vs replica set), so a static manifest flag could not
 `IDesignUnitOfWork` should expose `Stage(Save/Delete)` + `LoadAsync` (read-your-writes) + `CommitAsync` and map
 1:1 onto `IDocumentUnitOfWork`; the EF adapter maps the same surface onto `DbContext` + `SaveChangesAsync`
 (inherently atomic, `TransactionBoundary.CrossUnitAtomic`).
+
+---
+
+## CONSUMED — preview.6 landed; union host + write lane proven (this session)
+
+The Groundwork capability uplift is published as `0.0.1-preview.6` and consumed here
+(`Directory.Packages.props`). The single-provider story is now demonstrated end-to-end in code + tests,
+not just on paper.
+
+### Done + committed (branch 073-flowchart-scoped-execution)
+- **preview.6 remediation** (`4d3a2eb1`): the grown `IDocumentStore : IDocumentSessionFactory` surface
+  (native closed-query overloads + `BeginAsync`/`TransactionBoundary`) is implemented on the production
+  SQLite store and the 4 in-memory test doubles. All read-side Groundwork suites green.
+- **Single-provider union host** (`ca025144`): `Elsa.Persistence.Groundwork.Sqlite.Unified` — one
+  `IDocumentStore` materialized from `StorageManifestComposition.Union(runtime + workflows-design +
+  activities-design)` under identity `elsa-documents`, registered via
+  `AddGroundworkSqliteUnifiedPersistence` / the `GroundworkUnifiedPersistenceSqlite` shell feature.
+  Every runtime + design read/write port resolves against the one store. E2E tests prove one in-memory
+  SQLite DB materializes + serves all three lanes and that design reads run off it.
+- **Design write lane — multi-document add commands** (`7f5ce090`): `IAddWorkflowDefinitionCommand` and
+  `IAddActivityDefinitionCommand` are implemented as Groundwork document adapters over
+  `IDocumentUnitOfWork` (definition + first child committed atomically). Shared helpers
+  `GroundworkDocumentWriter` (envelope-shaped save/delete requests, read/write parity) and
+  `GroundworkAtomicWrite` (caller-enforced all-or-nothing; dispose-without-commit rolls back) live in
+  `Elsa.Persistence.Groundwork.Querying`. Registered alongside the read ports, so the union host wires
+  the write lane automatically. Tests: atomic commit + rollback, per-lane add round-trips, and a
+  unified-host write-then-read.
+
+### Remaining write-lane work (orchestration-heavy commands — follow-up)
+The six orchestration-bearing commands are NOT yet on Groundwork; they remain EF-only. They are
+feature-sized because each interleaves provider-neutral orchestration with the draft **embed model**
+(layout + validation records embedded in the `workflowDefinitionDraft` document):
+- `CreateDraft` / `UpdateDraft` / `DiscardDraft` — single-document, but carry the per-draft distributed
+  lock + the `OnDraftValidating` sequential validation gate + diff-stream / lifecycle events. The
+  Groundwork draft document must be reshaped to embed `WorkflowDefinitionDraftLayout` +
+  `WorkflowDefinitionDraftValidation`, and `GroundworkWorkflowDefinitionDraftStore` kept in sync.
+- `PromoteDraftToVersion` — reads the embedded validation error count (gate) + embedded layout, looks up
+  the last version via the native single-field ORDER BY (`SemVerSortKey` DESC, top 1), then writes
+  version + version-layout (UoW).
+- `SubmitWorkflowDefinition` — validates the activity tree (`IActivityStructureService`), writes
+  definition + draft + version + version-layout (UoW).
+- `CloneDraftFromVersion` — already provider-neutral (delegates to `ICreateDraftCommand` + read ports);
+  becomes Groundwork-backed for free once `CreateDraft` is.
+
+Recommended approach (unchanged): port these as Groundwork command adapters alongside EF (keeping the
+226 EF design tests untouched), reusing the neutral deps they already take
+(`IDistributedLockProvider`, `IEventPublisher`, `IDraftStateDiffEngine`, `IIdentityGenerator`,
+`IActivityStructureService`). The embed-model reshape is the one real design change; everything else is
+a persistence swap.
+
+### Remaining optimization
+- `gw-fallback-cleanup`: drop the `GroundworkReadStore` in-memory operator fallback where
+  `ClosedQueryNativeSupport.Evaluate` reports native support. Requires the in-memory test doubles to
+  faithfully implement the `PortableDocumentQuery` overloads (currently NotSupported stubs).
