@@ -1,5 +1,5 @@
 import { r as u } from "../vendor/chunks/index.js";
-const S = {
+const b = {
   status: "anonymous",
   roles: [],
   permissions: []
@@ -34,34 +34,34 @@ class B {
   async initialize() {
     if (this.options.isCallback?.()) {
       const r = this.getCallbackProviderId(), n = r ? await this.getProviderAdapter(r) : await this.resolveActiveAdapter();
-      return this.session = await n.handleCallback(), this.activeAdapter = n, this.pendingLoginProviderId = null, this.session;
+      return await this.applySession(await n.handleCallback(), n), this.pendingLoginProviderId = null, this.session;
     }
     const e = await this.resolveActiveAdapter();
-    return this.session = await e.initialize(), this.pendingLoginProviderId = null, this.session;
+    return await this.applySession(await e.initialize(), e), this.pendingLoginProviderId = null, this.session;
   }
   async login(e) {
     const r = e?.providerId ? await this.getProviderAdapter(e.providerId) : await this.resolveActiveAdapter();
     this.pendingLoginProviderId = r.id;
     try {
       const n = await r.login({ ...e, providerId: r.id });
-      n ? (this.session = n, this.activeAdapter = r, this.pendingLoginProviderId = null) : this.session.status !== "authenticated" && (this.activeAdapter = r);
+      n ? (await this.applySession(n, r), this.pendingLoginProviderId = null) : this.session.status !== "authenticated" && (this.activeAdapter = r);
     } catch (n) {
       throw this.pendingLoginProviderId = null, n;
     }
   }
   async handleCallback(e) {
     const r = e ? await this.getProviderAdapter(e) : await this.resolveActiveAdapter();
-    return this.session = await r.handleCallback(), this.activeAdapter = r, this.pendingLoginProviderId = null, this.session;
+    return await this.applySession(await r.handleCallback(), r), this.pendingLoginProviderId = null, this.session;
   }
   async logout() {
-    await (await this.resolveActiveAdapter()).logout(), this.session = S;
+    await (await this.resolveActiveAdapter()).logout(), this.session = b;
   }
   async getAccessToken() {
     return (await this.resolveActiveAdapter()).getAccessToken();
   }
   async refresh() {
     const e = await this.resolveActiveAdapter();
-    return this.session = await e.refresh(), this.session;
+    return await this.applySession(await e.refresh(), e), this.session;
   }
   async resolveActiveAdapter() {
     if (this.activeAdapter)
@@ -94,6 +94,9 @@ class B {
     const e = this.options.getCallbackProviderId?.();
     return e || (this.pendingLoginProviderId ? this.pendingLoginProviderId : typeof window > "u" ? null : new URLSearchParams(window.location.search).get("authProviderId"));
   }
+  async applySession(e, r) {
+    this.session = e, this.activeAdapter = e.provider?.id ? await this.getProviderAdapter(e.provider.id) : r;
+  }
 }
 class y extends Error {
   constructor(e) {
@@ -109,10 +112,10 @@ function F(t) {
     login: (s) => {
       const i = t.challenge;
       if (!i || i.type === "none")
-        throw new A(`Provider '${t.id}' does not expose a redirect challenge.`);
+        throw new g(`Provider '${t.id}' does not expose a redirect challenge.`);
       const o = "method" in i ? i.method.toUpperCase() : "GET";
       if (o !== "GET")
-        throw new A(`Provider '${t.id}' exposes an unsupported ${o} challenge.`);
+        throw new g(`Provider '${t.id}' exposes an unsupported ${o} challenge.`);
       const c = new URL(Y(i), m(t)), a = s?.returnUrl ?? t.location?.href ?? window.location.href;
       return c.searchParams.set("returnUrl", Q(a, s?.providerId ?? t.id, t)), (t.location ?? window.location).assign(c.toString()), Promise.resolve();
     },
@@ -120,7 +123,7 @@ function F(t) {
     logout: async () => {
       const s = await e(k(n, t), { method: "POST", credentials: "include" });
       if (!s.ok)
-        throw new A(`Sign-out failed with ${s.status}.`);
+        throw new g(`Sign-out failed with ${s.status}.`);
     },
     getAccessToken: async () => {
       if (!t.tokenEndpoint)
@@ -129,7 +132,7 @@ function F(t) {
       if (s.status === 401)
         return null;
       if (!s.ok)
-        throw new A(`Access-token request failed with ${s.status}.`);
+        throw new g(`Access-token request failed with ${s.status}.`);
       const i = await s.json();
       return typeof i.accessToken == "string" ? i.accessToken : null;
     },
@@ -147,9 +150,9 @@ function F(t) {
         body: JSON.stringify({ refreshToken: s })
       });
       if (o.status === 401)
-        return S;
+        return b;
       if (!o.ok)
-        throw new A(`Session refresh failed with ${o.status}.`);
+        throw new g(`Session refresh failed with ${o.status}.`);
       const c = await o.json();
       return c.status ? H(c) : v(e, r, t);
     }
@@ -158,9 +161,9 @@ function F(t) {
 async function v(t, e, r) {
   const n = await t(k(e, r), { credentials: "include", cache: "no-store" });
   if (n.status === 401)
-    return S;
+    return b;
   if (!n.ok)
-    throw new A(`Session request failed with ${n.status}.`);
+    throw new g(`Session request failed with ${n.status}.`);
   return D(n);
 }
 async function D(t) {
@@ -205,7 +208,7 @@ function W(t) {
     return !0;
   }
 }
-class A extends Error {
+class g extends Error {
   constructor(e) {
     super(e), this.name = "AuthAdapterError";
   }
@@ -236,10 +239,10 @@ async function $(t, e, r) {
     throw new Error(`Auth discovery request failed with ${n.status}.`);
   return await n.json();
 }
-var C = { exports: {} }, g = {};
+var P = { exports: {} }, A = {};
 var j;
 function X() {
-  if (j) return g;
+  if (j) return A;
   j = 1;
   var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
   function r(n, s, i) {
@@ -257,11 +260,11 @@ function X() {
       props: i
     };
   }
-  return g.Fragment = e, g.jsx = r, g.jsxs = r, g;
+  return A.Fragment = e, A.jsx = r, A.jsxs = r, A;
 }
 var U;
 function Z() {
-  return U || (U = 1, C.exports = X()), C.exports;
+  return U || (U = 1, P.exports = X()), P.exports;
 }
 var f = Z();
 const O = u.createContext(null);
@@ -271,7 +274,7 @@ function x() {
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return t;
 }
-function At({ manager: t, children: e }) {
+function gt({ manager: t, children: e }) {
   const [r, n] = u.useState(() => t.getSession() ?? L), [s, i] = u.useState(null), o = u.useRef(!1), c = u.useRef(0), a = u.useCallback((d) => o.current && c.current === d, []);
   u.useLayoutEffect(() => {
     o.current = !0;
@@ -292,7 +295,7 @@ function At({ manager: t, children: e }) {
           a(d) && (console.error("Auth capabilities request failed.", p), i(null));
         }
       } catch (l) {
-        a(d) && (console.error("Auth initialization failed.", l), n(S), i(null));
+        a(d) && (console.error("Auth initialization failed.", l), n(b), i(null));
       }
     }
     return h(), () => {
@@ -353,7 +356,7 @@ function tt() {
     };
   }, [t]);
 }
-function gt() {
+function At() {
   return x().capabilities;
 }
 function yt({ requires: t, requireAll: e = !0, fallback: r = null, children: n }) {
@@ -385,7 +388,7 @@ function kt(t) {
     kind: "external-oidc"
   });
 }
-function bt(t, e, r = {}) {
+function St(t, e, r = {}) {
   return {
     getJson(n, s) {
       return J(t, n, e, r, nt(s));
@@ -403,12 +406,12 @@ function bt(t, e, r = {}) {
 async function J(t, e, r, n, s) {
   const i = n.fetch ?? fetch, o = new URL(e, t).toString(), c = await i(o, await z(r, I(n, s))), a = c.status === 401 && n.refreshOnUnauthorized !== !1 ? await rt(i, o, r, I(n, s)) : c;
   if (!a.ok)
-    throw new b(a.status, await _(a));
+    throw new S(a.status, await _(a));
   const w = await a.text();
   try {
     return JSON.parse(w);
   } catch {
-    throw new b(a.status, `Expected JSON from ${o}.`);
+    throw new S(a.status, `Expected JSON from ${o}.`);
   }
 }
 async function rt(t, e, r, n) {
@@ -435,12 +438,12 @@ function st(t) {
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
 function I(t, e) {
-  return P(t.defaultHeaders ?? t.headers, e);
+  return C(t.defaultHeaders ?? t.headers, e);
 }
 function it(t, e = {}) {
   return async () => await t.getAccessToken() ?? await e.fallbackAccessTokenFactory?.() ?? e.anonymousToken ?? "";
 }
-function St(t, e) {
+function bt(t, e) {
   const r = at(t.accessTokenFactory) ? t.accessTokenFactory.bind(t) : void 0;
   return {
     ...t,
@@ -450,7 +453,7 @@ function St(t, e) {
 function at(t) {
   return typeof t == "function";
 }
-function Ct() {
+function Pt() {
   const t = [];
   return {
     add(e) {
@@ -461,7 +464,7 @@ function Ct() {
     }
   };
 }
-function Pt(t, e = {}) {
+function Ct(t, e = {}) {
   return {
     baseUrl: t,
     headers: e.headers,
@@ -471,10 +474,10 @@ function Pt(t, e = {}) {
 function ot(t, e) {
   return {
     async getJson(r, n) {
-      return q(t, r, P(e, lt(n)));
+      return q(t, r, C(e, lt(n)));
     },
     async postJson(r, n, s) {
-      return q(t, r, P(e, {
+      return q(t, r, C(e, {
         ...s,
         method: "POST",
         headers: ht(s?.headers),
@@ -483,7 +486,7 @@ function ot(t, e) {
     }
   };
 }
-function P(t, e = {}) {
+function C(t, e = {}) {
   return t ? {
     ...e,
     headers: ct(t, e.headers)
@@ -496,12 +499,12 @@ function ct(t, e) {
 async function q(t, e, r) {
   const n = dt(t, e), s = await fetch(n, r);
   if (!s.ok)
-    throw new b(s.status, await _(s));
+    throw new S(s.status, await _(s));
   const i = await s.text();
   try {
     return JSON.parse(i);
   } catch {
-    throw new b(
+    throw new S(
       s.status,
       `Expected JSON from ${n}, but received ${ft(s, i)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
@@ -547,33 +550,33 @@ function ft(t, e) {
   const r = t.headers.get("content-type") ?? "an unknown content type", n = e.trim(), s = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
   return `${r}${s}`;
 }
-class b extends Error {
+class S extends Error {
   constructor(e, r) {
     super(r), this.status = e, this.name = "StudioHttpError";
   }
   status;
 }
 export {
-  A as AuthAdapterError,
+  g as AuthAdapterError,
   y as AuthConfigurationError,
   yt as AuthGuard,
-  At as AuthProvider,
+  gt as AuthProvider,
   vt as RequireAuth,
-  b as StudioHttpError,
+  S as StudioHttpError,
   N as createAuthProviderManager,
-  bt as createAuthenticatedHttpClient,
+  St as createAuthenticatedHttpClient,
   wt as createBackendAuthProviderManager,
-  Ct as createContributionRegistry,
-  Pt as createEndpointContext,
+  Pt as createContributionRegistry,
+  Ct as createEndpointContext,
   ot as createHttpClient,
   kt as createOidcAuthAdapter,
   F as createRedirectAuthAdapter,
   it as createSignalRAccessTokenFactory,
   _ as readStudioHttpErrorMessage,
-  gt as useAuthCapabilities,
+  At as useAuthCapabilities,
   x as useAuthContext,
   K as useAuthSession,
   tt as usePermissions,
-  St as withAuthenticatedSignalROptions,
-  P as withDefaultHeaders
+  bt as withAuthenticatedSignalROptions,
+  C as withDefaultHeaders
 };

@@ -82,6 +82,24 @@ describe("auth provider manager", () => {
     expect(oidcAdapter.getAccessToken).not.toHaveBeenCalled();
   });
 
+  it("activates the provider returned by an inline login session when it differs from the selected provider", async () => {
+    const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
+    const localAdapter = stubAdapter("builtin", "openiddict", authenticatedSession("local"));
+    localAdapter.login = vi.fn(async () => authenticatedSession("alice"));
+    const manager = createAuthProviderManager({
+      bootstrap: async () => bootstrap("builtin"),
+      capabilities: async () => capabilities(),
+      adapters: [localAdapter, oidcAdapter]
+    });
+
+    await manager.login({ providerId: "builtin", returnUrl: "/studio/" });
+    await manager.getAccessToken();
+
+    expect(localAdapter.login).toHaveBeenCalledTimes(1);
+    expect(oidcAdapter.getAccessToken).toHaveBeenCalledTimes(1);
+    expect(localAdapter.getAccessToken).not.toHaveBeenCalled();
+  });
+
   it("keeps an authenticated session adapter active until alternate login callback completes", async () => {
     const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
     const localAdapter = stubAdapter("builtin", "openiddict", authenticatedSession("local"));
@@ -115,6 +133,63 @@ describe("auth provider manager", () => {
     expect(session).toMatchObject({ subject: "local" });
     expect(localAdapter.handleCallback).toHaveBeenCalledTimes(1);
     expect(oidcAdapter.handleCallback).not.toHaveBeenCalled();
+  });
+
+  it("activates the provider returned by the callback session when it differs from the callback hint", async () => {
+    const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
+    const localAdapter = stubAdapter("builtin", "openiddict", authenticatedSession("local"));
+    localAdapter.handleCallback = vi.fn(async () => authenticatedSession("alice"));
+    const manager = createAuthProviderManager({
+      bootstrap: async () => bootstrap("entra"),
+      capabilities: async () => capabilities(),
+      adapters: [localAdapter, oidcAdapter],
+      isCallback: () => true,
+      getCallbackProviderId: () => "builtin"
+    });
+
+    await manager.initialize();
+    await manager.getAccessToken();
+
+    expect(localAdapter.handleCallback).toHaveBeenCalledTimes(1);
+    expect(oidcAdapter.getAccessToken).toHaveBeenCalledTimes(1);
+    expect(localAdapter.getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("activates the provider returned by session probing when it differs from the default provider", async () => {
+    const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
+    const localAdapter = stubAdapter("builtin", "openiddict", authenticatedSession("local"));
+    localAdapter.initialize = vi.fn(async () => authenticatedSession("alice"));
+    const manager = createAuthProviderManager({
+      bootstrap: async () => bootstrap("builtin"),
+      capabilities: async () => capabilities(),
+      adapters: [localAdapter, oidcAdapter]
+    });
+
+    await manager.initialize();
+    await manager.getAccessToken();
+
+    expect(localAdapter.initialize).toHaveBeenCalledTimes(1);
+    expect(oidcAdapter.getAccessToken).toHaveBeenCalledTimes(1);
+    expect(localAdapter.getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("activates the provider returned by refresh when it differs from the active provider", async () => {
+    const oidcAdapter = stubAdapter("entra", "external-oidc", authenticatedSession("alice"));
+    const localAdapter = stubAdapter("builtin", "openiddict", authenticatedSession("local"));
+    localAdapter.refresh = vi.fn(async () => authenticatedSession("alice"));
+    const manager = createAuthProviderManager({
+      bootstrap: async () => bootstrap("builtin"),
+      capabilities: async () => capabilities(),
+      adapters: [localAdapter, oidcAdapter]
+    });
+
+    await manager.initialize();
+    await manager.refresh();
+    await manager.getAccessToken();
+
+    expect(localAdapter.refresh).toHaveBeenCalledTimes(1);
+    expect(oidcAdapter.getAccessToken).toHaveBeenCalledTimes(1);
+    expect(localAdapter.getAccessToken).not.toHaveBeenCalled();
   });
 
   it("fails fast when backend selects a provider without a registered adapter", async () => {
@@ -151,7 +226,10 @@ describe("auth provider manager", () => {
       }
 
       if (url.endsWith("/_elsa/identity/session")) {
-        return jsonResponse(authenticatedSession("alice"));
+        return jsonResponse({
+          ...authenticatedSession("alice"),
+          provider: { id: "oidc", kind: "external-oidc" }
+        });
       }
 
       throw new Error(`Unexpected request ${url}`);

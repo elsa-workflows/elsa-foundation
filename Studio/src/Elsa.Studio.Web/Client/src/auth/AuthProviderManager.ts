@@ -54,14 +54,13 @@ class DefaultAuthProviderManager implements AuthProviderManager {
         ? await this.getProviderAdapter(callbackProviderId)
         : await this.resolveActiveAdapter();
 
-      this.session = await adapter.handleCallback();
-      this.activeAdapter = adapter;
+      await this.applySession(await adapter.handleCallback(), adapter);
       this.pendingLoginProviderId = null;
       return this.session;
     }
 
     const adapter = await this.resolveActiveAdapter();
-    this.session = await adapter.initialize();
+    await this.applySession(await adapter.initialize(), adapter);
     this.pendingLoginProviderId = null;
 
     return this.session;
@@ -76,8 +75,7 @@ class DefaultAuthProviderManager implements AuthProviderManager {
     try {
       const loginSession = await adapter.login({ ...options, providerId: adapter.id });
       if (loginSession) {
-        this.session = loginSession;
-        this.activeAdapter = adapter;
+        await this.applySession(loginSession, adapter);
         this.pendingLoginProviderId = null;
       } else if (this.session.status !== "authenticated") {
         this.activeAdapter = adapter;
@@ -93,8 +91,7 @@ class DefaultAuthProviderManager implements AuthProviderManager {
       ? await this.getProviderAdapter(providerId)
       : await this.resolveActiveAdapter();
 
-    this.session = await adapter.handleCallback();
-    this.activeAdapter = adapter;
+    await this.applySession(await adapter.handleCallback(), adapter);
     this.pendingLoginProviderId = null;
     return this.session;
   }
@@ -112,7 +109,7 @@ class DefaultAuthProviderManager implements AuthProviderManager {
 
   async refresh() {
     const adapter = await this.resolveActiveAdapter();
-    this.session = await adapter.refresh();
+    await this.applySession(await adapter.refresh(), adapter);
     return this.session;
   }
 
@@ -179,6 +176,13 @@ class DefaultAuthProviderManager implements AuthProviderManager {
     }
 
     return new URLSearchParams(window.location.search).get("authProviderId");
+  }
+
+  private async applySession(session: AuthSession, fallbackAdapter: AuthProviderAdapter) {
+    this.session = session;
+    this.activeAdapter = session.provider?.id
+      ? await this.getProviderAdapter(session.provider.id)
+      : fallbackAdapter;
   }
 }
 
