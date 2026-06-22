@@ -19,7 +19,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -63,6 +63,11 @@ interface CreateWorkflowDraft {
   name: string;
   description: string;
   rootKind: CreateWorkflowKind;
+}
+
+interface ActivityPaletteGroup {
+  category: string;
+  activities: ActivityCatalogItem[];
 }
 
 export function register(api: ElsaStudioModuleApi) {
@@ -706,6 +711,22 @@ function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
   return { compositeRoots, otherCategories };
 }
 
+function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPaletteGroup[] {
+  const categories = new Map<string, ActivityCatalogItem[]>();
+
+  for (const activity of activities) {
+    const category = activity.category?.trim() || "Uncategorized";
+    categories.set(category, [...(categories.get(category) ?? []), activity]);
+  }
+
+  return Array.from(categories.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, categoryActivities]) => ({
+      category,
+      activities: categoryActivities.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
+    }));
+}
+
 function isCompositeRootActivity(activity: ActivityCatalogItem) {
   const displayName = getActivityDisplay(activity);
   return displayName === "Flowchart" || displayName === "Sequence" || activity.activityTypeKey.endsWith(".Flowchart") || activity.activityTypeKey.endsWith(".Sequence");
@@ -741,6 +762,7 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   const [status, setStatus] = useState("");
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
+  const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
@@ -755,6 +777,7 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   const root = draft?.state.rootActivity ?? null;
   const scope = useMemo(() => resolveScope(root, frames), [root, frames]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(activity => [activity.activityVersionId, activity])), [catalog]);
+  const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
   const selectedNode = useMemo(() => scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null, [scope, selectedNodeId]);
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
 
@@ -776,6 +799,22 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   useEffect(() => {
     void load().catch(e => setError(e instanceof Error ? e.message : String(e)));
   }, [load]);
+
+  useEffect(() => {
+    setExpandedPaletteCategories(current => {
+      let changed = false;
+      const next = new Set(current);
+
+      for (const group of paletteGroups) {
+        if (!next.has(group.category)) {
+          next.add(group.category);
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [paletteGroups]);
 
   useEffect(() => {
     if (!scope) {
@@ -1090,6 +1129,18 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
     setSelectedNodeId(null);
   };
 
+  const togglePaletteCategory = (category: string) => {
+    setExpandedPaletteCategories(current => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
   if (!details || !draft) {
     return <div className="wf-empty">{error || "Loading workflow editor..."}</div>;
   }
@@ -1118,21 +1169,50 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
       <div className="wf-editor-body">
         <aside className="wf-palette">
           <div className="wf-panel-title"><Boxes size={15} /> Activities</div>
-          <div className="wf-palette-list">
-            {catalog.map(activity => (
-              <button
-                type="button"
-                key={activity.activityVersionId}
-                draggable
-                onClick={() => onPaletteClick(activity)}
-                onDragStart={event => onPaletteDragStart(event, activity)}
-                onDragEnd={event => onPaletteDragEnd(event, activity)}
-                onPointerDown={event => onPalettePointerDown(event, activity)}
-              >
-                <strong>{getActivityDisplay(activity)}</strong>
-                <small>{activity.category}</small>
-              </button>
-            ))}
+          <div className="wf-palette-list" role="tree" aria-label="Available activities">
+            {paletteGroups.map(group => {
+              const expanded = expandedPaletteCategories.has(group.category);
+              return (
+                <div className="wf-palette-category" key={group.category}>
+                  <button
+                    type="button"
+                    className="wf-palette-category-toggle"
+                    role="treeitem"
+                    aria-expanded={expanded}
+                    onClick={() => togglePaletteCategory(group.category)}>
+                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <span>{group.category}</span>
+                    <small>{group.activities.length}</small>
+                  </button>
+                  {expanded ? (
+                    <div className="wf-palette-activities" role="group">
+                      {group.activities.map(activity => {
+                        const description = activity.description?.trim();
+                        const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
+                        return (
+                          <button
+                            type="button"
+                            className="wf-palette-activity"
+                            role="treeitem"
+                            key={activity.activityVersionId}
+                            draggable
+                            title={description || getActivityDisplay(activity)}
+                            aria-describedby={descriptionId}
+                            onClick={() => onPaletteClick(activity)}
+                            onDragStart={event => onPaletteDragStart(event, activity)}
+                            onDragEnd={event => onPaletteDragEnd(event, activity)}
+                            onPointerDown={event => onPalettePointerDown(event, activity)}
+                          >
+                            <strong>{getActivityDisplay(activity)}</strong>
+                            {description ? <small id={descriptionId}>{description}</small> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </aside>
 

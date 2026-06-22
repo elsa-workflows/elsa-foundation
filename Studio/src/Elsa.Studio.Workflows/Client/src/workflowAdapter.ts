@@ -193,7 +193,20 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
 }
 
 export function getActivityDisplay(activity: ActivityCatalogItem) {
-  return activity.displayName || activity.activityTypeKey.split(".").at(-1) || activity.activityTypeKey;
+  const shortName = activity.activityTypeKey.split(".").at(-1) || activity.activityTypeKey;
+  const displayName = activity.displayName?.trim();
+  if (!displayName || displayName === activity.activityTypeKey || displayName.includes(".")) {
+    return humanizeActivityTypeName(shortName);
+  }
+
+  return displayName;
+}
+
+function humanizeActivityTypeName(name: string) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .trim();
 }
 
 function createStructureForActivity(activity: ActivityCatalogItem): ActivityNodeStructure | null {

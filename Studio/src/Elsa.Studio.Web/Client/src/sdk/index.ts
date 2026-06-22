@@ -91,6 +91,7 @@ export interface StudioNavigationContribution {
   activePathPrefix?: string;
   order?: number;
   iconColor?: string;
+  parentId?: string;
 }
 
 export interface StudioDashboardWidgetContribution {

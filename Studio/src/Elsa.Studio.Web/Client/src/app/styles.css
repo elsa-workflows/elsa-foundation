@@ -324,6 +324,46 @@ textarea:focus {
   box-shadow: none;
 }
 
+.nav-item-group {
+  display: grid;
+  gap: 2px;
+}
+
+.nav-section a.has-active-child {
+  color: var(--sidebar-foreground);
+  font-weight: 600;
+}
+
+.nav-section a.has-active-child .nav-icon-tile {
+  background: color-mix(in srgb, var(--nav-icon-color) 18%, transparent);
+}
+
+.nav-children {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 2px 22px;
+  padding-left: 13px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+}
+
+.nav-section a.nav-child {
+  min-height: 28px;
+  gap: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.nav-section a.nav-child::before {
+  left: -14px;
+}
+
+.nav-section a.nav-child:hover,
+.nav-section a.nav-child.active {
+  color: var(--sidebar-foreground);
+}
+
 .sidebar-footer {
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);

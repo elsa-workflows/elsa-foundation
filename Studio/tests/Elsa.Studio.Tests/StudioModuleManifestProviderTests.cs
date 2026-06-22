@@ -4,6 +4,8 @@ using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Models;
+using Elsa.Studio.Diagnostics.OpenTelemetry;
+using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
@@ -25,6 +27,8 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Equal("1.0.0", response.HostVersion);
         Assert.Equal("1.0.0", response.SdkVersion);
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
@@ -66,6 +70,48 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_ReturnsStructuredLogsManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
+        Assert.Equal("Structured logs", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("panels", module.Capabilities);
+        Assert.Contains("http", module.Capabilities);
+        Assert.Contains("sse", module.Capabilities);
+        Assert.Contains("diagnostics", module.Capabilities);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsOpenTelemetryManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Equal("OpenTelemetry", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("http", module.Capabilities);
+        Assert.Contains("diagnostics", module.Capabilities);
+        Assert.Contains("otel", module.Capabilities);
+        Assert.Contains("traces", module.Capabilities);
+        Assert.Contains("metrics", module.Capabilities);
+        Assert.Contains("logs", module.Capabilities);
+    }
+
+    [Fact]
     public async Task GetModules_FiltersDisabledModulesAndReportsDiagnostic()
     {
         var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Samples.WeatherForecast"));
@@ -88,6 +134,32 @@ public sealed class StudioModuleManifestProviderTests
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
         Assert.Contains(response.Diagnostics, x =>
             x.ModuleId == "Elsa.Studio.ConsoleStream" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
+    public async Task GetModules_FiltersStructuredLogsModuleAndReportsDiagnostic()
+    {
+        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.StructuredLogs"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Diagnostics.StructuredLogs" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
+    public async Task GetModules_FiltersOpenTelemetryModuleAndReportsDiagnostic()
+    {
+        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.OpenTelemetry"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Diagnostics.OpenTelemetry" &&
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
@@ -156,6 +228,8 @@ public sealed class StudioModuleManifestProviderTests
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
         services.AddConsoleStreamStudio();
+        services.AddDiagnosticsOpenTelemetryStudio();
+        services.AddDiagnosticsStructuredLogsStudio();
         services.AddFeatureManagementStudio();
         services.AddWorkflowsStudio();
         services.AddDashboardStudioSample();
