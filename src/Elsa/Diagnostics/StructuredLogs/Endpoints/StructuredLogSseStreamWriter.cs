@@ -98,11 +98,12 @@ public sealed class StructuredLogSseStreamWriter
             }
         }
 
+        var moveNextStillPending = moveNext is { IsCompleted: false };
         try
         {
             await enumerator.DisposeAsync();
         }
-        catch (NotSupportedException) when (moveNext is { IsCompleted: false })
+        catch (NotSupportedException) when (moveNextStillPending)
         {
             // Some async iterators reject DisposeAsync while MoveNextAsync is still pending.
         }
