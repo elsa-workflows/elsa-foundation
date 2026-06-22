@@ -48,12 +48,16 @@ describe("extension builder page", () => {
 
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
-      if (url.endsWith("/builds")) return succeededBuild();
+      if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
       if (url.endsWith("/promote")) return acceptedPromotion();
       return {};
     });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-1")) return succeededBuild({ sourceRevisionId: null });
+      return defaultGetJson(url);
+    });
     const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
     await flushPromises();
     await flushPromises();
 
@@ -132,6 +136,68 @@ describe("extension builder page", () => {
       expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
       await unmount();
     }
+  });
+
+  it("normalizes numeric enum values and backend file kind fallbacks", async () => {
+    const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(0) : {});
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      postJson,
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/files")) return [
+          { path: "Activities", kind: 1 },
+          { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" }
+        ];
+        if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), state: 0, history: [{ version: "1.0.0", state: 0, available: true }] };
+        if (url.includes("/builds/build-1")) return succeededBuild({ status: 2 });
+        if (url.endsWith("Activities%2FHelloActivity.cs")) return { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" };
+        if (url.includes("/projects/proj-1")) return { ...project(), latestBuildStatus: 2, runtimeStatus: 0, builds: [succeededBuild({ status: 2 })] };
+        return {};
+      }
+    }));
+    await flushPromises();
+    await flushPromises();
+
+    expect(container.textContent).toContain("Succeeded");
+    expect(container.textContent).toContain("Loaded");
+    expect(buttonContaining(container, "Activities")?.disabled).toBe(true);
+
+    await clickTab(container, "Promote");
+    await clickButton(container, "Promote build");
+    await flushPromises();
+
+    expect(container.textContent).toContain("Duplicate package id and version rejected");
+    await unmount();
+  });
+
+  it("explains stale successful artifacts instead of allowing promotion", async () => {
+    const postJson = vi.fn(async () => acceptedPromotion());
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      postJson,
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/files")) return projectFiles();
+        if (url.endsWith("/runtime-status")) return loadedRuntime();
+        if (url.endsWith("Activities%2FHelloActivity.cs")) return projectFiles()[0];
+        if (url.includes("/projects/proj-1")) return { ...project(), currentSourceRevisionId: "rev-2", builds: [succeededBuild({ sourceRevisionId: "rev-1" })] };
+        return {};
+      }
+    }));
+    await flushPromises();
+    await flushPromises();
+
+    await clickTab(container, "Promote");
+    const promoteButton = buttonContaining(container, "Promote build");
+
+    expect(promoteButton?.disabled).toBe(true);
+    expect(promoteButton?.title).toContain("stale");
+    expect(postJson).not.toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/promote", {});
+
+    await unmount();
   });
 
   it("supports retry reconciliation, rollback gating, and generic template no-contributions messaging", async () => {
@@ -289,13 +355,14 @@ function deniedCapabilities() {
   };
 }
 
-function workspaceWithProject(_options?: { project?: ReturnType<typeof project> }) {
+function workspaceWithProject(options?: { project?: ReturnType<typeof project> }) {
+  const currentProject = options?.project ?? project();
   return {
     id: "ws-1",
     displayName: "Team Extensions",
     ownerId: "alice",
     trustContext: "trusted-team",
-    projectIds: ["proj-1"]
+    projectIds: [currentProject.id]
   };
 }
 
@@ -347,7 +414,7 @@ function artifact() {
   };
 }
 
-function succeededBuild() {
+function succeededBuild(overrides?: { id?: string; sourceRevisionId?: string | null; status?: string | number; artifact?: ReturnType<typeof artifact> | null }) {
   return {
     id: "build-1",
     projectId: "proj-1",
@@ -356,7 +423,8 @@ function succeededBuild() {
     startedAt: new Date().toISOString(),
     completedAt: new Date().toISOString(),
     diagnostics: [],
-    artifact: artifact()
+    artifact: artifact(),
+    ...overrides
   };
 }
 
@@ -406,9 +474,14 @@ function acceptedPromotion() {
   };
 }
 
-function rejectedPromotion(category: string) {
+function rejectedPromotion(category: string | number) {
   return {
     status: "Rejected",
     rejectionReason: category
   };
+}
+
+function buttonContaining(container: Element, text: string) {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+    .find(candidate => candidate.textContent?.includes(text) || candidate.getAttribute("aria-label")?.includes(text));
 }
