@@ -34,7 +34,7 @@ describe("agent client", () => {
 
     expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/bootstrap");
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({
-      providerId: "github-copilot",
+      providerId: "deterministic-test",
       metadata: expect.objectContaining({ mode: "troubleshoot", route: "/workflows/order" })
     }));
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions/agt_01/messages", expect.objectContaining({
@@ -51,13 +51,24 @@ describe("agent client", () => {
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/proposals/prop_01/execute", { actorId: "studio", revision: "1", comment: undefined });
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/feedback", { sessionId: "agt_01", messageId: "msg_01", rating: 1, actorId: "studio" });
   });
+
+  it("surfaces wrapped feedback errors", async () => {
+    const context = stubContext();
+    context.http.postJson = vi.fn(async url => {
+      if (url === "/_elsa/agent/feedback") return { error: { code: "feedback_failed", message: "Feedback failed." } };
+      return { data: { id: "ignored" } };
+    });
+    const client = createAgentClient(context);
+
+    await expect(client.submitFeedback("agt_01", "msg_01", { rating: "negative" })).rejects.toThrow("Feedback failed.");
+  });
 });
 
 function stubContext(): StudioEndpointContext {
   return {
     baseUrl: "https://foundation.example/",
     http: {
-      getJson: vi.fn(async () => ({ data: { capabilities: [], providers: [{ providerId: "github-copilot", isAvailable: true, status: "available" }] } })),
+      getJson: vi.fn(async () => ({ data: { capabilities: [], providers: [{ providerId: "deterministic-test", isAvailable: true, status: "available" }] } })),
       postJson: vi.fn(async url => {
         if (url === "/_elsa/agent/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };

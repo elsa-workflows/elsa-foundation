@@ -22,14 +22,18 @@ export interface AgentClient {
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
+  let providerId: string | undefined;
+
   return {
     async bootstrap() {
-      return mapBootstrap(unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/agent/bootstrap")));
+      const response = unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/agent/bootstrap"));
+      providerId = response.providers?.find(provider => provider.isAvailable)?.providerId;
+      return mapBootstrap(response);
     },
     async createSession(request) {
       return mapSession(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentSession>>("/_elsa/agent/sessions", {
         conversationId: request.activeSurface.resourceId ?? request.activeSurface.route,
-        providerId: "github-copilot",
+        ...(providerId ? { providerId } : {}),
         metadata: {
           mode: request.mode,
           route: request.activeSurface.route,
@@ -87,13 +91,13 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       };
     },
     async submitFeedback(sessionId, messageId, request) {
-      await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/agent/feedback", {
+      unwrap(await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/agent/feedback", {
         sessionId,
         messageId,
         rating: request.rating === "positive" ? 1 : -1,
         comment: request.comment,
         actorId: "studio"
-      });
+      }));
     }
   };
 }

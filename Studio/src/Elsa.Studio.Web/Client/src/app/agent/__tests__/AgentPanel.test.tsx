@@ -72,9 +72,10 @@ describe("AgentPanel", () => {
     await flushPromises();
     await flushPromises();
 
-    expect(client.createSession).toHaveBeenCalledWith(expect.objectContaining({ activeSurface: { route: "/" } }));
+    expect(client.createSession).toHaveBeenCalledWith(expect.objectContaining({ activeSurface: { route: "/" }, mode: "explain" }));
     expect(client.sendMessage).toHaveBeenCalledWith("agt_01", expect.objectContaining({
       message: "Explain this screen.",
+      mode: "explain",
       capabilityId: "studio.explain",
       contextAttachments: [expect.objectContaining({ id: "ctx_screen" })]
     }));
@@ -86,6 +87,54 @@ describe("AgentPanel", () => {
       expect.any(Function),
       expect.any(Function),
       { defaultMessageId: "msg_01" });
+
+    unmount();
+  });
+
+  it("keeps input disabled while the assistant stream is still running", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/");
+    api.agent.capabilities.add({
+      id: "studio.explain",
+      displayName: "Explain",
+      description: "Explain the active screen.",
+      kind: "answer",
+      risk: "read-only",
+      surfaces: ["*"]
+    });
+    api.agent.promptStarters.add({
+      id: "studio.prompt",
+      label: "Explain screen",
+      prompt: "Explain this screen.",
+      surfaces: ["*"],
+      requiredCapabilities: ["studio.explain"]
+    });
+    const client = stubClient();
+    let emitStreamEvent: ((event: AgentStreamEvent) => void) | undefined;
+    const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
+      emitStreamEvent = onEvent;
+      onEvent({ type: "message-started", messageId: "msg_01", role: "assistant" });
+      onEvent({ type: "message-delta", messageId: "msg_01", content: "Streaming..." });
+      return { close() {} };
+    });
+    const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
+
+    await flushPromises();
+    clickButton(container, "Explain screen");
+    await flushPromises();
+    await flushPromises();
+    clickButton(container, "Explain screen");
+
+    expect(container.querySelector<HTMLTextAreaElement>("#studio-agent-composer")?.disabled).toBe(true);
+    expect(client.sendMessage).toHaveBeenCalledTimes(1);
+
+    emitStreamEvent?.({ type: "message-completed", messageId: "msg_01" });
+    await flushPromises();
+
+    expect(container.querySelector<HTMLTextAreaElement>("#studio-agent-composer")?.disabled).toBe(false);
 
     unmount();
   });
@@ -183,6 +232,7 @@ describe("AgentPanel", () => {
     const client = stubClient();
     const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
       onEvent({ type: "proposal-created", proposalId: "prop_01", messageId: "msg_01" });
+      onEvent({ type: "message-completed", messageId: "msg_01" });
       return { close() {} };
     });
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
@@ -229,6 +279,7 @@ describe("AgentPanel", () => {
         messageId: "msg_01",
         proposal: { title: "Add timeout", summary: "Adds timeout handling.", baseRevision: "rev_01", operations: [{ op: "add-activity" }] }
       });
+      onEvent({ type: "message-completed", messageId: "msg_01" });
       return { close() {} };
     });
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);

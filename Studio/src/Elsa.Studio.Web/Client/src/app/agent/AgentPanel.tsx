@@ -37,7 +37,7 @@ export function AgentPanel({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const streamSubscriptionRef = useRef<AgentStreamSubscription | null>(null);
   const pendingProposalIdsRef = useRef(new Set<string>());
-  const mode: StudioAgentMode = "troubleshoot";
+  const mode: StudioAgentMode = bootstrap?.modes.includes("troubleshoot") ? "troubleshoot" : bootstrap?.modes[0] ?? "troubleshoot";
   const agentClient = useMemo(() => client ?? createAgentClient(api.backend), [api.backend, client]);
   const contributionFilter = useMemo(() => ({
     policy: {
@@ -122,13 +122,15 @@ export function AgentPanel({
         api.backend,
         response.streamUrl,
         handleStreamEvent,
-        streamError => setError(getAgentErrorMessage(streamError)),
+        streamError => {
+          setError(getAgentErrorMessage(streamError));
+          setBusy(false);
+        },
         { defaultMessageId: response.messageId });
     } catch (e) {
       const messageText = getAgentErrorMessage(e);
       setError(messageText);
       setMessages(current => [...current, { id: `error-${Date.now()}`, role: "error", content: messageText, status: "failed" }]);
-    } finally {
       setBusy(false);
     }
   }
@@ -211,6 +213,7 @@ export function AgentPanel({
         break;
       case "message-completed":
         setMessages(current => current.map(message => message.id === event.messageId ? { ...message, status: "completed" } : message));
+        setBusy(false);
         break;
       case "proposal-created":
         setProposals(current => upsertProposal(current, normalizeProposal(event.proposalId, event.proposal)));
@@ -229,6 +232,7 @@ export function AgentPanel({
       case "error":
         setError(event.message);
         setMessages(current => [...current, { id: `error-${Date.now()}`, role: "error", content: event.message, status: "failed" }]);
+        setBusy(false);
         break;
     }
   }
