@@ -151,6 +151,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [selectedWorkspace?.id, selectedProject?.id]);
 
   useEffect(() => {
+    clearBuildPoll();
+
     if (!selectedWorkspace || !selectedProject || !activeBuild || !isBuildRunning(activeBuild)) {
       return;
     }
@@ -160,7 +162,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }, 900);
 
     return () => clearBuildPoll();
-  }, [selectedWorkspace?.id, selectedProject?.id, activeBuild?.id, activeBuild?.status]);
+  }, [selectedWorkspace?.id, selectedProject?.id, activeBuild]);
 
   async function bootstrap() {
     setState("loading");
@@ -425,11 +427,6 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setActiveBuild(nextBuild);
       setBuildHistory(current => mergeBuildHistory(current, nextBuild));
       setBuildLog(log);
-      if (isBuildRunning(nextBuild)) {
-        pollTimerId.current = window.setTimeout(() => {
-          void refreshBuild(workspaceId, projectId, nextBuild.id, nextBuild.revision);
-        }, 900);
-      }
     } catch (e) {
       setError(getErrorMessage(e));
     }
