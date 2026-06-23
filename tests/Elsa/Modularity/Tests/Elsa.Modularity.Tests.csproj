@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Apps\Elsa.Server\Elsa.Server.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
