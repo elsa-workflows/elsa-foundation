@@ -32,7 +32,7 @@ internal interface IExtensionBuilderService
 internal sealed class ExtensionBuilderService(
     IExtensionBuilderStorage storage,
     IExtensionBuilderTemplateCatalog templates,
-    IExtensionBuilderBuildRunner buildRunner,
+    IExtensionBuilderBuildQueue buildQueue,
     IExtensionBuilderPromotionService promotionService,
     INuplaneAdminOperations nuplaneAdmin,
     IFeatureManagementService featureManagement,
@@ -103,31 +103,21 @@ internal sealed class ExtensionBuilderService(
             DateTimeOffset.UtcNow,
             null,
             null);
-        await storage.SaveBuildAsync(created, cancellationToken);
+        if (!await storage.SaveBuildAsync(created, cancellationToken))
+        {
+            DeleteBuildDirectory(runningLogPath: created.LogPath);
+            return null;
+        }
 
         var running = created with { Status = BuildStatus.Running, StartedAt = DateTimeOffset.UtcNow };
-        await storage.SaveBuildAsync(running, cancellationToken);
-
-        BuildResult completed;
-        try
+        if (!await storage.SaveBuildAsync(running, CancellationToken.None))
         {
-            completed = await buildRunner.RunAsync(project, snapshot, buildId, running.LogPath, storage.GetBuildArtifactsPath(buildId), cancellationToken);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or FileNotFoundException)
-        {
-            var diagnostic = new BuildDiagnostic(BuildDiagnosticSeverity.Error, ex.Message, null, null, null, null);
-            await File.WriteAllTextAsync(running.LogPath, ex.ToString(), CancellationToken.None);
-            completed = running with
-            {
-                Status = BuildStatus.Failed,
-                Diagnostics = [diagnostic],
-                Artifact = null,
-                CompletedAt = DateTimeOffset.UtcNow
-            };
+            DeleteBuildDirectory(running.LogPath);
+            return null;
         }
 
-        await storage.SaveBuildAsync(completed, cancellationToken);
-        return completed;
+        await buildQueue.EnqueueAsync(new(project, snapshot, buildId, running.LogPath, storage.GetBuildArtifactsPath(buildId)), CancellationToken.None);
+        return await storage.GetBuildAsync(buildId, caller.OwnerId, CancellationToken.None) ?? running;
     }
 
     public Task<BuildResult?> GetBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default) =>
@@ -153,11 +143,13 @@ internal sealed class ExtensionBuilderService(
         var build = await storage.GetBuildAsync(buildId, caller.OwnerId, cancellationToken);
         if (build is null)
             return null;
+        if (!await storage.ProjectExistsAsync(build.ProjectId, cancellationToken))
+            return null;
 
         var result = await promotionService.PromoteAsync(build, cancellationToken);
         if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null } && build.Artifact is not null)
         {
-            await storage.AddPromotionAsync(build.ProjectId, new(
+            var recorded = await storage.AddPromotionAsync(build.ProjectId, new(
                 result.PublishedPackage.PackageId,
                 result.PublishedPackage.Version,
                 build.Artifact.Path,
@@ -165,7 +157,13 @@ internal sealed class ExtensionBuilderService(
                 DateTimeOffset.UtcNow,
                 result.ReconcileOutcome,
                 result.RequiresReload,
-                result.RequiresRestart), cancellationToken);
+                result.RequiresRestart,
+                DateTimeOffset.UtcNow), CancellationToken.None);
+            if (!recorded)
+            {
+                DeleteFileIfExists(result.PublishedPackage.Path);
+                return null;
+            }
         }
 
         return result;
@@ -187,8 +185,7 @@ internal sealed class ExtensionBuilderService(
                 var loaded = activePackages.Packages.Any(package =>
                     string.Equals(package.PackageId, promotion.PackageId, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(package.Version, promotion.Version, StringComparison.OrdinalIgnoreCase));
-                var failed = promotion.ReconcileOutcome.IsDegraded ||
-                    promotion.ReconcileOutcome.FailedPackages.Any(x => string.Equals(x, promotion.PackageId, StringComparison.OrdinalIgnoreCase));
+                var failed = ReconcileFailedForPackage(promotion.ReconcileOutcome, promotion.PackageId);
                 var state = failed
                     ? ExtensionPackageRuntimeState.FailedReconciliation
                     : loaded
@@ -213,13 +210,21 @@ internal sealed class ExtensionBuilderService(
             .OrderBy(x => x.Version, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var lastReconcile = promotions.OrderByDescending(x => x.PromotedAt).FirstOrDefault()?.ReconcileOutcome;
+        var lastReconcile = promotions
+            .OrderByDescending(x => x.LastReconciledAt ?? x.PromotedAt)
+            .FirstOrDefault()
+            ?.ReconcileOutcome;
         return new(
             project.Id,
             project.PackageId,
             activeVersion,
             runtimePackages,
-            promotions.Select(x => x.Version).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray(),
+            promotions
+                .Where(x => File.Exists(x.FeedPath))
+                .Select(x => x.Version)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             lastReconcile,
             lastReconcile?.Reason);
     }
@@ -235,9 +240,22 @@ internal sealed class ExtensionBuilderService(
         if (target is null)
             return new PackagePromotionResult(PromotionStatus.Rejected, PromotionRejectionReason.InvalidManifest, null, null, false, false);
 
-        var result = await promotionService.RollbackAsync(project, target, cancellationToken);
-        if (result.Status is PromotionStatus.Accepted)
-            await storage.SetActiveVersionAsync(project.Id, request.Version, cancellationToken);
+        var result = await promotionService.RollbackAsync(project, target, await storage.ListPromotionsAsync(project.Id, cancellationToken), cancellationToken);
+        if (result is { Status: PromotionStatus.Accepted, ReconcileOutcome: not null })
+        {
+            var recorded = await storage.UpdatePromotionLifecycleAsync(
+                project.Id,
+                request.Version,
+                result.ReconcileOutcome,
+                result.RequiresReload,
+                result.RequiresRestart,
+                DateTimeOffset.UtcNow,
+                CancellationToken.None);
+            if (!recorded)
+                return null;
+
+            await storage.SetActiveVersionAsync(project.Id, request.Version, CancellationToken.None);
+        }
 
         return result;
     }
@@ -249,8 +267,30 @@ internal sealed class ExtensionBuilderService(
             return null;
 
         var outcome = await promotionService.RetryReconciliationAsync(cancellationToken);
-        await storage.UpdatePromotionReconcileOutcomeAsync(project.Id, outcome, cancellationToken);
+        await storage.UpdatePromotionReconcileOutcomeAsync(project.Id, outcome, CancellationToken.None);
         logger.LogInformation("Extension Builder reconciliation retry completed for project {ProjectId} with {Outcome}.", project.Id, outcome.Outcome);
         return new("retry-reconcile", outcome, RequiresReload: true, RequiresRestart: false, "Reconciliation retry completed.");
+    }
+
+    private static bool ReconcileFailedForPackage(ExtensionBuilderReconcileOutcome outcome, string packageId)
+    {
+        if (!outcome.IsDegraded)
+            return false;
+
+        return outcome.FailedPackages.Count is 0 ||
+            outcome.FailedPackages.Any(x => string.Equals(x, packageId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void DeleteBuildDirectory(string runningLogPath)
+    {
+        var buildDirectory = Path.GetDirectoryName(runningLogPath);
+        if (!string.IsNullOrWhiteSpace(buildDirectory) && Directory.Exists(buildDirectory))
+            Directory.Delete(buildDirectory, recursive: true);
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
     }
 }

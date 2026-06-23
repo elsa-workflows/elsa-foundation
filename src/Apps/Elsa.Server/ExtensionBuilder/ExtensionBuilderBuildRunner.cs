@@ -1,7 +1,11 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
+using System.Threading.Channels;
 using System.Xml.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Server.ExtensionBuilder;
@@ -9,6 +13,132 @@ namespace Elsa.Server.ExtensionBuilder;
 internal interface IExtensionBuilderBuildRunner
 {
     Task<BuildResult> RunAsync(ExtensionProject project, SourceSnapshot snapshot, string buildId, string logPath, string artifactsPath, CancellationToken cancellationToken = default);
+}
+
+internal interface IExtensionBuilderBuildQueue
+{
+    Task EnqueueAsync(ExtensionBuilderBuildWorkItem workItem, CancellationToken cancellationToken = default);
+}
+
+internal interface IExtensionBuilderBuildExecutor
+{
+    Task ExecuteAsync(ExtensionBuilderBuildWorkItem workItem, CancellationToken cancellationToken = default);
+}
+
+internal sealed record ExtensionBuilderBuildWorkItem(
+    ExtensionProject Project,
+    SourceSnapshot Snapshot,
+    string BuildId,
+    string LogPath,
+    string ArtifactsPath);
+
+internal sealed class ExtensionBuilderBackgroundBuildQueue : IExtensionBuilderBuildQueue
+{
+    private readonly Channel<ExtensionBuilderBuildWorkItem> _channel = Channel.CreateUnbounded<ExtensionBuilderBuildWorkItem>(new()
+    {
+        SingleReader = true
+    });
+
+    public Task EnqueueAsync(ExtensionBuilderBuildWorkItem workItem, CancellationToken cancellationToken = default) =>
+        _channel.Writer.WriteAsync(workItem, cancellationToken).AsTask();
+
+    public IAsyncEnumerable<ExtensionBuilderBuildWorkItem> ReadAllAsync(CancellationToken cancellationToken) =>
+        _channel.Reader.ReadAllAsync(cancellationToken);
+}
+
+internal sealed class ExtensionBuilderBuildWorker(
+    ExtensionBuilderBackgroundBuildQueue queue,
+    IServiceScopeFactory scopeFactory,
+    ILogger<ExtensionBuilderBuildWorker> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var workItem in queue.ReadAllAsync(stoppingToken))
+        {
+            using var scope = scopeFactory.CreateScope();
+            var executor = scope.ServiceProvider.GetRequiredService<IExtensionBuilderBuildExecutor>();
+            try
+            {
+                await executor.ExecuteAsync(workItem, stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Extension Builder build {BuildId} failed outside the normal build result path.", workItem.BuildId);
+            }
+        }
+    }
+}
+
+internal sealed class ExtensionBuilderBuildExecutor(
+    IExtensionBuilderStorage storage,
+    IExtensionBuilderBuildRunner buildRunner,
+    ILogger<ExtensionBuilderBuildExecutor> logger) : IExtensionBuilderBuildExecutor
+{
+    public async Task ExecuteAsync(ExtensionBuilderBuildWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        if (!await storage.ProjectExistsAsync(workItem.Project.Id, cancellationToken))
+            return;
+
+        BuildResult completed;
+        var running = new BuildResult(
+            workItem.BuildId,
+            workItem.Project.Id,
+            workItem.Project.WorkspaceId,
+            workItem.Snapshot.Id,
+            BuildStatus.Running,
+            [],
+            null,
+            workItem.LogPath,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null);
+
+        try
+        {
+            completed = await buildRunner.RunAsync(workItem.Project, workItem.Snapshot, workItem.BuildId, workItem.LogPath, workItem.ArtifactsPath, cancellationToken);
+        }
+        catch (OperationCanceledException ex)
+        {
+            completed = await CreateFailedBuildAsync(running, "Build was canceled before completion.", ex);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or FileNotFoundException)
+        {
+            completed = await CreateFailedBuildAsync(running, ex.Message, ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Extension Builder build {BuildId} failed unexpectedly.", workItem.BuildId);
+            completed = await CreateFailedBuildAsync(running, "Build failed unexpectedly. See the build log for details.", ex);
+        }
+
+        if (!await storage.ProjectExistsAsync(workItem.Project.Id, CancellationToken.None))
+        {
+            DeleteDirectoryIfExists(Path.GetDirectoryName(workItem.LogPath)!);
+            return;
+        }
+
+        if (!await storage.SaveBuildAsync(completed, CancellationToken.None))
+            DeleteDirectoryIfExists(Path.GetDirectoryName(workItem.LogPath)!);
+    }
+
+    private static async Task<BuildResult> CreateFailedBuildAsync(BuildResult running, string message, Exception exception)
+    {
+        var diagnostic = new BuildDiagnostic(BuildDiagnosticSeverity.Error, message, null, null, null, null);
+        await File.WriteAllTextAsync(running.LogPath, exception.ToString(), CancellationToken.None);
+        return running with
+        {
+            Status = BuildStatus.Failed,
+            Diagnostics = [diagnostic],
+            Artifact = null,
+            CompletedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static void DeleteDirectoryIfExists(string path)
+    {
+        if (Directory.Exists(path))
+            Directory.Delete(path, recursive: true);
+    }
 }
 
 internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuilderOptions> options) : IExtensionBuilderBuildRunner
@@ -25,6 +155,7 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
             var startedAt = DateTimeOffset.UtcNow;
             Directory.CreateDirectory(artifactsPath);
             var log = new List<string>();
+            var logGate = new object();
             var diagnostics = new List<BuildDiagnostic>();
 
             var projectFile = Directory.EnumerateFiles(snapshot.Path, "*.csproj", SearchOption.TopDirectoryOnly).FirstOrDefault();
@@ -36,9 +167,9 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
             }
 
             var dotnet = ResolveDotNetExecutable(options.Value.DotNetExecutable);
-            var restoreExit = await RunProcessAsync(dotnet, $"restore \"{projectFile}\"", snapshot.Path, log, cancellationToken);
+            var restoreExit = await RunProcessAsync(dotnet, $"restore \"{projectFile}\"", snapshot.Path, log, logGate, cancellationToken);
             var packExit = restoreExit == 0
-                ? await RunProcessAsync(dotnet, $"pack \"{projectFile}\" --no-restore -c Release -o \"{artifactsPath}\"", snapshot.Path, log, cancellationToken)
+                ? await RunProcessAsync(dotnet, $"pack \"{projectFile}\" --no-restore -c Release -o \"{artifactsPath}\"", snapshot.Path, log, logGate, cancellationToken)
                 : -1;
 
             await File.WriteAllLinesAsync(logPath, log, cancellationToken);
@@ -98,7 +229,7 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
             EmptyToNull(match.Groups["code"].Value));
     }
 
-    private static async Task<int> RunProcessAsync(string fileName, string arguments, string workingDirectory, List<string> log, CancellationToken cancellationToken)
+    private static async Task<int> RunProcessAsync(string fileName, string arguments, string workingDirectory, List<string> log, object logGate, CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo(fileName, arguments)
         {
@@ -109,13 +240,36 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
         };
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, args) => { if (args.Data is not null) log.Add(args.Data); };
-        process.ErrorDataReceived += (_, args) => { if (args.Data is not null) log.Add(args.Data); };
+        process.OutputDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                lock (logGate)
+                    log.Add(args.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, args) =>
+        {
+            if (args.Data is not null)
+            {
+                lock (logGate)
+                    log.Add(args.Data);
+            }
+        };
 
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+            throw;
+        }
         return process.ExitCode;
     }
 
