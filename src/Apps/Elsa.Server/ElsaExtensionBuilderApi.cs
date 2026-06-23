@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Elsa.Server.ExtensionBuilder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -174,8 +175,11 @@ internal static class ElsaExtensionBuilderApi
             : Results.File(artifact.Path, "application/octet-stream", artifact.FileName);
     }
 
-    private static async Task<IResult> PromoteBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        ToFoundResult(ToPromotionResponse(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, cancellationToken)), $"Build '{buildId}' was not found.");
+    private static async Task<IResult> PromoteBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        var request = await ReadPromotionRequestAsync(httpContext, cancellationToken);
+        return ToFoundResult(ToPromotionResponse(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, request, cancellationToken)), $"Build '{buildId}' was not found.");
+    }
 
     private static async Task<IResult> GetRuntimeStatusAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.GetRuntimeStatusAsync(GetCaller(httpContext), projectId, cancellationToken), $"Project '{projectId}' was not found.");
@@ -202,6 +206,15 @@ internal static class ElsaExtensionBuilderApi
         ApplyManagementApiKeyPrincipal(context.HttpContext);
         context.HttpContext.Items[CallerItemKey] = CreateCaller(context.HttpContext, hasManagementAccess: true);
         return next(context);
+    }
+
+    private static async Task<PackagePromotionRequest> ReadPromotionRequestAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        if (httpContext.Request.ContentLength is null or 0)
+            return PackagePromotionRequest.Default;
+
+        return await JsonSerializer.DeserializeAsync<PackagePromotionRequest>(httpContext.Request.Body, cancellationToken: cancellationToken)
+            ?? PackagePromotionRequest.Default;
     }
 
     internal static ValueTask<object?> RequireTrustedCallerAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)

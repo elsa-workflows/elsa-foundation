@@ -203,7 +203,10 @@ internal sealed record BuildArtifactResponse(
     long Size,
     DateTimeOffset CreatedAt);
 
-internal sealed record PackagePromotionRequest(string? TargetFeed);
+internal sealed record PackagePromotionRequest(string? TargetFeed)
+{
+    public static PackagePromotionRequest Default { get; } = new((string?)null);
+}
 
 internal sealed record PackagePromotionResult(
     PromotionStatus Status,

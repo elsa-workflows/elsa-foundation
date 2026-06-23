@@ -12,7 +12,7 @@ namespace Elsa.Server.ExtensionBuilder;
 
 internal interface IExtensionBuilderPromotionService
 {
-    Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default);
+    Task<PackagePromotionResult> PromoteAsync(BuildResult build, PackagePromotionRequest request, CancellationToken cancellationToken = default);
     Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, IReadOnlyList<PackagePromotionRecord> promotions, CancellationToken cancellationToken = default);
     Task<ExtensionBuilderReconcileOutcome> RetryReconciliationAsync(CancellationToken cancellationToken = default);
 }
@@ -31,7 +31,10 @@ internal sealed partial class ExtensionBuilderPromotionService(
     {
     }
 
-    public async Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
+    public Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default) =>
+        PromoteAsync(build, PackagePromotionRequest.Default, cancellationToken);
+
+    public async Task<PackagePromotionResult> PromoteAsync(BuildResult build, PackagePromotionRequest request, CancellationToken cancellationToken = default)
     {
         if (build.Status is not BuildStatus.Succeeded || build.Artifact is null)
             return Rejected(PromotionRejectionReason.InvalidManifest);
@@ -43,7 +46,9 @@ internal sealed partial class ExtensionBuilderPromotionService(
             !string.Equals(validation.Version, build.Artifact.Version, StringComparison.Ordinal))
             return Rejected(PromotionRejectionReason.InvalidManifest);
 
-        var feed = ResolveDropFolderFeed();
+        var feed = ResolveDropFolderFeed(request.TargetFeed);
+        if (feed is null)
+            return Rejected(PromotionRejectionReason.InvalidManifest);
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, build.Artifact.FileName);
         if (File.Exists(destination) ||
@@ -71,11 +76,15 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
         var source = target.FeedPath;
         var feed = ResolveDropFolderFeed();
+        if (feed is null)
+            return Rejected(PromotionRejectionReason.InvalidManifest);
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, Path.GetFileName(source));
-        if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
-            File.Copy(source, destination, overwrite: true);
-        DeactivateSupersededPackageVersions(feed.Path, target.PackageId, target.Version, promotions);
+        if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase) &&
+            TryCopyPackageToFeed(source, destination, overwrite: true) is { } copyRejection)
+            return Rejected(copyRejection);
+        if (TryDeactivateSupersededPackageVersions(feed.Path, target.PackageId, target.Version, promotions) is { } deactivateRejection)
+            return Rejected(deactivateRejection);
         var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
 
         return new(
@@ -205,7 +214,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
         return false;
     }
 
-    private static void DeactivateSupersededPackageVersions(string feedPath, string packageId, string activeVersion, IReadOnlyList<PackagePromotionRecord> promotions)
+    private static PromotionRejectionReason? TryDeactivateSupersededPackageVersions(string feedPath, string packageId, string activeVersion, IReadOnlyList<PackagePromotionRecord> promotions)
     {
         var promotedPaths = promotions
             .Where(x =>
@@ -229,8 +238,19 @@ internal sealed partial class ExtensionBuilderPromotionService(
         foreach (var path in promotedPaths)
         {
             if (File.Exists(path))
-                File.Delete(path);
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    return PromotionRejectionReason.MalformedPackage;
+                }
+            }
         }
+
+        return null;
     }
 
     private static (string PackageId, string Version)? TryReadPackageIdentity(string packagePath)
@@ -248,10 +268,16 @@ internal sealed partial class ExtensionBuilderPromotionService(
         }
     }
 
-    private DropFolderFeed ResolveDropFolderFeed()
+    private DropFolderFeed? ResolveDropFolderFeed(string? targetFeed = null)
     {
         var feeds = ReadFeeds(configuration);
-        var feed = feeds.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Path));
+        var feed = string.IsNullOrWhiteSpace(targetFeed)
+            ? feeds.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Path))
+            : feeds.FirstOrDefault(x =>
+                !string.IsNullOrWhiteSpace(x.Path) &&
+                string.Equals(x.Name, targetFeed, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(targetFeed) && feed is null)
+            return null;
         var path = feed?.Path ?? "packages";
         return new(feed?.Name ?? "drop-folder", Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path)));
     }
@@ -274,16 +300,16 @@ internal sealed partial class ExtensionBuilderPromotionService(
     private static PackagePromotionResult Rejected(PromotionRejectionReason reason) =>
         new(PromotionStatus.Rejected, reason, null, null, RequiresReload: false, RequiresRestart: false);
 
-    internal static PromotionRejectionReason? TryCopyPackageToFeed(string source, string destination)
+    internal static PromotionRejectionReason? TryCopyPackageToFeed(string source, string destination, bool overwrite = false)
     {
         try
         {
-            File.Copy(source, destination);
+            File.Copy(source, destination, overwrite);
             return null;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return File.Exists(destination) ? PromotionRejectionReason.Duplicate : PromotionRejectionReason.MalformedPackage;
+            return !overwrite && File.Exists(destination) ? PromotionRejectionReason.Duplicate : PromotionRejectionReason.MalformedPackage;
         }
     }
 

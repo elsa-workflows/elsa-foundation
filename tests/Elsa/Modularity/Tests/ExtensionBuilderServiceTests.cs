@@ -336,6 +336,20 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PromoteForwardsTargetFeedRequest()
+    {
+        var promotion = new FakePromotionService();
+        var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), promotion: promotion);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("elsa-activity-module", "Elsa.Test.TargetFeed", "1.0.0", "net10.0", null, null));
+        var build = await service.SubmitBuildAsync(_caller, project.Id);
+
+        await service.PromoteBuildAsync(_caller, build!.Id, new PackagePromotionRequest("configured"));
+
+        Assert.Equal("configured", promotion.PromotionRequest!.TargetFeed);
+    }
+
+    [Fact]
     public async Task RuntimeStatusDoesNotFailPackageWhenDegradedOutcomeNamesAnotherPackage()
     {
         var promotion = new FakePromotionService
@@ -500,6 +514,31 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
         Assert.DoesNotContain(promotion.RollbackPromotions!, x => x.Version == "3.0.0");
         Assert.Contains(await innerStorage.ListPromotionsAsync(project.Id), x => x.Version == "3.0.0");
+    }
+
+    [Fact]
+    public async Task RollbackDoesNotOverwriteNewerActivePromotion()
+    {
+        var innerStorage = CreateStorage();
+        var promotion = new FakePromotionService();
+        var service = CreateService(storage: innerStorage);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.ActiveRace", "3.0.0", "net10.0", null, null));
+        var promotedV1At = DateTimeOffset.UtcNow.AddMinutes(-20);
+        var promotedV2At = DateTimeOffset.UtcNow.AddMinutes(-10);
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "1.0.0", "artifact-1.nupkg", "feed-1.nupkg", promotedV1At, new("completed", "promote-1", null, false, []), true, false, promotedV1At));
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "2.0.0", "artifact-2.nupkg", "feed-2.nupkg", promotedV2At, new("completed", "promote-2", null, false, []), true, false, promotedV2At));
+        var storage = new ConcurrentPromotionStorage(
+            innerStorage,
+            _ => Task.CompletedTask,
+            async cancellationToken =>
+                await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "3.0.0", "artifact-3.nupkg", "feed-3.nupkg", DateTimeOffset.UtcNow, new("completed", "promote-3", null, false, []), true, false, DateTimeOffset.UtcNow), cancellationToken));
+        var rollbackService = CreateService(storage: storage, promotion: promotion);
+
+        var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
+
+        Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
+        Assert.Equal("3.0.0", await innerStorage.GetActiveVersionAsync(project.Id));
     }
 
     [Fact]
@@ -704,6 +743,48 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PromoteUsesRequestedConfigurationFeed()
+    {
+        var defaultFeed = Path.Combine(_directory, "default-feed");
+        var requestedFeed = Path.Combine(_directory, "requested-feed");
+        var packagePath = Path.Combine(_directory, "requested.nupkg");
+        CreatePackage(packagePath, "Elsa.Test.Requested", "1.0.0", "Safe.Package", includeManifest: true);
+        var build = new BuildResult(
+            "build",
+            "project",
+            "workspace",
+            "rev",
+            BuildStatus.Succeeded,
+            [],
+            new("artifact", "build", "Elsa.Test.Requested", "1.0.0", Path.GetFileName(packagePath), packagePath, new FileInfo(packagePath).Length, DateTimeOffset.UtcNow),
+            Path.Combine(_directory, "build.log"),
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Nuplane:Setup:Feeds:0:Name"] = "default",
+                ["Nuplane:Setup:Feeds:0:DirectoryPath"] = defaultFeed,
+                ["Nuplane:Setup:Feeds:1:Name"] = "requested",
+                ["Nuplane:Setup:Feeds:1:DirectoryPath"] = requestedFeed
+            })
+            .Build();
+        var service = new ExtensionBuilderPromotionService(
+            new FakeEnvironment(_directory),
+            Options.Create(new ExtensionBuilderOptions()),
+            new FakeNuplaneAdmin(),
+            configuration);
+
+        var result = await service.PromoteAsync(build, new PackagePromotionRequest("requested"));
+
+        Assert.Equal(PromotionStatus.Accepted, result.Status);
+        Assert.Equal("requested", result.PublishedPackage!.FeedName);
+        Assert.True(File.Exists(Path.Combine(requestedFeed, Path.GetFileName(packagePath))));
+        Assert.False(Directory.Exists(defaultFeed));
+    }
+
+    [Fact]
     public void PublicJsonContractsSerializeEnumsAsStrings()
     {
         var json = JsonSerializer.Serialize(
@@ -895,8 +976,11 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringRetry { get; set; }
         public IReadOnlyList<PackagePromotionRecord>? RollbackPromotions { get; private set; }
 
-        public Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
+        public PackagePromotionRequest? PromotionRequest { get; private set; }
+
+        public Task<PackagePromotionResult> PromoteAsync(BuildResult build, PackagePromotionRequest request, CancellationToken cancellationToken = default)
         {
+            PromotionRequest = request;
             var artifact = build.Artifact!;
             CancelDuringPromote?.Cancel();
             return Task.FromResult(new PackagePromotionResult(
@@ -952,7 +1036,10 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         }
     }
 
-    private sealed class ConcurrentPromotionStorage(IExtensionBuilderStorage inner, Func<CancellationToken, Task> afterFirstPromotionList) : IExtensionBuilderStorage
+    private sealed class ConcurrentPromotionStorage(
+        IExtensionBuilderStorage inner,
+        Func<CancellationToken, Task> afterFirstPromotionList,
+        Func<CancellationToken, Task>? beforeTrySetActiveVersion = null) : IExtensionBuilderStorage
     {
         private bool _listedPromotions;
 
@@ -991,6 +1078,13 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default) => inner.UpdatePromotionReconcileOutcomeAsync(projectId, outcome, cancellationToken);
         public Task<bool> UpdatePromotionLifecycleAsync(string projectId, string version, ExtensionBuilderReconcileOutcome outcome, bool requiresReload, bool requiresRestart, DateTimeOffset reconciledAt, CancellationToken cancellationToken = default) => inner.UpdatePromotionLifecycleAsync(projectId, version, outcome, requiresReload, requiresRestart, reconciledAt, cancellationToken);
         public Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default) => inner.SetActiveVersionAsync(projectId, version, cancellationToken);
+        public async Task<bool> TrySetActiveVersionAsync(string projectId, string version, string? expectedCurrentVersion, CancellationToken cancellationToken = default)
+        {
+            if (beforeTrySetActiveVersion is not null)
+                await beforeTrySetActiveVersion(cancellationToken);
+
+            return await inner.TrySetActiveVersionAsync(projectId, version, expectedCurrentVersion, cancellationToken);
+        }
         public Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default) => inner.GetActiveVersionAsync(projectId, cancellationToken);
         public string GetBuildLogPath(string buildId) => inner.GetBuildLogPath(buildId);
         public string GetBuildArtifactsPath(string buildId) => inner.GetBuildArtifactsPath(buildId);

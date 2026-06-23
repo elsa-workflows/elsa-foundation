@@ -30,6 +30,7 @@ internal interface IExtensionBuilderStorage
     Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default);
     Task<bool> UpdatePromotionLifecycleAsync(string projectId, string version, ExtensionBuilderReconcileOutcome outcome, bool requiresReload, bool requiresRestart, DateTimeOffset reconciledAt, CancellationToken cancellationToken = default);
     Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default);
+    Task<bool> TrySetActiveVersionAsync(string projectId, string version, string? expectedCurrentVersion, CancellationToken cancellationToken = default);
     Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default);
     string GetBuildLogPath(string buildId);
     string GetBuildArtifactsPath(string buildId);
@@ -317,10 +318,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return null;
 
             var normalizedPath = await WriteFileCoreAsync(projectId, path, content, cancellationToken);
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, CancellationToken.None);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return await ReadProjectFileAsync(ResolveProjectFilePath(projectId, normalizedPath), normalizedPath, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
+            return await ReadProjectFileAsync(ResolveProjectFilePath(projectId, normalizedPath), normalizedPath, CancellationToken.None);
         }
         finally
         {
@@ -342,9 +343,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return false;
 
             File.Delete(filePath);
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, CancellationToken.None);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return true;
         }
         finally
@@ -573,6 +574,28 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var state = await LoadStateAsync(cancellationToken);
             state.ActiveVersions[projectId] = version;
             await SaveStateAsync(state, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<bool> TrySetActiveVersionAsync(string projectId, string version, string? expectedCurrentVersion, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!state.Projects.ContainsKey(projectId))
+                return false;
+            state.ActiveVersions.TryGetValue(projectId, out var currentVersion);
+            if (!string.Equals(currentVersion, expectedCurrentVersion, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            state.ActiveVersions[projectId] = version;
+            await SaveStateAsync(state, cancellationToken);
+            return true;
         }
         finally
         {

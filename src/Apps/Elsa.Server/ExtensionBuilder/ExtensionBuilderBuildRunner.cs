@@ -268,11 +268,13 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
         try
         {
             await process.WaitForExitAsync(cancellationToken);
+            process.WaitForExit();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
+            process.WaitForExit();
             throw;
         }
         return process.ExitCode;
