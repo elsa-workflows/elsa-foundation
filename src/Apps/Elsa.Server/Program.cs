@@ -13,6 +13,10 @@ using Elsa.Activities.Flowchart;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
+using Elsa.Agent.Api;
+using Elsa.Agent.Core;
+using Elsa.Agent.GitHubCopilot;
+using Elsa.Agent.Workflows;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
@@ -121,6 +125,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+
+            // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
+            typeof(FoundationAgentAbstractionsFeature).Assembly,
+            typeof(FoundationAgentApiFeature).Assembly,
+            typeof(FoundationWorkflowsAgentFeature).Assembly,
+            typeof(GitHubCopilotAgentFeature).Assembly,
+
             typeof(ModularityApiFeature).Assembly,
             typeof(ConsoleLogStreamingFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,

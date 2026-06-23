@@ -25,7 +25,11 @@
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
+          "FoundationAgentAbstractions": {},
+          "FoundationAgentApi": {},
+          "FoundationWorkflowsAgent": {},
           "FileSystemDistributedLocking": {},
+          "GitHubCopilotAgent": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
