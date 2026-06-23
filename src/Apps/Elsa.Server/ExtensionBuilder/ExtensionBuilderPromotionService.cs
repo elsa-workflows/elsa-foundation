@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
@@ -12,11 +13,11 @@ namespace Elsa.Server.ExtensionBuilder;
 internal interface IExtensionBuilderPromotionService
 {
     Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default);
-    Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, CancellationToken cancellationToken = default);
+    Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, IReadOnlyList<PackagePromotionRecord> promotions, CancellationToken cancellationToken = default);
     Task<ExtensionBuilderReconcileOutcome> RetryReconciliationAsync(CancellationToken cancellationToken = default);
 }
 
-internal sealed class ExtensionBuilderPromotionService(
+internal sealed partial class ExtensionBuilderPromotionService(
     IWebHostEnvironment environment,
     IOptions<ExtensionBuilderOptions> options,
     INuplaneAdminOperations nuplaneAdmin) : IExtensionBuilderPromotionService
@@ -31,42 +32,55 @@ internal sealed class ExtensionBuilderPromotionService(
         var validation = await ValidatePackageAsync(build.Artifact.Path, cancellationToken);
         if (validation.RejectionReason is not null)
             return Rejected(validation.RejectionReason.Value);
+        if (!string.Equals(validation.PackageId, build.Artifact.PackageId, StringComparison.Ordinal) ||
+            !string.Equals(validation.Version, build.Artifact.Version, StringComparison.Ordinal))
+            return Rejected(PromotionRejectionReason.InvalidManifest);
 
         var feed = await ResolveDropFolderFeedAsync(cancellationToken);
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, build.Artifact.FileName);
-        if (File.Exists(destination) || await ActivePackageExistsAsync(build.Artifact.PackageId, build.Artifact.Version, cancellationToken))
+        if (File.Exists(destination) ||
+            FeedPackageExists(feed.Path, validation.PackageId!, validation.Version!) ||
+            await ActivePackageExistsAsync(validation.PackageId!, validation.Version!, cancellationToken))
             return Rejected(PromotionRejectionReason.Duplicate);
 
-        File.Copy(build.Artifact.Path, destination);
-        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(cancellationToken));
+        try
+        {
+            File.Copy(build.Artifact.Path, destination);
+        }
+        catch (IOException) when (File.Exists(destination))
+        {
+            return Rejected(PromotionRejectionReason.Duplicate);
+        }
+        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
 
         return new(
             PromotionStatus.Accepted,
             null,
-            new(build.Artifact.PackageId, build.Artifact.Version, feed.Name, destination),
+            new(validation.PackageId!, validation.Version!, feed.Name, destination),
             reconcile,
             RequiresReload: true,
             RequiresRestart: false);
     }
 
-    public async Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, CancellationToken cancellationToken = default)
+    public async Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, IReadOnlyList<PackagePromotionRecord> promotions, CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(target.ArtifactPath) && !File.Exists(target.FeedPath))
+        if (!File.Exists(target.FeedPath))
             return Rejected(PromotionRejectionReason.InvalidManifest);
 
-        var source = File.Exists(target.ArtifactPath) ? target.ArtifactPath : target.FeedPath;
+        var source = target.FeedPath;
         var feed = await ResolveDropFolderFeedAsync(cancellationToken);
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, Path.GetFileName(source));
         if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
             File.Copy(source, destination, overwrite: true);
-        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(cancellationToken));
+        DeactivateSupersededPackageVersions(feed.Path, target.PackageId, target.Version, promotions);
+        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
 
         return new(
             PromotionStatus.Accepted,
             null,
-            new(project.PackageId, target.Version, feed.Name, destination),
+            new(target.PackageId, target.Version, feed.Name, destination),
             reconcile,
             RequiresReload: true,
             RequiresRestart: false);
@@ -88,6 +102,10 @@ internal sealed class ExtensionBuilderPromotionService(
             if (nuspec is null)
                 return new(PromotionRejectionReason.InvalidManifest);
 
+            var identity = ReadNuspecIdentity(nuspec);
+            if (identity is null || !IsWellFormedPackageId(identity.Value.PackageId) || !IsWellFormedPackageVersion(identity.Value.Version))
+                return new(PromotionRejectionReason.InvalidManifest);
+
             var dependencies = ReadNuspecDependencies(nuspec);
             if (IsDependencyDenied(dependencies))
                 return new(PromotionRejectionReason.DependencyPolicy);
@@ -100,8 +118,10 @@ internal sealed class ExtensionBuilderPromotionService(
             using var manifestDocument = await JsonDocument.ParseAsync(manifestStream, cancellationToken: cancellationToken);
             if (manifestDocument.RootElement.ValueKind is not JsonValueKind.Object)
                 return new(PromotionRejectionReason.InvalidManifest);
+            if (!ManifestMatchesPackageIdentity(manifestDocument.RootElement, identity.Value.PackageId, identity.Value.Version))
+                return new(PromotionRejectionReason.InvalidManifest);
 
-            return new(null);
+            return new(null, identity.Value.PackageId, identity.Value.Version);
         }
         catch (Exception ex) when (ex is InvalidDataException or JsonException or System.Xml.XmlException)
         {
@@ -142,6 +162,89 @@ internal sealed class ExtensionBuilderPromotionService(
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Cast<string>()
             .ToArray();
+    }
+
+    private static (string PackageId, string Version)? ReadNuspecIdentity(ZipArchiveEntry nuspec)
+    {
+        using var stream = nuspec.Open();
+        var document = XDocument.Load(stream);
+        var ns = document.Root?.Name.Namespace ?? XNamespace.None;
+        var metadata = document.Root?.Element(ns + "metadata");
+        var packageId = metadata?.Element(ns + "id")?.Value.Trim();
+        var version = metadata?.Element(ns + "version")?.Value.Trim();
+        return string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(version)
+            ? null
+            : (packageId, version);
+    }
+
+    private static bool ManifestMatchesPackageIdentity(JsonElement manifest, string packageId, string version) =>
+        manifest.TryGetProperty("package", out var package) &&
+        package.ValueKind is JsonValueKind.Object &&
+        package.TryGetProperty("id", out var manifestPackageId) &&
+        package.TryGetProperty("version", out var manifestVersion) &&
+        manifestPackageId.ValueKind is JsonValueKind.String &&
+        manifestVersion.ValueKind is JsonValueKind.String &&
+        string.Equals(manifestPackageId.GetString(), packageId, StringComparison.Ordinal) &&
+        string.Equals(manifestVersion.GetString(), version, StringComparison.Ordinal);
+
+    private static bool FeedPackageExists(string feedPath, string packageId, string version)
+    {
+        if (!Directory.Exists(feedPath))
+            return false;
+
+        foreach (var packagePath in Directory.EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly))
+        {
+            var identity = TryReadPackageIdentity(packagePath);
+            if (identity is not null &&
+                string.Equals(identity.Value.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(identity.Value.Version, version, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void DeactivateSupersededPackageVersions(string feedPath, string packageId, string activeVersion, IReadOnlyList<PackagePromotionRecord> promotions)
+    {
+        var promotedPaths = promotions
+            .Where(x =>
+                string.Equals(x.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.FeedPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (Directory.Exists(feedPath))
+        {
+            foreach (var packagePath in Directory.EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly))
+            {
+                var identity = TryReadPackageIdentity(packagePath);
+                if (identity is not null &&
+                    string.Equals(identity.Value.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(identity.Value.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
+                    promotedPaths.Add(packagePath);
+            }
+        }
+
+        foreach (var path in promotedPaths)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    private static (string PackageId, string Version)? TryReadPackageIdentity(string packagePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(packagePath);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            var nuspec = archive.Entries.FirstOrDefault(x => x.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            return nuspec is null ? null : ReadNuspecIdentity(nuspec);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or System.Xml.XmlException or IOException)
+        {
+            return null;
+        }
     }
 
     private async Task<DropFolderFeed> ResolveDropFolderFeedAsync(CancellationToken cancellationToken)
@@ -211,6 +314,21 @@ internal sealed class ExtensionBuilderPromotionService(
 
     private static string NormalizeArchivePath(string path) => path.Replace('\\', '/').TrimStart('/');
 
-    internal sealed record PromotionValidationResult(PromotionRejectionReason? RejectionReason);
+    private static bool IsWellFormedPackageId(string packageId) =>
+        PackageIdRegex().IsMatch(packageId) &&
+        !packageId.StartsWith(".", StringComparison.Ordinal) &&
+        !packageId.EndsWith(".", StringComparison.Ordinal) &&
+        !packageId.Contains("..", StringComparison.Ordinal);
+
+    private static bool IsWellFormedPackageVersion(string version) =>
+        PackageVersionRegex().IsMatch(version);
+
+    [GeneratedRegex(@"^[A-Za-z0-9_.-]+$")]
+    private static partial Regex PackageIdRegex();
+
+    [GeneratedRegex(@"^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$")]
+    private static partial Regex PackageVersionRegex();
+
+    internal sealed record PromotionValidationResult(PromotionRejectionReason? RejectionReason, string? PackageId = null, string? Version = null);
     private sealed record DropFolderFeed(string Name, string Path);
 }

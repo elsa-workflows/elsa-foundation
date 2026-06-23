@@ -13,6 +13,7 @@ internal interface IExtensionBuilderStorage
     Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
+    Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProjectFileSummary>?> ListFilesAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
@@ -21,11 +22,12 @@ internal interface IExtensionBuilderStorage
     Task<bool> DeleteFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default);
     Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default);
-    Task<BuildResult> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default);
+    Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default);
-    Task AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default);
+    Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default);
     Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default);
+    Task<bool> UpdatePromotionLifecycleAsync(string projectId, string version, ExtensionBuilderReconcileOutcome outcome, bool requiresReload, bool requiresRestart, DateTimeOffset reconciledAt, CancellationToken cancellationToken = default);
     Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default);
     Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default);
     string GetBuildLogPath(string buildId);
@@ -119,7 +121,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return false;
 
             foreach (var projectId in workspace.ProjectIds)
-                state.Projects.Remove(projectId);
+                RemoveProjectAuthoringState(state, projectId);
             state.Workspaces.Remove(workspace.Id);
             DeleteDirectoryIfExists(GetWorkspacePath(workspace.Id));
             await SaveStateAsync(state, cancellationToken);
@@ -138,6 +140,20 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         {
             var state = await LoadStateAsync(cancellationToken);
             return TryGetOwnedProject(state, projectId, ownerId, out var project) ? project : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            return state.Projects.ContainsKey(projectId);
         }
         finally
         {
@@ -220,7 +236,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
                 return false;
 
-            state.Projects.Remove(project.Id);
+            RemoveProjectAuthoringState(state, project.Id);
             if (state.Workspaces.TryGetValue(project.WorkspaceId, out var workspace))
             {
                 state.Workspaces[workspace.Id] = workspace with
@@ -373,15 +389,18 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
-    public async Task<BuildResult> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default)
+    public async Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
             var state = await LoadStateAsync(cancellationToken);
+            if (!state.Projects.ContainsKey(build.ProjectId))
+                return false;
+
             state.Builds[build.Id] = build;
             await SaveStateAsync(state, cancellationToken);
-            return build;
+            return true;
         }
         finally
         {
@@ -403,18 +422,22 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
-    public async Task AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default)
+    public async Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
             var state = await LoadStateAsync(cancellationToken);
+            if (!state.Projects.ContainsKey(projectId))
+                return false;
+
             var promotions = state.Promotions.TryGetValue(projectId, out var existing) ? existing.ToList() : [];
             promotions.RemoveAll(x => string.Equals(x.Version, record.Version, StringComparison.OrdinalIgnoreCase));
             promotions.Add(record);
             state.Promotions[projectId] = promotions.OrderBy(x => x.Version, StringComparer.OrdinalIgnoreCase).ToArray();
             state.ActiveVersions[projectId] = record.Version;
             await SaveStateAsync(state, cancellationToken);
+            return true;
         }
         finally
         {
@@ -446,9 +469,54 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return;
 
             state.Promotions[projectId] = promotions
-                .Select(promotion => promotion with { ReconcileOutcome = outcome })
+                .Select(promotion => promotion with { ReconcileOutcome = outcome, LastReconciledAt = DateTimeOffset.UtcNow })
                 .ToArray();
             await SaveStateAsync(state, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<bool> UpdatePromotionLifecycleAsync(
+        string projectId,
+        string version,
+        ExtensionBuilderReconcileOutcome outcome,
+        bool requiresReload,
+        bool requiresRestart,
+        DateTimeOffset reconciledAt,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!state.Projects.ContainsKey(projectId) || !state.Promotions.TryGetValue(projectId, out var promotions))
+                return false;
+
+            var updated = false;
+            state.Promotions[projectId] = promotions
+                .Select(promotion =>
+                {
+                    if (!string.Equals(promotion.Version, version, StringComparison.OrdinalIgnoreCase))
+                        return promotion;
+
+                    updated = true;
+                    return promotion with
+                    {
+                        ReconcileOutcome = outcome,
+                        RequiresReload = requiresReload,
+                        RequiresRestart = requiresRestart,
+                        LastReconciledAt = reconciledAt
+                    };
+                })
+                .ToArray();
+            if (!updated)
+                return false;
+
+            await SaveStateAsync(state, cancellationToken);
+            return true;
         }
         finally
         {
@@ -610,6 +678,26 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     private string GetProjectPath(string projectId) => Path.Combine(RootPath, "projects", projectId);
     private string GetProjectFilesPath(string projectId) => Path.Combine(GetProjectPath(projectId), "files");
     private string GetSnapshotPath(string projectId, string snapshotId) => Path.Combine(GetProjectPath(projectId), "snapshots", snapshotId);
+    private string GetBuildPath(string buildId) => Path.Combine(RootPath, "builds", buildId);
+
+    private void RemoveProjectAuthoringState(ExtensionBuilderState state, string projectId)
+    {
+        state.Projects.Remove(projectId);
+        state.Promotions.Remove(projectId);
+        state.ActiveVersions.Remove(projectId);
+
+        var buildIds = state.Builds.Values
+            .Where(x => string.Equals(x.ProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.Id)
+            .ToArray();
+        foreach (var buildId in buildIds)
+        {
+            state.Builds.Remove(buildId);
+            DeleteDirectoryIfExists(GetBuildPath(buildId));
+        }
+
+        DeleteDirectoryIfExists(GetProjectPath(projectId));
+    }
 
     private static void CopyDirectory(string source, string destination, CancellationToken cancellationToken)
     {

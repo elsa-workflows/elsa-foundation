@@ -1,13 +1,16 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Server.ExtensionBuilder;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum ExtensionTemplateKind
 {
     ElsaActivityModule,
     GenericDotNet
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum ProjectFileKind
 {
     Source,
@@ -17,6 +20,7 @@ internal enum ProjectFileKind
     Other
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -25,6 +29,7 @@ internal enum BuildStatus
     Failed
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildDiagnosticSeverity
 {
     Info,
@@ -32,12 +37,14 @@ internal enum BuildDiagnosticSeverity
     Error
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PromotionStatus
 {
     Accepted,
     Rejected
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum PromotionRejectionReason
 {
     Duplicate,
@@ -46,6 +53,7 @@ internal enum PromotionRejectionReason
     MalformedPackage
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum ExtensionPackageRuntimeState
 {
     Loaded,
@@ -240,4 +248,5 @@ internal sealed record PackagePromotionRecord(
     DateTimeOffset PromotedAt,
     ExtensionBuilderReconcileOutcome ReconcileOutcome,
     bool RequiresReload,
-    bool RequiresRestart);
+    bool RequiresRestart,
+    DateTimeOffset? LastReconciledAt = null);

@@ -12,6 +12,7 @@ internal static class ElsaExtensionBuilderApi
     private const string ManagementApiKeyConfigurationKey = "Elsa:ModuleManagement:ApiKey";
     private const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
     private const string CallerItemKey = "__ElsaExtensionBuilderCaller";
+    private const string ElsaIdentityRoleClaimType = "elsa.identity.role";
 
     public static IEndpointRouteBuilder MapElsaExtensionBuilderApi(this IEndpointRouteBuilder endpoints)
     {
@@ -196,6 +197,7 @@ internal static class ElsaExtensionBuilderApi
             !ApiKeysEqual(configuredApiKey, providedApiKeys[0]!))
             return new ValueTask<object?>(Results.Unauthorized());
 
+        ApplyManagementApiKeyPrincipal(context.HttpContext);
         context.HttpContext.Items[CallerItemKey] = CreateCaller(context.HttpContext, hasManagementAccess: true);
         return next(context);
     }
@@ -214,14 +216,32 @@ internal static class ElsaExtensionBuilderApi
         var options = httpContext.RequestServices.GetRequiredService<IOptions<ExtensionBuilderOptions>>().Value;
         var user = httpContext.User;
         var isAuthenticated = user.Identity?.IsAuthenticated == true;
-        var isTrusted = isAuthenticated
-            ? options.TrustedRoles.Any(user.IsInRole)
-            : hasManagementAccess;
+        var isTrusted = isAuthenticated && options.TrustedRoles.Any(role => IsInRole(user, role));
         var ownerId = user.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? user.FindFirstValue("sub")
             ?? user.Identity?.Name
             ?? "anonymous";
         return new(ownerId, user.Identity?.Name ?? ownerId, hasManagementAccess, isTrusted);
+    }
+
+    internal static void ApplyManagementApiKeyPrincipal(HttpContext httpContext)
+    {
+        var options = httpContext.RequestServices.GetRequiredService<IOptions<ExtensionBuilderOptions>>().Value;
+        var trustedRole = options.TrustedRoles.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(trustedRole))
+            return;
+
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "module-management"),
+            new Claim(ClaimTypes.Name, "Module Management API Key"),
+            new Claim(ClaimTypes.Role, trustedRole),
+            new Claim(ElsaIdentityRoleClaimType, trustedRole)
+        };
+        var managementIdentity = new ClaimsIdentity(claims, "ElsaModuleManagementApiKey", ClaimTypes.Name, ClaimTypes.Role);
+        httpContext.User = httpContext.User.Identity?.IsAuthenticated == true
+            ? new ClaimsPrincipal(httpContext.User.Identities.Concat([managementIdentity]))
+            : new ClaimsPrincipal(managementIdentity);
     }
 
     private static ExtensionBuilderCaller GetCaller(HttpContext httpContext)
@@ -234,6 +254,12 @@ internal static class ElsaExtensionBuilderApi
 
     private static IResult ToFoundResult<T>(T? value, string notFoundMessage) =>
         value is null ? Results.NotFound(new ExtensionBuilderErrorResponse(notFoundMessage)) : Results.Ok(value);
+
+    private static bool IsInRole(ClaimsPrincipal user, string role) =>
+        user.IsInRole(role) ||
+        user.Claims.Any(claim =>
+            claim.Type == ElsaIdentityRoleClaimType &&
+            string.Equals(claim.Value, role, StringComparison.OrdinalIgnoreCase));
 
     private static bool ApiKeysEqual(string expected, string actual)
     {
