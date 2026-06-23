@@ -10,6 +10,7 @@ namespace Elsa.Server;
 
 internal static class ElsaExtensionBuilderApi
 {
+    private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
     private const string ManagementApiKeyConfigurationKey = "Elsa:ModuleManagement:ApiKey";
     private const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
     private const string ManagementApiKeyAuthenticationType = "ElsaModuleManagementApiKey";
@@ -177,7 +178,16 @@ internal static class ElsaExtensionBuilderApi
 
     private static async Task<IResult> PromoteBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
     {
-        var request = await ReadPromotionRequestAsync(httpContext, cancellationToken);
+        PackagePromotionRequest request;
+        try
+        {
+            request = await ReadPromotionRequestAsync(httpContext, cancellationToken);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+
         return ToFoundResult(ToPromotionResponse(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, request, cancellationToken)), $"Build '{buildId}' was not found.");
     }
 
@@ -208,12 +218,13 @@ internal static class ElsaExtensionBuilderApi
         return next(context);
     }
 
-    private static async Task<PackagePromotionRequest> ReadPromotionRequestAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    internal static async Task<PackagePromotionRequest> ReadPromotionRequestAsync(HttpContext httpContext, CancellationToken cancellationToken)
     {
-        if (httpContext.Request.ContentLength is null or 0)
+        if (httpContext.Request.ContentLength is 0 ||
+            (httpContext.Request.ContentLength is null && string.IsNullOrWhiteSpace(httpContext.Request.ContentType)))
             return PackagePromotionRequest.Default;
 
-        return await JsonSerializer.DeserializeAsync<PackagePromotionRequest>(httpContext.Request.Body, cancellationToken: cancellationToken)
+        return await JsonSerializer.DeserializeAsync<PackagePromotionRequest>(httpContext.Request.Body, WebJsonOptions, cancellationToken)
             ?? PackagePromotionRequest.Default;
     }
 

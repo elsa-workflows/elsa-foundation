@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Elsa.Server;
 using Elsa.Server.ExtensionBuilder;
 using Microsoft.AspNetCore.Http;
@@ -107,6 +109,34 @@ public sealed class ExtensionBuilderAuthorizationTests
         Assert.False(matches);
     }
 
+    [Fact]
+    public async Task PromotionRequestReadsCamelCaseJson()
+    {
+        var context = CreatePromotionRequestContext("""{"targetFeed":"requested"}""", contentLength: 26);
+
+        var request = await ElsaExtensionBuilderApi.ReadPromotionRequestAsync(context, CancellationToken.None);
+
+        Assert.Equal("requested", request.TargetFeed);
+    }
+
+    [Fact]
+    public async Task PromotionRequestReadsStreamedJsonWithoutContentLength()
+    {
+        var context = CreatePromotionRequestContext("""{"targetFeed":"streamed"}""", contentLength: null);
+
+        var request = await ElsaExtensionBuilderApi.ReadPromotionRequestAsync(context, CancellationToken.None);
+
+        Assert.Equal("streamed", request.TargetFeed);
+    }
+
+    [Fact]
+    public async Task PromotionRequestRejectsMalformedJson()
+    {
+        var context = CreatePromotionRequestContext("""{"targetFeed":""", contentLength: 14);
+
+        await Assert.ThrowsAsync<JsonException>(() => ElsaExtensionBuilderApi.ReadPromotionRequestAsync(context, CancellationToken.None));
+    }
+
     private static DefaultHttpContext CreateContext(ClaimsIdentity identity, ExtensionBuilderOptions? options = null)
     {
         var services = new ServiceCollection()
@@ -118,5 +148,14 @@ public sealed class ExtensionBuilderAuthorizationTests
             RequestServices = services,
             User = new ClaimsPrincipal(identity)
         };
+    }
+
+    private static DefaultHttpContext CreatePromotionRequestContext(string json, long? contentLength)
+    {
+        var context = CreateContext(new ClaimsIdentity());
+        context.Request.ContentType = "application/json";
+        context.Request.ContentLength = contentLength;
+        context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return context;
     }
 }
