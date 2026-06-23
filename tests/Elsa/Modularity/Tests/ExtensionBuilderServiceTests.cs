@@ -257,9 +257,9 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     public async Task PromoteStoresPromotionAndRuntimeStatusUsesNuplaneCatalog()
     {
         var nuplane = new FakeNuplaneAdmin();
-        var featureManagement = new FakeFeatureManagement();
+        var featureCatalog = new FakeServerFeatureCatalog();
         var promotion = new FakePromotionService();
-        var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), promotion: promotion, nuplane: nuplane, featureManagement: featureManagement);
+        var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), promotion: promotion, nuplane: nuplane, featureCatalog: featureCatalog);
         var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
         var project = await service.CreateProjectAsync(_caller, workspace.Id, new("elsa-activity-module", "Elsa.Test.Promote", "1.0.0", "net10.0", null, null));
         var build = await service.SubmitBuildAsync(_caller, project.Id);
@@ -269,7 +269,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         [
             new(result!.PublishedPackage!.PackageId, result.PublishedPackage.Version, "local", "drop", result.PublishedPackage.Path, DateTimeOffset.UtcNow, "corr", "graph", "gen", default, [], [], true)
         ];
-        featureManagement.Features =
+        featureCatalog.Features =
         [
             new("FeatureA", "Feature A", null, [], "manifest", result.PublishedPackage.PackageId, result.PublishedPackage.Version, true, Json("{}"), false, false, null, null, null, [])
         ];
@@ -686,7 +686,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         IExtensionBuilderBuildQueue? buildQueue = null,
         IExtensionBuilderPromotionService? promotion = null,
         FakeNuplaneAdmin? nuplane = null,
-        IFeatureManagementService? featureManagement = null,
+        IServerFeatureCatalog? featureCatalog = null,
         ExtensionBuilderStorage? storage = null)
     {
         nuplane ??= new FakeNuplaneAdmin();
@@ -699,7 +699,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             buildQueue,
             promotion ?? new FakePromotionService(),
             nuplane,
-            featureManagement ?? new FakeFeatureManagement(),
+            featureCatalog ?? new FakeServerFeatureCatalog(),
             NullLogger<ExtensionBuilderService>.Instance);
     }
 
@@ -898,15 +898,12 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
                 null));
     }
 
-    private sealed class FakeFeatureManagement : IFeatureManagementService
+    private sealed class FakeServerFeatureCatalog : IServerFeatureCatalog
     {
         public IReadOnlyList<FeatureCatalogItem> Features { get; set; } = [];
 
-        public Task<FeatureCatalogResponse> GetCatalogAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new FeatureCatalogResponse("rev", Features));
-
-        public Task<FeatureApplyResult> ApplyAsync(FeatureApplyRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<IReadOnlyList<FeatureCatalogItem>> ListFeaturesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Features);
     }
 
     private sealed class FakeEnvironment(string contentRootPath) : IWebHostEnvironment

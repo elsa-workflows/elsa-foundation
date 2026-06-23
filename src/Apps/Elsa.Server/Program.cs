@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Features;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
@@ -27,7 +28,7 @@ using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
-using Elsa.Modularity.Api.Extensions;
+using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
@@ -76,8 +77,11 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddNuplaneAdmin();
-builder.Services.AddModularityApi();
 builder.Services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
+builder.Services.AddScoped<IServerFeatureCatalog, ServerFeatureCatalog>();
+builder.Services.AddScoped<IFeatureCatalogContributor, RuntimeFeatureCatalogContributor>();
+builder.Services.AddScoped<IFeatureCatalogContributor, PackageManifestFeatureCatalogContributor>();
+builder.Services.AddScoped<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 builder.Services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
 builder.Services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
 builder.Services.AddSingleton<ExtensionBuilderBackgroundBuildQueue>();
@@ -97,6 +101,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
+builder.Services.AddSingleton<IFeatureAssemblyProvider>(sp => sp.GetRequiredService<NuplaneAssemblyProvider>());
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {

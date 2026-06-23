@@ -35,7 +35,7 @@ internal sealed class ExtensionBuilderService(
     IExtensionBuilderBuildQueue buildQueue,
     IExtensionBuilderPromotionService promotionService,
     INuplaneAdminOperations nuplaneAdmin,
-    IFeatureManagementService featureManagement,
+    IServerFeatureCatalog featureCatalog,
     ILogger<ExtensionBuilderService> logger) : IExtensionBuilderService
 {
     public ExtensionBuilderCapabilities GetCapabilities(ExtensionBuilderCaller caller) =>
@@ -178,7 +178,7 @@ internal sealed class ExtensionBuilderService(
         var promotions = await storage.ListPromotionsAsync(project.Id, cancellationToken);
         var activeVersion = await storage.GetActiveVersionAsync(project.Id, cancellationToken);
         var activePackages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
-        var catalog = await featureManagement.GetCatalogAsync(cancellationToken);
+        var features = await featureCatalog.ListFeaturesAsync(cancellationToken);
         var runtimePackages = promotions
             .Select(promotion =>
             {
@@ -191,7 +191,7 @@ internal sealed class ExtensionBuilderService(
                     : loaded
                         ? ExtensionPackageRuntimeState.Loaded
                         : ExtensionPackageRuntimeState.PendingRestart;
-                var contributions = catalog.Features
+                var contributions = features
                     .Where(feature =>
                         string.Equals(feature.PackageId, promotion.PackageId, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(feature.PackageVersion, promotion.Version, StringComparison.OrdinalIgnoreCase))
