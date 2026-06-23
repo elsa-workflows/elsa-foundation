@@ -29,18 +29,18 @@ describe("extension builder page", () => {
   it("renders owner-scoped workspaces, templates, files, build status, and runtime state", async () => {
     const { container, unmount } = await renderExtensionBuilderPage(stubApi());
 
-    await flushPromises();
-    await flushPromises();
+    await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Extension Builder");
     expect(container.textContent).toContain("Team Extensions");
     expect(container.textContent).toContain("owner alice");
     expect(container.textContent).toContain("Elsa activity/module");
     expect(container.textContent).toContain("Generic .NET class library");
-    expect(container.textContent).toContain("ElsaActivityExtension");
+    expect(container.querySelector<HTMLInputElement>("[aria-label='Project name']")?.value).toBe("ElsaActivityExtension");
     expect(container.textContent).toContain("Activities/HelloActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("HelloActivity");
     expect(container.textContent).toContain("Loaded");
+    await clickTab(container, "Runtime");
     expect(container.textContent).toContain("Hello activity");
 
     await unmount();
@@ -58,12 +58,10 @@ describe("extension builder page", () => {
     });
     const fetchMock = mockFetch();
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
-    await flushPromises();
-    await flushPromises();
+    await waitForText(container, "Activities/HelloActivity.cs");
 
-    const editor = container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']");
-    expect(editor).toBeTruthy();
-    await fill(editor!, `${editor!.value}\n// updated`);
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await fill(editor, `${editor.value}\n// updated`);
     await flushPromises();
 
     await clickButton(container, "Save");
@@ -104,8 +102,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
-    await flushPromises();
-    await flushPromises();
+    await waitForText(container, "CS1002");
 
     expect(container.textContent).toContain("CS1002");
     await clickButton(container, "CS1002");
@@ -126,12 +123,11 @@ describe("extension builder page", () => {
     ] as const) {
       const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(category) : {});
       const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
-      await flushPromises();
-      await flushPromises();
+      await waitForText(container, "Activities/HelloActivity.cs");
 
       await clickTab(container, "Promote");
       await clickButton(container, "Promote build");
-      await flushPromises();
+      await waitForText(container, expected);
 
       expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
       await unmount();
@@ -157,8 +153,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
-    await flushPromises();
-    await flushPromises();
+    await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Succeeded");
     expect(container.textContent).toContain("Loaded");
@@ -201,6 +196,7 @@ describe("extension builder page", () => {
   });
 
   it("supports retry reconciliation, rollback gating, and generic template no-contributions messaging", async () => {
+    const selectedProject = genericProject();
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/retry-reconcile")) return loadedRuntime({ features: [] });
       if (url.endsWith("/rollback")) return loadedRuntime({ version: "0.9.0", features: [] });
@@ -211,29 +207,29 @@ describe("extension builder page", () => {
       postJson,
       getJson: async url => {
         if (url.endsWith("/capabilities")) return trustedCapabilities();
-        if (url.endsWith("/workspaces")) return [workspaceWithProject({ project: genericProject() })];
+        if (url.endsWith("/workspaces")) return [workspaceWithProject({ project: selectedProject })];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return failedRuntime({ features: [] });
         if (url.endsWith("Activities%2FHelloActivity.cs")) return projectFiles()[0];
-        if (url.includes("/projects/proj-1")) return { ...genericProject(), builds: [succeededBuild()] };
+        if (url.includes(`/projects/${selectedProject.id}`)) return { ...selectedProject, builds: [succeededBuild()] };
         return {};
       }
     }));
-    await flushPromises();
-    await flushPromises();
+    await waitForText(container, "FailedReconciliation");
 
     expect(container.textContent).toContain("Generic .NET class library");
     expect(container.textContent).toContain("FailedReconciliation");
+    await clickTab(container, "Runtime");
     expect(container.textContent).toContain("contributed no runtime capabilities");
 
     await clickButton(container, "Retry reconciliation");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/retry-reconcile", {});
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {});
 
     await clickButton(container, "Rollback");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/rollback", { version: "0.9.0" });
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" });
 
     await unmount();
   });
@@ -335,6 +331,27 @@ async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
 
+async function waitForText(container: Element, text: string) {
+  await waitFor(() => container.textContent?.includes(text) === true, `Expected text '${text}'.`);
+}
+
+async function waitForElement<T extends Element>(container: Element, selector: string) {
+  let element = container.querySelector<T>(selector);
+  await waitFor(() => {
+    element = container.querySelector<T>(selector);
+    return element !== null;
+  }, `Expected element '${selector}'.`);
+  return element!;
+}
+
+async function waitFor(predicate: () => boolean, message: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (predicate()) return;
+    await flushPromises();
+  }
+  throw new Error(message);
+}
+
 function trustedCapabilities() {
   return {
     canCreateWorkspace: true,
@@ -356,13 +373,13 @@ function deniedCapabilities() {
 }
 
 function workspaceWithProject(options?: { project?: ReturnType<typeof project> }) {
-  const currentProject = options?.project ?? project();
+  const selectedProject = options?.project ?? project();
   return {
     id: "ws-1",
     displayName: "Team Extensions",
     ownerId: "alice",
     trustContext: "trusted-team",
-    projectIds: [currentProject.id]
+    projectIds: [selectedProject.id]
   };
 }
 
@@ -383,6 +400,7 @@ function project() {
 function genericProject() {
   return {
     ...project(),
+    id: "generic-proj",
     name: "Generic Extension",
     templateId: "generic-dotnet",
     packageId: "Company.Extensions.Generic"

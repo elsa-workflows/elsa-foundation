@@ -52,7 +52,7 @@ describe("navigation sections", () => {
   it("groups module and feature management under Settings", () => {
     expect(getNavigationSection({ id: "home", path: "/" })).toBe("workspace");
     expect(getNavigationSection({ id: "weather", path: "/weather" })).toBe("workspace");
-    expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("workspace");
+    expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("settings");
     expect(getNavigationSection({ id: "modules", path: "/modules" })).toBe("settings");
     expect(getNavigationSection({ id: "package-feeds", path: "/package-feeds" })).toBe("settings");
     expect(getNavigationSection({ id: "feature-management", path: "/features" })).toBe("settings");

@@ -81,6 +81,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const pollTimerId = useRef<number | null>(null);
   const mounted = useRef(true);
   const projectDetailsRequestId = useRef(0);
+  const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
   const editorDirty = editorText !== savedEditorText;
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? workspaces[0] ?? null;
@@ -141,6 +142,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setActiveBuild(null);
       setBuildHistory([]);
       setBuildLog("");
+      runtimeStatusRequestId.current += 1;
       setRuntimeStatus(null);
       return;
     }
@@ -195,6 +197,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function loadProjectDetails(workspaceId: string, projectId: string) {
     const requestId = ++projectDetailsRequestId.current;
+    const runtimeRequestId = ++runtimeStatusRequestId.current;
     setError(null);
     try {
       const [project, projectFiles, runtime] = await Promise.all([
@@ -205,7 +208,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
       setWorkspaces(current => patchProject(current, workspaceId, project));
       setFiles(projectFiles);
-      setRuntimeStatus(runtime);
+      if (runtimeRequestId === runtimeStatusRequestId.current) {
+        setRuntimeStatus(runtime);
+      }
       setBuildHistory(project.builds ?? []);
       setActiveBuild(project.builds?.[0] ?? null);
       const firstFile = projectFiles.find(file => file.type === "file");
@@ -426,23 +431,23 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     );
     if (result && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
       setPromotionResult(result);
-      if (result.runtimeStatus) {
-        setRuntimeStatus(result.runtimeStatus);
-      } else {
+      if (result.accepted) {
         await refreshRuntimeStatus(workspaceId, projectId);
+        if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       }
-      setActiveInspectorTab("runtime");
+      setActiveInspectorTab(result.accepted ? "runtime" : "promote");
     }
   }
 
   async function refreshRuntimeStatus(workspaceId = selectedWorkspace?.id, projectId = selectedProject?.id) {
     if (!workspaceId || !projectId) return;
+    const requestId = ++runtimeStatusRequestId.current;
     try {
-      const status = await getRuntimeStatus(context, workspaceId, projectId);
-      if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
-      setRuntimeStatus(status);
+      const runtime = await getRuntimeStatus(context, workspaceId, projectId);
+      if (!mounted.current || requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      setRuntimeStatus(runtime);
     } catch (e) {
-      if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      if (!mounted.current || requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       setError(getErrorMessage(e));
     }
   }
@@ -451,22 +456,24 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (!selectedWorkspace || !selectedProject) return;
     const workspaceId = selectedWorkspace.id;
     const projectId = selectedProject.id;
-    const status = await runOperation(
+    const requestId = ++runtimeStatusRequestId.current;
+    const updatedRuntime = await runOperation(
       () => retryReconciliation(context, workspaceId, projectId),
       `Retry reconciliation requested for ${selectedProject.name}.`
     );
-    if (status && isCurrentSelection(selectedIds.current, workspaceId, projectId)) setRuntimeStatus(status);
+    if (updatedRuntime && requestId === runtimeStatusRequestId.current && isCurrentSelection(selectedIds.current, workspaceId, projectId)) setRuntimeStatus(updatedRuntime);
   }
 
   async function handleRollback(version: string) {
     if (!selectedWorkspace || !selectedProject || !window.confirm(`Roll back ${selectedProject.packageId} to ${version}?`)) return;
     const workspaceId = selectedWorkspace.id;
     const projectId = selectedProject.id;
-    const status = await runOperation(
+    const requestId = ++runtimeStatusRequestId.current;
+    const updatedRuntime = await runOperation(
       () => rollbackPackage(context, workspaceId, projectId, version),
       `Rolled back ${selectedProject.packageId} to ${version}.`
     );
-    if (status && isCurrentSelection(selectedIds.current, workspaceId, projectId)) setRuntimeStatus(status);
+    if (updatedRuntime && requestId === runtimeStatusRequestId.current && isCurrentSelection(selectedIds.current, workspaceId, projectId)) setRuntimeStatus(updatedRuntime);
   }
 
   async function handleDiagnosticSelect(diagnostic: BuildDiagnostic) {

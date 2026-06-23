@@ -774,7 +774,7 @@ function isNavigationItemActive(item: StudioNavigationContribution, path: string
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {
-  const settingsPaths = new Set(["/modules", "/package-feeds", "/features"]);
+  const settingsPaths = new Set(["/modules", "/package-feeds", "/features", "/extension-builder"]);
   if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "package-feeds" || item.id === "feature-management") {
     return "settings";
   }
