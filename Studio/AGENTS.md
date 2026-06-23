@@ -7,12 +7,11 @@
 - **No unnecessary boilerplate.** Inline trivially small helpers rather than wrapping them in extra methods.
 
 <!-- SPECKIT START -->
-For additional context about the current UI-system specification, implementation
-plan, task backlog, and design contracts, read:
+For additional context about the current Extension Builder Studio UI specification,
+implementation plan, task backlog, and design contracts, read:
 
-- `specs/001-ui-system/spec.md`
-- `specs/001-ui-system/plan.md`
-- `specs/001-ui-system/tasks.md`
-- `specs/001-ui-system/contracts/studio-ui-components.md`
-- `specs/001-ui-system/contracts/module-management-api.md`
+- `specs/003-extension-builder-studio-ui/spec.md`
+- `specs/003-extension-builder-studio-ui/plan.md`
+- `specs/003-extension-builder-studio-ui/tasks.md`
+- `specs/003-extension-builder-studio-ui/contracts/extension-builder-ui-api.md`
 <!-- SPECKIT END -->

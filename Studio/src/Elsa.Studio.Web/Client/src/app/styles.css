@@ -1404,6 +1404,19 @@ textarea:focus {
   align-items: start;
 }
 
+.extension-builder-workbench {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr) minmax(360px, 430px);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 1560px) {
+  .extension-builder-workbench {
+    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr) minmax(430px, 30vw);
+  }
+}
+
 .package-feeds-panel {
   display: grid;
   gap: 12px;
@@ -1487,6 +1500,240 @@ textarea:focus {
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface);
   padding: 12px;
+}
+
+.extension-builder-browser {
+  max-height: calc(100vh - 100px);
+  overflow: auto;
+}
+
+.extension-builder-create {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--studio-border);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.extension-builder-create label,
+.extension-builder-file-create {
+  display: grid;
+  gap: 5px;
+}
+
+.extension-builder-create label span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-create input,
+.extension-builder-create select,
+.extension-builder-file-create input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px;
+}
+
+.extension-builder-danger-actions {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 10px;
+}
+
+.extension-builder-editor {
+  min-height: 640px;
+}
+
+.extension-builder-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 250px) minmax(0, 1fr);
+  gap: 10px;
+  min-height: 540px;
+}
+
+.extension-builder-file-tree {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-surface) 76%, var(--studio-surface-muted));
+  overflow: auto;
+  padding: 8px;
+}
+
+.extension-builder-file-create {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 4px;
+}
+
+.extension-builder-file-create input {
+  height: 30px;
+}
+
+.extension-builder-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius);
+}
+
+.extension-builder-file-row.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-border));
+  background: var(--studio-accent-soft);
+}
+
+.extension-builder-file-row > button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--studio-text);
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.extension-builder-file-row > button:first-child:disabled {
+  cursor: default;
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-file-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text-muted);
+}
+
+.studio-icon-button:hover {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.studio-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.extension-builder-code-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.extension-builder-editor-status,
+.extension-builder-runtime-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.extension-builder-editor-status > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--studio-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-editor-status code {
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+}
+
+.extension-builder-code-editor {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px;
+  tab-size: 2;
+}
+
+.extension-builder-inline-diagnostics {
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 45%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 8%, var(--studio-surface));
+  padding: 8px;
+}
+
+.extension-builder-inline-diagnostics span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-inspector {
+  max-height: calc(100vh - 100px);
+}
+
+.extension-builder-build-log {
+  min-height: 180px;
+}
+
+.extension-builder-diagnostic-button,
+.extension-builder-history-row {
+  width: 100%;
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  text-align: left;
+}
+
+.extension-builder-diagnostic-button span {
+  display: grid;
+  gap: 3px;
+}
+
+.extension-builder-diagnostic-button small,
+.extension-builder-history-row small {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-runtime-heading {
+  align-items: start;
 }
 
 .modules-source-nav {
