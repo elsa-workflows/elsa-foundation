@@ -6,16 +6,18 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 58
+- Discovered feature classes: 60
 
 ## Features
 
 | Feature class | Kind | Project | Base/interface | File |
 |---|---|---|---|---|
 | EFCoreActivitiesPersistenceFeatureBase | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreActivitiesPersistenceFeatureBase.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/EFCoreActivitiesPersistenceFeatureBase.cs) |
+| EFCoreOpenTelemetryPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreOpenTelemetryPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs) |
 | EFCoreStructuredLogsPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
 | EFCoreWorkflowsPersistenceFeatureBase | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreWorkflowsPersistenceFeatureBase.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/EFCoreWorkflowsPersistenceFeatureBase.cs) |
 | SqliteActivitiesDesignPersistenceShellFeature | EF Core feature base | Elsa.Activities.Design.Persistence.EFCore.Sqlite | EFCoreActivitiesPersistenceFeatureBase | [SqliteActivitiesDesignPersistenceShellFeature.cs](../../src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/SqliteActivitiesDesignPersistenceShellFeature.cs) |
+| SqliteOpenTelemetryPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | EFCoreOpenTelemetryPersistenceFeatureBase | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
 | SqliteStructuredLogsPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | EFCoreStructuredLogsPersistenceFeatureBase | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
 | SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
 | ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
@@ -26,8 +28,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
 | AspNetCoreIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IShellFeature | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
-| Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
-| Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/elsa3/Mapping/Elsa3MappingFeature.cs) |
+| Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
+| Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
