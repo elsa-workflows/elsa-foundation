@@ -72,6 +72,18 @@ public sealed class ExtensionBuilderAuthorizationTests
     }
 
     [Fact]
+    public void ManagementApiKeyPrincipalRemainsTrustedWhenTrustedRolesAreEmpty()
+    {
+        var context = CreateContext(new ClaimsIdentity(), new ExtensionBuilderOptions { TrustedRoles = [] });
+
+        ElsaExtensionBuilderApi.ApplyManagementApiKeyPrincipal(context);
+        var caller = ElsaExtensionBuilderApi.CreateCaller(context, hasManagementAccess: true);
+
+        Assert.Equal("module-management", caller.OwnerId);
+        Assert.True(caller.IsTrusted);
+    }
+
+    [Fact]
     public void ManagementApiKeyPrincipalPreservesExistingCallerIdentity()
     {
         var context = CreateContext(new ClaimsIdentity(
@@ -87,10 +99,10 @@ public sealed class ExtensionBuilderAuthorizationTests
         Assert.True(caller.IsTrusted);
     }
 
-    private static DefaultHttpContext CreateContext(ClaimsIdentity identity)
+    private static DefaultHttpContext CreateContext(ClaimsIdentity identity, ExtensionBuilderOptions? options = null)
     {
         var services = new ServiceCollection()
-            .AddSingleton(Options.Create(new ExtensionBuilderOptions()))
+            .AddSingleton(Options.Create(options ?? new ExtensionBuilderOptions()))
             .BuildServiceProvider();
 
         return new()

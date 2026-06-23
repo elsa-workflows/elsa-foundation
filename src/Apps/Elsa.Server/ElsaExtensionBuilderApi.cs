@@ -11,6 +11,8 @@ internal static class ElsaExtensionBuilderApi
 {
     private const string ManagementApiKeyConfigurationKey = "Elsa:ModuleManagement:ApiKey";
     private const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
+    private const string ManagementApiKeyAuthenticationType = "ElsaModuleManagementApiKey";
+    private const string ManagementApiKeyFallbackRole = "ExtensionBuilder";
     private const string CallerItemKey = "__ElsaExtensionBuilderCaller";
     private const string ElsaIdentityRoleClaimType = "elsa.identity.role";
 
@@ -151,10 +153,10 @@ internal static class ElsaExtensionBuilderApi
     }
 
     private static async Task<IResult> SubmitBuildAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        ToFoundResult(await service.SubmitBuildAsync(GetCaller(httpContext), projectId, cancellationToken), $"Project '{projectId}' was not found.");
+        ToFoundResult(ToBuildResponse(await service.SubmitBuildAsync(GetCaller(httpContext), projectId, cancellationToken)), $"Project '{projectId}' was not found.");
 
     private static async Task<IResult> GetBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        ToFoundResult(await service.GetBuildAsync(GetCaller(httpContext), buildId, cancellationToken), $"Build '{buildId}' was not found.");
+        ToFoundResult(ToBuildResponse(await service.GetBuildAsync(GetCaller(httpContext), buildId, cancellationToken)), $"Build '{buildId}' was not found.");
 
     private static async Task<IResult> GetBuildLogAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
     {
@@ -173,7 +175,7 @@ internal static class ElsaExtensionBuilderApi
     }
 
     private static async Task<IResult> PromoteBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
-        ToFoundResult(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, cancellationToken), $"Build '{buildId}' was not found.");
+        ToFoundResult(ToPromotionResponse(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, cancellationToken)), $"Build '{buildId}' was not found.");
 
     private static async Task<IResult> GetRuntimeStatusAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.GetRuntimeStatusAsync(GetCaller(httpContext), projectId, cancellationToken), $"Project '{projectId}' was not found.");
@@ -216,7 +218,11 @@ internal static class ElsaExtensionBuilderApi
         var options = httpContext.RequestServices.GetRequiredService<IOptions<ExtensionBuilderOptions>>().Value;
         var user = httpContext.User;
         var isAuthenticated = user.Identity?.IsAuthenticated == true;
-        var isTrusted = isAuthenticated && options.TrustedRoles.Any(role => IsInRole(user, role));
+        var hasTrustedRole = isAuthenticated && options.TrustedRoles.Any(role => !string.IsNullOrWhiteSpace(role) && IsInRole(user, role));
+        var hasManagementApiKeyIdentity = hasManagementAccess && user.Identities.Any(identity =>
+            identity.IsAuthenticated &&
+            string.Equals(identity.AuthenticationType, ManagementApiKeyAuthenticationType, StringComparison.Ordinal));
+        var isTrusted = hasTrustedRole || hasManagementApiKeyIdentity;
         var ownerId = user.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? user.FindFirstValue("sub")
             ?? user.Identity?.Name
@@ -227,9 +233,7 @@ internal static class ElsaExtensionBuilderApi
     internal static void ApplyManagementApiKeyPrincipal(HttpContext httpContext)
     {
         var options = httpContext.RequestServices.GetRequiredService<IOptions<ExtensionBuilderOptions>>().Value;
-        var trustedRole = options.TrustedRoles.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(trustedRole))
-            return;
+        var trustedRole = options.TrustedRoles.FirstOrDefault(role => !string.IsNullOrWhiteSpace(role)) ?? ManagementApiKeyFallbackRole;
 
         var claims = new[]
         {
@@ -238,7 +242,7 @@ internal static class ElsaExtensionBuilderApi
             new Claim(ClaimTypes.Role, trustedRole),
             new Claim(ElsaIdentityRoleClaimType, trustedRole)
         };
-        var managementIdentity = new ClaimsIdentity(claims, "ElsaModuleManagementApiKey", ClaimTypes.Name, ClaimTypes.Role);
+        var managementIdentity = new ClaimsIdentity(claims, ManagementApiKeyAuthenticationType, ClaimTypes.Name, ClaimTypes.Role);
         httpContext.User = httpContext.User.Identity?.IsAuthenticated == true
             ? new ClaimsPrincipal(httpContext.User.Identities.Concat([managementIdentity]))
             : new ClaimsPrincipal(managementIdentity);
@@ -254,6 +258,49 @@ internal static class ElsaExtensionBuilderApi
 
     private static IResult ToFoundResult<T>(T? value, string notFoundMessage) =>
         value is null ? Results.NotFound(new ExtensionBuilderErrorResponse(notFoundMessage)) : Results.Ok(value);
+
+    internal static BuildResultResponse? ToBuildResponse(BuildResult? build) =>
+        build is null
+            ? null
+            : new(
+                build.Id,
+                build.ProjectId,
+                build.WorkspaceId,
+                build.SourceRevisionId,
+                build.Status,
+                build.Diagnostics,
+                ToArtifactResponse(build.Artifact),
+                build.CreatedAt,
+                build.StartedAt,
+                build.CompletedAt);
+
+    internal static PackagePromotionResultResponse? ToPromotionResponse(PackagePromotionResult? result) =>
+        result is null
+            ? null
+            : new(
+                result.Status,
+                result.RejectionReason,
+                result.PublishedPackage is null
+                    ? null
+                    : new PublishedPackageResponse(
+                        result.PublishedPackage.PackageId,
+                        result.PublishedPackage.Version,
+                        result.PublishedPackage.FeedName),
+                result.ReconcileOutcome,
+                result.RequiresReload,
+                result.RequiresRestart);
+
+    private static BuildArtifactResponse? ToArtifactResponse(BuildArtifact? artifact) =>
+        artifact is null
+            ? null
+            : new(
+                artifact.Id,
+                artifact.BuildId,
+                artifact.PackageId,
+                artifact.Version,
+                artifact.FileName,
+                artifact.Size,
+                artifact.CreatedAt);
 
     private static bool IsInRole(ClaimsPrincipal user, string role) =>
         user.IsInRole(role) ||

@@ -164,6 +164,18 @@ internal sealed record BuildResult(
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt);
 
+internal sealed record BuildResultResponse(
+    string Id,
+    string ProjectId,
+    string WorkspaceId,
+    string SourceRevisionId,
+    BuildStatus Status,
+    IReadOnlyList<BuildDiagnostic> Diagnostics,
+    BuildArtifactResponse? Artifact,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt);
+
 internal sealed record BuildDiagnostic(
     BuildDiagnosticSeverity Severity,
     string Message,
@@ -182,6 +194,15 @@ internal sealed record BuildArtifact(
     long Size,
     DateTimeOffset CreatedAt);
 
+internal sealed record BuildArtifactResponse(
+    string Id,
+    string BuildId,
+    string PackageId,
+    string Version,
+    string FileName,
+    long Size,
+    DateTimeOffset CreatedAt);
+
 internal sealed record PackagePromotionRequest(string? TargetFeed);
 
 internal sealed record PackagePromotionResult(
@@ -192,11 +213,24 @@ internal sealed record PackagePromotionResult(
     bool RequiresReload,
     bool RequiresRestart);
 
+internal sealed record PackagePromotionResultResponse(
+    PromotionStatus Status,
+    PromotionRejectionReason? RejectionReason,
+    PublishedPackageResponse? PublishedPackage,
+    ExtensionBuilderReconcileOutcome? ReconcileOutcome,
+    bool RequiresReload,
+    bool RequiresRestart);
+
 internal sealed record PublishedPackage(
     string PackageId,
     string Version,
     string FeedName,
     string Path);
+
+internal sealed record PublishedPackageResponse(
+    string PackageId,
+    string Version,
+    string FeedName);
 
 internal sealed record ExtensionBuilderReconcileOutcome(
     string Outcome,

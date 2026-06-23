@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using Elsa.Server;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Elsa.Server.ExtensionBuilder;
@@ -25,6 +26,45 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     public ExtensionBuilderServiceTests()
     {
         Directory.CreateDirectory(_directory);
+    }
+
+    [Fact]
+    public void ApiBuildAndPromotionResponsesDoNotSerializeServerPaths()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var artifactPath = Path.Combine(_directory, "builds", "build", "artifact.nupkg");
+        var logPath = Path.Combine(_directory, "builds", "build", "build.log");
+        var feedPath = Path.Combine(_directory, "packages", "artifact.nupkg");
+        var build = new BuildResult(
+            "build",
+            "project",
+            "workspace",
+            "snapshot",
+            BuildStatus.Succeeded,
+            [],
+            new("artifact", "build", "Elsa.Test", "1.0.0", "artifact.nupkg", artifactPath, 42, now),
+            logPath,
+            now,
+            now,
+            now);
+        var promotion = new PackagePromotionResult(
+            PromotionStatus.Accepted,
+            null,
+            new("Elsa.Test", "1.0.0", "local", feedPath),
+            new("completed", "correlation", null, false, []),
+            false,
+            false);
+
+        var buildJson = JsonSerializer.Serialize(ElsaExtensionBuilderApi.ToBuildResponse(build));
+        var promotionJson = JsonSerializer.Serialize(ElsaExtensionBuilderApi.ToPromotionResponse(promotion));
+
+        Assert.Contains("artifact.nupkg", buildJson);
+        Assert.DoesNotContain(logPath, buildJson);
+        Assert.DoesNotContain(artifactPath, buildJson);
+        Assert.DoesNotContain("\"LogPath\"", buildJson);
+        Assert.DoesNotContain("\"Path\"", buildJson);
+        Assert.DoesNotContain(feedPath, promotionJson);
+        Assert.DoesNotContain("\"Path\"", promotionJson);
     }
 
     [Fact]
