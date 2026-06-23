@@ -308,10 +308,13 @@ internal static class ElsaExtensionBuilderApi
             claim.Type == ElsaIdentityRoleClaimType &&
             string.Equals(claim.Value, role, StringComparison.OrdinalIgnoreCase));
 
-    private static bool ApiKeysEqual(string expected, string actual)
+    internal static bool ApiKeysEqual(string expected, string actual)
     {
         var expectedBytes = Encoding.UTF8.GetBytes(expected);
         var actualBytes = Encoding.UTF8.GetBytes(actual);
+        if (expectedBytes.Length != actualBytes.Length)
+            return false;
+
         return CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
     }
 }

@@ -99,6 +99,14 @@ public sealed class ExtensionBuilderAuthorizationTests
         Assert.True(caller.IsTrusted);
     }
 
+    [Fact]
+    public void ApiKeysEqualReturnsFalseForDifferentLengthKeys()
+    {
+        var matches = ElsaExtensionBuilderApi.ApiKeysEqual("expected-key", "short");
+
+        Assert.False(matches);
+    }
+
     private static DefaultHttpContext CreateContext(ClaimsIdentity identity, ExtensionBuilderOptions? options = null)
     {
         var services = new ServiceCollection()

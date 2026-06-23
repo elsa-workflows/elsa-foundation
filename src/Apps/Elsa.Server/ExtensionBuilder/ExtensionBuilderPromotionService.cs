@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
@@ -20,9 +20,16 @@ internal interface IExtensionBuilderPromotionService
 internal sealed partial class ExtensionBuilderPromotionService(
     IWebHostEnvironment environment,
     IOptions<ExtensionBuilderOptions> options,
-    INuplaneAdminOperations nuplaneAdmin) : IExtensionBuilderPromotionService
+    INuplaneAdminOperations nuplaneAdmin,
+    IConfiguration configuration) : IExtensionBuilderPromotionService
 {
-    private const string ManagementFileName = "appsettings.json";
+    public ExtensionBuilderPromotionService(
+        IWebHostEnvironment environment,
+        IOptions<ExtensionBuilderOptions> options,
+        INuplaneAdminOperations nuplaneAdmin)
+        : this(environment, options, nuplaneAdmin, new ConfigurationBuilder().Build())
+    {
+    }
 
     public async Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
     {
@@ -36,7 +43,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
             !string.Equals(validation.Version, build.Artifact.Version, StringComparison.Ordinal))
             return Rejected(PromotionRejectionReason.InvalidManifest);
 
-        var feed = await ResolveDropFolderFeedAsync(cancellationToken);
+        var feed = ResolveDropFolderFeed();
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, build.Artifact.FileName);
         if (File.Exists(destination) ||
@@ -69,7 +76,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
             return Rejected(PromotionRejectionReason.InvalidManifest);
 
         var source = target.FeedPath;
-        var feed = await ResolveDropFolderFeedAsync(cancellationToken);
+        var feed = ResolveDropFolderFeed();
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, Path.GetFileName(source));
         if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase))
@@ -247,36 +254,20 @@ internal sealed partial class ExtensionBuilderPromotionService(
         }
     }
 
-    private async Task<DropFolderFeed> ResolveDropFolderFeedAsync(CancellationToken cancellationToken)
+    private DropFolderFeed ResolveDropFolderFeed()
     {
-        var config = await ReadManagementConfigurationAsync(cancellationToken);
-        var feeds = ReadFeeds(config);
+        var feeds = ReadFeeds(configuration);
         var feed = feeds.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Path));
         var path = feed?.Path ?? "packages";
         return new(feed?.Name ?? "drop-folder", Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path)));
     }
 
-    private async Task<JsonObject> ReadManagementConfigurationAsync(CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(environment.ContentRootPath, ManagementFileName);
-        if (!File.Exists(path))
-            return [];
-
-        var json = await File.ReadAllTextAsync(path, cancellationToken);
-        return JsonNode.Parse(json)?.AsObject() ?? [];
-    }
-
-    private static IReadOnlyList<DropFolderFeed> ReadFeeds(JsonObject config)
-    {
-        if (config["Nuplane"]?["Setup"]?["Feeds"] is not JsonArray feeds)
-            return [];
-
-        return feeds
-            .OfType<JsonObject>()
-            .Select(feed => new DropFolderFeed((string?)feed["Name"] ?? "", (string?)feed["DirectoryPath"] ?? ""))
+    private static IReadOnlyList<DropFolderFeed> ReadFeeds(IConfiguration configuration) =>
+        configuration.GetSection("Nuplane:Setup:Feeds")
+            .GetChildren()
+            .Select(feed => new DropFolderFeed(feed["Name"] ?? "", feed["DirectoryPath"] ?? ""))
             .Where(feed => !string.IsNullOrWhiteSpace(feed.Name) || !string.IsNullOrWhiteSpace(feed.Path))
             .ToArray();
-    }
 
     internal static ExtensionBuilderReconcileOutcome MapReconcileOutcome(ManualReconcileOutcome outcome) =>
         new(

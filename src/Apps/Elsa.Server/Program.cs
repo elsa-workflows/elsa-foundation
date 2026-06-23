@@ -27,6 +27,7 @@ using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
+using Elsa.Modularity.Api.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
@@ -75,6 +76,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddNuplaneAdmin();
+builder.Services.AddModularityApi();
 builder.Services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
 builder.Services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
 builder.Services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
@@ -95,7 +97,6 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
-builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {

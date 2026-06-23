@@ -5,6 +5,7 @@ using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Elsa.Server.ExtensionBuilder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -590,6 +591,46 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.Equal(PromotionStatus.Rejected, result.Status);
         Assert.Equal(PromotionRejectionReason.Duplicate, result.RejectionReason);
         Assert.False(File.Exists(Path.Combine(feed, "new-name.nupkg")));
+    }
+
+    [Fact]
+    public async Task PromoteUsesActiveConfigurationFeed()
+    {
+        var configuredFeed = Path.Combine(_directory, "configured-feed");
+        var fallbackFeed = Path.Combine(_directory, "packages");
+        var packagePath = Path.Combine(_directory, "configured.nupkg");
+        CreatePackage(packagePath, "Elsa.Test.Configured", "1.0.0", "Safe.Package", includeManifest: true);
+        var build = new BuildResult(
+            "build",
+            "project",
+            "workspace",
+            "rev",
+            BuildStatus.Succeeded,
+            [],
+            new("artifact", "build", "Elsa.Test.Configured", "1.0.0", Path.GetFileName(packagePath), packagePath, new FileInfo(packagePath).Length, DateTimeOffset.UtcNow),
+            Path.Combine(_directory, "build.log"),
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Nuplane:Setup:Feeds:0:Name"] = "configured",
+                ["Nuplane:Setup:Feeds:0:DirectoryPath"] = configuredFeed
+            })
+            .Build();
+        var service = new ExtensionBuilderPromotionService(
+            new FakeEnvironment(_directory),
+            Options.Create(new ExtensionBuilderOptions()),
+            new FakeNuplaneAdmin(),
+            configuration);
+
+        var result = await service.PromoteAsync(build);
+
+        Assert.Equal(PromotionStatus.Accepted, result.Status);
+        Assert.Equal("configured", result.PublishedPackage!.FeedName);
+        Assert.True(File.Exists(Path.Combine(configuredFeed, Path.GetFileName(packagePath))));
+        Assert.False(Directory.Exists(fallbackFeed));
     }
 
     [Fact]
