@@ -192,6 +192,27 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task StartupRecoveryFailsPersistedRunningBuilds()
+    {
+        var queue = new CapturingBuildQueue();
+        var storage = CreateStorage();
+        var service = CreateService(buildQueue: queue, storage: storage);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RecoverRunning", "1.0.0", "net10.0", null, null));
+        var build = await service.SubmitBuildAsync(_caller, project.Id);
+
+        var recovered = await storage.FailRunningBuildsAsync();
+        var persisted = await service.GetBuildAsync(_caller, build!.Id);
+        var log = await service.GetBuildLogAsync(_caller, build.Id);
+
+        Assert.Equal(1, recovered);
+        Assert.Equal(BuildStatus.Failed, persisted!.Status);
+        Assert.NotNull(persisted.CompletedAt);
+        Assert.Contains(persisted.Diagnostics, x => x.Message.Contains("server restarted", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("server restarted", log, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SubmitBuildStillEnqueuesAfterRequestCancellationDuringQueueWrite()
     {
         using var cancellation = new CancellationTokenSource();

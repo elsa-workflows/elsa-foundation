@@ -23,6 +23,7 @@ internal interface IExtensionBuilderStorage
     Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default);
+    Task<int> FailRunningBuildsAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default);
@@ -401,6 +402,46 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             state.Builds[build.Id] = build;
             await SaveStateAsync(state, cancellationToken);
             return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<int> FailRunningBuildsAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            var now = DateTimeOffset.UtcNow;
+            var recovered = 0;
+            foreach (var build in state.Builds.Values.Where(x => x.Status is BuildStatus.Running).ToArray())
+            {
+                var diagnostic = new BuildDiagnostic(
+                    BuildDiagnosticSeverity.Error,
+                    "Build failed because the server restarted before the queued build completed.",
+                    null,
+                    null,
+                    null,
+                    null);
+                state.Builds[build.Id] = build with
+                {
+                    Status = BuildStatus.Failed,
+                    Diagnostics = [.. build.Diagnostics, diagnostic],
+                    Artifact = null,
+                    CompletedAt = now
+                };
+                Directory.CreateDirectory(Path.GetDirectoryName(build.LogPath)!);
+                await File.AppendAllTextAsync(build.LogPath, $"{diagnostic.Message}{Environment.NewLine}", cancellationToken);
+                recovered++;
+            }
+
+            if (recovered > 0)
+                await SaveStateAsync(state, cancellationToken);
+
+            return recovered;
         }
         finally
         {

@@ -48,11 +48,16 @@ internal sealed class ExtensionBuilderBackgroundBuildQueue : IExtensionBuilderBu
 
 internal sealed class ExtensionBuilderBuildWorker(
     ExtensionBuilderBackgroundBuildQueue queue,
+    IExtensionBuilderStorage storage,
     IServiceScopeFactory scopeFactory,
     ILogger<ExtensionBuilderBuildWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var recoveredBuilds = await storage.FailRunningBuildsAsync(stoppingToken);
+        if (recoveredBuilds > 0)
+            logger.LogWarning("Marked {BuildCount} stale Extension Builder builds as failed after server startup.", recoveredBuilds);
+
         await foreach (var workItem in queue.ReadAllAsync(stoppingToken))
         {
             using var scope = scopeFactory.CreateScope();
