@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
-import type { ExtensionRuntimeStatus, ProjectFile } from "../app/modules/extensionBuilderApi";
+import type { ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
@@ -143,7 +143,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject()];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/files")) return [
-          { path: "Activities", kind: 1 },
+          { path: "Activities", type: "folder" },
           { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" }
         ];
         if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), state: 0, history: [{ version: "1.0.0", state: 0, available: true }] };
@@ -164,6 +164,28 @@ describe("extension builder page", () => {
     await flushPromises();
 
     expect(container.textContent).toContain("Duplicate package id and version rejected");
+    await unmount();
+  });
+
+  it("normalizes null new-format runtime features to an empty contribution list", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/files")) return projectFiles();
+        if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), features: null };
+        if (url.includes("/builds/build-1")) return succeededBuild();
+        if (url.endsWith("Activities%2FHelloActivity.cs")) return projectFiles()[0];
+        if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
+        return {};
+      }
+    }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await clickTab(container, "Runtime");
+    expect(container.textContent).toContain("contributed no runtime capabilities");
+
     await unmount();
   });
 
@@ -414,10 +436,10 @@ function templates() {
   ];
 }
 
-function projectFiles(): ProjectFile[] {
+function projectFiles() {
   return [
-    { path: "Activities/HelloActivity.cs", type: "file", content: "public sealed class HelloActivity { }" },
-    { path: "Hello.csproj", type: "file", content: "<Project />" }
+    { path: "Activities/HelloActivity.cs", kind: "Source", content: "public sealed class HelloActivity { }" },
+    { path: "Hello.csproj", kind: "Project", content: "<Project />" }
   ];
 }
 

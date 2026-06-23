@@ -380,6 +380,7 @@ function normalizeRuntimeStatus(status: RawExtensionRuntimeStatus): ExtensionRun
     return {
       ...normalized,
       state: normalizeRuntimeState(normalized.state) ?? "PendingRestart",
+      features: normalized.features ?? [],
       history: (normalized.history ?? []).map(version => ({
         ...version,
         state: normalizeRuntimeState(version.state) ?? null
@@ -429,11 +430,8 @@ function normalizeDiagnosticSeverity(value?: DiagnosticSeverity | number): Diagn
 }
 
 function normalizeProjectFileType(value?: ProjectFileType | number | null): ProjectFileType {
-  const normalized = enumName(value, ["file", "folder", "Source", "Project", "Manifest", "Configuration", "Other"]);
-  const lower = normalized.toLowerCase();
-  if (lower === "folder" || lower === "directory") return "folder";
-  if (!normalized || lower === "file" || ["source", "project", "manifest", "configuration", "other"].includes(lower)) return "file";
-  return normalized;
+  if (typeof value === "string" && ["folder", "directory"].includes(value.toLowerCase())) return "folder";
+  return "file";
 }
 
 function normalizePromotionStatus(value?: string | number | null) {
