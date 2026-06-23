@@ -54,7 +54,7 @@ internal sealed class ExtensionBuilderBuildWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var recoveredBuilds = await storage.FailRunningBuildsAsync(stoppingToken);
+        var recoveredBuilds = await storage.FailIncompleteBuildsAsync(stoppingToken);
         if (recoveredBuilds > 0)
             logger.LogWarning("Marked {BuildCount} stale Extension Builder builds as failed after server startup.", recoveredBuilds);
 

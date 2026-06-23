@@ -191,18 +191,32 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.Equal(build.Id, queue.WorkItem!.BuildId);
     }
 
-    [Fact]
-    public async Task StartupRecoveryFailsPersistedRunningBuilds()
+    [Theory]
+    [InlineData(nameof(BuildStatus.Pending))]
+    [InlineData(nameof(BuildStatus.Running))]
+    public async Task StartupRecoveryFailsPersistedIncompleteBuilds(string buildStatus)
     {
-        var queue = new CapturingBuildQueue();
+        var status = Enum.Parse<BuildStatus>(buildStatus);
         var storage = CreateStorage();
-        var service = CreateService(buildQueue: queue, storage: storage);
+        var service = CreateService(storage: storage);
         var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
-        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RecoverRunning", "1.0.0", "net10.0", null, null));
-        var build = await service.SubmitBuildAsync(_caller, project.Id);
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RecoverIncomplete", "1.0.0", "net10.0", null, null));
+        var build = new BuildResult(
+            "build",
+            project.Id,
+            project.WorkspaceId,
+            project.CurrentSourceRevisionId,
+            status,
+            [],
+            null,
+            storage.GetBuildLogPath("build"),
+            DateTimeOffset.UtcNow,
+            status is BuildStatus.Running ? DateTimeOffset.UtcNow : null,
+            null);
+        Assert.True(await storage.SaveBuildAsync(build));
 
-        var recovered = await storage.FailRunningBuildsAsync();
-        var persisted = await service.GetBuildAsync(_caller, build!.Id);
+        var recovered = await storage.FailIncompleteBuildsAsync();
+        var persisted = await service.GetBuildAsync(_caller, build.Id);
         var log = await service.GetBuildLogAsync(_caller, build.Id);
 
         Assert.Equal(1, recovered);

@@ -23,7 +23,7 @@ internal interface IExtensionBuilderStorage
     Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default);
-    Task<int> FailRunningBuildsAsync(CancellationToken cancellationToken = default);
+    Task<int> FailIncompleteBuildsAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default);
@@ -409,7 +409,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
-    public async Task<int> FailRunningBuildsAsync(CancellationToken cancellationToken = default)
+    public async Task<int> FailIncompleteBuildsAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -417,7 +417,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var state = await LoadStateAsync(cancellationToken);
             var now = DateTimeOffset.UtcNow;
             var recovered = 0;
-            foreach (var build in state.Builds.Values.Where(x => x.Status is BuildStatus.Running).ToArray())
+            foreach (var build in state.Builds.Values.Where(x => x.Status is BuildStatus.Pending or BuildStatus.Running).ToArray())
             {
                 var diagnostic = new BuildDiagnostic(
                     BuildDiagnosticSeverity.Error,
