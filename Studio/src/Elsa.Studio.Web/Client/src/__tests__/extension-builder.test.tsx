@@ -167,6 +167,28 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("normalizes null new-format runtime features to an empty contribution list", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/files")) return projectFiles();
+        if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), features: null };
+        if (url.includes("/builds/build-1")) return succeededBuild();
+        if (url.endsWith("Activities%2FHelloActivity.cs")) return projectFiles()[0];
+        if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
+        return {};
+      }
+    }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await clickTab(container, "Runtime");
+    expect(container.textContent).toContain("contributed no runtime capabilities");
+
+    await unmount();
+  });
+
   it("explains stale successful artifacts instead of allowing promotion", async () => {
     const postJson = vi.fn(async () => acceptedPromotion());
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({

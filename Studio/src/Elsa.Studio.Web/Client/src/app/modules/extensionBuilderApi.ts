@@ -380,6 +380,7 @@ function normalizeRuntimeStatus(status: RawExtensionRuntimeStatus): ExtensionRun
     return {
       ...normalized,
       state: normalizeRuntimeState(normalized.state) ?? "PendingRestart",
+      features: normalized.features ?? [],
       history: (normalized.history ?? []).map(version => ({
         ...version,
         state: normalizeRuntimeState(version.state) ?? null
