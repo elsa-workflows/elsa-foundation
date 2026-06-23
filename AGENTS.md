@@ -159,5 +159,5 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: specs/073-flowchart-scoped-execution/plan.md
+Current Speckit plan: specs/075-extension-builder-backend/plan.md
 <!-- SPECKIT END -->

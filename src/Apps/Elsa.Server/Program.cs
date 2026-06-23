@@ -36,6 +36,7 @@ using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
+using Elsa.Server.ExtensionBuilder;
 
 ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
 
@@ -70,6 +71,16 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddNuplaneAdmin();
+builder.Services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
+builder.Services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
+builder.Services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
+builder.Services.AddSingleton<ExtensionBuilderBackgroundBuildQueue>();
+builder.Services.AddSingleton<IExtensionBuilderBuildQueue>(sp => sp.GetRequiredService<ExtensionBuilderBackgroundBuildQueue>());
+builder.Services.AddHostedService<ExtensionBuilderBuildWorker>();
+builder.Services.AddScoped<IExtensionBuilderBuildRunner, ExtensionBuilderBuildRunner>();
+builder.Services.AddScoped<IExtensionBuilderBuildExecutor, ExtensionBuilderBuildExecutor>();
+builder.Services.AddScoped<IExtensionBuilderPromotionService, ExtensionBuilderPromotionService>();
+builder.Services.AddScoped<IExtensionBuilderService, ExtensionBuilderService>();
 builder.Services.AddSingleton<DemoPackageEventStore>();
 builder.Services.AddSingleton<DemoNuplaneObserver>();
 
@@ -148,6 +159,7 @@ app.UseCors(studioCorsPolicy);
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
 app.MapElsaDemoApi();
 app.MapElsaModuleManagementApi();
+app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
