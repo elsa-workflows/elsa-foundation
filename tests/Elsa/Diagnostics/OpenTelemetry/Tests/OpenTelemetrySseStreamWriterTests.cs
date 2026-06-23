@@ -86,7 +86,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
         var stream = new BlockingStream();
 
         var streamTask = _writer.StreamAsync(response, stream, cts.Token);
-        await stream.MoveNextStarted.WaitAsync(cts.Token);
+        await stream.MoveNextStarted.Task.WaitAsync(cts.Token);
 
         await cts.CancelAsync();
 
@@ -108,7 +108,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
         var stream = new BlockingStream(observeCancellation: false);
 
         var streamTask = writer.StreamAsync(response, stream, cts.Token);
-        await stream.MoveNextStarted.WaitAsync(cts.Token);
+        await stream.MoveNextStarted.Task.WaitAsync(cts.Token);
 
         await cts.CancelAsync();
 
