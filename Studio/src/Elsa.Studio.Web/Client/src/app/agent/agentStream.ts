@@ -151,7 +151,13 @@ function dispatchSseFrame(frame: SseFrame, defaultMessageId?: string): AgentStre
 }
 
 function parseJsonEvent(json: string, defaultMessageId?: string, eventName?: string): AgentStreamEvent | null {
-  const value = JSON.parse(json);
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    return null;
+  }
+
   if (eventName && value && typeof value === "object" && !("type" in value) && !("kind" in value)) {
     return normalizeStreamEvent({ type: eventName, data: value }, defaultMessageId);
   }

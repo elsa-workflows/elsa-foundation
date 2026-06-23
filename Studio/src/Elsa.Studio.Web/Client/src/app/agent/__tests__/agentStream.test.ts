@@ -115,6 +115,32 @@ describe("agent stream", () => {
       { type: "message-delta", messageId: "msg_01", content: "Hello" }
     ]);
   });
+
+  it("ignores malformed stream frames without failing the subscription", async () => {
+    const events: AgentStreamEvent[] = [];
+    const errors: Error[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      "not json\n",
+      `data: ${JSON.stringify({ type: "message-delta", messageId: "msg_01", content: "Hello" })}\n\n`,
+      "data: {\"type\":\"message-delta\"\n\n",
+      `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`,
+      "{\"type\":\"message-delta\""
+    ]), { status: 200 }));
+
+    subscribeAgentSessionStream(
+      createEndpointContext("https://foundation.example/"),
+      "/_elsa/agent/sessions/agt_01/stream",
+      event => events.push(event),
+      error => errors.push(error),
+      { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
+    await flushPromises();
+
+    expect(errors).toEqual([]);
+    expect(events).toEqual([
+      { type: "message-delta", messageId: "msg_01", content: "Hello" },
+      { type: "message-completed", messageId: "msg_01" }
+    ]);
+  });
 });
 
 function streamFrom(chunks: string[]) {
