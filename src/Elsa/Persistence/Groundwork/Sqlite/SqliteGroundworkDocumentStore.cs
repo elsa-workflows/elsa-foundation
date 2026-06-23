@@ -1,7 +1,10 @@
 using Elsa.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Groundwork.Sqlite.Documents;
 using Groundwork.Sqlite.Materialization;
 using Microsoft.Data.Sqlite;
@@ -33,6 +36,23 @@ public sealed class SqliteGroundworkDocumentStore(string connectionString, Stora
 
     public async Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
         await (await GetStoreAsync(cancellationToken)).QueryAsync(query, cancellationToken);
+
+    public async Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+        await (await GetStoreAsync(cancellationToken)).QueryAsync(query, cancellationToken);
+
+    public async Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+        await (await GetStoreAsync(cancellationToken)).FirstOrDefaultAsync(query, cancellationToken);
+
+    public async Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+        await (await GetStoreAsync(cancellationToken)).AnyAsync(query, cancellationToken);
+
+    // SQLite is a relational provider: a unit of work spans documents in one DbTransaction, so the
+    // boundary is always CrossUnitAtomic. The property is synchronous, so it reports the provider's
+    // invariant rather than materializing the inner store on access.
+    public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
+
+    public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+        await (await GetStoreAsync(cancellationToken)).BeginAsync(scope, cancellationToken);
 
     private async ValueTask<SqliteDocumentStore> GetStoreAsync(CancellationToken cancellationToken)
     {

@@ -6,28 +6,28 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class AddVersionCommandHandler(
     IWorkflowDefinitionVersionFactory versionFactory,
     IAddCommand<WorkflowDefinitionVersion> addCommand,
-    IQueries<WorkflowDefinitionVersion> queries,
-    IQueries<WorkflowDefinition> definitionQueries)
+    IWorkflowDefinitionVersionStore versionStore,
+    IWorkflowDefinitionStore definitionStore)
 
     : ICommandHandler<AddVersion, WorkflowDefinitionVersionDetailsView>
 {
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
-        var definition = await definitionQueries.Get(command.DefinitionId, cancellationToken);
-        var lastVersion = await queries.FindLastVersion(command.DefinitionId, cancellationToken);
+        var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
+        var lastVersion = await versionStore.FindLatestVersionAsync(command.DefinitionId, cancellationToken);
 
         var version = versionFactory.Create(definition, NextVersion(lastVersion?.Version), command.State.ToState());
 
         await addCommand.Add(WorkflowDefinitionVersion.From(version), cancellationToken);
 
-        var addedVersion = await queries.GetVersionIncludingDefinition(version.Id, cancellationToken);
+        var addedVersion = await versionStore.GetWithDefinitionAsync(version.Id, cancellationToken);
         return addedVersion.ToDetailsView();
     }
 

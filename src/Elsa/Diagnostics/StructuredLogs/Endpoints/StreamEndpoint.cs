@@ -18,10 +18,9 @@ internal sealed class StreamEndpoint(
     IStructuredLogStore store,
     StructuredLogFilterBinder binder,
     StructuredLogSseFormatter formatter,
+    StructuredLogSseStreamWriter streamWriter,
     IOptions<StructuredLogsOptions> options) : ElsaEndpointWithoutRequest
 {
-    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
-
     public override void Configure()
     {
         Get(options.Value.StreamPath);
@@ -70,26 +69,6 @@ internal sealed class StreamEndpoint(
 
     private async Task StreamLiveAsync(HttpResponse response, StructuredLogFilter filter, CancellationToken ct)
     {
-        await using var enumerator = feed.Subscribe(filter, ct).GetAsyncEnumerator(ct);
-        var moveNext = enumerator.MoveNextAsync().AsTask();
-
-        while (true)
-        {
-            var completed = await Task.WhenAny(moveNext, Task.Delay(HeartbeatInterval, ct));
-
-            if (completed != moveNext)
-            {
-                await response.WriteAsync(formatter.Heartbeat(), ct);
-                await response.Body.FlushAsync(ct);
-                continue;
-            }
-
-            if (!await moveNext)
-                break;
-
-            await response.WriteAsync(formatter.Format(enumerator.Current), ct);
-            await response.Body.FlushAsync(ct);
-            moveNext = enumerator.MoveNextAsync().AsTask();
-        }
+        await streamWriter.StreamAsync(response, feed.Subscribe(filter, ct), ct);
     }
 }

@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Events.Core.Contracts;
@@ -39,8 +40,8 @@ public sealed class ActivityVersionReconciler(
     IActivityDefinitionHasher hasher,
     IEventPublisher sender,
     IOptions<ActivityVersionReconcilerOptions> options,
-    IQueries<ActivityDefinition> definitionQueries,
-    IQueries<ActivityDefinitionVersion> versionQueries,
+    IActivityDefinitionStore definitionStore,
+    IActivityDefinitionVersionStore versionStore,
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddCommand<ActivityDefinitionVersion> addVersionCommand
 )
@@ -86,8 +87,9 @@ public sealed class ActivityVersionReconciler(
         // insensitive (FR-013) by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
         // the same logical version.
         var incomingSortKey = SemVer.ToSortKey(incomingVersion.Version);
-        var existingVersion = await versionQueries.Find(
-            v => v.DefinitionId == definition.Id && v.SemVerSortKey == incomingSortKey,
+        var existingVersion = await versionStore.FindByDefinitionAndSortKeyAsync(
+            definition.Id,
+            incomingSortKey,
             cancellationToken
         );
 
@@ -194,8 +196,9 @@ public sealed class ActivityVersionReconciler(
         string activityTypeKey,
         CancellationToken cancellationToken)
     {
-        var definition = await definitionQueries.Find(
-            x => x.Id == definitionId || x.ActivityTypeKey == activityTypeKey,
+        var definition = await definitionStore.FindByIdOrActivityTypeKeyAsync(
+            definitionId,
+            activityTypeKey,
             cancellationToken
         );
 

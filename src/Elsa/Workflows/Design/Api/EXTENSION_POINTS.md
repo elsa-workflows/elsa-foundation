@@ -21,8 +21,8 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
-- **Default impl:** `WorkflowDefinitionLookup` (`Elsa.Workflows.Design.Persistence.EFCore`), backed by `IQueries<WorkflowDefinitionVersion>` + `IQueries<WorkflowDefinition>`.
-- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override the underlying `IQueries<>` (see [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
+- **Default impl:** `WorkflowDefinitionLookup` (`Elsa.Workflows.Design.Persistence.EFCore`), backed by the named `IWorkflowDefinitionVersionStore` + `IWorkflowDefinitionStore` read ports.
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
 
 ### `IWorkflowDesignContextFactory` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `ValueTask<IWorkflowDesignContext> Create(CancellationToken ct)`

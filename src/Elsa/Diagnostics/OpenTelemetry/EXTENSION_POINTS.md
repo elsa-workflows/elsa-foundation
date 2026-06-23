@@ -18,7 +18,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 ### `IOpenTelemetryStore` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask WriteAsync(OpenTelemetryBatch batch, …)`, `ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(…)`, `ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(…)`, `ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, …)`, `ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(…)`, `ValueTask<OpenTelemetryLogResult> QueryLogsAsync(…)`, `ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(…)`.
 - **Default impl:** `InMemoryOpenTelemetryStore` — capacity-bounded ring buffers per signal (trace/span/metric-point/log-record/resource), bounds from `OpenTelemetryDiagnosticsOptions.*Capacity`. Stores normalized batches; oldest entries roll off and are counted as dropped. **It also populates the source registry** (`IOpenTelemetrySourceRegistry.MarkSeen`) for each resource it writes, and serves resource queries/storage diagnostics from that registry.
-- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. **Slice-4 gotcha:** the source registry is populated by the store (not the ingestor), so a durable override MUST also call `IOpenTelemetrySourceRegistry.MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty. (Planned shipped override: an EFCore store mirroring the Structured Logs persistence slice.)
+- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. The shipped `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature registers `EfCoreOpenTelemetryStore`, which persists resources/traces/spans/metric instruments/metric points/logs through EF Core and still calls `IOpenTelemetrySourceRegistry.MarkSeen` on write. Any other durable override MUST also call `MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty.
 
 ### `IOpenTelemetryLiveFeed` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask PublishAsync(OpenTelemetryBatch batch, …)`, `IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken)`.
@@ -61,7 +61,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 ## Deferred
 
 - **gRPC ingestion** — kept behind `OpenTelemetryDiagnosticsOptions.EnableGrpc` (default `false`); no gRPC route is mapped. The binding is host-specific.
-- **Persistence** — `IOpenTelemetryStore` is the override seam for a durable backend; an EFCore store mirroring the Structured Logs persistence slice is a planned follow-up.
+- **Persistence providers beyond SQLite** — `IOpenTelemetryStore` is the override seam for durable backends. SQLite EFCore persistence is shipped; other EF providers or external stores can use the same replacement-contract shape.
 
 ---
 

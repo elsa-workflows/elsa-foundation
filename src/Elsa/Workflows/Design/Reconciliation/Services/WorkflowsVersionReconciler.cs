@@ -4,7 +4,7 @@ using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Microsoft.Extensions.Logging;
@@ -24,8 +24,8 @@ public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
     IEventPublisher sender,
     IOptions<WorkflowVersionReconcilerOptions> options,
-    IQueries<WorkflowDefinition> definitionQueries,
-    IQueries<WorkflowDefinitionVersion> versionQueries,
+    IWorkflowDefinitionStore definitionStore,
+    IWorkflowDefinitionVersionStore versionStore,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
     IAddCommand<WorkflowDefinitionVersion> addVersionCommand
 )
@@ -56,7 +56,7 @@ public sealed class WorkflowsVersionReconciler(
 
         var candidateSortKey = SemVer.ToSortKey(version.Version);
 
-        var latestVersion = await versionQueries.FindLastVersion(definitionId, cancellationToken);
+        var latestVersion = await versionStore.FindLatestVersionAsync(definitionId, cancellationToken);
         if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
         {
             LogSkipOutdated(definitionId, version.Version);
@@ -103,17 +103,11 @@ public sealed class WorkflowsVersionReconciler(
 
     private async Task<bool> VersionExists(string definitionId, string sortKey, CancellationToken cancellationToken)
     {
-        return await versionQueries.Any(
-            x => x.SemVerSortKey == sortKey && x.DefinitionId == definitionId,
-            cancellationToken
-        );
+        return await versionStore.ExistsAsync(definitionId, sortKey, cancellationToken);
     }
 
     private async Task<WorkflowDefinition?> FindDefinition(string definitionId, CancellationToken cancellationToken)
     {
-        return await definitionQueries.Find(
-            x => x.Id == definitionId,
-            cancellationToken
-        );
+        return await definitionStore.FindByIdAsync(definitionId, cancellationToken);
     }
 }

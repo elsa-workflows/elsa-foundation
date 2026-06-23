@@ -66,6 +66,7 @@ public class OpenTelemetryFeature : FastEndpointsFeatureBase
 
         services.AddSingleton<OpenTelemetryStreamItemSerializer>();
         services.AddSingleton<OpenTelemetrySseFormatter>();
+        services.AddSingleton<OpenTelemetrySseStreamWriter>();
         services.AddSingleton<OpenTelemetryTraceFilterBinder>();
     }
 
