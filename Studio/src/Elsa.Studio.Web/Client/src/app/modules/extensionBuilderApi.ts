@@ -99,7 +99,6 @@ export interface PackagePromotionResult {
   accepted: boolean;
   category?: PromotionRejectionCategory | null;
   message?: string | null;
-  runtimeStatus?: ExtensionRuntimeStatus | null;
   publishedPackage?: PublishedPackage | null;
   requiresReload?: boolean;
   requiresRestart?: boolean;
@@ -246,11 +245,8 @@ export async function getBuildLog(context: StudioEndpointContext, _workspaceId: 
   return text;
 }
 
-export async function promoteBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, buildId: string, request: PackagePromotionRequest) {
-  const result = normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
-  return result.accepted
-    ? { ...result, runtimeStatus: await getRuntimeStatus(context, workspaceId, projectId).catch(() => null) }
-    : result;
+export async function promoteBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, request: PackagePromotionRequest) {
+  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
 }
 
 export async function getRuntimeStatus(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
@@ -289,6 +285,10 @@ async function requestJson<T = Record<string, never>>(context: StudioEndpointCon
 }
 
 async function hydrateWorkspace(context: StudioEndpointContext, workspace: RawExtensionWorkspace) {
+  if (workspace.projects) {
+    return normalizeWorkspace(workspace, workspace.projects.map(normalizeProject));
+  }
+
   const projects = await Promise.all((workspace.projectIds ?? []).map(projectId => getProject(context, workspace.id, projectId).catch(() => null)));
   return normalizeWorkspace(workspace, projects.filter((project): project is ExtensionProject => project !== null));
 }
@@ -471,6 +471,7 @@ interface RawExtensionWorkspace {
   createdAt?: string | null;
   updatedAt?: string | null;
   projectIds?: string[];
+  projects?: RawExtensionProject[];
 }
 
 interface RawExtensionProject {
