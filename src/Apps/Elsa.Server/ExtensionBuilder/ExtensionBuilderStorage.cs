@@ -104,7 +104,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var workspace = new ExtensionWorkspace(CreateId("ws"), ownerId, trustContext, displayName.Trim(), now, now, []);
             state.Workspaces[workspace.Id] = workspace;
             Directory.CreateDirectory(GetWorkspacePath(workspace.Id));
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return workspace;
         }
         finally
@@ -126,7 +126,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 RemoveProjectAuthoringState(state, projectId);
             state.Workspaces.Remove(workspace.Id);
             DeleteDirectoryIfExists(GetWorkspacePath(workspace.Id));
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return true;
         }
         finally
@@ -209,10 +209,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                     : file.Path.Equals("elsa-package.json", StringComparison.OrdinalIgnoreCase)
                         ? manifest.Content.GetRawText()
                         : file.Content;
-                await WriteFileCoreAsync(project.Id, file.Path, content, cancellationToken);
+                await WriteFileCoreAsync(project.Id, file.Path, content, CancellationToken.None);
             }
 
-            var snapshot = await CreateSourceSnapshotCoreAsync(project.Id, cancellationToken);
+            var snapshot = await CreateSourceSnapshotCoreAsync(project.Id, CancellationToken.None);
             project = project with { CurrentSourceRevisionId = snapshot.Id };
             state.Projects[project.Id] = project;
             state.Workspaces[workspace.Id] = workspace with
@@ -220,7 +220,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 ProjectIds = workspace.ProjectIds.Concat([project.Id]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                 UpdatedAt = now
             };
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return project;
         }
         finally
@@ -249,7 +249,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             }
 
             DeleteDirectoryIfExists(GetProjectPath(project.Id));
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return true;
         }
         finally

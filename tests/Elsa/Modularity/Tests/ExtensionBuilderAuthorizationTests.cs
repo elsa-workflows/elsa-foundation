@@ -86,7 +86,7 @@ public sealed class ExtensionBuilderAuthorizationTests
     }
 
     [Fact]
-    public void ManagementApiKeyPrincipalPreservesExistingCallerIdentity()
+    public void ManagementApiKeyPrincipalDoesNotTrustAuthenticatedUnlistedRole()
     {
         var context = CreateContext(new ClaimsIdentity(
         [
@@ -98,7 +98,7 @@ public sealed class ExtensionBuilderAuthorizationTests
         var caller = ElsaExtensionBuilderApi.CreateCaller(context, hasManagementAccess: true);
 
         Assert.Equal("dev", caller.OwnerId);
-        Assert.True(caller.IsTrusted);
+        Assert.False(caller.IsTrusted);
     }
 
     [Fact]

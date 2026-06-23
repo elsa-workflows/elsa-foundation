@@ -785,6 +785,43 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RollbackUsesOriginalPromotionFeed()
+    {
+        var defaultFeed = Path.Combine(_directory, "default-feed");
+        var requestedFeed = Path.Combine(_directory, "requested-feed");
+        Directory.CreateDirectory(requestedFeed);
+        var oldPackage = Path.Combine(requestedFeed, "Elsa.Test.RequestedRollback.1.0.0.nupkg");
+        var newPackage = Path.Combine(requestedFeed, "Elsa.Test.RequestedRollback.2.0.0.nupkg");
+        CreatePackage(oldPackage, "Elsa.Test.RequestedRollback", "1.0.0", "Safe.Package", includeManifest: true);
+        CreatePackage(newPackage, "Elsa.Test.RequestedRollback", "2.0.0", "Safe.Package", includeManifest: true);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Nuplane:Setup:Feeds:0:Name"] = "default",
+                ["Nuplane:Setup:Feeds:0:DirectoryPath"] = defaultFeed,
+                ["Nuplane:Setup:Feeds:1:Name"] = "requested",
+                ["Nuplane:Setup:Feeds:1:DirectoryPath"] = requestedFeed
+            })
+            .Build();
+        var project = new ExtensionProject("project", "workspace", "generic-dotnet", ExtensionTemplateKind.GenericDotNet, "Elsa.Test.RequestedRollback", "2.0.0", "net10.0", new("Test", null, [], Json("{}")), "rev", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var target = new PackagePromotionRecord(project.PackageId, "1.0.0", oldPackage, oldPackage, DateTimeOffset.UtcNow.AddMinutes(-1), new("completed", "corr-1", null, false, []), true, false);
+        var superseded = new PackagePromotionRecord(project.PackageId, "2.0.0", newPackage, newPackage, DateTimeOffset.UtcNow, new("completed", "corr-2", null, false, []), true, false);
+        var service = new ExtensionBuilderPromotionService(
+            new FakeEnvironment(_directory),
+            Options.Create(new ExtensionBuilderOptions()),
+            new FakeNuplaneAdmin(),
+            configuration);
+
+        var result = await service.RollbackAsync(project, target, [target, superseded]);
+
+        Assert.Equal(PromotionStatus.Accepted, result.Status);
+        Assert.Equal("requested", result.PublishedPackage!.FeedName);
+        Assert.True(File.Exists(oldPackage));
+        Assert.False(File.Exists(newPackage));
+        Assert.False(Directory.Exists(defaultFeed));
+    }
+
+    [Fact]
     public void PublicJsonContractsSerializeEnumsAsStrings()
     {
         var json = JsonSerializer.Serialize(

@@ -266,10 +266,11 @@ internal static class ElsaExtensionBuilderApi
             new Claim(ClaimTypes.Role, trustedRole),
             new Claim(ElsaIdentityRoleClaimType, trustedRole)
         };
+        if (httpContext.User.Identity?.IsAuthenticated == true)
+            return;
+
         var managementIdentity = new ClaimsIdentity(claims, ManagementApiKeyAuthenticationType, ClaimTypes.Name, ClaimTypes.Role);
-        httpContext.User = httpContext.User.Identity?.IsAuthenticated == true
-            ? new ClaimsPrincipal(httpContext.User.Identities.Concat([managementIdentity]))
-            : new ClaimsPrincipal(managementIdentity);
+        httpContext.User = new ClaimsPrincipal(managementIdentity);
     }
 
     private static ExtensionBuilderCaller GetCaller(HttpContext httpContext)

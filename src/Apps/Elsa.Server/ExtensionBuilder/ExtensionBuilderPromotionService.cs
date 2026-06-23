@@ -75,9 +75,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
             return Rejected(PromotionRejectionReason.InvalidManifest);
 
         var source = target.FeedPath;
-        var feed = ResolveDropFolderFeed();
-        if (feed is null)
-            return Rejected(PromotionRejectionReason.InvalidManifest);
+        var feed = ResolveDropFolderFeedForPackagePath(source);
         Directory.CreateDirectory(feed.Path);
         var destination = ResolveFeedPackagePath(feed.Path, Path.GetFileName(source));
         if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase) &&
@@ -133,7 +131,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
             return new(null, identity.Value.PackageId, identity.Value.Version);
         }
-        catch (Exception ex) when (ex is InvalidDataException or JsonException or System.Xml.XmlException)
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or System.Xml.XmlException or IOException or UnauthorizedAccessException)
         {
             return new(PromotionRejectionReason.MalformedPackage);
         }
@@ -216,10 +214,12 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
     private static PromotionRejectionReason? TryDeactivateSupersededPackageVersions(string feedPath, string packageId, string activeVersion, IReadOnlyList<PackagePromotionRecord> promotions)
     {
+        var normalizedFeedPath = Path.GetFullPath(feedPath);
         var promotedPaths = promotions
             .Where(x =>
                 string.Equals(x.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase) &&
+                IsPackageInFeed(x.FeedPath, normalizedFeedPath))
             .Select(x => x.FeedPath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -262,7 +262,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
             var nuspec = archive.Entries.FirstOrDefault(x => x.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
             return nuspec is null ? null : ReadNuspecIdentity(nuspec);
         }
-        catch (Exception ex) when (ex is InvalidDataException or System.Xml.XmlException or IOException)
+        catch (Exception ex) when (ex is InvalidDataException or System.Xml.XmlException or IOException or UnauthorizedAccessException)
         {
             return null;
         }
@@ -279,7 +279,16 @@ internal sealed partial class ExtensionBuilderPromotionService(
         if (!string.IsNullOrWhiteSpace(targetFeed) && feed is null)
             return null;
         var path = feed?.Path ?? "packages";
-        return new(feed?.Name ?? "drop-folder", Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path)));
+        return new(feed?.Name ?? "drop-folder", ResolveFeedRootPath(path));
+    }
+
+    private DropFolderFeed ResolveDropFolderFeedForPackagePath(string packagePath)
+    {
+        var packageDirectory = Path.GetFullPath(Path.GetDirectoryName(packagePath) ?? environment.ContentRootPath);
+        var feed = ReadFeeds(configuration)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+            .FirstOrDefault(x => string.Equals(ResolveFeedRootPath(x.Path), packageDirectory, StringComparison.OrdinalIgnoreCase));
+        return new(feed?.Name ?? "drop-folder", packageDirectory);
     }
 
     private static IReadOnlyList<DropFolderFeed> ReadFeeds(IConfiguration configuration) =>
@@ -311,6 +320,16 @@ internal sealed partial class ExtensionBuilderPromotionService(
         {
             return !overwrite && File.Exists(destination) ? PromotionRejectionReason.Duplicate : PromotionRejectionReason.MalformedPackage;
         }
+    }
+
+    private string ResolveFeedRootPath(string path) =>
+        Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path));
+
+    private static bool IsPackageInFeed(string packagePath, string feedPath)
+    {
+        var packageDirectory = Path.GetDirectoryName(packagePath);
+        return packageDirectory is not null &&
+            string.Equals(Path.GetFullPath(packageDirectory), feedPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ResolveFeedPackagePath(string feedRoot, string fileName)
