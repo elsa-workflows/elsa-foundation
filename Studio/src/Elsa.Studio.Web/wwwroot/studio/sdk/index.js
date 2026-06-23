@@ -1,29 +1,31 @@
-import { r as c } from "../vendor/chunks/index.js";
-const v = {
+import { j as f } from "../vendor/chunks/jsx-runtime.js";
+import { r as u } from "../vendor/chunks/index.js";
+const T = {
   status: "anonymous",
   roles: [],
   permissions: []
-}, j = {
+}, z = {
   status: "unknown",
   roles: [],
   permissions: []
 };
-function _(t) {
-  return new F(t);
+function Q(t) {
+  return new W(t);
 }
-class F {
+class W {
   constructor(e) {
     this.options = e;
-    for (const s of e.adapters ?? []) {
-      if (this.adapters.has(s.id))
-        throw new p(`Duplicate auth provider adapter '${s.id}'.`);
-      this.adapters.set(s.id, s);
+    for (const r of e.adapters ?? []) {
+      if (this.adapters.has(r.id))
+        throw new k(`Duplicate auth provider adapter '${r.id}'.`);
+      this.adapters.set(r.id, r);
     }
   }
   options;
   adapters = /* @__PURE__ */ new Map();
   activeAdapter = null;
-  session = j;
+  pendingLoginProviderId = null;
+  session = z;
   getSession() {
     return this.session;
   }
@@ -31,162 +33,206 @@ class F {
     return this.options.capabilities();
   }
   async initialize() {
-    const e = await this.resolveAdapter();
-    return this.session = this.options.isCallback?.() ? await e.handleCallback() : await e.initialize(), this.session;
+    if (this.options.isCallback?.()) {
+      const r = this.getCallbackProviderId(), n = r ? await this.getProviderAdapter(r) : await this.resolveActiveAdapter();
+      return await this.applySession(await n.handleCallback(), n), this.pendingLoginProviderId = null, this.session;
+    }
+    const e = await this.resolveActiveAdapter();
+    return await this.applySession(await e.initialize(), e), this.pendingLoginProviderId = null, this.session;
   }
   async login(e) {
-    await (e?.providerId ? await this.resolveAdapter(e.providerId) : await this.resolveAdapter()).login(e);
+    const r = e?.providerId ? await this.getProviderAdapter(e.providerId) : await this.resolveActiveAdapter();
+    this.pendingLoginProviderId = r.id;
+    try {
+      const n = await r.login({ ...e, providerId: r.id });
+      n ? (await this.applySession(n, r), this.pendingLoginProviderId = null) : this.session.status !== "authenticated" && (this.activeAdapter = r);
+    } catch (n) {
+      throw this.pendingLoginProviderId = null, n;
+    }
   }
   async handleCallback(e) {
-    const s = e ? await this.resolveAdapter(e) : await this.resolveAdapter();
-    return this.session = await s.handleCallback(), this.session;
+    const r = e ? await this.getProviderAdapter(e) : await this.resolveActiveAdapter();
+    return await this.applySession(await r.handleCallback(), r), this.pendingLoginProviderId = null, this.session;
   }
   async logout() {
-    await (await this.resolveAdapter()).logout(), this.session = v;
+    await (await this.resolveActiveAdapter()).logout(), this.session = T;
   }
   async getAccessToken() {
-    return (await this.resolveAdapter()).getAccessToken();
+    return (await this.resolveActiveAdapter()).getAccessToken();
   }
   async refresh() {
-    const e = await this.resolveAdapter();
-    return this.session = await e.refresh(), this.session;
+    const e = await this.resolveActiveAdapter();
+    return await this.applySession(await e.refresh(), e), this.session;
   }
-  async resolveAdapter(e) {
-    if (e)
-      return this.requireAdapter(e);
+  async resolveActiveAdapter() {
     if (this.activeAdapter)
       return this.activeAdapter;
-    const s = await this.options.bootstrap(), n = s.providers.find((r) => r.enabled && r.isDefault) ?? s.providers.find((r) => r.enabled);
-    if (!n)
-      throw new p("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
-    return this.activeAdapter = this.resolveProviderAdapter(n), this.activeAdapter;
+    const e = await this.options.bootstrap(), r = e.providers.find((s) => s.enabled && s.isDefault) ?? e.providers.find((s) => s.enabled);
+    if (!r)
+      throw new k("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
+    const n = this.resolveProviderAdapter(r);
+    return this.activeAdapter = n, n;
   }
-  requireAdapter(e) {
-    const s = this.adapters.get(e);
+  async getProviderAdapter(e) {
+    const r = this.adapters.get(e);
+    if (r)
+      return r;
+    const s = (await this.options.bootstrap()).providers.find((i) => i.enabled && i.id === e);
     if (!s)
-      throw new p(`No auth provider adapter is registered for '${e}'.`);
-    return this.activeAdapter = s, s;
+      throw new k(`No auth provider adapter is registered for '${e}'.`);
+    return this.resolveProviderAdapter(s);
   }
   resolveProviderAdapter(e) {
-    const s = this.adapters.get(e.id);
-    if (s)
-      return this.activeAdapter = s, s;
+    const r = this.adapters.get(e.id);
+    if (r)
+      return r;
     if (!this.options.adapterFactory)
-      throw new p(`No auth provider adapter is registered for '${e.id}'.`);
+      throw new k(`No auth provider adapter is registered for '${e.id}'.`);
     const n = this.options.adapterFactory(e);
-    return this.adapters.set(e.id, n), this.activeAdapter = n, n;
+    return this.adapters.set(e.id, n), n;
+  }
+  getCallbackProviderId() {
+    const e = this.options.getCallbackProviderId?.();
+    return e || (this.pendingLoginProviderId ? this.pendingLoginProviderId : typeof window > "u" ? null : new URLSearchParams(window.location.search).get("authProviderId"));
+  }
+  async applySession(e, r) {
+    const n = e.provider?.id ? await this.getProviderAdapter(e.provider.id) : r;
+    this.session = e, this.activeAdapter = n;
   }
 }
-class p extends Error {
+class k extends Error {
   constructor(e) {
     super(e), this.name = "AuthConfigurationError";
   }
 }
-function $(t) {
-  const e = t.fetch ?? fetch, s = t.sessionEndpoint ?? "/_elsa/identity/session", n = t.logoutEndpoint ?? `/_elsa/identity/logout/${encodeURIComponent(t.id)}`;
+function H(t) {
+  const e = t.fetch ?? fetch, r = t.sessionEndpoint ?? "/_elsa/identity/session", n = t.logoutEndpoint ?? `/_elsa/identity/logout/${encodeURIComponent(t.id)}`;
   return {
     id: t.id,
     kind: t.kind,
-    initialize: () => w(e, s, t),
-    login: (r) => {
-      const a = t.challenge;
-      if (!a || a.type === "none")
-        throw new l(`Provider '${t.id}' does not expose a redirect challenge.`);
-      const i = "method" in a ? a.method.toUpperCase() : "GET";
-      if (i !== "GET")
-        throw new l(`Provider '${t.id}' exposes an unsupported ${i} challenge.`);
-      const o = new URL(z(a), J(t)), u = r?.returnUrl ?? t.location?.href ?? window.location.href;
-      return o.searchParams.set("returnUrl", u), (t.location ?? window.location).assign(o.toString()), Promise.resolve();
+    initialize: () => S(e, r, t),
+    login: (s) => {
+      const i = t.challenge;
+      if (!i || i.type === "none")
+        throw new v(`Provider '${t.id}' does not expose a redirect challenge.`);
+      const a = "method" in i ? i.method.toUpperCase() : "GET";
+      if (a !== "GET")
+        throw new v(`Provider '${t.id}' exposes an unsupported ${a} challenge.`);
+      const c = new URL(Z(i), R(t)), o = s?.returnUrl ?? t.location?.href ?? window.location.href;
+      return c.searchParams.set("returnUrl", tt(o, s?.providerId ?? t.id, t)), (t.location ?? window.location).assign(c.toString()), Promise.resolve();
     },
-    handleCallback: () => w(e, s, t),
+    handleCallback: () => S(e, r, t),
     logout: async () => {
-      const r = await e(A(n, t), { method: "POST", credentials: "include" });
-      if (!r.ok)
-        throw new l(`Sign-out failed with ${r.status}.`);
+      const s = await e(E(n, t), { method: "POST", credentials: "include" });
+      if (!s.ok)
+        throw new v(`Sign-out failed with ${s.status}.`);
     },
     getAccessToken: async () => {
       if (!t.tokenEndpoint)
         return null;
-      const r = await e(A(t.tokenEndpoint, t), { credentials: "include", cache: "no-store" });
-      if (r.status === 401)
+      const s = await e(E(t.tokenEndpoint, t), { credentials: "include", cache: "no-store" });
+      if (s.status === 401)
         return null;
-      if (!r.ok)
-        throw new l(`Access-token request failed with ${r.status}.`);
-      const a = await r.json();
-      return typeof a.accessToken == "string" ? a.accessToken : null;
+      if (!s.ok)
+        throw new v(`Access-token request failed with ${s.status}.`);
+      const i = await s.json();
+      return typeof i.accessToken == "string" ? i.accessToken : null;
     },
     refresh: async () => {
-      const r = await t.getRefreshToken?.(), a = t.refreshEndpoint;
-      if (!a || !r)
-        return w(e, s, t);
-      const i = await e(A(a, t), {
+      const s = await t.getRefreshToken?.(), i = t.refreshEndpoint;
+      if (!i || !s)
+        return S(e, r, t);
+      const a = await e(E(i, t), {
         method: "POST",
         credentials: "include",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ refreshToken: r })
+        body: JSON.stringify({ refreshToken: s })
       });
-      if (i.status === 401)
-        return v;
-      if (!i.ok)
-        throw new l(`Session refresh failed with ${i.status}.`);
-      const o = await i.json();
-      return o.status ? P(o) : w(e, s, t);
+      if (a.status === 401)
+        return T;
+      if (!a.ok)
+        throw new v(`Session refresh failed with ${a.status}.`);
+      const c = await a.json();
+      return c.status ? M(c) : S(e, r, t);
     }
   };
 }
-async function w(t, e, s) {
-  const n = await t(A(e, s), { credentials: "include", cache: "no-store" });
+async function S(t, e, r) {
+  const n = await t(E(e, r), { credentials: "include", cache: "no-store" });
   if (n.status === 401)
-    return v;
+    return T;
   if (!n.ok)
-    throw new l(`Session request failed with ${n.status}.`);
-  return H(n);
+    throw new v(`Session request failed with ${n.status}.`);
+  return X(n);
 }
-async function H(t) {
+async function X(t) {
   const e = await t.json();
-  return P(e);
+  return M(e);
 }
-function P(t) {
+function M(t) {
+  const e = Y(t.status) ? t.status : "anonymous";
   return {
     ...t,
-    roles: t.roles ?? [],
-    permissions: t.permissions ?? []
+    status: e,
+    roles: L(t.roles),
+    permissions: L(t.permissions)
   };
 }
-function z(t) {
+function L(t) {
+  return Array.isArray(t) ? t.filter((e) => typeof e == "string") : [];
+}
+function Y(t) {
+  return t === "unknown" || t === "anonymous" || t === "authenticated";
+}
+function Z(t) {
   return "loginPath" in t ? t.loginPath : t.url;
 }
-function A(t, e) {
-  return new URL(t, J(e)).toString();
+function E(t, e) {
+  return new URL(t, R(e)).toString();
 }
-function J(t) {
+function R(t) {
   return t?.baseUrl ?? t?.location?.origin ?? window.location.origin;
 }
-class l extends Error {
+function tt(t, e, r) {
+  const n = new URL(t, et(r));
+  return n.searchParams.set("authProviderId", e), rt(t) ? `${n.pathname}${n.search}${n.hash}` : n.toString();
+}
+function et(t) {
+  return t?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? t?.location?.origin ?? R(t);
+}
+function rt(t) {
+  try {
+    return new URL(t), !1;
+  } catch {
+    return !0;
+  }
+}
+class v extends Error {
   constructor(e) {
     super(e), this.name = "AuthAdapterError";
   }
 }
-function at(t = {}) {
-  const e = t.baseUrl ?? window.location.origin, s = t.fetch ?? fetch;
-  return _({
-    bootstrap: () => m(s, e, "/_elsa/identity/bootstrap"),
-    capabilities: () => m(s, e, "/_elsa/identity/capabilities"),
+function mt(t = {}) {
+  const e = t.baseUrl ?? window.location.origin, r = t.fetch ?? fetch;
+  return Q({
+    bootstrap: () => I(r, e, "/_elsa/identity/bootstrap"),
+    capabilities: () => I(r, e, "/_elsa/identity/capabilities"),
     isCallback: t.isCallback,
-    adapterFactory: (n) => $({
+    getCallbackProviderId: t.getCallbackProviderId,
+    adapterFactory: (n) => H({
       id: n.id,
       kind: n.kind,
       baseUrl: e,
       challenge: n.challenge,
-      fetch: s
+      fetch: r
     })
   });
 }
-async function m(t, e, s) {
-  const n = await t(new URL(s, e).toString(), {
+async function I(t, e, r) {
+  const n = await t(new URL(r, e).toString(), {
     credentials: "include",
     cache: "no-store",
     headers: { Accept: "application/json" }
@@ -195,144 +241,199 @@ async function m(t, e, s) {
     throw new Error(`Auth discovery request failed with ${n.status}.`);
   return await n.json();
 }
-var k = { exports: {} }, f = {};
-var C;
-function N() {
-  if (C) return f;
-  C = 1;
-  var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
-  function s(n, r, a) {
-    var i = null;
-    if (a !== void 0 && (i = "" + a), r.key !== void 0 && (i = "" + r.key), "key" in r) {
-      a = {};
-      for (var o in r)
-        o !== "key" && (a[o] = r[o]);
-    } else a = r;
-    return r = a.ref, {
-      $$typeof: t,
-      type: n,
-      key: i,
-      ref: r !== void 0 ? r : null,
-      props: a
-    };
-  }
-  return f.Fragment = e, f.jsx = s, f.jsxs = s, f;
-}
-var E;
-function B() {
-  return E || (E = 1, k.exports = N()), k.exports;
-}
-var h = B();
-const q = c.createContext(null);
-function x() {
-  const t = c.useContext(q);
+const N = u.createContext(null);
+function j() {
+  const t = u.useContext(N);
   if (!t)
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return t;
 }
-function it({ manager: t, children: e }) {
-  const [s, n] = c.useState(() => t.getSession() ?? j), [r, a] = c.useState(null);
-  c.useEffect(() => {
-    let d = !1;
-    async function O() {
-      const S = await t.initialize();
-      if (!d && (n(S), S.status === "authenticated")) {
-        const M = await t.getCapabilities();
-        d || a(M);
+function kt({ manager: t, children: e }) {
+  const [r, n] = u.useState(() => t.getSession() ?? z), [s, i] = u.useState(null), a = u.useRef(!1), c = u.useRef(0), o = u.useCallback((d) => a.current && c.current === d, []);
+  u.useLayoutEffect(() => {
+    a.current = !0;
+    const d = ++c.current;
+    async function h() {
+      try {
+        const l = await t.initialize();
+        if (!o(d))
+          return;
+        if (n(l), l.status !== "authenticated") {
+          i(null);
+          return;
+        }
+        try {
+          const w = await t.getCapabilities();
+          o(d) && i(w);
+        } catch (w) {
+          o(d) && (console.error("Auth capabilities request failed.", w), i(null));
+        }
+      } catch (l) {
+        o(d) && (console.error("Auth initialization failed.", l), n(T), i(null));
       }
     }
-    return O(), () => {
-      d = !0;
+    return h(), () => {
+      a.current = !1, c.current += 1;
     };
-  }, [t]);
-  const i = c.useCallback((d) => t.login(d), [t]), o = c.useCallback(async () => {
-    await t.logout(), n(t.getSession()), a(null);
-  }, [t]), u = c.useCallback(async () => {
-    const d = await t.refresh();
-    return n(d), d.status === "authenticated" ? a(await t.getCapabilities()) : a(null), d;
-  }, [t]), y = c.useMemo(() => ({
-    session: s,
-    capabilities: r,
-    login: i,
-    logout: o,
-    refresh: u
-  }), [r, i, o, u, s]);
-  return /* @__PURE__ */ h.jsx(q.Provider, { value: y, children: e });
+  }, [t, o]);
+  const p = u.useCallback(async (d) => {
+    const h = ++c.current;
+    if (await t.login(d), !o(h))
+      return;
+    const l = t.getSession();
+    if (n(l), l.status === "authenticated")
+      try {
+        const w = await t.getCapabilities();
+        o(h) && i(w);
+      } catch (w) {
+        o(h) && (console.error("Auth capabilities request failed.", w), i(null));
+      }
+    else
+      i(null);
+  }, [t, o]), $ = u.useCallback(async () => {
+    const d = ++c.current;
+    await t.logout(), o(d) && (n(t.getSession()), i(null));
+  }, [t, o]), J = u.useCallback(async () => {
+    const d = ++c.current, h = await t.refresh();
+    if (!o(d))
+      return h;
+    if (n(h), h.status === "authenticated")
+      try {
+        const l = await t.getCapabilities();
+        o(d) && i(l);
+      } catch (l) {
+        o(d) && (console.error("Auth capabilities request failed.", l), i(null));
+      }
+    else
+      i(null);
+    return h;
+  }, [t, o]), V = u.useMemo(() => ({
+    session: r,
+    capabilities: s,
+    login: p,
+    logout: $,
+    refresh: J
+  }), [s, p, $, J, r]);
+  return /* @__PURE__ */ f.jsx(N.Provider, { value: V, children: e });
 }
-function D() {
-  return x().session;
+function nt() {
+  return j().session;
 }
-function L() {
-  const { permissions: t } = D();
-  return c.useMemo(() => {
+function st() {
+  const { permissions: t } = nt();
+  return u.useMemo(() => {
     const e = new Set(t);
     return {
-      has: (s) => e.has(s),
-      hasAny: (s) => s.some((n) => e.has(n)),
-      hasAll: (s) => s.every((n) => e.has(n))
+      has: (r) => e.has(r),
+      hasAny: (r) => r.some((n) => e.has(n)),
+      hasAll: (r) => r.every((n) => e.has(n))
     };
   }, [t]);
 }
-function ot() {
-  return x().capabilities;
+function St() {
+  return j().capabilities;
 }
-function ct({ requires: t, requireAll: e = !0, fallback: s = null, children: n }) {
-  const r = L(), a = typeof t == "string" ? [t] : t ?? [];
-  return a.length === 0 || (e ? r.hasAll(a) : r.hasAny(a)) ? /* @__PURE__ */ h.jsx(h.Fragment, { children: n }) : /* @__PURE__ */ h.jsx(h.Fragment, { children: s });
+function Pt({ requires: t, requireAll: e = !0, fallback: r = null, children: n }) {
+  const s = st(), i = typeof t == "string" ? [t] : t ?? [];
+  return i.length === 0 || (e ? s.hasAll(i) : s.hasAny(i)) ? /* @__PURE__ */ f.jsx(f.Fragment, { children: n }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: r });
 }
-function ut({ children: t, fallback: e = null, loginOptions: s }) {
-  const { session: n, login: r } = x();
-  return c.useEffect(() => {
-    n.status === "anonymous" && r(s);
-  }, [r, s, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ h.jsx(h.Fragment, { children: e }) : /* @__PURE__ */ h.jsx(h.Fragment, { children: t });
+function Ct({ children: t, fallback: e = null, loginOptions: r }) {
+  const { session: n, login: s } = j(), i = u.useRef(null);
+  return u.useEffect(() => {
+    if (n.status === "anonymous") {
+      const a = it(r), c = i.current;
+      if (c?.key === a && c.login === s)
+        return;
+      const o = { key: a, login: s };
+      i.current = o, s(r).catch((p) => {
+        i.current === o && (i.current = null), console.error("Auth login failed.", p);
+      });
+    } else
+      i.current = null;
+  }, [s, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ f.jsx(f.Fragment, { children: e }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: t });
 }
-function dt(t) {
-  return $({
+function it(t) {
+  return `${t?.providerId ?? ""}
+${t?.returnUrl ?? ""}`;
+}
+function Et(t) {
+  return H({
     ...t,
     kind: "external-oidc"
   });
 }
-function ht(t, e, s = {}) {
+function Tt(t, e, r = {}) {
   return {
-    getJson(n, r) {
-      return b(t, n, e, s, I(r));
+    requestJson(n, s) {
+      return y(t, n, e, r, P(s));
     },
-    postJson(n, r, a) {
-      return b(t, n, e, s, {
-        ...a,
+    getJson(n, s) {
+      return y(t, n, e, r, P(s));
+    },
+    postJson(n, s, i) {
+      return y(t, n, e, r, {
+        ...i,
         method: "POST",
-        headers: Q(a?.headers),
-        body: JSON.stringify(r)
+        headers: O(i?.headers),
+        body: JSON.stringify(s)
       });
+    },
+    putJson(n, s, i) {
+      return y(t, n, e, r, {
+        ...i,
+        method: "PUT",
+        headers: O(i?.headers),
+        body: JSON.stringify(s)
+      });
+    },
+    deleteJson(n, s) {
+      return y(t, n, e, r, P({
+        ...s,
+        method: "DELETE"
+      }));
+    },
+    postForm(n, s, i) {
+      return y(t, n, e, r, P({
+        ...i,
+        method: "POST",
+        body: s
+      }));
     }
   };
 }
-async function b(t, e, s, n, r) {
-  const a = n.fetch ?? fetch, i = new URL(e, t).toString(), o = await a(i, await U(s, r)), u = o.status === 401 && n.refreshOnUnauthorized !== !1 ? await G(a, i, s, r) : o;
-  if (!u.ok)
-    throw new g(u.status, await Y(u));
-  const y = await u.text();
+const x = /* @__PURE__ */ new Map();
+async function y(t, e, r, n, s) {
+  const i = n.fetch ?? fetch, a = new URL(e, t).toString(), c = await i(a, await B(r, U(n, s))), o = c.status === 401 && n.refreshOnUnauthorized !== !1 ? await ot(i, a, r, U(n, s)) : c;
+  if (!o.ok)
+    throw await D(o);
+  const p = await o.text();
+  if (!p.trim())
+    return {};
   try {
-    return JSON.parse(y);
+    return JSON.parse(p);
   } catch {
-    throw new g(u.status, `Expected JSON from ${i}.`);
+    throw new m(o.status, `Expected JSON from ${a}.`);
   }
 }
-async function G(t, e, s, n) {
-  return (await s.refresh()).status !== "authenticated" ? new Response("Authentication required.", { status: 401 }) : t(e, await U(s, n));
+async function ot(t, e, r, n) {
+  return await at(e, r) ? t(e, await B(r, n)) : new Response("Authentication required.", { status: 401 });
 }
-async function U(t, e) {
-  const s = new Headers(e?.headers), n = await t.getAccessToken();
-  return n && s.set("Authorization", `Bearer ${n}`), {
+async function at(t, e) {
+  const r = new URL(t).origin, n = x.get(r);
+  if (n)
+    return n;
+  const s = e.refresh().then((i) => i.status === "authenticated").finally(() => x.delete(r));
+  return x.set(r, s), s;
+}
+async function B(t, e) {
+  const r = new Headers(e?.headers), n = await t.getAccessToken();
+  return n && r.set("Authorization", `Bearer ${n}`), {
     ...e,
     credentials: e?.credentials ?? "include",
-    headers: s
+    headers: r
   };
 }
-async function Y(t) {
-  return (await t.text()).trim() || `Request failed with ${t.status}.`;
-}
-function I(t) {
+function P(t) {
   const e = new Headers(t?.headers);
   return e.has("Accept") || e.set("Accept", "application/json"), {
     ...t,
@@ -340,20 +441,28 @@ function I(t) {
     headers: e
   };
 }
-function Q(t) {
+function O(t) {
   const e = new Headers(t);
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
-function V(t, e = {}) {
-  return async () => await t.getAccessToken() ?? e.anonymousToken ?? "";
+function U(t, e) {
+  return g(t.defaultHeaders ?? t.headers, e);
 }
-function lt(t, e) {
+function ct(t, e = {}) {
+  return async () => await t.getAccessToken() ?? await e.fallbackAccessTokenFactory?.() ?? e.anonymousToken ?? "";
+}
+function xt(t, e) {
+  const r = ut(t.accessTokenFactory) ? t.accessTokenFactory.bind(t) : void 0;
   return {
     ...t,
-    accessTokenFactory: V(e)
+    accessTokenFactory: ct(e, { fallbackAccessTokenFactory: r })
   };
 }
-function ft() {
+function ut(t) {
+  return typeof t == "function";
+}
+const q = 1e4;
+function b() {
   const t = [];
   return {
     add(e) {
@@ -364,76 +473,192 @@ function ft() {
     }
   };
 }
-function pt(t, e = {}) {
+function Rt() {
+  const t = /* @__PURE__ */ new Set();
+  return {
+    contextProviders: b(),
+    promptActions: b(),
+    tools: b(),
+    proposalRenderers: b(),
+    surfaces: b(),
+    dispatchPrompt(e) {
+      for (const r of t)
+        r(e);
+    },
+    onPrompt(e) {
+      return t.add(e), () => t.delete(e);
+    }
+  };
+}
+function jt(t, e = {}) {
   return {
     baseUrl: t,
     headers: e.headers,
-    http: W(t, e.headers)
+    http: dt(t, e.headers)
   };
 }
-function W(t, e) {
+function dt(t, e) {
   return {
-    async getJson(s, n) {
-      return R(t, s, T(e, et(n)));
+    requestJson(r, n) {
+      return A(t, r, g(e, C(n)));
     },
-    async postJson(s, n, r) {
-      return R(t, s, T(e, {
-        ...r,
+    async getJson(r, n) {
+      return A(t, r, g(e, C(n)));
+    },
+    async postJson(r, n, s) {
+      return A(t, r, g(e, {
+        ...s,
         method: "POST",
-        headers: st(r?.headers),
+        headers: F(s?.headers),
         body: JSON.stringify(n)
       }));
+    },
+    async putJson(r, n, s) {
+      return A(t, r, g(e, {
+        ...s,
+        method: "PUT",
+        headers: F(s?.headers),
+        body: JSON.stringify(n)
+      }));
+    },
+    async deleteJson(r, n) {
+      return A(t, r, g(e, C({
+        ...n,
+        method: "DELETE"
+      })));
+    },
+    async postForm(r, n, s) {
+      return A(t, r, g(e, C({
+        ...s,
+        method: "POST",
+        body: n
+      })));
     }
   };
 }
-function T(t, e = {}) {
+function g(t, e = {}) {
   return t ? {
     ...e,
-    headers: X(t, e.headers)
+    headers: lt(t, e.headers)
   } : e;
 }
-function X(t, e) {
-  const s = new Headers(t);
-  return new Headers(e).forEach((n, r) => s.set(r, n)), s;
+function lt(t, e) {
+  const r = new Headers(t);
+  return new Headers(e).forEach((n, s) => r.set(s, n)), r;
 }
-async function R(t, e, s) {
-  const n = tt(t, e), r = await fetch(n, s);
-  if (!r.ok)
-    throw new g(r.status, await Z(r));
-  const a = await r.text();
+async function A(t, e, r) {
+  const n = yt(t, e), s = new AbortController(), i = globalThis.setTimeout(() => s.abort(), q);
+  let a;
   try {
-    return JSON.parse(a);
+    a = await fetch(n, {
+      ...r,
+      signal: ht(r?.signal, s.signal)
+    });
+  } catch (o) {
+    throw s.signal.aborted && !r?.signal?.aborted ? new Error(`Request to ${n} timed out after ${q / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : o;
+  } finally {
+    globalThis.clearTimeout(i);
+  }
+  if (!a.ok)
+    throw await D(a);
+  const c = await a.text();
+  if (!c.trim())
+    return {};
+  try {
+    return JSON.parse(c);
   } catch {
-    throw new g(
-      r.status,
-      `Expected JSON from ${n}, but received ${nt(r, a)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+    throw new m(
+      a.status,
+      `Expected JSON from ${n}, but received ${At(a, c)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
-async function Z(t) {
-  if ((t.headers.get("content-type") ?? "").includes("application/json"))
-    try {
-      const n = await t.json();
-      return K(n) ?? `Request failed with ${t.status}.`;
-    } catch {
-      return `Request failed with ${t.status}.`;
-    }
-  return (await t.text()).trim() || `Request failed with ${t.status}.`;
+function ht(t, e) {
+  if (!t)
+    return e;
+  if (typeof AbortSignal.any == "function")
+    return AbortSignal.any([t, e]);
+  const r = new AbortController(), n = () => r.abort();
+  return t.aborted || e.aborted ? r.abort() : (t.addEventListener("abort", n, { once: !0 }), e.addEventListener("abort", n, { once: !0 })), r.signal;
 }
-function K(t) {
+async function ft(t) {
+  return (await _(t)).message;
+}
+async function D(t) {
+  const e = await _(t);
+  return new m(t.status, e.message, e.validationErrors);
+}
+async function _(t) {
+  const e = t.headers.get("content-type") ?? "";
+  if (pt(e))
+    try {
+      const n = await t.json(), s = G(n);
+      return {
+        message: wt(n) ?? gt(s) ?? `Request failed with ${t.status}.`,
+        validationErrors: s
+      };
+    } catch {
+      return { message: `Request failed with ${t.status}.`, validationErrors: null };
+    }
+  return { message: (await t.text()).trim() || `Request failed with ${t.status}.`, validationErrors: null };
+}
+function pt(t) {
+  return t.toLowerCase().includes("json");
+}
+async function $t(t) {
+  if (t instanceof m)
+    return t.message;
+  if (K(t))
+    try {
+      return await ft(t.response.clone());
+    } catch {
+      return t.response.statusText || "Request failed.";
+    }
+  return t instanceof Error ? t.message : "Unknown error.";
+}
+async function Jt(t) {
+  if (t instanceof m)
+    return t.validationErrors;
+  if (!K(t))
+    return null;
+  try {
+    const e = await t.response.clone().json();
+    return G(e);
+  } catch {
+    return null;
+  }
+}
+function wt(t) {
   if (typeof t.detail == "string" && t.detail.length > 0) return t.detail;
   if (typeof t.title == "string" && t.title.length > 0) return t.title;
   if (Array.isArray(t.errors) && t.errors.length > 0) return t.errors.map(String).join(" ");
   if (t.errors && typeof t.errors == "object") {
-    const e = Object.values(t.errors).flatMap((s) => Array.isArray(s) ? s : [s]).map(String);
+    const e = Object.values(t.errors).flatMap((r) => Array.isArray(r) ? r : [r]).map(String);
     if (e.length > 0) return e.join(" ");
   }
   return null;
 }
-function tt(t, e) {
+function G(t) {
+  const e = t.errors;
+  if (!e || typeof e != "object" || Array.isArray(e))
+    return null;
+  const r = {};
+  for (const [n, s] of Object.entries(e)) {
+    const i = Array.isArray(s) ? s.map(String) : [String(s)];
+    i.length > 0 && (r[n] = i);
+  }
+  return Object.keys(r).length > 0 ? r : null;
+}
+function gt(t) {
+  return t ? Object.values(t).flat().join(" ") : null;
+}
+function K(t) {
+  return typeof t == "object" && t !== null && "response" in t && t.response instanceof Response;
+}
+function yt(t, e) {
   return new URL(e, t).toString();
 }
-function et(t) {
+function C(t) {
   const e = new Headers(t?.headers);
   return e.has("Accept") || e.set("Accept", "application/json"), {
     ...t,
@@ -441,40 +666,46 @@ function et(t) {
     headers: e
   };
 }
-function st(t) {
+function F(t) {
   const e = new Headers(t);
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
-function nt(t, e) {
-  const s = t.headers.get("content-type") ?? "an unknown content type", n = e.trim(), r = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
-  return `${s}${r}`;
+function At(t, e) {
+  const r = t.headers.get("content-type") ?? "an unknown content type", n = e.trim(), s = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
+  return `${r}${s}`;
 }
-class g extends Error {
-  constructor(e, s) {
-    super(s), this.status = e, this.name = "StudioHttpError";
+class m extends Error {
+  constructor(e, r, n = null) {
+    super(r), this.status = e, this.validationErrors = n, this.name = "StudioHttpError";
   }
   status;
+  validationErrors;
 }
 export {
-  l as AuthAdapterError,
-  p as AuthConfigurationError,
-  ct as AuthGuard,
-  it as AuthProvider,
-  ut as RequireAuth,
-  g as StudioHttpError,
-  _ as createAuthProviderManager,
-  ht as createAuthenticatedHttpClient,
-  at as createBackendAuthProviderManager,
-  ft as createContributionRegistry,
-  pt as createEndpointContext,
-  W as createHttpClient,
-  dt as createOidcAuthAdapter,
-  $ as createRedirectAuthAdapter,
-  V as createSignalRAccessTokenFactory,
-  ot as useAuthCapabilities,
-  x as useAuthContext,
-  D as useAuthSession,
-  L as usePermissions,
-  lt as withAuthenticatedSignalROptions,
-  T as withDefaultHeaders
+  v as AuthAdapterError,
+  k as AuthConfigurationError,
+  Pt as AuthGuard,
+  kt as AuthProvider,
+  Ct as RequireAuth,
+  m as StudioHttpError,
+  Rt as createAiContributionApi,
+  Q as createAuthProviderManager,
+  Tt as createAuthenticatedHttpClient,
+  mt as createBackendAuthProviderManager,
+  b as createContributionRegistry,
+  jt as createEndpointContext,
+  dt as createHttpClient,
+  Et as createOidcAuthAdapter,
+  H as createRedirectAuthAdapter,
+  ct as createSignalRAccessTokenFactory,
+  D as createStudioHttpError,
+  $t as describeApiError,
+  ft as readStudioHttpErrorMessage,
+  Jt as tryExtractValidationErrors,
+  St as useAuthCapabilities,
+  j as useAuthContext,
+  nt as useAuthSession,
+  st as usePermissions,
+  xt as withAuthenticatedSignalROptions,
+  g as withDefaultHeaders
 };

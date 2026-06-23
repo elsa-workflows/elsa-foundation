@@ -30,6 +30,7 @@ export interface StudioModulesResponse {
 
 export type StudioModuleRegistryStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed" | "pending" | "unknown";
 export type StudioModuleRegistryCompatibility = "compatible" | "warning" | "incompatible" | "unknown";
+const requestTimeoutMs = 10000;
 
 export interface StudioModuleRegistryResponse {
   hostVersion: string;
@@ -66,9 +67,15 @@ export interface StudioModuleContributionSummary {
   status: string;
 }
 
+export type StudioValidationErrors = Record<string, string[]>;
+
 export interface StudioHttpClient {
+  requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;
   postJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
+  putJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
+  deleteJson<T>(url: string, init?: RequestInit): Promise<T>;
+  postForm<T>(url: string, body: FormData, init?: RequestInit): Promise<T>;
 }
 
 export interface StudioEndpointContext {
@@ -106,6 +113,44 @@ export interface StudioPanelContribution {
   title: string;
   order?: number;
   component: ComponentType;
+}
+
+export interface StudioFeatureAreaNavLeaf {
+  id?: string;
+  title: string;
+  path: string;
+  iconColor?: string;
+  placeholder?: boolean;
+}
+
+export interface StudioFeatureAreaNavParent {
+  id?: string;
+  title: string;
+  path: string;
+  iconColor?: string;
+  items: StudioFeatureAreaNavLeaf[];
+}
+
+export type StudioFeatureAreaNavContribution = StudioFeatureAreaNavLeaf | StudioFeatureAreaNavParent;
+
+export interface StudioFeatureAreaRouteContribution {
+  id: string;
+  path: string;
+  label: string;
+  component: ComponentType;
+}
+
+export interface StudioFeatureAreaContribution {
+  id: string;
+  title: string;
+  description?: string;
+  navGroup?: string;
+  ownedPaths: string[];
+  required?: boolean;
+  defaultEnabled?: boolean;
+  order?: number;
+  nav: StudioFeatureAreaNavContribution;
+  routes: StudioFeatureAreaRouteContribution[];
 }
 
 export interface StudioSettingDescriptor {
@@ -148,9 +193,118 @@ export interface StudioSettingEditorContribution {
   component: ComponentType<StudioSettingEditorProps>;
 }
 
+export type StudioAiPromptMode = "enqueue" | "steer";
+export type StudioAiPromptPlacement = "shell" | "toolbar" | "inspector" | "empty-state" | "field-adornment" | "selection";
+export type StudioAiToolMutability = "read-only" | "proposal" | "administrative";
+export type StudioAiToolDangerLevel = "low" | "medium" | "high" | "critical";
+export type StudioAiTenantBehavior = "tenant-scoped" | "host-scoped" | "cross-tenant-denied";
+export type StudioAiProposalStatus = "draft" | "validated" | "blocked" | "approved" | "rejected" | "applied" | "expired";
+
+export interface StudioAiContextAttachment {
+  id?: string;
+  kind: string;
+  referenceId?: string | null;
+  scope?: string | null;
+  activityId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StudioAiPromptRequest {
+  message: string;
+  agent?: string | null;
+  mode?: StudioAiPromptMode;
+  attachments?: StudioAiContextAttachment[];
+  source?: {
+    moduleId?: string;
+    actionId?: string;
+    label?: string;
+  };
+}
+
+export interface StudioAiContextProviderContribution {
+  id: string;
+  kind: string;
+  label: string;
+  description?: string;
+  moduleId?: string;
+  order?: number;
+  createAttachment(reference: unknown): StudioAiContextAttachment | null;
+}
+
+export interface StudioAiPromptActionContribution<TContext = unknown> {
+  id: string;
+  label: string;
+  description?: string;
+  moduleId?: string;
+  order?: number;
+  placement: StudioAiPromptPlacement;
+  contextKind: string;
+  createPrompt(context: TContext): StudioAiPromptRequest | null;
+}
+
+export interface StudioAiToolContribution {
+  name: string;
+  displayName: string;
+  description?: string;
+  mutability: StudioAiToolMutability;
+  dangerLevel: StudioAiToolDangerLevel;
+  tenantBehavior?: StudioAiTenantBehavior;
+  permissions?: string[];
+  agentScopes?: string[];
+  moduleId?: string;
+}
+
+export interface StudioAiProposalRendererProps {
+  proposal: StudioAiProposalSummary;
+}
+
+export interface StudioAiProposalSummary {
+  id: string;
+  kind: string;
+  status: StudioAiProposalStatus | string;
+  conversationId?: string | null;
+  rationale?: string | null;
+  warnings?: string[];
+  diagnostics?: Array<{ code?: string; message: string; severity?: string; path?: string | null }>;
+  graphDiff?: {
+    addedActivityIds?: string[];
+    removedActivityIds?: string[];
+    changedActivityIds?: string[];
+    data?: Record<string, unknown>;
+  } | null;
+}
+
+export interface StudioAiProposalRendererContribution {
+  id: string;
+  kind: string;
+  moduleId?: string;
+  component: ComponentType<StudioAiProposalRendererProps>;
+}
+
+export interface StudioAiSurfaceContribution {
+  id: string;
+  title: string;
+  placement: "route" | "panel" | "drawer" | "inline";
+  moduleId?: string;
+  order?: number;
+}
+
 export interface StudioContributionRegistry<T> {
   add(contribution: T): void;
   list(): T[];
+}
+
+export interface StudioAiPromptDispatcher {
+  dispatchPrompt(request: StudioAiPromptRequest): void;
+  onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
+}
+
+export interface StudioAiContributionApi extends StudioAiPromptDispatcher {
+  readonly contextProviders: StudioContributionRegistry<StudioAiContextProviderContribution>;
+  readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
+  readonly tools: StudioContributionRegistry<StudioAiToolContribution>;
+  readonly proposalRenderers: StudioContributionRegistry<StudioAiProposalRendererContribution>;
+  readonly surfaces: StudioContributionRegistry<StudioAiSurfaceContribution>;
 }
 
 export interface ElsaStudioHostContext extends StudioEndpointContext {
@@ -164,6 +318,7 @@ export interface ElsaStudioBackendContext extends StudioEndpointContext {
 export interface ElsaStudioModuleApi {
   readonly host: ElsaStudioHostContext;
   readonly backend: ElsaStudioBackendContext;
+  readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
@@ -176,6 +331,7 @@ export interface ElsaStudioModuleApi {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
   };
+  readonly ai: StudioAiContributionApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
@@ -196,6 +352,27 @@ export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
   };
 }
 
+export function createAiContributionApi(): StudioAiContributionApi {
+  const listeners = new Set<(request: StudioAiPromptRequest) => void>();
+
+  return {
+    contextProviders: createContributionRegistry(),
+    promptActions: createContributionRegistry(),
+    tools: createContributionRegistry(),
+    proposalRenderers: createContributionRegistry(),
+    surfaces: createContributionRegistry(),
+    dispatchPrompt(request) {
+      for (const listener of listeners) {
+        listener(request);
+      }
+    },
+    onPrompt(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }
+  };
+}
+
 export function createEndpointContext(baseUrl: string, options: { headers?: HeadersInit } = {}): StudioEndpointContext {
   return {
     baseUrl,
@@ -206,6 +383,9 @@ export function createEndpointContext(baseUrl: string, options: { headers?: Head
 
 export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit): StudioHttpClient {
   return {
+    requestJson<T>(url: string, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
+    },
     async getJson<T>(url: string, init?: RequestInit) {
       return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
@@ -216,6 +396,27 @@ export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit):
         headers: withJsonContentTypeAndAccept(init?.headers),
         body: JSON.stringify(body)
       }));
+    },
+    async putJson<T>(url: string, body: unknown, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, {
+        ...init,
+        method: "PUT",
+        headers: withJsonContentTypeAndAccept(init?.headers),
+        body: JSON.stringify(body)
+      }));
+    },
+    async deleteJson<T>(url: string, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+        ...init,
+        method: "DELETE"
+      })));
+    },
+    async postForm<T>(url: string, body: FormData, init?: RequestInit) {
+      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+        ...init,
+        method: "POST",
+        body
+      })));
     }
   };
 }
@@ -238,12 +439,34 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
 
 async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) {
   const requestUrl = resolveStudioUrl(baseUrl, url);
-  const response = await fetch(requestUrl, init);
+  const timeout = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => timeout.abort(), requestTimeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      ...init,
+      signal: combineAbortSignals(init?.signal, timeout.signal)
+    });
+  } catch (error) {
+    if (timeout.signal.aborted && !init?.signal?.aborted) {
+      throw new Error(`Request to ${requestUrl} timed out after ${requestTimeoutMs / 1000} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`);
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
-    throw new StudioHttpError(response.status, await readErrorMessage(response));
+    throw await createStudioHttpError(response);
   }
 
   const text = await response.text();
+  if (!text.trim()) {
+    return {} as T;
+  }
+
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -253,19 +476,94 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
   }
 }
 
-async function readErrorMessage(response: Response) {
+function combineAbortSignals(requestSignal: AbortSignal | null | undefined, timeoutSignal: AbortSignal) {
+  if (!requestSignal) {
+    return timeoutSignal;
+  }
+
+  if (typeof AbortSignal.any === "function") {
+    return AbortSignal.any([requestSignal, timeoutSignal]);
+  }
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (requestSignal.aborted || timeoutSignal.aborted) {
+    controller.abort();
+  } else {
+    requestSignal.addEventListener("abort", abort, { once: true });
+    timeoutSignal.addEventListener("abort", abort, { once: true });
+  }
+
+  return controller.signal;
+}
+
+export async function readStudioHttpErrorMessage(response: Response) {
+  return (await readStudioHttpError(response)).message;
+}
+
+export async function createStudioHttpError(response: Response) {
+  const error = await readStudioHttpError(response);
+  return new StudioHttpError(response.status, error.message, error.validationErrors);
+}
+
+async function readStudioHttpError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null }> {
   const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
+  if (isJsonContentType(contentType)) {
     try {
       const payload = await response.json() as Record<string, unknown>;
-      return getProblemDetailsMessage(payload) ?? `Request failed with ${response.status}.`;
+      const validationErrors = extractValidationErrors(payload);
+      return {
+        message: getProblemDetailsMessage(payload) ?? getValidationErrorMessage(validationErrors) ?? `Request failed with ${response.status}.`,
+        validationErrors
+      };
     } catch {
-      return `Request failed with ${response.status}.`;
+      return { message: `Request failed with ${response.status}.`, validationErrors: null };
     }
   }
 
   const text = await response.text();
-  return text.trim() || `Request failed with ${response.status}.`;
+  return { message: text.trim() || `Request failed with ${response.status}.`, validationErrors: null };
+}
+
+function isJsonContentType(contentType: string) {
+  return contentType.toLowerCase().includes("json");
+}
+
+export async function describeApiError(error: unknown): Promise<string> {
+  if (error instanceof StudioHttpError) {
+    return error.message;
+  }
+
+  if (isResponseLikeError(error)) {
+    try {
+      return await readStudioHttpErrorMessage(error.response.clone());
+    } catch {
+      return error.response.statusText || "Request failed.";
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unknown error.";
+}
+
+export async function tryExtractValidationErrors(error: unknown): Promise<StudioValidationErrors | null> {
+  if (error instanceof StudioHttpError) {
+    return error.validationErrors;
+  }
+
+  if (!isResponseLikeError(error)) {
+    return null;
+  }
+
+  try {
+    const payload = await error.response.clone().json() as Record<string, unknown>;
+    return extractValidationErrors(payload);
+  } catch {
+    return null;
+  }
 }
 
 function getProblemDetailsMessage(payload: Record<string, unknown>) {
@@ -280,6 +578,35 @@ function getProblemDetailsMessage(payload: Record<string, unknown>) {
   }
 
   return null;
+}
+
+function extractValidationErrors(payload: Record<string, unknown>): StudioValidationErrors | null {
+  const errors = payload.errors;
+  if (!errors || typeof errors !== "object" || Array.isArray(errors)) {
+    return null;
+  }
+
+  const result: StudioValidationErrors = {};
+  for (const [key, value] of Object.entries(errors as Record<string, unknown>)) {
+    const messages = Array.isArray(value) ? value.map(String) : [String(value)];
+    if (messages.length > 0) {
+      result[key] = messages;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function getValidationErrorMessage(errors: StudioValidationErrors | null) {
+  if (!errors) {
+    return null;
+  }
+
+  return Object.values(errors).flat().join(" ");
+}
+
+function isResponseLikeError(error: unknown): error is { response: Response } {
+  return typeof error === "object" && error !== null && "response" in error && (error as { response?: unknown }).response instanceof Response;
 }
 
 function resolveStudioUrl(baseUrl: string, url: string) {
@@ -321,7 +648,8 @@ function describeResponseContent(response: Response, text: string) {
 export class StudioHttpError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    public readonly validationErrors: StudioValidationErrors | null = null
   ) {
     super(message);
     this.name = "StudioHttpError";

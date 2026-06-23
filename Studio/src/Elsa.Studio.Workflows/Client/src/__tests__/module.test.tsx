@@ -15,8 +15,14 @@ describe("workflows module", () => {
 
     register(api);
 
+    expect(api.featureAreas.list()).toEqual([
+      expect.objectContaining({ id: "workflows", title: "Workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
+    ]);
     expect(api.navigation.list()).toEqual([
-      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" })
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
+      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
@@ -47,7 +53,10 @@ describe("workflows module", () => {
     await flushPromises();
 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Delete workflow definition"));
-    expect(fetchMock).toHaveBeenCalledWith("https://server.example/_elsa/workflow-management/definitions/definition-1", { method: "DELETE" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/_elsa/workflow-management/definitions/definition-1",
+      expect.objectContaining({ method: "DELETE" })
+    );
 
     await unmount();
   });
@@ -81,7 +90,10 @@ describe("workflows module", () => {
     await flushPromises();
 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Permanently delete workflow definition"));
-    expect(fetchMock).toHaveBeenCalledWith("https://server.example/_elsa/workflow-management/definitions/definition-1/permanent", { method: "DELETE" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/_elsa/workflow-management/definitions/definition-1/permanent",
+      expect.objectContaining({ method: "DELETE" })
+    );
 
     await unmount();
   });
@@ -193,6 +205,88 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("opens the canvas activity picker and inserts an activity into an empty flowchart", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    expect(inputByLabel(container, "Search activities")).toBeTruthy();
+    await click(optionByText(container, "Write Line"));
+    await flushPromises();
+
+    expect(container.querySelector(".wf-node")?.textContent).toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("filters the canvas activity picker with keyboard search", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" }),
+        activity({ activityVersionId: "send-email-v1", activityTypeKey: "Elsa.Activities.SendEmail", category: "Email", displayName: "Send Email" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    await fill(inputByLabel(container, "Search activities"), "email");
+
+    expect(container.querySelector(".wf-connect-menu")?.textContent).toContain("Send Email");
+    expect(container.querySelector(".wf-connect-menu")?.textContent).not.toContain("Write Line");
+
+    await unmount();
+  });
+
   it("opens a filtered executable artifacts view for a definition", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({ definitions: [definition()] })));
     const { container, unmount } = await renderRegisteredRoute();
@@ -206,14 +300,15 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("creates a workflow definition from the sequence action", async () => {
+  it("creates a workflow definition from any selected root activity", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST" && url.endsWith("/_elsa/workflow-management/definitions")) {
         expect(JSON.parse(String(init.body))).toEqual({
           name: "Customer onboarding",
           description: "Creates the first customer workflow.",
-          rootKind: "sequence"
+          rootKind: "flowchart",
+          rootActivityVersionId: "write-line-v1"
         });
         return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
       }
@@ -234,10 +329,11 @@ describe("workflows module", () => {
     await waitForText(container, "Write Line");
     expect(selectByLabel(container, "Root activity")?.querySelector("optgroup[label='Composite roots']")).toBeTruthy();
     expect(selectByLabel(container, "Root activity")?.querySelector("optgroup[label='Primitives']")).toBeTruthy();
+    expect(selectByLabel(container, "Root activity")?.querySelector("option[value='write-line-v1']")?.disabled).toBe(false);
 
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await fill(textareaByLabel(container, "Description"), "Creates the first customer workflow.");
-    await select(selectByLabel(container, "Root activity"), "sequence");
+    await select(selectByLabel(container, "Root activity"), "write-line-v1");
     await click(buttonByText(dialog(container), "Create"));
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -331,17 +427,100 @@ describe("workflows module", () => {
 });
 
 function testApi(): ElsaStudioModuleApi {
+  const navigation = registry();
+  const routes = registry();
   return {
     backend: {
       baseUrl: "https://server.example/",
-      http: {
-        getJson: async () => ({}),
-        postJson: async () => ({})
-      }
+      http: fetchHttp("https://server.example/")
     },
-    navigation: registry(),
-    routes: registry()
+    featureAreas: featureAreaRegistry(navigation, routes),
+    navigation,
+    routes,
+    ai: {
+      promptActions: registry(),
+      dispatchPrompt: vi.fn(),
+      onPrompt: vi.fn(() => () => {})
+    }
+  } as ElsaStudioModuleApi;
+}
+
+function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: ReturnType<typeof registry>) {
+  const featureAreas = registry();
+
+  return {
+    ...featureAreas,
+    add(featureArea: any) {
+      featureAreas.add(featureArea);
+      navigation.add({
+        id: featureArea.id,
+        label: featureArea.nav.title,
+        path: featureArea.nav.path,
+        activePathPrefix: featureArea.ownedPaths[0],
+        order: featureArea.order,
+        iconColor: featureArea.nav.iconColor
+      });
+      for (const item of featureArea.nav.items ?? []) {
+        navigation.add({
+          id: `${featureArea.id}-${item.title.toLowerCase()}`,
+          label: item.title,
+          path: item.path,
+          parentId: featureArea.id,
+          activePathPrefix: item.path,
+          iconColor: item.iconColor ?? featureArea.nav.iconColor
+        });
+      }
+      for (const route of featureArea.routes) {
+        routes.add(route);
+      }
+    }
   };
+}
+
+function fetchHttp(baseUrl: string) {
+  async function requestJson<T>(url: string, init?: RequestInit) {
+    const response = await fetch(new URL(url, baseUrl).toString(), init);
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(text || `Request failed with ${response.status}.`);
+    }
+    return (text ? JSON.parse(text) : {}) as T;
+  }
+
+  return {
+    requestJson,
+    getJson: <T,>(url: string, init?: RequestInit) => requestJson<T>(url, { ...init, headers: withHeaders(init?.headers) }),
+    postJson: <T,>(url: string, body: unknown, init?: RequestInit) => requestJson<T>(url, {
+      ...init,
+      method: "POST",
+      headers: withHeaders(init?.headers, true),
+      body: JSON.stringify(body)
+    }),
+    putJson: <T,>(url: string, body: unknown, init?: RequestInit) => requestJson<T>(url, {
+      ...init,
+      method: "PUT",
+      headers: withHeaders(init?.headers, true),
+      body: JSON.stringify(body)
+    }),
+    deleteJson: <T,>(url: string, init?: RequestInit) => requestJson<T>(url, {
+      ...init,
+      method: "DELETE",
+      headers: withHeaders(init?.headers)
+    }),
+    postForm: <T,>(url: string, body: FormData, init?: RequestInit) => requestJson<T>(url, {
+      ...init,
+      method: "POST",
+      headers: withHeaders(init?.headers),
+      body
+    })
+  };
+}
+
+function withHeaders(headers?: HeadersInit, json = false) {
+  const result = new Headers(headers);
+  result.set("Accept", "application/json");
+  if (json) result.set("Content-Type", "application/json");
+  return result;
 }
 
 async function renderRegisteredRoute(path = "/workflows/definitions") {
@@ -421,6 +600,26 @@ function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function flowchartRoot(activities: unknown[]) {
+  return {
+    nodeId: "root",
+    activityVersionId: "flowchart-v1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.flowchart.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        activities,
+        connections: [],
+        startNodeId: null,
+        nodeMetadata: {},
+        connectionMetadata: {}
+      }
+    }
+  };
+}
+
 function activity(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     activityVersionId: "activity-1",
@@ -480,6 +679,11 @@ function dialog(container: HTMLElement) {
   const element = container.querySelector<HTMLElement>(".wf-dialog");
   if (!element) throw new Error("Dialog not found");
   return element;
+}
+
+function optionByText(container: HTMLElement, text: string) {
+  return Array.from(container.querySelectorAll<HTMLElement>("[role='option']"))
+    .find(option => option.textContent?.includes(text)) ?? null;
 }
 
 function rowByLabel(container: HTMLElement, label: string) {

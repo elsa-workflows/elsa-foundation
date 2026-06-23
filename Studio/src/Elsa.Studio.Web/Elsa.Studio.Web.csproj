@@ -33,6 +33,9 @@
     <ProjectReference Include="..\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Samples.Dashboard\Elsa.Studio.Samples.Dashboard.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Weaver.Chat\Elsa.Studio.Weaver.Chat.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
   </ItemGroup>
 
