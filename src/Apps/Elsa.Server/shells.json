@@ -17,6 +17,7 @@
           },
           "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
           "DiagnosticsStructuredLogs": {},
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},

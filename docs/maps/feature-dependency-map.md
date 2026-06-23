@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 58
+- Feature classes: 60
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 55
+- Feature-bearing source projects: 57
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -45,6 +45,8 @@ No duplicate explicit feature IDs were discovered.
 | FoundationWorkflowsAgent | FoundationWorkflowsAgentFeature | False | Elsa.Agent.Workflows | - | - | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/Agent/FoundationWorkflowsAgentFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | DiagnosticsOpenTelemetry | OpenTelemetryFeature | False | Elsa.Diagnostics.OpenTelemetry | AllowUnauthenticatedLoopback: bool<br>ApiKey: string?<br>ApiKeyHeaderName: string<br>LogRecordCapacity: int<br>MaxHttpRequestBodySize: long<br>MaxQuerySize: int<br>MetricPointCapacity: int<br>ResourceCapacity: int<br>SpanCapacity: int<br>SubscriberChannelCapacity: int<br>TraceCapacity: int | code default<br>sensitive or deployment-specific value signal | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
+| - | EFCoreOpenTelemetryPersistenceFeatureBase | True | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore | - | code default | [EFCoreOpenTelemetryPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs) |
+| DiagnosticsOpenTelemetryPersistenceEFCoreSqlite | SqliteOpenTelemetryPersistenceShellFeature | False | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | - | code default<br>sensitive or deployment-specific value signal | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
 | DiagnosticsStructuredLogs | StructuredLogsFeature | False | Elsa.Diagnostics.StructuredLogs | BufferCapacity: int<br>MinimumLevel: string<br>ServiceName: string?<br>SourceDisplayName: string? | - | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
 | - | EFCoreStructuredLogsPersistenceFeatureBase | True | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | - | code default | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
 | DiagnosticsStructuredLogsPersistenceEFCoreSqlite | SqliteStructuredLogsPersistenceShellFeature | False | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | - | code default<br>sensitive or deployment-specific value signal | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
@@ -84,8 +86,8 @@ No duplicate explicit feature IDs were discovered.
 | JavaScriptEndpoints | JavaScriptActivitiesEndpointsFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivities | JavaScriptActivitiesFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
 | JavaScriptWorkflowsRuntime | JavaScriptWorkflowsRuntimeFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
-| Elsa3ImportJsonActivities | Elsa3ImportActivitiesFeature | False | Elsa3.Activities.Design.Import | WorkflowCollectionSourceTypes: IEnumerable<string> | type-name selection signal<br>validation/requiredness guard in code | [Elsa3ImportActivitiesFeature.cs](../../src/elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
-| Elsa3Mapping | Elsa3MappingFeature | False | Elsa3.Mapping | - | - | [Elsa3MappingFeature.cs](../../src/elsa3/Mapping/Elsa3MappingFeature.cs) |
+| Elsa3ImportJsonActivities | Elsa3ImportActivitiesFeature | False | Elsa3.Activities.Design.Import | WorkflowCollectionSourceTypes: IEnumerable<string> | type-name selection signal<br>validation/requiredness guard in code | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
+| Elsa3Mapping | Elsa3MappingFeature | False | Elsa3.Mapping | - | - | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
 
 ## Feature Dependency Evidence
 
@@ -109,6 +111,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | FoundationWorkflowsAgent | Elsa.Agent.Workflows | Elsa.Agent.Core (FoundationAgentAbstractions) | - | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Caching.Memory 10.0.8 |
 | DiagnosticsOpenTelemetry | Elsa.Diagnostics.OpenTelemetry | - | Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.OpenTelemetry.Core | CShells.Abstractions 0.0.29-preview.143<br>CShells.FastEndpoints.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| DiagnosticsOpenTelemetryPersistenceEFCoreSqlite | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore (EFCoreOpenTelemetryPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | DiagnosticsStructuredLogs | Elsa.Diagnostics.StructuredLogs | - | Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.StructuredLogs.Core | CShells.Abstractions 0.0.29-preview.143<br>CShells.FastEndpoints.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | DiagnosticsStructuredLogsPersistenceEFCoreSqlite | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore (EFCoreStructuredLogsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |

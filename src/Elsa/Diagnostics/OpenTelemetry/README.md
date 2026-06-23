@@ -1,14 +1,16 @@
 # Elsa.Diagnostics.OpenTelemetry
 
-Collects OpenTelemetry signals — traces, metrics, and logs — pushed by the host's OTLP exporter over **OTLP/HTTP protobuf**, normalizes them into capacity-bounded in-memory stores, and exposes them to Elsa Studio over HTTP query endpoints and a Server-Sent Events (SSE) live stream. It is a **server** shell feature. Storage, ingestion, redaction, and the live feed are each isolated behind separate `.Core` contracts so a durable backend or external transport can replace one role without touching the rest.
+Collects OpenTelemetry signals — traces, metrics, and logs — pushed by the host's OTLP exporter over **OTLP/HTTP protobuf**, normalizes them into a queryable diagnostics store, and exposes them to Elsa Studio over HTTP query endpoints and a Server-Sent Events (SSE) live stream. It is a **server** shell feature. Storage, ingestion, redaction, and the live feed are each isolated behind separate `.Core` contracts so a durable backend or external transport can replace one role without touching the rest.
 
 Feature name (manifest / appsettings key): **`DiagnosticsOpenTelemetry`**.
+SQLite persistence feature name: **`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`**.
 
 ## What this feature provides
 
 - **Decomposed roles** behind separate contracts (all registered with `TryAdd*` so a persistence/transport feature can replace just one):
   - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, writes it to the store, then publishes it to the live feed.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
+  - **`EfCoreOpenTelemetryStore`** → `IOpenTelemetryStore` (via `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite`) — durable EF Core-backed history for resources, traces, spans, metric instruments, metric points, and logs. It uses the same non-blocking write pattern as Structured Logs persistence: ingestion enqueues batches onto a bounded channel, a startup task starts the async drain loop after migrations, and retention pruning keeps high-volume tables bounded by the configured capacities. It also marks resources seen synchronously before enqueueing.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
   - **`OpenTelemetryRedactor`** → `IOpenTelemetryRedactor` — strips sensitive attribute values (by name) and masks sensitive text patterns (by regex) on ingestion.
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
@@ -62,10 +64,21 @@ Unlike the Structured Logs stream, OpenTelemetry stream items carry **no monoton
 
 Both lists are surfaced through options so a host can extend or replace them.
 
+## EFCore SQLite persistence
+
+Enable `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry` to replace the default in-memory store with durable SQLite-backed history. The persistence feature:
+
+- registers `EfCoreOpenTelemetryStore` as the active `IOpenTelemetryStore` replacement;
+- disables generic EF command/query machinery because this is a diagnostics store, not a read-model domain;
+- routes this DbContext's EF logging to `NullLoggerFactory` to avoid diagnostics feedback loops;
+- uses `IDbContextFactory<OpenTelemetryDbContext>` as a singleton to avoid captive dependencies from the singleton store;
+- runs migrations from the SQLite provider package and starts the drain loop through `StartOpenTelemetryDrainingStartupTask`.
+
+The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storage backend; persistence affects query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the OTEL SSE stream still has no `Last-Event-ID` resume.
+
 ## Deferred (kept behind contracts/options)
 
 - **gRPC ingestion** — `EnableGrpc` defaults to `false` and no gRPC route is mapped; the binding is host-specific. The option, `GrpcEndpointPath`, and `GrpcDisabledReason` are kept so a host can light it up later. (Source parity: elsa-core also ships gRPC disabled.)
-- **Persistence** — the in-memory store is overridable via `IOpenTelemetryStore` (`TryAddSingleton`); a durable EFCore backend mirroring the Structured Logs persistence slice is a planned follow-up.
 
 ## Deviations from the elsa-core source
 
@@ -76,7 +89,7 @@ This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Two d
 
 ## Replacing the defaults
 
-All store/feed/ingestor/redactor/registry/provider contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The common extension is replacing `IOpenTelemetryStore` with a persistent implementation while leaving ingestion, redaction, transport, and the UI unchanged.
+All store/feed/ingestor/redactor/registry/provider contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped extension is replacing `IOpenTelemetryStore` with `EfCoreOpenTelemetryStore` while leaving ingestion, redaction, transport, and the UI unchanged.
 
 ## Owned exception surface
 
