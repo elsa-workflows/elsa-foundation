@@ -594,6 +594,18 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public void PromoteCopyMapsMissingSourceToMalformedPackage()
+    {
+        var missingSource = Path.Combine(_directory, "missing.nupkg");
+        var destination = Path.Combine(_directory, "packages", "missing.nupkg");
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+        var rejection = ExtensionBuilderPromotionService.TryCopyPackageToFeed(missingSource, destination);
+
+        Assert.Equal(PromotionRejectionReason.MalformedPackage, rejection);
+    }
+
+    [Fact]
     public async Task PromoteUsesActiveConfigurationFeed()
     {
         var configuredFeed = Path.Combine(_directory, "configured-feed");

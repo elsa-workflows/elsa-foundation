@@ -51,14 +51,8 @@ internal sealed partial class ExtensionBuilderPromotionService(
             await ActivePackageExistsAsync(validation.PackageId!, validation.Version!, cancellationToken))
             return Rejected(PromotionRejectionReason.Duplicate);
 
-        try
-        {
-            File.Copy(build.Artifact.Path, destination);
-        }
-        catch (IOException) when (File.Exists(destination))
-        {
-            return Rejected(PromotionRejectionReason.Duplicate);
-        }
+        if (TryCopyPackageToFeed(build.Artifact.Path, destination) is { } copyRejection)
+            return Rejected(copyRejection);
         var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
 
         return new(
@@ -279,6 +273,19 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
     private static PackagePromotionResult Rejected(PromotionRejectionReason reason) =>
         new(PromotionStatus.Rejected, reason, null, null, RequiresReload: false, RequiresRestart: false);
+
+    internal static PromotionRejectionReason? TryCopyPackageToFeed(string source, string destination)
+    {
+        try
+        {
+            File.Copy(source, destination);
+            return null;
+        }
+        catch (IOException)
+        {
+            return File.Exists(destination) ? PromotionRejectionReason.Duplicate : PromotionRejectionReason.MalformedPackage;
+        }
+    }
 
     private static string ResolveFeedPackagePath(string feedRoot, string fileName)
     {
