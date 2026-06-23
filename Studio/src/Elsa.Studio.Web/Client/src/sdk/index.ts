@@ -146,6 +146,83 @@ export interface StudioSettingEditorContribution {
   component: ComponentType<StudioSettingEditorProps>;
 }
 
+export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";
+export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
+export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
+export type StudioAgentRisk = "read-only" | "review-required" | "destructive" | "admin";
+
+export interface StudioAgentSurface {
+  route: string;
+  resourceType?: string;
+  resourceId?: string;
+  selection?: unknown;
+}
+
+export interface StudioAgentContextRequest {
+  surface: StudioAgentSurface;
+  mode?: StudioAgentMode;
+  sessionId?: string;
+}
+
+export interface StudioAgentContextAttachment {
+  id: string;
+  source: string;
+  sourceId?: string;
+  label: string;
+  contentType: string;
+  sensitivity: StudioAgentSensitivity;
+  scope: string;
+  content?: unknown;
+}
+
+export interface StudioAgentContextProviderContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  order?: number;
+  surfaces: string[];
+  sensitivity: StudioAgentSensitivity;
+  collect(context: StudioAgentContextRequest): Promise<StudioAgentContextAttachment[]>;
+}
+
+export interface StudioAgentPromptStarterContribution {
+  id: string;
+  moduleId?: string;
+  label: string;
+  prompt: string;
+  surfaces: string[];
+  order?: number;
+  requiredCapabilities?: string[];
+}
+
+export interface StudioAgentCapabilityContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  description: string;
+  kind: StudioAgentCapabilityKind;
+  risk: StudioAgentRisk;
+  surfaces: string[];
+  requiredPermissions?: string[];
+}
+
+export interface StudioAgentActionContribution {
+  id: string;
+  capabilityId: string;
+  displayName: string;
+  description: string;
+  risk: Exclude<StudioAgentRisk, "read-only">;
+  surfaces: string[];
+  proposalSchema: unknown;
+}
+
+export interface StudioAgentRegistry {
+  readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
+  readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
+  readonly capabilities: StudioContributionRegistry<StudioAgentCapabilityContribution>;
+  readonly actions: StudioContributionRegistry<StudioAgentActionContribution>;
+}
+
 export interface StudioContributionRegistry<T> {
   add(contribution: T): void;
   list(): T[];
@@ -170,6 +247,7 @@ export interface ElsaStudioModuleApi {
   readonly activityEditors: StudioContributionRegistry<unknown>;
   readonly propertyEditors: StudioContributionRegistry<unknown>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
+  readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;

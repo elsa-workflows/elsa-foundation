@@ -30,7 +30,9 @@ import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import elsaLogo from "../assets/images/icon.png";
+import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import "./styles.css";
+import "./agent/agent.css";
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = "workspace" | "settings";
@@ -71,6 +73,7 @@ function AppContent() {
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
   const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -114,6 +117,7 @@ function AppContent() {
           hostVersion: manifestResponse.hostVersion,
           sdkVersion: manifestResponse.sdkVersion
         });
+        registerBuiltInAgentContributions(registry);
 
         if (!disposed) {
           setApi(registry);
@@ -167,16 +171,29 @@ function AppContent() {
   const pageTitle = navigation.find(item => item.path === path)?.label ?? activeRoute?.label ?? "Studio";
 
   return (
-    <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
-      {path === "/" ? <Home api={api!} /> : null}
-      {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
-      {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
-      {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
-      {ActiveComponent ? <ActiveComponent /> : null}
-      {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
-        <div className="empty-state">No Studio route is registered for {path}.</div>
+    <>
+      <ShellFrame
+        navigation={navigation}
+        panels={panels}
+        path={path}
+        title={pageTitle}
+        onNavigate={navigateTo}
+        backendBaseUrl={backendBaseUrl}
+        assistantAction={<AgentLauncher open={assistantOpen} onClick={() => setAssistantOpen(current => !current)} />}
+      >
+        {path === "/" ? <Home api={api!} /> : null}
+        {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
+        {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
+        {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
+        {ActiveComponent ? <ActiveComponent /> : null}
+        {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
+          <div className="empty-state">No Studio route is registered for {path}.</div>
+        ) : null}
+      </ShellFrame>
+      {assistantOpen ? (
+        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} />
       ) : null}
-    </ShellFrame>
+    </>
   );
 }
 
@@ -191,6 +208,7 @@ function ShellFrame({
   path,
   title,
   backendBaseUrl,
+  assistantAction,
   onNavigate,
   children
 }: {
@@ -199,6 +217,7 @@ function ShellFrame({
   path: string;
   title: string;
   backendBaseUrl: string;
+  assistantAction?: React.ReactNode;
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
@@ -258,6 +277,7 @@ function ShellFrame({
             <h1>{title}</h1>
           </div>
           <div className="topbar-actions">
+            {assistantAction}
             <a href="https://github.com/elsa-workflows/elsa-foundation-studio" aria-label="GitHub">
               <Github size={18} />
             </a>
@@ -272,6 +292,16 @@ function ShellFrame({
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
     </div>
   );
+}
+
+function registerBuiltInAgentContributions(api: ElsaStudioModuleApi) {
+  api.agent.contextProviders.add(createWorkflowAgentContextProvider());
+  for (const capability of workflowAgentCapabilities) {
+    api.agent.capabilities.add(capability);
+  }
+  for (const promptStarter of workflowPromptStarters) {
+    api.agent.promptStarters.add(promptStarter);
+  }
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {

@@ -7,12 +7,14 @@
 - **No unnecessary boilerplate.** Inline trivially small helpers rather than wrapping them in extra methods.
 
 <!-- SPECKIT START -->
-For additional context about the current UI-system specification, implementation
-plan, task backlog, and design contracts, read:
+For additional context about the current agentic Studio experience
+specification, implementation plan, and design contracts, read:
 
-- `specs/001-ui-system/spec.md`
-- `specs/001-ui-system/plan.md`
-- `specs/001-ui-system/tasks.md`
-- `specs/001-ui-system/contracts/studio-ui-components.md`
-- `specs/001-ui-system/contracts/module-management-api.md`
+- `specs/003-agentic-studio-experience/spec.md`
+- `specs/003-agentic-studio-experience/plan.md`
+- `specs/003-agentic-studio-experience/research.md`
+- `specs/003-agentic-studio-experience/data-model.md`
+- `specs/003-agentic-studio-experience/contracts/agent-backend-api.md`
+- `specs/003-agentic-studio-experience/contracts/studio-agent-sdk.md`
+- `specs/003-agentic-studio-experience/contracts/workflow-agent-contract.md`
 <!-- SPECKIT END -->

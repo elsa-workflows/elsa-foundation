@@ -20,6 +20,12 @@ export function createStudioRegistry(host: ElsaStudioHostContext, backendBaseUrl
     activityEditors: createContributionRegistry(),
     propertyEditors: createContributionRegistry(),
     settingEditors: createContributionRegistry(),
+    agent: {
+      contextProviders: createContributionRegistry(),
+      promptStarters: createContributionRegistry(),
+      capabilities: createContributionRegistry(),
+      actions: createContributionRegistry()
+    },
     workflowDesigner: {
       nodeRenderers: createContributionRegistry(),
       toolboxItems: createContributionRegistry()
