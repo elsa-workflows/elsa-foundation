@@ -6,8 +6,10 @@ import {
   getActivityDisplay,
   getChildSlots,
   sequenceStructureKind,
+  spliceWorkflowEdge,
   syncCanvasToScope,
   updateScopeActivities,
+  withFlowchartConnections,
   type CanvasScope
 } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -116,7 +118,61 @@ describe("workflow adapter", () => {
     const canvas = buildCanvas(firstScope(root), [writeLine], []);
 
     expect(canvas.edges).toHaveLength(1);
-    expect(canvas.edges[0]).toMatchObject({ source: "a", target: "b" });
+    expect(canvas.edges[0]).toMatchObject({ source: "a", target: "b", sourceHandle: "Done" });
+    expect(canvas.edges[0].targetHandle).toBeUndefined();
+  });
+
+  it("preserves flowchart connection metadata and vertices while syncing ports", () => {
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "flowchart-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: flowchartStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [node("a"), node("b")],
+          connections: [{
+            id: "connection-1",
+            source: { nodeId: "a", port: "Approved" },
+            target: { nodeId: "b" },
+            metadata: { existing: true },
+            vertices: [{ x: 10, y: 20 }]
+          }]
+        }
+      }
+    };
+    const canvas = buildCanvas(firstScope(root), [writeLine], []);
+    const updated = withFlowchartConnections(root, [{
+      ...canvas.edges[0],
+      sourceHandle: "Rejected",
+      data: { vertices: [{ x: 40.4, y: 50.6 }] }
+    }]);
+
+    expect(updated.structure?.payload.connections).toEqual([{
+      id: "connection-1",
+      source: { nodeId: "a", port: "Rejected" },
+      target: { nodeId: "b" },
+      metadata: { existing: true },
+      vertices: [{ x: 40, y: 51 }]
+    }]);
+  });
+
+  it("splices flowchart edges through a new Done connection", () => {
+    const edges = [{
+      id: "connection-1",
+      source: "a",
+      target: "b",
+      sourceHandle: "Approved",
+      type: "workflow"
+    }];
+
+    const spliced = spliceWorkflowEdge(edges, edges[0], "inserted");
+
+    expect(spliced).toHaveLength(2);
+    expect(spliced[0]).toMatchObject({ source: "a", target: "inserted", sourceHandle: "Approved" });
+    expect(spliced[1]).toMatchObject({ source: "inserted", target: "b", sourceHandle: "Done" });
   });
 });
 

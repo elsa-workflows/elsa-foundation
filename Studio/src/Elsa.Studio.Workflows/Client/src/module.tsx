@@ -2,25 +2,33 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ReactFlow,
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MiniMap,
   Position,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  getSmoothStepPath,
+  reconnectEdge,
   type Connection,
   type Edge,
   type EdgeChange,
+  type EdgeProps,
   type Node,
   type NodeChange,
   type NodeProps,
+  type OnConnectEnd,
+  type OnConnectStart,
+  type OnReconnect,
   type ReactFlowInstance,
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Sparkles, Trash2 } from "lucide-react";
+import type { ElsaStudioModuleApi, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -34,25 +42,30 @@ import {
   restoreDefinition,
   runExecutable,
   updateDraft
-} from "./workflowsApi";
+} from "./api/workflows";
 import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary } from "./workflowTypes";
 import {
   buildCanvas,
   createActivityNode,
+  createWorkflowEdge,
   getActivityDisplay,
+  getActivitySourcePorts,
   getChildSlots,
   resolveScope,
+  spliceWorkflowEdge,
   updateLayout,
   updateScopeActivities,
   updateScopeOwner,
   syncCanvasToScope,
   withFlowchartConnections,
   type ScopeFrame,
+  type WorkflowEdgeData,
   type WorkflowNodeData
 } from "./workflowAdapter";
 import "./styles.css";
 
 const nodeTypes = { workflowActivity: WorkflowActivityNode };
+const edgeTypes = { workflow: WorkflowFlowEdge };
 const activityDragDataType = "application/x-elsa-activity-version-id";
 const pointerDragThreshold = 6;
 const autosaveDelayMs = 1200;
@@ -63,6 +76,7 @@ interface CreateWorkflowDraft {
   name: string;
   description: string;
   rootKind: CreateWorkflowKind;
+  rootActivityVersionId?: string | null;
 }
 
 interface ActivityPaletteGroup {
@@ -70,39 +84,65 @@ interface ActivityPaletteGroup {
   activities: ActivityCatalogItem[];
 }
 
+type WorkflowEdge = Edge<WorkflowEdgeData>;
+
+type ConnectMenuState =
+  | { kind: "fromEmpty"; clientX: number; clientY: number }
+  | { kind: "fromPort"; sourceNodeId: string; sourceHandleId: string | null; clientX: number; clientY: number }
+  | { kind: "spliceEdge"; edgeId: string; clientX: number; clientY: number };
+
+interface WorkflowEdgeActions {
+  highlightedEdgeId: string | null;
+  deleteEdge(edgeId: string): void;
+  requestInsertActivity(edgeId: string, clientX: number, clientY: number): void;
+}
+
+const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
+
 export function register(api: ElsaStudioModuleApi) {
-  api.navigation.add({
+  api.featureAreas.add({
     id: "workflows",
-    label: "Workflows",
-    path: "/workflows/definitions",
-    activePathPrefix: "/workflows",
+    title: "Workflows",
+    description: "Design, publish and run workflow definitions and inspect instances.",
+    navGroup: "Workspace",
+    ownedPaths: ["/workflows"],
+    required: true,
+    defaultEnabled: true,
     order: 20,
-    iconColor: "#0ea5e9"
-  });
-
-  api.routes.add({
-    id: "workflows-definitions",
-    path: "/workflows/definitions",
-    label: "Workflow definitions",
-    component: () => <WorkflowManagementPage context={api.backend} />
-  });
-
-  api.routes.add({
-    id: "workflows-executables",
-    path: "/workflows/executables",
-    label: "Workflow executables",
-    component: () => <WorkflowExecutablesPage context={api.backend} />
-  });
-
-  api.routes.add({
-    id: "workflows-instances",
-    path: "/workflows/instances",
-    label: "Workflow instances",
-    component: () => <WorkflowInstancesPage />
+    nav: {
+      title: "Workflows",
+      path: "/workflows/definitions",
+      iconColor: "#0ea5e9",
+      items: [
+        { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
+        { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
+        { title: "Instances", path: "/workflows/instances", iconColor: "#0ea5e9" }
+      ]
+    },
+    routes: [
+      {
+        id: "workflows-definitions",
+        path: "/workflows/definitions",
+        label: "Workflow definitions",
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-executables",
+        path: "/workflows/executables",
+        label: "Workflow executables",
+        component: () => <WorkflowExecutablesPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-instances",
+        path: "/workflows/instances",
+        label: "Workflow instances",
+        component: () => <WorkflowInstancesPage ai={api.ai} />
+      }
+    ]
   });
 }
 
-function WorkflowManagementPage({ context }: { context: StudioEndpointContext }) {
+function WorkflowManagementPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
 
   useEffect(() => {
@@ -118,15 +158,15 @@ function WorkflowManagementPage({ context }: { context: StudioEndpointContext })
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
-        <WorkflowDefinitions context={context} onOpen={openDefinition} />
+        <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
       </WorkflowsPageFrame>
     );
 }
 
-function WorkflowExecutablesPage({ context }: { context: StudioEndpointContext }) {
+function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -137,16 +177,22 @@ function WorkflowExecutablesPage({ context }: { context: StudioEndpointContext }
 
   return (
     <WorkflowsPageFrame activePath="/workflows/executables" title="Executables">
-      <WorkflowExecutables context={context} definitionFilter={definitionFilter} />
+      <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} />
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowInstancesPage() {
+function WorkflowInstancesPage({ ai }: { ai: StudioAiContributionApi }) {
+  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   return (
     <WorkflowsPageFrame activePath="/workflows/instances" title="Instances">
       <div className="wf-empty">
         Workflow instance history will appear here when the runtime exposes an instance query endpoint.
+        {instanceAction ? (
+          <button type="button" className="wf-ai-inline-action" onClick={() => dispatchAiAction(ai, instanceAction, { scope: "workflow-instances" })}>
+            <Sparkles size={13} /> Ask Weaver about instances
+          </button>
+        ) : null}
       </div>
     </WorkflowsPageFrame>
   );
@@ -184,7 +230,7 @@ function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
 }
 
-function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointContext; onOpen(id: string): void }) {
+function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
   const [search, setSearch] = useState("");
   const [listState, setListState] = useState<DefinitionListState>("active");
   const [page, setPage] = useState(1);
@@ -201,6 +247,8 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
+  const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
+  const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
 
@@ -266,7 +314,8 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        rootKind: createDraft.rootKind
+        rootKind: createDraft.rootKind,
+        rootActivityVersionId: getCreateRootActivityVersionId(createDraft, catalog)
       });
       setCreateDraft(null);
       onOpen(details.definition.id);
@@ -449,6 +498,9 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
                     <>
                       <button type="button" onClick={event => { event.stopPropagation(); onOpen(definition.id); }}>Open</button>
                       <button type="button" onClick={event => { event.stopPropagation(); openDefinitionArtifacts(definition.id); }}>Artifacts</button>
+                      {explainDefinitionAction ? (
+                        <button type="button" onClick={() => dispatchAiAction(ai, explainDefinitionAction, definition)}><Sparkles size={13} /> Explain</button>
+                      ) : null}
                       <button type="button" className="danger" onClick={() => void softDelete(definition)}><Trash2 size={13} /> Delete</button>
                     </>
                   ) : (
@@ -479,6 +531,8 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
           activities={catalog}
           catalogState={catalogState}
           creating={creating}
+          suggestMetadataAction={suggestMetadataAction}
+          onSuggestMetadata={suggestMetadataAction ? () => dispatchAiAction(ai, suggestMetadataAction, { draft: createDraft, activities: catalog }) : undefined}
           onChange={nextDraft => setCreateDraft(nextDraft)}
           onClose={() => setCreateDraft(null)}
           onSubmit={submitCreate}
@@ -488,16 +542,33 @@ function WorkflowDefinitions({ context, onOpen }: { context: StudioEndpointConte
   );
 }
 
-function CreateWorkflowDialog({ draft, activities, catalogState, creating, onChange, onClose, onSubmit }: {
+function CreateWorkflowDialog({ draft, activities, catalogState, creating, suggestMetadataAction, onSuggestMetadata, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
   activities: ActivityCatalogItem[];
   catalogState: "idle" | "loading" | "ready" | "failed";
   creating: boolean;
+  suggestMetadataAction?: StudioAiPromptActionContribution | null;
+  onSuggestMetadata?: () => void;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;
   onSubmit(): void;
 }) {
   const groupedActivities = useMemo(() => groupCreateRootActivities(activities), [activities]);
+  const selectedRootValue = getSelectedRootValue(draft, activities);
+
+  const changeRootActivity = (value: string) => {
+    if (value.startsWith("kind:")) {
+      onChange({ ...draft, rootKind: value.slice(5) as CreateWorkflowKind, rootActivityVersionId: null });
+      return;
+    }
+
+    const selectedActivity = activities.find(activity => activity.activityVersionId === value);
+    onChange({
+      ...draft,
+      rootKind: getRootKind(selectedActivity) ?? draft.rootKind,
+      rootActivityVersionId: value
+    });
+  };
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
@@ -510,6 +581,11 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
         >
           <div className="wf-dialog-heading">
             <h3 id="workflow-create-title">Create Workflow</h3>
+            {suggestMetadataAction ? (
+              <button type="button" className="wf-ai-action" onClick={onSuggestMetadata} title={suggestMetadataAction.description ?? suggestMetadataAction.label}>
+                <Sparkles size={13} /> {suggestMetadataAction.label}
+              </button>
+            ) : null}
           </div>
           <label className="wf-form-field">
             <span>Display name</span>
@@ -533,8 +609,8 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
             <span>Root activity</span>
             <select
               aria-label="Root activity"
-              value={draft.rootKind}
-              onChange={event => onChange({ ...draft, rootKind: event.target.value as CreateWorkflowKind })}
+              value={selectedRootValue}
+              onChange={event => changeRootActivity(event.target.value)}
               disabled={catalogState === "loading"}
             >
               <optgroup label="Composite roots">
@@ -545,7 +621,7 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
               {groupedActivities.otherCategories.map(category => (
                 <optgroup key={category.name} label={category.name}>
                   {category.activities.map(activity => (
-                    <option key={activity.activityVersionId} value={`unsupported:${activity.activityVersionId}`} disabled>
+                    <option key={activity.activityVersionId} value={activity.activityVersionId}>
                       {getActivityDisplay(activity)}
                     </option>
                   ))}
@@ -565,7 +641,7 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, onCha
   );
 }
 
-function WorkflowExecutables({ context, definitionFilter }: { context: StudioEndpointContext; definitionFilter: string | null }) {
+function WorkflowExecutables({ context, ai, definitionFilter }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -576,6 +652,7 @@ function WorkflowExecutables({ context, definitionFilter }: { context: StudioEnd
       : executables,
     [definitionFilter, executables]
   );
+  const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
   const load = useCallback(async () => {
     setState("loading");
@@ -636,6 +713,9 @@ function WorkflowExecutables({ context, definitionFilter }: { context: StudioEnd
               <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
               <span className="wf-row-actions">
                 <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
+                {explainExecutableAction ? (
+                  <button type="button" onClick={() => dispatchAiAction(ai, explainExecutableAction, executable)}><Sparkles size={13} /> Explain</button>
+                ) : null}
               </span>
             </div>
           ))}
@@ -688,14 +768,25 @@ function getTotalPages(totalCount: number, pageSize: number) {
   return Math.max(1, Math.ceil(totalCount / pageSize));
 }
 
+function findAiAction(ai: StudioAiContributionApi, id: string) {
+  return ai.promptActions.list().find(action => action.id === id) ?? null;
+}
+
+function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioAiPromptActionContribution<TContext>, context: TContext) {
+  const prompt = action.createPrompt(context);
+  if (prompt) ai.dispatchPrompt(prompt);
+}
+
 function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
+  const flowchartActivity = findRootKindActivity(activities, "flowchart");
+  const sequenceActivity = findRootKindActivity(activities, "sequence");
   const compositeRoots = [
-    { value: "flowchart" as const, label: "Flowchart" },
-    { value: "sequence" as const, label: "Sequence" }
+    { value: flowchartActivity?.activityVersionId ?? "kind:flowchart", label: "Flowchart" },
+    { value: sequenceActivity?.activityVersionId ?? "kind:sequence", label: "Sequence" }
   ];
   const categories = new Map<string, ActivityCatalogItem[]>();
 
-  for (const activity of activities) {
+  for (const activity of activities.filter(isActivityBrowsable)) {
     if (isCompositeRootActivity(activity)) continue;
     const category = activity.category || "Uncategorized";
     categories.set(category, [...(categories.get(category) ?? []), activity]);
@@ -709,6 +800,34 @@ function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
     }));
 
   return { compositeRoots, otherCategories };
+}
+
+function getSelectedRootValue(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? `kind:${draft.rootKind}`;
+}
+
+function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? null;
+}
+
+function findRootKindActivity(activities: ActivityCatalogItem[], rootKind: CreateWorkflowKind) {
+  return activities.find(activity => getRootKind(activity) === rootKind);
+}
+
+function getRootKind(activity: ActivityCatalogItem | undefined) {
+  if (!activity) {
+    return null;
+  }
+
+  if (isFlowchartActivity(activity)) {
+    return "flowchart";
+  }
+
+  if (isSequenceActivity(activity)) {
+    return "sequence";
+  }
+
+  return null;
 }
 
 function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPaletteGroup[] {
@@ -728,8 +847,21 @@ function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPalett
 }
 
 function isCompositeRootActivity(activity: ActivityCatalogItem) {
+  return isFlowchartActivity(activity) || isSequenceActivity(activity);
+}
+
+function isFlowchartActivity(activity: ActivityCatalogItem) {
   const displayName = getActivityDisplay(activity);
-  return displayName === "Flowchart" || displayName === "Sequence" || activity.activityTypeKey.endsWith(".Flowchart") || activity.activityTypeKey.endsWith(".Sequence");
+  return displayName === "Flowchart" || activity.activityTypeKey.endsWith(".Flowchart");
+}
+
+function isSequenceActivity(activity: ActivityCatalogItem) {
+  const displayName = getActivityDisplay(activity);
+  return displayName === "Sequence" || activity.activityTypeKey.endsWith(".Sequence");
+}
+
+function isActivityBrowsable(activity: ActivityCatalogItem) {
+  return (activity as { isBrowsable?: unknown }).isBrowsable !== false && (activity as { browsable?: unknown }).browsable !== false;
 }
 
 function formatExecutableSource(executable: WorkflowExecutableSummary) {
@@ -749,21 +881,24 @@ function formatActivityTypeName(typeName: string) {
   return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
 }
 
-function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndpointContext; definitionId: string; onBack(): void }) {
+function WorkflowEditor({ context, definitionId, ai, onBack }: { context: StudioEndpointContext; definitionId: string; ai: StudioAiContributionApi; onBack(): void }) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null>(null);
+  const [edges, setEdges] = useState<WorkflowEdge[]>([]);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [connectMenu, setConnectMenu] = useState<ConnectMenuState | null>(null);
+  const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const connectSourceRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
   const pointerDragRef = useRef<{
@@ -780,6 +915,8 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
   const selectedNode = useMemo(() => scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null, [scope, selectedNodeId]);
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
+  const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
+  const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
 
   const load = useCallback(async () => {
     setError("");
@@ -908,6 +1045,53 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
     setSelectedNodeId(next.nodeId);
   }, [draft?.state.rootActivity, frames, scope]);
 
+  const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
+    const activityNode = createActivityNode(activity, createNodeId(activity));
+    const node: Node<WorkflowNodeData> = {
+      id: activityNode.nodeId,
+      type: "workflowActivity",
+      position,
+      selected: true,
+      data: {
+        label: getActivityDisplay(activity),
+        activityVersionId: activity.activityVersionId,
+        activityTypeKey: activity.activityTypeKey,
+        childSlots: getChildSlots(activityNode),
+        acceptsInbound: String(activity.executionType ?? "").toLowerCase() !== "trigger",
+        sourcePorts: getActivitySourcePorts(activityNode, activity)
+      }
+    };
+
+    return { activityNode, node };
+  }, []);
+
+  const commitCanvas = useCallback((nextNodes: Node<WorkflowNodeData>[], nextEdges: WorkflowEdge[], additionalActivities: ActivityNode[] = []) => {
+    setDraft(current => {
+      if (!current) return current;
+
+      const nextLayout = updateLayout(current.layout, nextNodes);
+      const rootActivity = current.state.rootActivity;
+      if (!rootActivity) return { ...current, layout: nextLayout };
+
+      const currentScope = resolveScope(rootActivity, frames);
+      if (!currentScope) return { ...current, layout: nextLayout };
+
+      const ownerWithActivities = syncCanvasToScope(currentScope, nextNodes, nextEdges, additionalActivities);
+      const nextOwner = currentScope.slot.mode === "flowchart"
+        ? withFlowchartConnections(ownerWithActivities, nextEdges)
+        : ownerWithActivities;
+
+      return {
+        ...current,
+        layout: nextLayout,
+        state: {
+          ...current.state,
+          rootActivity: updateScopeOwner(rootActivity, frames, nextOwner)
+        }
+      };
+    });
+  }, [frames]);
+
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
     if (!canvasRef.current) return null;
 
@@ -921,6 +1105,31 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
 
     return reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY });
   }, [reactFlowInstance]);
+
+  const findEdgeUnderCursor = useCallback((clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const edgeElement = element?.closest(".react-flow__edge") as HTMLElement | null;
+    return edgeElement?.getAttribute("data-id") ?? null;
+  }, []);
+
+  const spliceActivityIntoEdge = useCallback((activity: ActivityCatalogItem, edge: WorkflowEdge, fallbackPosition: XYPosition) => {
+    const sourceNode = nodes.find(node => node.id === edge.source);
+    const targetNode = nodes.find(node => node.id === edge.target);
+    const position = sourceNode && targetNode
+      ? midpointBetween(sourceNode, targetNode)
+      : sourceNode
+        ? rightOf(sourceNode)
+        : fallbackPosition;
+    const placed = createCanvasActivity(activity, position);
+    const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+    const nextNodes = [...clearedNodes, placed.node];
+    const nextEdges = spliceWorkflowEdge(edges, edge, placed.node.id);
+
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    setSelectedNodeId(placed.node.id);
+    commitCanvas(nextNodes, nextEdges, [placed.activityNode]);
+  }, [commitCanvas, createCanvasActivity, edges, nodes]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
     if (!canvasRef.current) return false;
@@ -937,9 +1146,18 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
 
+    if (scope?.slot.mode === "flowchart") {
+      const edgeId = findEdgeUnderCursor(clientX, clientY);
+      const edge = edgeId ? edges.find(candidate => candidate.id === edgeId) : undefined;
+      if (edge) {
+        spliceActivityIntoEdge(activity, edge, position);
+        return true;
+      }
+    }
+
     addActivity(activity, position);
     return true;
-  }, [addActivity, toCanvasPosition]);
+  }, [addActivity, edges, findEdgeUnderCursor, scope?.slot.mode, spliceActivityIntoEdge, toCanvasPosition]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -1017,15 +1235,38 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   const onCanvasDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    if (scope?.slot.mode !== "flowchart") return;
+
+    const edgeId = findEdgeUnderCursor(event.clientX, event.clientY);
+    setHighlightedEdgeId(edgeId);
+  };
+
+  const onCanvasDragLeave = (event: React.DragEvent) => {
+    if (!canvasRef.current) return;
+    const related = event.relatedTarget as globalThis.Node | null;
+    if (related && canvasRef.current.contains(related)) return;
+
+    setHighlightedEdgeId(null);
   };
 
   const onCanvasDrop = (event: React.DragEvent) => {
     event.preventDefault();
+    setHighlightedEdgeId(null);
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) || event.dataTransfer.getData("text/plain");
     const activity = catalogByVersion.get(activityVersionId);
     if (!activity) return;
 
     tryAddActivityAtClientPoint(activity, event.clientX, event.clientY);
+  };
+
+  const openEmptyConnectMenu = () => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setConnectMenu({
+      kind: "fromEmpty",
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2
+    });
   };
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
@@ -1099,30 +1340,135 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
   };
 
   const onNodesChange = (changes: NodeChange[]) => setNodes(current => applyNodeChanges(changes, current));
-  const onEdgesChange = (changes: EdgeChange[]) => setEdges(current => applyEdgeChanges(changes, current));
+  const onEdgesChange = (changes: EdgeChange[]) => setEdges(current => applyEdgeChanges(changes, current) as WorkflowEdge[]);
+  const isValidConnection = (connection: Connection | Edge) => {
+    if (!connection.source || !connection.target) return false;
+    if (connection.source === connection.target) return false;
+    if (scope?.slot.mode !== "flowchart") return false;
+    return !connection.targetHandle;
+  };
   const onConnect = (connection: Connection) => {
     if (!draft?.state.rootActivity || !scope || scope.slot.mode !== "flowchart") return;
-    const nextEdges = addEdge(connection, edges);
-    const nextOwner = withFlowchartConnections(scope.owner, nextEdges);
+    if (!isValidConnection(connection)) return;
+
+    const nextEdge = createWorkflowEdge(connection.source, connection.target, connection.sourceHandle ?? "Done", connection.targetHandle ?? undefined);
+    const nextEdges = addEdge(nextEdge, edges) as WorkflowEdge[];
     setEdges(nextEdges);
-    setRoot(updateScopeOwner(draft.state.rootActivity, frames, nextOwner));
+    commitCanvas(nodes, nextEdges);
   };
   const commitLayout = () => {
-    setDraft(current => {
-      if (!current) return current;
-      const nextLayout = updateLayout(current.layout, nodes);
-      if (!current.state.rootActivity || !scope) return { ...current, layout: nextLayout };
-      const nextOwner = syncCanvasToScope(scope, nodes, edges);
-      return {
-        ...current,
-        layout: nextLayout,
-        state: {
-          ...current.state,
-          rootActivity: updateScopeOwner(current.state.rootActivity, frames, nextOwner)
-        }
-      };
+    commitCanvas(nodes, edges);
+  };
+
+  const onConnectStart: OnConnectStart = (_event, params) => {
+    if (!params.nodeId || params.handleType === "target") {
+      connectSourceRef.current = null;
+      return;
+    }
+
+    connectSourceRef.current = {
+      nodeId: params.nodeId,
+      handleId: params.handleId ?? null
+    };
+  };
+
+  const onConnectEnd: OnConnectEnd = event => {
+    const source = connectSourceRef.current;
+    connectSourceRef.current = null;
+    if (!source || scope?.slot.mode !== "flowchart") return;
+
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(".react-flow__handle, .react-flow__node")) return;
+
+    const point = clientPointFromEvent(event);
+    setConnectMenu({
+      kind: "fromPort",
+      sourceNodeId: source.nodeId,
+      sourceHandleId: source.handleId,
+      clientX: point.x,
+      clientY: point.y
     });
   };
+
+  const onReconnect: OnReconnect<WorkflowEdge> = (oldEdge, newConnection) => {
+    if (!isValidConnection(newConnection)) return;
+    const nextEdges = reconnectEdge(oldEdge, {
+      ...newConnection,
+      sourceHandle: newConnection.sourceHandle ?? "Done",
+      targetHandle: newConnection.targetHandle ?? undefined
+    }, edges, { shouldReplaceId: false }) as WorkflowEdge[];
+    setEdges(nextEdges);
+    commitCanvas(nodes, nextEdges);
+  };
+
+  const onNodesDelete = (deletedNodes: Node<WorkflowNodeData>[]) => {
+    if (deletedNodes.length === 0) return;
+    const deletedIds = new Set(deletedNodes.map(node => node.id));
+    const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
+    const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    if (selectedNodeId && deletedIds.has(selectedNodeId)) setSelectedNodeId(null);
+    commitCanvas(nextNodes, nextEdges);
+  };
+
+  const onEdgesDelete = (deletedEdges: WorkflowEdge[]) => {
+    if (deletedEdges.length === 0) return;
+    const deletedIds = new Set(deletedEdges.map(edge => edge.id));
+    const nextEdges = edges.filter(edge => !deletedIds.has(edge.id));
+    setEdges(nextEdges);
+    commitCanvas(nodes, nextEdges);
+  };
+
+  const deleteEdge = useCallback((edgeId: string) => {
+    const nextEdges = edges.filter(edge => edge.id !== edgeId);
+    setEdges(nextEdges);
+    commitCanvas(nodes, nextEdges);
+  }, [commitCanvas, edges, nodes]);
+
+  const requestInsertActivity = useCallback((edgeId: string, clientX: number, clientY: number) => {
+    setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
+  }, []);
+
+  const onConnectMenuPick = (activity: ActivityCatalogItem) => {
+    const menu = connectMenu;
+    if (!menu) return;
+    setConnectMenu(null);
+
+    const fallbackPosition = toCanvasPosition(menu.clientX, menu.clientY) ?? { x: 0, y: 0 };
+    if (menu.kind === "fromEmpty") {
+      const placed = createCanvasActivity(activity, fallbackPosition);
+      const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+      const nextNodes = [...clearedNodes, placed.node];
+      setNodes(nextNodes);
+      setSelectedNodeId(placed.node.id);
+      commitCanvas(nextNodes, edges, [placed.activityNode]);
+      return;
+    }
+
+    if (menu.kind === "fromPort") {
+      const sourceNode = nodes.find(node => node.id === menu.sourceNodeId);
+      const position = sourceNode ? rightOf(sourceNode) : fallbackPosition;
+      const placed = createCanvasActivity(activity, position);
+      const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
+      const nextNodes = [...clearedNodes, placed.node];
+      const nextEdges = [...edges, createWorkflowEdge(menu.sourceNodeId, placed.node.id, menu.sourceHandleId ?? "Done")];
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      setSelectedNodeId(placed.node.id);
+      commitCanvas(nextNodes, nextEdges, [placed.activityNode]);
+      return;
+    }
+
+    const edge = edges.find(candidate => candidate.id === menu.edgeId);
+    if (edge) spliceActivityIntoEdge(activity, edge, fallbackPosition);
+  };
+
+  const edgeActions = useMemo<WorkflowEdgeActions>(() => ({
+    highlightedEdgeId,
+    deleteEdge,
+    requestInsertActivity
+  }), [deleteEdge, highlightedEdgeId, requestInsertActivity]);
 
   const enterSlot = (node: ActivityNode, slotId: string, label: string) => {
     setFrames(current => [...current, { ownerNodeId: node.nodeId, slotId, label }]);
@@ -1158,6 +1504,12 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
             <input type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
             <span>Autosave</span>
           </label>
+          {findRisksAction ? (
+            <button type="button" onClick={() => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })}><Sparkles size={15} /> Risks</button>
+          ) : null}
+          {proposeUpdateAction ? (
+            <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
+          ) : null}
           <button type="button" onClick={() => void save()}><Save size={15} /> Save</button>
           <button type="button" onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
           <button type="button" disabled={!publishedArtifactId} onClick={() => void run()}><Play size={15} /> Run</button>
@@ -1226,25 +1578,58 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
               </React.Fragment>
             ))}
           </div>
-          <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDrop={onCanvasDrop}>
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onInit={setReactFlowInstance}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onDragOver={onCanvasDragOver}
-              onDrop={onCanvasDrop}
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-              onNodeDragStop={commitLayout}
-              fitView
-            >
-              <Background gap={18} size={1} />
-              <Controls />
-              <MiniMap pannable zoomable />
-            </ReactFlow>
+          <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
+            <WorkflowEdgeActionsContext.Provider value={edgeActions}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onInit={setReactFlowInstance}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodesDelete={onNodesDelete}
+                onEdgesDelete={onEdgesDelete}
+                onConnect={onConnect}
+                onConnectStart={scope?.slot.mode === "flowchart" ? onConnectStart : undefined}
+                onConnectEnd={scope?.slot.mode === "flowchart" ? onConnectEnd : undefined}
+                onReconnect={scope?.slot.mode === "flowchart" ? onReconnect : undefined}
+                isValidConnection={isValidConnection}
+                onDragOver={onCanvasDragOver}
+                onDragLeave={onCanvasDragLeave}
+                onDrop={onCanvasDrop}
+                onPaneClick={() => setSelectedNodeId(null)}
+                onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                onNodeDragStop={commitLayout}
+                fitView
+                minZoom={0.2}
+                maxZoom={1.8}
+                nodesConnectable={scope?.slot.mode === "flowchart"}
+                selectionOnDrag
+                multiSelectionKeyCode={["Shift", "Meta", "Control"]}
+                deleteKeyCode={["Backspace", "Delete"]}
+                panActivationKeyCode={null}
+                defaultEdgeOptions={{ type: "workflow" }}
+              >
+                <Background gap={18} size={1} />
+                <Controls />
+                <MiniMap pannable zoomable />
+              </ReactFlow>
+            </WorkflowEdgeActionsContext.Provider>
+            {scope?.slot.mode === "flowchart" && nodes.length === 0 ? (
+              <button type="button" className="wf-empty-canvas-add" onClick={() => openEmptyConnectMenu()}>
+                <Plus size={15} /> Add activity
+              </button>
+            ) : null}
+            {connectMenu ? (
+              <ConnectMenu
+                clientX={connectMenu.clientX}
+                clientY={connectMenu.clientY}
+                activities={catalog}
+                onPick={onConnectMenuPick}
+                onClose={() => setConnectMenu(null)}
+              />
+            ) : null}
           </div>
           <ValidationPanel draft={draft} />
         </main>
@@ -1281,13 +1666,181 @@ function WorkflowEditor({ context, definitionId, onBack }: { context: StudioEndp
 
 function WorkflowActivityNode({ data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
+  const sourcePorts = nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }];
   return (
     <div className={selected ? "wf-node selected" : "wf-node"}>
-      <Handle type="target" position={Position.Left} />
+      {nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       <strong>{nodeData.label}</strong>
       <small>{nodeData.activityTypeKey ?? nodeData.activityVersionId}</small>
       {nodeData.childSlots.length > 0 ? <span>{nodeData.childSlots.length} embedded slot{nodeData.childSlots.length === 1 ? "" : "s"}</span> : null}
-      <Handle type="source" position={Position.Right} />
+      {sourcePorts.map((port, index) => {
+        const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
+        return (
+          <React.Fragment key={port.name}>
+            <span className="wf-node-port-label" style={{ top }}>{port.displayName}</span>
+            <Handle type="source" position={Position.Right} id={port.name} style={{ top }} />
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
+  const {
+    id,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    markerEnd,
+    style,
+    label,
+    labelStyle
+  } = props;
+  const actions = React.useContext(WorkflowEdgeActionsContext);
+  const [hovered, setHovered] = useState(false);
+  const [path, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const isHighlighted = actions?.highlightedEdgeId === id;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          strokeWidth: isHighlighted ? 2.5 : style?.strokeWidth
+        }}
+        label={label}
+        labelX={labelX}
+        labelY={labelY}
+        labelStyle={labelStyle}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      {actions ? (
+        <EdgeLabelRenderer>
+          <div
+            className={["wf-edge-actions", hovered ? "visible" : "", isHighlighted ? "highlighted" : ""].filter(Boolean).join(" ")}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+          >
+            <button type="button" aria-label="Insert activity into connection" title="Insert activity" onClick={event => actions.requestInsertActivity(id, event.clientX, event.clientY)}>
+              <Plus size={12} />
+            </button>
+            <button type="button" aria-label="Delete connection" title="Delete connection" onClick={() => actions.deleteEdge(id)}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  );
+}
+
+function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: { clientX: number; clientY: number; activities: ActivityCatalogItem[]; onPick(activity: ActivityCatalogItem): void; onClose(): void }) {
+  const [search, setSearch] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const browsable = activities.filter(isActivityBrowsable);
+    if (!term) return browsable;
+    return browsable.filter(activity =>
+      getActivityDisplay(activity).toLowerCase().includes(term) ||
+      activity.activityTypeKey.toLowerCase().includes(term) ||
+      (activity.category ?? "").toLowerCase().includes(term) ||
+      (activity.description ?? "").toLowerCase().includes(term));
+  }, [activities, search]);
+
+  const groups = useMemo(() => groupActivityPalette(filtered), [filtered]);
+  const flatActivities = useMemo(() => groups.flatMap(group => group.activities), [groups]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as globalThis.Node)) onClose();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex(index => Math.min(index + 1, flatActivities.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex(index => Math.max(index - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const activity = flatActivities[activeIndex];
+      if (activity) onPick(activity);
+    }
+  };
+
+  const left = Math.max(8, Math.min(clientX + 4, window.innerWidth - 328));
+  const top = Math.max(8, Math.min(clientY + 4, window.innerHeight - 360));
+  let itemIndex = -1;
+
+  return (
+    <div ref={containerRef} className="wf-connect-menu" style={{ left, top }} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
+      <input
+        ref={inputRef}
+        type="search"
+        value={search}
+        placeholder="Search activities..."
+        aria-label="Search activities"
+        onChange={event => {
+          setSearch(event.target.value);
+          setActiveIndex(0);
+        }}
+        onKeyDown={onInputKeyDown}
+      />
+      <div className="wf-connect-menu-list" role="listbox" aria-label="Activity picker">
+        {groups.length === 0 ? <p>No matching activities.</p> : groups.map(group => (
+          <section key={group.category}>
+            <h4>{group.category}</h4>
+            {group.activities.map(activity => {
+              itemIndex += 1;
+              const currentIndex = itemIndex;
+              const active = currentIndex === activeIndex;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={active ? "active" : ""}
+                  key={activity.activityVersionId}
+                  onMouseEnter={() => setActiveIndex(currentIndex)}
+                  onClick={() => onPick(activity)}
+                >
+                  <strong>{getActivityDisplay(activity)}</strong>
+                  <small>{activity.category || activity.activityTypeKey}</small>
+                </button>
+              );
+            })}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1308,6 +1861,25 @@ function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
 function createNodeId(activity: ActivityCatalogItem) {
   const base = getActivityDisplay(activity).replace(/[^a-z0-9]+/gi, "").toLowerCase() || "activity";
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function rightOf(node: Node) {
+  return { x: node.position.x + 280, y: node.position.y };
+}
+
+function midpointBetween(source: Node, target: Node) {
+  return {
+    x: Math.round((source.position.x + target.position.x) / 2),
+    y: Math.round((source.position.y + target.position.y) / 2)
+  };
+}
+
+function clientPointFromEvent(event: MouseEvent | TouchEvent) {
+  if ("changedTouches" in event && event.changedTouches.length > 0) {
+    return { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
+  }
+
+  return { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY };
 }
 
 function getDraftSignature(draft: WorkflowDraft) {

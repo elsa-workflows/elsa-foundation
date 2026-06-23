@@ -101,6 +101,7 @@ export interface CreateDefinitionRequest {
   name: string;
   description?: string | null;
   rootKind: "sequence" | "flowchart";
+  rootActivityVersionId?: string | null;
 }
 
 export interface PromoteDraftResponse {

@@ -1,4 +1,4 @@
-import type { Edge, Node } from "@xyflow/react";
+import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, DesignMetadataRecord } from "./workflowTypes";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
@@ -9,6 +9,17 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   activityVersionId: string;
   activityTypeKey?: string;
   childSlots: ChildSlot[];
+  acceptsInbound: boolean;
+  sourcePorts: WorkflowPortDescriptor[];
+}
+
+export interface WorkflowPortDescriptor {
+  name: string;
+  displayName: string;
+}
+
+export interface WorkflowEdgeData extends Record<string, unknown> {
+  vertices?: XYPosition[];
 }
 
 export interface ChildSlot {
@@ -92,7 +103,9 @@ export function buildCanvas(scope: CanvasScope, catalog: ActivityCatalogItem[], 
         label: catalogItem?.displayName ?? activity.activityVersionId,
         activityVersionId: activity.activityVersionId,
         activityTypeKey: catalogItem?.activityTypeKey,
-        childSlots: getChildSlots(activity)
+        childSlots: getChildSlots(activity),
+        acceptsInbound: activityAcceptsInbound(activity, catalogItem),
+        sourcePorts: getActivitySourcePorts(activity, catalogItem)
       }
     };
   });
@@ -147,8 +160,11 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
   };
 }
 
-export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeData>[], edges: Edge[]) {
+export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeData>[], edges: Edge[], additionalActivities: ActivityNode[] = []) {
   const existing = new Map(scope.slot.activities.map(activity => [activity.nodeId, activity]));
+  for (const activity of additionalActivities) {
+    existing.set(activity.nodeId, activity);
+  }
   const activities = nodes.map(node => existing.get(node.id)).filter((activity): activity is ActivityNode => !!activity);
 
   if (scope.slot.mode === "sequence") {
@@ -235,18 +251,33 @@ function createStructureForActivity(activity: ActivityCatalogItem): ActivityNode
   return null;
 }
 
-function updateFlowchartConnections(structure: ActivityNodeStructure | null | undefined, edges: Edge[]) {
+function updateFlowchartConnections(structure: ActivityNodeStructure | null | undefined, edges: Edge<WorkflowEdgeData>[]) {
   if (!structure) return structure ?? null;
+  const previousConnections = Array.isArray(structure.payload.connections) ? structure.payload.connections : [];
+  const previousById = new Map<string, Record<string, unknown>>();
+
+  for (const connection of previousConnections) {
+    if (!isRecord(connection)) continue;
+    const id = connection.id;
+    if (typeof id === "string") previousById.set(id, connection);
+  }
 
   return {
     ...structure,
     payload: {
       ...structure.payload,
-      connections: edges.map(edge => ({
-        id: edge.id,
-        source: { nodeId: edge.source, port: edge.sourceHandle ?? "Done" },
-        target: { nodeId: edge.target, port: edge.targetHandle ?? "Done" }
-      }))
+      connections: edges.map(edge => {
+        const previous = previousById.get(edge.id) ?? {};
+        const vertices = edge.data?.vertices;
+        const { vertices: _oldVertices, ...previousWithoutVertices } = previous;
+        return {
+          ...previousWithoutVertices,
+          id: edge.id,
+          source: { nodeId: edge.source, port: edge.sourceHandle ?? "Done" },
+          target: edge.targetHandle ? { nodeId: edge.target, port: edge.targetHandle } : { nodeId: edge.target },
+          ...(vertices?.length ? { vertices: vertices.map(vertex => ({ x: Math.round(vertex.x), y: Math.round(vertex.y) })) } : {})
+        };
+      })
     }
   };
 }
@@ -265,7 +296,7 @@ function buildEdges(slot: ChildSlot, nodes: Node<WorkflowNodeData>[]): Edge[] {
   return [];
 }
 
-export function flowchartEdges(owner: ActivityNode): Edge[] {
+export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
   if (owner.structure?.kind !== flowchartStructureKind) return [];
   const connections = owner.structure.payload.connections;
   if (!Array.isArray(connections)) return [];
@@ -276,22 +307,117 @@ export function flowchartEdges(owner: ActivityNode): Edge[] {
       const source = (connection as { source?: { nodeId?: string; port?: string } }).source;
       const target = (connection as { target?: { nodeId?: string; port?: string } }).target;
       if (!source?.nodeId || !target?.nodeId) return null;
+      const vertices = Array.isArray((connection as { vertices?: unknown }).vertices)
+        ? (connection as { vertices: unknown[] }).vertices.filter(isPosition)
+        : [];
       return {
         id: typeof (connection as { id?: unknown }).id === "string" ? String((connection as { id?: unknown }).id) : `flow-${index}-${source.nodeId}-${target.nodeId}`,
         source: source.nodeId,
         target: target.nodeId,
         sourceHandle: source.port,
-        targetHandle: target.port,
-        type: "smoothstep",
-        label: source.port && source.port !== "Done" ? source.port : undefined
-      } satisfies Edge;
+        targetHandle: target.port && target.port !== "Done" ? target.port : undefined,
+        type: "workflow",
+        label: source.port && source.port !== "Done" ? source.port : undefined,
+        data: vertices.length ? { vertices } : undefined
+      } satisfies Edge<WorkflowEdgeData>;
     })
     .filter((edge): edge is Edge => !!edge);
+}
+
+export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  const cases = readStringList((activity as { cases?: unknown }).cases);
+  if (isFlowSwitch(activity, catalogItem) && cases.length > 0) {
+    return [...cases.map(name => ({ name, displayName: name })), { name: "Default", displayName: "Default" }];
+  }
+
+  const descriptorPorts = [
+    ...readFlowPorts(catalogItem?.designFacets),
+    ...readFlowPorts((catalogItem as { ports?: unknown } | undefined)?.ports),
+    ...readFlowPorts(catalogItem?.outputs)
+  ];
+  if (descriptorPorts.length > 0) return uniquePorts(descriptorPorts);
+
+  const outcomes = readStringList((activity as { outcomes?: unknown }).outcomes);
+  if (outcomes.length > 0) return outcomes.map(name => ({ name, displayName: name }));
+
+  return [{ name: "Done", displayName: "Done" }];
+}
+
+export function activityAcceptsInbound(_activity: ActivityNode, catalogItem?: ActivityCatalogItem) {
+  return String(catalogItem?.executionType ?? "").toLowerCase() !== "trigger";
+}
+
+export function createWorkflowEdge(source: string, target: string, sourceHandle?: string | null, targetHandle?: string | null): Edge<WorkflowEdgeData> {
+  const port = sourceHandle ?? "Done";
+  return {
+    id: `flow-${source}-${target}-${port}-${crypto.randomUUID().slice(0, 8)}`,
+    source,
+    target,
+    sourceHandle: port,
+    targetHandle: targetHandle ?? undefined,
+    type: "workflow",
+    label: port !== "Done" ? port : undefined
+  };
+}
+
+export function spliceWorkflowEdge(edges: Edge<WorkflowEdgeData>[], edge: Edge<WorkflowEdgeData>, newNodeId: string) {
+  const first = createWorkflowEdge(edge.source, newNodeId, edge.sourceHandle ?? "Done", undefined);
+  const second = createWorkflowEdge(newNodeId, edge.target, "Done", edge.targetHandle ?? undefined);
+  return edges.filter(candidate => candidate.id !== edge.id).concat(first, second);
 }
 
 function readActivityArray(value: unknown): ActivityNode[] | null {
   if (!Array.isArray(value)) return null;
   return value.filter(isActivityNode);
+}
+
+function isFlowSwitch(activity: ActivityNode, catalogItem?: ActivityCatalogItem) {
+  const key = catalogItem?.activityTypeKey ?? activity.activityVersionId;
+  const name = catalogItem?.displayName ?? "";
+  return key.endsWith(".FlowSwitch") || key === "FlowSwitch" || name === "FlowSwitch";
+}
+
+function readFlowPorts(value: unknown): WorkflowPortDescriptor[] {
+  if (!Array.isArray(value)) return [];
+  const ports: WorkflowPortDescriptor[] = [];
+
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    if (Array.isArray(item.ports)) {
+      ports.push(...readFlowPorts(item.ports));
+      continue;
+    }
+
+    const type = typeof item.type === "string" ? item.type : typeof item.portType === "string" ? item.portType : "";
+    const isBrowsable = item.isBrowsable !== false && item.browsable !== false;
+    const name = typeof item.name === "string" ? item.name : typeof item.id === "string" ? item.id : "";
+    if (isBrowsable && type.toLowerCase() === "flow" && name) {
+      const displayName = typeof item.displayName === "string" ? item.displayName : name;
+      ports.push({ name, displayName });
+    }
+  }
+
+  return ports;
+}
+
+function uniquePorts(ports: WorkflowPortDescriptor[]) {
+  const byName = new Map<string, WorkflowPortDescriptor>();
+  for (const port of ports) {
+    if (!byName.has(port.name)) byName.set(port.name, port);
+  }
+  return [...byName.values()];
+}
+
+function readStringList(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function isPosition(value: unknown): value is XYPosition {
+  return isRecord(value) && typeof value.x === "number" && typeof value.y === "number";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function isActivityNode(value: unknown): value is ActivityNode {

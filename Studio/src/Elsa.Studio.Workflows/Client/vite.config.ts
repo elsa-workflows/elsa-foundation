@@ -16,7 +16,7 @@ export default defineConfig({
       fileName: () => "module.js"
     },
     rollupOptions: {
-      external: ["react", "@elsa-workflows/studio-sdk"],
+      external: ["react", "@elsa-workflows/studio-sdk", "@tanstack/react-query"],
       output: {
         assetFileNames: "module[extname]"
       }

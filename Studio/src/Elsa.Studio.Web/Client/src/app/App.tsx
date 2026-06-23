@@ -23,12 +23,13 @@ import type {
   StudioNavigationContribution,
   StudioPanelContribution
 } from "../sdk";
-import { createStudioRegistry } from "./registry";
+import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import { createEndpointContext } from "../sdk";
 import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { QueryProvider } from "./providers/QueryProvider";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
@@ -149,6 +150,10 @@ function AppContent() {
     () => (api?.panels.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
     [api, state]
   );
+  const featureAreas = useMemo(
+    () => (api?.featureAreas.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
+    [api, state]
+  );
 
   if (state === "loading") {
     return (
@@ -168,7 +173,8 @@ function AppContent() {
 
   const activeRoute = routes.find(route => route.path === path);
   const ActiveComponent = activeRoute?.component;
-  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? "Studio";
+  const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
+  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
 
   return (
     <ShellFrame navigation={navigation} panels={panels} path={path} title={pageTitle} onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
@@ -179,7 +185,11 @@ function AppContent() {
       {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
       {ActiveComponent ? <ActiveComponent /> : null}
       {!ActiveComponent && path !== "/" && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
-        <div className="empty-state">No Studio route is registered for {path}.</div>
+        <div className="empty-state">
+          {owningFeatureArea
+            ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
+            : `No Studio route is registered for ${path}.`}
+        </div>
       ) : null}
     </ShellFrame>
   );
@@ -858,7 +868,9 @@ function navigateTo(path: string) {
 export function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <QueryProvider>
+        <AppContent />
+      </QueryProvider>
     </ThemeProvider>
   );
 }

@@ -36,7 +36,7 @@ export function createRedirectAuthAdapter(options: RedirectAuthAdapterOptions): 
 
       const destination = new URL(getChallengeUrl(challenge), resolveBaseUrl(options));
       const returnUrl = loginOptions?.returnUrl ?? options.location?.href ?? window.location.href;
-      destination.searchParams.set("returnUrl", returnUrl);
+      destination.searchParams.set("returnUrl", addCallbackProviderToReturnUrl(returnUrl, loginOptions?.providerId ?? options.id, options));
       (options.location ?? window.location).assign(destination.toString());
       return Promise.resolve();
     },
@@ -87,7 +87,7 @@ export function createRedirectAuthAdapter(options: RedirectAuthAdapterOptions): 
       }
 
       const payload = await response.json() as Partial<AuthSession>;
-      return payload.status ? normalizeSession(payload as AuthSession) : readSession(request, sessionEndpoint, options);
+      return payload.status ? normalizeSession(payload) : readSession(request, sessionEndpoint, options);
     }
   };
 }
@@ -105,16 +105,29 @@ async function readSession(request: typeof fetch, sessionEndpoint: string, optio
 }
 
 async function parseSession(response: Response) {
-  const session = await response.json() as AuthSession;
+  const session = await response.json() as Partial<AuthSession>;
   return normalizeSession(session);
 }
 
-function normalizeSession(session: AuthSession): AuthSession {
+function normalizeSession(session: Partial<AuthSession>): AuthSession {
+  const status = isAuthSessionStatus(session.status) ? session.status : "anonymous";
+
   return {
     ...session,
-    roles: session.roles ?? [],
-    permissions: session.permissions ?? []
+    status,
+    roles: normalizeStringArray(session.roles),
+    permissions: normalizeStringArray(session.permissions)
   };
+}
+
+function normalizeStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function isAuthSessionStatus(value: unknown): value is AuthSession["status"] {
+  return value === "unknown" || value === "anonymous" || value === "authenticated";
 }
 
 function getChallengeUrl(challenge: Exclude<AuthChallenge, { type: "none" }>) {
@@ -127,6 +140,35 @@ function resolveAuthUrl(url: string, options?: Pick<RedirectAuthAdapterOptions, 
 
 function resolveBaseUrl(options?: Pick<RedirectAuthAdapterOptions, "baseUrl" | "location">) {
   return options?.baseUrl ?? options?.location?.origin ?? window.location.origin;
+}
+
+function addCallbackProviderToReturnUrl(
+  returnUrl: string,
+  providerId: string,
+  options?: Pick<RedirectAuthAdapterOptions, "baseUrl" | "location">
+) {
+  const result = new URL(returnUrl, resolveReturnUrlBase(options));
+  result.searchParams.set("authProviderId", providerId);
+
+  return isRelativeUrl(returnUrl)
+    ? `${result.pathname}${result.search}${result.hash}`
+    : result.toString();
+}
+
+function resolveReturnUrlBase(options?: Pick<RedirectAuthAdapterOptions, "baseUrl" | "location">) {
+  return options?.location?.href
+    ?? (typeof window !== "undefined" ? window.location.href : undefined)
+    ?? options?.location?.origin
+    ?? resolveBaseUrl(options);
+}
+
+function isRelativeUrl(url: string) {
+  try {
+    new URL(url);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 export class AuthAdapterError extends Error {

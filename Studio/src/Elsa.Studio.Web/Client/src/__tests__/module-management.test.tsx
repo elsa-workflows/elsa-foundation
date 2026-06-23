@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { requestJson } from "../app/modules/moduleManagementApi";
 import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
 
 describe("module management page", () => {
@@ -438,7 +437,7 @@ describe("module management page", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const context = createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Module-Management-Key": "secret" } });
-    await requestJson(context, "/_elsa/module-management/registry");
+    await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
     expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
@@ -454,23 +453,26 @@ function stubApi(options?: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: {
-        getJson: options?.hostGetJson ?? (async () => studioRegistry()),
-        postJson: async () => ({})
-      }
+      http: stubHttp("https://studio.example/", options?.hostGetJson ?? (async () => studioRegistry()))
     },
     backend: {
       baseUrl: "https://foundation.example/",
-      http: {
-        getJson: options?.backendGetJson ?? (async () => serverRegistry()),
-        postJson: async () => ({})
-      }
+      http: stubHttp("https://foundation.example/", options?.backendGetJson ?? (async () => serverRegistry()))
     },
     diagnostics: {
       add() {},
       list: () => []
     }
   } as ElsaStudioModuleApi;
+}
+
+function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
+  const http = createEndpointContext(baseUrl).http;
+  return {
+    ...http,
+    requestJson: http.requestJson,
+    getJson,
+  };
 }
 
 function sourceNavigator(container: Element) {
