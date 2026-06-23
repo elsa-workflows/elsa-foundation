@@ -480,6 +480,29 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RollbackUsesSinglePromotionSnapshot()
+    {
+        var innerStorage = CreateStorage();
+        var promotion = new FakePromotionService();
+        var service = CreateService(storage: innerStorage);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RollbackSnapshot", "3.0.0", "net10.0", null, null));
+        var promotedV1At = DateTimeOffset.UtcNow.AddMinutes(-20);
+        var promotedV2At = DateTimeOffset.UtcNow.AddMinutes(-10);
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "1.0.0", "artifact-1.nupkg", "feed-1.nupkg", promotedV1At, new("completed", "promote-1", null, false, []), true, false, promotedV1At));
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "2.0.0", "artifact-2.nupkg", "feed-2.nupkg", promotedV2At, new("completed", "promote-2", null, false, []), true, false, promotedV2At));
+        var storage = new ConcurrentPromotionStorage(innerStorage, async cancellationToken =>
+            await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "3.0.0", "artifact-3.nupkg", "feed-3.nupkg", DateTimeOffset.UtcNow, new("completed", "promote-3", null, false, []), true, false, DateTimeOffset.UtcNow), cancellationToken));
+        var rollbackService = CreateService(storage: storage, promotion: promotion);
+
+        var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
+
+        Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
+        Assert.DoesNotContain(promotion.RollbackPromotions!, x => x.Version == "3.0.0");
+        Assert.Contains(await innerStorage.ListPromotionsAsync(project.Id), x => x.Version == "3.0.0");
+    }
+
+    [Fact]
     public async Task RollbackRecordsStateWhenRequestIsCanceledAfterLiveMutation()
     {
         using var cancellation = new CancellationTokenSource();
@@ -734,7 +757,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         IExtensionBuilderPromotionService? promotion = null,
         FakeNuplaneAdmin? nuplane = null,
         IServerFeatureCatalog? featureCatalog = null,
-        ExtensionBuilderStorage? storage = null)
+        IExtensionBuilderStorage? storage = null)
     {
         nuplane ??= new FakeNuplaneAdmin();
         storage ??= CreateStorage();
@@ -870,6 +893,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringPromote { get; set; }
         public CancellationTokenSource? CancelDuringRollback { get; set; }
         public CancellationTokenSource? CancelDuringRetry { get; set; }
+        public IReadOnlyList<PackagePromotionRecord>? RollbackPromotions { get; private set; }
 
         public Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
         {
@@ -887,6 +911,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public Task<PackagePromotionResult> RollbackAsync(ExtensionProject project, PackagePromotionRecord target, IReadOnlyList<PackagePromotionRecord> promotions, CancellationToken cancellationToken = default)
         {
             CancelDuringRollback?.Cancel();
+            RollbackPromotions = promotions;
             return Task.FromResult(new PackagePromotionResult(PromotionStatus.Accepted, null, new(project.PackageId, target.Version, "local", target.FeedPath), RollbackOutcome, true, false));
         }
 
@@ -925,6 +950,50 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             WorkItem = workItem;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class ConcurrentPromotionStorage(IExtensionBuilderStorage inner, Func<CancellationToken, Task> afterFirstPromotionList) : IExtensionBuilderStorage
+    {
+        private bool _listedPromotions;
+
+        public string RootPath => inner.RootPath;
+        public Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default) => inner.ListWorkspacesAsync(ownerId, cancellationToken);
+        public Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) => inner.GetWorkspaceAsync(workspaceId, ownerId, cancellationToken);
+        public Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default) => inner.CreateWorkspaceAsync(ownerId, trustContext, displayName, cancellationToken);
+        public Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) => inner.DeleteWorkspaceAsync(workspaceId, ownerId, cancellationToken);
+        public Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) => inner.GetProjectAsync(projectId, ownerId, cancellationToken);
+        public Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default) => inner.ProjectExistsAsync(projectId, cancellationToken);
+        public Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default) => inner.CreateProjectAsync(workspaceId, ownerId, template, request, cancellationToken);
+        public Task<bool> DeleteProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) => inner.DeleteProjectAsync(projectId, ownerId, cancellationToken);
+        public Task<IReadOnlyList<ProjectFileSummary>?> ListFilesAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) => inner.ListFilesAsync(projectId, ownerId, cancellationToken);
+        public Task<ProjectFile?> ReadFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default) => inner.ReadFileAsync(projectId, ownerId, path, cancellationToken);
+        public Task<ProjectFile?> WriteFileAsync(string projectId, string ownerId, string path, string content, CancellationToken cancellationToken = default) => inner.WriteFileAsync(projectId, ownerId, path, content, cancellationToken);
+        public Task<bool> DeleteFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default) => inner.DeleteFileAsync(projectId, ownerId, path, cancellationToken);
+        public Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) => inner.CreateSourceSnapshotAsync(projectId, ownerId, cancellationToken);
+        public Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default) => inner.GetBuildAsync(buildId, ownerId, cancellationToken);
+        public Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default) => inner.SaveBuildAsync(build, cancellationToken);
+        public Task<int> FailIncompleteBuildsAsync(CancellationToken cancellationToken = default) => inner.FailIncompleteBuildsAsync(cancellationToken);
+        public Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default) => inner.ListProjectBuildsAsync(projectId, cancellationToken);
+        public Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default) => inner.AddPromotionAsync(projectId, record, cancellationToken);
+
+        public async Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default)
+        {
+            var promotions = await inner.ListPromotionsAsync(projectId, cancellationToken);
+            if (!_listedPromotions)
+            {
+                _listedPromotions = true;
+                await afterFirstPromotionList(cancellationToken);
+            }
+
+            return promotions;
+        }
+
+        public Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default) => inner.UpdatePromotionReconcileOutcomeAsync(projectId, outcome, cancellationToken);
+        public Task<bool> UpdatePromotionLifecycleAsync(string projectId, string version, ExtensionBuilderReconcileOutcome outcome, bool requiresReload, bool requiresRestart, DateTimeOffset reconciledAt, CancellationToken cancellationToken = default) => inner.UpdatePromotionLifecycleAsync(projectId, version, outcome, requiresReload, requiresRestart, reconciledAt, cancellationToken);
+        public Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default) => inner.SetActiveVersionAsync(projectId, version, cancellationToken);
+        public Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default) => inner.GetActiveVersionAsync(projectId, cancellationToken);
+        public string GetBuildLogPath(string buildId) => inner.GetBuildLogPath(buildId);
+        public string GetBuildArtifactsPath(string buildId) => inner.GetBuildArtifactsPath(buildId);
     }
 
     private sealed class FakeNuplaneAdmin : INuplaneAdminOperations

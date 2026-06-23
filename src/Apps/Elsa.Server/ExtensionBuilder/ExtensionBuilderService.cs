@@ -235,12 +235,12 @@ internal sealed class ExtensionBuilderService(
         if (project is null)
             return null;
 
-        var target = (await storage.ListPromotionsAsync(project.Id, cancellationToken))
-            .FirstOrDefault(x => string.Equals(x.Version, request.Version, StringComparison.OrdinalIgnoreCase));
+        var promotions = await storage.ListPromotionsAsync(project.Id, cancellationToken);
+        var target = promotions.FirstOrDefault(x => string.Equals(x.Version, request.Version, StringComparison.OrdinalIgnoreCase));
         if (target is null)
             return new PackagePromotionResult(PromotionStatus.Rejected, PromotionRejectionReason.InvalidManifest, null, null, false, false);
 
-        var result = await promotionService.RollbackAsync(project, target, await storage.ListPromotionsAsync(project.Id, cancellationToken), cancellationToken);
+        var result = await promotionService.RollbackAsync(project, target, promotions, cancellationToken);
         if (result is { Status: PromotionStatus.Accepted, ReconcileOutcome: not null })
         {
             var recorded = await storage.UpdatePromotionLifecycleAsync(
