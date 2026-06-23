@@ -336,7 +336,7 @@ function normalizeTemplate(template: RawExtensionTemplate): ExtensionTemplate {
 function normalizeProjectFile(file: RawProjectFile): ProjectFile {
   return {
     path: file.path,
-    type: file.type ?? "file",
+    type: normalizeProjectFileType(file.type ?? file.kind),
     size: file.size,
     updatedAt: file.updatedAt,
     content: file.content
@@ -428,6 +428,14 @@ function normalizeDiagnosticSeverity(value?: DiagnosticSeverity | number): Diagn
   return enumName(value, ["Info", "Warning", "Error"]);
 }
 
+function normalizeProjectFileType(value?: ProjectFileType | number | null): ProjectFileType {
+  const normalized = enumName(value, ["file", "folder", "Source", "Project", "Manifest", "Configuration", "Other"]);
+  const lower = normalized.toLowerCase();
+  if (lower === "folder" || lower === "directory") return "folder";
+  if (!normalized || lower === "file" || ["source", "project", "manifest", "configuration", "other"].includes(lower)) return "file";
+  return normalized;
+}
+
 function normalizePromotionStatus(value?: string | number | null) {
   return enumName(value, ["Accepted", "Rejected"]);
 }
@@ -505,7 +513,7 @@ interface RawExtensionTemplate {
 
 interface RawProjectFile {
   path: string;
-  type?: ProjectFileType;
+  type?: ProjectFileType | number;
   kind?: ProjectFileType | number;
   size?: number | null;
   updatedAt?: string | null;

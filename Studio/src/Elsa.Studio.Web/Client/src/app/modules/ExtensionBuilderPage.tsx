@@ -389,11 +389,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setActiveBuild(revisionedBuild);
       setBuildHistory(current => mergeBuildHistory(current, revisionedBuild));
       setBuildLog("");
-      await refreshBuild(selectedWorkspace.id, selectedProject.id, revisionedBuild.id);
+      await refreshBuild(selectedWorkspace.id, selectedProject.id, revisionedBuild.id, revisionedBuild.revision);
     }
   }
 
-  async function refreshBuild(workspaceId: string, projectId: string, buildId: string) {
+  async function refreshBuild(workspaceId: string, projectId: string, buildId: string, fallbackRevision?: string | null) {
     clearBuildPoll();
     try {
       const [build, log] = await Promise.all([
@@ -403,13 +403,13 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       const artifact = build.artifact ?? null;
       if (!mounted.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
-      const nextBuild = { ...build, revision: build.revision ?? activeBuild?.revision ?? null, artifact };
+      const nextBuild = { ...build, revision: build.revision ?? fallbackRevision ?? activeBuild?.revision ?? null, artifact };
       setActiveBuild(nextBuild);
       setBuildHistory(current => mergeBuildHistory(current, nextBuild));
       setBuildLog(log);
       if (isBuildRunning(nextBuild)) {
         pollTimerId.current = window.setTimeout(() => {
-          void refreshBuild(workspaceId, projectId, nextBuild.id);
+          void refreshBuild(workspaceId, projectId, nextBuild.id, nextBuild.revision);
         }, 900);
       }
     } catch (e) {
@@ -419,6 +419,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handlePromote() {
     if (!selectedWorkspace || !selectedProject || !activeBuild || !latestArtifact) return;
+    if (!isBuildForCurrentRevision(activeBuild, selectedProject)) {
+      setError("Build artifact is stale. Rebuild the current source revision before promoting.");
+      return;
+    }
     const workspaceId = selectedWorkspace.id;
     const projectId = selectedProject.id;
     const result = await runOperation(
@@ -440,10 +444,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     const requestId = ++runtimeStatusRequestId.current;
     try {
       const runtime = await getRuntimeStatus(context, workspaceId, projectId);
-      if (requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      if (!mounted.current || requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       setRuntimeStatus(runtime);
     } catch (e) {
-      if (requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      if (!mounted.current || requestId !== runtimeStatusRequestId.current || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       setError(getErrorMessage(e));
     }
   }
@@ -612,7 +616,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           onSelectBuild={build => {
             setActiveBuild(build);
             setActiveInspectorTab("build");
-            if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id);
+            if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id, build.revision);
           }}
           onPromote={handlePromote}
           onRefreshRuntime={() => refreshRuntimeStatus()}
@@ -934,6 +938,7 @@ function BuildRuntimeInspector({
           promotionResult={promotionResult}
           busy={busy}
           canPromote={canPromote}
+          isBuildCurrent={isBuildForCurrentRevision(activeBuild, project)}
           onPromote={onPromote}
         />
       ) : null}
@@ -1012,6 +1017,7 @@ function PromotePanel({
   promotionResult,
   busy,
   canPromote,
+  isBuildCurrent,
   onPromote
 }: {
   capabilities: ExtensionBuilderCapabilities;
@@ -1020,6 +1026,7 @@ function PromotePanel({
   promotionResult: PackagePromotionResult | null;
   busy: boolean;
   canPromote: boolean;
+  isBuildCurrent: boolean;
   onPromote(): void;
 }) {
   const promoteReason = !capabilities.canPromote
@@ -1028,7 +1035,9 @@ function PromotePanel({
       ? "A succeeded build is required"
       : !artifact
         ? "A build artifact is required"
-        : undefined;
+        : !isBuildCurrent
+          ? "Build artifact is stale. Rebuild the current source revision before promoting."
+          : undefined;
 
   return (
     <div className="modules-inspector-section">
