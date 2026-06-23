@@ -4,9 +4,14 @@ using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Models;
+using Elsa.Studio.Diagnostics.OpenTelemetry;
+using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
+using Elsa.Studio.Weaver.Chat;
+using Elsa.Studio.Weaver.Workflows;
+using Elsa.Studio.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -24,10 +29,56 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Equal("1.0.0", response.HostVersion);
         Assert.Equal("1.0.0", response.SdkVersion);
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ConsoleStream");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsWeaverManifestsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var chat = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Equal("Weaver chat", chat.DisplayName);
+        Assert.Equal("WeaverChatStudio", chat.ShellFeatureName);
+        Assert.StartsWith("/_content/Elsa.Studio.Weaver.Chat/studio/modules/weaver-chat/module.js", chat.Entry, StringComparison.Ordinal);
+        Assert.Contains("weaver-chat", chat.Capabilities);
+        Assert.Contains("ai-capabilities", chat.Capabilities);
+        Assert.Contains("ai-surfaces", chat.Capabilities);
+
+        var workflows = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
+        Assert.Equal("Weaver workflows", workflows.DisplayName);
+        Assert.Equal("WeaverWorkflowsStudio", workflows.ShellFeatureName);
+        Assert.Contains("weaver-workflows", workflows.Capabilities);
+        Assert.Contains("ai-context-providers", workflows.Capabilities);
+        Assert.Contains("ai-prompt-actions", workflows.Capabilities);
+        Assert.Contains("ai-proposal-renderers", workflows.Capabilities);
+        Assert.Contains("ai-tools", workflows.Capabilities);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsWorkflowsManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal("Workflows", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("workflow-designer", module.Capabilities);
     }
 
     [Fact]
@@ -45,6 +96,48 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains("navigation", module.Capabilities);
         Assert.Contains("routes", module.Capabilities);
         Assert.Contains("setting-editors", module.Capabilities);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsStructuredLogsManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
+        Assert.Equal("Structured logs", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("panels", module.Capabilities);
+        Assert.Contains("http", module.Capabilities);
+        Assert.Contains("sse", module.Capabilities);
+        Assert.Contains("diagnostics", module.Capabilities);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsOpenTelemetryManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Equal("OpenTelemetry", module.DisplayName);
+        Assert.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/module.css", StringComparison.Ordinal));
+        Assert.Contains("navigation", module.Capabilities);
+        Assert.Contains("routes", module.Capabilities);
+        Assert.Contains("http", module.Capabilities);
+        Assert.Contains("diagnostics", module.Capabilities);
+        Assert.Contains("otel", module.Capabilities);
+        Assert.Contains("traces", module.Capabilities);
+        Assert.Contains("metrics", module.Capabilities);
+        Assert.Contains("logs", module.Capabilities);
     }
 
     [Fact]
@@ -74,6 +167,32 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public async Task GetModules_FiltersStructuredLogsModuleAndReportsDiagnostic()
+    {
+        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.StructuredLogs"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Diagnostics.StructuredLogs" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
+    public async Task GetModules_FiltersOpenTelemetryModuleAndReportsDiagnostic()
+    {
+        using var provider = CreateProvider(options => options.DisabledModuleIds.Add("Elsa.Studio.Diagnostics.OpenTelemetry"));
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Diagnostics.OpenTelemetry" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+    }
+
+    [Fact]
     public async Task GetModules_FiltersModulesOwnedByInactiveShellFeatures()
     {
         using var provider = CreateProvider(
@@ -90,6 +209,10 @@ public sealed class StudioModuleManifestProviderTests
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Contains(response.Diagnostics, x =>
             x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
+            x.Status == StudioModuleDiagnosticStatuses.Disabled);
+        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
+        Assert.Contains(response.Diagnostics, x =>
+            x.ModuleId == "Elsa.Studio.Weaver.Chat" &&
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
@@ -117,6 +240,10 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(featureManagement.Contributions, x => x.Type == "http" && x.Label == "HTTP endpoints");
         Assert.Contains(featureManagement.Contributions, x => x.Type == "setting-editors");
         Assert.Contains(featureManagement.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+
+        var weaver = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
+        Assert.Contains(weaver.Contributions, x => x.Type == "ai-context-providers" && x.Label == "AI context providers");
+        Assert.Contains(weaver.Contributions, x => x.Type == "ai-prompt-actions" && x.Label == "AI prompt actions");
     }
 
     [Fact]
@@ -138,7 +265,12 @@ public sealed class StudioModuleManifestProviderTests
         var services = new ServiceCollection();
         services.AddElsaStudioApi();
         services.AddConsoleStreamStudio();
+        services.AddDiagnosticsOpenTelemetryStudio();
+        services.AddDiagnosticsStructuredLogsStudio();
         services.AddFeatureManagementStudio();
+        services.AddWeaverChatStudio();
+        services.AddWeaverWorkflowsStudio();
+        services.AddWorkflowsStudio();
         services.AddDashboardStudioSample();
         services.AddWeatherForecastStudioSample();
 

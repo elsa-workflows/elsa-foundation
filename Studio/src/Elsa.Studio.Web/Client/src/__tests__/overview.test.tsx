@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getNavigationSection, Home } from "../app/App";
+import { getNavigationSection, getTopLevelNavigationItems, Home } from "../app/App";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 afterEach(() => {
@@ -52,9 +52,20 @@ describe("navigation sections", () => {
   it("groups module and feature management under Settings", () => {
     expect(getNavigationSection({ id: "home", path: "/" })).toBe("workspace");
     expect(getNavigationSection({ id: "weather", path: "/weather" })).toBe("workspace");
+    expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("settings");
     expect(getNavigationSection({ id: "modules", path: "/modules" })).toBe("settings");
     expect(getNavigationSection({ id: "package-feeds", path: "/package-feeds" })).toBe("settings");
     expect(getNavigationSection({ id: "feature-management", path: "/features" })).toBe("settings");
+  });
+
+  it("keeps child navigation items out of top-level sections", () => {
+    const navigation = [
+      { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules" },
+      { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics" },
+      { id: "orphan", label: "Orphan", path: "/orphan", parentId: "missing" }
+    ];
+
+    expect(getTopLevelNavigationItems(navigation, "workspace").map(item => item.id)).toEqual(["diagnostics", "orphan"]);
   });
 });
 

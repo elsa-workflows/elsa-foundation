@@ -69,6 +69,7 @@ interface FeatureHostState {
   selectedId: string;
   checkedFeatureIds: Set<string>;
   selectedCategory: string;
+  filterText: string;
   loading: boolean;
   applying: boolean;
   status: string | null;
@@ -78,6 +79,11 @@ interface FeatureHostState {
 const AllCategoriesId = "__all";
 const UncategorizedId = "__uncategorized";
 const ModulesChangedEventName = "elsa-studio:modules-changed";
+
+export const featureKeys = {
+  all: ["features"] as const,
+  catalog: (hostId: FeatureHostId) => [...featureKeys.all, hostId, "catalog"] as const
+};
 
 let moduleApi: ElsaStudioModuleApi;
 
@@ -193,6 +199,7 @@ function createInitialHostState(): FeatureHostState {
     selectedId: "",
     checkedFeatureIds: new Set(),
     selectedCategory: AllCategoriesId,
+    filterText: "",
     loading: true,
     applying: false,
     status: null,
@@ -210,7 +217,7 @@ export function FeatureManagementPage() {
 
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const hostState = hostStates[activeHost.id];
-  const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, loading, applying, status, error } = hostState;
+  const { catalog, draft, selectedId, checkedFeatureIds, selectedCategory, filterText, loading, applying, status, error } = hostState;
 
   useEffect(() => {
     for (const host of hosts) {
@@ -218,10 +225,11 @@ export function FeatureManagementPage() {
     }
   }, []);
 
-  const categories = useMemo(() => getCategoryFilters(draft), [draft]);
+  const textFilteredDraft = useMemo(() => filterFeaturesByText(draft, filterText), [draft, filterText]);
+  const categories = useMemo(() => getCategoryFilters(textFilteredDraft), [textFilteredDraft]);
   const filteredDraft = useMemo(
-    () => filterFeaturesByCategory(draft, selectedCategory),
-    [draft, selectedCategory]);
+    () => filterFeaturesByCategory(textFilteredDraft, selectedCategory),
+    [textFilteredDraft, selectedCategory]);
   const selectedFeature = filteredDraft.find(feature => feature.id === selectedId)
     ?? filteredDraft.find(feature => feature.enabled)
     ?? filteredDraft[0]
@@ -418,7 +426,9 @@ export function FeatureManagementPage() {
         <CategoryFilter
           categories={categories}
           selectedCategory={selectedCategory}
+          filterText={filterText}
           onSelect={category => updateHostState(activeHost.id, state => ({ ...state, selectedCategory: category }))}
+          onFilterTextChange={value => updateHostState(activeHost.id, state => ({ ...state, filterText: value }))}
         />
 
         <div className="feature-management-list-column">
@@ -438,7 +448,7 @@ export function FeatureManagementPage() {
             selectedEnabledCount={checkedFeatures.filter(feature => feature.enabled).length}
             allVisibleChecked={allVisibleChecked}
             onToggleVisible={toggleVisibleFeatureSelection}
-            onClearSelection={() => setCheckedFeatureIds(new Set())}
+            onClearSelection={() => updateHostState(activeHost.id, state => ({ ...state, checkedFeatureIds: new Set() }))}
             onEnableSelected={() => setCheckedFeaturesEnabled(true)}
             onDisableSelected={() => setCheckedFeaturesEnabled(false)}
           />
@@ -446,7 +456,7 @@ export function FeatureManagementPage() {
           <div className="feature-management-list" aria-busy={loading}>
             {loading && draft.length === 0 ? <p className="feature-management-muted">Loading features...</p> : null}
             {!loading && draft.length === 0 ? <p className="feature-management-muted">No features are available.</p> : null}
-            {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">No features match this category.</p> : null}
+            {!loading && draft.length > 0 && filteredDraft.length === 0 ? <p className="feature-management-muted">{filterText.trim() ? "No features match this filter." : "No features match this category."}</p> : null}
             {filteredDraft.map(feature => (
               <FeatureCard
                 key={feature.id}
@@ -563,15 +573,29 @@ function BulkFeatureActions({
 function CategoryFilter({
   categories,
   selectedCategory,
+  filterText,
+  onFilterTextChange,
   onSelect
 }: {
   categories: CategoryFilterItem[];
   selectedCategory: string;
+  filterText: string;
+  onFilterTextChange(value: string): void;
   onSelect(categoryId: string): void;
 }) {
   return (
     <aside className="feature-management-categories" aria-label="Feature categories">
       <span className="feature-management-panel-label">Categories</span>
+      <label className="feature-management-filter">
+        <span>Filter features</span>
+        <input
+          type="search"
+          aria-label="Filter features"
+          placeholder="Filter by name, package, setting..."
+          value={filterText}
+          onChange={event => onFilterTextChange(event.target.value)}
+        />
+      </label>
       <div className="feature-management-category-list">
         {categories.map(category => (
           <button
@@ -1066,6 +1090,43 @@ function filterFeaturesByCategory(features: DraftFeature[], category: string) {
   }
 
   return features.filter(feature => getFeatureCategoryIds(feature).includes(category));
+}
+
+export function filterFeaturesByText(features: DraftFeature[], filterText: string) {
+  const terms = filterText
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (terms.length === 0) {
+    return features;
+  }
+
+  return features.filter(feature => {
+    const searchable = [
+      feature.id,
+      feature.displayName,
+      feature.description,
+      feature.sourceKind,
+      feature.packageId,
+      feature.packageVersion,
+      ...feature.categories,
+      ...feature.settings.flatMap(setting => [
+        setting.name,
+        setting.displayName,
+        setting.description,
+        setting.category,
+        setting.group,
+        setting.uiHint
+      ])
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+      .toLowerCase();
+
+    return terms.every(term => searchable.includes(term));
+  });
 }
 
 function getFeatureCategoryIds(feature: DraftFeature) {

@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { requestJson } from "../app/modules/moduleManagementApi";
 import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
 
 describe("module management page", () => {
@@ -354,6 +353,8 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Retention");
     expect(container.textContent).toContain("Reconcile");
     expect(container.textContent).toContain("Prune old versions");
+    expect(container.textContent).toContain("Change ledger");
+    expect(container.textContent).toContain("Feed registration changes require restart");
     const operationsPanel = container.querySelector("[aria-label='Studio feed operations']");
     const retentionPanel = container.querySelector("[aria-label='Studio retention settings']");
     expect(operationsPanel?.textContent).toContain("Reconcile");
@@ -394,6 +395,7 @@ describe("module management page", () => {
 
     expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
     expect(container.querySelector("[aria-label='Feed name']")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Include all packages']")).toBeTruthy();
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     expect(serverTab).toBeTruthy();
@@ -435,7 +437,7 @@ describe("module management page", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const context = createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Module-Management-Key": "secret" } });
-    await requestJson(context, "/_elsa/module-management/registry");
+    await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
     expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
@@ -451,23 +453,26 @@ function stubApi(options?: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: {
-        getJson: options?.hostGetJson ?? (async () => studioRegistry()),
-        postJson: async () => ({})
-      }
+      http: stubHttp("https://studio.example/", options?.hostGetJson ?? (async () => studioRegistry()))
     },
     backend: {
       baseUrl: "https://foundation.example/",
-      http: {
-        getJson: options?.backendGetJson ?? (async () => serverRegistry()),
-        postJson: async () => ({})
-      }
+      http: stubHttp("https://foundation.example/", options?.backendGetJson ?? (async () => serverRegistry()))
     },
     diagnostics: {
       add() {},
       list: () => []
     }
   } as ElsaStudioModuleApi;
+}
+
+function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
+  const http = createEndpointContext(baseUrl).http;
+  return {
+    ...http,
+    requestJson: http.requestJson,
+    getJson,
+  };
 }
 
 function sourceNavigator(container: Element) {

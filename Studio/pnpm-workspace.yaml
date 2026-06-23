@@ -1,6 +1,11 @@
 packages:
   - "src/Elsa.Studio.Web/Client"
   - "src/Elsa.Studio.ConsoleStream/Client"
+  - "src/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
+  - "src/Elsa.Studio.Diagnostics.StructuredLogs/Client"
   - "src/Elsa.Studio.FeatureManagement/Client"
+  - "src/Elsa.Studio.Weaver.Chat/Client"
+  - "src/Elsa.Studio.Weaver.Workflows/Client"
+  - "src/Elsa.Studio.Workflows/Client"
   - "src/Elsa.Studio.Samples.Dashboard/Client"
   - "src/Elsa.Studio.Samples.WeatherForecast/Client"

@@ -3,9 +3,11 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Hammer,
   ExternalLink,
   FileText,
   Gauge,
+  GitBranch,
   Github,
   LayoutDashboard,
   Maximize2,
@@ -21,14 +23,16 @@ import type {
   StudioNavigationContribution,
   StudioPanelContribution
 } from "../sdk";
-import { createStudioRegistry } from "./registry";
+import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import { createEndpointContext } from "../sdk";
 import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { QueryProvider } from "./providers/QueryProvider";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
+import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import "./styles.css";
@@ -52,6 +56,7 @@ interface HostHealthEntry {
 
 const builtInNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
@@ -149,6 +154,10 @@ function AppContent() {
     () => (api?.panels.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
     [api, state]
   );
+  const featureAreas = useMemo(
+    () => (api?.featureAreas.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
+    [api, state]
+  );
 
   if (state === "loading") {
     return (
@@ -168,7 +177,8 @@ function AppContent() {
 
   const activeRoute = routes.find(route => route.path === path);
   const ActiveComponent = activeRoute?.component;
-  const pageTitle = navigation.find(item => item.path === path)?.label ?? activeRoute?.label ?? "Studio";
+  const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
+  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
 
   return (
     <>
@@ -182,12 +192,17 @@ function AppContent() {
         assistantAction={<AgentLauncher open={assistantOpen} onClick={() => setAssistantOpen(current => !current)} />}
       >
         {path === "/" ? <Home api={api!} /> : null}
+        {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
         {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
         {ActiveComponent ? <ActiveComponent /> : null}
-        {!ActiveComponent && path !== "/" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
-          <div className="empty-state">No Studio route is registered for {path}.</div>
+        {!ActiveComponent && path !== "/" && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
+          <div className="empty-state">
+            {owningFeatureArea
+              ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
+              : `No Studio route is registered for ${path}.`}
+          </div>
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
@@ -221,9 +236,20 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
+  for (const item of navigation) {
+    if (!item.parentId) {
+      continue;
+    }
+
+    const children = childrenByParentId.get(item.parentId) ?? [];
+    children.push(item);
+    childrenByParentId.set(item.parentId, children);
+  }
+
   const navigationSections = [
-    { id: "workspace", label: "Workspace", items: navigation.filter(item => getNavigationSection(item) === "workspace") },
-    { id: "settings", label: "Settings", items: navigation.filter(item => getNavigationSection(item) === "settings") }
+    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
+    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
   ].filter(section => section.items.length > 0);
 
   return (
@@ -247,26 +273,51 @@ function ShellFrame({
         {navigationSections.map(section => (
           <nav key={section.id} className="nav-section" aria-label={section.label}>
             <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => (
-              <a
-                key={item.id}
-                className={path === item.path ? "active" : ""}
-                href={item.path}
-                onClick={event => {
-                  event.preventDefault();
-                  onNavigate(item.path);
-                }}
-              >
-                <NavIconTile item={item} />
-                {item.label}
-              </a>
-            ))}
+            {section.items.map(item => {
+              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              return (
+                <div className="nav-item-group" key={item.id}>
+                  <a
+                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    href={item.path}
+                    onClick={event => {
+                      event.preventDefault();
+                      onNavigate(item.path);
+                    }}
+                  >
+                    <NavIconTile item={item} />
+                    {item.label}
+                  </a>
+                  {childItems.length > 0 ? (
+                    <div className="nav-children">
+                      {childItems.map(child => (
+                        <a
+                          key={child.id}
+                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
+                          href={child.path}
+                          onClick={event => {
+                            event.preventDefault();
+                            onNavigate(child.path);
+                          }}
+                        >
+                          {child.label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
         ))}
 
-        <div className="sidebar-footer">
-          <ShieldCheck size={16} />
-          <span>Backend API: {new URL(backendBaseUrl).host}</span>
+        <div className="sidebar-footer" aria-label="Backend API status">
+          <span className="sidebar-status-dot" aria-hidden="true" />
+          <span>
+            <strong>Backend API</strong>
+            <small>{new URL(backendBaseUrl).host}</small>
+          </span>
         </div>
       </aside>
 
@@ -308,7 +359,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, false));
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
@@ -697,6 +748,14 @@ function NavIcon({ id }: { id: string }) {
     return <FileText size={18} />;
   }
 
+  if (id.includes("workflow")) {
+    return <GitBranch size={18} />;
+  }
+
+  if (id.includes("extension-builder")) {
+    return <Hammer size={18} />;
+  }
+
   if (id.includes("modules")) {
     return <PackageSearch size={18} />;
   }
@@ -741,16 +800,31 @@ function getDefaultNavIconColor(id: string) {
     return "#f59e0b";
   }
 
+  if (id.includes("extension-builder")) {
+    return "#ec4899";
+  }
+
   return "var(--primary)";
 }
 
+function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
+  if (path === item.path) return true;
+  if (!item.activePathPrefix) return false;
+  return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
+}
+
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {
-  const settingsPaths = new Set(["/modules", "/package-feeds", "/features"]);
+  const settingsPaths = new Set(["/modules", "/package-feeds", "/features", "/extension-builder"]);
   if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "package-feeds" || item.id === "feature-management") {
     return "settings";
   }
 
   return "workspace";
+}
+
+export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
+  const ids = new Set(navigation.map(item => item.id));
+  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
 }
 
 function normalizePath(path: string) {
@@ -798,6 +872,15 @@ function getInitialActiveBottomPanelId() {
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
 }
 
+function getInitialBottomPanelCollapsed() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const value = window.localStorage.getItem(bottomPanelCollapsedStorageKey);
+  return value === null ? window.innerWidth <= 640 : value === "true";
+}
+
 function getInitialBoolean(storageKey: string, fallback: boolean) {
   if (typeof window === "undefined") {
     return fallback;
@@ -815,7 +898,9 @@ function navigateTo(path: string) {
 export function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <QueryProvider>
+        <AppContent />
+      </QueryProvider>
     </ThemeProvider>
   );
 }

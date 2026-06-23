@@ -9,7 +9,10 @@
             "MaxRecentQuerySize": 2000,
             "PreserveAnsi": true
           },
+          "OpenTelemetryStudio": {},
+          "StructuredLogsStudio": {},
           "FeatureManagement": {},
+          "WorkflowsStudio": {},
           "StudioApi": {}
         },
         "Configuration": {

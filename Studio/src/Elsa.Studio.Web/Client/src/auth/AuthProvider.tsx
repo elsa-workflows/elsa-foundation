@@ -1,25 +1,56 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
+import { anonymousAuthSession, unknownAuthSession, type AuthCapabilities, type AuthProviderProps, type AuthSession, type LoginOptions } from "./types";
 
 export function AuthProvider({ manager, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession>(() => manager.getSession() ?? unknownAuthSession);
   const [capabilities, setCapabilities] = useState<AuthCapabilities | null>(null);
+  const mountedRef = useRef(false);
+  const authOperationRef = useRef(0);
 
-  useEffect(() => {
-    let disposed = false;
+  const shouldCommit = useCallback((operation: number) => mountedRef.current && authOperationRef.current === operation, []);
+  const loadCapabilities = useCallback(async (operation: number) => {
+    if (!shouldCommit(operation)) {
+      return;
+    }
+
+    setCapabilities(null);
+    try {
+      const nextCapabilities = await manager.getCapabilities();
+      if (shouldCommit(operation)) {
+        setCapabilities(nextCapabilities);
+      }
+    } catch (error) {
+      if (shouldCommit(operation)) {
+        console.error("Auth capabilities request failed.", error);
+        setCapabilities(null);
+      }
+    }
+  }, [manager, shouldCommit]);
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    const operation = ++authOperationRef.current;
 
     async function initialize() {
-      const nextSession = await manager.initialize();
-      if (disposed) {
-        return;
-      }
+      try {
+        const nextSession = await manager.initialize();
+        if (!shouldCommit(operation)) {
+          return;
+        }
 
-      setSession(nextSession);
-      if (nextSession.status === "authenticated") {
-        const nextCapabilities = await manager.getCapabilities();
-        if (!disposed) {
-          setCapabilities(nextCapabilities);
+        setSession(nextSession);
+        if (nextSession.status !== "authenticated") {
+          setCapabilities(null);
+          return;
+        }
+
+        await loadCapabilities(operation);
+      } catch (error) {
+        if (shouldCommit(operation)) {
+          console.error("Auth initialization failed.", error);
+          setSession(anonymousAuthSession);
+          setCapabilities(null);
         }
       }
     }
@@ -27,28 +58,54 @@ export function AuthProvider({ manager, children }: AuthProviderProps) {
     void initialize();
 
     return () => {
-      disposed = true;
+      mountedRef.current = false;
+      // Invalidate operations from this manager before the next synchronous effect setup mints a fresh token.
+      authOperationRef.current += 1;
     };
-  }, [manager]);
+  }, [loadCapabilities, manager, shouldCommit]);
 
-  const login = useCallback((options?: LoginOptions) => manager.login(options), [manager]);
+  const login = useCallback(async (options?: LoginOptions) => {
+    const operation = ++authOperationRef.current;
+    await manager.login(options);
+    if (!shouldCommit(operation)) {
+      return;
+    }
 
-  const logout = useCallback(async () => {
-    await manager.logout();
-    setSession(manager.getSession());
-    setCapabilities(null);
-  }, [manager]);
-
-  const refresh = useCallback(async () => {
-    const nextSession = await manager.refresh();
+    const nextSession = manager.getSession();
     setSession(nextSession);
     if (nextSession.status === "authenticated") {
-      setCapabilities(await manager.getCapabilities());
+      await loadCapabilities(operation);
+    } else {
+      setCapabilities(null);
+    }
+  }, [loadCapabilities, manager, shouldCommit]);
+
+  const logout = useCallback(async () => {
+    const operation = ++authOperationRef.current;
+    await manager.logout();
+    if (!shouldCommit(operation)) {
+      return;
+    }
+
+    setSession(manager.getSession());
+    setCapabilities(null);
+  }, [manager, shouldCommit]);
+
+  const refresh = useCallback(async () => {
+    const operation = ++authOperationRef.current;
+    const nextSession = await manager.refresh();
+    if (!shouldCommit(operation)) {
+      return nextSession;
+    }
+
+    setSession(nextSession);
+    if (nextSession.status === "authenticated") {
+      await loadCapabilities(operation);
     } else {
       setCapabilities(null);
     }
     return nextSession;
-  }, [manager]);
+  }, [loadCapabilities, manager, shouldCommit]);
 
   const value = useMemo(() => ({
     session,

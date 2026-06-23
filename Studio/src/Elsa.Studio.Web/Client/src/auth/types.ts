@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 
 export type AuthSessionStatus = "unknown" | "anonymous" | "authenticated";
-export type TokenFreshness = "fresh" | "refreshing" | "expired";
+export type TokenFreshness = "none" | "fresh" | "refreshing" | "expired";
 export type OwnershipMode = "foundation-owned" | "external-owned" | "hybrid";
 export type IdentityAuthority = "foundation" | "external";
 
 export interface AuthSession {
   status: AuthSessionStatus;
-  subject?: string;
-  displayName?: string;
-  tenantId?: string;
+  subject?: string | null;
+  displayName?: string | null;
+  tenantId?: string | null;
   roles: string[];
   permissions: string[];
   tokenFreshness?: TokenFreshness;
-  provider?: AuthProviderRef;
+  provider?: AuthProviderRef | null;
 }
 
 export interface AuthProviderRef {
@@ -23,10 +23,10 @@ export interface AuthProviderRef {
 
 export interface AuthCapabilities {
   ownershipMode: OwnershipMode;
-  userAuthority: IdentityAuthority;
-  roleAuthority: IdentityAuthority;
-  applicationAuthority: IdentityAuthority;
-  capabilities: ProviderCapabilities;
+  userAuthority?: IdentityAuthority;
+  roleAuthority?: IdentityAuthority;
+  applicationAuthority?: IdentityAuthority;
+  capabilities?: ProviderCapabilities;
   providers: AuthProviderSummary[];
 }
 
@@ -43,8 +43,10 @@ export interface ProviderCapabilities {
 export interface AuthProviderSummary {
   id: string;
   kind: string;
+  displayName?: string;
   isDefault: boolean;
   enabled: boolean;
+  capabilities?: ProviderCapabilities;
 }
 
 export interface AuthBootstrap {
@@ -58,6 +60,7 @@ export interface AuthBootstrapProvider extends AuthProviderSummary {
 }
 
 export type AuthChallenge =
+  | { url: string; method: "GET" | "POST" | string; scheme?: string; parameters?: Record<string, unknown> }
   | { type: "redirect"; loginPath: string }
   | { type: "none" };
 
@@ -70,7 +73,7 @@ export interface AuthProviderAdapter {
   id: string;
   kind: string;
   initialize(): Promise<AuthSession>;
-  login(options?: LoginOptions): Promise<void>;
+  login(options?: LoginOptions): Promise<AuthSession | void>;
   handleCallback(): Promise<AuthSession>;
   logout(): Promise<void>;
   getAccessToken(): Promise<string | null>;
