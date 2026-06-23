@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
-import type { ExtensionRuntimeStatus, ProjectFile } from "../app/modules/extensionBuilderApi";
+import type { ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
@@ -143,7 +143,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject()];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/files")) return [
-          { path: "Activities", kind: 1 },
+          { path: "Activities", type: "folder" },
           { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" }
         ];
         if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), state: 0, history: [{ version: "1.0.0", state: 0, available: true }] };
@@ -414,10 +414,10 @@ function templates() {
   ];
 }
 
-function projectFiles(): ProjectFile[] {
+function projectFiles() {
   return [
-    { path: "Activities/HelloActivity.cs", type: "file", content: "public sealed class HelloActivity { }" },
-    { path: "Hello.csproj", type: "file", content: "<Project />" }
+    { path: "Activities/HelloActivity.cs", kind: "Source", content: "public sealed class HelloActivity { }" },
+    { path: "Hello.csproj", kind: "Project", content: "<Project />" }
   ];
 }
 
