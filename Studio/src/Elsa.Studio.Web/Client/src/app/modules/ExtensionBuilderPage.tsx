@@ -195,6 +195,16 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function refreshWorkspacesSafely(options?: { preserveSelection?: boolean }) {
+    try {
+      await refreshWorkspaces(options);
+      return true;
+    } catch (e) {
+      setError(getErrorMessage(e));
+      return false;
+    }
+  }
+
   async function loadProjectDetails(workspaceId: string, projectId: string) {
     const requestId = ++projectDetailsRequestId.current;
     const runtimeRequestId = ++runtimeStatusRequestId.current;
@@ -292,8 +302,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
     const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created workspace ${workspaceName.trim()}.`);
     if (workspace) {
-      await refreshWorkspaces({ preserveSelection: true });
-      setSelectedWorkspaceId(workspace.id);
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
     }
   }
 
@@ -315,8 +326,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       `Created project ${projectDraft.name.trim()}.`
     );
     if (project) {
-      await refreshWorkspaces({ preserveSelection: true });
-      setSelectedProjectId(project.id);
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedProjectId(project.id);
+      }
     }
   }
 
@@ -354,7 +366,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       clearSourceDependentState();
       const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
-      await openFile(workspaceId, projectId, saved.path, { force: true });
+      await openFile(workspaceId, projectId, saved.path);
     }
   }
 
@@ -492,14 +504,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleDeleteProject() {
     if (!selectedWorkspace || !selectedProject || !window.confirm(`Delete project ${selectedProject.name}?`)) return;
-    await runOperation(() => deleteProject(context, selectedWorkspace.id, selectedProject.id), `Deleted project ${selectedProject.name}.`);
-    await refreshWorkspaces({ preserveSelection: true });
+    const deleted = await runOperation(() => deleteProject(context, selectedWorkspace.id, selectedProject.id), `Deleted project ${selectedProject.name}.`);
+    if (deleted) await refreshWorkspacesSafely({ preserveSelection: true });
   }
 
   async function handleDeleteWorkspace() {
     if (!selectedWorkspace || !window.confirm(`Delete workspace ${selectedWorkspace.name}?`)) return;
-    await runOperation(() => deleteWorkspace(context, selectedWorkspace.id), `Deleted workspace ${selectedWorkspace.name}.`);
-    await refreshWorkspaces();
+    const deleted = await runOperation(() => deleteWorkspace(context, selectedWorkspace.id), `Deleted workspace ${selectedWorkspace.name}.`);
+    if (deleted) await refreshWorkspacesSafely();
   }
 
   if (state === "loading") {
