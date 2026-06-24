@@ -10,13 +10,14 @@ internal sealed class OpenTelemetryPersistenceTestContext : IDisposable
 {
     private readonly OpenTelemetryTestHost _host;
 
-    public OpenTelemetryPersistenceTestContext(OpenTelemetryDiagnosticsOptions? options = null, int pruneInterval = 500)
+    public OpenTelemetryPersistenceTestContext(OpenTelemetryDiagnosticsOptions? options = null, int pruneInterval = 500, bool startDraining = true)
     {
         _host = OpenTelemetryTestHost.Create();
         Options = options ?? new OpenTelemetryDiagnosticsOptions();
         SourceRegistry = new OpenTelemetrySourceRegistry(Microsoft.Extensions.Options.Options.Create(Options));
         Store = new EfCoreOpenTelemetryStore(_host, Microsoft.Extensions.Options.Options.Create(Options), SourceRegistry, pruneInterval);
-        Store.StartDraining();
+        if (startDraining)
+            Store.StartDraining();
     }
 
     public OpenTelemetryDiagnosticsOptions Options { get; }

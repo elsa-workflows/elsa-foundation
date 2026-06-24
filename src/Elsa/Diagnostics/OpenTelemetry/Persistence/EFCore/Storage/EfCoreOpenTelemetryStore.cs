@@ -36,6 +36,11 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private readonly CancellationTokenSource _cts = new();
     private int _draining;
     private int _insertedSincePrune;
+    private long _droppedResourceCount;
+    private long _droppedTraceCount;
+    private long _droppedSpanCount;
+    private long _droppedMetricPointCount;
+    private long _droppedLogRecordCount;
     private Task? _drainLoop;
 
     public EfCoreOpenTelemetryStore(
@@ -65,7 +70,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         var capacity = Math.Max(BatchSize, _options.SubscriberChannelCapacity) * 4;
         _channel = Channel.CreateBounded<OpenTelemetryBatch>(new BoundedChannelOptions(capacity)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false,
         });
@@ -76,10 +81,15 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(batch);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (!_channel.Writer.TryWrite(batch))
+        {
+            TrackDropped(batch);
+            return ValueTask.CompletedTask;
+        }
+
         foreach (var resource in batch.Resources)
             _sourceRegistry.MarkSeen(resource);
 
-        _channel.Writer.TryWrite(batch);
         return ValueTask.CompletedTask;
     }
 
@@ -96,7 +106,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
         if (take == 0)
-            return new OpenTelemetryResourceResult([], _sourceRegistry.DroppedCount);
+            return new OpenTelemetryResourceResult([], DroppedResourceCount);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var resources = (await db.TelemetryResources.AsNoTracking()
@@ -113,7 +123,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .Take(take)
             .ToList();
 
-        return new OpenTelemetryResourceResult(resources, _sourceRegistry.DroppedCount);
+        return new OpenTelemetryResourceResult(resources, DroppedResourceCount);
     }
 
     public async ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default)
@@ -121,7 +131,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
         if (take == 0)
-            return new OpenTelemetryTraceResult([], 0);
+            return new OpenTelemetryTraceResult([], DroppedTraceCount);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var serviceResourceIds = await ResolveResourceIdsAsync(db, filter.ServiceName, cancellationToken);
@@ -146,7 +156,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .TakeLast(take)
             .ToList();
 
-        return new OpenTelemetryTraceResult(traces, 0);
+        return new OpenTelemetryTraceResult(traces, DroppedTraceCount);
     }
 
     public async ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default)
@@ -194,7 +204,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
         if (take == 0)
-            return new OpenTelemetryMetricResult([], [], 0);
+            return new OpenTelemetryMetricResult([], [], DroppedMetricPointCount);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var serviceResourceIds = await ResolveResourceIdsAsync(db, filter.ServiceName, cancellationToken);
@@ -230,7 +240,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .Select(x => instruments[x])
             .ToList();
 
-        return new OpenTelemetryMetricResult(selectedInstruments, points, 0);
+        return new OpenTelemetryMetricResult(selectedInstruments, points, DroppedMetricPointCount);
     }
 
     public async ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default)
@@ -238,7 +248,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(filter);
         var take = ClampTake(filter.Take);
         if (take == 0)
-            return new OpenTelemetryLogResult([], 0);
+            return new OpenTelemetryLogResult([], DroppedLogRecordCount);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var serviceResourceIds = await ResolveResourceIdsAsync(db, filter.ServiceName, cancellationToken);
@@ -260,7 +270,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .TakeLast(take)
             .ToList();
 
-        return new OpenTelemetryLogResult(logs, 0);
+        return new OpenTelemetryLogResult(logs, DroppedLogRecordCount);
     }
 
     public async ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
@@ -277,10 +287,10 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             await db.MetricInstruments.CountAsync(cancellationToken),
             await db.MetricPoints.CountAsync(cancellationToken),
             await db.OtlpLogRecords.CountAsync(cancellationToken),
-            0,
-            0,
-            0,
-            0);
+            DroppedTraceCount,
+            DroppedSpanCount,
+            DroppedMetricPointCount,
+            DroppedLogRecordCount);
     }
 
     private async Task RunDrainLoopAsync(CancellationToken cancellationToken)
@@ -344,6 +354,8 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             }
             catch
             {
+                foreach (var batch in batches)
+                    TrackDropped(batch);
                 return 0;
             }
         }
@@ -398,10 +410,10 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             try
             {
                 await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-                await PruneTracesAsync(db, cancellationToken);
-                await PruneSpansAsync(db, cancellationToken);
-                await PruneMetricPointsAsync(db, cancellationToken);
-                await PruneLogsAsync(db, cancellationToken);
+                Interlocked.Add(ref _droppedTraceCount, await PruneTracesAsync(db, cancellationToken));
+                Interlocked.Add(ref _droppedSpanCount, await PruneSpansAsync(db, cancellationToken));
+                Interlocked.Add(ref _droppedMetricPointCount, await PruneMetricPointsAsync(db, cancellationToken));
+                Interlocked.Add(ref _droppedLogRecordCount, await PruneLogsAsync(db, cancellationToken));
                 await PruneResourcesAsync(db, cancellationToken);
                 _insertedSincePrune = 0;
                 return;
@@ -423,56 +435,56 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         }
     }
 
-    private async Task PruneTracesAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
+    private async Task<int> PruneTracesAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
     {
         var maxId = await db.TelemetryTraces.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
         var threshold = maxId - _traceCapacity;
         if (threshold <= 0)
-            return;
+            return 0;
 
-        await db.TelemetryTraces.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
+        return await db.TelemetryTraces.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
     }
 
-    private async Task PruneSpansAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
+    private async Task<int> PruneSpansAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
     {
         var maxId = await db.TelemetrySpans.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
         var threshold = maxId - _spanCapacity;
         if (threshold <= 0)
-            return;
+            return 0;
 
-        await db.TelemetrySpans.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
+        return await db.TelemetrySpans.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
     }
 
-    private async Task PruneMetricPointsAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
+    private async Task<int> PruneMetricPointsAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
     {
         var maxId = await db.MetricPoints.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
         var threshold = maxId - _metricPointCapacity;
         if (threshold <= 0)
-            return;
+            return 0;
 
-        await db.MetricPoints.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
+        return await db.MetricPoints.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
     }
 
-    private async Task PruneLogsAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
+    private async Task<int> PruneLogsAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
     {
         var maxId = await db.OtlpLogRecords.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
         var threshold = maxId - _logRecordCapacity;
         if (threshold <= 0)
-            return;
+            return 0;
 
-        await db.OtlpLogRecords.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
+        return await db.OtlpLogRecords.Where(x => x.Id <= threshold).ExecuteDeleteAsync(cancellationToken);
     }
 
-    private async Task PruneResourcesAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
+    private async Task<int> PruneResourcesAsync(OpenTelemetryDbContext db, CancellationToken cancellationToken)
     {
         var oldIds = await db.TelemetryResources.OrderByDescending(x => x.LastSeen)
             .Skip(_resourceCapacity)
             .Select(x => x.Id)
             .ToListAsync(cancellationToken);
         if (oldIds.Count == 0)
-            return;
+            return 0;
 
-        await db.TelemetryResources.Where(x => oldIds.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
+        return await db.TelemetryResources.Where(x => oldIds.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
     }
 
     private async Task<HashSet<string>?> ResolveResourceIdsAsync(OpenTelemetryDbContext db, string? serviceName, CancellationToken cancellationToken)
@@ -491,6 +503,25 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private int ClampTake(int? take) => Math.Clamp(take ?? _maxQuerySize, 0, _maxQuerySize);
 
     private static int ClampCapacity(int capacity) => Math.Max(1, capacity);
+
+    private long DroppedResourceCount => _sourceRegistry.DroppedCount + Interlocked.Read(ref _droppedResourceCount);
+
+    private long DroppedTraceCount => Interlocked.Read(ref _droppedTraceCount);
+
+    private long DroppedSpanCount => Interlocked.Read(ref _droppedSpanCount);
+
+    private long DroppedMetricPointCount => Interlocked.Read(ref _droppedMetricPointCount);
+
+    private long DroppedLogRecordCount => Interlocked.Read(ref _droppedLogRecordCount);
+
+    private void TrackDropped(OpenTelemetryBatch batch)
+    {
+        Interlocked.Add(ref _droppedResourceCount, batch.Resources.Count);
+        Interlocked.Add(ref _droppedTraceCount, batch.Traces.Count);
+        Interlocked.Add(ref _droppedSpanCount, batch.Spans.Count);
+        Interlocked.Add(ref _droppedMetricPointCount, batch.MetricPoints.Count);
+        Interlocked.Add(ref _droppedLogRecordCount, batch.Logs.Count);
+    }
 
     private static bool Matches(string? candidate, string? search) =>
         !string.IsNullOrEmpty(candidate) && !string.IsNullOrEmpty(search) && candidate.Contains(search, StringComparison.OrdinalIgnoreCase);

@@ -161,6 +161,10 @@ public sealed class EfCoreOpenTelemetryStoreTests
                    diagnostics.MetricPointCount == 2 &&
                    diagnostics.LogRecordCount == 2 &&
                    diagnostics.ResourceCount == 2 &&
+                   diagnostics.DroppedTraceCount == 4 &&
+                   diagnostics.DroppedSpanCount == 4 &&
+                   diagnostics.DroppedMetricPointCount == 4 &&
+                   diagnostics.DroppedLogRecordCount == 4 &&
                    traces.Items.Select(x => x.TraceId).SequenceEqual(["trace-5", "trace-6"]);
         });
 
@@ -169,7 +173,44 @@ public sealed class EfCoreOpenTelemetryStoreTests
         Assert.True(pruned, $"Final counts: resources={finalDiagnostics.ResourceCount}, traces={finalDiagnostics.TraceCount}, spans={finalDiagnostics.SpanCount}, points={finalDiagnostics.MetricPointCount}, logs={finalDiagnostics.LogRecordCount}; traces=[{string.Join(",", finalTraces.Items.Select(x => x.TraceId))}]");
 
         var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
+        var metrics = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { Take = 10 });
+        var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 10 });
         Assert.Equal(["trace-5", "trace-6"], traces.Items.Select(x => x.TraceId));
+        Assert.Equal(4, traces.DroppedCount);
+        Assert.Equal(4, metrics.DroppedCount);
+        Assert.Equal(4, logs.DroppedCount);
+    }
+
+    [Fact]
+    public async Task WriteAsync_WhenChannelIsFull_CountsRejectedBatchWithoutMarkingResourcesSeen()
+    {
+        using var context = new OpenTelemetryPersistenceTestContext(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10, SubscriberChannelCapacity = 1 }, startDraining: false);
+        const int writeCount = 300;
+
+        for (var i = 1; i <= writeCount; i++)
+        {
+            var resource = context.Resource($"resource-{i}", "api", context.Now.AddSeconds(i));
+            await context.Store.WriteAsync(new OpenTelemetryBatch(
+                [resource],
+                [context.Trace($"trace-{i}", resource.Id, context.Now.AddSeconds(i))],
+                [context.Span($"span-record-{i}", $"trace-{i}", $"span-{i}", resource.Id)],
+                [],
+                [context.Point($"point-{i}", $"instrument-{i}", resource.Id, context.Now.AddSeconds(i))],
+                [context.Log($"log-{i}", resource.Id, $"trace-{i}")]));
+        }
+
+        var acceptedCount = context.SourceRegistry.List().Count;
+        var resources = await context.Store.QueryResourcesAsync(new OpenTelemetryResourceFilter { Take = 0 });
+        var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 0 });
+        var metrics = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { Take = 0 });
+        var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 0 });
+
+        Assert.InRange(acceptedCount, 1, writeCount - 1);
+        var rejectedCount = writeCount - acceptedCount;
+        Assert.Equal(rejectedCount, resources.DroppedCount);
+        Assert.Equal(rejectedCount, traces.DroppedCount);
+        Assert.Equal(rejectedCount, metrics.DroppedCount);
+        Assert.Equal(rejectedCount, logs.DroppedCount);
     }
 
     private static async Task<bool> WaitForConditionAsync(Func<Task<bool>> probe, int timeoutMs = 5000)

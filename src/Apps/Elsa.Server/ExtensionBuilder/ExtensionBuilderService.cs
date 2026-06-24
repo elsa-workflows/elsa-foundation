@@ -38,6 +38,8 @@ internal sealed class ExtensionBuilderService(
     IServerFeatureCatalog featureCatalog,
     ILogger<ExtensionBuilderService> logger) : IExtensionBuilderService
 {
+    private static readonly ExtensionBuilderReconcileOutcome PendingPromotionReconcileOutcome = new("pending", "", null, false, []);
+
     public ExtensionBuilderCapabilities GetCapabilities(ExtensionBuilderCaller caller) =>
         ExtensionBuilderCapabilities.FromTrust(caller.HasManagementAccess && caller.IsTrusted);
 
@@ -150,7 +152,7 @@ internal sealed class ExtensionBuilderService(
             return null;
 
         var result = await promotionService.PromoteAsync(build, request, cancellationToken);
-        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null } && build.Artifact is not null)
+        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null } && build.Artifact is not null)
         {
             var recorded = await storage.AddPromotionAsync(build.ProjectId, new(
                 result.PublishedPackage.PackageId,
@@ -158,7 +160,7 @@ internal sealed class ExtensionBuilderService(
                 build.Artifact.Path,
                 result.PublishedPackage.Path,
                 DateTimeOffset.UtcNow,
-                result.ReconcileOutcome,
+                PendingPromotionReconcileOutcome,
                 result.RequiresReload,
                 result.RequiresRestart,
                 DateTimeOffset.UtcNow), CancellationToken.None);
@@ -167,6 +169,20 @@ internal sealed class ExtensionBuilderService(
                 DeleteFileIfExists(result.PublishedPackage.Path);
                 return null;
             }
+
+            var reconcile = await promotionService.RetryReconciliationAsync(CancellationToken.None);
+            var updated = await storage.UpdatePromotionLifecycleAsync(
+                build.ProjectId,
+                result.PublishedPackage.Version,
+                reconcile,
+                result.RequiresReload,
+                result.RequiresRestart,
+                DateTimeOffset.UtcNow,
+                CancellationToken.None);
+            if (!updated)
+                return null;
+
+            result = result with { ReconcileOutcome = reconcile };
         }
 
         return result;

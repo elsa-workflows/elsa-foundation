@@ -58,13 +58,12 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
         if (TryCopyPackageToFeed(build.Artifact.Path, destination) is { } copyRejection)
             return Rejected(copyRejection);
-        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
 
         return new(
             PromotionStatus.Accepted,
             null,
             new(validation.PackageId!, validation.Version!, feed.Name, destination),
-            reconcile,
+            null,
             RequiresReload: true,
             RequiresRestart: false);
     }

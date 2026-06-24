@@ -317,7 +317,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
                 return null;
 
-            var normalizedPath = await WriteFileCoreAsync(projectId, path, content, cancellationToken);
+            var normalizedPath = await WriteFileCoreAsync(projectId, path, content, CancellationToken.None);
             var snapshot = await CreateSourceSnapshotCoreAsync(projectId, CancellationToken.None);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
             await SaveStateAsync(state, CancellationToken.None);

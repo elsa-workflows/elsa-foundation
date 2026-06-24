@@ -336,6 +336,31 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PromoteRecordsStateBeforeTriggeringReconcile()
+    {
+        var storage = CreateStorage();
+        ExtensionProject? project = null;
+        var promotion = new FakePromotionService
+        {
+            BeforeRetryReconciliation = async () =>
+            {
+                var record = Assert.Single(await storage.ListPromotionsAsync(project!.Id));
+                Assert.Equal("pending", record.ReconcileOutcome.Outcome);
+            }
+        };
+        var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), storage: storage, promotion: promotion);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        project = await service.CreateProjectAsync(_caller, workspace.Id, new("elsa-activity-module", "Elsa.Test.PromoteBeforeReconcile", "1.0.0", "net10.0", null, null));
+        var build = await service.SubmitBuildAsync(_caller, project.Id);
+
+        var result = await service.PromoteBuildAsync(_caller, build!.Id);
+        var recordAfterReconcile = Assert.Single(await storage.ListPromotionsAsync(project.Id));
+
+        Assert.Equal(PromotionStatus.Accepted, result!.Status);
+        Assert.Equal("completed", recordAfterReconcile.ReconcileOutcome.Outcome);
+    }
+
+    [Fact]
     public async Task PromoteForwardsTargetFeedRequest()
     {
         var promotion = new FakePromotionService();
@@ -354,7 +379,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     {
         var promotion = new FakePromotionService
         {
-            ReconcileOutcome = new("completed", "corr", "other-package-failed", true, ["Other.Package"])
+            RetryOutcome = new("completed", "corr", "other-package-failed", true, ["Other.Package"])
         };
         var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), promotion: promotion);
         var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
@@ -1012,6 +1037,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringRollback { get; set; }
         public CancellationTokenSource? CancelDuringRetry { get; set; }
         public IReadOnlyList<PackagePromotionRecord>? RollbackPromotions { get; private set; }
+        public Func<Task>? BeforeRetryReconciliation { get; init; }
 
         public PackagePromotionRequest? PromotionRequest { get; private set; }
 
@@ -1036,10 +1062,13 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             return Task.FromResult(new PackagePromotionResult(PromotionStatus.Accepted, null, new(project.PackageId, target.Version, "local", target.FeedPath), RollbackOutcome, true, false));
         }
 
-        public Task<ExtensionBuilderReconcileOutcome> RetryReconciliationAsync(CancellationToken cancellationToken = default)
+        public async Task<ExtensionBuilderReconcileOutcome> RetryReconciliationAsync(CancellationToken cancellationToken = default)
         {
             CancelDuringRetry?.Cancel();
-            return Task.FromResult(RetryOutcome);
+            if (BeforeRetryReconciliation is not null)
+                await BeforeRetryReconciliation();
+
+            return RetryOutcome;
         }
     }
 
