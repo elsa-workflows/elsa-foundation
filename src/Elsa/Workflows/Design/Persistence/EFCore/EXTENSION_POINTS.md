@@ -33,7 +33,19 @@ All command contracts are defined in `Elsa.Workflows.Design.Persistence.Core`. R
 - **Signature:** `Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken ct)`
 - **Default impl:** EF Core transactional insert.
 
-### `IDraftStateDiffEngine` *(Feature contract — `Elsa.Workflows.Design.Persistence.EFCore`)*
+### `ISaveWorkflowDefinitionCommand` *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `Task Execute(WorkflowDefinition definition, CancellationToken ct)`
+- **Default impl:** EF Core update.
+
+### `IDeleteWorkflowDefinitionPermanentlyCommand` *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `Task Execute(string definitionId, CancellationToken ct)`
+- **Default impl:** EF Core transactional delete of definition, drafts, versions, and layout/validation siblings.
+
+### `ISubmitWorkflowDefinitionCommand` *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `Task<SubmittedWorkflowDefinition> Execute(string name, string? description, WorkflowDefinitionState state, CancellationToken ct)`
+- **Default impl:** EF Core `SubmitWorkflowDefinition`.
+
+### `IDraftStateDiffEngine` *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`
 - **Default impl:** `DraftStateDiffEngine` (this feature).
 - **Override:** `services.Replace(...)` to change which mutation events are emitted or the match-key semantics.

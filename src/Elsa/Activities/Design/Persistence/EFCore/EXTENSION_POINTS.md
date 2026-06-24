@@ -12,7 +12,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IAddActivityDefinitionCommand, MyCommand>())` — e.g. to use a different store or add additional side-effects on activity creation.
 
 ### `IActivityDefinitionLookup` *(Core — `Elsa.Activities.Design.Persistence.Core`)*
-- **Default impl:** `ActivityDefinitionLookup` (this feature) — EF Core read path via the named `IActivityDefinitionStore` + `IActivityDefinitionVersionStore` read ports.
+- **Default impl:** Core `ActivityDefinitionLookup` — read path via the named `IActivityDefinitionStore` + `IActivityDefinitionVersionStore` ports.
 - **Override:** replace with a custom lookup (caching layer, alternate store).
 
 ---

@@ -4,9 +4,9 @@ using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -85,7 +85,7 @@ public sealed class CreateDraft(
 
         IReadOnlyList<ValidationError> errors;
 
-        var lockKey = LockKeys.DraftKey(draftId);
+        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         await using (var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken))

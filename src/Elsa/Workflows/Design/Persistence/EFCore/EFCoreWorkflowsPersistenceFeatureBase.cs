@@ -6,7 +6,6 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EFCore.Commands;
-using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Persistence.EFCore.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +32,8 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
         {
             services
                 .AddScoped<IAddWorkflowDefinitionCommand, AddWorkflowDefinition>()
+                .AddScoped<ISaveWorkflowDefinitionCommand, SaveWorkflowDefinition>()
+                .AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, DeleteWorkflowDefinitionPermanently>()
                 .AddScoped<ISubmitWorkflowDefinitionCommand, SubmitWorkflowDefinition>()
                 // Lifecycle origination + cloning + discard (NOT mutations — kept distinct, FR-003)
                 .AddScoped<ICreateDraftCommand, CreateDraft>()

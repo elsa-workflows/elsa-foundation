@@ -2,8 +2,8 @@ using Elsa.Locking.Core;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Events;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,7 +27,7 @@ public sealed class DiscardDraft(
 {
     public async Task Execute(string draftId, CancellationToken cancellationToken = default)
     {
-        var lockKey = LockKeys.DraftKey(draftId);
+        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
         string workflowDefinitionId;
 

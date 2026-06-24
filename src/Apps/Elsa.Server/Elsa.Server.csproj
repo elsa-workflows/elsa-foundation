@@ -47,7 +47,6 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\EFCore\Sqlite\Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
@@ -73,7 +72,7 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
+		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite.Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
@@ -85,7 +84,6 @@
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\EFCore\Sqlite\Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
 	</ItemGroup>
 
 </Project>

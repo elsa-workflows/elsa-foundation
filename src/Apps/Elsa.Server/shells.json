@@ -5,7 +5,6 @@
         "Name": "default",
         "Features": {
           "ActivitiesDesignApi": {},
-          "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
           "ActivitiesPrimitives": {},
           "ActivitiesRuntime": {},
@@ -31,6 +30,7 @@
           "FoundationWorkflowsAgent": {},
           "FileSystemDistributedLocking": {},
           "GitHubCopilotAgent": {},
+          "GroundworkUnifiedPersistenceSqlite": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -40,7 +40,6 @@
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
-          "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
           "GroundworkRuntimePersistenceSqlite": {}

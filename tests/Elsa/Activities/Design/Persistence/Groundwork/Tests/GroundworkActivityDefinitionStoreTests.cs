@@ -101,4 +101,17 @@ public class GroundworkActivityDefinitionStoreTests
         Assert.NotNull(result);
         Assert.Equal("a2", result!.Id);
     }
+
+    [Fact]
+    public async Task Find_by_filter_display_name_matches_exact()
+    {
+        var store = await SeededAsync(
+            Definition("a1", "Acme.Send", search: "Send Email"),
+            Definition("a2", "Acme.Wait", search: "Wait"));
+
+        var result = await store.FindAsync(new ActivityDefinitionFilter { DisplayName = "Send Email" });
+
+        Assert.NotNull(result);
+        Assert.Equal("a1", result!.Id);
+    }
 }

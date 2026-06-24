@@ -22,6 +22,9 @@ public sealed class EFCoreActivityDefinitionStore(IDbContextFactory<ActivitiesDe
     public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
         => FirstOrDefaultAsync(filter.ToQuery(), cancellationToken: cancellationToken);
 
+    public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
+        => QueryAsync(filter.ToQuery(), cancellationToken: cancellationToken);
+
     public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default)
         => FirstOrDefaultAsync(
             Query<ActivityDefinition>.Where(x => x.Id, QueryOp.Equal, id)

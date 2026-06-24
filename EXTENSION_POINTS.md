@@ -59,6 +59,7 @@ not automatic constitution violations.
 | Caching (cache manager + change-token signaling) | [`src/Elsa/Caching/Memory/EXTENSION_POINTS.md`](src/Elsa/Caching/Memory/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md`](src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md`](src/Elsa/Locking/FileSystem/EXTENSION_POINTS.md) |
+| Modularity API (shell feature-management surface) | [`src/Elsa/Modularity/Api/EXTENSION_POINTS.md`](src/Elsa/Modularity/Api/EXTENSION_POINTS.md) |
 
 ### Expressions
 
@@ -100,6 +101,7 @@ not automatic constitution violations.
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
 | Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
+| Activities design — Groundwork persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Workflows
 
@@ -109,6 +111,7 @@ not automatic constitution violations.
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
+| Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows runtime (checkpoint policy/writer, post-commit dispatcher/outbox, recovery scanner, domain retry policy, bookmark resume resolver, value binding resolver/register/validator, payload capture policy, execution agent provider, start dispatcher, scheduler queue/drain, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 

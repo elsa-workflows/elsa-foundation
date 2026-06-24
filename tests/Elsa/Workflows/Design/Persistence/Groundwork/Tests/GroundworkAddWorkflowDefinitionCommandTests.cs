@@ -1,3 +1,4 @@
+using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -18,7 +19,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
     public async Task Persists_definition_and_draft_readable_through_the_ports()
     {
         var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var command = new GroundworkAddWorkflowDefinitionCommand(store, Payloads);
+        var command = new GroundworkAddWorkflowDefinitionCommand(store, Payloads, new FakeSystemClock());
 
         var definition = new WorkflowDefinition { Id = "def-1", Name = "Onboarding", Description = "New hire flow" };
         var draft = new WorkflowDefinitionDraft
@@ -40,5 +41,10 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         Assert.Equal("Onboarding", readDefinition!.Name);
         Assert.NotNull(readDraft);
         Assert.Equal("draft-1", readDraft!.Id);
+    }
+
+    private sealed class FakeSystemClock : ISystemClock
+    {
+        public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     }
 }

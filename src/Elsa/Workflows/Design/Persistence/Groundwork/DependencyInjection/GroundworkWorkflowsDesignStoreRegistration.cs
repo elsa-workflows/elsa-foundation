@@ -1,4 +1,8 @@
+using Elsa.Primitives.Contracts;
+using Elsa.Persistence.Groundwork.Services;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +41,40 @@ public static class GroundworkWorkflowsDesignStoreRegistration
 
         services.RemoveAll<IAddWorkflowDefinitionCommand>();
         services.AddScoped<IAddWorkflowDefinitionCommand, GroundworkAddWorkflowDefinitionCommand>();
+
+        services.RemoveAll<ISaveWorkflowDefinitionCommand>();
+        services.AddScoped<ISaveWorkflowDefinitionCommand, GroundworkSaveWorkflowDefinitionCommand>();
+
+        services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>();
+        services.AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, GroundworkDeleteWorkflowDefinitionPermanentlyCommand>();
+
+        services.RemoveAll<ICreateDraftCommand>();
+        services.AddScoped<ICreateDraftCommand, GroundworkCreateDraftCommand>();
+
+        services.RemoveAll<IUpdateDraftCommand>();
+        services.AddScoped<IUpdateDraftCommand, GroundworkUpdateDraftCommand>();
+
+        services.RemoveAll<IDiscardDraftCommand>();
+        services.AddScoped<IDiscardDraftCommand, GroundworkDiscardDraftCommand>();
+
+        services.RemoveAll<IPromoteDraftToVersionCommand>();
+        services.AddScoped<IPromoteDraftToVersionCommand, GroundworkPromoteDraftToVersionCommand>();
+
+        services.RemoveAll<ISubmitWorkflowDefinitionCommand>();
+        services.AddScoped<ISubmitWorkflowDefinitionCommand, GroundworkSubmitWorkflowDefinitionCommand>();
+
+        services.RemoveAll<ICloneDraftFromVersionCommand>();
+        services.AddScoped<ICloneDraftFromVersionCommand, GroundworkCloneDraftFromVersionCommand>();
+
+        services.RemoveAll<IWorkflowDefinitionLookup>();
+        services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
+
+        services.RemoveAll<IDraftStateDiffEngine>();
+        services.AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>();
+
+        services.TryAddScoped<IIdentityGenerator, GroundworkIdentityGenerator>();
+        services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
+        services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
 
         return services;
     }

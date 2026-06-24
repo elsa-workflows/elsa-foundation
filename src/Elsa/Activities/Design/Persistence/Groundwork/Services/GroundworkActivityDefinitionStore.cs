@@ -35,6 +35,9 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
     public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
         => _reads.FirstOrDefaultAsync(filter.ToQuery(), cancellationToken);
 
+    public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
+        => _reads.QueryAsync(filter.ToQuery(), cancellationToken);
+
     public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default)
         => _reads.FirstOrDefaultAsync(
             Query<ActivityDefinition>.Where(x => x.Id, QueryOp.Equal, id)
