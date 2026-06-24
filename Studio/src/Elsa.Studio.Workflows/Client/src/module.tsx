@@ -26,8 +26,8 @@ import {
   type ReactFlowInstance,
   type XYPosition
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Maximize2, Minimize2, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, Zap } from "lucide-react";
+import "@xyflow/react/dist/style.css";
 import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -2021,14 +2021,14 @@ function WorkflowEditor({
     return selectedNode ? (
       <div className="wf-inspector-content">
         <h3>{nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId}</h3>
-              <dl>
-                <dt>Node ID</dt>
-                <dd>{selectedNode.nodeId}</dd>
-                <dt>Activity version</dt>
-                <dd>{selectedNode.activityVersionId}</dd>
-                <dt>Activity type</dt>
-                <dd>{selectedDescriptor?.typeName ?? nodes.find(node => node.id === selectedNode.nodeId)?.data.activityTypeKey ?? "Unknown"}</dd>
-              </dl>
+        <dl>
+          <dt>Node ID</dt>
+          <dd>{selectedNode.nodeId}</dd>
+          <dt>Activity version</dt>
+          <dd>{selectedNode.activityVersionId}</dd>
+          <dt>Activity type</dt>
+          <dd>{selectedDescriptor?.typeName ?? nodes.find(node => node.id === selectedNode.nodeId)?.data.activityTypeKey ?? "Unknown"}</dd>
+        </dl>
         <ActivityPropertiesPanel
           activity={selectedNode}
           descriptor={selectedDescriptor}

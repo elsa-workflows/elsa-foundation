@@ -470,13 +470,18 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
 
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
+    await click(buttonByLabel(container, "Open expanded Text editor"));
+    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Property editor");
+    await fill(textareaByLabel(container, "Text expanded value"), "Hello from expanded editor\nwith more room");
+    await click(buttonByText(container, "Close"));
+
     await click(buttonByText(container, "Save"));
 
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
     expect(putCall).toBeTruthy();
     expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
       typeName: "System.String",
-      expression: { type: "Literal", value: "Hello from properties" }
+      expression: { type: "Literal", value: "Hello from expanded editor\nwith more room" }
     });
 
     await unmount();

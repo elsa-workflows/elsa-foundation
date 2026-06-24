@@ -11,7 +11,7 @@ import {
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 describe("open telemetry module", () => {
-  it("registers diagnostics navigation and route contributions", () => {
+  it("registers diagnostics navigation, route, and bottom panel contributions", () => {
     const api = stubApi();
 
     register(api);
@@ -30,6 +30,13 @@ describe("open telemetry module", () => {
         id: "open-telemetry",
         label: "OpenTelemetry",
         path: "/diagnostics/open-telemetry"
+      }
+    ]);
+    expect(api.panels.items).toMatchObject([
+      {
+        id: "open-telemetry",
+        title: "OpenTelemetry",
+        order: 1020
       }
     ]);
   });

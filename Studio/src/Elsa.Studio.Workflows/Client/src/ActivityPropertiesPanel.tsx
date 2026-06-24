@@ -1,4 +1,5 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { Maximize2, X } from "lucide-react";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -97,6 +98,8 @@ function PropertyRow({
   const syntax = wrapped?.expression.type ?? "Literal";
   const value = getLiteralEditorValue(activity, input);
   const useInlineSyntaxPicker = Boolean(wrapped && isSingleLineTextInput(input, editor?.id));
+  const canExpandEditor = Boolean(wrapped && isExpandableTextInput(input, editor?.id));
+  const [expanded, setExpanded] = useState(false);
 
   const setRaw = (nextValue: unknown) => {
     const next = wrapped ? withLiteralValue(wrapped, nextValue) : nextValue;
@@ -137,10 +140,115 @@ function PropertyRow({
             variant="inline"
             onChange={setSyntax}
           />
+          {canExpandEditor ? (
+            <button
+              type="button"
+              className="wf-expression-expand-button"
+              aria-label={`Open expanded ${input.displayName || input.name} editor`}
+              title="Open expanded editor"
+              onClick={() => setExpanded(true)}
+            >
+              <Maximize2 size={13} />
+            </button>
+          ) : null}
         </div>
       ) : (
         renderEditor(EditorComponent, input, value, readOnly, context, setRaw)
       )}
+      {canExpandEditor && !useInlineSyntaxPicker ? (
+        <button
+          type="button"
+          className="wf-property-expand-row"
+          aria-label={`Open expanded ${input.displayName || input.name} editor`}
+          onClick={() => setExpanded(true)}
+        >
+          <Maximize2 size={13} /> Open expanded editor
+        </button>
+      ) : null}
+      {expanded ? (
+        <ExpandedPropertyEditor
+          input={input}
+          value={value}
+          syntax={syntax}
+          descriptors={expressionDescriptors}
+          disabled={readOnly}
+          onChange={setRaw}
+          onSyntaxChange={setSyntax}
+          onClose={() => setExpanded(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ExpandedPropertyEditor({
+  input,
+  value,
+  syntax,
+  descriptors,
+  disabled,
+  onChange,
+  onSyntaxChange,
+  onClose
+}: {
+  input: StudioActivityInputDescriptor;
+  value: unknown;
+  syntax: string;
+  descriptors: StudioExpressionDescriptor[];
+  disabled: boolean;
+  onChange(value: unknown): void;
+  onSyntaxChange(value: string): void;
+  onClose(): void;
+}) {
+  const titleId = useId();
+  const displayName = input.displayName || input.name;
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="wf-property-editor-backdrop">
+      <section className="wf-property-editor-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <header>
+          <div>
+            <span>Property editor</span>
+            <h3 id={titleId}>{displayName}</h3>
+          </div>
+          <button type="button" aria-label={`Close ${displayName} editor`} onClick={onClose}>
+            <X size={16} />
+          </button>
+        </header>
+        <div className="wf-property-editor-body">
+          <div className="wf-property-editor-toolbar">
+            <SyntaxPicker
+              label={`${displayName} expression syntax`}
+              value={syntax}
+              descriptors={descriptors}
+              disabled={disabled}
+              onChange={onSyntaxChange}
+            />
+            <span>{formatTypeName(input.typeName)}</span>
+          </div>
+          {input.description ? <p>{input.description}</p> : null}
+          <textarea
+            aria-label={`${displayName} expanded value`}
+            value={value == null ? "" : String(value)}
+            disabled={disabled}
+            spellCheck={false}
+            onChange={event => onChange(event.target.value)}
+          />
+        </div>
+        <footer>
+          <span>Changes update the draft immediately.</span>
+          <button type="button" onClick={onClose}>Close</button>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -263,4 +371,15 @@ function isSingleLineTextInput(input: StudioActivityInputDescriptor, editorId: s
 
   const normalizedType = input.typeName.toLowerCase();
   return ["string", "system.string", "text"].includes(normalizedType) || input.uiHint?.toLowerCase() === "singleline";
+}
+
+function isExpandableTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
+  const uiHint = input.uiHint?.toLowerCase();
+  if (uiHint === "checkbox" || uiHint === "dropdown") return false;
+  if (editorId && !inlineSyntaxEditorIds.has(editorId) && uiHint !== "multiline") return false;
+
+  const normalizedType = input.typeName.toLowerCase();
+  return ["string", "system.string", "text"].includes(normalizedType) ||
+    uiHint === "singleline" ||
+    uiHint === "multiline";
 }

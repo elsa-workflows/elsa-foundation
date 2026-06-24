@@ -1499,7 +1499,7 @@
 }
 
 .wf-expression-field .wf-expression-editor > input[type="text"] {
-  padding-right: 104px;
+  padding-right: 134px;
 }
 
 .wf-syntax-picker {
@@ -1529,7 +1529,7 @@
 .wf-syntax-picker.inline {
   position: absolute;
   top: 4px;
-  right: 4px;
+  right: 33px;
   bottom: 4px;
   width: auto;
 }
@@ -1608,6 +1608,180 @@
   left: auto;
   right: 0;
   min-width: 176px;
+}
+
+.wf-expression-expand-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  display: inline-flex;
+  width: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-left-color: var(--wf-border);
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--wf-surface) 78%, var(--wf-bg));
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.wf-expression-expand-button:hover,
+.wf-expression-expand-button:focus-visible {
+  color: var(--wf-text);
+  outline: none;
+}
+
+.wf-property-expand-row {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  background: var(--wf-panel-muted);
+  color: var(--wf-muted-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.wf-property-expand-row:hover,
+.wf-property-expand-row:focus-visible {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
+}
+
+.wf-property-editor-backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 6, 23, 0.58);
+  padding: 28px;
+}
+
+.wf-property-editor-dialog {
+  display: grid;
+  width: min(860px, calc(100vw - 56px));
+  max-height: min(760px, calc(100vh - 56px));
+  min-height: 440px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--wf-border);
+  border-radius: 8px;
+  background: var(--wf-panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  color: var(--wf-text);
+}
+
+.wf-property-editor-dialog header,
+.wf-property-editor-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--wf-border);
+  padding: 12px 14px;
+}
+
+.wf-property-editor-dialog footer {
+  border-top: 1px solid var(--wf-border);
+  border-bottom: 0;
+}
+
+.wf-property-editor-dialog header span,
+.wf-property-editor-dialog footer span,
+.wf-property-editor-body > p {
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-property-editor-dialog h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.wf-property-editor-dialog header button,
+.wf-property-editor-dialog footer button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.wf-property-editor-dialog header button {
+  width: 30px;
+  padding: 0;
+}
+
+.wf-property-editor-dialog header button:hover,
+.wf-property-editor-dialog footer button:hover {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+}
+
+.wf-property-editor-body {
+  display: grid;
+  min-height: 0;
+  gap: 10px;
+  padding: 14px;
+}
+
+.wf-property-editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) auto;
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+}
+
+.wf-property-editor-toolbar > span {
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  color: var(--wf-muted-text);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+}
+
+.wf-property-editor-body textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 280px;
+  border: 1px solid var(--wf-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  color: var(--wf-text);
+  outline: none;
+  padding: 10px;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wf-property-editor-body textarea:focus {
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-accent) 18%, transparent);
 }
 
 .wf-syntax-picker-menu button {
