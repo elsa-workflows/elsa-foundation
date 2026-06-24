@@ -7,7 +7,7 @@ Domain: `Elsa.Agent`
 
 ### `IAgentSessionService`
 
-Session and message storage boundary for provider-agnostic agent conversations.
+Session and message storage boundary for provider-agnostic agent conversations, including atomic pending-message reservation for streaming.
 
 ### `IAgentPolicyEvaluator`
 

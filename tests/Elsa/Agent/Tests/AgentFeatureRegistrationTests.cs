@@ -127,6 +127,36 @@ public sealed class AgentFeatureRegistrationTests
         Assert.Single(provider.LastMessage.Context);
     }
 
+    [Fact]
+    public async Task Session_service_reserves_latest_pending_user_message_once()
+    {
+        var audit = new InMemoryAgentAuditStore();
+        var sessions = new InMemoryAgentSessionService(audit);
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            "provider",
+            "explain",
+            "Test session",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        var message = await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Explain this workflow.",
+            AgentMessageStatus.Pending,
+            "workflow.explain",
+            [],
+            []));
+
+        var first = await sessions.ReserveLatestPendingUserMessageAsync(session.Id);
+        var second = await sessions.ReserveLatestPendingUserMessageAsync(session.Id);
+
+        Assert.Equal(message.Id, first!.Id);
+        Assert.Equal(AgentMessageStatus.Streaming, first.Status);
+        Assert.Null(second);
+    }
+
     private sealed class CapturingAgentProvider : IAgentProvider
     {
         public string ProviderId => "capturing-test";

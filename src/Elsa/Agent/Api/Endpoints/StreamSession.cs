@@ -33,17 +33,12 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
             return;
         }
 
-        var streamedMessage = (await sessions.ListMessagesAsync(req.SessionId, ct))
-            .Where(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending)
-            .OrderByDescending(x => x.CreatedAt)
-            .FirstOrDefault();
+        var streamedMessage = await sessions.ReserveLatestPendingUserMessageAsync(req.SessionId, ct);
         if (streamedMessage is null)
         {
             await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.message.not_streamable", $"Agent session '{req.SessionId}' does not have a pending user message to stream.", 409)), 409, cancellation: ct);
             return;
         }
-
-        await sessions.UpdateMessageAsync(req.SessionId, streamedMessage.Id, AgentMessageStatus.Streaming, cancellationToken: CancellationToken.None);
 
         var response = HttpContext.Response;
         response.StatusCode = StatusCodes.Status200OK;
@@ -62,6 +57,7 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            await ResetStreamingMessageToPendingAsync(req.SessionId, streamedMessage.Id);
             throw;
         }
         catch (Exception ex)
@@ -79,6 +75,13 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
                 logger.LogWarning(writeEx, "Agent session {SessionId} stream error event could not be written.", req.SessionId);
             }
         }
+    }
+
+    private async Task ResetStreamingMessageToPendingAsync(string sessionId, string messageId)
+    {
+        var current = await sessions.FindMessageAsync(sessionId, messageId, CancellationToken.None);
+        if (current?.Status is AgentMessageStatus.Streaming)
+            await sessions.UpdateMessageAsync(sessionId, messageId, AgentMessageStatus.Pending, cancellationToken: CancellationToken.None);
     }
 
     private async Task UpdateMessageForTerminalEventAsync(string sessionId, string messageId, AgentStreamEvent item, CancellationToken ct)

@@ -287,8 +287,13 @@ internal sealed class ExtensionBuilderService(
             if (!recorded)
                 return null;
 
-            if (activeVersion is null || promotions.Any(x => string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase)))
-                await storage.TrySetActiveVersionAsync(project.Id, request.Version, activeVersion, CancellationToken.None);
+            if (!result.ReconcileOutcome.IsDegraded &&
+                (activeVersion is null || promotions.Any(x => string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase))))
+            {
+                var activated = await storage.TrySetActiveVersionAsync(project.Id, request.Version, activeVersion, CancellationToken.None);
+                if (!activated)
+                    result = result with { Status = PromotionStatus.Conflict };
+            }
         }
 
         return result;

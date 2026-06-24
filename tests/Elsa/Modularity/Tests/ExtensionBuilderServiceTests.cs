@@ -538,7 +538,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task RollbackUpdatesRuntimeStatusWithLatestReconcileOutcome()
+    public async Task RollbackRecordsDegradedOutcomeWithoutAdvancingActiveVersion()
     {
         var storage = CreateStorage();
         var promotion = new FakePromotionService
@@ -551,12 +551,13 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         var promotedV1At = DateTimeOffset.UtcNow.AddMinutes(-10);
         await storage.AddPromotionAsync(project.Id, new(project.PackageId, "1.0.0", "artifact-1.nupkg", "feed-1.nupkg", promotedV1At, new("completed", "promote-1", null, false, []), true, false, promotedV1At));
         await storage.AddPromotionAsync(project.Id, new(project.PackageId, "2.0.0", "artifact-2.nupkg", "feed-2.nupkg", DateTimeOffset.UtcNow, new("completed", "promote-2", null, false, []), true, false, DateTimeOffset.UtcNow));
+        await storage.SetActiveVersionAsync(project.Id, "2.0.0");
 
         var rollback = await service.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
         var status = await service.GetRuntimeStatusAsync(_caller, project.Id);
 
         Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
-        Assert.Equal("1.0.0", status!.ActiveVersion);
+        Assert.Equal("2.0.0", status!.ActiveVersion);
         Assert.Equal("rollback-corr", status.LastReconcileOutcome!.CorrelationId);
         var targetPackage = Assert.Single(status.Packages, x => x.Version == "1.0.0");
         Assert.Equal(ExtensionPackageRuntimeState.FailedReconciliation, targetPackage.State);
@@ -607,7 +608,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
 
         var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
 
-        Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
+        Assert.Equal(PromotionStatus.Conflict, rollback!.Status);
         Assert.Equal("3.0.0", await innerStorage.GetActiveVersionAsync(project.Id));
     }
 
