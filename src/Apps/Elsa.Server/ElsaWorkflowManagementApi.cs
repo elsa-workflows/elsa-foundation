@@ -39,6 +39,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapPut("/drafts/{draftId}", UpdateDraftAsync);
         group.MapPost("/drafts/{draftId}/promote", PromoteDraftAsync);
         group.MapDelete("/drafts/{draftId}", DiscardDraftAsync);
+        group.MapGet("/versions/{versionId}", GetVersionAsync);
         group.MapPost("/versions/{versionId}/publish", PublishVersionAsync);
         group.MapPost("/executables/{artifactId}/run", RunExecutableAsync);
         group.MapGet("/activities", ListActivitiesAsync);
@@ -88,6 +89,9 @@ internal static class ElsaWorkflowManagementApi
 
     private static Task<IResult> GetDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, services => LoadDefinitionResultAsync(services, definitionId, cancellationToken), cancellationToken);
+
+    private static Task<IResult> GetVersionAsync(IShellRegistry shellRegistry, string versionId, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services => LoadVersionResultAsync(services, versionId, cancellationToken), cancellationToken);
 
     private static Task<IResult> CreateDefinitionAsync(IShellRegistry shellRegistry, CreateWorkflowDefinitionRequest request, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
@@ -318,6 +322,28 @@ internal static class ElsaWorkflowManagementApi
             return Results.Ok(await LoadDraftAsync(draftStore, draft, cancellationToken));
 
         return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition draft '{draftId}' was not found."));
+    }
+
+    private static async Task<IResult> LoadVersionResultAsync(IServiceProvider services, string versionId, CancellationToken cancellationToken)
+    {
+        var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
+        var layoutStore = services.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>();
+
+        WorkflowDefinitionVersion version;
+        try
+        {
+            version = await versionStore.GetWithDefinitionAsync(versionId, cancellationToken);
+        }
+        catch (ArgumentException)
+        {
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition version '{versionId}' was not found."));
+        }
+
+        if (version.Definition is null)
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition version '{versionId}' was not found."));
+
+        var layout = await layoutStore.FindByVersionIdAsync(versionId, cancellationToken);
+        return Results.Ok(version.ToDetailsView(layout?.Records));
     }
 
     private static async Task<WorkflowDraftResponse> LoadDraftAsync(IWorkflowDefinitionDraftStore draftStore, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)

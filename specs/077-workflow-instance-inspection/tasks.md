@@ -23,12 +23,12 @@
 
 **Purpose**: Complete the design-version read contract needed by all instance visualization stories.
 
-- [ ] T005 [P] Add backend tests for version details including layout in `tests/Elsa/Workflows/Design/Tests/WorkflowDefinitionVersionDetailsTests.cs`
-- [ ] T006 [P] Add Studio API/type tests or fixtures for workflow definition version details with layout in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
-- [ ] T007 Extend `WorkflowDefinitionVersionDetailsView` with layout records in `src/Elsa/Workflows/Design/Api/Models/WorkflowDefinitionVersionDetailsView.cs`
-- [ ] T008 Update version projection/handler to read layout via `IWorkflowDefinitionVersionLayoutStore` in `src/Elsa/Workflows/Design/Api/Handlers/GetVersionRequestHandler.cs` and `src/Elsa/Workflows/Design/Api/Projections/WorkflowViewProjections.cs`
-- [ ] T009 Implement the design version GET endpoint in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/Get.cs`
-- [ ] T010 Update Studio workflow API types and client method for version details in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts` and `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/api/workflows.ts`
+- [X] T005 [P] Add backend tests for version details including layout in `tests/Elsa/Workflows/Design/Tests/WorkflowDefinitionVersionDetailsTests.cs`
+- [X] T006 [P] Add Studio API/type tests or fixtures for workflow definition version details with layout in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
+- [X] T007 Extend `WorkflowDefinitionVersionDetailsView` with layout records in `src/Elsa/Workflows/Design/Api/Models/WorkflowDefinitionVersionDetailsView.cs`
+- [X] T008 Update version projection/handler to read layout via `IWorkflowDefinitionVersionLayoutStore` in `src/Elsa/Workflows/Design/Api/Handlers/GetVersionRequestHandler.cs` and `src/Elsa/Workflows/Design/Api/Projections/WorkflowViewProjections.cs`
+- [X] T009 Implement the design version GET endpoint in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/Get.cs`
+- [X] T010 Update Studio workflow API types and client method for version details in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowTypes.ts` and `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/api/workflows.ts`
 
 **Checkpoint**: Studio can request the exact definition version state and layout for an instance.
 
@@ -42,16 +42,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Add workflow adapter tests for runtime overlays/read-only node data in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowAdapter.test.ts`
-- [ ] T012 [P] [US1] Add Studio route test for direct instance detail rendering with canvas evidence in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
+- [X] T011 [P] [US1] Add workflow adapter tests for runtime overlays/read-only node data in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowAdapter.test.ts`
+- [X] T012 [P] [US1] Add Studio route test for direct instance detail rendering with canvas evidence in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Add instance graph overlay data helpers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowAdapter.ts`
-- [ ] T014 [US1] Add read-only instance detail route registration for `/workflows/instances/:workflowExecutionId` in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T015 [US1] Implement instance detail data loading for runtime details, definition version details, and activity catalog in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T016 [US1] Render read-only React Flow instance canvas with runtime node markers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T017 [US1] Add CSS for the instance workbench canvas, runtime badges, and fault markers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [X] T013 [US1] Add instance graph overlay data helpers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/workflowAdapter.ts`
+- [X] T014 [US1] Add read-only instance detail route registration for `/workflows/instances/:workflowExecutionId` in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T015 [US1] Implement instance detail data loading for runtime details, definition version details, and activity catalog in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T016 [US1] Render read-only React Flow instance canvas with runtime node markers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T017 [US1] Add CSS for the instance workbench canvas, runtime badges, and fault markers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: User Story 1 is independently functional and testable.
 
@@ -65,13 +65,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T018 [P] [US2] Update Studio list navigation test in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
+- [X] T018 [P] [US2] Update Studio list navigation test in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
 
 ### Implementation for User Story 2
 
-- [ ] T019 [US2] Change instance list row selection to navigate to the instance detail route in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T020 [US2] Add detail-page back/list affordances and not-found/fallback states in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T021 [US2] Adjust responsive layout so the list and detail views remain usable at desktop and narrower widths in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [X] T019 [US2] Change instance list row selection to navigate to the instance detail route in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T020 [US2] Add detail-page back/list affordances and not-found/fallback states in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T021 [US2] Adjust responsive layout so the list and detail views remain usable at desktop and narrower widths in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: User Story 2 is independently functional and testable.
 
@@ -85,14 +85,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T022 [P] [US3] Add Studio correlation tests for node/history/incident selection in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
+- [X] T022 [P] [US3] Add Studio correlation tests for node/history/incident selection in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx`
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] Add correlated selection state and matching helpers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T024 [US3] Update activity history and incident panels to select/highlight related graph nodes in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T025 [US3] Add unmatched runtime evidence sections for activity executions/incidents without graph matches in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
-- [ ] T026 [US3] Add CSS for correlated selected/highlight states in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
+- [X] T023 [US3] Add correlated selection state and matching helpers in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T024 [US3] Update activity history and incident panels to select/highlight related graph nodes in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T025 [US3] Add unmatched runtime evidence sections for activity executions/incidents without graph matches in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/module.tsx`
+- [X] T026 [US3] Add CSS for correlated selected/highlight states in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/styles.css`
 
 **Checkpoint**: All user stories are independently functional.
 
@@ -102,11 +102,11 @@
 
 **Purpose**: Verification, documentation consistency, and requested self-review.
 
-- [ ] T027 [P] Run backend focused tests from `specs/077-workflow-instance-inspection/quickstart.md`
-- [ ] T028 [P] Run Studio focused tests/build from `specs/077-workflow-instance-inspection/quickstart.md`
-- [ ] T029 Perform manual browser validation against `/workflows/instances` and `/workflows/instances/{workflowExecutionId}`
-- [ ] T030 Run self-review loop over current diffs and fix actionable findings until clean
-- [ ] T031 Mark all completed tasks `[X]`, commit foundation changes, commit Studio changes, and report verification evidence
+- [X] T027 [P] Run backend focused tests from `specs/077-workflow-instance-inspection/quickstart.md`
+- [X] T028 [P] Run Studio focused tests/build from `specs/077-workflow-instance-inspection/quickstart.md`
+- [X] T029 Perform manual browser validation against `/workflows/instances` and `/workflows/instances/{workflowExecutionId}`
+- [X] T030 Run self-review loop over current diffs and fix actionable findings until clean
+- [X] T031 Mark all completed tasks `[X]`, commit foundation changes, commit Studio changes, and report verification evidence
 
 ---
 
