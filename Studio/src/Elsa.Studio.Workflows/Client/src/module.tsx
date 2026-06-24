@@ -34,10 +34,12 @@ import {
   deleteDefinition,
   deleteDefinitionPermanently,
   getDefinition,
+  getWorkflowInstance,
   listActivities,
   listActivityDescriptors,
   listDefinitions,
   listExecutables,
+  listWorkflowInstances,
   listExpressionDescriptors,
   fallbackExpressionDescriptors,
   promoteDraft,
@@ -46,7 +48,7 @@ import {
   runExecutable,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "./workflowTypes";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -158,7 +160,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instances",
         path: "/workflows/instances",
         label: "Workflow instances",
-        component: () => <WorkflowInstancesPage ai={api.ai} />
+        component: () => <WorkflowInstancesPage context={api.backend} ai={api.ai} />
       }
     ]
   });
@@ -214,18 +216,10 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
   );
 }
 
-function WorkflowInstancesPage({ ai }: { ai: StudioAiContributionApi }) {
-  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   return (
     <WorkflowsPageFrame activePath="/workflows/instances" title="Instances">
-      <div className="wf-empty">
-        Workflow instance history will appear here when the runtime exposes an instance query endpoint.
-        {instanceAction ? (
-          <button type="button" className="wf-ai-inline-action" onClick={() => dispatchAiAction(ai, instanceAction, { scope: "workflow-instances" })}>
-            <Sparkles size={13} /> Ask Weaver about instances
-          </button>
-        ) : null}
-      </div>
+      <WorkflowInstances context={context} ai={ai} />
     </WorkflowsPageFrame>
   );
 }
@@ -755,6 +749,231 @@ function WorkflowExecutables({ context, ai, definitionFilter }: { context: Studi
       ) : null}
     </>
   );
+}
+
+function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  const [selectedDetails, setSelectedDetails] = useState<WorkflowInstanceDetails | null>(null);
+  const [detailState, setDetailState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [detailError, setDetailError] = useState("");
+  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setError("");
+    try {
+      const nextInstances = await listWorkflowInstances(context, { status: statusFilter || undefined, take: 100 });
+      setInstances(nextInstances);
+      setState("ready");
+      setSelectedInstanceId(current => current && nextInstances.some(instance => instance.workflowExecutionId === current) ? current : nextInstances[0]?.workflowExecutionId ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setInstances([]);
+      setState("failed");
+    }
+  }, [context, statusFilter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSelectedDetails(null);
+    setDetailError("");
+
+    if (!selectedInstanceId) {
+      setDetailState("idle");
+      return () => { cancelled = true; };
+    }
+
+    setDetailState("loading");
+    void getWorkflowInstance(context, selectedInstanceId)
+      .then(details => {
+        if (cancelled) return;
+        setSelectedDetails(details);
+        setDetailState("ready");
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setDetailError(e instanceof Error ? e.message : String(e));
+        setDetailState("failed");
+      });
+
+    return () => { cancelled = true; };
+  }, [context, selectedInstanceId]);
+
+  const selectedSummary = instances.find(instance => instance.workflowExecutionId === selectedInstanceId) ?? null;
+
+  return (
+    <>
+      <div className="wf-toolbar">
+        <button type="button" onClick={() => void load()}>Refresh</button>
+        <label className="wf-toolbar-field">
+          <span>Status</span>
+          <select aria-label="Workflow instance status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Running">Running</option>
+            <option value="Suspended">Suspended</option>
+            <option value="Completed">Completed</option>
+            <option value="Faulted">Faulted</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </label>
+      </div>
+      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow instances...</div> : null}
+      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow instances found. Run a published workflow executable to create instance history.</div> : null}
+      {state === "ready" && instances.length > 0 ? (
+        <div className="wf-instance-workbench">
+          <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow instances">
+            <div className="wf-grid-head" role="row">
+              <span>Instance</span>
+              <span>Status</span>
+              <span>Definition</span>
+              <span>Activity</span>
+              <span>Started</span>
+              <span>Duration</span>
+            </div>
+            {instances.map(instance => (
+              <button
+                type="button"
+                className="wf-grid-row"
+                role="row"
+                aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
+                aria-selected={instance.workflowExecutionId === selectedInstanceId}
+                key={instance.workflowExecutionId}
+                onClick={() => setSelectedInstanceId(instance.workflowExecutionId)}
+              >
+                <span>
+                  <strong>{instance.workflowExecutionId}</strong>
+                  <small>{instance.artifactId}</small>
+                </span>
+                <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
+                <span>
+                  <strong>{instance.definitionId}</strong>
+                  <small>{instance.definitionVersionId}</small>
+                </span>
+                <span>
+                  <strong>{instance.activityCount} activities</strong>
+                  <small>{instance.incidentCount} incidents</small>
+                </span>
+                <span>{formatDate(instance.startedAt ?? instance.createdAt)}</span>
+                <span>{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
+              </button>
+            ))}
+          </div>
+          <WorkflowInstanceInspector
+            ai={ai}
+            action={instanceAction}
+            summary={selectedSummary}
+            details={selectedDetails}
+            state={detailState}
+            error={detailError}
+          />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function WorkflowInstanceInspector({ ai, action, summary, details, state, error }: {
+  ai: StudioAiContributionApi;
+  action: StudioAiPromptActionContribution | undefined;
+  summary: WorkflowInstanceSummary | null;
+  details: WorkflowInstanceDetails | null;
+  state: "idle" | "loading" | "ready" | "failed";
+  error: string;
+}) {
+  if (!summary) {
+    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow instance to inspect activity history.</div></aside>;
+  }
+
+  return (
+    <aside className="wf-instance-inspector" aria-label="Workflow instance details">
+      <header>
+        <div>
+          <span>Workflow instance</span>
+          <h3>{summary.workflowExecutionId}</h3>
+        </div>
+        {action ? (
+          <button type="button" onClick={() => dispatchAiAction(ai, action, details ?? summary)}>
+            <Sparkles size={13} /> Explain
+          </button>
+        ) : null}
+      </header>
+      <dl className="wf-instance-meta">
+        <dt>Status</dt>
+        <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+        <dt>Artifact</dt>
+        <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
+        <dt>Definition</dt>
+        <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
+        <dt>Created</dt>
+        <dd>{formatDate(summary.createdAt)}</dd>
+        <dt>Started</dt>
+        <dd>{formatDate(summary.startedAt)}</dd>
+        <dt>Completed</dt>
+        <dd>{formatDate(summary.completedAt)}</dd>
+        <dt>Correlation</dt>
+        <dd>{summary.correlationId || "None"}</dd>
+      </dl>
+      {state === "loading" ? <div className="wf-empty">Loading instance details...</div> : null}
+      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "ready" && details ? (
+        <>
+          <WorkflowActivityHistory activities={details.activities} />
+          <WorkflowIncidentList incidents={details.incidents} />
+        </>
+      ) : null}
+    </aside>
+  );
+}
+
+function WorkflowActivityHistory({ activities }: { activities: ActivityExecutionStateSummary[] }) {
+  return (
+    <section className="wf-instance-section">
+      <h4>Activity history</h4>
+      {activities.length === 0 ? <p>No activity executions recorded yet.</p> : null}
+      {activities.length > 0 ? (
+        <div className="wf-instance-activity-list">
+          {activities.map(activity => (
+            <div className="wf-instance-activity" key={activity.activityExecutionId}>
+              <span><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></span>
+              <strong>{shortTypeName(activity.activityType) ?? activity.activityType}</strong>
+              <small>{activity.activityExecutionId}</small>
+              <time>{formatDate(activity.scheduledAt)}</time>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function WorkflowIncidentList({ incidents }: { incidents: IncidentStateSummary[] }) {
+  return (
+    <section className="wf-instance-section">
+      <h4>Incidents</h4>
+      {incidents.length === 0 ? <p>No incidents recorded.</p> : null}
+      {incidents.map(incident => (
+        <div className="wf-instance-incident" data-severity={incident.severity.toLowerCase()} key={incident.incidentId}>
+          <strong>{incident.failureType}</strong>
+          <span>{incident.status} · {incident.severity}</span>
+          <p>{incident.message}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function WorkflowStatusBadge({ status, subStatus }: { status: string; subStatus?: string | null }) {
+  return <span className="wf-status-badge" data-status={status.toLowerCase()}>{subStatus ? `${status} · ${subStatus}` : status}</span>;
 }
 
 function DefinitionPager({ page, pageSize, totalCount, onPageChange, onPageSizeChange }: {
@@ -2503,4 +2722,23 @@ function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatDuration(start?: string | null, end?: string | null) {
+  if (!start || !end) return "";
+
+  const startTime = Date.parse(start);
+  const endTime = Date.parse(end);
+  if (Number.isNaN(startTime) || Number.isNaN(endTime) || endTime < startTime) return "";
+
+  const totalSeconds = Math.round((endTime - startTime) / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
