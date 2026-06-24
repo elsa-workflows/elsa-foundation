@@ -8,8 +8,10 @@ using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.EFCore.Events;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
@@ -43,6 +45,8 @@ internal static class ElsaWorkflowManagementApi
         group.MapPost("/versions/{versionId}/publish", PublishVersionAsync);
         group.MapPost("/executables/{artifactId}/run", RunExecutableAsync);
         group.MapGet("/activities", ListActivitiesAsync);
+        group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
+        group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
 
         return endpoints;
     }
@@ -301,6 +305,52 @@ internal static class ElsaWorkflowManagementApi
             }
         }, cancellationToken);
 
+    private static Task<IResult> ListActivityDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var dbContext = await CreateDbContextAsync<ActivitiesDesignDbContext>(services, cancellationToken);
+            var eventPublisher = services.GetRequiredService<IEventPublisher>();
+            await using (dbContext)
+            {
+                var versions = await dbContext.ActivityDefinitionVersions
+                    .Include(x => x.Definition)
+                    .OrderBy(x => x.Definition!.Category)
+                    .ThenBy(x => x.Definition!.DisplayName)
+                    .ThenBy(x => x.Id)
+                    .ToArrayAsync(cancellationToken);
+
+                foreach (var version in versions)
+                {
+                    await eventPublisher.Publish(
+                        new OnEntityLoading(dbContext, version),
+                        EventPublishingStrategy.Sequential,
+                        cancellationToken);
+                }
+
+                var response = versions
+                    .Where(x => x.Definition is not null)
+                    .Select(ToActivityDescriptorResponse)
+                    .ToArray();
+
+                return Results.Ok(new ActivityDescriptorsResponse(response));
+            }
+        }, cancellationToken);
+
+    private static Task<IResult> ListExpressionDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services =>
+        {
+            var registry = services.GetService<IExpressionDescriptorRegistry>();
+            var descriptors = registry?.ListAll().Select(ToExpressionDescriptorResponse) ?? [];
+            var response = descriptors
+                .Concat(DefaultExpressionDescriptors())
+                .GroupBy(x => x.Type, StringComparer.Ordinal)
+                .Select(x => x.First())
+                .OrderBy(x => x.DisplayName)
+                .ToArray();
+
+            return Task.FromResult<IResult>(Results.Ok(new ExpressionDescriptorsResponse(response)));
+        }, cancellationToken);
+
     private static async Task<IResult> LoadDefinitionResultAsync(IServiceProvider services, string definitionId, CancellationToken cancellationToken)
     {
         var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
@@ -439,6 +489,131 @@ internal static class ElsaWorkflowManagementApi
     private static bool IsSequenceActivity(string? activityTypeKey) =>
         activityTypeKey?.Contains(nameof(Sequence), StringComparison.Ordinal) == true;
 
+    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version)
+    {
+        var definition = version.Definition!;
+        var activityName = definition.ActivityTypeKey.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? definition.ActivityTypeKey;
+        return new ActivityDescriptorResponse(
+            definition.ActivityTypeKey,
+            definition.ActivityTypeKey,
+            activityName,
+            ParseMajorVersion(version.Version),
+            definition.Category,
+            definition.DisplayName ?? activityName,
+            definition.Description,
+            version.ExecutionType.ToString(),
+            version.Inputs.Select(ToInputDescriptorResponse).ToArray(),
+            version.Outputs.Select(ToOutputDescriptorResponse).ToArray(),
+            version.DesignFacets.SelectMany(ToPortDescriptorResponses).ToArray(),
+            new Dictionary<string, object>(),
+            new Dictionary<string, object>(),
+            version.DesignFacets.Any(IsContainerDesignFacet),
+            true,
+            false,
+            false);
+    }
+
+    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input) =>
+        new(
+            input.Name,
+            GetTypeName(input.Type),
+            input.DisplayName,
+            input.Description,
+            input.Order,
+            input.Category,
+            input.IsBrowsable,
+            input.UiHint ?? InferUiHint(input.Type),
+            true,
+            null,
+            "Literal",
+            input.UISpecifications ?? GetUiSpecifications(input.Type),
+            input.IsRequired);
+
+    private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
+        new(
+            output.Name,
+            GetTypeName(output.Type),
+            output.DisplayName,
+            output.Description,
+            output.Order,
+            output.Category,
+            output.IsBrowsable);
+
+    private static IEnumerable<PortDescriptorResponse> ToPortDescriptorResponses(Elsa.Activities.Design.Core.Models.ActivityDesignFacet facet)
+    {
+        if (facet.Payload.ValueKind != JsonValueKind.Object || !facet.Payload.TryGetProperty("ports", out var ports) || ports.ValueKind != JsonValueKind.Array)
+            yield break;
+
+        foreach (var port in ports.EnumerateArray())
+        {
+            if (port.ValueKind != JsonValueKind.Object || !port.TryGetProperty("name", out var nameProperty))
+                continue;
+
+            var name = nameProperty.GetString();
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var displayName = port.TryGetProperty("displayName", out var displayNameProperty) ? displayNameProperty.GetString() : name;
+            var type = port.TryGetProperty("type", out var typeProperty) ? typeProperty.GetString() ?? "Flow" : "Flow";
+            var isBrowsable = port.TryGetProperty("isBrowsable", out var browsableProperty) && browsableProperty.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? browsableProperty.GetBoolean()
+                : (bool?)null;
+
+            yield return new PortDescriptorResponse(name, displayName, type, isBrowsable);
+        }
+    }
+
+    private static ExpressionDescriptorResponse ToExpressionDescriptorResponse(IExpressionDescriptor descriptor) =>
+        new(descriptor.TypeName, descriptor.DisplayName, null);
+
+    private static IEnumerable<ExpressionDescriptorResponse> DefaultExpressionDescriptors()
+    {
+        yield return new ExpressionDescriptorResponse("Literal", "Literal", null);
+        yield return new ExpressionDescriptorResponse("JavaScript", "JavaScript", null);
+        yield return new ExpressionDescriptorResponse("Liquid", "Liquid", null);
+        yield return new ExpressionDescriptorResponse("Object", "Object", null);
+        yield return new ExpressionDescriptorResponse("Variable", "Variable", null);
+        yield return new ExpressionDescriptorResponse("Input", "Input", null);
+    }
+
+    private static string GetTypeName(TypeInformation type) => type.GetTypeFullName();
+
+    private static int ParseMajorVersion(string version) =>
+        int.TryParse(version.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(), out var major)
+            ? major
+            : 1;
+
+    private static string InferUiHint(TypeInformation type)
+    {
+        var typeName = GetTypeName(type);
+        if (string.Equals(typeName, typeof(bool).FullName, StringComparison.Ordinal))
+            return "checkbox";
+
+        return "singleline";
+    }
+
+    private static IDictionary<string, object>? GetUiSpecifications(TypeInformation type)
+    {
+        try
+        {
+            var loadedType = type.LoadType();
+            if (!loadedType.IsEnum)
+                return null;
+
+            return new Dictionary<string, object>
+            {
+                ["options"] = Enum.GetNames(loadedType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsContainerDesignFacet(Elsa.Activities.Design.Core.Models.ActivityDesignFacet facet) =>
+        facet.Kind.Contains("structure", StringComparison.OrdinalIgnoreCase);
+
     private static string GetMissingRootActivityMessage(CreateWorkflowDefinitionRequest request) =>
         string.IsNullOrWhiteSpace(request.RootActivityVersionId)
             ? $"Could not find a constructable {NormalizeRootKind(request.RootKind)} activity in the activity catalog."
@@ -540,3 +715,56 @@ internal sealed record ActivityCatalogItemResponse(
     IReadOnlyCollection<Elsa.Activities.Design.Core.Models.InputDefinition> Inputs,
     IReadOnlyCollection<Elsa.Activities.Design.Core.Models.OutputDefinition> Outputs,
     IReadOnlyCollection<Elsa.Activities.Design.Core.Models.ActivityDesignFacet> DesignFacets);
+
+internal sealed record ActivityDescriptorsResponse(IReadOnlyList<ActivityDescriptorResponse> Items);
+
+internal sealed record ActivityDescriptorResponse(
+    string TypeName,
+    string Namespace,
+    string Name,
+    int Version,
+    string Category,
+    string DisplayName,
+    string? Description,
+    string Kind,
+    IReadOnlyCollection<InputDescriptorResponse> Inputs,
+    IReadOnlyCollection<OutputDescriptorResponse> Outputs,
+    IReadOnlyCollection<PortDescriptorResponse> Ports,
+    IReadOnlyDictionary<string, object> CustomProperties,
+    IReadOnlyDictionary<string, object> ConstructionProperties,
+    bool IsContainer,
+    bool IsBrowsable,
+    bool IsStart,
+    bool IsTerminal);
+
+internal sealed record InputDescriptorResponse(
+    string Name,
+    string TypeName,
+    string DisplayName,
+    string? Description,
+    float Order,
+    string? Category,
+    bool? IsBrowsable,
+    string UiHint,
+    bool IsWrapped,
+    object? DefaultValue,
+    string DefaultSyntax,
+    IDictionary<string, object>? UiSpecifications,
+    bool IsRequired);
+
+internal sealed record OutputDescriptorResponse(
+    string Name,
+    string TypeName,
+    string DisplayName,
+    string? Description,
+    float Order,
+    string? Category,
+    bool? IsBrowsable);
+
+internal sealed record PortDescriptorResponse(string Name, string? DisplayName, string Type, bool? IsBrowsable);
+
+internal sealed record DescriptorOptionResponse(string Label, object Value);
+
+internal sealed record ExpressionDescriptorsResponse(IReadOnlyList<ExpressionDescriptorResponse> Items);
+
+internal sealed record ExpressionDescriptorResponse(string Type, string DisplayName, string? Description);
