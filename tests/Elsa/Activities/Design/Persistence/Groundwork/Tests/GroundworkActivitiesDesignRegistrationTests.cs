@@ -1,9 +1,11 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +40,7 @@ public class GroundworkActivitiesDesignRegistrationTests
         Assert.IsType<GroundworkActivityDefinitionStore>(sp.GetRequiredService<IActivityDefinitionStore>());
         Assert.IsType<GroundworkActivityDefinitionVersionStore>(sp.GetRequiredService<IActivityDefinitionVersionStore>());
         Assert.IsType<GroundworkAddActivityDefinitionCommand>(sp.GetRequiredService<IAddActivityDefinitionCommand>());
+        Assert.IsType<GroundworkAddActivityDefinitionVersionCommand>(sp.GetRequiredService<IAddCommand<ActivityDefinitionVersion>>());
         Assert.IsType<ActivityDefinitionLookup>(sp.GetRequiredService<IActivityDefinitionLookup>());
     }
 
