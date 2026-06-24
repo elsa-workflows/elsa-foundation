@@ -44,22 +44,19 @@ internal static class ElsaModuleManagementApi
     }
 
     private static async Task<IResult> GetRegistryAsync(
-        [FromServices] IFeatureManagementService featureManagement,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
+        [FromServices] IModuleRegistryService moduleRegistry,
         [FromServices] IWebHostEnvironment environment,
         [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
-        var features = await featureManagement.GetCatalogAsync(cancellationToken);
-        var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
+        var modules = await moduleRegistry.ListModulesAsync(cancellationToken);
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
 
         return Results.Ok(new ModuleManagementRegistryResponse(
             new("server", "Server", "Elsa.Server", environment.ContentRootPath),
             DateTimeOffset.UtcNow,
-            features.Features.Select(ModuleManagementModule.FromFeature).ToArray(),
-            packages.Packages.Select(ModuleManagementPackage.FromActivePackage).ToArray(),
+            modules,
             ListDropFolderPackages(dropFolder),
             ReadRegistryFeeds(config),
             ReadRetentionPolicy(config, cleanupOptions.Value),
@@ -496,7 +493,6 @@ internal sealed record ModuleManagementRegistryResponse(
     ModuleManagementHost Host,
     DateTimeOffset GeneratedAt,
     IReadOnlyList<ModuleManagementModule> Modules,
-    IReadOnlyList<ModuleManagementPackage> Packages,
     IReadOnlyList<ModuleManagementDropFolderPackage> DropFolderPackages,
     IReadOnlyList<ModuleManagementFeed> Feeds,
     ModuleManagementRetentionPolicy RetentionPolicy,
@@ -505,80 +501,214 @@ internal sealed record ModuleManagementRegistryResponse(
 
 internal sealed record ModuleManagementHost(string Id, string DisplayName, string Runtime, string ContentRootPath);
 
+internal interface IModuleRegistryService
+{
+    Task<IReadOnlyList<ModuleManagementModule>> ListModulesAsync(CancellationToken cancellationToken = default);
+}
+
+internal sealed class ModuleRegistryService(
+    IFeatureManagementService featureManagement,
+    INuplaneAdminOperations nuplaneAdmin) : IModuleRegistryService
+{
+    public async Task<IReadOnlyList<ModuleManagementModule>> ListModulesAsync(CancellationToken cancellationToken = default)
+    {
+        var features = await featureManagement.GetCatalogAsync(cancellationToken);
+        var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
+        return ModuleManagementRegistryBuilder.BuildModules(features.Features, packages.Packages);
+    }
+}
+
 internal sealed record ModuleManagementModule(
     string Id,
     string DisplayName,
-    string Surface,
-    string Runtime,
-    string SourceKind,
-    string Scope,
+    string PackageId,
     string Version,
+    string SourceKind,
+    string FeedName,
+    string SourceName,
+    string InstallPath,
     string Status,
     string Compatibility,
-    string? PackageId,
-    string? PackageVersion,
-    IReadOnlyList<ModuleManagementContribution> Contributions,
-    IReadOnlyList<ModuleManagementDiagnostic> Diagnostics,
-    ModuleManagementStudioManifest Manifest)
-{
-    public static ModuleManagementModule FromFeature(FeatureCatalogItem feature)
-    {
-        var hasReadError = !string.IsNullOrWhiteSpace(feature.ReadError);
-        var diagnostics = hasReadError
-            ? [new ModuleManagementDiagnostic(feature.Id, "failed", feature.ReadError!)]
-            : Array.Empty<ModuleManagementDiagnostic>();
+    ModuleManagementPackageManifest? Manifest,
+    IReadOnlyList<ModuleManagementPackageDependency> Dependencies,
+    IReadOnlyList<ModuleManagementFeature> Features,
+    IReadOnlyList<ModuleManagementDiagnostic> Diagnostics);
 
-        var contributions = feature.Settings
-            .Select(setting => new ModuleManagementContribution("setting", setting.Name, setting.DisplayName, "active"))
+internal sealed record ModuleManagementFeature(
+    string Id,
+    string DisplayName,
+    string? Description,
+    IReadOnlyList<string> Categories,
+    bool Enabled,
+    string SourceKind,
+    bool Advanced,
+    bool Experimental,
+    JsonElement Configuration,
+    IReadOnlyList<FeatureSettingDescriptor> Settings,
+    string? ManifestPath,
+    string? ManifestHash,
+    IReadOnlyList<ModuleManagementDiagnostic> Diagnostics);
+
+internal static class ModuleManagementRegistryBuilder
+{
+    public static IReadOnlyList<ModuleManagementModule> BuildModules(
+        IReadOnlyList<FeatureCatalogItem> features,
+        IReadOnlyList<ActivePackage> packages)
+    {
+        var modules = new List<ModuleManagementModule>();
+        var packageFeatures = features
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageId) && !string.IsNullOrWhiteSpace(x.PackageVersion))
+            .ToLookup(x => PackageKey(x.PackageId!, x.PackageVersion!), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var package in packages.OrderBy(x => x.PackageId, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Version, StringComparer.OrdinalIgnoreCase))
+            modules.Add(BuildPackageModule(package, packageFeatures[PackageKey(package.PackageId, package.Version)].ToArray()));
+
+        var serverFeatures = features
+            .Where(x => string.IsNullOrWhiteSpace(x.PackageId) || string.IsNullOrWhiteSpace(x.PackageVersion))
+            .Where(x => !IsManifestError(x))
+            .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var capabilities = new List<string> { "feature" };
-        if (feature.Settings.Count > 0)
-            capabilities.Add("settings");
+        if (serverFeatures.Length > 0)
+            modules.Insert(0, BuildServerModule(serverFeatures));
+
+        return modules;
+    }
+
+    private static ModuleManagementModule BuildPackageModule(ActivePackage package, IReadOnlyList<FeatureCatalogItem> features)
+    {
+        var manifest = ModuleManagementPackageManifest.Read(package.InstallPath);
+        var dependencies = ModuleManagementPackageDependency.Read(package.InstallPath);
+        var diagnostics = BuildPackageDiagnostics(package, manifest, features);
+        var childFeatures = features
+            .Where(x => !IsManifestError(x))
+            .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(ToFeature)
+            .ToArray();
+
+        return new(
+            PackageKey(package.PackageId, package.Version),
+            package.PackageId,
+            package.PackageId,
+            package.Version,
+            "package",
+            package.FeedName ?? "",
+            package.SourceName ?? "",
+            package.InstallPath,
+            diagnostics.Any(x => x.Status == "failed") ? "failed" : "loaded",
+            diagnostics.Count > 0 ? "warning" : "compatible",
+            manifest,
+            dependencies,
+            childFeatures,
+            diagnostics);
+    }
+
+    private static ModuleManagementModule BuildServerModule(IReadOnlyList<FeatureCatalogItem> features) =>
+        new(
+            "Elsa.Server",
+            "Elsa.Server",
+            "Elsa.Server",
+            "",
+            "server",
+            "",
+            "",
+            "",
+            "loaded",
+            "compatible",
+            null,
+            [],
+            features.Select(ToFeature).ToArray(),
+            []);
+
+    private static IReadOnlyList<ModuleManagementDiagnostic> BuildPackageDiagnostics(
+        ActivePackage package,
+        ModuleManagementPackageManifest? manifest,
+        IReadOnlyList<FeatureCatalogItem> features)
+    {
+        var diagnostics = new List<ModuleManagementDiagnostic>();
+
+        foreach (var feature in features.Where(x => !string.IsNullOrWhiteSpace(x.ReadError)))
+            diagnostics.Add(new(feature.Id, "failed", feature.ReadError!));
+
+        if (manifest is null && diagnostics.Count == 0)
+            diagnostics.Add(new(package.PackageId, "warning", "Package manifest not found."));
+        else if (manifest?.Kind == "manifest-error")
+            diagnostics.Add(new(package.PackageId, "failed", manifest.Text ?? "Package manifest could not be read."));
+
+        var manifestIdentity = ReadManifestIdentity(manifest);
+        if (manifestIdentity is not null)
+        {
+            if (!string.Equals(manifestIdentity.Value.PackageId, package.PackageId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(manifestIdentity.Value.Version, package.Version, StringComparison.OrdinalIgnoreCase))
+            {
+                diagnostics.Add(new(
+                    "manifest",
+                    "warning",
+                    $"Manifest package identity '{manifestIdentity.Value.PackageId}@{manifestIdentity.Value.Version}' differs from active package identity '{package.PackageId}@{package.Version}'."));
+            }
+        }
+
+        return diagnostics
+            .GroupBy(x => (x.Source, x.Status, x.Reason))
+            .Select(x => x.First())
+            .ToArray();
+    }
+
+    private static ModuleManagementFeature ToFeature(FeatureCatalogItem feature)
+    {
+        var diagnostics = string.IsNullOrWhiteSpace(feature.ReadError)
+            ? Array.Empty<ModuleManagementDiagnostic>()
+            : [new ModuleManagementDiagnostic(feature.Id, "failed", feature.ReadError!)];
 
         return new(
             feature.Id,
             feature.DisplayName,
-            "Server",
-            "Elsa.Server",
+            feature.Description,
+            feature.Categories,
+            feature.Enabled,
             feature.SourceKind,
-            "backend",
-            feature.PackageVersion ?? "",
-            hasReadError ? "failed" : feature.Enabled ? "loaded" : "available",
-            hasReadError ? "warning" : "compatible",
-            feature.PackageId,
-            feature.PackageVersion,
-            contributions,
-            diagnostics,
-            new(feature.ManifestPath ?? "", [], capabilities));
+            feature.Advanced,
+            feature.Experimental,
+            feature.Configuration,
+            feature.Settings,
+            feature.ManifestPath,
+            feature.ManifestHash,
+            diagnostics);
     }
-}
 
-internal sealed record ModuleManagementContribution(string Type, string Id, string Label, string Status);
+    private static (string PackageId, string Version)? ReadManifestIdentity(ModuleManagementPackageManifest? manifest)
+    {
+        if (manifest?.Content is not JsonObject content)
+            return null;
 
-internal sealed record ModuleManagementStudioManifest(
-    string Entry,
-    IReadOnlyList<string> Styles,
-    IReadOnlyList<string> Capabilities);
+        var package = content["package"] as JsonObject;
+        if (package is null)
+            return null;
 
-internal sealed record ModuleManagementPackage(
-    string Id,
-    string Version,
-    string FeedName,
-    string SourceName,
-    string InstallPath,
-    ModuleManagementPackageManifest? Manifest,
-    IReadOnlyList<ModuleManagementPackageDependency> Dependencies)
-{
-    public static ModuleManagementPackage FromActivePackage(ActivePackage package) =>
-        new(
-            package.PackageId,
-            package.Version,
-            package.FeedName ?? "",
-            package.SourceName ?? "",
-            package.InstallPath,
-            ModuleManagementPackageManifest.Read(package.InstallPath),
-            ModuleManagementPackageDependency.Read(package.InstallPath));
+        var packageId = ReadString(package, "id", "packageId");
+        var version = ReadString(package, "version");
+        return string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(version)
+            ? null
+            : (packageId, version);
+    }
+
+    private static string? ReadString(JsonObject obj, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (obj[name] is JsonValue value && value.TryGetValue<string>(out var text))
+                return text;
+        }
+
+        return null;
+    }
+
+    private static bool IsManifestError(FeatureCatalogItem feature) =>
+        string.Equals(feature.SourceKind, FeatureSourceKinds.ManifestError, StringComparison.OrdinalIgnoreCase);
+
+    private static string PackageKey(string packageId, string version) => $"{packageId}@{version}";
 }
 
 internal sealed record ModuleManagementPackageManifest(string Kind, string Path, JsonNode? Content, string? Text)
