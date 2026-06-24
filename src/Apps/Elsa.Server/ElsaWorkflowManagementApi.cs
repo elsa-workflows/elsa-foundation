@@ -119,9 +119,9 @@ internal static class ElsaWorkflowManagementApi
             if (string.IsNullOrWhiteSpace(request.Name))
                 return Results.BadRequest(new WorkflowManagementErrorResponse("A workflow name is required."));
 
-            var activity = await CreateRootActivityAsync(services, request.RootKind, cancellationToken);
+            var activity = await CreateRootActivityAsync(services, request.RootActivityVersionId, request.RootKind, cancellationToken);
             if (activity is null)
-                return Results.BadRequest(new WorkflowManagementErrorResponse($"Could not find a constructable {NormalizeRootKind(request.RootKind)} activity in the activity catalog."));
+                return Results.BadRequest(new WorkflowManagementErrorResponse(GetMissingRootActivityMessage(request)));
 
             var state = new WorkflowDefinitionState(
                 Variables: [],
@@ -378,18 +378,17 @@ internal static class ElsaWorkflowManagementApi
             validation?.Errors.ToArray() ?? []);
     }
 
-    private static async Task<ActivityNode?> CreateRootActivityAsync(IServiceProvider services, string? rootKind, CancellationToken cancellationToken)
+    private static async Task<ActivityNode?> CreateRootActivityAsync(IServiceProvider services, string? rootActivityVersionId, string? rootKind, CancellationToken cancellationToken)
     {
         var normalized = NormalizeRootKind(rootKind);
         var dbContext = await CreateDbContextAsync<ActivitiesDesignDbContext>(services, cancellationToken);
         await using (dbContext)
         {
-            var activityTypeName = normalized == WorkflowRootKinds.Flowchart ? nameof(Flowchart) : nameof(Sequence);
-            var version = await dbContext.ActivityDefinitionVersions
-                .Include(x => x.Definition)
-                .Where(x => x.Definition != null && x.Definition.ActivityTypeKey.Contains(activityTypeName))
-                .OrderByDescending(x => x.SemVerSortKey)
-                .FirstOrDefaultAsync(cancellationToken);
+            var version = string.IsNullOrWhiteSpace(rootActivityVersionId)
+                ? await FindRootKindActivityVersionAsync(dbContext, normalized, cancellationToken)
+                : await dbContext.ActivityDefinitionVersions
+                    .Include(x => x.Definition)
+                    .FirstOrDefaultAsync(x => x.Id == rootActivityVersionId, cancellationToken);
 
             if (version is null)
                 return null;
@@ -399,13 +398,23 @@ internal static class ElsaWorkflowManagementApi
                 ActivityVersionId: version.Id,
                 Inputs: [],
                 Outputs: [],
-                Structure: CreateRootStructure(normalized));
+                Structure: CreateRootStructure(version.Definition?.ActivityTypeKey, normalized));
         }
     }
 
-    private static ActivityNodeStructure CreateRootStructure(string rootKind)
+    private static Task<ActivityDefinitionVersion?> FindRootKindActivityVersionAsync(ActivitiesDesignDbContext dbContext, string rootKind, CancellationToken cancellationToken)
     {
-        if (rootKind == WorkflowRootKinds.Flowchart)
+        var activityTypeName = rootKind == WorkflowRootKinds.Flowchart ? nameof(Flowchart) : nameof(Sequence);
+        return dbContext.ActivityDefinitionVersions
+            .Include(x => x.Definition)
+            .Where(x => x.Definition != null && x.Definition.ActivityTypeKey.Contains(activityTypeName))
+            .OrderByDescending(x => x.SemVerSortKey)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private static ActivityNodeStructure? CreateRootStructure(string? activityTypeKey, string fallbackRootKind)
+    {
+        if (IsFlowchartActivity(activityTypeKey) || (activityTypeKey is null && fallbackRootKind == WorkflowRootKinds.Flowchart))
         {
             var structure = new FlowchartAuthoredStructure();
             return new ActivityNodeStructure(
@@ -414,12 +423,26 @@ internal static class ElsaWorkflowManagementApi
                 JsonSerializer.SerializeToElement(structure, SerializerOptions));
         }
 
+        if (!IsSequenceActivity(activityTypeKey) && !(activityTypeKey is null && fallbackRootKind == WorkflowRootKinds.Sequence))
+            return null;
+
         var sequence = new SequenceAuthoredStructure();
         return new ActivityNodeStructure(
             Sequence.StructureKind,
             Sequence.StructureSchemaVersion,
             JsonSerializer.SerializeToElement(sequence, SerializerOptions));
     }
+
+    private static bool IsFlowchartActivity(string? activityTypeKey) =>
+        activityTypeKey?.Contains(nameof(Flowchart), StringComparison.Ordinal) == true;
+
+    private static bool IsSequenceActivity(string? activityTypeKey) =>
+        activityTypeKey?.Contains(nameof(Sequence), StringComparison.Ordinal) == true;
+
+    private static string GetMissingRootActivityMessage(CreateWorkflowDefinitionRequest request) =>
+        string.IsNullOrWhiteSpace(request.RootActivityVersionId)
+            ? $"Could not find a constructable {NormalizeRootKind(request.RootKind)} activity in the activity catalog."
+            : $"Could not find root activity version '{request.RootActivityVersionId}' in the activity catalog.";
 
     private static string NormalizeRootKind(string? rootKind) =>
         string.Equals(rootKind, WorkflowRootKinds.Flowchart, StringComparison.OrdinalIgnoreCase)
@@ -494,7 +517,7 @@ internal sealed record WorkflowDraftResponse(
     IReadOnlyCollection<DesignMetadataRecord> Layout,
     IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError> ValidationErrors);
 
-internal sealed record CreateWorkflowDefinitionRequest(string Name, string? Description, string? RootKind);
+internal sealed record CreateWorkflowDefinitionRequest(string Name, string? Description, string? RootKind, string? RootActivityVersionId);
 
 internal sealed record UpdateWorkflowDraftRequest(
     WorkflowDefinitionStateView State,

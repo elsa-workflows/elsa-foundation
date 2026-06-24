@@ -62,6 +62,74 @@ The SQLite provider has no portable atomic insert-only primitive: `ExpectedVersi
 
 The entire **runtime** persistence story is now provider-agnostic with only the host naming a provider. What remains for a "de facto Groundwork persistence" verdict is a product decision on **design-time/definition persistence** (currently EF Core), plus optional benchmark evidence before moving operational hot paths onto Groundwork's operational layer.
 
+## Update 3 — Path B: closed query contract unblocks the universal provider
+
+The Phase 4 finding below ("Design-persistence scope") concluded design persistence could **not**
+become a Groundwork lane because it was bound to a full `IQueryable`/LINQ read surface
+(`IQueries<TEntity>` / `IFilter<TEntity>`). That blocker has now been **removed in Elsa** (Path B /
+Option 2 — chosen because the requirement is "one DB configured once at the host backs every module"):
+
+- **A closed, provider-neutral query spec.** `Query<TEntity>` (`Elsa.Persistence.Core/Queries`) is a
+  finite operation set — field `Equal` / `In` / `Contains` (case-insensitive), AND-of-OR composition,
+  a single `OrderBy`/`OrderByDescending`, optional tenant-agnostic flag — covering the *entire* design-lane
+  query vocabulary inventoried for this work. No `IQueryable`, no arbitrary expression trees.
+- **Named per-aggregate read ports.** Every design aggregate exposes a small intent-revealing read
+  port (`IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`,
+  `IWorkflowDefinitionVersionLayoutStore`, `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`)
+  with closed methods. Related-entity loads are explicit second reads (`GetWithDefinitionAsync`), so a
+  non-relational provider needs no joins; `SemVer` knowledge stays out of the store (callers pass a
+  precomputed sort key).
+- **EF Core implements the same contract.** A generic `EFCoreReadStore<TDbContext, TEntity>` translates
+  `Query<TEntity>` to LINQ (`EFCoreQueryTranslator`), preserving tenant filters + the `OnEntityLoading`
+  hydration pipeline. Relational users are unaffected.
+- **The legacy surface is gone.** `IQueries<TEntity>`, `IFilter<TEntity>`, `EFCoreQueries<,>`, and
+  `ConfigureQueries<>` have been deleted; all design consumers (lookups, reconcilers, publishing, the
+  clone command, the API handlers) now speak only the named ports.
+
+**Consequence:** the design lanes are no longer LINQ-bound. The remaining work for a single universal
+provider is now bounded and additive: (a) a **Groundwork adapter** implementing the named read ports
+over Groundwork's portable query (native where available, in-adapter fallback until Groundwork ships the
+scoped query uplift — `IN`, substring-contains, OR-composition, single-field `ORDER BY`, total-count),
+and (b) **single-provider host composition** that wires every lane to one provider. The bounded query
+uplift (NOT a full ORM) is specified for the Groundwork maintainers in the
+[Groundwork closed-query capability spec](groundwork-closed-query-capability-spec.md). The "Recommended
+implementation route" item 5 is therefore reclassified from a product decision to **in-progress
+
+### Update 3a — the document-backed read path is proven in code
+
+Two building blocks now turn the above from "designed" into "demonstrated", both committed with tests on
+the universal-provider branch:
+
+- **`InMemoryQueryEvaluator`** (`Elsa.Persistence.Core`) — evaluates the closed `Query<TEntity>` against
+  materialized entities with semantics byte-for-byte identical to `EFCoreQueryTranslator` (11 tests).
+  This is the provider-neutral fallback the capability spec promised.
+- **`GroundworkReadStore<TEntity>`** (`Elsa.Persistence.Groundwork.Querying`) — the document-store
+  analogue of `EFCoreReadStore`. It satisfies the full closed contract over Groundwork's `IDocumentStore`
+  (whose only native query is equality-on-index + offset paging) by pulling the candidate set through a
+  by-collection equality index and applying the evaluator, with a by-id point-read fast path. 11 tests
+  run every design-lane query shape against the manifest-driven in-memory document store and return the
+  **same result set as the EF Core provider** — concrete evidence that design persistence can run on a
+  **document** database, not just a relational one, with the choice made only at the host.
+
+**Direction confirmed (host decision):** Elsa does **not** adopt Groundwork's relational providers for
+the design lane; instead every Elsa lane must be able to run on **either** a relational database (EF
+Core) **or** a document database (Groundwork documents), selected once at the host. The document path is
+the Groundwork path.
+
+**Remaining productionization** (bounded, mechanical except where noted): per-aggregate read adapters
+binding each named port to `GroundworkReadStore<TEntity>`; a **design storage manifest** (document kinds
++ by-collection indexes); the **write side** (Groundwork create/update/delete for the design aggregates,
+replacing the EF write commands) — the larger piece, and where the one real design decision lives:
+serialize the **domain projection** (the logical entity incl. its `[NotMapped]` `State` /
+`DescriptorPayload` / layout `Records`, excluding EF shadow `*Source` strings and navigation properties,
+with related aggregates fetched via a second read); and **single-provider host composition** wiring every
+lane (runtime + design) to the chosen provider. This productionization is captured as an executable,
+per-aggregate plan in the
+[Groundwork design persistence provider implementation plan](groundwork-design-provider-implementation-plan.md).
+
+
+engineering**.
+
 ## What the current codebase already gives us
 
 - Runtime persistence seams already exist as replacement contracts in `Elsa.Workflows.Runtime.Core` (`IWorkflowExecutableStore`, `IWorkflowExecutionStateStore`, `IBookmarkStateStore`, `IDurableValueStateStore`, `IIncidentStateStore`, `IOperationalStateStore`, `ISchedulerStateStore`, `IRuntimePostCommitOutboxStore`).
@@ -150,7 +218,12 @@ Wins:
 
 Keep `WorkloadFamily` as a **non-binding intent label** for diagnostics and human readability; stop letting it (and a self-declared category) be the gate.
 
-## Design-persistence scope (Phase 4 finding)
+## Design-persistence scope (Phase 4 finding — SUPERSEDED by Update 3)
+
+> **Superseded.** This finding concluded design persistence could not become a Groundwork lane while it
+> was bound to the `IQueries<TEntity>` / `IFilter<TEntity>` `IQueryable` surface. That surface has since
+> been replaced by the closed `Query<TEntity>` spec + named read ports (see **Update 3**), so the blocker
+> below no longer holds. The section is retained for historical context.
 
 **Decision: a "de facto Groundwork persistence" verdict should be scoped to the runtime, with design-time/definition persistence staying on EF Core for now.** This is a capability conclusion, not a preference.
 
@@ -177,7 +250,7 @@ For design persistence to become a Groundwork lane, Groundwork would need to gro
 2. ✅ **Done (all ten runtime seams).** Every runtime store now has a Groundwork bridge over `IDocumentStore` — `IBookmarkStateStore`, `IWorkflowExecutableStore`, `IActivityExecutionStateStore`, `IWorkflowExecutionStateStore`, `IDurableValueStateStore`, `ISchedulerStateStore`, `IOperationalStateStore`, `IControlPlaneStateStore`, `IIncidentStateStore`, `IRuntimePostCommitOutboxStore` — each with provider-neutral and registration tests. See "Update 2" above.
 3. ✅ **Done.** A durable `GroundworkRuntimeCheckpointWriter` orchestrates the seam stores for atomic-by-idempotent-replay checkpoint commits, proven across a simulated SQLite restart.
 4. ✅ **Done.** Existing in-memory defaults stay intact when Groundwork is not composed (covered by a regression test).
-5. ⏳ **Open (product decision).** Decide whether design-time/definition persistence (currently EF Core) is in scope for a "de facto Groundwork" verdict.
+5. 🚧 **In progress (Path B — see Update 3).** Design-time/definition persistence is being unbound from the `IQueryable`/LINQ surface so a single host-selected provider can back every lane. Done: closed `Query<TEntity>` spec, named per-aggregate read ports, EF Core adapter on the same contract, and deletion of `IQueries<T>`/`IFilter<T>`. Remaining: Groundwork design adapter, single-provider host composition, and the Groundwork capability spec handoff.
 6. ⏳ **Open (evidence-gated).** Add a hot-path viability matrix/benchmark before migrating operational seams onto Groundwork's *operational* layer (leases/work queue/transport outbox), gated on evidence rather than capability.
 
 ## POC acceptance criteria

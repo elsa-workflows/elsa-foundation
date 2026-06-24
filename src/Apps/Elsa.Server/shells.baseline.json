@@ -30,6 +30,10 @@
           "DiagnosticsConsoleLogStreaming": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "FoundationAgentAbstractions": {},
+          "FoundationAgentApi": {},
+          "FoundationWorkflowsAgent": {},
+          "GitHubCopilotAgent": {},
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           }

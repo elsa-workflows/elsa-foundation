@@ -1,4 +1,4 @@
-using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.Queries;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Filters;
 /// <summary>
 /// A specification to use when finding workflow definitions. Only non-null fields will be included in the conditional expression.
 /// </summary>
-public class WorkflowDefinitionFilter : IFilter<WorkflowDefinition>
+public class WorkflowDefinitionFilter
 {
     /// <summary>
     /// Filter by the ID of the workflow definition.
@@ -44,19 +44,25 @@ public class WorkflowDefinitionFilter : IFilter<WorkflowDefinition>
     public bool? TenantAgnostic { get; set; }
 
     /// <summary>
-    /// Applies the filter to the specified queryable.
+    /// Projects this filter onto the closed, provider-neutral <see cref="Query{TEntity}"/> spec. This is
+    /// the shape every persistence provider can translate.
     /// </summary>
-    /// <param name="queryable">The queryable to apply the filter to.</param>
-    /// <returns>The filtered queryable.</returns>
-    public virtual IQueryable<WorkflowDefinition> Apply(IQueryable<WorkflowDefinition> queryable)
+    public Query<WorkflowDefinition> ToQuery()
     {
-        if (Id != null) queryable = queryable.Where(x => x.Id == Id);
-        if (Ids != null) queryable = queryable.Where(x => Ids.Contains(x.Id));
-        if (Name != null) queryable = queryable.Where(x => x.Name == Name);
-        if (Names != null) queryable = queryable.Where(x => Names.Contains(x.Name!));
-        if (!string.IsNullOrWhiteSpace(SearchTerm)) queryable = queryable.Where(x => x.Name!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Description!.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) || x.Id.Contains(SearchTerm));
-        if (Description != null) queryable = queryable.Where(x => x.Description == Description);
+        var query = Query<WorkflowDefinition>.All();
 
-        return queryable;
+        if (Id != null) query.And(x => x.Id, QueryOp.Equal, Id);
+        if (Ids != null) query.And(x => x.Id, QueryOp.In, Ids);
+        if (Name != null) query.And(x => x.Name, QueryOp.Equal, Name);
+        if (Names != null) query.And(x => x.Name, QueryOp.In, Names);
+        if (!string.IsNullOrWhiteSpace(SearchTerm))
+            query.And(x => x.Name, QueryOp.Contains, SearchTerm)
+                .Or(x => x.Description, QueryOp.Contains, SearchTerm)
+                .Or(x => x.Id, QueryOp.Contains, SearchTerm);
+        if (Description != null) query.And(x => x.Description, QueryOp.Equal, Description);
+
+        if (TenantAgnostic == true) query.IgnoreTenant();
+
+        return query;
     }
 }

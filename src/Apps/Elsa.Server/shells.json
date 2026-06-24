@@ -17,6 +17,7 @@
           },
           "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
           "DiagnosticsStructuredLogs": {},
           "DiagnosticsStructuredLogsPersistenceEFCoreSqlite": {},
           "Events": {},
@@ -24,7 +25,11 @@
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
+          "FoundationAgentAbstractions": {},
+          "FoundationAgentApi": {},
+          "FoundationWorkflowsAgent": {},
           "FileSystemDistributedLocking": {},
+          "GitHubCopilotAgent": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -32,6 +37,7 @@
           "SampleNuplaneActivities": {},
           "Serialization": {},
           "Tasks": {},
+          "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},

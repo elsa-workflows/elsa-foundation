@@ -1,0 +1,140 @@
+using System.Linq.Expressions;
+using System.Reflection;
+using Elsa.Persistence.Core.Queries;
+using Elsa.Primitives.Entities;
+using Elsa.Primitives.Persistence;
+
+namespace Elsa.Persistence.EFCore.Queries;
+
+/// <summary>
+/// Translates a provider-neutral <see cref="Query{TEntity}"/> into LINQ over an
+/// <see cref="IQueryable{T}"/> so EF Core can execute it server-side. The emitted expression shapes
+/// (equality, <c>IN</c> via <see cref="Enumerable.Contains{TSource}(IEnumerable{TSource}, TSource)"/>,
+/// and provider-translatable single-argument <see cref="string.Contains(string)"/> over normalized
+/// text for case-insensitive substring search).
+/// </summary>
+public static class EFCoreQueryTranslator
+{
+    private static readonly System.Reflection.MethodInfo ContainsStringMethod =
+        typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+    private static readonly System.Reflection.MethodInfo ToLowerMethod =
+        typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
+
+    /// <summary>
+    /// Applies <paramref name="query"/>'s predicates and ordering to <paramref name="source"/>.
+    /// Tenant-agnostic handling is the adapter's concern (EF's <c>IgnoreQueryFilters</c>), not the
+    /// translator's, so this method stays pure LINQ.
+    /// </summary>
+    public static IQueryable<TEntity> Apply<TEntity>(IQueryable<TEntity> source, Query<TEntity> query)
+        where TEntity : Entity
+    {
+        var nullabilityContext = new NullabilityInfoContext();
+        foreach (var clause in query.Clauses)
+        {
+            var predicate = BuildClause(clause, nullabilityContext);
+            if (predicate != null)
+                source = source.Where(predicate);
+        }
+
+        if (query.Order != null)
+            source = ApplyOrder(source, query.Order);
+
+        return source;
+    }
+
+    private static Expression<Func<TEntity, bool>>? BuildClause<TEntity>(IReadOnlyList<QueryComparison<TEntity>> clause, NullabilityInfoContext nullabilityContext)
+        where TEntity : Entity
+    {
+        if (clause.Count == 0)
+            return null;
+
+        var parameter = Expression.Parameter(typeof(TEntity), "x");
+        Expression? body = null;
+
+        foreach (var comparison in clause)
+        {
+            var comparisonBody = BuildComparison(comparison, parameter, nullabilityContext);
+            body = body == null ? comparisonBody : Expression.OrElse(body, comparisonBody);
+        }
+
+        return Expression.Lambda<Func<TEntity, bool>>(body!, parameter);
+    }
+
+    private static Expression BuildComparison<TEntity>(QueryComparison<TEntity> comparison, ParameterExpression parameter, NullabilityInfoContext nullabilityContext)
+        where TEntity : Entity
+    {
+        var field = new ParameterReplacer(parameter).Visit(comparison.FieldSelector.Body);
+
+        switch (comparison.Operator)
+        {
+            case QueryOp.Equal:
+                return Expression.Equal(field, Expression.Constant(comparison.Value, field.Type));
+
+            case QueryOp.In:
+                {
+                    var elementType = field.Type;
+                    var enumerableType = typeof(IEnumerable<>).MakeGenericType(elementType);
+                    var containsMethod = typeof(Enumerable).GetMethods()
+                        .First(m => m.Name == nameof(Enumerable.Contains) && m.GetParameters().Length == 2)
+                        .MakeGenericMethod(elementType);
+                    return Expression.Call(containsMethod, Expression.Constant(comparison.Value, enumerableType), field);
+                }
+
+            case QueryOp.Contains:
+                {
+                    // Null-guard so the same shape is safe whether executed as SQL (EF) or in memory
+                    // (e.g. a non-relational provider's fallback): a null field yields no match
+                    // instead of throwing, matching EF's effective LIKE-on-NULL semantics.
+                    var call = Expression.Call(
+                        Expression.Call(field, ToLowerMethod),
+                        ContainsStringMethod,
+                        Expression.Constant(((string)comparison.Value!).ToLower()));
+                    return RequiresNullGuard(field, nullabilityContext)
+                        ? Expression.AndAlso(Expression.NotEqual(field, Expression.Constant(null, field.Type)), call)
+                        : call;
+                }
+
+            default:
+                throw new NotSupportedException($"Unsupported query operator '{comparison.Operator}'.");
+        }
+    }
+
+    private static IQueryable<TEntity> ApplyOrder<TEntity>(IQueryable<TEntity> source, QueryOrder<TEntity> order)
+        where TEntity : Entity
+    {
+        var keyType = order.FieldSelector.ReturnType;
+        var methodName = order.Direction == OrderDirection.Descending
+            ? nameof(Queryable.OrderByDescending)
+            : nameof(Queryable.OrderBy);
+
+        var method = typeof(Queryable).GetMethods()
+            .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(TEntity), keyType);
+
+        return (IQueryable<TEntity>)method.Invoke(null, [source, order.FieldSelector])!;
+    }
+
+    private static bool RequiresNullGuard(Expression field, NullabilityInfoContext nullabilityContext)
+    {
+        var memberExpression = UnwrapMemberExpression(field);
+        return memberExpression?.Member switch
+        {
+            PropertyInfo property => nullabilityContext.Create(property).ReadState != NullabilityState.NotNull,
+            FieldInfo fieldInfo => nullabilityContext.Create(fieldInfo).ReadState != NullabilityState.NotNull,
+            _ => true
+        };
+    }
+
+    private static MemberExpression? UnwrapMemberExpression(Expression expression)
+    {
+        if (expression is UnaryExpression { NodeType: ExpressionType.Convert } unary)
+            expression = unary.Operand;
+
+        return expression as MemberExpression;
+    }
+
+    private sealed class ParameterReplacer(ParameterExpression replacement) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node) => replacement;
+    }
+}

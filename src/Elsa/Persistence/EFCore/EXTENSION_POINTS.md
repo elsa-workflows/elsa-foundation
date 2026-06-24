@@ -14,13 +14,14 @@ This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's
 
 | Contract | Default impl | Override when |
 |---|---|---|
-| `IQueries<TEntity>` *(defined in `Elsa.Persistence.Core`)* | `EFCoreQueries<TDbContext, TEntity>` (this assembly) | You want a different read strategy (caching layer, read replica, a non-EF store for some entity) while keeping the rest of the EF Core stack. This is the canonical *override* example: swap Queries, keep everything else. |
+| Named per-aggregate **read ports** (e.g. `IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`, `IWorkflowDefinitionVersionLayoutStore`, `IActivityDefinitionStore`, `IActivityDefinitionVersionStore`) *(defined per domain in `*.Design.Persistence.Core/Stores`)* | `EFCore<Aggregate>Store` adapters over the generic `EFCoreReadStore<TDbContext, TEntity>` (this assembly) | You want a different read strategy for one aggregate (caching layer, read replica, a non-EF/Groundwork store) while keeping the rest of the EF Core stack. This is the canonical *override* example: swap one read port, keep everything else. |
 | `IUpsertCommandGenerator` | `UpsertCommandGenerator` | A provider needs different bulk-upsert SQL (dialect-specific `MERGE` / `ON CONFLICT`). |
 | `IElsaDbContextSchema` | *(none — optional)* | A deployment needs the Elsa tables under a custom schema name during migration. |
 
-### `IQueries<TEntity>` *(Core — `Elsa.Persistence.Core`)*
-- **Lives in:** `Elsa.Persistence.Core` (provider-agnostic). **Default impl:** `EFCoreQueries<TDbContext, TEntity>` (this assembly) — the `AsNoTracking` read path that publishes `OnEntityLoading` for every materialised entity.
-- **Replace:** register your own `IQueries<TEntity>` (or a decorator) before/after the EF Core feature wires its default. Mutate-then-save commands that need change tracking do **not** go through `IQueries` (they use a tracked `DbContextFactory` context directly), so overriding Queries does not affect the write path.
+### Named read ports + `EFCoreReadStore<TDbContext, TEntity>` *(closed-query read surface)*
+- **Read contract:** each aggregate exposes a small, intent-revealing read port (in its domain `*.Design.Persistence.Core/Stores`) with closed methods (`GetAsync`, `FindBy…Async`, `ListBy…Async`, `ExistsAsync`, …). There is **no** `IQueryable`/LINQ surface — callers cannot express an arbitrary expression tree, so any provider can satisfy a port.
+- **Shared plumbing:** the EF default impls (`EFCore<Aggregate>Store`) derive from `EFCoreReadStore<TDbContext, TEntity>` (this assembly), which translates the closed, provider-neutral `Query<TEntity>` spec (`Elsa.Persistence.Core.Queries`) to LINQ via `EFCoreQueryTranslator`, applies `IgnoreQueryFilters()` for tenant-agnostic reads, and publishes `OnEntityLoading` for every materialised entity. Filters project onto the spec through their `ToQuery()` method.
+- **Replace:** register your own implementation of a specific read port (or a decorator) before/after the EF Core feature wires its default; or subclass `EFCoreReadStore` for cross-cutting read behaviour. Mutate-then-save commands that need change tracking do **not** go through the read ports (they use a tracked `DbContextFactory` context directly), so overriding a read port does not affect the write path.
 
 ### `IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*
 - **Signature:** `GeneratedCommand Generate<TDbContext, TEntity>(TDbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector) where TDbContext : DbContext where TEntity : Entity;`
@@ -140,8 +141,8 @@ Heading convention per research item R4: `### <EventClassName>`.
 **Delivery strategy.** Sequential (the default) — the caller must see a hydrated entity.
 
 **Publication sites.**
-- `EFCoreQueries.PublishEntityLoadingEvents` — the **read path**. Published for every entity returned by `Find` / `FindMany` / `Query` (per-item, per-list and per-page fan-out). These results are `AsNoTracking`; hydration is in-memory.
-- `UpdateDraft.LoadAndHydrate` (`Elsa.Workflows.Design.Persistence.EFCore`) — the **mutate-then-save path**. The command loads the Draft through its own **tracked** `DbContextFactory` context (NOT `IQueries.Find`, which returns a detached `AsNoTracking` entity it could not save), then publishes `OnEntityLoading` Sequential so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
+- `EFCoreReadStore.QueryAsync` / `FirstOrDefaultAsync` (this assembly) — the **read path** behind every named read port. Published for every entity returned by a port read (per-item and per-list fan-out). These results are `AsNoTracking`; hydration is in-memory.
+- `UpdateDraft.LoadAndHydrate` (`Elsa.Workflows.Design.Persistence.EFCore`) — the **mutate-then-save path**. The command loads the Draft through its own **tracked** `DbContextFactory` context (NOT a named read store, which returns a detached `AsNoTracking` entity it could not save), then publishes `OnEntityLoading` Sequential so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
 
 **Expected handler.**
 - Exactly one `IEventHandler<OnEntityLoading>`: `ApplyEntityLoadingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable`.

@@ -1,26 +1,23 @@
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Api.Requests;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class GetDefinitionRequestHandler(
-    IQueries<WorkflowDefinitionVersion> versionQueries,
-    IQueries<WorkflowDefinition> defQueries,
-    IQueries<WorkflowDefinitionDraft> draftQueries)
+    IWorkflowDefinitionVersionStore versionStore,
+    IWorkflowDefinitionStore definitionStore,
+    IWorkflowDefinitionDraftStore draftStore)
     : IRequestHandler<GetDefinition, WorkflowDefinitionDetailsView>
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(GetDefinition request, CancellationToken cancellationToken)
     {
-        var versionFilter = new WorkflowDefinitionVersionFilter { DefinitionId = request.Id };
-
-        var definitionTask = defQueries.Get(request.Id, cancellationToken);
-        var versionsTask = versionQueries.Query(versionFilter, Constants.Expressions.VersionSelector, cancellationToken);
-        var draftTask = draftQueries.Find(d => d.WorkflowDefinitionId == request.Id, cancellationToken);
+        var definitionTask = definitionStore.GetAsync(request.Id, cancellationToken);
+        var versionsTask = versionStore.ListByDefinitionAsync(request.Id, cancellationToken);
+        var draftTask = draftStore.FindByWorkflowDefinitionIdAsync(request.Id, cancellationToken);
 
         var definition = await definitionTask;
         var versions = await versionsTask;
@@ -29,7 +26,7 @@ public sealed class GetDefinitionRequestHandler(
         return new WorkflowDefinitionDetailsView(
             definition.ToView(),
             draft?.State.ToStateView(),
-            versions
+            versions.Select(e => new WorkflowDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt))
         );
     }
 }

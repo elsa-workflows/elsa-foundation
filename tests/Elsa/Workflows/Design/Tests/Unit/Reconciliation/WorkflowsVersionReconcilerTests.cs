@@ -6,6 +6,8 @@ using Elsa.Primitives.Enums;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
@@ -28,8 +30,8 @@ public sealed class WorkflowsVersionReconcilerTests
     {
         var incoming = BuildIncomingVersion(definitionId: "wf-new", version: "1.0.0");
         var sender = new CapturingSender { ToContribute = [incoming] };
-        var defs = new StubQueries<WorkflowDefinition>();
-        var versions = new StubQueries<WorkflowDefinitionVersion>();
+        var defs = new StubDefinitionStore();
+        var versions = new StubVersionStore();
         var addDef = new SpyAddCommand<WorkflowDefinition>();
         var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
 
@@ -49,8 +51,8 @@ public sealed class WorkflowsVersionReconcilerTests
         var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: "2.0.0");
         var existingDef = new WorkflowDefinition { Id = "wf-existing", Name = "Existing" };
 
-        var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
-        var versions = new StubQueries<WorkflowDefinitionVersion>(); // No existing versions.
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore(); // No existing versions.
         var addDef = new SpyAddCommand<WorkflowDefinition>();
         var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
 
@@ -71,8 +73,8 @@ public sealed class WorkflowsVersionReconcilerTests
         var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
         var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
 
-        var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
-        var versions = new StubQueries<WorkflowDefinitionVersion>().With(existingVersion);
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
         var addDef = new SpyAddCommand<WorkflowDefinition>();
         var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
 
@@ -92,8 +94,8 @@ public sealed class WorkflowsVersionReconcilerTests
         var existingDef = new WorkflowDefinition { Id = "wf-dup", Name = "Dup" };
         var existingVersion = new WorkflowDefinitionVersion("wf-dup", "1.0.0");
 
-        var defs = new StubQueries<WorkflowDefinition>().With(existingDef);
-        var versions = new StubQueries<WorkflowDefinitionVersion>().With(existingVersion);
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
@@ -106,8 +108,8 @@ public sealed class WorkflowsVersionReconcilerTests
 
     private static WorkflowsVersionReconciler NewReconciler(
         IEventPublisher sender,
-        IQueries<WorkflowDefinition> defs,
-        IQueries<WorkflowDefinitionVersion> versions,
+        IWorkflowDefinitionStore defs,
+        IWorkflowDefinitionVersionStore versions,
         IAddCommand<WorkflowDefinition> addDef,
         IAddCommand<WorkflowDefinitionVersion> addVer,
         DuplicateHandling duplicateHandling)
@@ -168,53 +170,37 @@ public sealed class WorkflowsVersionReconcilerTests
         }
     }
 
-    private sealed class StubQueries<TEntity> : IQueries<TEntity> where TEntity : Entity
+    private sealed class StubDefinitionStore : IWorkflowDefinitionStore
     {
-        private readonly List<TEntity> _items = new();
-        public StubQueries<TEntity> With(TEntity item) { _items.Add(item); return this; }
+        private readonly List<WorkflowDefinition> _items = new();
+        public StubDefinitionStore With(WorkflowDefinition item) { _items.Add(item); return this; }
 
-        public Task<TEntity?> Find(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().FirstOrDefault(predicate));
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
 
-        public Task<bool> Any(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-            => Task.FromResult(_items.AsQueryable().Any(predicate));
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.First(x => x.Id == id));
 
-        public Task<IEnumerable<TEntity>> Query<TProp>(IFilter<TEntity> filter, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default)
-        {
-            var q = filter.Apply(_items.AsQueryable());
-            var ordered = order.Direction == Elsa.Primitives.Persistence.OrderDirection.Ascending
-                ? q.OrderBy(order.KeySelector)
-                : q.OrderByDescending(order.KeySelector);
-            return Task.FromResult<IEnumerable<TEntity>>(ordered.ToList());
-        }
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<WorkflowDefinition>>(_items);
+    }
 
-        // Other IQueries members are not invoked by the reconciler; throw if hit.
+    private sealed class StubVersionStore : IWorkflowDefinitionVersionStore
+    {
+        private readonly List<WorkflowDefinitionVersion> _items = new();
+        public StubVersionStore With(WorkflowDefinitionVersion item) { _items.Add(item); return this; }
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Where(x => x.DefinitionId == definitionId).OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal).FirstOrDefault());
+
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Any(x => x.DefinitionId == definitionId && x.SemVerSortKey == semVerSortKey));
+
         private const string Unused = "Not exercised by reconciler tests.";
-        public Task<TEntity?> Find(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<TEntity?> Find(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<TEntity?> Find<TProperty>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> include, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<TEntity?> Find<TProperty>(IFilter<TEntity> filter, IEnumerable<System.Linq.Expressions.Expression<Func<TEntity, TProperty>>> include, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> FindMany(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> FindMany(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> FindMany<TProp>(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany(System.Linq.Expressions.Expression<Func<TEntity, bool>>? predicate, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany(IFilter<TEntity> filter, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<Elsa.Primitives.Persistence.Page<TEntity>> FindMany<TProp>(System.Linq.Expressions.Expression<Func<TEntity, bool>>? predicate, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, Elsa.Primitives.Persistence.PageArgs? pageArgs = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> List(CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> Query(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> Query(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TEntity>> Query<TProp>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TResult>> Query<TResult>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TResult>> Query<TResult>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TResult>> Query<TResult, TProp>(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<IEnumerable<TResult>> Query<TResult, TProp>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TResult>> selector, Elsa.Primitives.Persistence.OrderDefinition<TEntity, TProp> order, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<long> Count(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<bool> Any(Func<IQueryable<TEntity>, IQueryable<TEntity>> query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<bool> Any(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<long> Count(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<long> Count(IFilter<TEntity> filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<long> Count<TProperty>(IFilter<TEntity> filter, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public Task<long> Count<TProperty>(System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, System.Linq.Expressions.Expression<Func<TEntity, TProperty>> propertySelector, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
     private sealed class SpyAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity

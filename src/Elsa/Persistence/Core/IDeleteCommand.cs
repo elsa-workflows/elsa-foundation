@@ -11,10 +11,4 @@ public interface IDeleteCommand<TEntity>
     /// </summary>
     /// <returns>The number of entities deleted.</returns>
     Task<long> DeleteWhere(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Deletes entities using a query.
-    /// </summary>
-    /// <returns>The number of entities deleted.</returns>
-    Task<long> DeleteWhere(IFilter<TEntity> filter, CancellationToken cancellationToken = default);
 }

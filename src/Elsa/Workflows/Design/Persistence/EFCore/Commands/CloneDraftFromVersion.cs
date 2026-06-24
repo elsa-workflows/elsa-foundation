@@ -1,7 +1,6 @@
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
@@ -15,25 +14,26 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// <c>OnDraftValidated</c>) all live in the create command.
 /// </summary>
 /// <remarks>
-/// The reads go through <see cref="IQueries{TEntity}"/> rather than a hand-rolled
+/// The reads go through the named <see cref="IWorkflowDefinitionVersionStore"/> and
+/// <see cref="IWorkflowDefinitionVersionLayoutStore"/> ports rather than a hand-rolled
 /// <c>DbContextFactory</c> + loading-handler loop: the clone only reads (no change tracking is
-/// needed on the source Version or its layout), so the query service — which already runs the
-/// loading-handler / <c>OnEntityLoading</c> hydration pipeline and disposes its own short-lived
-/// context — is the preferred path. The mutation (the new Draft) is owned entirely by the create
+/// needed on the source Version or its layout), so the read ports — which already run the
+/// loading-handler / <c>OnEntityLoading</c> hydration pipeline and dispose their own short-lived
+/// context — are the preferred path. The mutation (the new Draft) is owned entirely by the create
 /// command, which opens its own tracked context under the per-Draft lock.
 /// </remarks>
 public sealed class CloneDraftFromVersion(
-    IQueries<WorkflowDefinitionVersion> versionQueries,
-    IQueries<WorkflowDefinitionVersionLayout> layoutQueries,
+    IWorkflowDefinitionVersionStore versionStore,
+    IWorkflowDefinitionVersionLayoutStore layoutStore,
     ICreateDraftCommand createDraftCommand
 ) : ICloneDraftFromVersionCommand
 {
     public async Task<string> Execute(string sourceVersionId, CancellationToken cancellationToken = default)
     {
-        var sourceVersion = await versionQueries.Find(v => v.Id == sourceVersionId, cancellationToken)
+        var sourceVersion = await versionStore.FindByIdAsync(sourceVersionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition version '{sourceVersionId}' not found");
 
-        var sourceLayout = await layoutQueries.Find(l => l.WorkflowDefinitionVersionId == sourceVersionId, cancellationToken);
+        var sourceLayout = await layoutStore.FindByVersionIdAsync(sourceVersionId, cancellationToken);
         var sourceLayoutRecords = sourceLayout?.Records ?? [];
 
         var sourceState = sourceVersion.State;

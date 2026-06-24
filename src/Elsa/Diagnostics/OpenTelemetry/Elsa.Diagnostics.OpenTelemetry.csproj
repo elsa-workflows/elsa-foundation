@@ -29,8 +29,11 @@
   <ItemGroup>
     <!-- Nested Core project lives under the same domain root; keep SDK globs scoped to this project. -->
     <Compile Remove="Core/**/*" />
+    <Compile Remove="Persistence/**/*" />
     <EmbeddedResource Remove="Core/**/*" />
+    <EmbeddedResource Remove="Persistence/**/*" />
     <None Remove="Core/**/*" />
+    <None Remove="Persistence/**/*" />
   </ItemGroup>
 
 </Project>

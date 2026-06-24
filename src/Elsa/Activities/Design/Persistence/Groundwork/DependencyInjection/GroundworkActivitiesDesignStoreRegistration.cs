@@ -1,0 +1,32 @@
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+
+/// <summary>
+/// Registers the Groundwork (document) implementations of the activity-design read ports. A provider
+/// feature is responsible for registering the concrete <see cref="Groundwork.Documents.Store.IDocumentStore"/>
+/// (and the host's <see cref="Elsa.Serialization.Core.IPayloadSerializer"/>) these adapters consume; this
+/// method only swaps the read-port contracts over to the document-backed implementations, mirroring the
+/// runtime lane's <c>AddGroundworkRuntimeStores</c> and the workflows-design lane's
+/// <c>AddGroundworkWorkflowsDesignStores</c>.
+/// </summary>
+public static class GroundworkActivitiesDesignStoreRegistration
+{
+    public static IServiceCollection AddGroundworkActivitiesDesignStores(this IServiceCollection services)
+    {
+        services.RemoveAll<IActivityDefinitionStore>();
+        services.AddScoped<IActivityDefinitionStore, GroundworkActivityDefinitionStore>();
+
+        services.RemoveAll<IActivityDefinitionVersionStore>();
+        services.AddScoped<IActivityDefinitionVersionStore, GroundworkActivityDefinitionVersionStore>();
+
+        services.RemoveAll<IAddActivityDefinitionCommand>();
+        services.AddScoped<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>();
+
+        return services;
+    }
+}

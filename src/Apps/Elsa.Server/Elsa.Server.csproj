@@ -36,6 +36,10 @@
 	</Target>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\Elsa\Agent\Abstractions\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
@@ -53,6 +57,7 @@
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+		<ProjectReference Include="..\..\Elsa\Diagnostics\OpenTelemetry\Persistence\EFCore\Sqlite\Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\StructuredLogs\Persistence\EFCore\Sqlite\Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />

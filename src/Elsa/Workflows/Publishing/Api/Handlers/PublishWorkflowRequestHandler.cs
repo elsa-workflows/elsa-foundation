@@ -4,13 +4,12 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Extensions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -20,8 +19,8 @@ using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class PublishWorkflowRequestHandler(
-    IQueries<WorkflowDefinitionVersion> workflowVersions,
-    IQueries<ActivityDefinitionVersion> activityVersions,
+    IWorkflowDefinitionVersionStore workflowVersions,
+    IActivityDefinitionVersionStore activityVersions,
     IWorkflowExecutableStore executableStore,
     IActivityStructureService activityStructureService)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
@@ -34,7 +33,7 @@ public sealed class PublishWorkflowRequestHandler(
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
-        var version = await workflowVersions.GetVersionIncludingDefinition(request.VersionId, cancellationToken);
+        var version = await workflowVersions.GetWithDefinitionAsync(request.VersionId, cancellationToken);
         var state = version.State;
         var rootActivity = state.RootActivity
             ?? throw new ArgumentException("Workflow version has no root activity to publish.");
@@ -44,7 +43,7 @@ public sealed class PublishWorkflowRequestHandler(
 
         var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
         foreach (var activityVersionId in activities.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
-            activityRows[activityVersionId] = await activityVersions.GetVersionInlcudingDefinition(activityVersionId, cancellationToken);
+            activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
         var compiledRoot = CompileNode(rootActivity, activityRows);
         var artifactHash = ComputeHash(version, compiledRoot);

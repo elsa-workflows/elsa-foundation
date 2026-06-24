@@ -68,6 +68,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Groundwork Runtime Evaluation And Hardening spec](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md)
 - [Groundwork Runtime Evaluation And Hardening plan](../../specs/020-groundwork-runtime-evaluation-hardening/plan.md)
 - [Groundwork host-configurable persistence feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md)
+- [Groundwork closed-query capability spec](../reports/groundwork-closed-query-capability-spec.md)
 - [Groundwork host-configurable runtime store POC spec](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md)
 - [Groundwork host-configurable runtime store POC plan](../../specs/071-groundwork-host-configurable-runtime-store-poc/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
@@ -87,6 +88,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - Post-G8 feasibility work can validate host-configurable Groundwork adoption for low-risk runtime store contracts while keeping hot-path stores behind explicit viability gates.
 - Runtime continuation state remains benchmark-gated; operational streams remain specialized by default.
 - Update: re-assessment against the live Groundwork confirms it now ships an operational layer (Outbox, WorkQueue, Leases, UnitOfWork), closing the seven hot-path gaps the feasibility report flagged as missing. An opt-in bridge is landed in this repo — `Elsa.Persistence.Groundwork` implementing `IBookmarkStateStore` and `IWorkflowExecutableStore` over Groundwork's `IDocumentStore`, with a host-owned `Elsa.Persistence.Groundwork.Sqlite` provider feature, consuming the feedz.io preview feed (`Groundwork.* @ 0.0.1-preview.4`). See the [feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md) Update section.
+- Update (universal provider, Option 2): the design lanes were taken off `IQueryable`/LINQ and rebuilt on a closed, provider-neutral `Query<TEntity>` spec exposed through named per-aggregate read ports, implemented for **both** EF Core (relational) and Groundwork documents (`GroundworkReadStore<TEntity>`, same result set, 11 tests). Host decision recorded: every Elsa lane must run on a relational **or** a document database, selected once at the host — no Groundwork relational providers for the design lane. The remaining productionization (per-aggregate read adapters, rich-entity serialization, Groundwork write commands, design manifest, single-provider host composition) is an executable, reviewed build captured in the [Groundwork design provider implementation plan](../reports/groundwork-design-provider-implementation-plan.md). Bounded Groundwork query uplift handed off in the [closed-query capability spec](../reports/groundwork-closed-query-capability-spec.md).
 
 ## Drift / Review Notes
 

@@ -44,13 +44,13 @@ internal static class ElsaModuleManagementApi
     }
 
     private static async Task<IResult> GetRegistryAsync(
-        [FromServices] IFeatureManagementService featureManagement,
+        [FromServices] IServerFeatureCatalog featureCatalog,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         [FromServices] IWebHostEnvironment environment,
         [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
-        var features = await featureManagement.GetCatalogAsync(cancellationToken);
+        var features = await featureCatalog.ListFeaturesAsync(cancellationToken);
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
@@ -58,7 +58,7 @@ internal static class ElsaModuleManagementApi
         return Results.Ok(new ModuleManagementRegistryResponse(
             new("server", "Server", "Elsa.Server", environment.ContentRootPath),
             DateTimeOffset.UtcNow,
-            features.Features.Select(ModuleManagementModule.FromFeature).ToArray(),
+            features.Select(ModuleManagementModule.FromFeature).ToArray(),
             packages.Packages.Select(ModuleManagementPackage.FromActivePackage).ToArray(),
             ListDropFolderPackages(dropFolder),
             ReadRegistryFeeds(config),

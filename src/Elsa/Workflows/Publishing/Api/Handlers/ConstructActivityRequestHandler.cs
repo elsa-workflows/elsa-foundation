@@ -1,9 +1,7 @@
 using System.Reflection;
-using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Extensions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 
@@ -24,14 +22,14 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 /// compile-and-publish domain.
 /// </summary>
 public sealed class ConstructActivityRequestHandler(
-    IQueries<ActivityDefinitionVersion> versions,
+    IActivityDefinitionVersionStore versions,
     IActivityFactory factory)
     : IRequestHandler<ConstructActivity, ConstructedActivityView>
 {
     public async Task<ConstructedActivityView> Handle(ConstructActivity request, CancellationToken cancellationToken)
     {
         // 1. Read — the Design seam. The payload stays opaque; we never deserialize it ourselves.
-        var version = await versions.GetVersionInlcudingDefinition(request.ActivityId, cancellationToken);
+        var version = await versions.GetWithDefinitionAsync(request.ActivityId, cancellationToken);
 
         // 2. Invoke — the Runtime seam. Construct-only: no author values to bind yet.
         var activity = await factory.Create(

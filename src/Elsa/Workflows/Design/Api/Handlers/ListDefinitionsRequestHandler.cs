@@ -1,13 +1,12 @@
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
 
-public sealed class ListDefinitionsRequestHandler(IQueries<WorkflowDefinition> queries)
+public sealed class ListDefinitionsRequestHandler(IWorkflowDefinitionStore store)
 
     : IRequestHandler<ListDefinitions, IEnumerable<WorkflowDefinitionView>>
 {
@@ -22,6 +21,7 @@ public sealed class ListDefinitionsRequestHandler(IQueries<WorkflowDefinition> q
             TenantAgnostic = request.TenantAgnostic
         };
 
-        return await queries.Query(filter, Constants.Expressions.DefinitionSelector, cancellationToken);
+        var definitions = await store.ListAsync(filter, cancellationToken);
+        return definitions.Select(e => new WorkflowDefinitionView(e.Id, e.Name, e.Description, e.CreatedAt, e.LastModifiedAt));
     }
 }

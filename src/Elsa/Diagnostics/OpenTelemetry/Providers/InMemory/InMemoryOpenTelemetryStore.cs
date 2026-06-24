@@ -203,7 +203,8 @@ public class InMemoryOpenTelemetryStore : IOpenTelemetryStore
             _traces.DroppedCount,
             _spans.DroppedCount,
             _metricPoints.DroppedCount,
-            _logs.DroppedCount);
+            _logs.DroppedCount,
+            _sourceRegistry.DroppedCount);
 
         return ValueTask.FromResult(diagnostics);
     }
