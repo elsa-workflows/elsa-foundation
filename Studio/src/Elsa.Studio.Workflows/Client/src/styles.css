@@ -366,6 +366,61 @@
   grid-template-columns: minmax(170px, 1.2fr) 132px minmax(160px, 1fr) 120px 150px 88px;
 }
 
+.wf-instance-detail-workbench {
+  display: grid;
+  min-height: min(760px, calc(100vh - 230px));
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  gap: 14px;
+  margin: 14px 18px;
+}
+
+.wf-instance-canvas-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 560px;
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid var(--wf-border);
+  border-radius: 8px;
+  background: var(--wf-canvas);
+}
+
+.wf-instance-canvas-shell header {
+  display: flex;
+  min-height: 58px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--wf-border);
+  background: var(--wf-panel);
+  padding: 10px 12px;
+}
+
+.wf-instance-canvas-shell header span {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.wf-instance-canvas-shell h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.wf-instance-canvas-shell h3 small {
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-instance-canvas {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
 .wf-instance-inspector {
   min-width: 0;
   overflow: hidden;
@@ -479,7 +534,19 @@
   border: 1px solid var(--wf-border);
   border-radius: 6px;
   background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
   padding: 9px;
+  text-align: left;
+}
+
+.wf-instance-activity:hover,
+.wf-instance-incident:hover,
+.wf-instance-activity[data-selected="true"],
+.wf-instance-incident[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
+  box-shadow: inset 3px 0 0 var(--wf-accent);
 }
 
 .wf-instance-activity {
@@ -513,6 +580,69 @@
 .wf-instance-incident[data-severity="critical"] {
   border-color: color-mix(in srgb, var(--wf-danger) 50%, var(--wf-border));
   background: var(--wf-danger-soft);
+}
+
+.wf-instance-unmatched-list {
+  display: grid;
+  gap: 7px;
+}
+
+.wf-instance-unmatched {
+  display: grid;
+  gap: 3px;
+  border: 1px dashed var(--wf-border-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wf-panel-muted) 72%, transparent);
+  padding: 8px;
+}
+
+.wf-instance-unmatched strong,
+.wf-instance-unmatched small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-instance-unmatched small {
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-node.wf-node-runtime {
+  padding-bottom: 9px;
+}
+
+.wf-node.wf-node-runtime.faulted {
+  border-color: color-mix(in srgb, var(--wf-danger) 56%, var(--wf-border));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--wf-danger) 18%, transparent),
+    0 14px 30px rgba(15, 23, 42, 0.14);
+}
+
+.wf-node-runtime-strip {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 0 44px;
+}
+
+.wf-node-runtime-strip .wf-status-badge,
+.wf-node-runtime-count {
+  min-height: 20px;
+  font-size: 10px;
+}
+
+.wf-node-runtime-count {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--wf-danger) 36%, var(--wf-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wf-danger) 10%, var(--wf-panel));
+  color: var(--wf-text);
+  font-weight: 750;
+  line-height: 1;
+  padding: 0 7px;
 }
 
 .wf-status-badge {
@@ -2141,6 +2271,15 @@
 @media (max-width: 900px) {
   .wf-instance-workbench {
     grid-template-columns: 1fr;
+  }
+
+  .wf-instance-detail-workbench {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .wf-instance-canvas-shell {
+    min-height: 460px;
   }
 
   .wf-grid-head,

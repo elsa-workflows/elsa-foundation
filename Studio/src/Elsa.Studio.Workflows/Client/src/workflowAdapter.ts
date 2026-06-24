@@ -1,5 +1,5 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
-import type { ActivityCatalogItem, ActivityNode, ActivityNodeStructure, DesignMetadataRecord } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export const flowchartStructureKind = "elsa.flowchart.structure";
@@ -15,6 +15,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
+  runtime?: WorkflowRuntimeNodeOverlay;
 }
 
 export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger";
@@ -26,6 +27,16 @@ export interface WorkflowPortDescriptor {
 
 export interface WorkflowEdgeData extends Record<string, unknown> {
   vertices?: XYPosition[];
+}
+
+export interface WorkflowRuntimeNodeOverlay {
+  status?: string;
+  subStatus?: string | null;
+  activityExecutionId?: string;
+  faultCount: number;
+  incidentCount: number;
+  hasBlockingIncident: boolean;
+  selected: boolean;
 }
 
 export interface ChildSlot {
@@ -130,6 +141,50 @@ export function buildUnsupportedActivityCanvas(activity: ActivityNode, catalog: 
     })],
     edges: [] satisfies Edge[]
   };
+}
+
+export function applyRuntimeOverlays(
+  nodes: Node<WorkflowNodeData>[],
+  activities: ActivityExecutionStateSummary[],
+  incidents: IncidentStateSummary[],
+  selectedEvidenceId: string | null = null
+) {
+  const activityByExecutionId = new Map(activities.map(activity => [activity.activityExecutionId, activity]));
+  const activitiesByNodeId = groupBy(activities, activity => activity.authoredActivityId || activity.executableNodeId);
+  const incidentsByNodeId = groupBy(incidents, incident => {
+    if (incident.executableNodeId) return incident.executableNodeId;
+    return incident.activityExecutionId ? activityByExecutionId.get(incident.activityExecutionId)?.authoredActivityId ?? "" : "";
+  });
+
+  return nodes.map(node => {
+    const nodeActivities = activitiesByNodeId.get(node.id) ?? [];
+    const nodeIncidents = incidentsByNodeId.get(node.id) ?? [];
+    if (nodeActivities.length === 0 && nodeIncidents.length === 0) return node;
+
+    const latestActivity = latestActivityExecution(nodeActivities);
+    const selected = selectedEvidenceId === node.id ||
+      nodeActivities.some(activity => activity.activityExecutionId === selectedEvidenceId) ||
+      nodeIncidents.some(incident => incident.incidentId === selectedEvidenceId);
+    const runtime: WorkflowRuntimeNodeOverlay = {
+      status: latestActivity?.status,
+      subStatus: latestActivity?.subStatus,
+      activityExecutionId: latestActivity?.activityExecutionId,
+      faultCount: nodeActivities.reduce((sum, activity) => sum + activity.faultCount + activity.aggregateFaultCount, 0),
+      incidentCount: nodeIncidents.length,
+      hasBlockingIncident: nodeIncidents.some(incident => incident.isBlocking),
+      selected
+    };
+
+    return {
+      ...node,
+      selected,
+      className: selected ? "wf-runtime-node-selected" : node.className,
+      data: {
+        ...node.data,
+        runtime
+      }
+    };
+  });
 }
 
 export function getActivityDesignerSupport(activity: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem): WorkflowDesignerSupport {
@@ -519,6 +574,26 @@ function uniquePorts(ports: WorkflowPortDescriptor[]) {
 
 function readStringList(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function groupBy<T>(items: T[], getKey: (item: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = getKey(item);
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+
+  return groups;
+}
+
+function latestActivityExecution(activities: ActivityExecutionStateSummary[]) {
+  return [...activities].sort((left, right) =>
+    activityExecutionTime(right).localeCompare(activityExecutionTime(left)))[0];
+}
+
+function activityExecutionTime(activity: ActivityExecutionStateSummary) {
+  return activity.completedAt ?? activity.startedAt ?? activity.scheduledAt;
 }
 
 function isPosition(value: unknown): value is XYPosition {

@@ -34,6 +34,7 @@ import {
   deleteDefinition,
   deleteDefinitionPermanently,
   getDefinition,
+  getWorkflowDefinitionVersion,
   getWorkflowInstance,
   listActivities,
   listActivityDescriptors,
@@ -49,8 +50,9 @@ import {
   startWorkflowDraftTestRun,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
 import {
+  applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
   createActivityNode,
@@ -167,6 +169,12 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/instances",
         label: "Workflow instances",
         component: () => <WorkflowInstancesPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-instance-detail",
+        path: "/workflows/instances/:workflowExecutionId",
+        label: "Workflow instance",
+        component: () => <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} />
       }
     ]
   });
@@ -230,6 +238,16 @@ function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext
   );
 }
 
+function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const workflowExecutionId = readWorkflowExecutionIdFromUrl();
+
+  return (
+    <WorkflowsPageFrame activePath="/workflows/instances" title="Instance">
+      <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
+    </WorkflowsPageFrame>
+  );
+}
+
 function WorkflowsPageFrame({ activePath, title, children }: { activePath: string; title: string; children: React.ReactNode }) {
   const navigate = (path: string) => {
     window.history.pushState({}, "", path);
@@ -260,6 +278,11 @@ function readDefinitionIdFromUrl() {
 
 function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
+}
+
+function readWorkflowExecutionIdFromUrl() {
+  const match = /^\/workflows\/instances\/([^/]+)$/.exec(window.location.pathname);
+  return match ? decodeURIComponent(match[1]) : "";
 }
 
 function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointContext; ai: StudioAiContributionApi; onOpen(id: string): void }) {
@@ -757,16 +780,11 @@ function WorkflowExecutables({ context, ai, definitionFilter }: { context: Studi
   );
 }
 
-function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
-  const [selectedDetails, setSelectedDetails] = useState<WorkflowInstanceDetails | null>(null);
-  const [detailState, setDetailState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
-  const [detailError, setDetailError] = useState("");
-  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
   const load = useCallback(async () => {
     setState("loading");
@@ -775,7 +793,6 @@ function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai
       const nextInstances = await listWorkflowInstances(context, { status: statusFilter || undefined, take: 100 });
       setInstances(nextInstances);
       setState("ready");
-      setSelectedInstanceId(current => current && nextInstances.some(instance => instance.workflowExecutionId === current) ? current : nextInstances[0]?.workflowExecutionId ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setInstances([]);
@@ -787,33 +804,10 @@ function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai
     void load();
   }, [load]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setSelectedDetails(null);
-    setDetailError("");
-
-    if (!selectedInstanceId) {
-      setDetailState("idle");
-      return () => { cancelled = true; };
-    }
-
-    setDetailState("loading");
-    void getWorkflowInstance(context, selectedInstanceId)
-      .then(details => {
-        if (cancelled) return;
-        setSelectedDetails(details);
-        setDetailState("ready");
-      })
-      .catch(e => {
-        if (cancelled) return;
-        setDetailError(e instanceof Error ? e.message : String(e));
-        setDetailState("failed");
-      });
-
-    return () => { cancelled = true; };
-  }, [context, selectedInstanceId]);
-
-  const selectedSummary = instances.find(instance => instance.workflowExecutionId === selectedInstanceId) ?? null;
+  const openInstance = (workflowExecutionId: string) => {
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
 
   return (
     <>
@@ -836,51 +830,130 @@ function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai
       {state === "loading" ? <div className="wf-empty">Loading workflow instances...</div> : null}
       {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow instances found. Run a published workflow executable to create instance history.</div> : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className="wf-instance-workbench">
-          <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow instances">
-            <div className="wf-grid-head" role="row">
-              <span>Instance</span>
-              <span>Status</span>
-              <span>Definition</span>
-              <span>Activity</span>
-              <span>Started</span>
-              <span>Duration</span>
-            </div>
-            {instances.map(instance => (
-              <button
-                type="button"
-                className="wf-grid-row"
-                role="row"
-                aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
-                aria-selected={instance.workflowExecutionId === selectedInstanceId}
-                key={instance.workflowExecutionId}
-                onClick={() => setSelectedInstanceId(instance.workflowExecutionId)}
-              >
-                <span>
-                  <strong>{instance.workflowExecutionId}</strong>
-                  <small>{instance.artifactId}</small>
-                </span>
-                <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
-                <span>
-                  <strong>{instance.definitionId}</strong>
-                  <small>{instance.definitionVersionId}</small>
-                </span>
-                <span>
-                  <strong>{instance.activityCount} activities</strong>
-                  <small>{instance.incidentCount} incidents</small>
-                </span>
-                <span>{formatDate(instance.startedAt ?? instance.createdAt)}</span>
-                <span>{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
-              </button>
-            ))}
+        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow instances">
+          <div className="wf-grid-head" role="row">
+            <span>Instance</span>
+            <span>Status</span>
+            <span>Definition</span>
+            <span>Activity</span>
+            <span>Started</span>
+            <span>Duration</span>
           </div>
+          {instances.map(instance => (
+            <button
+              type="button"
+              className="wf-grid-row"
+              role="row"
+              aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
+              key={instance.workflowExecutionId}
+              onClick={() => openInstance(instance.workflowExecutionId)}
+            >
+              <span>
+                <strong>{instance.workflowExecutionId}</strong>
+                <small>{instance.artifactId}</small>
+              </span>
+              <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
+              <span>
+                <strong>{instance.definitionId}</strong>
+                <small>{instance.definitionVersionId}</small>
+              </span>
+              <span>
+                <strong>{instance.activityCount} activities</strong>
+                <small>{instance.incidentCount} incidents</small>
+              </span>
+              <span>{formatDate(instance.startedAt ?? instance.createdAt)}</span>
+              <span>{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+interface WorkflowInstanceInspectionData {
+  details: WorkflowInstanceDetails;
+  definitionVersion: WorkflowDefinitionVersionDetails;
+  activityCatalog: ActivityCatalogItem[];
+}
+
+function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: {
+  context: StudioEndpointContext;
+  ai: StudioAiContributionApi;
+  workflowExecutionId: string;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [data, setData] = useState<WorkflowInstanceInspectionData | null>(null);
+  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+
+  const load = useCallback(async () => {
+    if (!workflowExecutionId) {
+      setError("No workflow execution id was provided.");
+      setState("failed");
+      return;
+    }
+
+    setState("loading");
+    setError("");
+    try {
+      const details = await getWorkflowInstance(context, workflowExecutionId);
+      const [definitionVersion, activityCatalog] = await Promise.all([
+        getWorkflowDefinitionVersion(context, details.instance.definitionVersionId),
+        listActivities(context)
+      ]);
+      setData({ details, definitionVersion, activityCatalog: activityCatalog.activities });
+      setSelectedEvidenceId(null);
+      setState("ready");
+    } catch (e) {
+      setData(null);
+      setError(e instanceof Error ? e.message : String(e));
+      setState("failed");
+    }
+  }, [context, workflowExecutionId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const goBack = () => {
+    window.history.pushState({}, "", "/workflows/instances");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  return (
+    <>
+      <div className="wf-toolbar">
+        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Instances</button>
+        <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
+        {data && instanceAction ? (
+          <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
+            <Sparkles size={13} /> Explain
+          </button>
+        ) : null}
+      </div>
+      {state === "loading" ? <div className="wf-empty">Loading workflow instance...</div> : null}
+      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "ready" && data ? (
+        <div className="wf-instance-detail-workbench">
+          <WorkflowInstanceCanvas
+            definitionVersion={data.definitionVersion}
+            activityCatalog={data.activityCatalog}
+            details={data.details}
+            selectedEvidenceId={selectedEvidenceId}
+            onSelectEvidence={setSelectedEvidenceId}
+          />
           <WorkflowInstanceInspector
             ai={ai}
             action={instanceAction}
-            summary={selectedSummary}
-            details={selectedDetails}
-            state={detailState}
-            error={detailError}
+            summary={data.details.instance}
+            details={data.details}
+            state="ready"
+            error=""
+            selectedEvidenceId={selectedEvidenceId}
+            onSelectEvidence={setSelectedEvidenceId}
+            graphNodeIds={getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog)}
           />
         </div>
       ) : null}
@@ -888,13 +961,82 @@ function WorkflowInstances({ context, ai }: { context: StudioEndpointContext; ai
   );
 }
 
-function WorkflowInstanceInspector({ ai, action, summary, details, state, error }: {
+function WorkflowInstanceCanvas({ definitionVersion, activityCatalog, details, selectedEvidenceId, onSelectEvidence }: {
+  definitionVersion: WorkflowDefinitionVersionDetails;
+  activityCatalog: ActivityCatalogItem[];
+  details: WorkflowInstanceDetails;
+  selectedEvidenceId: string | null;
+  onSelectEvidence(evidenceId: string | null): void;
+}) {
+  const canvas = useMemo(() => {
+    const root = definitionVersion.state.rootActivity;
+    if (!root) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
+
+    const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
+    const support = getActivityDesignerSupport(root, rootCatalogItem);
+    const scope = support === "unsupported" ? null : resolveScope(root, []);
+    const baseCanvas = support === "unsupported"
+      ? buildUnsupportedActivityCanvas(root, activityCatalog, definitionVersion.layout)
+      : scope
+        ? buildCanvas(scope, activityCatalog, definitionVersion.layout)
+        : buildUnsupportedActivityCanvas(root, activityCatalog, definitionVersion.layout);
+    const readonlyNodes = baseCanvas.nodes.map(node => ({
+      ...node,
+      draggable: false,
+      connectable: false,
+      deletable: false
+    }));
+
+    return {
+      nodes: applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
+      edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
+    };
+  }, [activityCatalog, definitionVersion, details, selectedEvidenceId]);
+
+  return (
+    <section className="wf-instance-canvas-shell" aria-label="Workflow instance canvas">
+      <header>
+        <div>
+          <span>Definition version</span>
+          <h3>{definitionVersion.definition.name} <small>{definitionVersion.version}</small></h3>
+        </div>
+        <WorkflowStatusBadge status={details.instance.status} subStatus={details.instance.subStatus} />
+      </header>
+      <div className="wf-instance-canvas">
+        {canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this definition version.</div> : null}
+        {canvas.nodes.length > 0 ? (
+          <ReactFlow
+            nodes={canvas.nodes}
+            edges={canvas.edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable
+            onNodeClick={(_, node) => onSelectEvidence(node.id)}
+            onPaneClick={() => onSelectEvidence(null)}
+          >
+            <Background />
+            <MiniMap pannable zoomable />
+            <Controls />
+          </ReactFlow>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function WorkflowInstanceInspector({ ai, action, summary, details, state, error, selectedEvidenceId = null, onSelectEvidence, graphNodeIds }: {
   ai: StudioAiContributionApi;
   action: StudioAiPromptActionContribution | undefined;
   summary: WorkflowInstanceSummary | null;
   details: WorkflowInstanceDetails | null;
   state: "idle" | "loading" | "ready" | "failed";
   error: string;
+  selectedEvidenceId?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
+  graphNodeIds?: Set<string>;
 }) {
   if (!summary) {
     return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow instance to inspect activity history.</div></aside>;
@@ -933,15 +1075,20 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error 
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {state === "ready" && details ? (
         <>
-          <WorkflowActivityHistory activities={details.activities} />
-          <WorkflowIncidentList incidents={details.incidents} />
+          <WorkflowActivityHistory activities={details.activities} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
+          <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
+          <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} />
         </>
       ) : null}
     </aside>
   );
 }
 
-function WorkflowActivityHistory({ activities }: { activities: ActivityExecutionStateSummary[] }) {
+function WorkflowActivityHistory({ activities, selectedEvidenceId = null, onSelectEvidence }: {
+  activities: ActivityExecutionStateSummary[];
+  selectedEvidenceId?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
+}) {
   return (
     <section className="wf-instance-section">
       <h4>Activity history</h4>
@@ -949,12 +1096,18 @@ function WorkflowActivityHistory({ activities }: { activities: ActivityExecution
       {activities.length > 0 ? (
         <div className="wf-instance-activity-list">
           {activities.map(activity => (
-            <div className="wf-instance-activity" key={activity.activityExecutionId}>
+            <button
+              type="button"
+              className="wf-instance-activity"
+              data-selected={activity.activityExecutionId === selectedEvidenceId}
+              key={activity.activityExecutionId}
+              onClick={() => onSelectEvidence?.(activity.activityExecutionId)}
+            >
               <span><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></span>
               <strong>{shortTypeName(activity.activityType) ?? activity.activityType}</strong>
               <small>{activity.activityExecutionId}</small>
               <time>{formatDate(activity.scheduledAt)}</time>
-            </div>
+            </button>
           ))}
         </div>
       ) : null}
@@ -962,24 +1115,84 @@ function WorkflowActivityHistory({ activities }: { activities: ActivityExecution
   );
 }
 
-function WorkflowIncidentList({ incidents }: { incidents: IncidentStateSummary[] }) {
+function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
+  incidents: IncidentStateSummary[];
+  selectedEvidenceId?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
+}) {
   return (
     <section className="wf-instance-section">
       <h4>Incidents</h4>
       {incidents.length === 0 ? <p>No incidents recorded.</p> : null}
       {incidents.map(incident => (
-        <div className="wf-instance-incident" data-severity={incident.severity.toLowerCase()} key={incident.incidentId}>
+        <button
+          type="button"
+          className="wf-instance-incident"
+          data-severity={incident.severity.toLowerCase()}
+          data-selected={incident.incidentId === selectedEvidenceId}
+          key={incident.incidentId}
+          onClick={() => onSelectEvidence?.(incident.incidentId)}
+        >
           <strong>{incident.failureType}</strong>
           <span>{incident.status} · {incident.severity}</span>
           <p>{incident.message}</p>
-        </div>
+        </button>
       ))}
+    </section>
+  );
+}
+
+function WorkflowUnmatchedEvidence({ details, graphNodeIds }: { details: WorkflowInstanceDetails; graphNodeIds?: Set<string> }) {
+  if (!graphNodeIds) return null;
+
+  const activityByExecutionId = new Map(details.activities.map(activity => [activity.activityExecutionId, activity]));
+  const unmatchedActivities = details.activities.filter(activity => !graphNodeIds.has(activityNodeKey(activity)));
+  const unmatchedIncidents = details.incidents.filter(incident => {
+    const activity = incident.activityExecutionId ? activityByExecutionId.get(incident.activityExecutionId) : null;
+    const nodeId = incident.executableNodeId ?? (activity ? activityNodeKey(activity) : "");
+    return !nodeId || !graphNodeIds.has(nodeId);
+  });
+
+  if (unmatchedActivities.length === 0 && unmatchedIncidents.length === 0) return null;
+
+  return (
+    <section className="wf-instance-section">
+      <h4>Unmatched runtime evidence</h4>
+      <div className="wf-instance-unmatched-list">
+        {unmatchedActivities.map(activity => (
+          <div className="wf-instance-unmatched" key={`activity-${activity.activityExecutionId}`}>
+            <strong>{shortTypeName(activity.activityType) ?? activity.activityType}</strong>
+            <small>{activity.activityExecutionId}</small>
+          </div>
+        ))}
+        {unmatchedIncidents.map(incident => (
+          <div className="wf-instance-unmatched" key={`incident-${incident.incidentId}`}>
+            <strong>{incident.failureType}</strong>
+            <small>{incident.incidentId}</small>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
 
 function WorkflowStatusBadge({ status, subStatus }: { status: string; subStatus?: string | null }) {
   return <span className="wf-status-badge" data-status={status.toLowerCase()}>{subStatus ? `${status} · ${subStatus}` : status}</span>;
+}
+
+function getVisibleWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
+  const root = definitionVersion.state.rootActivity;
+  if (!root) return new Set<string>();
+
+  const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
+  if (getActivityDesignerSupport(root, rootCatalogItem) === "unsupported") return new Set([root.nodeId]);
+
+  const scope = resolveScope(root, []);
+  return new Set(scope?.slot.activities.map(activity => activity.nodeId) ?? [root.nodeId]);
+}
+
+function activityNodeKey(activity: ActivityExecutionStateSummary) {
+  return activity.authoredActivityId || activity.executableNodeId;
 }
 
 function DefinitionPager({ page, pageSize, totalCount, onPageChange, onPageSizeChange }: {
@@ -2520,13 +2733,17 @@ function compareWorkflowPanelTabs(left: WorkflowEditorPanelTab, right: WorkflowE
 
 function WorkflowActivityNode({ data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
+  const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
   const sourcePorts = showFlowPorts
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
   return (
-    <div className={selected ? "wf-node selected" : "wf-node"} data-icon={nodeData.icon ?? "activity"}>
+    <div
+      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
+      data-icon={nodeData.icon ?? "activity"}
+    >
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       <div className="wf-node-content">
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
@@ -2537,6 +2754,13 @@ function WorkflowActivityNode({ data, selected }: NodeProps) {
       </div>
       {nodeData.childSlots.length > 0 ? (
         <span className="wf-node-slot-badge">{nodeData.childSlots.length} slot{nodeData.childSlots.length === 1 ? "" : "s"}</span>
+      ) : null}
+      {runtime ? (
+        <div className="wf-node-runtime-strip">
+          {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}
+          {runtime.incidentCount > 0 ? <span className="wf-node-runtime-count">{runtime.incidentCount} incident{runtime.incidentCount === 1 ? "" : "s"}</span> : null}
+          {runtime.faultCount > 0 ? <span className="wf-node-runtime-count">{runtime.faultCount} faults</span> : null}
+        </div>
       ) : null}
       {sourcePorts.map((port, index) => {
         const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;

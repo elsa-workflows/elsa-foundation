@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyRuntimeOverlays,
   buildUnsupportedActivityCanvas,
   buildCanvas,
   createActivityNode,
@@ -233,6 +234,25 @@ describe("workflow adapter", () => {
     expect(spliced[0]).toMatchObject({ source: "a", target: "inserted", sourceHandle: "Approved" });
     expect(spliced[1]).toMatchObject({ source: "inserted", target: "b", sourceHandle: "Done" });
   });
+
+  it("adds runtime overlays and selected incident state to matching graph nodes", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const nodes = applyRuntimeOverlays(canvas.nodes, [activityExecution()], [incident()], "incident-1");
+
+    expect(nodes[0]).toMatchObject({
+      id: "write-line-1",
+      selected: true,
+      data: {
+        runtime: {
+          status: "Faulted",
+          activityExecutionId: "activity-execution-1",
+          incidentCount: 1,
+          hasBlockingIncident: true,
+          selected: true
+        }
+      }
+    });
+  });
 });
 
 function sequenceRoot(activities: ActivityNode[]): ActivityNode {
@@ -260,5 +280,49 @@ function node(nodeId: string): ActivityNode {
     inputs: [],
     outputs: [],
     structure: null
+  };
+}
+
+function activityExecution() {
+  return {
+    activityExecutionId: "activity-execution-1",
+    workflowExecutionId: "wfexec-1",
+    executableNodeId: "write-line-1",
+    authoredActivityId: "write-line-1",
+    activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+    activityTypeVersion: "1.0.0",
+    status: "Faulted",
+    subStatus: null,
+    scheduledAt: "2026-06-18T01:00:01Z",
+    startedAt: "2026-06-18T01:00:01Z",
+    completedAt: "2026-06-18T01:00:02Z",
+    schedulingActivityExecutionId: null,
+    parentActivityExecutionId: null,
+    branchId: null,
+    iterationId: null,
+    callStackDepth: 0,
+    bookmarkIds: [],
+    incidentIds: ["incident-1"],
+    faultCount: 1,
+    aggregateFaultCount: 0,
+    metadata: {}
+  };
+}
+
+function incident() {
+  return {
+    incidentId: "incident-1",
+    workflowExecutionId: "wfexec-1",
+    activityExecutionId: "activity-execution-1",
+    executableNodeId: "write-line-1",
+    severity: "Error",
+    status: "Open",
+    resolutionAction: "None",
+    failureType: "ActivityFaulted",
+    message: "Required service is not registered.",
+    createdAt: "2026-06-18T01:00:02Z",
+    resolvedAt: null,
+    isBlocking: true,
+    metadata: {}
   };
 }

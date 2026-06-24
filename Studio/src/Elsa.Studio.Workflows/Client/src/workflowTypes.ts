@@ -34,6 +34,14 @@ export interface WorkflowVersionSummary {
   createdAt: string;
 }
 
+export interface WorkflowDefinitionVersionDetails {
+  id: string;
+  version: string;
+  definition: Pick<WorkflowDefinitionSummary, "id" | "name" | "description" | "createdAt" | "lastModifiedAt">;
+  state: WorkflowDefinitionState;
+  layout: DesignMetadataRecord[];
+}
+
 export interface WorkflowDraft {
   id: string;
   definitionId: string;

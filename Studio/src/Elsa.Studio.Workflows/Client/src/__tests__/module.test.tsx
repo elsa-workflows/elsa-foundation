@@ -27,7 +27,8 @@ describe("workflows module", () => {
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances" })
+      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances" }),
+      expect.objectContaining({ id: "workflows-instance-detail", path: "/workflows/instances/:workflowExecutionId" })
     ]);
   });
 
@@ -808,13 +809,9 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders workflow instances with selected activity history", async () => {
+  it("navigates from workflow instances to the wider instance detail route", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
-        return response(workflowInstanceDetails());
-      }
-
       if (url.startsWith("https://server.example/runtime/workflows/instances")) {
         return response([workflowInstance()]);
       }
@@ -825,17 +822,58 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    await waitForText(container, "Activity history");
     expect(container.textContent).toContain("Instances");
-    expect(container.textContent).toContain("Activity history");
-    expect(container.textContent).toContain("WriteLine");
-    expect(container.textContent).toContain("No incidents recorded.");
+    await click(rowByLabel(container, "Inspect workflow instance wfexec-1"));
+
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/instances?take=100",
       expect.any(Object)
     );
+
+    await unmount();
+  });
+
+  it("renders direct workflow instance details with definition layout on the canvas", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails());
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
+        return response(workflowDefinitionVersionDetails());
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Definition version");
+    expect(container.textContent).toContain("Activity history");
+    expect(container.textContent).toContain("WriteLine");
+    expect(container.textContent).toContain("No incidents recorded.");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/instances/wfexec-1",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/_elsa/workflow-management/versions/version-1",
       expect.any(Object)
     );
 
@@ -950,7 +988,9 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
   configureApi?.(api);
   register(api);
   const routePath = new URL(path, window.location.origin).pathname;
-  const route = api.routes.list().find(candidate => candidate.path === routePath) ?? api.routes.list()[0];
+  const route = api.routes.list().find(candidate => candidate.path === routePath) ??
+    api.routes.list().find(candidate => routeMatchesPath(candidate.path, routePath)) ??
+    api.routes.list()[0];
   const Component = route.component;
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -967,6 +1007,13 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
       container.remove();
     }
   };
+}
+
+function routeMatchesPath(routePath: string, path: string) {
+  const routeSegments = routePath.split("/").filter(Boolean);
+  const pathSegments = path.split("/").filter(Boolean);
+  return routeSegments.length === pathSegments.length &&
+    routeSegments.every((segment, index) => segment.startsWith(":") || segment === pathSegments[index]);
 }
 
 function definition(overrides: Partial<Record<string, unknown>> = {}) {
@@ -1069,6 +1116,34 @@ function workflowInstanceDetails(overrides: Partial<Record<string, unknown>> = {
       metadata: {}
     }],
     incidents: [],
+    ...overrides
+  };
+}
+
+function workflowDefinitionVersionDetails(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "version-1",
+    version: "1.0.0",
+    definition: {
+      id: "definition-1",
+      name: "Hello World",
+      description: "Writes text.",
+      createdAt: "2026-06-18T01:00:00Z",
+      lastModifiedAt: "2026-06-18T01:10:00Z"
+    },
+    state: {
+      variables: [],
+      rootActivity: flowchartRoot([{
+        nodeId: "write-line-1",
+        activityVersionId: "write-line-v1",
+        inputs: [],
+        outputs: [],
+        structure: null
+      }]),
+      inputs: [],
+      outputs: []
+    },
+    layout: [{ nodeId: "write-line-1", x: 180, y: 120 }],
     ...overrides
   };
 }
