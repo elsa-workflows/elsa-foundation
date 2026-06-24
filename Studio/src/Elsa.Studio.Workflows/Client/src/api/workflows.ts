@@ -15,6 +15,7 @@ import type {
   WorkflowInstanceSummary,
   WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
+  WorkflowDefinitionVersionDetails,
   WorkflowDefinitionsResponse,
   WorkflowDraft,
   WorkflowTestRunView
@@ -27,6 +28,7 @@ export const workflowKeys = {
   definitions: ["workflows", "definitions"] as const,
   definitionsList: (request: DefinitionListRequest) => [...workflowKeys.definitions, "list", request] as const,
   definition: (definitionId: string) => [...workflowKeys.definitions, "detail", definitionId] as const,
+  version: (versionId: string) => ["workflows", "versions", versionId] as const,
   executables: (definitionId?: string | null) => ["workflows", "executables", definitionId ?? "all"] as const,
   instances: ["workflows", "instances"] as const,
   instance: (workflowExecutionId: string) => ["workflows", "instances", workflowExecutionId] as const,
@@ -117,6 +119,10 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
 
 export async function getDefinition(context: StudioEndpointContext, definitionId: string) {
   return context.http.getJson<WorkflowDefinitionDetails>(`${basePath}/definitions/${encodeURIComponent(definitionId)}`);
+}
+
+export async function getWorkflowDefinitionVersion(context: StudioEndpointContext, versionId: string) {
+  return context.http.getJson<WorkflowDefinitionVersionDetails>(`${basePath}/versions/${encodeURIComponent(versionId)}`);
 }
 
 export async function createDefinition(context: StudioEndpointContext, request: CreateDefinitionRequest) {

@@ -176,7 +176,7 @@ function AppContent() {
     );
   }
 
-  const activeRoute = routes.find(route => route.path === path);
+  const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
@@ -211,6 +211,19 @@ function AppContent() {
       ) : null}
     </>
   );
+}
+
+function findRouteForPath<TRoute extends { path: string }>(routes: TRoute[], path: string) {
+  return routes.find(route => route.path === path) ?? routes.find(route => routeMatchesPath(route.path, path));
+}
+
+function routeMatchesPath(routePath: string, path: string) {
+  const routeSegments = routePath.split("/").filter(Boolean);
+  const pathSegments = path.split("/").filter(Boolean);
+  if (routeSegments.length !== pathSegments.length) return false;
+
+  return routeSegments.every((segment, index) =>
+    segment.startsWith(":") || segment === pathSegments[index]);
 }
 
 function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit | undefined {
