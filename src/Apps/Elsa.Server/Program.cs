@@ -6,7 +6,6 @@ using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
-using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
@@ -28,12 +27,12 @@ using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Nuplane.Services;
+using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
-using Elsa.Workflows.Design.Persistence.EFCore.Sqlite;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Nuplane;
@@ -113,9 +112,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
-            typeof(SqliteWorkflowsDesignPersistenceShellFeature).Assembly,
+            typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
-            typeof(SqliteActivitiesDesignPersistenceShellFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
             // Construction seam (Runtime side): the dispatch factory + registry, the CLR kind, and the

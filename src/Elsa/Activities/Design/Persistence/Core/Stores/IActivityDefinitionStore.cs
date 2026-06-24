@@ -17,6 +17,9 @@ public interface IActivityDefinitionStore
     /// <summary>Finds the first definition matching the supplied filter, or <c>null</c> if none match.</summary>
     Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default);
 
+    /// <summary>Lists definitions matching the supplied filter.</summary>
+    Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default);
+
     /// <summary>Finds the definition whose surrogate id equals <paramref name="id"/> or whose natural key equals <paramref name="activityTypeKey"/>, or <c>null</c>.</summary>
     Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default);
 

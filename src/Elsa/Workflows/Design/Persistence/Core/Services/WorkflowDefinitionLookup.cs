@@ -1,9 +1,9 @@
-﻿using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
-namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
+namespace Elsa.Workflows.Design.Persistence.Core.Services;
 
 public sealed class WorkflowDefinitionLookup(IWorkflowDefinitionVersionStore versionStore, IWorkflowDefinitionStore definitionStore) : IWorkflowDefinitionLookup
 {

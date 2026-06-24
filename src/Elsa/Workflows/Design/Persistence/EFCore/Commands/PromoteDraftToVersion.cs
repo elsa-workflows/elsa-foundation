@@ -4,10 +4,10 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Versioning;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
-using Elsa.Workflows.Design.Persistence.EFCore.Constants;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,7 +24,7 @@ public sealed class PromoteDraftToVersion(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
 
-        var lockKey = LockKeys.DraftKey(draftId);
+        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
 
         await using var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken);
         await using var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken);

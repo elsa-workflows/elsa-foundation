@@ -5,12 +5,13 @@ using System.Text.Json.Serialization;
 using System.IO.Compression;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Activities.Design.Persistence.EFCore.DbContext;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Nuplane.Admin;
 
 namespace Elsa.Server;
@@ -270,34 +271,73 @@ internal static class ElsaDemoApi
 
     private static async Task<DemoResetWorkflowCounts> ClearWorkflowsAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
-        var factory = serviceProvider.GetRequiredService<IDbContextFactory<WorkflowsDesignDbContext>>();
-        await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var store = serviceProvider.GetRequiredService<IDocumentStore>();
+        var definitions = await ClearDocumentKindAsync(
+            store,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
+            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
+        var versions = await ClearDocumentKindAsync(
+            store,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
+            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
+        var drafts = await ClearDocumentKindAsync(
+            store,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
+            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
+        var versionLayouts = await ClearDocumentKindAsync(
+            store,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
+            WorkflowsDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
 
-        var draftValidations = await dbContext.WorkflowDefinitionDraftValidations.ExecuteDeleteAsync(cancellationToken);
-        var draftLayouts = await dbContext.WorkflowDefinitionDraftLayouts.ExecuteDeleteAsync(cancellationToken);
-        var versionLayouts = await dbContext.WorkflowDefinitionVersionLayouts.ExecuteDeleteAsync(cancellationToken);
-        var drafts = await dbContext.WorkflowDefinitionDrafts.ExecuteDeleteAsync(cancellationToken);
-        var versions = await dbContext.WorkflowDefinitionVersions.ExecuteDeleteAsync(cancellationToken);
-        var definitions = await dbContext.WorkflowDefinitions.ExecuteDeleteAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        return new DemoResetWorkflowCounts(definitions, versions, drafts, versionLayouts, draftLayouts, draftValidations);
+        return new DemoResetWorkflowCounts(definitions, versions, drafts, versionLayouts, DraftLayouts: 0, DraftValidations: 0);
     }
 
     private static async Task<DemoResetActivityCounts> ClearActivitiesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
-        var factory = serviceProvider.GetRequiredService<IDbContextFactory<ActivitiesDesignDbContext>>();
-        await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        var versions = await dbContext.ActivityDefinitionVersions.ExecuteDeleteAsync(cancellationToken);
-        var definitions = await dbContext.ActivityDefinitions.ExecuteDeleteAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
+        var store = serviceProvider.GetRequiredService<IDocumentStore>();
+        var versions = await ClearDocumentKindAsync(
+            store,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
+            ActivitiesDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
+        var definitions = await ClearDocumentKindAsync(
+            store,
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+            ActivitiesDesignStorageManifest.ByCollectionIndex,
+            cancellationToken);
 
         return new DemoResetActivityCounts(definitions, versions);
+    }
+
+    private static async Task<int> ClearDocumentKindAsync(
+        IDocumentStore store,
+        string documentKind,
+        string collection,
+        string byCollectionIndex,
+        CancellationToken cancellationToken)
+    {
+        var documents = await store.QueryAsync(
+            new DocumentStoreQuery(documentKind, byCollectionIndex, collection),
+            cancellationToken);
+
+        var deletes = documents
+            .Select(document => new DeleteDocumentRequest(documentKind, document.Id, null))
+            .ToArray();
+
+        if (deletes.Length > 0)
+            await store.DeleteAllAsync(DocumentCommitScope.Of(documentKind), deletes, cancellationToken);
+
+        return deletes.Length;
     }
 
     private static DemoClearPackageDropFolderResponse ClearPackageDropFolder(IWebHostEnvironment environment)

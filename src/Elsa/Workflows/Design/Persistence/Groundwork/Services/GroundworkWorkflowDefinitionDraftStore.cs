@@ -1,8 +1,8 @@
-using Elsa.Persistence.Core.Queries;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -15,20 +15,34 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// </summary>
 public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinitionDraftStore
 {
-    private readonly GroundworkReadStore<WorkflowDefinitionDraft> _reads;
+    private readonly GroundworkWorkflowDefinitionDraftDocumentStore _documents;
 
     public GroundworkWorkflowDefinitionDraftStore(IDocumentStore store, IPayloadSerializer payloadSerializer)
     {
-        _reads = new GroundworkReadStore<WorkflowDefinitionDraft>(
-            store,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-            WorkflowsDesignStorageManifest.ByCollectionIndex,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
-            GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        _documents = new GroundworkWorkflowDefinitionDraftDocumentStore(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
     }
 
-    public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-        => _reads.FirstOrDefaultAsync(
-            Query<WorkflowDefinitionDraft>.Where(x => x.WorkflowDefinitionId, QueryOp.Equal, workflowDefinitionId),
-            cancellationToken);
+    public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
+        return document?.Entity;
+    }
+
+    public async Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documents.FindByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken);
+        return document?.Entity;
+    }
+
+    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
+        return document?.Layout.ToArray() ?? [];
+    }
+
+    public async Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
+        return document?.Errors.ToArray() ?? [];
+    }
 }

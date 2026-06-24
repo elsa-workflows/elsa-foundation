@@ -1,4 +1,11 @@
+using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
+using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -20,13 +27,16 @@ public class GroundworkWorkflowsDesignRegistrationTests
         var services = new ServiceCollection();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create()));
         services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
+        services.AddSingleton<IDistributedLockProvider, StubLockProvider>();
+        services.AddSingleton<IEventPublisher, StubEventPublisher>();
+        services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
         preRegister?.Invoke(services);
         services.AddGroundworkWorkflowsDesignStores();
         return services.BuildServiceProvider();
     }
 
     [Fact]
-    public void Registers_all_four_read_ports_as_groundwork_implementations()
+    public void Registers_read_ports_commands_and_lookups_as_groundwork_implementations()
     {
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
@@ -36,6 +46,16 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<GroundworkWorkflowDefinitionVersionStore>(sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionDraftStore>(sp.GetRequiredService<IWorkflowDefinitionDraftStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());
+        Assert.IsType<GroundworkAddWorkflowDefinitionCommand>(sp.GetRequiredService<IAddWorkflowDefinitionCommand>());
+        Assert.IsType<GroundworkSaveWorkflowDefinitionCommand>(sp.GetRequiredService<ISaveWorkflowDefinitionCommand>());
+        Assert.IsType<GroundworkDeleteWorkflowDefinitionPermanentlyCommand>(sp.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>());
+        Assert.IsType<GroundworkCreateDraftCommand>(sp.GetRequiredService<ICreateDraftCommand>());
+        Assert.IsType<GroundworkUpdateDraftCommand>(sp.GetRequiredService<IUpdateDraftCommand>());
+        Assert.IsType<GroundworkDiscardDraftCommand>(sp.GetRequiredService<IDiscardDraftCommand>());
+        Assert.IsType<GroundworkPromoteDraftToVersionCommand>(sp.GetRequiredService<IPromoteDraftToVersionCommand>());
+        Assert.IsType<GroundworkSubmitWorkflowDefinitionCommand>(sp.GetRequiredService<ISubmitWorkflowDefinitionCommand>());
+        Assert.IsType<GroundworkCloneDraftFromVersionCommand>(sp.GetRequiredService<ICloneDraftFromVersionCommand>());
+        Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
     }
 
     [Fact]
@@ -56,5 +76,32 @@ public class GroundworkWorkflowsDesignRegistrationTests
         public Task<Core.Entities.WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<Core.Entities.WorkflowDefinition>> ListAsync(Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubEventPublisher : IEventPublisher
+    {
+        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class EmptyActivityStructureService : IActivityStructureService
+    {
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => null;
     }
 }

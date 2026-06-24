@@ -1,3 +1,6 @@
+using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
@@ -26,7 +29,7 @@ public class GroundworkActivitiesDesignRegistrationTests
     }
 
     [Fact]
-    public void Registers_both_read_ports_as_groundwork_implementations()
+    public void Registers_read_ports_commands_and_lookup_as_groundwork_implementations()
     {
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
@@ -34,6 +37,8 @@ public class GroundworkActivitiesDesignRegistrationTests
 
         Assert.IsType<GroundworkActivityDefinitionStore>(sp.GetRequiredService<IActivityDefinitionStore>());
         Assert.IsType<GroundworkActivityDefinitionVersionStore>(sp.GetRequiredService<IActivityDefinitionVersionStore>());
+        Assert.IsType<GroundworkAddActivityDefinitionCommand>(sp.GetRequiredService<IAddActivityDefinitionCommand>());
+        Assert.IsType<ActivityDefinitionLookup>(sp.GetRequiredService<IActivityDefinitionLookup>());
     }
 
     [Fact]
@@ -53,6 +58,7 @@ public class GroundworkActivitiesDesignRegistrationTests
     {
         public Task<Core.Entities.ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.ActivityDefinition?> FindAsync(Core.Filters.ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Core.Entities.ActivityDefinition>> ListAsync(Core.Filters.ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Core.Entities.ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

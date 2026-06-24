@@ -1,24 +1,21 @@
 using System.Text.Json;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.EFCore.DbContext;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Flowchart.Activities;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
-using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.EFCore.Events;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
-using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Server;
 
@@ -50,64 +47,39 @@ internal static class ElsaWorkflowManagementApi
     private static Task<IResult> ListDefinitionsAsync(IShellRegistry shellRegistry, string? search, string? state, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-            await using (dbContext)
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+            var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
+            var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
+
+            var definitions = await definitionStore.ListAsync(new WorkflowDefinitionFilter { SearchTerm = search }, cancellationToken);
+            definitions = NormalizeDefinitionListState(state) switch
             {
-                var query = dbContext.WorkflowDefinitions.AsNoTracking();
-                query = NormalizeDefinitionListState(state) switch
-                {
-                    WorkflowDefinitionListStates.Deleted => query.Where(x => x.DeletedAt != null),
-                    WorkflowDefinitionListStates.All => query,
-                    _ => query.Where(x => x.DeletedAt == null)
-                };
+                WorkflowDefinitionListStates.Deleted => definitions.Where(x => x.DeletedAt != null).ToArray(),
+                WorkflowDefinitionListStates.All => definitions,
+                _ => definitions.Where(x => x.DeletedAt == null).ToArray()
+            };
 
-                if (!string.IsNullOrWhiteSpace(search))
-                    query = query.Where(x => x.Name.Contains(search));
+            var summaries = new List<WorkflowDefinitionSummaryResponse>(definitions.Count);
+            foreach (var definition in definitions.OrderBy(x => x.Name, StringComparer.Ordinal).ThenBy(x => x.Id, StringComparer.Ordinal))
+            {
+                var draft = await draftStore.FindByWorkflowDefinitionIdAsync(definition.Id, cancellationToken);
+                var versions = await versionStore.ListByDefinitionAsync(definition.Id, cancellationToken);
+                var latestVersion = versions.OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal).FirstOrDefault();
 
-                var definitions = await query
-                    .OrderBy(x => x.Name)
-                    .ThenBy(x => x.Id)
-                    .ToArrayAsync(cancellationToken);
-
-                var definitionIds = definitions.Select(x => x.Id).ToArray();
-                var drafts = await dbContext.WorkflowDefinitionDrafts.AsNoTracking()
-                    .Where(x => definitionIds.Contains(x.WorkflowDefinitionId))
-                    .GroupBy(x => x.WorkflowDefinitionId)
-                    .Select(x => x.OrderByDescending(draft => draft.LastModifiedAt).First())
-                    .ToArrayAsync(cancellationToken);
-                var versions = await dbContext.WorkflowDefinitionVersions.AsNoTracking()
-                    .Where(x => definitionIds.Contains(x.DefinitionId))
-                    .GroupBy(x => x.DefinitionId)
-                    .Select(x => new
-                    {
-                        DefinitionId = x.Key,
-                        Count = x.Count(),
-                        Latest = x.OrderByDescending(version => version.SemVerSortKey).FirstOrDefault()
-                    })
-                    .ToArrayAsync(cancellationToken);
-
-                var draftsByDefinition = drafts.ToDictionary(x => x.WorkflowDefinitionId, StringComparer.Ordinal);
-                var versionsByDefinition = versions.ToDictionary(x => x.DefinitionId, StringComparer.Ordinal);
-
-                var response = definitions.Select(definition =>
-                {
-                    draftsByDefinition.TryGetValue(definition.Id, out var draft);
-                    versionsByDefinition.TryGetValue(definition.Id, out var version);
-                    return new WorkflowDefinitionSummaryResponse(
-                        definition.Id,
-                        definition.Name,
-                        definition.Description,
-                        definition.CreatedAt,
-                        definition.LastModifiedAt,
-                        definition.DeletedAt,
-                        draft?.Id,
-                        version?.Latest?.Id,
-                        version?.Latest?.Version,
-                        version?.Count ?? 0);
-                }).ToArray();
-
-                return Results.Ok(new WorkflowDefinitionsResponse(response));
+                summaries.Add(new WorkflowDefinitionSummaryResponse(
+                    definition.Id,
+                    definition.Name,
+                    definition.Description,
+                    definition.CreatedAt,
+                    definition.LastModifiedAt,
+                    definition.DeletedAt,
+                    draft?.Id,
+                    latestVersion?.Id,
+                    latestVersion?.Version,
+                    versions.Count));
             }
+
+            return Results.Ok(new WorkflowDefinitionsResponse(summaries));
         }, cancellationToken);
 
     private static Task<IResult> GetDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
@@ -140,84 +112,49 @@ internal static class ElsaWorkflowManagementApi
     private static Task<IResult> DeleteDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-            await using (dbContext)
-            {
-                var definition = await dbContext.WorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == definitionId, cancellationToken);
-                if (definition is null)
-                    return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+            var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+            if (definition is null)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
 
-                if (definition.DeletedAt is null)
-                    definition.DeletedAt = DateTimeOffset.UtcNow;
+            if (definition.DeletedAt is null)
+                definition.DeletedAt = DateTimeOffset.UtcNow;
 
-                definition.DeletedReason = null;
-                await dbContext.SaveChangesAsync(cancellationToken);
-                return Results.NoContent();
-            }
+            definition.DeletedReason = null;
+            await SaveWorkflowDefinitionAsync(services, definition, cancellationToken);
+            return Results.NoContent();
         }, cancellationToken);
 
     private static Task<IResult> RestoreDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-            await using (dbContext)
-            {
-                var definition = await dbContext.WorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == definitionId, cancellationToken);
-                if (definition is null)
-                    return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+            var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+            if (definition is null)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
 
-                definition.DeletedAt = null;
-                definition.DeletedReason = null;
-                await dbContext.SaveChangesAsync(cancellationToken);
-                return Results.NoContent();
-            }
+            definition.DeletedAt = null;
+            definition.DeletedReason = null;
+            await SaveWorkflowDefinitionAsync(services, definition, cancellationToken);
+            return Results.NoContent();
         }, cancellationToken);
 
     private static Task<IResult> DeleteDefinitionPermanentlyAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-            await using (dbContext)
-            await using (var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
-            {
-                var definition = await dbContext.WorkflowDefinitions.FirstOrDefaultAsync(x => x.Id == definitionId, cancellationToken);
-                if (definition is null)
-                    return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
 
-                if (definition.DeletedAt is null)
-                    return Results.BadRequest(new WorkflowManagementErrorResponse("Only deleted workflow definitions can be permanently deleted."));
+            var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+            if (definition is null)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
 
-                var draftIds = await dbContext.WorkflowDefinitionDrafts
-                    .Where(x => x.WorkflowDefinitionId == definitionId)
-                    .Select(x => x.Id)
-                    .ToArrayAsync(cancellationToken);
-                var versionIds = await dbContext.WorkflowDefinitionVersions
-                    .Where(x => x.DefinitionId == definitionId)
-                    .Select(x => x.Id)
-                    .ToArrayAsync(cancellationToken);
+            if (definition.DeletedAt is null)
+                return Results.BadRequest(new WorkflowManagementErrorResponse("Only deleted workflow definitions can be permanently deleted."));
 
-                await dbContext.WorkflowDefinitionDraftValidations
-                    .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
-                    .ExecuteDeleteAsync(cancellationToken);
-                await dbContext.WorkflowDefinitionDraftLayouts
-                    .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
-                    .ExecuteDeleteAsync(cancellationToken);
-                await dbContext.WorkflowDefinitionVersionLayouts
-                    .Where(x => versionIds.Contains(x.WorkflowDefinitionVersionId))
-                    .ExecuteDeleteAsync(cancellationToken);
-                await dbContext.WorkflowDefinitionDrafts
-                    .Where(x => x.WorkflowDefinitionId == definitionId)
-                    .ExecuteDeleteAsync(cancellationToken);
-                await dbContext.WorkflowDefinitionVersions
-                    .Where(x => x.DefinitionId == definitionId)
-                    .ExecuteDeleteAsync(cancellationToken);
-                await dbContext.WorkflowDefinitions
-                    .Where(x => x.Id == definitionId)
-                    .ExecuteDeleteAsync(cancellationToken);
+            var delete = services.GetRequiredService<IDeleteWorkflowDefinitionPermanentlyCommand>();
+            await delete.Execute(definitionId, cancellationToken);
 
-                await transaction.CommitAsync(cancellationToken);
-                return Results.NoContent();
-            }
+            return Results.NoContent();
         }, cancellationToken);
 
     private static Task<IResult> UpdateDraftAsync(IShellRegistry shellRegistry, string draftId, UpdateWorkflowDraftRequest request, CancellationToken cancellationToken) =>
@@ -263,153 +200,139 @@ internal static class ElsaWorkflowManagementApi
     private static Task<IResult> ListActivitiesAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var dbContext = await CreateDbContextAsync<ActivitiesDesignDbContext>(services, cancellationToken);
-            var eventPublisher = services.GetRequiredService<IEventPublisher>();
-            await using (dbContext)
+            var versionStore = services.GetRequiredService<IActivityDefinitionVersionStore>();
+            var definitionStore = services.GetRequiredService<IActivityDefinitionStore>();
+            var versions = await versionStore.ListAsync(cancellationToken);
+
+            foreach (var version in versions)
             {
-                var versions = await dbContext.ActivityDefinitionVersions
-                    .Include(x => x.Definition)
-                    .OrderBy(x => x.Definition!.Category)
-                    .ThenBy(x => x.Definition!.DisplayName)
-                    .ThenBy(x => x.Id)
-                    .ToArrayAsync(cancellationToken);
-
-                foreach (var version in versions)
-                {
-                    await eventPublisher.Publish(
-                        new OnEntityLoading(dbContext, version),
-                        EventPublishingStrategy.Sequential,
-                        cancellationToken);
-                }
-
-                var response = versions
-                    .Where(x => x.Definition is not null)
-                    .Select(x => new ActivityCatalogItemResponse(
-                        x.Id,
-                        x.Definition!.ActivityTypeKey,
-                        x.Version,
-                        x.Definition.Category,
-                        x.Definition.DisplayName ?? x.Definition.ActivityTypeKey,
-                        x.Definition.Description,
-                        x.ExecutionType.ToString(),
-                        x.Inputs.ToArray(),
-                        x.Outputs.ToArray(),
-                        x.DesignFacets.ToArray()))
-                    .ToArray();
-
-                return Results.Ok(new ActivityCatalogResponse(response));
+                if (version.Definition is null)
+                    version.Definition = await definitionStore.GetAsync(version.DefinitionId, cancellationToken);
             }
+
+            var response = versions
+                .Where(x => x.Definition is not null)
+                .OrderBy(x => x.Definition!.Category, StringComparer.Ordinal)
+                .ThenBy(x => x.Definition!.DisplayName, StringComparer.Ordinal)
+                .ThenBy(x => x.Id, StringComparer.Ordinal)
+                .Select(x => new ActivityCatalogItemResponse(
+                    x.Id,
+                    x.Definition!.ActivityTypeKey,
+                    x.Version,
+                    x.Definition.Category,
+                    x.Definition.DisplayName ?? x.Definition.ActivityTypeKey,
+                    x.Definition.Description,
+                    x.ExecutionType.ToString(),
+                    x.Inputs.ToArray(),
+                    x.Outputs.ToArray(),
+                    x.DesignFacets.ToArray()))
+                .ToArray();
+
+            return Results.Ok(new ActivityCatalogResponse(response));
         }, cancellationToken);
 
     private static async Task<IResult> LoadDefinitionResultAsync(IServiceProvider services, string definitionId, CancellationToken cancellationToken)
     {
-        var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-        await using (dbContext)
-        {
-            var definition = await dbContext.WorkflowDefinitions.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == definitionId && x.DeletedAt == null, cancellationToken);
+        var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+        var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
 
-            if (definition is null)
-                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+        var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+        if (definition is null || definition.DeletedAt is not null)
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
 
-            var draft = await dbContext.WorkflowDefinitionDrafts
-                .Where(x => x.WorkflowDefinitionId == definitionId)
-                .OrderByDescending(x => x.LastModifiedAt)
-                .FirstOrDefaultAsync(cancellationToken);
-            var versions = await dbContext.WorkflowDefinitionVersions.AsNoTracking()
-                .Where(x => x.DefinitionId == definitionId)
-                .OrderByDescending(x => x.SemVerSortKey)
-                .Select(x => new WorkflowVersionSummaryResponse(x.Id, x.Version, x.CreatedAt))
-                .ToArrayAsync(cancellationToken);
+        var draft = await draftStore.FindByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
+        var versions = (await versionStore.ListByDefinitionAsync(definitionId, cancellationToken))
+            .OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal)
+            .Select(x => new WorkflowVersionSummaryResponse(x.Id, x.Version, x.CreatedAt))
+            .ToArray();
 
-            WorkflowDraftResponse? draftResponse = null;
-            if (draft is not null)
-                draftResponse = await LoadDraftAsync(services, dbContext, draft, cancellationToken);
+        WorkflowDraftResponse? draftResponse = null;
+        if (draft is not null)
+            draftResponse = await LoadDraftAsync(draftStore, draft, cancellationToken);
 
-            return Results.Ok(new WorkflowDefinitionDetailsResponse(
-                new WorkflowDefinitionSummaryResponse(
-                    definition.Id,
-                    definition.Name,
-                    definition.Description,
-                    definition.CreatedAt,
-                    definition.LastModifiedAt,
-                    definition.DeletedAt,
-                    draft?.Id,
-                    versions.FirstOrDefault()?.Id,
-                    versions.FirstOrDefault()?.Version,
-                    versions.Length),
-                draftResponse,
-                versions));
-        }
+        return Results.Ok(new WorkflowDefinitionDetailsResponse(
+            new WorkflowDefinitionSummaryResponse(
+                definition.Id,
+                definition.Name,
+                definition.Description,
+                definition.CreatedAt,
+                definition.LastModifiedAt,
+                definition.DeletedAt,
+                draft?.Id,
+                versions.FirstOrDefault()?.Id,
+                versions.FirstOrDefault()?.Version,
+                versions.Length),
+            draftResponse,
+            versions));
     }
 
     private static async Task<IResult> LoadDraftResultAsync(IServiceProvider services, string draftId, CancellationToken cancellationToken)
     {
-        var dbContext = await CreateDbContextAsync<WorkflowsDesignDbContext>(services, cancellationToken);
-        await using (dbContext)
-        {
-            var draft = await dbContext.WorkflowDefinitionDrafts.FirstOrDefaultAsync(x => x.Id == draftId, cancellationToken);
-            if (draft is null)
-                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition draft '{draftId}' was not found."));
+        var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var draft = await draftStore.FindByIdAsync(draftId, cancellationToken);
+        if (draft is not null)
+            return Results.Ok(await LoadDraftAsync(draftStore, draft, cancellationToken));
 
-            return Results.Ok(await LoadDraftAsync(services, dbContext, draft, cancellationToken));
-        }
+        return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition draft '{draftId}' was not found."));
     }
 
-    private static async Task<WorkflowDraftResponse> LoadDraftAsync(IServiceProvider services, WorkflowsDesignDbContext dbContext, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
+    private static async Task<WorkflowDraftResponse> LoadDraftAsync(IWorkflowDefinitionDraftStore draftStore, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
-        var eventPublisher = services.GetRequiredService<IEventPublisher>();
-        await eventPublisher.Publish(
-            new OnEntityLoading(dbContext, draft),
-            EventPublishingStrategy.Sequential,
-            cancellationToken);
+        var layout = await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken);
+        var errors = await draftStore.FindValidationErrorsByDraftIdAsync(draft.Id, cancellationToken);
 
-        var layout = await dbContext.WorkflowDefinitionDraftLayouts.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draft.Id, cancellationToken);
-        var validation = await dbContext.WorkflowDefinitionDraftValidations.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draft.Id, cancellationToken);
-
-        return new WorkflowDraftResponse(
+        return new(
             draft.Id,
             draft.WorkflowDefinitionId,
             draft.SourceVersionId,
             draft.State.ToStateView(),
-            layout?.Records.ToArray() ?? [],
-            validation?.Errors.ToArray() ?? []);
+            layout,
+            errors);
     }
 
     private static async Task<ActivityNode?> CreateRootActivityAsync(IServiceProvider services, string? rootActivityVersionId, string? rootKind, CancellationToken cancellationToken)
     {
         var normalized = NormalizeRootKind(rootKind);
-        var dbContext = await CreateDbContextAsync<ActivitiesDesignDbContext>(services, cancellationToken);
-        await using (dbContext)
-        {
-            var version = string.IsNullOrWhiteSpace(rootActivityVersionId)
-                ? await FindRootKindActivityVersionAsync(dbContext, normalized, cancellationToken)
-                : await dbContext.ActivityDefinitionVersions
-                    .Include(x => x.Definition)
-                    .FirstOrDefaultAsync(x => x.Id == rootActivityVersionId, cancellationToken);
+        var versionStore = services.GetRequiredService<IActivityDefinitionVersionStore>();
+        var version = string.IsNullOrWhiteSpace(rootActivityVersionId)
+            ? await FindRootKindActivityVersionAsync(services, normalized, cancellationToken)
+            : await versionStore.GetWithDefinitionAsync(rootActivityVersionId, cancellationToken);
 
-            if (version is null)
-                return null;
+        if (version is null)
+            return null;
 
-            return new ActivityNode(
-                NodeId: "root",
-                ActivityVersionId: version.Id,
-                Inputs: [],
-                Outputs: [],
-                Structure: CreateRootStructure(version.Definition?.ActivityTypeKey, normalized));
-        }
+        return new ActivityNode(
+            NodeId: "root",
+            ActivityVersionId: version.Id,
+            Inputs: [],
+            Outputs: [],
+            Structure: CreateRootStructure(version.Definition?.ActivityTypeKey, normalized));
     }
 
-    private static Task<ActivityDefinitionVersion?> FindRootKindActivityVersionAsync(ActivitiesDesignDbContext dbContext, string rootKind, CancellationToken cancellationToken)
+    private static async Task<ActivityDefinitionVersion?> FindRootKindActivityVersionAsync(IServiceProvider services, string rootKind, CancellationToken cancellationToken)
     {
+        var versionStore = services.GetRequiredService<IActivityDefinitionVersionStore>();
+        var definitionStore = services.GetRequiredService<IActivityDefinitionStore>();
         var activityTypeName = rootKind == WorkflowRootKinds.Flowchart ? nameof(Flowchart) : nameof(Sequence);
-        return dbContext.ActivityDefinitionVersions
-            .Include(x => x.Definition)
-            .Where(x => x.Definition != null && x.Definition.ActivityTypeKey.Contains(activityTypeName))
-            .OrderByDescending(x => x.SemVerSortKey)
-            .FirstOrDefaultAsync(cancellationToken);
+        var versions = await versionStore.ListAsync(cancellationToken);
+
+        foreach (var version in versions)
+        {
+            if (version.Definition is null)
+                version.Definition = await definitionStore.GetAsync(version.DefinitionId, cancellationToken);
+        }
+
+        return versions
+            .Where(x => x.Definition != null && x.Definition.ActivityTypeKey.Contains(activityTypeName, StringComparison.Ordinal))
+            .OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static Task SaveWorkflowDefinitionAsync(IServiceProvider services, WorkflowDefinition definition, CancellationToken cancellationToken)
+    {
+        var save = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
+        return save.Execute(definition, cancellationToken);
     }
 
     private static ActivityNodeStructure? CreateRootStructure(string? activityTypeKey, string fallbackRootKind)
@@ -458,13 +381,6 @@ internal static class ElsaWorkflowManagementApi
             return WorkflowDefinitionListStates.All;
 
         return WorkflowDefinitionListStates.Active;
-    }
-
-    private static async Task<TDbContext> CreateDbContextAsync<TDbContext>(IServiceProvider services, CancellationToken cancellationToken)
-        where TDbContext : DbContext
-    {
-        var factory = services.GetRequiredService<IDbContextFactory<TDbContext>>();
-        return await factory.CreateDbContextAsync(cancellationToken);
     }
 
     private static async Task<IResult> WithShellAsync(IShellRegistry shellRegistry, Func<IServiceProvider, Task<IResult>> action, CancellationToken cancellationToken)

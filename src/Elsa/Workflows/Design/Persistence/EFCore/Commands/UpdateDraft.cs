@@ -3,10 +3,9 @@ using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.EFCore.Constants;
-using Elsa.Workflows.Design.Persistence.EFCore.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -52,7 +51,7 @@ public sealed class UpdateDraft(
         WorkflowDefinitionDraft draft;
         IReadOnlyList<ValidationError> errors;
 
-        var lockKey = LockKeys.DraftKey(request.DraftId);
+        var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(request.DraftId);
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         await using (var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken))

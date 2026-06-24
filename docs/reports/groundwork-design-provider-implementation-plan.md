@@ -1,6 +1,6 @@
 # Groundwork design persistence provider — implementation plan
 
-Status: **Ready to execute** (foundation proven in code). Owner program goal:
+Status: **Implemented for Elsa-side provider switch** (Groundwork foundation proven and consumed). Owner program goal:
 [Groundwork persistence readiness](../program-goals/groundwork-persistence-readiness.md).
 Companion verdict: [Groundwork host-configurable persistence feasibility](groundwork-host-configurable-persistence-feasibility.md).
 Companion handoff: [Groundwork closed-query capability spec](groundwork-closed-query-capability-spec.md).
@@ -306,7 +306,7 @@ dependent (Mongo standalone vs replica set), so a static manifest flag could not
 
 ---
 
-## CONSUMED — preview.6 landed; union host + write lane proven (this session)
+## CONSUMED — preview.6 landed; union host + write lane proven
 
 The original Groundwork capability uplift was published as preview.6 and consumed here at the time
 (`Directory.Packages.props`). The single-provider story is now demonstrated end-to-end in code + tests,
@@ -333,27 +333,24 @@ repo previously hosted locally. Elsa now consumes those upstream APIs instead of
   to Groundwork. Registered alongside the read ports, so the union host wires the write lane automatically.
   Tests: atomic commit + rollback, per-lane add round-trips, and a unified-host write-then-read.
 
-### Remaining write-lane work (orchestration-heavy commands — follow-up)
-The six orchestration-bearing commands are NOT yet on Groundwork; they remain EF-only. They are
-feature-sized because each interleaves provider-neutral orchestration with the draft **embed model**
-(layout + validation records embedded in the `workflowDefinitionDraft` document):
-- `CreateDraft` / `UpdateDraft` / `DiscardDraft` — single-document, but carry the per-draft distributed
-  lock + the `OnDraftValidating` sequential validation gate + diff-stream / lifecycle events. The
-  Groundwork draft document must be reshaped to embed `WorkflowDefinitionDraftLayout` +
-  `WorkflowDefinitionDraftValidation`, and `GroundworkWorkflowDefinitionDraftStore` kept in sync.
-- `PromoteDraftToVersion` — reads the embedded validation error count (gate) + embedded layout, looks up
-  the last version via the native single-field ORDER BY (`SemVerSortKey` DESC, top 1), then writes
-  version + version-layout (UoW).
-- `SubmitWorkflowDefinition` — validates the activity tree (`IActivityStructureService`), writes
-  definition + draft + version + version-layout (UoW).
-- `CloneDraftFromVersion` — already provider-neutral (delegates to `ICreateDraftCommand` + read ports);
-  becomes Groundwork-backed for free once `CreateDraft` is.
-
-Recommended approach (unchanged): port these as Groundwork command adapters alongside EF (keeping the
-226 EF design tests untouched), reusing the neutral deps they already take
-(`IDistributedLockProvider`, `IEventPublisher`, `IDraftStateDiffEngine`, `IIdentityGenerator`,
-`IActivityStructureService`). The embed-model reshape is the one real design change; everything else is
-a persistence swap.
+### Done — Elsa-side Groundwork write lane and server switch
+- **Provider-neutral orchestration moved out of EF:** `IDraftStateDiffEngine`, `DraftStateDiffEngine`,
+  `WorkflowDefinitionLookup`, and `ActivityDefinitionLookup` now live in the persistence core layers and
+  resolve through named stores rather than EF `DbContext` services.
+- **Draft embed model implemented:** Groundwork `workflowDefinitionDraft` documents embed the draft entity,
+  designer layout records, and validation errors in one document. `IWorkflowDefinitionDraftStore` exposes
+  provider-neutral reads for draft lookup, layout, and validation state.
+- **Orchestration-bearing workflow commands implemented for Groundwork:** `ICreateDraftCommand`,
+  `IUpdateDraftCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`,
+  `ISubmitWorkflowDefinitionCommand`, `ICloneDraftFromVersionCommand`, `ISaveWorkflowDefinitionCommand`, and
+  `IDeleteWorkflowDefinitionPermanentlyCommand` are registered by `AddGroundworkWorkflowsDesignStores()`.
+  Multi-document writes use Groundwork atomic document writes; create/update preserve the per-draft lock and
+  sequential validation gate; promotion rejects drafts with embedded validation errors.
+- **Server composition switched:** `Elsa.Server` now uses `GroundworkUnifiedPersistenceSqlite` for workflow and
+  activity design persistence, with demo reset clearing Groundwork document kinds instead of EF design tables.
+- **Tests and catalogs updated:** focused Groundwork command tests cover create/update/promote/discard behavior,
+  Groundwork activity tests cover the expanded activity store contract, and the Groundwork workflow/activity
+  extension-point catalogs plus generated maps record the replacement-contract registrations.
 
 ### Remaining optimization
 - `gw-fallback-cleanup`: drop the `GroundworkReadStore` in-memory operator fallback where

@@ -1,8 +1,8 @@
-﻿using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
-namespace Elsa.Workflows.Design.Persistence.EFCore.Contracts;
+namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 public interface IDraftStateDiffEngine
 {
@@ -11,6 +11,5 @@ public interface IDraftStateDiffEngine
         WorkflowDefinitionState stored,
         IReadOnlyCollection<DesignMetadataRecord> storedLayout,
         WorkflowDefinitionState desired,
-        IReadOnlyCollection<DesignMetadataRecord> desiredLayout
-    );
+        IReadOnlyCollection<DesignMetadataRecord> desiredLayout);
 }

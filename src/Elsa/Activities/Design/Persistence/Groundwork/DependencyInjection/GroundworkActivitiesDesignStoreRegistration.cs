@@ -1,6 +1,10 @@
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Persistence.Groundwork.Services;
+using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -26,6 +30,14 @@ public static class GroundworkActivitiesDesignStoreRegistration
 
         services.RemoveAll<IAddActivityDefinitionCommand>();
         services.AddScoped<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>();
+
+        services.RemoveAll<IActivityDefinitionLookup>();
+        services.AddScoped<IActivityDefinitionLookup, ActivityDefinitionLookup>();
+
+        services.TryAddScoped<IIdentityGenerator, GroundworkIdentityGenerator>();
+        services.TryAddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();
+        services.TryAddScoped<IActivityDefinitionFactory, ActivityDefinitionFactory>();
+        services.TryAddScoped<IActivityDefinitionVersionFactory, ActivityDefinitionVersionFactory>();
 
         return services;
     }
