@@ -628,8 +628,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "artifact-1");
     expect(container.textContent).toContain("Executables");
-    expect(container.textContent).toContain("Definitions");
-    expect(container.textContent).toContain("Instances");
+    expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     expect(container.textContent).toContain("Flowchart");
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
@@ -823,6 +822,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "wfexec-1");
     expect(container.textContent).toContain("Instances");
+    expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     await click(rowByLabel(container, "Inspect workflow instance wfexec-1"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");

@@ -208,7 +208,7 @@ function WorkflowManagementPage({
   return definitionId
     ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
     : (
-      <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
+      <WorkflowsPageFrame title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
       </WorkflowsPageFrame>
     );
@@ -224,7 +224,7 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
   }, []);
 
   return (
-    <WorkflowsPageFrame activePath="/workflows/executables" title="Executables">
+    <WorkflowsPageFrame title="Executables">
       <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} />
     </WorkflowsPageFrame>
   );
@@ -232,7 +232,7 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
 
 function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   return (
-    <WorkflowsPageFrame activePath="/workflows/instances" title="Instances">
+    <WorkflowsPageFrame title="Instances">
       <WorkflowInstances context={context} ai={ai} />
     </WorkflowsPageFrame>
   );
@@ -242,18 +242,13 @@ function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointC
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
-    <WorkflowsPageFrame activePath="/workflows/instances" title="Instance">
+    <WorkflowsPageFrame title="Instance">
       <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
     </WorkflowsPageFrame>
   );
 }
 
-function WorkflowsPageFrame({ activePath, title, children }: { activePath: string; title: string; children: React.ReactNode }) {
-  const navigate = (path: string) => {
-    window.history.pushState({}, "", path);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
+function WorkflowsPageFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="wf-page">
       <div className="wf-page-header">
@@ -262,11 +257,6 @@ function WorkflowsPageFrame({ activePath, title, children }: { activePath: strin
           <h2>{title}</h2>
         </div>
       </div>
-      <nav className="wf-section-tabs" aria-label="Workflow views">
-        <a className={activePath === "/workflows/definitions" ? "active" : ""} href="/workflows/definitions" onClick={event => { event.preventDefault(); navigate("/workflows/definitions"); }}>Definitions</a>
-        <a className={activePath === "/workflows/executables" ? "active" : ""} href="/workflows/executables" onClick={event => { event.preventDefault(); navigate("/workflows/executables"); }}>Executables</a>
-        <a className={activePath === "/workflows/instances" ? "active" : ""} href="/workflows/instances" onClick={event => { event.preventDefault(); navigate("/workflows/instances"); }}>Instances</a>
-      </nav>
       {children}
     </section>
   );
