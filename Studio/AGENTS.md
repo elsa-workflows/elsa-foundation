@@ -18,3 +18,17 @@ specification, implementation plan, and design contracts, read:
 - `specs/003-agentic-studio-experience/contracts/studio-agent-sdk.md`
 - `specs/003-agentic-studio-experience/contracts/workflow-agent-contract.md`
 <!-- SPECKIT END -->
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation-studio`; external PRs are not a triage request surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single-context domain documentation layout. See `docs/agents/domain.md`.
