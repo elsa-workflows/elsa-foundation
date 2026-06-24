@@ -213,7 +213,7 @@ function AppContent() {
   );
 }
 
-function findRouteForPath<TRoute extends { path: string }>(routes: TRoute[], path: string) {
+export function findRouteForPath<TRoute extends { path: string }>(routes: TRoute[], path: string) {
   return routes.find(route => route.path === path) ?? routes.find(route => routeMatchesPath(route.path, path));
 }
 
