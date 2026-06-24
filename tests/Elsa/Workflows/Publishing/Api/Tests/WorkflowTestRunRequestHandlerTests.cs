@@ -90,6 +90,17 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public void RejectsBlankDraftSnapshotIdBeforeCreatingTestRunRequest()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: " ",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)));
+
+        Assert.Equal("SnapshotId", exception.ParamName);
+    }
+
+    [Fact]
     public async Task RejectsMissingRootWithoutDispatchingExecution()
     {
         var handler = Handler(WorkflowVersion(rootActivity: null));
