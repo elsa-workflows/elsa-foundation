@@ -102,6 +102,18 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => service.ReadProjectFileAsync(_caller, project.Id, "../outside.cs"));
     }
 
+    [Theory]
+    [InlineData("Elsa.Test\"><Bad/>", "1.0.0", "net10.0")]
+    [InlineData("Elsa.Test.Valid", "1.0.0\"><Bad/>", "net10.0")]
+    [InlineData("Elsa.Test.Valid", "1.0.0", "net10.0</TargetFramework><Bad/>")]
+    public async Task CreateProjectRejectsUnsafeIdentityFields(string packageId, string packageVersion, string targetFramework)
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", packageId, packageVersion, targetFramework, null, null)));
+    }
+
     [Fact]
     public async Task DeleteWorkspaceRemovesProjectFilesAndBuildArtifacts()
     {
@@ -604,6 +616,31 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             _ => Task.CompletedTask,
             async cancellationToken =>
                 await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "3.0.0", "artifact-3.nupkg", "feed-3.nupkg", DateTimeOffset.UtcNow, new("completed", "promote-3", null, false, []), true, false, DateTimeOffset.UtcNow), cancellationToken));
+        var rollbackService = CreateService(storage: storage, promotion: promotion);
+
+        var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
+
+        Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
+        Assert.True(rollback.ReconcileOutcome!.IsDegraded);
+        Assert.Equal("failed", rollback.ReconcileOutcome.Outcome);
+        Assert.Contains(project.PackageId, rollback.ReconcileOutcome.FailedPackages);
+        Assert.Equal("3.0.0", await innerStorage.GetActiveVersionAsync(project.Id));
+    }
+
+    [Fact]
+    public async Task RollbackMarksDegradedWhenActiveVersionIsOutsidePromotionSnapshot()
+    {
+        var innerStorage = CreateStorage();
+        var promotion = new FakePromotionService();
+        var service = CreateService(storage: innerStorage);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.ActiveSkipRace", "3.0.0", "net10.0", null, null));
+        var promotedV1At = DateTimeOffset.UtcNow.AddMinutes(-20);
+        var promotedV2At = DateTimeOffset.UtcNow.AddMinutes(-10);
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "1.0.0", "artifact-1.nupkg", "feed-1.nupkg", promotedV1At, new("completed", "promote-1", null, false, []), true, false, promotedV1At));
+        await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "2.0.0", "artifact-2.nupkg", "feed-2.nupkg", promotedV2At, new("completed", "promote-2", null, false, []), true, false, promotedV2At));
+        var storage = new ConcurrentPromotionStorage(innerStorage, async cancellationToken =>
+            await innerStorage.AddPromotionAsync(project.Id, new(project.PackageId, "3.0.0", "artifact-3.nupkg", "feed-3.nupkg", DateTimeOffset.UtcNow, new("completed", "promote-3", null, false, []), true, false, DateTimeOffset.UtcNow), cancellationToken));
         var rollbackService = CreateService(storage: storage, promotion: promotion);
 
         var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));

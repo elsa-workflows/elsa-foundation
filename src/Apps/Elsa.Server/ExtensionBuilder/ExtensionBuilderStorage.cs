@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -40,6 +41,8 @@ internal sealed record SourceSnapshot(string Id, string ProjectId, string Path, 
 
 internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 {
+    private static readonly Regex PackageVersionPattern = new(@"^[0-9]+(\.[0-9]+){1,3}(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$", RegexOptions.Compiled);
+    private static readonly Regex TargetFrameworkPattern = new(@"^(net|netstandard|netcoreapp)[A-Za-z0-9.]+(-[A-Za-z0-9_.-]+)?$", RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
@@ -180,6 +183,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var packageId = request.PackageId.Trim();
             var version = string.IsNullOrWhiteSpace(request.PackageVersion) ? template.DefaultPackageVersion : request.PackageVersion.Trim();
             var targetFramework = string.IsNullOrWhiteSpace(request.TargetFramework) ? template.DefaultTargetFramework : request.TargetFramework.Trim();
+            ValidateProjectIdentity(packageId, version, targetFramework);
             var manifestContent = ExtensionBuilderTemplateCatalog.RewriteManifest(template.DefaultManifest.Content, packageId, version);
             var manifest = template.DefaultManifest with
             {
@@ -363,9 +367,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
                 return null;
 
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, CancellationToken.None);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
+            await SaveStateAsync(state, CancellationToken.None);
             return snapshot;
         }
         finally
@@ -630,6 +635,22 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         Directory.CreateDirectory(path);
         return path;
     }
+
+    private static void ValidateProjectIdentity(string packageId, string version, string targetFramework)
+    {
+        if (!IsWellFormedPackageId(packageId))
+            throw new ArgumentException($"Package id '{packageId}' is not valid.", nameof(CreateProjectRequest.PackageId));
+        if (!PackageVersionPattern.IsMatch(version))
+            throw new ArgumentException($"Package version '{version}' is not valid.", nameof(CreateProjectRequest.PackageVersion));
+        if (!TargetFrameworkPattern.IsMatch(targetFramework))
+            throw new ArgumentException($"Target framework '{targetFramework}' is not valid.", nameof(CreateProjectRequest.TargetFramework));
+    }
+
+    private static bool IsWellFormedPackageId(string packageId) =>
+        packageId.All(x => char.IsAsciiLetterOrDigit(x) || x is '_' or '.' or '-') &&
+        !packageId.StartsWith(".", StringComparison.Ordinal) &&
+        !packageId.EndsWith(".", StringComparison.Ordinal) &&
+        !packageId.Contains("..", StringComparison.Ordinal);
 
     private async Task<ExtensionBuilderState> LoadStateAsync(CancellationToken cancellationToken)
     {

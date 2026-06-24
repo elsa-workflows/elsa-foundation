@@ -287,29 +287,18 @@ internal sealed class ExtensionBuilderService(
             if (!recorded)
                 return null;
 
-            if (!result.ReconcileOutcome.IsDegraded &&
-                (activeVersion is null || promotions.Any(x => string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase))))
+            if (result.ReconcileOutcome.IsDegraded)
+                return result;
+
+            if (activeVersion is not null && !promotions.Any(x => string.Equals(x.Version, activeVersion, StringComparison.OrdinalIgnoreCase)))
             {
-                var activated = await storage.TrySetActiveVersionAsync(project.Id, request.Version, activeVersion, CancellationToken.None);
-                if (!activated)
-                {
-                    var conflictOutcome = new ExtensionBuilderReconcileOutcome(
-                        "failed",
-                        result.ReconcileOutcome.CorrelationId,
-                        "Active package version changed before rollback activation could be recorded.",
-                        true,
-                        [project.PackageId]);
-                    await storage.UpdatePromotionLifecycleAsync(
-                        project.Id,
-                        request.Version,
-                        conflictOutcome,
-                        result.RequiresReload,
-                        result.RequiresRestart,
-                        DateTimeOffset.UtcNow,
-                        CancellationToken.None);
-                    result = result with { ReconcileOutcome = conflictOutcome };
-                }
+                result = await MarkRollbackActivationFailedAsync(project, request.Version, result);
+                return result;
             }
+
+            var activated = await storage.TrySetActiveVersionAsync(project.Id, request.Version, activeVersion, CancellationToken.None);
+            if (!activated)
+                result = await MarkRollbackActivationFailedAsync(project, request.Version, result);
         }
 
         return result;
@@ -334,6 +323,25 @@ internal sealed class ExtensionBuilderService(
 
         return outcome.FailedPackages.Count is 0 ||
             outcome.FailedPackages.Any(x => string.Equals(x, packageId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<PackagePromotionResult> MarkRollbackActivationFailedAsync(ExtensionProject project, string version, PackagePromotionResult result)
+    {
+        var outcome = new ExtensionBuilderReconcileOutcome(
+            "failed",
+            result.ReconcileOutcome?.CorrelationId ?? "",
+            "Active package version changed before rollback activation could be recorded.",
+            true,
+            [project.PackageId]);
+        await storage.UpdatePromotionLifecycleAsync(
+            project.Id,
+            version,
+            outcome,
+            result.RequiresReload,
+            result.RequiresRestart,
+            DateTimeOffset.UtcNow,
+            CancellationToken.None);
+        return result with { ReconcileOutcome = outcome };
     }
 
     private static void DeleteBuildDirectory(string runningLogPath)
