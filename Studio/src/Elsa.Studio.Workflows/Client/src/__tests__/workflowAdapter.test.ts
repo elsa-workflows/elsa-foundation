@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildUnsupportedActivityCanvas,
   buildCanvas,
   createActivityNode,
   flowchartStructureKind,
+  getActivityDesignerSupport,
   getActivityDisplay,
   getChildSlots,
   sequenceStructureKind,
@@ -33,6 +35,14 @@ const sequenceActivity: ActivityCatalogItem = {
   activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence",
   category: "Composition",
   displayName: "Sequence"
+};
+
+const flowchartActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "activity-flowchart-v1",
+  activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+  category: "Composition",
+  displayName: "Flowchart"
 };
 
 describe("workflow adapter", () => {
@@ -67,6 +77,46 @@ describe("workflow adapter", () => {
       property: "primaryBranch",
       label: "Primary Branch",
       mode: "generic"
+    });
+  });
+
+  it("resolves explicit designer support for flowchart and sequence activities", () => {
+    expect(getActivityDesignerSupport(createActivityNode(flowchartActivity, "flowchart"), flowchartActivity)).toBe("flowchart");
+    expect(getActivityDesignerSupport(createActivityNode(sequenceActivity, "sequence"), sequenceActivity)).toBe("sequence");
+    expect(getActivityDesignerSupport(node("write-line"), writeLine)).toBe("unsupported");
+  });
+
+  it("builds a fixed unsupported activity canvas without flow ports", () => {
+    const activity: ActivityNode = {
+      nodeId: "unsupported-root",
+      activityVersionId: writeLine.activityVersionId,
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "acme.unsupported.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          embedded: [node("child")]
+        }
+      }
+    };
+
+    const canvas = buildUnsupportedActivityCanvas(activity, [writeLine], [{ nodeId: "unsupported-root", x: 40, y: 80 }]);
+
+    expect(canvas.edges).toEqual([]);
+    expect(canvas.nodes).toHaveLength(1);
+    expect(canvas.nodes[0]).toMatchObject({
+      id: "unsupported-root",
+      draggable: false,
+      deletable: false,
+      connectable: false,
+      position: { x: 40, y: 80 },
+      data: {
+        label: "Write Line",
+        suppressFlowPorts: true,
+        sourcePorts: [],
+        childSlots: [expect.objectContaining({ property: "embedded", activities: [expect.objectContaining({ nodeId: "child" })] })]
+      }
     });
   });
 

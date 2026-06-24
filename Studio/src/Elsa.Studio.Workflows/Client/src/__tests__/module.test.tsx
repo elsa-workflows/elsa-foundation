@@ -249,6 +249,61 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("renders an unsupported root activity as a fixed selectable node without flow ports", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+
+    const activityNodes = container.querySelectorAll(".wf-canvas .wf-node");
+    expect(activityNodes).toHaveLength(1);
+    expect(activityNodes[0].textContent).toContain("Write Line");
+    expect(container.querySelectorAll(".wf-canvas .react-flow__handle")).toHaveLength(0);
+    expect(buttonByText(container, "Add activity")).toBeNull();
+
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
+
+    await unmount();
+  });
+
   it("filters the canvas activity picker with keyboard search", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

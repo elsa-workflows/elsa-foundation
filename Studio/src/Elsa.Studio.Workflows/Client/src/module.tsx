@@ -46,12 +46,15 @@ import {
 import type { ActivityCatalogItem, ActivityNode, DefinitionListState, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary } from "./workflowTypes";
 import {
   buildCanvas,
+  buildUnsupportedActivityCanvas,
   createActivityNode,
   createWorkflowEdge,
+  getActivityDesignerSupport,
   getActivityDisplay,
   getActivitySourcePorts,
   getChildSlots,
   resolveScope,
+  resolveScopeOwner,
   spliceWorkflowEdge,
   updateLayout,
   updateScopeActivities,
@@ -910,11 +913,19 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   const suppressPaletteClickRef = useRef(false);
 
   const root = draft?.state.rootActivity ?? null;
-  const scope = useMemo(() => resolveScope(root, frames), [root, frames]);
   const catalogByVersion = useMemo(() => new Map(catalog.map(activity => [activity.activityVersionId, activity])), [catalog]);
+  const scopeOwner = useMemo(() => resolveScopeOwner(root, frames), [root, frames]);
+  const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
+  const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
+  const scope = useMemo(() => isUnsupportedDesigner ? null : resolveScope(root, frames), [root, frames, isUnsupportedDesigner]);
   const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
-  const selectedNode = useMemo(() => scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null, [scope, selectedNodeId]);
+  const selectedNode = useMemo(() => {
+    if (isUnsupportedDesigner && scopeOwner?.nodeId === selectedNodeId) return scopeOwner;
+    return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
+  }, [isUnsupportedDesigner, scope, scopeOwner, selectedNodeId]);
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
+  const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
+  const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
 
@@ -954,21 +965,30 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   }, [paletteGroups]);
 
   useEffect(() => {
-    if (!scope) {
+    if (!scopeOwner) {
       setNodes([]);
       setEdges([]);
       return;
     }
-    const canvas = buildCanvas(scope, catalog, draft?.layout ?? []);
+
+    const canvas = isUnsupportedDesigner
+      ? buildUnsupportedActivityCanvas(scopeOwner, catalog, draft?.layout ?? [])
+      : scope
+        ? buildCanvas(scope, catalog, draft?.layout ?? [])
+        : { nodes: [], edges: [] };
     setNodes(canvas.nodes);
-    setEdges(canvas.edges);
-  }, [scope, catalog, draft?.layout]);
+    setEdges(canvas.edges as WorkflowEdge[]);
+  }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner]);
 
   const setRoot = (rootActivity: ActivityNode) => {
     setDraft(current => current ? { ...current, state: { ...current.state, rootActivity } } : current);
   };
 
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition) => {
+    if (draft?.state.rootActivity && isUnsupportedDesigner) {
+      return;
+    }
+
     const next = createActivityNode(activity, createNodeId(activity));
     if (!draft?.state.rootActivity) {
       setRoot(next);
@@ -1043,7 +1063,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
       };
     });
     setSelectedNodeId(next.nodeId);
-  }, [draft?.state.rootActivity, frames, scope]);
+  }, [draft?.state.rootActivity, frames, isUnsupportedDesigner, scope]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
     const activityNode = createActivityNode(activity, createNodeId(activity));
@@ -1066,6 +1086,8 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   }, []);
 
   const commitCanvas = useCallback((nextNodes: Node<WorkflowNodeData>[], nextEdges: WorkflowEdge[], additionalActivities: ActivityNode[] = []) => {
+    if (isUnsupportedDesigner) return;
+
     setDraft(current => {
       if (!current) return current;
 
@@ -1090,7 +1112,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
         }
       };
     });
-  }, [frames]);
+  }, [frames, isUnsupportedDesigner]);
 
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
     if (!canvasRef.current) return null;
@@ -1132,6 +1154,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   }, [commitCanvas, createCanvasActivity, edges, nodes]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
+    if (!canAddActivitiesToCanvas) return false;
     if (!canvasRef.current) return false;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -1146,7 +1169,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
 
-    if (scope?.slot.mode === "flowchart") {
+    if (isFlowchartDesigner) {
       const edgeId = findEdgeUnderCursor(clientX, clientY);
       const edge = edgeId ? edges.find(candidate => candidate.id === edgeId) : undefined;
       if (edge) {
@@ -1157,7 +1180,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
 
     addActivity(activity, position);
     return true;
-  }, [addActivity, edges, findEdgeUnderCursor, scope?.slot.mode, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [addActivity, canAddActivitiesToCanvas, edges, findEdgeUnderCursor, isFlowchartDesigner, spliceActivityIntoEdge, toCanvasPosition]);
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
@@ -1229,13 +1252,19 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
 
   const onPaletteClick = (activity: ActivityCatalogItem) => {
     if (suppressPaletteClickRef.current) return;
+    if (!canAddActivitiesToCanvas) return;
     addActivity(activity);
   };
 
   const onCanvasDragOver = (event: React.DragEvent) => {
+    if (!canAddActivitiesToCanvas) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
-    if (scope?.slot.mode !== "flowchart") return;
+    if (!isFlowchartDesigner) return;
 
     const edgeId = findEdgeUnderCursor(event.clientX, event.clientY);
     setHighlightedEdgeId(edgeId);
@@ -1252,6 +1281,8 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   const onCanvasDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setHighlightedEdgeId(null);
+    if (!canAddActivitiesToCanvas) return;
+
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) || event.dataTransfer.getData("text/plain");
     const activity = catalogByVersion.get(activityVersionId);
     if (!activity) return;
@@ -1260,6 +1291,8 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   };
 
   const openEmptyConnectMenu = () => {
+    if (!isFlowchartDesigner) return;
+
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     setConnectMenu({
@@ -1339,16 +1372,25 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
     }
   };
 
-  const onNodesChange = (changes: NodeChange[]) => setNodes(current => applyNodeChanges(changes, current));
-  const onEdgesChange = (changes: EdgeChange[]) => setEdges(current => applyEdgeChanges(changes, current) as WorkflowEdge[]);
+  const onNodesChange = (changes: NodeChange[]) => {
+    const allowedChanges = isUnsupportedDesigner
+      ? changes.filter(change => change.type === "select")
+      : changes;
+    if (allowedChanges.length === 0) return;
+    setNodes(current => applyNodeChanges(allowedChanges, current));
+  };
+  const onEdgesChange = (changes: EdgeChange[]) => {
+    if (isUnsupportedDesigner) return;
+    setEdges(current => applyEdgeChanges(changes, current) as WorkflowEdge[]);
+  };
   const isValidConnection = (connection: Connection | Edge) => {
     if (!connection.source || !connection.target) return false;
     if (connection.source === connection.target) return false;
-    if (scope?.slot.mode !== "flowchart") return false;
+    if (!isFlowchartDesigner) return false;
     return !connection.targetHandle;
   };
   const onConnect = (connection: Connection) => {
-    if (!draft?.state.rootActivity || !scope || scope.slot.mode !== "flowchart") return;
+    if (!draft?.state.rootActivity || !scope || !isFlowchartDesigner) return;
     if (!isValidConnection(connection)) return;
 
     const nextEdge = createWorkflowEdge(connection.source, connection.target, connection.sourceHandle ?? "Done", connection.targetHandle ?? undefined);
@@ -1375,7 +1417,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   const onConnectEnd: OnConnectEnd = event => {
     const source = connectSourceRef.current;
     connectSourceRef.current = null;
-    if (!source || scope?.slot.mode !== "flowchart") return;
+    if (!source || !isFlowchartDesigner) return;
 
     const target = event.target as HTMLElement | null;
     if (target?.closest(".react-flow__handle, .react-flow__node")) return;
@@ -1391,6 +1433,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   };
 
   const onReconnect: OnReconnect<WorkflowEdge> = (oldEdge, newConnection) => {
+    if (!isFlowchartDesigner) return;
     if (!isValidConnection(newConnection)) return;
     const nextEdges = reconnectEdge(oldEdge, {
       ...newConnection,
@@ -1402,6 +1445,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   };
 
   const onNodesDelete = (deletedNodes: Node<WorkflowNodeData>[]) => {
+    if (isUnsupportedDesigner) return;
     if (deletedNodes.length === 0) return;
     const deletedIds = new Set(deletedNodes.map(node => node.id));
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
@@ -1413,6 +1457,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   };
 
   const onEdgesDelete = (deletedEdges: WorkflowEdge[]) => {
+    if (isUnsupportedDesigner) return;
     if (deletedEdges.length === 0) return;
     const deletedIds = new Set(deletedEdges.map(edge => edge.id));
     const nextEdges = edges.filter(edge => !deletedIds.has(edge.id));
@@ -1421,14 +1466,16 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
   };
 
   const deleteEdge = useCallback((edgeId: string) => {
+    if (isUnsupportedDesigner) return;
     const nextEdges = edges.filter(edge => edge.id !== edgeId);
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);
-  }, [commitCanvas, edges, nodes]);
+  }, [commitCanvas, edges, isUnsupportedDesigner, nodes]);
 
   const requestInsertActivity = useCallback((edgeId: string, clientX: number, clientY: number) => {
+    if (!isFlowchartDesigner) return;
     setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
-  }, []);
+  }, [isFlowchartDesigner]);
 
   const onConnectMenuPick = (activity: ActivityCatalogItem) => {
     const menu = connectMenu;
@@ -1591,23 +1638,24 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
                 onNodesDelete={onNodesDelete}
                 onEdgesDelete={onEdgesDelete}
                 onConnect={onConnect}
-                onConnectStart={scope?.slot.mode === "flowchart" ? onConnectStart : undefined}
-                onConnectEnd={scope?.slot.mode === "flowchart" ? onConnectEnd : undefined}
-                onReconnect={scope?.slot.mode === "flowchart" ? onReconnect : undefined}
+                onConnectStart={isFlowchartDesigner ? onConnectStart : undefined}
+                onConnectEnd={isFlowchartDesigner ? onConnectEnd : undefined}
+                onReconnect={isFlowchartDesigner ? onReconnect : undefined}
                 isValidConnection={isValidConnection}
                 onDragOver={onCanvasDragOver}
                 onDragLeave={onCanvasDragLeave}
                 onDrop={onCanvasDrop}
                 onPaneClick={() => setSelectedNodeId(null)}
                 onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-                onNodeDragStop={commitLayout}
+                onNodeDragStop={isUnsupportedDesigner ? undefined : commitLayout}
                 fitView
                 minZoom={0.2}
                 maxZoom={1.8}
-                nodesConnectable={scope?.slot.mode === "flowchart"}
+                nodesConnectable={isFlowchartDesigner}
+                nodesDraggable={!isUnsupportedDesigner}
                 selectionOnDrag
                 multiSelectionKeyCode={["Shift", "Meta", "Control"]}
-                deleteKeyCode={["Backspace", "Delete"]}
+                deleteKeyCode={isUnsupportedDesigner ? null : ["Backspace", "Delete"]}
                 panActivationKeyCode={null}
                 defaultEdgeOptions={{ type: "workflow" }}
               >
@@ -1616,7 +1664,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
                 <MiniMap pannable zoomable />
               </ReactFlow>
             </WorkflowEdgeActionsContext.Provider>
-            {scope?.slot.mode === "flowchart" && nodes.length === 0 ? (
+            {isFlowchartDesigner && nodes.length === 0 ? (
               <button type="button" className="wf-empty-canvas-add" onClick={() => openEmptyConnectMenu()}>
                 <Plus size={15} /> Add activity
               </button>
@@ -1666,10 +1714,13 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
 
 function WorkflowActivityNode({ data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
-  const sourcePorts = nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }];
+  const showFlowPorts = !nodeData.suppressFlowPorts;
+  const sourcePorts = showFlowPorts
+    ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
+    : [];
   return (
     <div className={selected ? "wf-node selected" : "wf-node"}>
-      {nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       <strong>{nodeData.label}</strong>
       <small>{nodeData.activityTypeKey ?? nodeData.activityVersionId}</small>
       {nodeData.childSlots.length > 0 ? <span>{nodeData.childSlots.length} embedded slot{nodeData.childSlots.length === 1 ? "" : "s"}</span> : null}

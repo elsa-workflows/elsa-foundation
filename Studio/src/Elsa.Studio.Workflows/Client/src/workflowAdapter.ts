@@ -11,6 +11,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   childSlots: ChildSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
+  suppressFlowPorts?: boolean;
 }
 
 export interface WorkflowPortDescriptor {
@@ -41,22 +42,29 @@ export interface ScopeFrame {
   label: string;
 }
 
-export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[]): CanvasScope | null {
+export type WorkflowDesignerSupport = "flowchart" | "sequence" | "unsupported";
+
+export function resolveScopeOwner(root: ActivityNode | null | undefined, frames: ScopeFrame[]): ActivityNode | null {
   if (!root) return null;
 
   let owner = root;
-  let slot = getChildSlots(owner)[0];
-  if (!slot) return null;
-
   for (const frame of frames) {
-    const frameSlot = getChildSlots(owner).find(candidate => candidate.id === frame.slotId);
-    if (!frameSlot) return null;
-    const nextOwner = frameSlot.activities.find(activity => activity.nodeId === frame.ownerNodeId);
+    const slot = getChildSlots(owner).find(candidate => candidate.id === frame.slotId);
+    if (!slot) return null;
+    const nextOwner = slot.activities.find(activity => activity.nodeId === frame.ownerNodeId);
     if (!nextOwner) return null;
     owner = nextOwner;
-    slot = getChildSlots(owner)[0];
-    if (!slot) return null;
   }
+
+  return owner;
+}
+
+export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[]): CanvasScope | null {
+  const owner = resolveScopeOwner(root, frames);
+  if (!owner) return null;
+
+  let slot = getChildSlots(owner)[0];
+  if (!slot) return null;
 
   return { owner, slot };
 }
@@ -95,25 +103,34 @@ export function buildCanvas(scope: CanvasScope, catalog: ActivityCatalogItem[], 
   const nodes: Node<WorkflowNodeData>[] = scope.slot.activities.map((activity, index) => {
     const catalogItem = catalogByVersion.get(activity.activityVersionId);
     const position = layoutByNodeId.get(activity.nodeId) ?? defaultPosition(scope.slot.mode, index);
-    return {
-      id: activity.nodeId,
-      type: "workflowActivity",
-      position: { x: position.x, y: position.y },
-      data: {
-        label: catalogItem?.displayName ?? activity.activityVersionId,
-        activityVersionId: activity.activityVersionId,
-        activityTypeKey: catalogItem?.activityTypeKey,
-        childSlots: getChildSlots(activity),
-        acceptsInbound: activityAcceptsInbound(activity, catalogItem),
-        sourcePorts: getActivitySourcePorts(activity, catalogItem)
-      }
-    };
+    return createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y });
   });
 
   return {
     nodes,
     edges: scope.slot.mode === "flowchart" ? flowchartEdges(scope.owner) : buildEdges(scope.slot, nodes)
   };
+}
+
+export function buildUnsupportedActivityCanvas(activity: ActivityNode, catalog: ActivityCatalogItem[], layout: DesignMetadataRecord[]) {
+  const catalogItem = catalog.find(candidate => candidate.activityVersionId === activity.activityVersionId);
+  const position = layout.find(record => record.nodeId === activity.nodeId) ?? { x: 0, y: 0 };
+
+  return {
+    nodes: [createWorkflowNode(activity, catalogItem, { x: position.x, y: position.y }, {
+      connectable: false,
+      deletable: false,
+      draggable: false,
+      suppressFlowPorts: true
+    })],
+    edges: [] satisfies Edge[]
+  };
+}
+
+export function getActivityDesignerSupport(activity: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem): WorkflowDesignerSupport {
+  if (activity?.structure?.kind === flowchartStructureKind || isFlowchartCatalogItem(catalogItem)) return "flowchart";
+  if (activity?.structure?.kind === sequenceStructureKind || isSequenceCatalogItem(catalogItem)) return "sequence";
+  return "unsupported";
 }
 
 export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], activities: ActivityNode[]): ActivityNode {
@@ -216,6 +233,39 @@ export function getActivityDisplay(activity: ActivityCatalogItem) {
   }
 
   return displayName;
+}
+
+function createWorkflowNode(
+  activity: ActivityNode,
+  catalogItem: ActivityCatalogItem | undefined,
+  position: XYPosition,
+  options: { connectable?: boolean; deletable?: boolean; draggable?: boolean; suppressFlowPorts?: boolean } = {}
+): Node<WorkflowNodeData> {
+  return {
+    id: activity.nodeId,
+    type: "workflowActivity",
+    position,
+    connectable: options.connectable,
+    deletable: options.deletable,
+    draggable: options.draggable,
+    data: {
+      label: catalogItem ? getActivityDisplay(catalogItem) : activity.activityVersionId,
+      activityVersionId: activity.activityVersionId,
+      activityTypeKey: catalogItem?.activityTypeKey,
+      childSlots: getChildSlots(activity),
+      acceptsInbound: activityAcceptsInbound(activity, catalogItem),
+      sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
+      suppressFlowPorts: options.suppressFlowPorts
+    }
+  };
+}
+
+function isFlowchartCatalogItem(activity: ActivityCatalogItem | undefined) {
+  return !!activity && (getActivityDisplay(activity) === "Flowchart" || activity.activityTypeKey.endsWith(".Flowchart"));
+}
+
+function isSequenceCatalogItem(activity: ActivityCatalogItem | undefined) {
+  return !!activity && (getActivityDisplay(activity) === "Sequence" || activity.activityTypeKey.endsWith(".Sequence"));
 }
 
 function humanizeActivityTypeName(name: string) {
