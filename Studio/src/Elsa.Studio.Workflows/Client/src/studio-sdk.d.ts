@@ -115,6 +115,20 @@ declare module "@elsa-workflows/studio-sdk" {
     component: ComponentType<StudioActivityPropertyEditorProps>;
   }
 
+  export type StudioWorkflowDesignerPanelSide = "left" | "right";
+
+  export interface StudioWorkflowDesignerPanelProps<TContext = unknown> {
+    context: TContext;
+  }
+
+  export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
+    id: string;
+    title: string;
+    side: StudioWorkflowDesignerPanelSide;
+    order?: number;
+    component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
+  }
+
   export interface StudioFeatureAreaNavLeaf {
     id?: string;
     title: string;
@@ -194,5 +208,8 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
     readonly ai: StudioAiContributionApi;
     readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
+    readonly workflowDesigner: {
+      readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
+    };
   }
 }

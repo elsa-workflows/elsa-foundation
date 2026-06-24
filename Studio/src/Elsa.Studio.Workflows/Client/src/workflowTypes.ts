@@ -94,6 +94,8 @@ export interface ActivityCatalogItem {
   category: string;
   displayName: string;
   description?: string | null;
+  icon?: string | null;
+  iconColor?: string | null;
   executionType: string;
   inputs: unknown[];
   outputs: unknown[];

@@ -27,8 +27,8 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Sparkles, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Maximize2, Minimize2, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, Zap } from "lucide-react";
+import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -58,6 +58,7 @@ import {
   getChildSlots,
   resolveScope,
   resolveScopeOwner,
+  resolveActivityIcon,
   spliceWorkflowEdge,
   updateActivity,
   updateLayout,
@@ -79,6 +80,19 @@ const pointerDragThreshold = 6;
 const autosaveDelayMs = 1200;
 const definitionPageSizes = [10, 25, 50];
 const defaultDefinitionPageSize = 10;
+const workflowPaletteWidthStorageKey = "elsa-studio-workflow-palette-width";
+const workflowInspectorWidthStorageKey = "elsa-studio-workflow-inspector-width";
+const workflowPaletteCollapsedStorageKey = "elsa-studio-workflow-palette-collapsed";
+const workflowInspectorCollapsedStorageKey = "elsa-studio-workflow-inspector-collapsed";
+const workflowSidePanelMaximizedStorageKey = "elsa-studio-workflow-side-panel-maximized";
+const minPaletteWidth = 180;
+const maxPaletteWidth = 460;
+const defaultPaletteWidth = 260;
+const minInspectorWidth = 260;
+const maxInspectorWidth = 560;
+const defaultInspectorWidth = 320;
+const collapsedSidePanelWidth = 42;
+const sidePanelResizeStep = 16;
 type CreateWorkflowKind = "sequence" | "flowchart";
 interface CreateWorkflowDraft {
   name: string;
@@ -132,7 +146,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} />
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} workflowDesignerPanels={api.workflowDesigner.panels.list()} />
       },
       {
         id: "workflows-executables",
@@ -153,11 +167,13 @@ export function register(api: ElsaStudioModuleApi) {
 function WorkflowManagementPage({
   context,
   ai,
-  propertyEditors
+  propertyEditors,
+  workflowDesignerPanels
 }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
 
@@ -174,7 +190,7 @@ function WorkflowManagementPage({
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
@@ -937,17 +953,93 @@ function shortTypeName(key: string | null | undefined) {
   return key?.split(".").filter(Boolean).at(-1);
 }
 
+function readStoredNumber(key: string, fallback: number, min: number, max: number) {
+  const storage = getLocalStorage();
+  if (!storage) return fallback;
+
+  const value = Number(storage.getItem(key));
+  return Number.isFinite(value) ? clamp(value, min, max) : fallback;
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  const storage = getLocalStorage();
+  if (!storage) return fallback;
+
+  const value = storage.getItem(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function readStoredMaximizedSide(): WorkflowSidePanel | null {
+  const storage = getLocalStorage();
+  if (!storage) return null;
+
+  const value = storage.getItem(workflowSidePanelMaximizedStorageKey);
+  return value === "palette" || value === "inspector" ? value : null;
+}
+
+function getLocalStorage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> | null {
+  if (typeof window === "undefined") return null;
+
+  const storage = window.localStorage as Partial<Storage> | undefined;
+  return storage &&
+    typeof storage.getItem === "function" &&
+    typeof storage.setItem === "function" &&
+    typeof storage.removeItem === "function"
+    ? storage as Pick<Storage, "getItem" | "setItem" | "removeItem">
+    : null;
+}
+
+function writeStoredValue(key: string, value: string | null) {
+  const storage = getLocalStorage();
+  if (!storage) return;
+
+  if (value == null) {
+    storage.removeItem(key);
+  } else {
+    storage.setItem(key, value);
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+type WorkflowSidePanel = "palette" | "inspector";
+
+interface WorkflowEditorPanelTab {
+  id: string;
+  title: string;
+  order: number;
+  icon: React.ReactNode;
+  render(): React.ReactNode;
+}
+
+interface WorkflowDesignerPanelContext {
+  definition: WorkflowDefinitionDetails["definition"];
+  draft: WorkflowDraft;
+  selectedActivity: ActivityNode | null;
+  selectedActivityDescriptor: StudioActivityDescriptor | null;
+  selectedActivitySlots: ReturnType<typeof getChildSlots>;
+  catalog: ActivityCatalogItem[];
+  currentScopeOwner: ActivityNode | null;
+  frames: ScopeFrame[];
+}
+
 function WorkflowEditor({
   context,
   definitionId,
   ai,
   propertyEditors,
+  workflowDesignerPanels,
   onBack
 }: {
   context: StudioEndpointContext;
   definitionId: string;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   onBack(): void;
 }) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
@@ -968,6 +1060,13 @@ function WorkflowEditor({
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
+  const [paletteWidth, setPaletteWidth] = useState(() => readStoredNumber(workflowPaletteWidthStorageKey, defaultPaletteWidth, minPaletteWidth, maxPaletteWidth));
+  const [inspectorWidth, setInspectorWidth] = useState(() => readStoredNumber(workflowInspectorWidthStorageKey, defaultInspectorWidth, minInspectorWidth, maxInspectorWidth));
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() => readStoredBoolean(workflowPaletteCollapsedStorageKey, false));
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => readStoredBoolean(workflowInspectorCollapsedStorageKey, false));
+  const [maximizedSidePanel, setMaximizedSidePanel] = useState<WorkflowSidePanel | null>(readStoredMaximizedSide);
+  const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
+  const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
@@ -1001,6 +1100,37 @@ function WorkflowEditor({
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
+
+  useEffect(() => {
+    writeStoredValue(workflowPaletteWidthStorageKey, String(paletteWidth));
+  }, [paletteWidth]);
+
+  useEffect(() => {
+    writeStoredValue(workflowInspectorWidthStorageKey, String(inspectorWidth));
+  }, [inspectorWidth]);
+
+  useEffect(() => {
+    writeStoredValue(workflowPaletteCollapsedStorageKey, String(paletteCollapsed));
+  }, [paletteCollapsed]);
+
+  useEffect(() => {
+    writeStoredValue(workflowInspectorCollapsedStorageKey, String(inspectorCollapsed));
+  }, [inspectorCollapsed]);
+
+  useEffect(() => {
+    writeStoredValue(workflowSidePanelMaximizedStorageKey, maximizedSidePanel);
+  }, [maximizedSidePanel]);
+
+  useEffect(() => {
+    if (!maximizedSidePanel) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMaximizedSidePanel(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [maximizedSidePanel]);
 
   const load = useCallback(async () => {
     setError("");
@@ -1161,6 +1291,9 @@ function WorkflowEditor({
         label: getActivityDisplay(activity),
         activityVersionId: activity.activityVersionId,
         activityTypeKey: activity.activityTypeKey,
+        category: activity.category,
+        executionType: activity.executionType,
+        icon: resolveActivityIcon(activity),
         childSlots: getChildSlots(activityNode),
         acceptsInbound: String(activity.executionType ?? "").toLowerCase() !== "trigger",
         sourcePorts: getActivitySourcePorts(activityNode, activity)
@@ -1633,8 +1766,240 @@ function WorkflowEditor({
     });
   };
 
+  const toggleSidePanelCollapsed = (side: WorkflowSidePanel) => {
+    setMaximizedSidePanel(current => current === side ? null : current);
+    if (side === "palette") {
+      setPaletteCollapsed(current => !current);
+    } else {
+      setInspectorCollapsed(current => !current);
+    }
+  };
+
+  const toggleSidePanelMaximized = (side: WorkflowSidePanel) => {
+    if (side === "palette") {
+      setPaletteCollapsed(false);
+    } else {
+      setInspectorCollapsed(false);
+    }
+
+    setMaximizedSidePanel(current => current === side ? null : side);
+  };
+
+  const resizeSidePanel = (side: WorkflowSidePanel, delta: number) => {
+    setMaximizedSidePanel(null);
+    if (side === "palette") {
+      setPaletteCollapsed(false);
+      setPaletteWidth(current => clamp(current + delta, minPaletteWidth, maxPaletteWidth));
+    } else {
+      setInspectorCollapsed(false);
+      setInspectorWidth(current => clamp(current + delta, minInspectorWidth, maxInspectorWidth));
+    }
+  };
+
+  const startSidePanelResize = (side: WorkflowSidePanel, event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setMaximizedSidePanel(null);
+    if (side === "palette") {
+      setPaletteCollapsed(false);
+    } else {
+      setInspectorCollapsed(false);
+    }
+
+    const startX = event.clientX;
+    const startWidth = side === "palette" ? paletteWidth : inspectorWidth;
+    const min = side === "palette" ? minPaletteWidth : minInspectorWidth;
+    const max = side === "palette" ? maxPaletteWidth : maxInspectorWidth;
+
+    document.body.classList.add("wf-side-panel-resizing");
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const delta = side === "palette"
+        ? moveEvent.clientX - startX
+        : startX - moveEvent.clientX;
+      const nextWidth = clamp(startWidth + delta, min, max);
+
+      if (side === "palette") {
+        setPaletteWidth(nextWidth);
+      } else {
+        setInspectorWidth(nextWidth);
+      }
+    };
+
+    const stopResize = () => {
+      document.body.classList.remove("wf-side-panel-resizing");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+  };
+
+  const handleSidePanelResizeKeyDown = (side: WorkflowSidePanel, event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      resizeSidePanel(side, side === "palette" ? -sidePanelResizeStep : sidePanelResizeStep);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      resizeSidePanel(side, side === "palette" ? sidePanelResizeStep : -sidePanelResizeStep);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      if (side === "palette") setPaletteWidth(minPaletteWidth);
+      else setInspectorWidth(minInspectorWidth);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      if (side === "palette") setPaletteWidth(maxPaletteWidth);
+      else setInspectorWidth(maxInspectorWidth);
+    }
+  };
+
   if (!details || !draft) {
     return <div className="wf-empty">{error || "Loading workflow editor..."}</div>;
+  }
+
+  const editorBodyClassName = [
+    "wf-editor-body",
+    paletteCollapsed ? "palette-collapsed" : "",
+    inspectorCollapsed ? "inspector-collapsed" : "",
+    maximizedSidePanel === "palette" ? "palette-maximized" : "",
+    maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
+  ].filter(Boolean).join(" ");
+  const editorBodyStyle = {
+    "--wf-palette-width": `${paletteCollapsed ? collapsedSidePanelWidth : paletteWidth}px`,
+    "--wf-inspector-width": `${inspectorCollapsed ? collapsedSidePanelWidth : inspectorWidth}px`
+  } as React.CSSProperties;
+  const paletteExpanded = !paletteCollapsed && maximizedSidePanel !== "inspector";
+  const inspectorExpanded = !inspectorCollapsed && maximizedSidePanel !== "palette";
+  const panelContext: WorkflowDesignerPanelContext = {
+    definition: details.definition,
+    draft,
+    selectedActivity: selectedNode,
+    selectedActivityDescriptor: selectedDescriptor,
+    selectedActivitySlots: selectedSlots,
+    catalog,
+    currentScopeOwner: scopeOwner,
+    frames
+  };
+  const contributedPanelTabs = workflowDesignerPanels
+    .map(panel => {
+      const ContributedPanel = panel.component;
+      return {
+        id: panel.id,
+        title: panel.title,
+        side: panel.side,
+        order: panel.order ?? 500,
+        icon: null,
+        render: () => <ContributedPanel context={panelContext} />
+      };
+    });
+  const leftPanelTabs: WorkflowEditorPanelTab[] = [
+    {
+      id: "activities",
+      title: "Activities",
+      order: 0,
+      icon: <Boxes size={15} />,
+      render: renderActivitiesPanel
+    },
+    ...contributedPanelTabs.filter(tab => tab.side === "left")
+  ].sort(compareWorkflowPanelTabs);
+  const rightPanelTabs: WorkflowEditorPanelTab[] = [
+    {
+      id: "inspector",
+      title: "Inspector",
+      order: 0,
+      icon: <ListTree size={15} />,
+      render: renderInspectorPanel
+    },
+    ...contributedPanelTabs.filter(tab => tab.side === "right")
+  ].sort(compareWorkflowPanelTabs);
+  const activeLeftPanel = leftPanelTabs.find(tab => tab.id === activeLeftPanelId) ?? leftPanelTabs[0];
+  const activeRightPanel = rightPanelTabs.find(tab => tab.id === activeRightPanelId) ?? rightPanelTabs[0];
+
+  function renderActivitiesPanel() {
+    return (
+      <div className="wf-palette-list" role="tree" aria-label="Available activities">
+        {paletteGroups.map(group => {
+          const expanded = expandedPaletteCategories.has(group.category);
+          return (
+            <div className="wf-palette-category" key={group.category}>
+              <button
+                type="button"
+                className="wf-palette-category-toggle"
+                role="treeitem"
+                aria-expanded={expanded}
+                onClick={() => togglePaletteCategory(group.category)}>
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span>{group.category}</span>
+                <small>{group.activities.length}</small>
+              </button>
+              {expanded ? (
+                <div className="wf-palette-activities" role="group">
+                  {group.activities.map(activity => {
+                    const description = activity.description?.trim();
+                    const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
+                    return (
+                      <button
+                        type="button"
+                        className="wf-palette-activity"
+                        role="treeitem"
+                        key={activity.activityVersionId}
+                        draggable
+                        title={description || getActivityDisplay(activity)}
+                        aria-describedby={descriptionId}
+                        onClick={() => onPaletteClick(activity)}
+                        onDragStart={event => onPaletteDragStart(event, activity)}
+                        onDragEnd={event => onPaletteDragEnd(event, activity)}
+                        onPointerDown={event => onPalettePointerDown(event, activity)}
+                      >
+                        <strong>{getActivityDisplay(activity)}</strong>
+                        {description ? <small id={descriptionId}>{description}</small> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderInspectorPanel() {
+    return selectedNode ? (
+      <div className="wf-inspector-content">
+        <h3>{nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId}</h3>
+              <dl>
+                <dt>Node ID</dt>
+                <dd>{selectedNode.nodeId}</dd>
+                <dt>Activity version</dt>
+                <dd>{selectedNode.activityVersionId}</dd>
+                <dt>Activity type</dt>
+                <dd>{selectedDescriptor?.typeName ?? nodes.find(node => node.id === selectedNode.nodeId)?.data.activityTypeKey ?? "Unknown"}</dd>
+              </dl>
+        <ActivityPropertiesPanel
+          activity={selectedNode}
+          descriptor={selectedDescriptor}
+          editors={propertyEditors}
+          expressionDescriptors={expressionDescriptors}
+          descriptorStatus={descriptorStatus}
+          onChange={updateSelectedActivity}
+        />
+        {selectedSlots.length > 0 ? (
+          <div className="wf-slot-list">
+            <span>Embedded slots</span>
+            {selectedSlots.map(slot => (
+              <button type="button" key={slot.id} onClick={() => enterSlot(selectedNode, slot.id, `${nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId} / ${slot.label}`)}>
+                {slot.label}
+                <small>{slot.activities.length} activit{slot.activities.length === 1 ? "y" : "ies"}</small>
+              </button>
+            ))}
+          </div>
+        ) : <p className="wf-muted">This activity does not expose embedded child slots.</p>}
+      </div>
+    ) : <p className="wf-muted">Select an activity to inspect properties and embedded slots.</p>;
   }
 
   return (
@@ -1664,55 +2029,55 @@ function WorkflowEditor({
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
 
-      <div className="wf-editor-body">
-        <aside className="wf-palette">
-          <div className="wf-panel-title"><Boxes size={15} /> Activities</div>
-          <div className="wf-palette-list" role="tree" aria-label="Available activities">
-            {paletteGroups.map(group => {
-              const expanded = expandedPaletteCategories.has(group.category);
-              return (
-                <div className="wf-palette-category" key={group.category}>
-                  <button
-                    type="button"
-                    className="wf-palette-category-toggle"
-                    role="treeitem"
-                    aria-expanded={expanded}
-                    onClick={() => togglePaletteCategory(group.category)}>
-                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <span>{group.category}</span>
-                    <small>{group.activities.length}</small>
-                  </button>
-                  {expanded ? (
-                    <div className="wf-palette-activities" role="group">
-                      {group.activities.map(activity => {
-                        const description = activity.description?.trim();
-                        const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
-                        return (
-                          <button
-                            type="button"
-                            className="wf-palette-activity"
-                            role="treeitem"
-                            key={activity.activityVersionId}
-                            draggable
-                            title={description || getActivityDisplay(activity)}
-                            aria-describedby={descriptionId}
-                            onClick={() => onPaletteClick(activity)}
-                            onDragStart={event => onPaletteDragStart(event, activity)}
-                            onDragEnd={event => onPaletteDragEnd(event, activity)}
-                            onPointerDown={event => onPalettePointerDown(event, activity)}
-                          >
-                            <strong>{getActivityDisplay(activity)}</strong>
-                            {description ? <small id={descriptionId}>{description}</small> : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+      <div className={editorBodyClassName} style={editorBodyStyle}>
+        <aside className="wf-palette" aria-label="Activities panel">
+          <div className="wf-panel-title">
+            <PanelTabList
+              label="Activities panel tabs"
+              tabs={leftPanelTabs}
+              activeTabId={activeLeftPanel.id}
+              onSelect={setActiveLeftPanelId}
+            />
+            <span className="wf-panel-actions">
+              <button
+                type="button"
+                className="wf-panel-action-button"
+                aria-label={paletteCollapsed ? "Expand activities panel" : "Collapse activities panel"}
+                title={paletteCollapsed ? "Expand" : "Collapse"}
+                onClick={() => toggleSidePanelCollapsed("palette")}
+              >
+                {paletteCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              </button>
+              {!paletteCollapsed ? (
+                <button
+                  type="button"
+                  className="wf-panel-action-button"
+                  aria-label={maximizedSidePanel === "palette" ? "Restore activities panel" : "Maximize activities panel"}
+                  title={maximizedSidePanel === "palette" ? "Restore" : "Maximize"}
+                  onClick={() => toggleSidePanelMaximized("palette")}
+                >
+                  {maximizedSidePanel === "palette" ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                </button>
+              ) : null}
+            </span>
           </div>
+          {activeLeftPanel.render()}
         </aside>
+
+        {paletteExpanded && !maximizedSidePanel ? (
+          <div
+            className="wf-side-resize-handle left"
+            role="separator"
+            aria-label="Resize activities panel"
+            aria-orientation="vertical"
+            aria-valuemin={minPaletteWidth}
+            aria-valuemax={maxPaletteWidth}
+            aria-valuenow={paletteWidth}
+            tabIndex={0}
+            onPointerDown={event => startSidePanelResize("palette", event)}
+            onKeyDown={event => handleSidePanelResizeKeyDown("palette", event)}
+          />
+        ) : <div className="wf-side-resize-spacer" />}
 
         <main className="wf-canvas-shell">
           <div className="wf-breadcrumb">
@@ -1781,42 +2146,92 @@ function WorkflowEditor({
           <ValidationPanel draft={draft} />
         </main>
 
-        <aside className="wf-inspector">
-          <div className="wf-panel-title"><ListTree size={15} /> Inspector</div>
-          {selectedNode ? (
-            <div className="wf-inspector-content">
-              <h3>{nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId}</h3>
-              <dl>
-                <dt>Node ID</dt>
-                <dd>{selectedNode.nodeId}</dd>
-                <dt>Activity version</dt>
-                <dd>{selectedNode.activityVersionId}</dd>
-              </dl>
-              <ActivityPropertiesPanel
-                activity={selectedNode}
-                descriptor={selectedDescriptor}
-                editors={propertyEditors}
-                expressionDescriptors={expressionDescriptors}
-                descriptorStatus={descriptorStatus}
-                onChange={updateSelectedActivity}
-              />
-              {selectedSlots.length > 0 ? (
-                <div className="wf-slot-list">
-                  <span>Embedded slots</span>
-                  {selectedSlots.map(slot => (
-                    <button type="button" key={slot.id} onClick={() => enterSlot(selectedNode, slot.id, `${nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId} / ${slot.label}`)}>
-                      {slot.label}
-                      <small>{slot.activities.length} activit{slot.activities.length === 1 ? "y" : "ies"}</small>
-                    </button>
-                  ))}
-                </div>
-              ) : <p className="wf-muted">This activity does not expose embedded child slots.</p>}
-            </div>
-          ) : <p className="wf-muted">Select an activity to inspect properties and embedded slots.</p>}
+        {inspectorExpanded && !maximizedSidePanel ? (
+          <div
+            className="wf-side-resize-handle right"
+            role="separator"
+            aria-label="Resize inspector panel"
+            aria-orientation="vertical"
+            aria-valuemin={minInspectorWidth}
+            aria-valuemax={maxInspectorWidth}
+            aria-valuenow={inspectorWidth}
+            tabIndex={0}
+            onPointerDown={event => startSidePanelResize("inspector", event)}
+            onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
+          />
+        ) : <div className="wf-side-resize-spacer" />}
+
+        <aside className="wf-inspector" aria-label="Inspector panel">
+          <div className="wf-panel-title">
+            <PanelTabList
+              label="Inspector panel tabs"
+              tabs={rightPanelTabs}
+              activeTabId={activeRightPanel.id}
+              onSelect={setActiveRightPanelId}
+            />
+            <span className="wf-panel-actions">
+              <button
+                type="button"
+                className="wf-panel-action-button"
+                aria-label={inspectorCollapsed ? "Expand inspector panel" : "Collapse inspector panel"}
+                title={inspectorCollapsed ? "Expand" : "Collapse"}
+                onClick={() => toggleSidePanelCollapsed("inspector")}
+              >
+                {inspectorCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {!inspectorCollapsed ? (
+                <button
+                  type="button"
+                  className="wf-panel-action-button"
+                  aria-label={maximizedSidePanel === "inspector" ? "Restore inspector panel" : "Maximize inspector panel"}
+                  title={maximizedSidePanel === "inspector" ? "Restore" : "Maximize"}
+                  onClick={() => toggleSidePanelMaximized("inspector")}
+                >
+                  {maximizedSidePanel === "inspector" ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                </button>
+              ) : null}
+            </span>
+          </div>
+          {activeRightPanel.render()}
         </aside>
       </div>
     </section>
   );
+}
+
+function PanelTabList({
+  label,
+  tabs,
+  activeTabId,
+  onSelect
+}: {
+  label: string;
+  tabs: WorkflowEditorPanelTab[];
+  activeTabId: string;
+  onSelect(tabId: string): void;
+}) {
+  return (
+    <div className="wf-panel-tab-list" role="tablist" aria-label={label}>
+      {tabs.map(tab => (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab.id === activeTabId}
+          className={tab.id === activeTabId ? "active" : ""}
+          key={tab.id}
+          title={tab.title}
+          onClick={() => onSelect(tab.id)}
+        >
+          {tab.icon ? <span className="wf-panel-tab-icon" aria-hidden="true">{tab.icon}</span> : null}
+          <span>{tab.title}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function compareWorkflowPanelTabs(left: WorkflowEditorPanelTab, right: WorkflowEditorPanelTab) {
+  return left.order - right.order || left.title.localeCompare(right.title);
 }
 
 function WorkflowActivityNode({ data, selected }: NodeProps) {
@@ -1825,12 +2240,20 @@ function WorkflowActivityNode({ data, selected }: NodeProps) {
   const sourcePorts = showFlowPorts
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
+  const subtitle = formatNodeSubtitle(nodeData);
   return (
-    <div className={selected ? "wf-node selected" : "wf-node"}>
+    <div className={selected ? "wf-node selected" : "wf-node"} data-icon={nodeData.icon ?? "activity"}>
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
-      <strong>{nodeData.label}</strong>
-      <small>{nodeData.activityTypeKey ?? nodeData.activityVersionId}</small>
-      {nodeData.childSlots.length > 0 ? <span>{nodeData.childSlots.length} embedded slot{nodeData.childSlots.length === 1 ? "" : "s"}</span> : null}
+      <div className="wf-node-content">
+        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
+        <span className="wf-node-copy">
+          <strong>{nodeData.label}</strong>
+          {subtitle ? <small>{subtitle}</small> : null}
+        </span>
+      </div>
+      {nodeData.childSlots.length > 0 ? (
+        <span className="wf-node-slot-badge">{nodeData.childSlots.length} slot{nodeData.childSlots.length === 1 ? "" : "s"}</span>
+      ) : null}
       {sourcePorts.map((port, index) => {
         const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
         return (
@@ -1842,6 +2265,30 @@ function WorkflowActivityNode({ data, selected }: NodeProps) {
       })}
     </div>
   );
+}
+
+function formatNodeSubtitle(nodeData: WorkflowNodeData) {
+  const category = nodeData.category?.trim();
+  const executionType = nodeData.executionType?.trim();
+  const parts = [category, executionType].filter((part): part is string => !!part);
+  return parts.join(" · ");
+}
+
+function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
+  switch (icon) {
+    case "flowchart":
+      return <GitBranch size={15} />;
+    case "sequence":
+      return <ListTree size={15} />;
+    case "terminal":
+      return <Terminal size={15} />;
+    case "runtime":
+      return <Play size={15} />;
+    case "trigger":
+      return <Zap size={15} />;
+    default:
+      return <Boxes size={15} />;
+  }
 }
 
 function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {

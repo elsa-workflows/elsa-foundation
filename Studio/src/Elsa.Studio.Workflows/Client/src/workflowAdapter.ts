@@ -8,11 +8,16 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
   activityVersionId: string;
   activityTypeKey?: string;
+  category?: string;
+  executionType?: string;
+  icon?: WorkflowNodeIcon;
   childSlots: ChildSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
 }
+
+export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger";
 
 export interface WorkflowPortDescriptor {
   name: string;
@@ -273,12 +278,45 @@ function createWorkflowNode(
       label: catalogItem ? getActivityDisplay(catalogItem) : activity.activityVersionId,
       activityVersionId: activity.activityVersionId,
       activityTypeKey: catalogItem?.activityTypeKey,
+      category: catalogItem?.category,
+      executionType: catalogItem?.executionType,
+      icon: resolveActivityIcon(catalogItem),
       childSlots: getChildSlots(activity),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts
     }
   };
+}
+
+export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): WorkflowNodeIcon {
+  if (!activity) return "activity";
+
+  const configuredIcon = normalizeWorkflowNodeIcon(activity.icon);
+  if (configuredIcon) return configuredIcon;
+
+  const typeKey = activity.activityTypeKey.toLowerCase();
+  const displayName = getActivityDisplay(activity).toLowerCase();
+  const category = activity.category?.toLowerCase() ?? "";
+  const executionType = activity.executionType?.toLowerCase() ?? "";
+
+  if (typeKey.endsWith(".flowchart") || displayName === "flowchart") return "flowchart";
+  if (typeKey.endsWith(".sequence") || displayName === "sequence") return "sequence";
+  if (typeKey.includes("writeline") || displayName.includes("write line")) return "terminal";
+  if (category.includes("runtime")) return "runtime";
+  if (executionType === "trigger") return "trigger";
+  return "activity";
+}
+
+function normalizeWorkflowNodeIcon(icon: string | null | undefined): WorkflowNodeIcon | null {
+  if (!icon) return null;
+
+  const normalized = icon.trim().toLowerCase();
+  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger"].includes(normalized)) {
+    return normalized as WorkflowNodeIcon;
+  }
+
+  return null;
 }
 
 function isFlowchartCatalogItem(activity: ActivityCatalogItem | undefined) {

@@ -16,6 +16,8 @@ import {
   writeInputValue
 } from "./activityProperties";
 
+const inlineSyntaxEditorIds = new Set(["studio.property.singleline", "studio.property.text-fallback"]);
+
 export interface ActivityPropertiesPanelProps {
   activity: ActivityNode;
   descriptor: StudioActivityDescriptor | null;
@@ -94,6 +96,7 @@ function PropertyRow({
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? "Literal";
   const value = getLiteralEditorValue(activity, input);
+  const useInlineSyntaxPicker = Boolean(wrapped && isSingleLineTextInput(input, editor?.id));
 
   const setRaw = (nextValue: unknown) => {
     const next = wrapped ? withLiteralValue(wrapped, nextValue) : nextValue;
@@ -112,7 +115,7 @@ function PropertyRow({
         <span>{formatTypeName(input.typeName)}</span>
       </div>
       {input.description ? <p>{input.description}</p> : null}
-      {wrapped ? (
+      {wrapped && !useInlineSyntaxPicker ? (
         <SyntaxPicker
           label={`${input.displayName || input.name} expression syntax`}
           value={syntax}
@@ -121,18 +124,45 @@ function PropertyRow({
           onChange={setSyntax}
         />
       ) : null}
-      {EditorComponent ? (
-        <EditorComponent
-          descriptor={input}
-          value={value}
-          disabled={readOnly}
-          context={context}
-          onChange={setRaw}
-        />
+      {useInlineSyntaxPicker ? (
+        <div className="wf-expression-field">
+          <div className="wf-expression-editor">
+            {renderEditor(EditorComponent, input, value, readOnly, context, setRaw)}
+          </div>
+          <SyntaxPicker
+            label={`${input.displayName || input.name} expression syntax`}
+            value={syntax}
+            descriptors={expressionDescriptors}
+            disabled={readOnly}
+            variant="inline"
+            onChange={setSyntax}
+          />
+        </div>
       ) : (
-        <input type="text" value={value == null ? "" : String(value)} disabled={readOnly} onChange={event => setRaw(event.target.value)} />
+        renderEditor(EditorComponent, input, value, readOnly, context, setRaw)
       )}
     </div>
+  );
+}
+
+function renderEditor(
+  EditorComponent: StudioActivityPropertyEditorContribution["component"] | undefined,
+  input: StudioActivityInputDescriptor,
+  value: unknown,
+  disabled: boolean,
+  context: StudioActivityPropertyEditorContext,
+  onChange: (value: unknown) => void
+) {
+  return EditorComponent ? (
+    <EditorComponent
+      descriptor={input}
+      value={value}
+      disabled={disabled}
+      context={context}
+      onChange={onChange}
+    />
+  ) : (
+    <input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />
   );
 }
 
@@ -141,25 +171,32 @@ function SyntaxPicker({
   value,
   descriptors,
   disabled,
+  variant = "block",
   onChange
 }: {
   label: string;
   value: string;
   descriptors: StudioExpressionDescriptor[];
   disabled: boolean;
+  variant?: "block" | "inline";
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
   const listboxId = useId();
   const selected = descriptors.find(descriptor => descriptor.type === value);
+  const className = [
+    "wf-syntax-picker-trigger",
+    variant === "inline" ? "inline" : "",
+    open ? "open" : ""
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className="wf-syntax-picker" onBlur={event => {
+    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
     }}>
       <button
         type="button"
-        className={open ? "wf-syntax-picker-trigger open" : "wf-syntax-picker-trigger"}
+        className={className}
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -218,4 +255,12 @@ function groupInputs(inputs: StudioActivityInputDescriptor[]) {
 
 function formatTypeName(typeName: string) {
   return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
+}
+
+function isSingleLineTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
+  if (input.uiHint?.toLowerCase() === "multiline") return false;
+  if (editorId && !inlineSyntaxEditorIds.has(editorId)) return false;
+
+  const normalizedType = input.typeName.toLowerCase();
+  return ["string", "system.string", "text"].includes(normalizedType) || input.uiHint?.toLowerCase() === "singleline";
 }

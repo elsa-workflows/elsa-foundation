@@ -113,11 +113,20 @@ describe("workflow adapter", () => {
       position: { x: 40, y: 80 },
       data: {
         label: "Write Line",
+        category: "Primitives",
+        executionType: "Action",
+        icon: "terminal",
         suppressFlowPorts: true,
         sourcePorts: [],
         childSlots: [expect.objectContaining({ property: "embedded", activities: [expect.objectContaining({ nodeId: "child" })] })]
       }
     });
+  });
+
+  it("uses explicit known activity icon metadata before fallback icon resolution", () => {
+    const canvas = buildUnsupportedActivityCanvas(node("explicit-icon"), [{ ...writeLine, icon: "trigger" }], []);
+
+    expect(canvas.nodes[0].data.icon).toBe("trigger");
   });
 
   it("uses the Sequence adapter to preserve ordered child activities", () => {
