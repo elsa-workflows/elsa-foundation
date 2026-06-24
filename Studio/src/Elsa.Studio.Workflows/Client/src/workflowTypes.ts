@@ -176,3 +176,69 @@ export interface WorkflowExecutableSummary {
   nodeCount: number;
   resumeTargetCount: number;
 }
+
+export interface WorkflowInstanceSummary {
+  workflowExecutionId: string;
+  artifactId: string;
+  definitionId: string;
+  definitionVersionId: string;
+  artifactVersion: string;
+  artifactHash: string;
+  status: string;
+  subStatus?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  updatedAt?: string | null;
+  completedAt?: string | null;
+  correlationId?: string | null;
+  parentWorkflowExecutionId?: string | null;
+  tenantId?: string | null;
+  activityCount: number;
+  incidentCount: number;
+}
+
+export interface WorkflowInstanceDetails {
+  instance: WorkflowInstanceSummary;
+  activities: ActivityExecutionStateSummary[];
+  incidents: IncidentStateSummary[];
+}
+
+export interface ActivityExecutionStateSummary {
+  activityExecutionId: string;
+  workflowExecutionId: string;
+  executableNodeId: string;
+  authoredActivityId: string;
+  activityType: string;
+  activityTypeVersion: string;
+  status: string;
+  subStatus?: string | null;
+  scheduledAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  schedulingActivityExecutionId?: string | null;
+  parentActivityExecutionId?: string | null;
+  branchId?: string | null;
+  iterationId?: string | null;
+  callStackDepth?: number | null;
+  bookmarkIds: string[];
+  incidentIds: string[];
+  faultCount: number;
+  aggregateFaultCount: number;
+  metadata: Record<string, string>;
+}
+
+export interface IncidentStateSummary {
+  incidentId: string;
+  workflowExecutionId: string;
+  activityExecutionId?: string | null;
+  executableNodeId?: string | null;
+  severity: string;
+  status: string;
+  resolutionAction: string;
+  failureType: string;
+  message: string;
+  createdAt: string;
+  resolvedAt?: string | null;
+  isBlocking: boolean;
+  metadata: Record<string, string>;
+}

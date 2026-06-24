@@ -808,11 +808,36 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders the workflow instances placeholder route", async () => {
+  it("renders workflow instances with selected activity history", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails());
+      }
+
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) {
+        return response([workflowInstance()]);
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
-    await waitForText(container, "Workflow instance history will appear here");
+    await waitForText(container, "wfexec-1");
+    await waitForText(container, "Activity history");
     expect(container.textContent).toContain("Instances");
+    expect(container.textContent).toContain("Activity history");
+    expect(container.textContent).toContain("WriteLine");
+    expect(container.textContent).toContain("No incidents recorded.");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?take=100",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances/wfexec-1",
+      expect.any(Object)
+    );
 
     await unmount();
   });
@@ -991,6 +1016,59 @@ function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
     commandDispatchStatus: "Accepted",
     reason: null,
     expiresAt: "2026-06-24T12:00:00Z",
+    ...overrides
+  };
+}
+
+function workflowInstance(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    workflowExecutionId: "wfexec-1",
+    artifactId: "artifact-1",
+    artifactVersion: "1.0.0",
+    definitionId: "definition-1",
+    definitionVersionId: "version-1",
+    status: "Completed",
+    subStatus: null,
+    correlationId: "correlation-1",
+    parentWorkflowExecutionId: null,
+    tenantId: null,
+    activityCount: 1,
+    incidentCount: 0,
+    createdAt: "2026-06-18T01:00:00Z",
+    startedAt: "2026-06-18T01:00:01Z",
+    completedAt: "2026-06-18T01:00:03Z",
+    updatedAt: "2026-06-18T01:00:03Z",
+    ...overrides
+  };
+}
+
+function workflowInstanceDetails(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    instance: workflowInstance(),
+    activities: [{
+      activityExecutionId: "activity-execution-1",
+      workflowExecutionId: "wfexec-1",
+      executableNodeId: "write-line-1",
+      authoredActivityId: "write-line-1",
+      activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+      activityTypeVersion: "1.0.0",
+      status: "Completed",
+      subStatus: null,
+      scheduledAt: "2026-06-18T01:00:01Z",
+      startedAt: "2026-06-18T01:00:01Z",
+      completedAt: "2026-06-18T01:00:03Z",
+      schedulingActivityExecutionId: null,
+      parentActivityExecutionId: null,
+      branchId: null,
+      iterationId: null,
+      callStackDepth: 0,
+      bookmarkIds: [],
+      incidentIds: [],
+      faultCount: 0,
+      aggregateFaultCount: 0,
+      metadata: {}
+    }],
+    incidents: [],
     ...overrides
   };
 }

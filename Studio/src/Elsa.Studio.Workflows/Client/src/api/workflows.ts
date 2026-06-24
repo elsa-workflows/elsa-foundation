@@ -11,6 +11,8 @@ import type {
   PromoteDraftResponse,
   PublishedWorkflowResponse,
   StartWorkflowDraftTestRunRequest,
+  WorkflowInstanceDetails,
+  WorkflowInstanceSummary,
   WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
   WorkflowDefinitionsResponse,
@@ -26,6 +28,8 @@ export const workflowKeys = {
   definitionsList: (request: DefinitionListRequest) => [...workflowKeys.definitions, "list", request] as const,
   definition: (definitionId: string) => [...workflowKeys.definitions, "detail", definitionId] as const,
   executables: (definitionId?: string | null) => ["workflows", "executables", definitionId ?? "all"] as const,
+  instances: ["workflows", "instances"] as const,
+  instance: (workflowExecutionId: string) => ["workflows", "instances", workflowExecutionId] as const,
   activities: ["workflows", "activities"] as const,
   activityDescriptors: ["workflows", "activity-descriptors"] as const,
   expressionDescriptors: ["workflows", "expression-descriptors"] as const
@@ -159,6 +163,28 @@ export async function runExecutable(context: StudioEndpointContext, artifactId: 
 
 export async function listExecutables(context: StudioEndpointContext) {
   return context.http.getJson<WorkflowExecutableSummary[]>("/_demo/workflows/executables");
+}
+
+export interface ListWorkflowInstancesRequest {
+  status?: string;
+  definitionId?: string;
+  correlationId?: string;
+  take?: number;
+}
+
+export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
+  const parameters = new URLSearchParams();
+  if (request.status) parameters.set("status", request.status);
+  if (request.definitionId) parameters.set("definitionId", request.definitionId);
+  if (request.correlationId) parameters.set("correlationId", request.correlationId);
+  if (request.take) parameters.set("take", String(request.take));
+
+  const query = parameters.toString();
+  return context.http.getJson<WorkflowInstanceSummary[]>(`/runtime/workflows/instances${query ? `?${query}` : ""}`);
+}
+
+export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
+  return context.http.getJson<WorkflowInstanceDetails>(`/runtime/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
 }
 
 export async function listActivities(context: StudioEndpointContext) {
