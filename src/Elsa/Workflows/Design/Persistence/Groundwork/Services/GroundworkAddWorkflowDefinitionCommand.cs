@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -13,11 +14,15 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// embedded <c>workflowDefinitionDraft</c> into one Groundwork <see cref="IDocumentUnitOfWork"/> and commits them
 /// together.
 /// </summary>
-public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer)
+public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store, IPayloadSerializer payloadSerializer, ISystemClock clock)
     : IAddWorkflowDefinitionCommand
 {
     public async Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellation)
     {
+        var now = clock.UtcNow;
+        GroundworkEntityTimestamps.StampAdded(workflowDefinition, now);
+        GroundworkEntityTimestamps.StampAdded(draft, now);
+
         var definitionSave = GroundworkDocumentWriter.ToSaveRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,

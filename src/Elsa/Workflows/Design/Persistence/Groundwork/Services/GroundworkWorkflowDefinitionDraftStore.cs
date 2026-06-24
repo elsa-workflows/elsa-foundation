@@ -34,6 +34,12 @@ public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinition
         return document?.Entity;
     }
 
+    public async Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+    {
+        var documents = await _documents.ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken);
+        return documents.Select(x => x.Entity).ToArray();
+    }
+
     public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         var document = await _documents.FindByIdAsync(draftId, cancellationToken);

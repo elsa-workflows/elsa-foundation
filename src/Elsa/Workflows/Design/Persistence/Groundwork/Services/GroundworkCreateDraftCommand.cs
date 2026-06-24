@@ -20,7 +20,8 @@ public sealed class GroundworkCreateDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IEventPublisher eventPublisher)
+    IEventPublisher eventPublisher,
+    ISystemClock clock)
     : ICreateDraftCommand
 {
     public async Task<string> Execute(
@@ -48,6 +49,7 @@ public sealed class GroundworkCreateDraftCommand(
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         {
             errors = await ExecuteValidationGate(draft, cancellationToken);
+            GroundworkEntityTimestamps.StampAdded(draft, clock.UtcNow);
 
             await store.SaveAllAsync(
                 DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),

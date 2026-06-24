@@ -1,6 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -17,7 +18,8 @@ public sealed class GroundworkUpdateDraftCommand(
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
     IEventPublisher eventPublisher,
-    IDraftStateDiffEngine diffEngine)
+    IDraftStateDiffEngine diffEngine,
+    ISystemClock clock)
     : IUpdateDraftCommand
 {
     public async Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
@@ -40,6 +42,7 @@ public sealed class GroundworkUpdateDraftCommand(
             draft.State = request.State;
             diffEvents = diffEngine.Evaluate(request.DraftId, storedState, storedLayout, request.State, request.Layout);
             errors = await ExecuteValidationGate(draft, cancellationToken);
+            GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
 
             await store.SaveAllAsync(
                 DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),

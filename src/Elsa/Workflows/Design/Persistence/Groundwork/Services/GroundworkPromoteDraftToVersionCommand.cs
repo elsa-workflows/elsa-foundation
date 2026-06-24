@@ -18,7 +18,8 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
     IWorkflowDefinitionVersionStore versionStore,
-    IIdentityGenerator identityGenerator)
+    IIdentityGenerator identityGenerator,
+    ISystemClock clock)
     : IPromoteDraftToVersionCommand
 {
     public async Task<string> Execute(string draftId, CancellationToken cancellationToken = default)
@@ -52,6 +53,10 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
             WorkflowDefinitionVersionId = versionId,
             Records = document.Layout.ToList()
         };
+
+        var now = clock.UtcNow;
+        GroundworkEntityTimestamps.StampAdded(version, now);
+        GroundworkEntityTimestamps.StampAdded(versionLayout, now);
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

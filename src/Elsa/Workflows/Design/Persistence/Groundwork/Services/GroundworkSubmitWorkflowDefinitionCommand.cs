@@ -15,7 +15,8 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
     IIdentityGenerator identityGenerator,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IActivityStructureService activityStructureService)
+    IActivityStructureService activityStructureService,
+    ISystemClock clock)
     : ISubmitWorkflowDefinitionCommand
 {
     private const string InitialVersion = "1.0.0";
@@ -62,6 +63,11 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         };
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(store, GroundworkDesignDocumentSerialization.Create(payloadSerializer));
+        var now = clock.UtcNow;
+        GroundworkEntityTimestamps.StampAdded(definition, now);
+        GroundworkEntityTimestamps.StampAdded(draft, now);
+        GroundworkEntityTimestamps.StampAdded(version, now);
+        GroundworkEntityTimestamps.StampAdded(versionLayout, now);
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

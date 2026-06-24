@@ -24,6 +24,9 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     }
 
     public async Task<GroundworkWorkflowDefinitionDraftDocument?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
+        => CurrentDraft(await ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken));
+
+    public async Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
     {
         var envelopes = await store.QueryAsync(
             new DocumentStoreQuery(
@@ -34,7 +37,8 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 
         return envelopes
             .Select(Deserialize)
-            .FirstOrDefault(document => document.Entity.WorkflowDefinitionId == workflowDefinitionId);
+            .Where(document => document.Entity.WorkflowDefinitionId == workflowDefinitionId)
+            .ToList();
     }
 
     public SaveDocumentRequest ToSaveRequest(
@@ -73,4 +77,11 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 
         return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, [], []);
     }
+
+    private static GroundworkWorkflowDefinitionDraftDocument? CurrentDraft(IReadOnlyCollection<GroundworkWorkflowDefinitionDraftDocument> drafts) =>
+        drafts
+            .OrderByDescending(x => x.Entity.LastModifiedAt)
+            .ThenByDescending(x => x.Entity.CreatedAt)
+            .ThenByDescending(x => x.Entity.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
 }

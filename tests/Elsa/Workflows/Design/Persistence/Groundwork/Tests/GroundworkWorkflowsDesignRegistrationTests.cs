@@ -1,6 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -30,6 +31,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         services.AddSingleton<IDistributedLockProvider, StubLockProvider>();
         services.AddSingleton<IEventPublisher, StubEventPublisher>();
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddSingleton<ISystemClock, FakeSystemClock>();
         preRegister?.Invoke(services);
         services.AddGroundworkWorkflowsDesignStores();
         return services.BuildServiceProvider();
@@ -82,6 +84,11 @@ public class GroundworkWorkflowsDesignRegistrationTests
     {
         public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class FakeSystemClock : ISystemClock
+    {
+        public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     }
 
     private sealed class StubLockProvider : IDistributedLockProvider

@@ -18,13 +18,13 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     public async Task Execute(string definitionId, CancellationToken cancellationToken = default)
     {
         var deletes = new List<DeleteDocumentRequest>();
-        var draft = await draftStore.FindByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
-        if (draft is not null)
+        var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
+        if (drafts.Count > 0)
         {
             var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
                 store,
                 GroundworkDesignDocumentSerialization.Create(payloadSerializer));
-            deletes.Add(draftDocuments.ToDeleteRequest(draft.Id));
+            deletes.AddRange(drafts.Select(draft => draftDocuments.ToDeleteRequest(draft.Id)));
         }
 
         var versions = await versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
