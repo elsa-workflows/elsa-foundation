@@ -27,7 +27,11 @@ using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
+using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -96,6 +100,9 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
+builder.Services.AddNuplaneFeatureCatalog();
+builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
+builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
@@ -136,6 +143,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(SqliteGroundworkRuntimePersistenceShellFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
             typeof(FoundationAgentAbstractionsFeature).Assembly,
