@@ -38,6 +38,7 @@ public class ActivityDefinitionFilter
                 .Or(x => x.Description, QueryOp.Contains, SearchTerm)
                 .Or(x => x.Id, QueryOp.Contains, SearchTerm);
         if (Category != null) query.And(x => x.Category, QueryOp.Equal, Category);
+        if (DisplayName != null) query.And(x => x.DisplayName, QueryOp.Equal, DisplayName);
         if (Description != null) query.And(x => x.Description, QueryOp.Contains, Description);
         if (ActivityTypeKey != null) query.And(x => x.ActivityTypeKey, QueryOp.Equal, ActivityTypeKey);
 
