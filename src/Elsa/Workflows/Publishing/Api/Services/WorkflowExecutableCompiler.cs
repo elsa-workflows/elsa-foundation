@@ -34,10 +34,12 @@ public sealed class WorkflowExecutableCompiler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var version = await workflowVersions.GetWithDefinitionAsync(request.VersionId, cancellationToken);
+        var source = request.Source ?? await GetVersionSourceAsync(request.VersionId, cancellationToken);
         try
         {
-            var state = version.State;
+            var state = source.State;
+            ArgumentNullException.ThrowIfNull(state);
+
             var rootActivity = state.RootActivity
                 ?? throw new ArgumentException("Workflow version has no root activity to publish.");
 
@@ -49,7 +51,7 @@ public sealed class WorkflowExecutableCompiler(
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
             var compiledRoot = CompileNode(rootActivity, activityRows);
-            var artifactHash = ComputeHash(version, compiledRoot);
+            var artifactHash = ComputeHash(source, compiledRoot);
             var artifactId = CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -57,11 +59,11 @@ public sealed class WorkflowExecutableCompiler(
             return new WorkflowExecutable(
                 identity: new WorkflowExecutableIdentity(
                     ArtifactId: artifactId,
-                    DefinitionId: version.DefinitionId,
-                    DefinitionVersionId: version.Id,
-                    ArtifactVersion: version.Version,
+                    DefinitionId: source.DefinitionId,
+                    DefinitionVersionId: source.DefinitionVersionId,
+                    ArtifactVersion: source.ArtifactVersion,
                     ArtifactHash: artifactHash,
-                    Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version)),
+                    Source: source.SourceReference),
                 rootActivity: compiledRoot,
                 resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
                 createdAt: request.CreatedAt,
@@ -72,8 +74,21 @@ public sealed class WorkflowExecutableCompiler(
         }
         catch (ArgumentException exception) when (exception is not WorkflowExecutableCompilationException)
         {
-            throw new WorkflowExecutableCompilationException(version.DefinitionId, version.Id, exception.Message, exception);
+            throw new WorkflowExecutableCompilationException(source.DefinitionId, source.DefinitionVersionId, exception.Message, exception);
         }
+    }
+
+    private async Task<WorkflowExecutableCompileSource> GetVersionSourceAsync(
+        string versionId,
+        CancellationToken cancellationToken)
+    {
+        var version = await workflowVersions.GetWithDefinitionAsync(versionId, cancellationToken);
+        return new WorkflowExecutableCompileSource(
+            DefinitionId: version.DefinitionId,
+            DefinitionVersionId: version.Id,
+            ArtifactVersion: version.Version,
+            State: version.State,
+            SourceReference: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version));
     }
 
     private static string CreateArtifactId(string artifactIdPrefix, string artifactHash)
@@ -203,14 +218,18 @@ public sealed class WorkflowExecutableCompiler(
     }
 
     private static string ComputeHash(
-        WorkflowDefinitionVersion version,
+        WorkflowExecutableCompileSource source,
         ExecutableNode rootActivity)
     {
         var nodes = FlattenExecutableActivities(rootActivity).ToArray();
         var payload = string.Join(
             '\n',
-            version.Id,
-            version.Version,
+            source.SourceReference.SourceKind,
+            source.SourceReference.SourceId,
+            source.SourceReference.SourceVersion,
+            source.DefinitionId,
+            source.DefinitionVersionId,
+            source.ArtifactVersion,
             rootActivity.ExecutableNodeId,
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
                 .Select(FormatNode)));

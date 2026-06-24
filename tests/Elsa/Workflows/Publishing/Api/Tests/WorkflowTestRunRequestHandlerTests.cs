@@ -48,6 +48,59 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task StartsDraftSnapshotTransientWorkflowTestRunWithoutDurableDefinitionVersion()
+    {
+        var dispatcher = Dispatcher();
+        var handler = DraftSnapshotHandler(dispatcher);
+
+        var view = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-1",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+
+        Assert.Equal("DispatchAccepted", view.Status);
+        Assert.Equal("Accepted", view.CommandDispatchStatus);
+        Assert.Equal("definition-1", view.DefinitionId);
+        Assert.Equal("draft:snapshot-1", view.DefinitionVersionId);
+        Assert.NotNull(view.WorkflowExecutionId);
+        Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
+        Assert.Empty(await _executableStore.ListAsync());
+        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
+            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
+    }
+
+    [Fact]
+    public async Task RejectsDraftSnapshotCompileFailureWithSnapshotIdentity()
+    {
+        var handler = DraftSnapshotHandler();
+
+        var view = await handler.Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-1",
+            State: new WorkflowDefinitionState([], RootActivity: null, [], [], null, null)), CancellationToken.None);
+
+        Assert.Equal("Rejected", view.Status);
+        Assert.Equal("definition-1", view.DefinitionId);
+        Assert.Equal("draft:snapshot-1", view.DefinitionVersionId);
+        Assert.Null(view.ArtifactId);
+        Assert.Null(view.WorkflowExecutionId);
+        Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
+        Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
+    }
+
+    [Fact]
+    public void RejectsBlankDraftSnapshotIdBeforeCreatingTestRunRequest()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: " ",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)));
+
+        Assert.Equal("SnapshotId", exception.ParamName);
+    }
+
+    [Fact]
     public async Task RejectsMissingRootWithoutDispatchingExecution()
     {
         var handler = Handler(WorkflowVersion(rootActivity: null));
@@ -157,6 +210,17 @@ public sealed class WorkflowTestRunRequestHandlerTests
             dispatcher ?? Dispatcher(),
             TimeProvider.System);
 
+    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowExecutionStartDispatcher? dispatcher = null) =>
+        new(
+            new WorkflowExecutableCompiler(
+                new ThrowingVersionStore(),
+                new FakeActivityVersionStore([_writeLineActivity]),
+                _activityStructureService),
+            new InMemoryTransientWorkflowExecutableStore(_executableStore),
+            _testRunStore,
+            dispatcher ?? Dispatcher(),
+            TimeProvider.System);
+
     private WorkflowExecutionStartDispatcher Dispatcher() =>
         new(
             _executableStore,
@@ -205,6 +269,18 @@ public sealed class WorkflowTestRunRequestHandlerTests
             version.Id == versionId
                 ? Task.FromResult(version)
                 : throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
+
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingVersionStore : IWorkflowDefinitionVersionStore
+    {
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Draft snapshot test runs must not read durable workflow definition versions.");
 
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
