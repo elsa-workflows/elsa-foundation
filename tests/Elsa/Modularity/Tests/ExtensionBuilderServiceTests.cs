@@ -361,6 +361,25 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PromoteRecordsFailedOutcomeWhenPostCommitReconciliationFails()
+    {
+        var storage = CreateStorage();
+        var promotion = new FakePromotionService { RetryException = new InvalidOperationException("nuplane unavailable") };
+        var service = CreateService(new FakeBuildRunner(BuildStatus.Succeeded), storage: storage, promotion: promotion);
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("elsa-activity-module", "Elsa.Test.PromoteReconcileFailure", "1.0.0", "net10.0", null, null));
+        var build = await service.SubmitBuildAsync(_caller, project.Id);
+
+        var result = await service.PromoteBuildAsync(_caller, build!.Id);
+        var record = Assert.Single(await storage.ListPromotionsAsync(project.Id));
+
+        Assert.Equal(PromotionStatus.Accepted, result!.Status);
+        Assert.Equal("failed", result.ReconcileOutcome!.Outcome);
+        Assert.Equal("failed", record.ReconcileOutcome.Outcome);
+        Assert.Contains(project.PackageId, record.ReconcileOutcome.FailedPackages);
+    }
+
+    [Fact]
     public async Task PromoteForwardsTargetFeedRequest()
     {
         var promotion = new FakePromotionService();
@@ -1036,6 +1055,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringPromote { get; set; }
         public CancellationTokenSource? CancelDuringRollback { get; set; }
         public CancellationTokenSource? CancelDuringRetry { get; set; }
+        public Exception? RetryException { get; init; }
         public IReadOnlyList<PackagePromotionRecord>? RollbackPromotions { get; private set; }
         public Func<Task>? BeforeRetryReconciliation { get; init; }
 
@@ -1067,6 +1087,8 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             CancelDuringRetry?.Cancel();
             if (BeforeRetryReconciliation is not null)
                 await BeforeRetryReconciliation();
+            if (RetryException is not null)
+                throw RetryException;
 
             return RetryOutcome;
         }

@@ -170,12 +170,14 @@ public sealed class EfCoreOpenTelemetryStoreTests
 
         var finalDiagnostics = await context.Store.GetDiagnosticsAsync();
         var finalTraces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
+        var finalResources = await context.Store.QueryResourcesAsync(new OpenTelemetryResourceFilter { Take = 10 });
         Assert.True(pruned, $"Final counts: resources={finalDiagnostics.ResourceCount}, traces={finalDiagnostics.TraceCount}, spans={finalDiagnostics.SpanCount}, points={finalDiagnostics.MetricPointCount}, logs={finalDiagnostics.LogRecordCount}; traces=[{string.Join(",", finalTraces.Items.Select(x => x.TraceId))}]");
 
         var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
         var metrics = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { Take = 10 });
         var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 10 });
         Assert.Equal(["trace-5", "trace-6"], traces.Items.Select(x => x.TraceId));
+        Assert.True(finalResources.DroppedCount > 0);
         Assert.Equal(4, traces.DroppedCount);
         Assert.Equal(4, metrics.DroppedCount);
         Assert.Equal(4, logs.DroppedCount);

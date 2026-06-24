@@ -414,7 +414,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
                 Interlocked.Add(ref _droppedSpanCount, await PruneSpansAsync(db, cancellationToken));
                 Interlocked.Add(ref _droppedMetricPointCount, await PruneMetricPointsAsync(db, cancellationToken));
                 Interlocked.Add(ref _droppedLogRecordCount, await PruneLogsAsync(db, cancellationToken));
-                await PruneResourcesAsync(db, cancellationToken);
+                Interlocked.Add(ref _droppedResourceCount, await PruneResourcesAsync(db, cancellationToken));
                 _insertedSincePrune = 0;
                 return;
             }

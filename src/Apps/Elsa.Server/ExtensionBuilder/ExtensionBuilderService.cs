@@ -170,7 +170,7 @@ internal sealed class ExtensionBuilderService(
                 return null;
             }
 
-            var reconcile = await promotionService.RetryReconciliationAsync(CancellationToken.None);
+            var reconcile = await TryReconcilePromotionAsync(result.PublishedPackage.PackageId);
             var updated = await storage.UpdatePromotionLifecycleAsync(
                 build.ProjectId,
                 result.PublishedPackage.Version,
@@ -180,12 +180,25 @@ internal sealed class ExtensionBuilderService(
                 DateTimeOffset.UtcNow,
                 CancellationToken.None);
             if (!updated)
-                return null;
+                logger.LogWarning("Extension Builder promotion {PackageId} {Version} was accepted but reconciliation outcome could not be recorded.", result.PublishedPackage.PackageId, result.PublishedPackage.Version);
 
             result = result with { ReconcileOutcome = reconcile };
         }
 
         return result;
+    }
+
+    private async Task<ExtensionBuilderReconcileOutcome> TryReconcilePromotionAsync(string packageId)
+    {
+        try
+        {
+            return await promotionService.RetryReconciliationAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Extension Builder promotion {PackageId} was accepted but reconciliation failed.", packageId);
+            return new("failed", "", ex.Message, true, [packageId]);
+        }
     }
 
     public async Task<ExtensionRuntimeStatus?> GetRuntimeStatusAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default)
