@@ -292,7 +292,23 @@ internal sealed class ExtensionBuilderService(
             {
                 var activated = await storage.TrySetActiveVersionAsync(project.Id, request.Version, activeVersion, CancellationToken.None);
                 if (!activated)
-                    result = result with { Status = PromotionStatus.Conflict };
+                {
+                    var conflictOutcome = new ExtensionBuilderReconcileOutcome(
+                        "failed",
+                        result.ReconcileOutcome.CorrelationId,
+                        "Active package version changed before rollback activation could be recorded.",
+                        true,
+                        [project.PackageId]);
+                    await storage.UpdatePromotionLifecycleAsync(
+                        project.Id,
+                        request.Version,
+                        conflictOutcome,
+                        result.RequiresReload,
+                        result.RequiresRestart,
+                        DateTimeOffset.UtcNow,
+                        CancellationToken.None);
+                    result = result with { ReconcileOutcome = conflictOutcome };
+                }
             }
         }
 

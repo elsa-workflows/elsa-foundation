@@ -608,7 +608,10 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
 
         var rollback = await rollbackService.RollbackPackageAsync(_caller, project.Id, new("1.0.0"));
 
-        Assert.Equal(PromotionStatus.Conflict, rollback!.Status);
+        Assert.Equal(PromotionStatus.Accepted, rollback!.Status);
+        Assert.True(rollback.ReconcileOutcome!.IsDegraded);
+        Assert.Equal("failed", rollback.ReconcileOutcome.Outcome);
+        Assert.Contains(project.PackageId, rollback.ReconcileOutcome.FailedPackages);
         Assert.Equal("3.0.0", await innerStorage.GetActiveVersionAsync(project.Id));
     }
 

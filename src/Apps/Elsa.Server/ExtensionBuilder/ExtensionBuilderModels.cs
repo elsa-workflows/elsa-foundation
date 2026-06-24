@@ -41,8 +41,7 @@ internal enum BuildDiagnosticSeverity
 internal enum PromotionStatus
 {
     Accepted,
-    Rejected,
-    Conflict
+    Rejected
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
