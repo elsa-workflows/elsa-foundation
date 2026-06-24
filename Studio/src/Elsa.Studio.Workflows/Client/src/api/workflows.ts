@@ -10,15 +10,17 @@ import type {
   ExpressionDescriptorsResponse,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
+  StartWorkflowDraftTestRunRequest,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
   WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
   WorkflowDefinitionsResponse,
-  WorkflowDraft
+  WorkflowDraft,
+  WorkflowTestRunView
 } from "../workflowTypes";
-
 const basePath = "/_elsa/workflow-management";
+const publishingBasePath = "/_elsa/publishing";
 
 export const workflowKeys = {
   all: ["workflows"] as const,
@@ -145,6 +147,16 @@ export async function publishVersion(context: StudioEndpointContext, versionId: 
   return context.http.postJson<PublishedWorkflowResponse>(`${basePath}/versions/${encodeURIComponent(versionId)}/publish`, {});
 }
 
+export async function startWorkflowDraftTestRun(context: StudioEndpointContext, request: StartWorkflowDraftTestRunRequest) {
+  try {
+    return await context.http.postJson<WorkflowTestRunView>(`${publishingBasePath}/workflows/drafts/test-runs`, request);
+  } catch (error) {
+    const rejected = parseRejectedTestRun(error);
+    if (rejected) return rejected;
+    throw error;
+  }
+}
+
 export async function runExecutable(context: StudioEndpointContext, artifactId: string) {
   return context.http.postJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}/run`, {});
 }
@@ -225,6 +237,29 @@ function normalizeActivityDescriptors(value: unknown): ActivityDescriptor[] {
       outputs: descriptor.outputs ?? [],
       ports: descriptor.ports ?? []
     }));
+}
+
+function parseRejectedTestRun(error: unknown): WorkflowTestRunView | null {
+  const payload = error && typeof error === "object" && "payload" in error
+    ? (error as { payload?: unknown }).payload
+    : null;
+  const payloadView = parseTestRunView(payload);
+  if (payloadView) return payloadView;
+
+  if (!(error instanceof Error)) return null;
+  try {
+    return parseTestRunView(JSON.parse(error.message));
+  } catch {
+    return null;
+  }
+}
+
+function parseTestRunView(value: unknown): WorkflowTestRunView | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<WorkflowTestRunView>;
+  return typeof candidate.testRunId === "string" && typeof candidate.status === "string"
+    ? candidate as WorkflowTestRunView
+    : null;
 }
 
 export const fallbackExpressionDescriptors: ExpressionDescriptor[] = [

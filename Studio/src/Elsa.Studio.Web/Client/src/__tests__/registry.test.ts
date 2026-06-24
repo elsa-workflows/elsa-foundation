@@ -232,6 +232,24 @@ describe("studio registry", () => {
     } satisfies Partial<StudioHttpError>);
   });
 
+  it("preserves reason payloads on structured http failures", async () => {
+    const payload = {
+      testRunId: "test-run-1",
+      status: "Rejected",
+      reason: "Workflow version has no root activity to publish."
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify(payload),
+      { status: 400, headers: { "content-type": "application/json" } })));
+    const client = createEndpointContext("https://foundation.example/").http;
+
+    await expect(client.postJson("/publishing/workflows/version-1/test-runs", {})).rejects.toMatchObject({
+      status: 400,
+      message: payload.reason,
+      payload
+    } satisfies Partial<StudioHttpError>);
+  });
+
   it("extracts validation errors from http failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
       JSON.stringify({ errors: { Name: ["Name is required."] } }),

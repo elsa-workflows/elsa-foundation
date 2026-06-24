@@ -850,6 +850,77 @@
   color: var(--wf-success);
 }
 
+.wf-test-run-capsule {
+  display: grid;
+  gap: 10px;
+  margin: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--wf-success) 34%, var(--wf-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wf-success) 8%, var(--wf-panel));
+  color: var(--wf-text);
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+.wf-test-run-capsule[data-state="rejected"] {
+  border-color: color-mix(in srgb, #d97706 40%, var(--wf-border));
+  background: color-mix(in srgb, #d97706 10%, var(--wf-panel));
+}
+
+.wf-test-run-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--wf-success);
+}
+
+.wf-test-run-capsule[data-state="rejected"] .wf-test-run-heading {
+  color: #b45309;
+}
+
+.wf-test-run-heading strong,
+.wf-test-run-heading span {
+  display: block;
+}
+
+.wf-test-run-heading span {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wf-test-run-capsule p {
+  margin: 0;
+  color: #92400e;
+}
+
+.wf-test-run-capsule dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.wf-test-run-capsule div {
+  min-width: 0;
+}
+
+.wf-test-run-capsule dt {
+  color: var(--wf-muted-text);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.wf-test-run-capsule dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--wf-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wf-editor-body {
   display: grid;
   min-height: 0;

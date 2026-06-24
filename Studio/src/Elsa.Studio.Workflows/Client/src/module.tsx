@@ -46,9 +46,10 @@ import {
   publishVersion,
   restoreDefinition,
   runExecutable,
+  startWorkflowDraftTestRun,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
@@ -109,6 +110,11 @@ interface ActivityPaletteGroup {
 }
 
 type WorkflowEdge = Edge<WorkflowEdgeData>;
+type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "testRunPreparing" | "testRunStarting";
+interface WorkflowTestRunState {
+  draftSignature: string;
+  view: WorkflowTestRunView;
+}
 
 type ConnectMenuState =
   | { kind: "fromEmpty"; clientX: number; clientY: number }
@@ -1176,7 +1182,10 @@ function readStoredNumber(key: string, fallback: number, min: number, max: numbe
   const storage = getLocalStorage();
   if (!storage) return fallback;
 
-  const value = Number(storage.getItem(key));
+  const storedValue = storage.getItem(key);
+  if (storedValue == null) return fallback;
+
+  const value = Number(storedValue);
   return Number.isFinite(value) ? clamp(value, min, max) : fallback;
 }
 
@@ -1276,6 +1285,8 @@ function WorkflowEditor({
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
+  const [testRun, setTestRun] = useState<WorkflowTestRunState | null>(null);
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
@@ -1290,6 +1301,7 @@ function WorkflowEditor({
   const connectSourceRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
@@ -1317,6 +1329,8 @@ function WorkflowEditor({
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
   const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
+  const busy = operation !== "idle";
+  const canRunTest = !!draft?.state.rootActivity && !busy;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
 
@@ -1740,26 +1754,33 @@ function WorkflowEditor({
   };
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
-    const requestId = ++saveRequestIdRef.current;
-    const requestedSignature = getDraftSignature(draftSnapshot);
-    setError("");
-    try {
-      const saved = await updateDraft(context, draftSnapshot);
-      const savedSignature = getDraftSignature(saved);
-      lastSavedDraftSignatureRef.current = savedSignature;
-      setDraft(current => {
-        if (!current || current.id !== saved.id) return current;
-        return getDraftSignature(current) === requestedSignature
-          ? saved
-          : { ...current, validationErrors: saved.validationErrors };
-      });
-      if (requestId === saveRequestIdRef.current) setStatus(savedStatus);
-    } catch (e) {
-      if (requestId === saveRequestIdRef.current) {
-        setStatus("");
-        setError(e instanceof Error ? e.message : String(e));
+    const queuedSave = async () => {
+      const requestId = ++saveRequestIdRef.current;
+      const requestedSignature = getDraftSignature(draftSnapshot);
+      setError("");
+      try {
+        const saved = await updateDraft(context, draftSnapshot);
+        const savedSignature = getDraftSignature(saved);
+        lastSavedDraftSignatureRef.current = savedSignature;
+        setDraft(current => {
+          if (!current || current.id !== saved.id) return current;
+          return getDraftSignature(current) === requestedSignature
+            ? saved
+            : { ...current, validationErrors: saved.validationErrors };
+        });
+        if (requestId === saveRequestIdRef.current) setStatus(savedStatus);
+        return saved;
+      } catch (e) {
+        if (requestId === saveRequestIdRef.current) {
+          setStatus("");
+          setError(e instanceof Error ? e.message : String(e));
+        }
+        throw e;
       }
-    }
+    };
+    const queued = saveQueueRef.current.then(queuedSave, queuedSave);
+    saveQueueRef.current = queued.catch(() => undefined);
+    return queued;
   }, [context]);
 
   useEffect(() => {
@@ -1770,20 +1791,28 @@ function WorkflowEditor({
 
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
-      void saveDraft(draft, "Autosaved");
+      void saveDraft(draft, "Autosaved").catch(() => undefined);
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
   }, [autosaveEnabled, draft, saveDraft]);
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setOperation("saving");
     setStatus("Saving...");
-    await saveDraft(draft, "Saved");
+    try {
+      await saveDraft(draft, "Saved");
+    } catch {
+      // saveDraft surfaces the error in the editor alert.
+    } finally {
+      setOperation("idle");
+    }
   };
 
   const promoteAndPublish = async () => {
-    if (!draft) return;
+    if (!draft || busy) return;
+    setOperation("promoting");
     setStatus("Promoting...");
     try {
       const promoted = await promoteDraft(context, draft.id);
@@ -1794,18 +1823,36 @@ function WorkflowEditor({
     } catch (e) {
       setStatus("");
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOperation("idle");
     }
   };
 
   const run = async () => {
-    if (!publishedArtifactId) return;
-    setStatus("Running...");
+    if (!draft?.state.rootActivity || busy) return;
+    const draftSnapshot = draft;
+    const draftSignature = getDraftSignature(draftSnapshot);
+    setTestRun(null);
+    setStatus("Preparing test run...");
     try {
-      await runExecutable(context, publishedArtifactId);
-      setStatus("Run dispatched");
+      setOperation("testRunPreparing");
+      setStatus("Preparing test run...");
+      const snapshotId = createDraftSnapshotId(draftSnapshot);
+
+      setOperation("testRunStarting");
+      setStatus("Starting test run...");
+      const nextTestRun = await startWorkflowDraftTestRun(context, {
+        definitionId: draftSnapshot.definitionId,
+        snapshotId,
+        state: draftSnapshot.state
+      });
+      setTestRun({ draftSignature, view: nextTestRun });
+      setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOperation("idle");
     }
   };
 
@@ -2091,6 +2138,9 @@ function WorkflowEditor({
   } as React.CSSProperties;
   const paletteExpanded = !paletteCollapsed && maximizedSidePanel !== "inspector";
   const inspectorExpanded = !inspectorCollapsed && maximizedSidePanel !== "palette";
+  const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
+    ? testRun.view
+    : null;
   const panelContext: WorkflowDesignerPanelContext = {
     definition: details.definition,
     draft,
@@ -2248,13 +2298,20 @@ function WorkflowEditor({
           {proposeUpdateAction ? (
             <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
           ) : null}
-          <button type="button" onClick={() => void save()}><Save size={15} /> Save</button>
-          <button type="button" onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
-          <button type="button" disabled={!publishedArtifactId} onClick={() => void run()}><Play size={15} /> Run</button>
+          <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
+          <button type="button" disabled={busy} onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
+          <button
+            type="button"
+            disabled={!canRunTest}
+            title={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
+            onClick={() => void run()}>
+            <Play size={15} /> Run
+          </button>
         </div>
       </div>
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {renderedTestRun ? <TestRunCapsule testRun={renderedTestRun} /> : null}
 
       <div className={editorBodyClassName} style={editorBodyStyle}>
         <aside className="wf-palette" aria-label="Activities panel">
@@ -2690,6 +2747,30 @@ function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
   );
 }
 
+function TestRunCapsule({ testRun }: { testRun: WorkflowTestRunView }) {
+  const rejected = isRejectedTestRun(testRun);
+  return (
+    <section className="wf-test-run-capsule" data-state={rejected ? "rejected" : "accepted"} aria-live="polite">
+      <div className="wf-test-run-heading">
+        {rejected ? <AlertCircle size={16} /> : <Check size={16} />}
+        <div>
+          <strong>{rejected ? "Test run rejected" : "Test run dispatched"}</strong>
+          <span>Ephemeral - not promoted</span>
+        </div>
+      </div>
+      {rejected && testRun.reason ? <p>{testRun.reason}</p> : null}
+      <dl>
+        <div><dt>Status</dt><dd>{testRun.status}</dd></div>
+        {testRun.commandDispatchStatus ? <div><dt>Dispatch</dt><dd>{testRun.commandDispatchStatus}</dd></div> : null}
+        <div><dt>Test run</dt><dd>{testRun.testRunId}</dd></div>
+        {testRun.artifactId ? <div><dt>Transient artifact</dt><dd>{testRun.artifactId}</dd></div> : null}
+        {testRun.workflowExecutionId ? <div><dt>Execution</dt><dd>{testRun.workflowExecutionId}</dd></div> : null}
+        {testRun.expiresAt ? <div><dt>Expires</dt><dd>{formatDate(testRun.expiresAt)}</dd></div> : null}
+      </dl>
+    </section>
+  );
+}
+
 function createNodeId(activity: ActivityCatalogItem) {
   const base = getActivityDisplay(activity).replace(/[^a-z0-9]+/gi, "").toLowerCase() || "activity";
   return `${base}-${crypto.randomUUID().slice(0, 8)}`;
@@ -2716,6 +2797,24 @@ function clientPointFromEvent(event: MouseEvent | TouchEvent) {
 
 function getDraftSignature(draft: WorkflowDraft) {
   return JSON.stringify({ state: draft.state, layout: draft.layout });
+}
+
+function createDraftSnapshotId(draft: WorkflowDraft) {
+  return `${draft.id}-${hashString(JSON.stringify(draft.state))}`;
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function isRejectedTestRun(testRun: WorkflowTestRunView) {
+  return testRun.status.toLowerCase() === "rejected";
 }
 
 function formatDate(value?: string | null) {

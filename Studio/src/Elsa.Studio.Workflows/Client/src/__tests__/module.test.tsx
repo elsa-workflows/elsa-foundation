@@ -459,6 +459,9 @@ describe("workflows module", () => {
 
     await waitForText(container, "Write Line");
     await click(container.querySelector(".wf-canvas .react-flow__node"));
+    const writeLineNode = Array.from(container.querySelectorAll(".react-flow__node"))
+      .find(node => node.textContent?.includes("Write Line")) ?? null;
+    await click(writeLineNode);
     await waitForText(container, "Text");
     expect(container.querySelector("select.wf-property-syntax")).toBeNull();
     expect(container.querySelector(".wf-expression-field .wf-syntax-picker.inline")).toBeTruthy();
@@ -552,7 +555,7 @@ describe("workflows module", () => {
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
         activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence", category: "Composition", displayName: "Sequence" }),
-        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
       ] });
       if (url.includes("/definitions/created-definition")) return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
       return response({ definitions: [definition()] });
@@ -635,6 +638,158 @@ describe("workflows module", () => {
       "https://server.example/_elsa/workflow-management/executables/artifact-1/run",
       expect.objectContaining({ method: "POST" })
     );
+
+    await unmount();
+  });
+
+  it("sends the current designer draft snapshot to the transient test-run endpoint", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView());
+      if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
+      if (init?.method === "POST" && url.includes("/versions/")) throw new Error("Designer Run must not publish versions.");
+      if (init?.method === "POST" && url.includes("/executables/")) throw new Error("Designer Run must not call durable executable run.");
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({ state: { variables: [], rootActivity: flowchartRoot([]), inputs: [], outputs: [] } }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    await click(optionByText(container, "Write Line"));
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "test-run-1");
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
+    const testRunCall = calls.find(call => call.method === "POST" && call.url.endsWith("/_elsa/publishing/workflows/drafts/test-runs"));
+    expect(testRunCall).toBeTruthy();
+    const requestBody = JSON.parse(testRunCall?.body ?? "{}");
+    expect(requestBody.definitionId).toBe("definition-1");
+    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
+    expect(JSON.stringify(requestBody.state)).toContain("write-line-v1");
+    expect(calls.some(call => call.url.includes("/drafts/draft-1/promote") && call.method === "POST")).toBe(false);
+    expect(calls.some(call => call.url.includes("/versions/") && call.method === "POST")).toBe(false);
+    expect(calls.some(call => call.url.includes("/executables/") && call.method === "POST")).toBe(false);
+    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
+
+    await unmount();
+  });
+
+  it("hides stale designer test-run metadata after the draft changes", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView());
+      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal" },
+        { type: "JavaScript", displayName: "JavaScript" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Run");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "test-run-1");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
+
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+    await waitForText(container, "Text");
+    await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
+
+    await waitForTextToDisappear(container, "test-run-1");
+    expect(container.textContent).not.toContain("artifact-transient-1");
+    expect(container.textContent).not.toContain("wfexec-1");
+
+    await unmount();
+  });
+
+  it("shows compile rejection reasons for designer test runs", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView({
+        artifactId: null,
+        workflowExecutionId: null,
+        status: "Rejected",
+        commandDispatchStatus: null,
+        reason: "Workflow version has no root activity to publish.",
+        expiresAt: null
+      }), 400);
+      if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({ state: { variables: [], rootActivity: flowchartRoot([]), inputs: [], outputs: [] } }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Run");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Workflow version has no root activity to publish.");
+
+    expect(container.textContent).toContain("Test run rejected");
+    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
   });
@@ -846,6 +1001,21 @@ function executable(overrides: Partial<Record<string, unknown>> = {}) {
     rootActivityVersion: "1.0.0",
     nodeCount: 3,
     resumeTargetCount: 0,
+    ...overrides
+  };
+}
+
+function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    testRunId: "test-run-1",
+    definitionId: "definition-1",
+    definitionVersionId: "draft:draft-1-abcdef12",
+    artifactId: "artifact-transient-1",
+    workflowExecutionId: "wfexec-1",
+    status: "DispatchAccepted",
+    commandDispatchStatus: "Accepted",
+    reason: null,
+    expiresAt: "2026-06-24T12:00:00Z",
     ...overrides
   };
 }
