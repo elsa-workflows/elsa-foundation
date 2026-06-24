@@ -1,5 +1,4 @@
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -26,16 +25,17 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         try
         {
             // First "process": apply the commit, then dispose the store to flush and close the connection.
-            await using (var store = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
-                var writer = CreateWriter(store);
+                var writer = CreateWriter(fixture.DocumentStore);
                 await writer.WriteAsync(BuildCommit("commit-1"), Decision);
             }
 
             // Second "process": a brand-new store over the same database file. Nothing is in memory, so anything
             // we can read back was genuinely persisted by the first process.
-            await using (var store = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
+                var store = fixture.DocumentStore;
                 Assert.Equal(WorkflowExecutionStatus.Running, (await new GroundworkWorkflowExecutionStateStore(store).FindAsync("wf-1"))!.Status);
                 Assert.Equal(7L, (await new GroundworkSchedulerStateStore(store).FindAsync("wf-1"))!.Version);
                 Assert.NotNull(await new GroundworkActivityExecutionStateStore(store).FindAsync("wf-1", "ae-1"));

@@ -102,7 +102,7 @@ add native index declarations and push individual clauses down without changing 
 
 One registration entry point wires **every** lane to the chosen provider, e.g.
 `AddGroundworkDesignStores(...)` alongside the existing `AddGroundworkRuntimeStores(...)`, both pointed at one
-host-selected `IDocumentStore` (e.g. `SqliteGroundworkDocumentStore`). Use the runtime registration's
+host-selected `IDocumentStore` (e.g. one produced by Groundwork's provider factory). Use the runtime registration's
 `RemoveAll<TPort>() + AddSingleton<TPort, TGroundworkAdapter>()` swap pattern so composing the Groundwork
 provider replaces the EF (or in-memory) registrations. The acceptance test: a host that registers only the
 Groundwork provider runs the full design + runtime surface against one document database.
@@ -308,9 +308,12 @@ dependent (Mongo standalone vs replica set), so a static manifest flag could not
 
 ## CONSUMED — preview.6 landed; union host + write lane proven (this session)
 
-The Groundwork capability uplift is published as `0.0.1-preview.6` and consumed here
+The original Groundwork capability uplift was published as preview.6 and consumed here at the time
 (`Directory.Packages.props`). The single-provider story is now demonstrated end-to-end in code + tests,
 not just on paper.
+
+Follow-up: Groundwork `0.0.1-preview.7` now carries the reusable document helpers and SQLite factory that this
+repo previously hosted locally. Elsa now consumes those upstream APIs instead of keeping local copies.
 
 ### Done + committed (branch 073-flowchart-scoped-execution)
 - **preview.6 remediation** (`4d3a2eb1`): the grown `IDocumentStore : IDocumentSessionFactory` surface
@@ -325,11 +328,10 @@ not just on paper.
 - **Design write lane — multi-document add commands** (`7f5ce090`): `IAddWorkflowDefinitionCommand` and
   `IAddActivityDefinitionCommand` are implemented as Groundwork document adapters over
   `IDocumentUnitOfWork` (definition + first child committed atomically). Shared helpers
-  `GroundworkDocumentWriter` (envelope-shaped save/delete requests, read/write parity) and
-  `GroundworkAtomicWrite` (caller-enforced all-or-nothing; dispose-without-commit rolls back) live in
-  `Elsa.Persistence.Groundwork.Querying`. Registered alongside the read ports, so the union host wires
-  the write lane automatically. Tests: atomic commit + rollback, per-lane add round-trips, and a
-  unified-host write-then-read.
+  `GroundworkDocumentWriter` (envelope-shaped save/delete requests, read/write parity) and the atomic write
+  path originally lived in `Elsa.Persistence.Groundwork.Querying`; the atomic helper has since moved upstream
+  to Groundwork. Registered alongside the read ports, so the union host wires the write lane automatically.
+  Tests: atomic commit + rollback, per-lane add round-trips, and a unified-host write-then-read.
 
 ### Remaining write-lane work (orchestration-heavy commands — follow-up)
 The six orchestration-bearing commands are NOT yet on Groundwork; they remain EF-only. They are

@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -67,11 +68,12 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
 
-        new SqliteGroundworkRuntimePersistenceShellFeature().ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<SqliteGroundworkDocumentStore>(provider.GetRequiredService<IDocumentStore>());
+        Assert.IsType<SqliteDocumentStoreHandle>(provider.GetRequiredService<SqliteDocumentStoreHandle>());
+        Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());

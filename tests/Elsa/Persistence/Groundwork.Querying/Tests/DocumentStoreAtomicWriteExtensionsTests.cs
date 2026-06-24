@@ -7,11 +7,11 @@ using Xunit;
 namespace Elsa.Persistence.Groundwork.Querying.Tests;
 
 /// <summary>
-/// Proves <see cref="GroundworkAtomicWrite.SaveAllAsync"/> enforces all-or-nothing across documents through the
+/// Proves Groundwork's <see cref="DocumentStoreAtomicWriteExtensions.SaveAllAsync"/> enforces all-or-nothing across documents through the
 /// Groundwork document unit of work: a clean batch commits every document, and a batch whose later write returns
 /// a non-success status aborts before commit so nothing is persisted (the earlier write is rolled back).
 /// </summary>
-public class GroundworkAtomicWriteTests
+public class GroundworkDocumentStoreAtomicWriteExtensionsTests
 {
     private const string Kind = "thing";
     private const string SchemaVersion = "1.0.0";
@@ -21,8 +21,7 @@ public class GroundworkAtomicWriteTests
     {
         var store = new InMemoryDocumentStore(BuildManifest());
 
-        await GroundworkAtomicWrite.SaveAllAsync(
-            store,
+        await store.SaveAllAsync(
             DocumentCommitScope.Of(Kind),
             [Save("a"), Save("b")]);
 
@@ -38,8 +37,8 @@ public class GroundworkAtomicWriteTests
         // The second write demands version 99 on a document that does not exist -> ConcurrencyConflict.
         var conflicting = new SaveDocumentRequest(Kind, "b", SchemaVersion, "{}", ExpectedVersion: 99);
 
-        var ex = await Assert.ThrowsAsync<GroundworkAtomicWriteException>(() =>
-            GroundworkAtomicWrite.SaveAllAsync(store, DocumentCommitScope.Of(Kind), [Save("a"), conflicting]));
+        var ex = await Assert.ThrowsAsync<DocumentAtomicWriteException>(() =>
+            store.SaveAllAsync(DocumentCommitScope.Of(Kind), [Save("a"), conflicting]));
 
         Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, ex.Status);
         Assert.Equal("b", ex.Id);

@@ -23,9 +23,12 @@ public static class GroundworkDocumentWriter
         JsonSerializerOptions jsonOptions)
         where TEntity : Entity
     {
-        var document = new GroundworkDocument<TEntity>(collection, entity);
-        var content = JsonSerializer.Serialize(document, jsonOptions);
-        return new SaveDocumentRequest(documentKind, entity.Id, schemaVersion, content);
+        return JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+            documentKind,
+            entity.Id,
+            schemaVersion,
+            new GroundworkDocument<TEntity>(collection, entity),
+            jsonOptions);
     }
 
     /// <summary>Produces an unconditional delete request for the given document kind and id.</summary>
