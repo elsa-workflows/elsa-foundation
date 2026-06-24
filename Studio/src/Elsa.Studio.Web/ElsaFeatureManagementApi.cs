@@ -4,10 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Studio.Api.Features;
-using Elsa.Studio.ConsoleStream;
-using Elsa.Studio.FeatureManagement;
-using Elsa.Studio.Samples.Dashboard;
 using Microsoft.AspNetCore.Mvc;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
@@ -25,13 +21,12 @@ internal static class ElsaFeatureManagementApi
 
     private static async Task<IResult> GetFeaturesAsync(
         [FromServices] StudioShellFeatureConfigurationStore shellStore,
-        [FromServices] StudioNuplaneAssemblyProvider assemblyProvider,
-        [FromServices] IServiceProvider serviceProvider,
+        [FromServices] StudioRuntimeFeatureCatalogRefresher runtimeFeatureCatalog,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         CancellationToken cancellationToken)
     {
         var shell = await shellStore.LoadAsync(cancellationToken);
-        var descriptors = await GetFeatureDescriptorsAsync(assemblyProvider, serviceProvider, cancellationToken);
+        var descriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
         return Results.Ok(BuildCatalog(shell, descriptors, packages.Packages));
     }
@@ -39,8 +34,7 @@ internal static class ElsaFeatureManagementApi
     private static async Task<IResult> ApplyFeaturesAsync(
         [FromBody] FeatureManagementApplyRequest request,
         [FromServices] StudioShellFeatureConfigurationStore shellStore,
-        [FromServices] StudioNuplaneAssemblyProvider assemblyProvider,
-        [FromServices] IServiceProvider serviceProvider,
+        [FromServices] StudioRuntimeFeatureCatalogRefresher runtimeFeatureCatalog,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         [FromServices] IShellRegistry shellRegistry,
         CancellationToken cancellationToken)
@@ -49,7 +43,7 @@ internal static class ElsaFeatureManagementApi
             return Results.BadRequest(new FeatureManagementErrorResponse("Revision is required."));
 
         var currentShell = await shellStore.LoadAsync(cancellationToken);
-        var currentDescriptors = await GetFeatureDescriptorsAsync(assemblyProvider, serviceProvider, cancellationToken);
+        var currentDescriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
         var currentPackages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
         var currentCatalog = BuildCatalog(currentShell, currentDescriptors, currentPackages.Packages);
         var knownFeatureIds = currentCatalog.Features.Select(feature => feature.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -79,33 +73,13 @@ internal static class ElsaFeatureManagementApi
         var reloadResults = await shellRegistry.ReloadActiveAsync(null, cancellationToken);
         var reloadedShellCount = reloadResults.Count(result => result.Error is null);
         var savedPackages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
-        var descriptors = await GetFeatureDescriptorsAsync(assemblyProvider, serviceProvider, cancellationToken);
+        var descriptors = await runtimeFeatureCatalog.GetFeatureDescriptorsAsync(cancellationToken);
         var catalog = BuildCatalog(savedShell, descriptors, savedPackages.Packages);
 
         return Results.Ok(new FeatureManagementApplyResultResponse(
             catalog,
             descriptors.Count,
             reloadedShellCount));
-    }
-
-    private static async Task<IReadOnlyCollection<ShellFeatureDescriptor>> GetFeatureDescriptorsAsync(
-        StudioNuplaneAssemblyProvider assemblyProvider,
-        IServiceProvider serviceProvider,
-        CancellationToken cancellationToken)
-    {
-        var packageAssemblies = await assemblyProvider.GetAssembliesAsync(serviceProvider, cancellationToken);
-        var assemblies = new[]
-            {
-                typeof(StudioApiFeature).Assembly,
-                typeof(ConsoleStreamStudioFeature).Assembly,
-                typeof(FeatureManagementStudioFeature).Assembly,
-                typeof(DashboardStudioFeature).Assembly
-            }
-            .Concat(packageAssemblies)
-            .Distinct()
-            .ToArray();
-
-        return FeatureDiscovery.DiscoverFeatures(assemblies).ToArray();
     }
 
     private static FeatureManagementCatalogResponse BuildCatalog(

@@ -1,6 +1,7 @@
 .agent-launcher {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-sm);
@@ -11,6 +12,22 @@
   font: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
+}
+
+.topbar-actions > .agent-launcher {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 0.75rem 0 0.65rem;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-launcher svg {
+  flex: 0 0 auto;
 }
 
 .agent-launcher:hover:not(:disabled),
