@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 60
+- Feature classes: 63
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 57
+- Feature-bearing source projects: 60
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -71,6 +71,9 @@ No duplicate explicit feature IDs were discovered.
 | GroundworkRuntimePersistenceSqlite | SqliteGroundworkRuntimePersistenceShellFeature | False | Elsa.Persistence.Groundwork.Sqlite | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | GroundworkUnifiedPersistenceSqlite | SqliteGroundworkUnifiedPersistenceShellFeature | False | Elsa.Persistence.Groundwork.Sqlite.Unified | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite.Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | Primitives | PrimitivesFeature | False | Elsa.Primitives.Hosting | - | - | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
+| Secrets | SecretsFeature | False | Elsa.Secrets | - | sensitive or deployment-specific value signal | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
+| SecretsApi | SecretsApiFeature | False | Elsa.Secrets.Api | - | sensitive or deployment-specific value signal | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
+| SecretsGroundworkPersistence | SecretsGroundworkPersistenceFeature | False | Elsa.Secrets.Persistence.Groundwork | - | sensitive or deployment-specific value signal | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | Serialization.Newtonsoft | NewtonsoftSerializationFeature | False | Elsa.Serialization.Newtonsoft | - | - | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | Serialization | SerializationFeature | False | Elsa.Serialization.SystemText | - | - | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
 | Tasks | TasksFeature | False | Elsa.Tasks | - | - | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
@@ -135,6 +138,9 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | GroundworkRuntimePersistenceSqlite | Elsa.Persistence.Groundwork.Sqlite | - | Elsa.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Sqlite 0.0.1-preview.7<br>Microsoft.Data.Sqlite 10.0.8 |
 | GroundworkUnifiedPersistenceSqlite | Elsa.Persistence.Groundwork.Sqlite.Unified | Elsa.Persistence.Groundwork.Sqlite (GroundworkRuntimePersistenceSqlite) | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Core 0.0.1-preview.7<br>Groundwork.Documents 0.0.1-preview.7<br>Microsoft.Extensions.DependencyInjection 10.0.8 |
 | Primitives | Elsa.Primitives.Hosting | - | Elsa.Primitives | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
+| Secrets | Elsa.Secrets | - | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.DependencyInjection 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| SecretsApi | Elsa.Secrets.Api | Elsa.Secrets (Secrets) | Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Secrets.Core | - |
+| SecretsGroundworkPersistence | Elsa.Secrets.Persistence.Groundwork | Elsa.Secrets (Secrets) | Elsa.Secrets.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Core 0.0.1-preview.7<br>Groundwork.Documents 0.0.1-preview.7<br>Microsoft.Extensions.DependencyInjection 10.0.8 |
 | Serialization.Newtonsoft | Elsa.Serialization.Newtonsoft | - | Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Newtonsoft.Json 13.0.4 |
 | Serialization | Elsa.Serialization.SystemText | - | Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | Tasks | Elsa.Tasks | - | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.143<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
