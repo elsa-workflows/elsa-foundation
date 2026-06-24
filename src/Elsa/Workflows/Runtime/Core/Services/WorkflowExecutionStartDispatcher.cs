@@ -46,6 +46,39 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
+        if (executable.Scope == WorkflowExecutableScope.TransientTestRun)
+            throw new WorkflowExecutableNotFoundException(request.ArtifactId);
+
+        return await DispatchCoreAsync(request, executable, cancellationToken);
+    }
+
+    public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable executable,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(executable);
+
+        if (executable.Scope != WorkflowExecutableScope.TransientTestRun)
+            throw new ArgumentException("Transient dispatch requires a transient test-run executable.", nameof(executable));
+
+        if (!string.Equals(request.ArtifactId, executable.Identity.ArtifactId, StringComparison.Ordinal))
+            throw new ArgumentException("Transient dispatch request artifact ID must match the executable artifact ID.", nameof(request));
+
+        await _executableStore.SaveAsync(executable, cancellationToken);
+
+        return await DispatchCoreAsync(request, executable, cancellationToken);
+    }
+
+    private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable executable,
+        CancellationToken cancellationToken)
+    {
+        if (executable.ExpiresAt is { } expiresAt && expiresAt <= _timeProvider.GetUtcNow())
+            throw new WorkflowExecutableNotFoundException(request.ArtifactId);
+
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
         var metadata = CreateDispatchMetadata(request, executable.Identity);

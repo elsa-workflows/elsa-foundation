@@ -10,7 +10,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// Groundwork-backed <see cref="IWorkflowExecutableStore"/>. Like the bookmark bridge it depends only
 /// on the provider-neutral <see cref="IDocumentStore"/>; the host selects the concrete provider through
 /// feature composition. The executable is stored inside a thin document that stamps a constant
-/// collection value, which lets the unfiltered <see cref="ListAsync"/> be served through the same
+/// collection value, which lets <see cref="ListAsync"/> be served through the same
 /// declared-index equality query every provider supports.
 /// </summary>
 public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IWorkflowExecutableStore
@@ -32,6 +32,19 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
             cancellationToken);
     }
 
+    public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+
+        var result = await store.DeleteAsync(
+            new DeleteDocumentRequest(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+                artifactId),
+            cancellationToken);
+
+        return result.Status == DocumentStoreWriteStatus.Deleted;
+    }
+
     public async ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
@@ -44,7 +57,9 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
         return envelope is null ? null : Map(envelope);
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(
+        bool includeTransient = false,
+        CancellationToken cancellationToken = default)
     {
         var envelopes = await store.QueryAsync(
             new DocumentStoreQuery(
@@ -53,7 +68,9 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
                 ElsaRuntimeStorageManifest.WorkflowExecutableCollection),
             cancellationToken);
 
-        return envelopes.Select(Map).ToArray();
+        return envelopes.Select(Map)
+            .Where(executable => includeTransient || executable.Scope == WorkflowExecutableScope.Published)
+            .ToArray();
     }
 
     private static WorkflowExecutable Map(DocumentEnvelope envelope) =>

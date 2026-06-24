@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -229,10 +230,11 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activityVersions) =>
         new(
-            new FakeVersionStore(workflowVersion),
-            new FakeActivityVersionStore(activityVersions.ToList()),
-            _store,
-            _activityStructureService);
+            new WorkflowExecutableCompiler(
+                new FakeVersionStore(workflowVersion),
+                new FakeActivityVersionStore(activityVersions.ToList()),
+                _activityStructureService),
+            _store);
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")

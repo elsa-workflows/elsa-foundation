@@ -258,7 +258,7 @@ internal static class ElsaDemoApi
         var shell = await shellRegistry.GetOrActivateAsync("default", cancellationToken);
         await using var shellScope = shell.BeginScope();
         var store = shellScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
-        var executables = await store.ListAsync(cancellationToken);
+        var executables = await store.ListAsync(cancellationToken: cancellationToken);
 
         var response = executables
             .Select(DemoWorkflowExecutableResponse.FromExecutable)

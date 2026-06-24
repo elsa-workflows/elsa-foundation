@@ -40,7 +40,8 @@
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {}
+          "WorkflowsRuntimeApi": {},
+          "GroundworkRuntimePersistenceSqlite": {}
         },
         "Configuration": {
           "WebRouting": {
