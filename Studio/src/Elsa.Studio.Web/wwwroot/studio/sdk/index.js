@@ -572,7 +572,7 @@ async function ft(t) {
 }
 async function D(t) {
   const e = await _(t);
-  return new b(t.status, e.message, e.validationErrors);
+  return new b(t.status, e.message, e.validationErrors, e.payload);
 }
 async function _(t) {
   const e = t.headers.get("content-type") ?? "";
@@ -581,12 +581,13 @@ async function _(t) {
       const r = await t.json(), s = G(r);
       return {
         message: wt(r) ?? gt(s) ?? `Request failed with ${t.status}.`,
-        validationErrors: s
+        validationErrors: s,
+        payload: r
       };
     } catch {
-      return { message: `Request failed with ${t.status}.`, validationErrors: null };
+      return { message: `Request failed with ${t.status}.`, validationErrors: null, payload: null };
     }
-  return { message: (await t.text()).trim() || `Request failed with ${t.status}.`, validationErrors: null };
+  return { message: (await t.text()).trim() || `Request failed with ${t.status}.`, validationErrors: null, payload: null };
 }
 function pt(t) {
   return t.toLowerCase().includes("json");
@@ -617,6 +618,7 @@ async function Jt(t) {
 function wt(t) {
   if (typeof t.detail == "string" && t.detail.length > 0) return t.detail;
   if (typeof t.title == "string" && t.title.length > 0) return t.title;
+  if (typeof t.reason == "string" && t.reason.length > 0) return t.reason;
   if (Array.isArray(t.errors) && t.errors.length > 0) return t.errors.map(String).join(" ");
   if (t.errors && typeof t.errors == "object") {
     const e = Object.values(t.errors).flatMap((n) => Array.isArray(n) ? n : [n]).map(String);
@@ -661,11 +663,12 @@ function At(t, e) {
   return `${n}${s}`;
 }
 class b extends Error {
-  constructor(e, n, r = null) {
-    super(n), this.status = e, this.validationErrors = r, this.name = "StudioHttpError";
+  constructor(e, n, r = null, s = null) {
+    super(n), this.status = e, this.validationErrors = r, this.payload = s, this.name = "StudioHttpError";
   }
   status;
   validationErrors;
+  payload;
 }
 export {
   A as AuthAdapterError,

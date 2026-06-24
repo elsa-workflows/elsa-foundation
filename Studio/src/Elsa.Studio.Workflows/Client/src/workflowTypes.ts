@@ -136,6 +136,25 @@ export interface PublishedWorkflowResponse {
   nodeCount: number;
 }
 
+export interface StartWorkflowDraftTestRunRequest {
+  definitionId: string;
+  snapshotId: string;
+  state: WorkflowDefinitionState;
+  artifactVersion?: string | null;
+}
+
+export interface WorkflowTestRunView {
+  testRunId: string;
+  definitionId: string;
+  definitionVersionId: string;
+  artifactId?: string | null;
+  workflowExecutionId?: string | null;
+  status: string;
+  commandDispatchStatus?: string | null;
+  reason?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface WorkflowExecutableSummary {
   artifactId: string;
   artifactVersion: string;

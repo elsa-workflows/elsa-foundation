@@ -662,10 +662,10 @@ export async function readStudioHttpErrorMessage(response: Response) {
 
 export async function createStudioHttpError(response: Response) {
   const error = await readStudioHttpError(response);
-  return new StudioHttpError(response.status, error.message, error.validationErrors);
+  return new StudioHttpError(response.status, error.message, error.validationErrors, error.payload);
 }
 
-async function readStudioHttpError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null }> {
+async function readStudioHttpError(response: Response): Promise<{ message: string; validationErrors: StudioValidationErrors | null; payload: unknown | null }> {
   const contentType = response.headers.get("content-type") ?? "";
   if (isJsonContentType(contentType)) {
     try {
@@ -673,15 +673,16 @@ async function readStudioHttpError(response: Response): Promise<{ message: strin
       const validationErrors = extractValidationErrors(payload);
       return {
         message: getProblemDetailsMessage(payload) ?? getValidationErrorMessage(validationErrors) ?? `Request failed with ${response.status}.`,
-        validationErrors
+        validationErrors,
+        payload
       };
     } catch {
-      return { message: `Request failed with ${response.status}.`, validationErrors: null };
+      return { message: `Request failed with ${response.status}.`, validationErrors: null, payload: null };
     }
   }
 
   const text = await response.text();
-  return { message: text.trim() || `Request failed with ${response.status}.`, validationErrors: null };
+  return { message: text.trim() || `Request failed with ${response.status}.`, validationErrors: null, payload: null };
 }
 
 function isJsonContentType(contentType: string) {
@@ -728,6 +729,7 @@ export async function tryExtractValidationErrors(error: unknown): Promise<Studio
 function getProblemDetailsMessage(payload: Record<string, unknown>) {
   if (typeof payload.detail === "string" && payload.detail.length > 0) return payload.detail;
   if (typeof payload.title === "string" && payload.title.length > 0) return payload.title;
+  if (typeof payload.reason === "string" && payload.reason.length > 0) return payload.reason;
   if (Array.isArray(payload.errors) && payload.errors.length > 0) return payload.errors.map(String).join(" ");
   if (payload.errors && typeof payload.errors === "object") {
     const messages = Object.values(payload.errors as Record<string, unknown>)
@@ -808,7 +810,8 @@ export class StudioHttpError extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    public readonly validationErrors: StudioValidationErrors | null = null
+    public readonly validationErrors: StudioValidationErrors | null = null,
+    public readonly payload: unknown | null = null
   ) {
     super(message);
     this.name = "StudioHttpError";
