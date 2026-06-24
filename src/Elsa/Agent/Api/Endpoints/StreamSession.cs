@@ -33,6 +33,15 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
             return;
         }
 
+        var streamedMessage = await sessions.FindLatestMessageAsync(req.SessionId, AgentRole.User, ct);
+        if (streamedMessage is null)
+        {
+            await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.message.not_found", $"Agent session '{req.SessionId}' does not have a user message to stream.", 404)), 404, cancellation: ct);
+            return;
+        }
+
+        await sessions.UpdateMessageAsync(req.SessionId, streamedMessage.Id, AgentMessageStatus.Streaming, cancellationToken: CancellationToken.None);
+
         var response = HttpContext.Response;
         response.StatusCode = StatusCodes.Status200OK;
         response.ContentType = "text/event-stream";
@@ -42,8 +51,11 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
 
         try
         {
-            await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
+            await foreach (var item in streaming.StreamAsync(req.SessionId, streamedMessage.Id, ct))
+            {
+                await UpdateMessageForTerminalEventAsync(req.SessionId, streamedMessage.Id, item, CancellationToken.None);
                 await WriteAsync(response, item, ct);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -53,9 +65,7 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
         {
             logger.LogWarning(ex, "Agent session {SessionId} stream failed.", req.SessionId);
             var error = new AgentError("agent.stream.failed", "The agent stream failed before completion.", 500);
-            var latestMessage = await sessions.FindLatestMessageAsync(req.SessionId, AgentRole.User, CancellationToken.None);
-            if (latestMessage is { Status: AgentMessageStatus.Pending or AgentMessageStatus.Streaming })
-                await sessions.UpdateMessageAsync(req.SessionId, latestMessage.Id, AgentMessageStatus.Failed, error, CancellationToken.None);
+            await sessions.UpdateMessageAsync(req.SessionId, streamedMessage.Id, AgentMessageStatus.Failed, error, CancellationToken.None);
 
             try
             {
@@ -65,6 +75,19 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
             {
                 logger.LogWarning(writeEx, "Agent session {SessionId} stream error event could not be written.", req.SessionId);
             }
+        }
+    }
+
+    private async Task UpdateMessageForTerminalEventAsync(string sessionId, string messageId, AgentStreamEvent item, CancellationToken ct)
+    {
+        switch (item.Kind)
+        {
+            case AgentStreamEventKind.Completed:
+                await sessions.UpdateMessageAsync(sessionId, messageId, AgentMessageStatus.Completed, cancellationToken: ct);
+                break;
+            case AgentStreamEventKind.Error:
+                await sessions.UpdateMessageAsync(sessionId, messageId, AgentMessageStatus.Failed, item.Error, ct);
+                break;
         }
     }
 

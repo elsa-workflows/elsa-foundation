@@ -495,7 +495,7 @@ public sealed class DefaultAgentStreamingService(
     IAgentSessionService sessions,
     IAgentProviderRegistry providers) : IAgentStreamingService
 {
-    public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, string? messageId = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var session = await sessions.FindAsync(sessionId, cancellationToken);
         if (session is null)
@@ -511,10 +511,14 @@ public sealed class DefaultAgentStreamingService(
             yield break;
         }
 
-        var message = await sessions.FindLatestMessageAsync(session.Id, AgentRole.User, cancellationToken);
+        var message = string.IsNullOrWhiteSpace(messageId)
+            ? await sessions.FindLatestMessageAsync(session.Id, AgentRole.User, cancellationToken)
+            : await sessions.FindMessageAsync(session.Id, messageId, cancellationToken);
         if (message is null)
         {
-            yield return Error("agent.message.not_found", $"Agent session '{sessionId}' does not have a user message to stream.", 404);
+            yield return Error("agent.message.not_found", string.IsNullOrWhiteSpace(messageId)
+                ? $"Agent session '{sessionId}' does not have a user message to stream."
+                : $"Agent message '{messageId}' was not found in session '{sessionId}'.", 404);
             yield break;
         }
 

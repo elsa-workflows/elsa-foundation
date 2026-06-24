@@ -81,7 +81,7 @@ public interface IAgentProposalService
 
 public interface IAgentStreamingService
 {
-    IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, string? messageId = null, CancellationToken cancellationToken = default);
 }
 
 public interface IAgentFeedbackService
