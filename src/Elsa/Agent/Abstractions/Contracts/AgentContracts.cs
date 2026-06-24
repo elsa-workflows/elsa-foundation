@@ -6,6 +6,8 @@ public interface IAgentSessionService
 {
     Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default);
 
+    Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default);
+
     Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default);
 
     Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default);

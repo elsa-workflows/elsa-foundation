@@ -58,6 +58,17 @@ internal sealed class PostMessage(
         }
 
         var storedContext = await sessions.ListContextAsync(req.SessionId, ct);
+        var missingContextIds = req.ContextAttachmentIds
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(id => storedContext.All(x => !string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (missingContextIds.Count > 0)
+        {
+            var error = new AgentError("agent.context.not_found", $"Context attachment(s) were not found: {string.Join(", ", missingContextIds)}", 400);
+            await Send.ResponseAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), error.StatusCode, cancellation: ct);
+            return;
+        }
+
         var requestedStoredContext = req.ContextAttachmentIds.Count == 0
             ? new List<AgentContextAttachment>()
             : storedContext.Where(x => req.ContextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();

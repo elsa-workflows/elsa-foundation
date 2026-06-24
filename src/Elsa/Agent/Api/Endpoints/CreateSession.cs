@@ -42,7 +42,23 @@ internal sealed class CreateSession(
             AgentPolicy.Default,
             BuildMetadata(req)), ct);
 
-        _ = await provider.CreateSessionAsync(session, ct);
+        try
+        {
+            _ = await provider.CreateSessionAsync(session, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await sessions.DeleteAsync(session.Id, CancellationToken.None);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await sessions.DeleteAsync(session.Id, CancellationToken.None);
+            var error = new AgentError("agent.provider.create_failed", $"Agent provider '{req.ProviderId}' could not create a session: {ex.Message}", 502);
+            await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), error.StatusCode, cancellation: CancellationToken.None);
+            return;
+        }
+
         var contextAttachments = await CollectInitialContextAsync(session, req, ct);
         await sessions.AddContextAsync(session.Id, contextAttachments, ct);
 

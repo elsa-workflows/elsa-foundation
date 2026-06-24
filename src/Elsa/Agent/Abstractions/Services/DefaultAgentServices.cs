@@ -186,6 +186,14 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
         return Task.FromResult(session);
     }
 
+    public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var removed = _sessions.TryRemove(sessionId, out _);
+        _messages.TryRemove(sessionId, out _);
+        _contexts.TryRemove(sessionId, out _);
+        return Task.FromResult(removed);
+    }
+
     public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
     {
         if (!_sessions.ContainsKey(sessionId))

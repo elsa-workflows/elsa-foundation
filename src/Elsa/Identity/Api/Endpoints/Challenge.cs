@@ -25,6 +25,16 @@ internal sealed class Challenge(IAuthenticationProviderManager providers) : Elsa
 
         await HttpContext.ChallengeAsync(
             descriptor.Challenge.Scheme ?? descriptor.Id,
-            new AuthenticationProperties { RedirectUri = Query<string>("returnUrl", isRequired: false) ?? "/" });
+            new AuthenticationProperties { RedirectUri = GetSafeReturnUrl(Query<string>("returnUrl", isRequired: false)) });
+    }
+
+    private static string GetSafeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+            return "/";
+
+        return returnUrl.StartsWith('/') && !returnUrl.StartsWith("//", StringComparison.Ordinal) && !returnUrl.StartsWith("/\\", StringComparison.Ordinal)
+            ? returnUrl
+            : "/";
     }
 }

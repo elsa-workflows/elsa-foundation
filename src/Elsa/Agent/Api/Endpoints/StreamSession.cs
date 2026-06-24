@@ -19,25 +19,25 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
 
     public override async Task HandleAsync(AgentSessionRouteRequest req, CancellationToken ct)
     {
+        var session = await sessions.FindAsync(req.SessionId, ct);
+        if (session is null)
+        {
+            await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404)), 404, cancellation: ct);
+            return;
+        }
+
+        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
+        {
+            await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.session.forbidden", "The agent session is not available to the current principal.", 403)), 403, cancellation: ct);
+            return;
+        }
+
         var response = HttpContext.Response;
         response.StatusCode = StatusCodes.Status200OK;
         response.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache";
         response.Headers.Connection = "keep-alive";
         response.Headers["X-Accel-Buffering"] = "no";
-
-        var session = await sessions.FindAsync(req.SessionId, ct);
-        if (session is null)
-        {
-            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404), DateTimeOffset.UtcNow), ct);
-            return;
-        }
-
-        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
-        {
-            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.forbidden", "The agent session is not available to the current principal.", 403), DateTimeOffset.UtcNow), ct);
-            return;
-        }
 
         await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
             await WriteAsync(response, item, ct);
