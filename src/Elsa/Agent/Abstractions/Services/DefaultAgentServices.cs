@@ -229,6 +229,28 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
         return message;
     }
 
+    public Task<AgentMessage?> UpdateMessageAsync(string sessionId, string messageId, AgentMessageStatus status, AgentError? error = null, CancellationToken cancellationToken = default)
+    {
+        if (!_messages.TryGetValue(sessionId, out var messages))
+            return Task.FromResult<AgentMessage?>(null);
+
+        lock (messages)
+        {
+            var index = messages.FindIndex(x => string.Equals(x.Id, messageId, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                return Task.FromResult<AgentMessage?>(null);
+
+            var updated = messages[index] with
+            {
+                Status = status,
+                CompletedAt = status is AgentMessageStatus.Completed or AgentMessageStatus.Failed or AgentMessageStatus.Cancelled ? DateTimeOffset.UtcNow : messages[index].CompletedAt,
+                Error = error
+            };
+            messages[index] = updated;
+            return Task.FromResult<AgentMessage?>(updated);
+        }
+    }
+
     public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default)
     {
         if (!_messages.TryGetValue(sessionId, out var messages))

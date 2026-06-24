@@ -43,8 +43,11 @@ internal sealed class PostMessage(
             return;
         }
 
-        var requestedCapabilities = req.RequestedCapabilities.Count > 0
-            ? req.RequestedCapabilities
+        var contextAttachmentIds = req.ContextAttachmentIds ?? [];
+        var contextAttachments = req.ContextAttachments ?? [];
+        var requestedCapabilitiesInput = req.RequestedCapabilities ?? [];
+        var requestedCapabilities = requestedCapabilitiesInput.Count > 0
+            ? requestedCapabilitiesInput
             : string.IsNullOrWhiteSpace(req.CapabilityId) ? [] : [req.CapabilityId];
 
         foreach (var capabilityId in requestedCapabilities)
@@ -58,7 +61,7 @@ internal sealed class PostMessage(
         }
 
         var storedContext = await sessions.ListContextAsync(req.SessionId, ct);
-        var missingContextIds = req.ContextAttachmentIds
+        var missingContextIds = contextAttachmentIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(id => storedContext.All(x => !string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase)))
             .ToList();
@@ -69,10 +72,10 @@ internal sealed class PostMessage(
             return;
         }
 
-        var requestedStoredContext = req.ContextAttachmentIds.Count == 0
+        var requestedStoredContext = contextAttachmentIds.Count == 0
             ? new List<AgentContextAttachment>()
-            : storedContext.Where(x => req.ContextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();
-        var requestContext = req.ContextAttachments.Select(x => x.ToDomain()).ToList();
+            : storedContext.Where(x => contextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();
+        var requestContext = contextAttachments.Select(x => x.ToDomain()).ToList();
         var context = await contextSanitizer.SanitizeAsync(requestedStoredContext.Concat(requestContext).ToList(), ct);
         var contextDecision = await policyEvaluator.EvaluateContextAsync(session.Policy, context, ct);
         if (!contextDecision.Allowed)

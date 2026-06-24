@@ -3,13 +3,15 @@ using Elsa.Agent.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Api.Endpoints;
 
 internal sealed class CreateSession(
     IAgentSessionService sessions,
     IAgentContextCollector contextCollector,
-    IAgentProviderRegistry providers)
+    IAgentProviderRegistry providers,
+    ILogger<CreateSession> logger)
     : ElsaEndpoint<AgentCreateSessionRequest, AgentApiResponse<AgentCreateSessionResponse>>
 {
     public override void Configure()
@@ -45,6 +47,14 @@ internal sealed class CreateSession(
         try
         {
             _ = await provider.CreateSessionAsync(session, ct);
+            var contextAttachments = await CollectInitialContextAsync(session, req, ct);
+            await sessions.AddContextAsync(session.Id, contextAttachments, ct);
+
+            await Send.OkAsync(AgentApiResponse<AgentCreateSessionResponse>.Success(new(
+                session.Id,
+                session.Status.ToContractString(),
+                session.Title,
+                contextAttachments.Select(x => x.ToResponse()).ToList())), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -53,20 +63,15 @@ internal sealed class CreateSession(
         }
         catch (Exception ex)
         {
+            var correlationId = Guid.NewGuid().ToString("N");
             await sessions.DeleteAsync(session.Id, CancellationToken.None);
-            var error = new AgentError("agent.provider.create_failed", $"Agent provider '{req.ProviderId}' could not create a session: {ex.Message}", 502);
+            logger.LogWarning(ex, "Agent session {SessionId} initialization failed. CorrelationId: {CorrelationId}", session.Id, correlationId);
+            if (HttpContext.Response.HasStarted)
+                throw;
+
+            var error = new AgentError("agent.provider.create_failed", $"Agent provider could not create a session. CorrelationId: {correlationId}", 502);
             await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), error.StatusCode, cancellation: CancellationToken.None);
-            return;
         }
-
-        var contextAttachments = await CollectInitialContextAsync(session, req, ct);
-        await sessions.AddContextAsync(session.Id, contextAttachments, ct);
-
-        await Send.OkAsync(AgentApiResponse<AgentCreateSessionResponse>.Success(new(
-            session.Id,
-            session.Status.ToContractString(),
-            session.Title,
-            contextAttachments.Select(x => x.ToResponse()).ToList())), ct);
     }
 
     private async Task<IReadOnlyCollection<AgentContextAttachment>> CollectInitialContextAsync(AgentSession session, AgentCreateSessionRequest req, CancellationToken ct)

@@ -5,10 +5,11 @@ using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Api.Endpoints;
 
-internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSessionService sessions)
+internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSessionService sessions, ILogger<StreamSession> logger)
     : ElsaEndpoint<AgentSessionRouteRequest>
 {
     public override void Configure()
@@ -39,8 +40,32 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
         response.Headers.Connection = "keep-alive";
         response.Headers["X-Accel-Buffering"] = "no";
 
-        await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
-            await WriteAsync(response, item, ct);
+        try
+        {
+            await foreach (var item in streaming.StreamAsync(req.SessionId, ct))
+                await WriteAsync(response, item, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Agent session {SessionId} stream failed.", req.SessionId);
+            var error = new AgentError("agent.stream.failed", "The agent stream failed before completion.", 500);
+            var latestMessage = await sessions.FindLatestMessageAsync(req.SessionId, AgentRole.User, CancellationToken.None);
+            if (latestMessage is { Status: AgentMessageStatus.Pending or AgentMessageStatus.Streaming })
+                await sessions.UpdateMessageAsync(req.SessionId, latestMessage.Id, AgentMessageStatus.Failed, error, CancellationToken.None);
+
+            try
+            {
+                await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow), CancellationToken.None);
+            }
+            catch (Exception writeEx)
+            {
+                logger.LogWarning(writeEx, "Agent session {SessionId} stream error event could not be written.", req.SessionId);
+            }
+        }
     }
 
     private static async Task WriteAsync(HttpResponse response, AgentStreamEvent item, CancellationToken ct)

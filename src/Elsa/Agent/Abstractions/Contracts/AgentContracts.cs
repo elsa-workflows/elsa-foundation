@@ -12,6 +12,8 @@ public interface IAgentSessionService
 
     Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default);
 
+    Task<AgentMessage?> UpdateMessageAsync(string sessionId, string messageId, AgentMessageStatus status, AgentError? error = null, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default);
 
     Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default);
