@@ -159,5 +159,7 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Current Speckit plan: specs/075-extension-builder-backend/plan.md
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at specs/076-workflow-test-runs/plan.md
 <!-- SPECKIT END -->

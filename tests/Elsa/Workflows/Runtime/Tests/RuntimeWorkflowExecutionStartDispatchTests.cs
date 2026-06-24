@@ -75,6 +75,38 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_RejectsTransientTestRunArtifactBeforeAgentActivation()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30)));
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+
+        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test")).AsTask());
+
+        Assert.Empty(agentProvider.ActivationRequests);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+        Assert.Empty(await store.ListAsync());
+    }
+
+    [Fact]
+    public async Task DispatchTransientAsync_AllowsTransientTestRunArtifact()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var executable = NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30));
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+
+        var result = await dispatcher.DispatchTransientAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "designer-test"), executable);
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+        Assert.Single(agentProvider.ActivationRequests);
+        Assert.Single(agentProvider.Agent.Envelopes);
+        Assert.Empty(await store.ListAsync());
+        Assert.NotNull(await store.FindAsync("artifact-1"));
+    }
+
+    [Fact]
     public async Task DispatchAsync_UsesProvidedWorkflowExecutionIdAndIdempotencyKey()
     {
         var store = new InMemoryWorkflowExecutableStore();
@@ -107,14 +139,18 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
-    private static WorkflowExecutable NewExecutable() =>
+    private static WorkflowExecutable NewExecutable(
+        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
+        DateTimeOffset? expiresAt = null) =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>());
+            compatibilityMetadata: new Dictionary<string, string>(),
+            scope: scope,
+            expiresAt: expiresAt);
 
     private static ExecutableNode NewNode(string nodeId) =>
         new(

@@ -10,4 +10,9 @@ public interface IWorkflowExecutionStartDispatcher
     ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
         CancellationToken cancellationToken = default);
+
+    ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable executable,
+        CancellationToken cancellationToken = default);
 }

@@ -3,6 +3,8 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
+        services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
+        services.TryAddSingleton<ITransientWorkflowExecutableStore, InMemoryTransientWorkflowExecutableStore>();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
     }
 }

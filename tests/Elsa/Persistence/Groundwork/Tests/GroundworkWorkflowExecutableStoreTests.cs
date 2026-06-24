@@ -85,6 +85,25 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Empty(await store.ListAsync());
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task List_Excludes_Transient_Test_Run_Executables_And_Delete_Removes_Them(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        await store.SaveAsync(Executable("test-artifact-1", scope: WorkflowExecutableScope.TransientTestRun, expiresAt: DateTimeOffset.UtcNow.AddMinutes(30)));
+
+        var all = await store.ListAsync();
+        Assert.Equal("artifact-1", Assert.Single(all).Identity.ArtifactId);
+        Assert.NotNull(await store.FindAsync("test-artifact-1"));
+
+        Assert.True(await store.DeleteAsync("test-artifact-1"));
+        Assert.Null(await store.FindAsync("test-artifact-1"));
+    }
+
     [Fact]
     public void Serialization_Omits_Derived_Node_Projections()
     {
@@ -97,7 +116,11 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.DoesNotContain("\"nodes\"", json);
     }
 
-    private static WorkflowExecutable Executable(string artifactId, string artifactVersion = "1")
+    private static WorkflowExecutable Executable(
+        string artifactId,
+        string artifactVersion = "1",
+        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
+        DateTimeOffset? expiresAt = null)
     {
         var child = new ExecutableNode(
             executableNodeId: "child",
@@ -143,7 +166,9 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             },
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
+            scope: scope,
+            expiresAt: expiresAt);
     }
 
     private static JsonElement Json(string json)
