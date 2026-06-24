@@ -76,6 +76,9 @@ declare module "@elsa-workflows/studio-sdk" {
     category?: string;
     displayName?: string | null;
     description?: string | null;
+    icon?: string | null;
+    iconName?: string | null;
+    iconColor?: string | null;
     kind?: string;
     inputs: StudioActivityInputDescriptor[];
     outputs: StudioActivityOutputDescriptor[];

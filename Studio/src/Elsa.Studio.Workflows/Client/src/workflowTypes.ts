@@ -97,6 +97,9 @@ export interface ActivityCatalogItem {
   icon?: string | null;
   iconColor?: string | null;
   executionType: string;
+  icon?: string | null;
+  iconName?: string | null;
+  iconColor?: string | null;
   inputs: unknown[];
   outputs: unknown[];
   designFacets: unknown[];

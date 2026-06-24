@@ -193,6 +193,8 @@ describe("workflows module", () => {
     expect(writeLine?.getAttribute("role")).toBe("treeitem");
     expect(writeLine?.getAttribute("title")).toBe("Writes a line to the console.");
     expect(writeLine?.textContent).toContain("Writes a line to the console.");
+    expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
+    expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
 
     const primitives = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-category-toggle"))
       .find(button => button.textContent?.includes("Primitives"));

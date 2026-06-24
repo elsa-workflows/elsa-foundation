@@ -26,8 +26,8 @@ import {
   type ReactFlowInstance,
   type XYPosition
 } from "@xyflow/react";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Maximize2, Minimize2, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, Zap } from "lucide-react";
 import "@xyflow/react/dist/style.css";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, Zap } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -1989,6 +1989,8 @@ function WorkflowEditor({
                   {group.activities.map(activity => {
                     const description = activity.description?.trim();
                     const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
+                    const displayName = getActivityDisplay(activity);
+                    const icon = resolveActivityIcon(activity);
                     return (
                       <button
                         type="button"
@@ -2003,8 +2005,14 @@ function WorkflowEditor({
                         onDragEnd={event => onPaletteDragEnd(event, activity)}
                         onPointerDown={event => onPalettePointerDown(event, activity)}
                       >
-                        <strong>{getActivityDisplay(activity)}</strong>
-                        {description ? <small id={descriptionId}>{description}</small> : null}
+                        <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">
+                          {renderActivityIcon(icon)}
+                        </span>
+                        <span className="wf-palette-activity-text">
+                          <strong>{displayName}</strong>
+                          {description ? <small id={descriptionId}>{description}</small> : null}
+                        </span>
+                        <GripVertical className="wf-palette-activity-grip" size={14} aria-hidden="true" />
                       </button>
                     );
                   })}
@@ -2024,10 +2032,10 @@ function WorkflowEditor({
         <dl>
           <dt>Node ID</dt>
           <dd>{selectedNode.nodeId}</dd>
+          <dt>Activity type</dt>
+          <dd>{selectedDescriptor?.typeName ?? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? "Unknown"}</dd>
           <dt>Activity version</dt>
           <dd>{selectedNode.activityVersionId}</dd>
-          <dt>Activity type</dt>
-          <dd>{selectedDescriptor?.typeName ?? nodes.find(node => node.id === selectedNode.nodeId)?.data.activityTypeKey ?? "Unknown"}</dd>
         </dl>
         <ActivityPropertiesPanel
           activity={selectedNode}
@@ -2118,7 +2126,7 @@ function WorkflowEditor({
               ) : null}
             </span>
           </div>
-          {activeLeftPanel.render()}
+          {paletteExpanded ? activeLeftPanel.render() : null}
         </aside>
 
         {paletteExpanded && !maximizedSidePanel ? (
@@ -2249,7 +2257,7 @@ function WorkflowEditor({
               ) : null}
             </span>
           </div>
-          {activeRightPanel.render()}
+          {inspectorExpanded ? activeRightPanel.render() : null}
         </aside>
       </div>
     </section>
