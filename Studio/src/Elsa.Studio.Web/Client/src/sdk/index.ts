@@ -249,6 +249,9 @@ export interface StudioActivityDescriptor {
   category?: string;
   displayName?: string | null;
   description?: string | null;
+  icon?: string | null;
+  iconName?: string | null;
+  iconColor?: string | null;
   kind?: StudioActivityKind;
   inputs: StudioActivityInputDescriptor[];
   outputs: StudioActivityOutputDescriptor[];
