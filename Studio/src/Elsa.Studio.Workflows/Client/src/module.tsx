@@ -109,6 +109,10 @@ interface ActivityPaletteGroup {
 
 type WorkflowEdge = Edge<WorkflowEdgeData>;
 type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "testRunPreparing" | "testRunStarting";
+interface WorkflowTestRunState {
+  draftSignature: string;
+  view: WorkflowTestRunView;
+}
 
 type ConnectMenuState =
   | { kind: "fromEmpty"; clientX: number; clientY: number }
@@ -1063,7 +1067,7 @@ function WorkflowEditor({
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
-  const [testRun, setTestRun] = useState<WorkflowTestRunView | null>(null);
+  const [testRun, setTestRun] = useState<WorkflowTestRunState | null>(null);
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
@@ -1608,6 +1612,7 @@ function WorkflowEditor({
   const run = async () => {
     if (!draft?.state.rootActivity || busy) return;
     const draftSnapshot = draft;
+    const draftSignature = getDraftSignature(draftSnapshot);
     setTestRun(null);
     setStatus("Preparing test run...");
     try {
@@ -1622,7 +1627,7 @@ function WorkflowEditor({
         snapshotId,
         state: draftSnapshot.state
       });
-      setTestRun(nextTestRun);
+      setTestRun({ draftSignature, view: nextTestRun });
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
@@ -1914,6 +1919,9 @@ function WorkflowEditor({
   } as React.CSSProperties;
   const paletteExpanded = !paletteCollapsed && maximizedSidePanel !== "inspector";
   const inspectorExpanded = !inspectorCollapsed && maximizedSidePanel !== "palette";
+  const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
+    ? testRun.view
+    : null;
   const panelContext: WorkflowDesignerPanelContext = {
     definition: details.definition,
     draft,
@@ -2076,7 +2084,7 @@ function WorkflowEditor({
       </div>
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {testRun ? <TestRunCapsule testRun={testRun} /> : null}
+      {renderedTestRun ? <TestRunCapsule testRun={renderedTestRun} /> : null}
 
       <div className={editorBodyClassName} style={editorBodyStyle}>
         <aside className="wf-palette" aria-label="Activities panel">
