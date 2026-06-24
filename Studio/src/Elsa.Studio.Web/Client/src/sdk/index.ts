@@ -115,6 +115,20 @@ export interface StudioPanelContribution {
   component: ComponentType;
 }
 
+export type StudioWorkflowDesignerPanelSide = "left" | "right";
+
+export interface StudioWorkflowDesignerPanelProps<TContext = unknown> {
+  context: TContext;
+}
+
+export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
+  id: string;
+  title: string;
+  side: StudioWorkflowDesignerPanelSide;
+  order?: number;
+  component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
+}
+
 export interface StudioFeatureAreaNavLeaf {
   id?: string;
   title: string;
@@ -489,6 +503,7 @@ export interface ElsaStudioModuleApi {
   readonly workflowDesigner: {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
+    readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
   };
   readonly ai: StudioAiContributionApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;

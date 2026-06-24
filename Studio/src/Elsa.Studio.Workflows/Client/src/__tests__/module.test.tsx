@@ -205,6 +205,107 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("supports resizing, collapsing, and maximizing workflow side panels", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+
+    const editor = container.querySelector(".wf-editor-body");
+    expect(editor).toBeTruthy();
+    expect(container.querySelectorAll(".wf-side-resize-handle")).toHaveLength(2);
+    expect(buttonByLabel(container, "Collapse activities panel")).toBeTruthy();
+    expect(buttonByLabel(container, "Maximize inspector panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Collapse activities panel"));
+    expect(editor?.className).toContain("palette-collapsed");
+    expect(buttonByLabel(container, "Expand activities panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Expand activities panel"));
+    expect(editor?.className).not.toContain("palette-collapsed");
+
+    await click(buttonByLabel(container, "Maximize inspector panel"));
+    expect(editor?.className).toContain("inspector-maximized");
+    expect(buttonByLabel(container, "Restore inspector panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Restore inspector panel"));
+    expect(editor?.className).not.toContain("inspector-maximized");
+
+    const inspectorSeparator = container.querySelector<HTMLElement>("[aria-label='Resize inspector panel']");
+    inspectorSeparator?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await flushPromises();
+    flushSync(() => {});
+    expect(inspectorSeparator?.getAttribute("aria-valuenow")).toBe("336");
+
+    await unmount();
+  });
+
+  it("hosts module-contributed workflow side panel tabs", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowDesigner.panels.add({
+        id: "custom.left",
+        title: "Library",
+        side: "left",
+        order: 50,
+        component: () => <div className="custom-left-panel">Module left panel</div>
+      });
+      api.workflowDesigner.panels.add({
+        id: "custom.right",
+        title: "Audit",
+        side: "right",
+        order: 50,
+        component: () => <div className="custom-right-panel">Module right panel</div>
+      });
+    });
+
+    await waitForText(container, "Write Line");
+    expect(container.querySelector("[role='tablist'][aria-label='Activities panel tabs']")?.textContent).toContain("Library");
+    expect(container.querySelector("[role='tablist'][aria-label='Inspector panel tabs']")?.textContent).toContain("Audit");
+
+    await click(buttonByText(container, "Library"));
+    expect(container.textContent).toContain("Module left panel");
+
+    await click(buttonByText(container, "Audit"));
+    expect(container.textContent).toContain("Module right panel");
+
+    await unmount();
+  });
+
   it("opens the canvas activity picker and inserts an activity into an empty flowchart", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -293,6 +394,9 @@ describe("workflows module", () => {
     const activityNodes = container.querySelectorAll(".wf-canvas .wf-node");
     expect(activityNodes).toHaveLength(1);
     expect(activityNodes[0].textContent).toContain("Write Line");
+    expect(activityNodes[0].textContent).toContain("Primitives");
+    expect(activityNodes[0].textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(activityNodes[0].getAttribute("data-icon")).toBe("terminal");
     expect(container.querySelectorAll(".wf-canvas .react-flow__handle")).toHaveLength(0);
     expect(buttonByText(container, "Add activity")).toBeNull();
 
@@ -300,6 +404,7 @@ describe("workflows module", () => {
 
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
     expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.WriteLine");
 
     await unmount();
   });
@@ -354,6 +459,8 @@ describe("workflows module", () => {
     await click(container.querySelector(".wf-canvas .react-flow__node"));
     await waitForText(container, "Text");
     expect(container.querySelector("select.wf-property-syntax")).toBeNull();
+    expect(container.querySelector(".wf-expression-field .wf-syntax-picker.inline")).toBeTruthy();
+    expect(container.querySelector(".wf-property-row > .wf-syntax-picker:not(.inline)")).toBeNull();
 
     await click(container.querySelector(".wf-syntax-picker-trigger"));
     expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
@@ -651,6 +758,9 @@ function testApi(): ElsaStudioModuleApi {
     navigation,
     routes,
     propertyEditors: registry(),
+    workflowDesigner: {
+      panels: registry()
+    },
     ai: {
       promptActions: registry(),
       dispatchPrompt: vi.fn(),
@@ -737,9 +847,10 @@ function withHeaders(headers?: HeadersInit, json = false) {
   return result;
 }
 
-async function renderRegisteredRoute(path = "/workflows/definitions") {
+async function renderRegisteredRoute(path = "/workflows/definitions", configureApi?: (api: ElsaStudioModuleApi) => void) {
   window.history.replaceState({}, "", path);
   const api = testApi();
+  configureApi?.(api);
   register(api);
   const routePath = new URL(path, window.location.origin).pathname;
   const route = api.routes.list().find(candidate => candidate.path === routePath) ?? api.routes.list()[0];
@@ -908,6 +1019,11 @@ async function click(element: Element | null) {
 function buttonByText(container: HTMLElement, text: string) {
   return Array.from(container.querySelectorAll("button"))
     .find(button => button.textContent?.trim() === text) ?? null;
+}
+
+function buttonByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll("button"))
+    .find(button => button.getAttribute("aria-label") === label) ?? null;
 }
 
 function checkboxByLabel(container: HTMLElement, label: string) {

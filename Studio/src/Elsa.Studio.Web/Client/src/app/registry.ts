@@ -55,7 +55,8 @@ export function createStudioRegistry(
     },
     workflowDesigner: {
       nodeRenderers: createContributionRegistry(),
-      toolboxItems: createContributionRegistry()
+      toolboxItems: createContributionRegistry(),
+      panels: createContributionRegistry()
     },
     ai: createAiContributionApi(),
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>()
