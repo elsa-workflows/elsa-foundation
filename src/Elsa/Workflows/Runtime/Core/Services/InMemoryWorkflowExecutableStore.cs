@@ -18,6 +18,14 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+
+        lock (_gate)
+            return ValueTask.FromResult(_executables.Remove(artifactId));
+    }
+
     public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
@@ -26,9 +34,13 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
             return ValueTask.FromResult(_executables.GetValueOrDefault(artifactId));
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(
+        bool includeTransient = false,
+        CancellationToken cancellationToken = default)
     {
         lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values.ToArray());
+            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values
+                .Where(executable => includeTransient || executable.Scope == WorkflowExecutableScope.Published)
+                .ToArray());
     }
 }

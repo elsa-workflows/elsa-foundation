@@ -13,12 +13,17 @@ public sealed class WorkflowExecutable
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
         DateTimeOffset? publishedAt,
-        IReadOnlyDictionary<string, string> compatibilityMetadata)
+        IReadOnlyDictionary<string, string> compatibilityMetadata,
+        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
+        DateTimeOffset? expiresAt = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
+
+        if (scope == WorkflowExecutableScope.Published && expiresAt is not null)
+            throw new ArgumentException("Published workflow executables cannot expire.", nameof(expiresAt));
 
         var nodeSnapshot = Flatten(rootActivity).ToArray();
 
@@ -30,6 +35,8 @@ public sealed class WorkflowExecutable
         CreatedAt = createdAt;
         PublishedAt = publishedAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        Scope = scope;
+        ExpiresAt = expiresAt;
     }
 
     public WorkflowExecutableIdentity Identity { get; }
@@ -40,6 +47,8 @@ public sealed class WorkflowExecutable
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? PublishedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
+    public WorkflowExecutableScope Scope { get; }
+    public DateTimeOffset? ExpiresAt { get; }
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {
@@ -55,4 +64,10 @@ public sealed class WorkflowExecutable
                 stack.Push(child);
         }
     }
+}
+
+public enum WorkflowExecutableScope
+{
+    Published,
+    TransientTestRun
 }
