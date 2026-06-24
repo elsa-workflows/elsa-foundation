@@ -1,0 +1,118 @@
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Extensions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa.Secrets.Tests;
+
+public sealed class SecretManagerTests : IDisposable
+{
+    private readonly ServiceProvider _provider;
+    private readonly ISecretManager _manager;
+    private readonly ISecretResolver _resolver;
+
+    public SecretManagerTests()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Elsa:Secrets:EncryptionKey"] = "tests-only-secret-key",
+                ["External:ApiKey"] = "from-configuration"
+            })
+            .Build();
+        var services = new ServiceCollection().AddSingleton<IConfiguration>(configuration).AddSecrets(configuration);
+        _provider = services.BuildServiceProvider();
+        _manager = _provider.GetRequiredService<ISecretManager>();
+        _resolver = _provider.GetRequiredService<ISecretResolver>();
+    }
+
+    [Fact]
+    public async Task Create_Normalizes_Name_And_Does_Not_Reveal_Value()
+    {
+        var created = await CreateEncryptedAsync(" Payments.Api ");
+
+        Assert.Equal("payments.api", created.Name);
+        Assert.Equal(" Payments.Api ".Trim(), created.DisplayName);
+        Assert.Null(created.ExpiresAt);
+
+        var listed = Assert.Single((await _manager.ListAsync(new SecretQuery())).Items);
+        Assert.Equal("payments.api", listed.Name);
+        Assert.DoesNotContain("secret-value", listed.Description ?? "");
+    }
+
+    [Fact]
+    public async Task Resolve_Returns_Value_From_Encrypted_Store()
+    {
+        await CreateEncryptedAsync("payments.api", value: "secret-value");
+
+        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api", SecretTypeNames.Text));
+
+        Assert.True(resolved.Succeeded);
+        Assert.Equal("secret-value", resolved.Value);
+        Assert.Equal("payments.api", resolved.Metadata!.Name);
+    }
+
+    [Fact]
+    public async Task Rotate_Retires_Previous_Version_And_Resolves_New_Value()
+    {
+        await CreateEncryptedAsync("payments.api", value: "old-value");
+
+        var rotated = await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" });
+        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+
+        Assert.Equal(2, rotated.CurrentVersion);
+        Assert.Equal("new-value", resolved.Value);
+    }
+
+    [Fact]
+    public async Task Revoke_Prevents_Runtime_Resolution()
+    {
+        await CreateEncryptedAsync("payments.api");
+
+        await _manager.RevokeAsync("payments.api");
+        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+
+        Assert.False(resolved.Succeeded);
+        Assert.Equal(SecretResolutionFailureCode.Revoked, resolved.FailureCode);
+    }
+
+    [Fact]
+    public async Task Delete_Removes_Secret_From_List()
+    {
+        await CreateEncryptedAsync("payments.api");
+
+        Assert.True(await _manager.DeleteAsync("payments.api"));
+        Assert.Empty((await _manager.ListAsync(new SecretQuery())).Items);
+        Assert.Null(await _manager.FindAsync("payments.api"));
+    }
+
+    [Fact]
+    public async Task Configuration_Store_Resolves_Host_Configuration_Value()
+    {
+        await _manager.CreateAsync(new CreateSecretRequest
+        {
+            Name = "external.api-key",
+            StoreName = SecretStoreNames.Configuration,
+            TypeName = SecretTypeNames.Text,
+            ConfigurationKey = "External:ApiKey"
+        });
+
+        var resolved = await _resolver.ResolveAsync(new SecretReference("external.api-key"));
+
+        Assert.True(resolved.Succeeded);
+        Assert.Equal("from-configuration", resolved.Value);
+    }
+
+    private ValueTask<SecretMetadata> CreateEncryptedAsync(string name, string value = "secret-value") =>
+        _manager.CreateAsync(new CreateSecretRequest
+        {
+            Name = name,
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Value = value
+        });
+
+    public void Dispose() => _provider.Dispose();
+}

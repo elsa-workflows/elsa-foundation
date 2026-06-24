@@ -144,6 +144,14 @@
     <Project Path="src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
     <Project Path="src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Secrets/">
+    <Project Path="src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj" />
+    <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
+    <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
+  </Folder>
+  <Folder Name="/src/elsa/Secrets/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/elsa/Tasks/">
     <Project Path="src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <Project Path="src/Elsa/Tasks/Elsa.Tasks.csproj" />
@@ -252,6 +260,9 @@
   <Folder Name="/tests/Elsa/Samples/Nuplane/" />
   <Folder Name="/tests/Elsa/Samples/Nuplane/Activities/">
     <Project Path="tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Secrets/">
+    <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">

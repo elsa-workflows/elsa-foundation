@@ -161,5 +161,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/077-workflow-instance-inspection/plan.md
+at specs/079-secrets-module/plan.md
 <!-- SPECKIT END -->
