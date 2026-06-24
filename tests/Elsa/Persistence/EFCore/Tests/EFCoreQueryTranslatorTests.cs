@@ -1,6 +1,8 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.EFCore.Queries;
 using Elsa.Primitives.Entities;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Persistence.EFCore.Tests;
@@ -21,6 +23,16 @@ public class EFCoreQueryTranslatorTests
         public string? Description { get; set; }
         public string Category { get; set; } = string.Empty;
         public string SortKey { get; set; } = string.Empty;
+    }
+
+    private sealed class DocContext(DbContextOptions<DocContext> options) : DbContext(options)
+    {
+        public DbSet<Doc> Docs => Set<Doc>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Doc>().Ignore(x => x.RowNumber);
+        }
     }
 
     private static IQueryable<Doc> Sample() => new[]
@@ -66,6 +78,31 @@ public class EFCoreQueryTranslatorTests
         var result = EFCoreQueryTranslator.Apply(Sample(), q).Select(x => x.Id).OrderBy(x => x).ToList();
 
         // "a" (Name "Order Processing"), "c" (Description "ORDER fulfilment").
+        Assert.Equal(["a", "c"], result);
+    }
+
+    [Fact]
+    public async Task Contains_translates_for_sqlite_search_terms()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<DocContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var context = new DocContext(options);
+        await context.Database.EnsureCreatedAsync();
+        context.Docs.AddRange(Sample());
+        await context.SaveChangesAsync();
+        const string term = "order";
+        var q = Query<Doc>.Where(x => x.Name, QueryOp.Contains, term)
+                          .Or(x => x.Description, QueryOp.Contains, term)
+                          .Or(x => x.Id, QueryOp.Contains, term);
+
+        var result = await EFCoreQueryTranslator.Apply(context.Docs, q)
+            .Select(x => x.Id)
+            .OrderBy(x => x)
+            .ToListAsync();
+
         Assert.Equal(["a", "c"], result);
     }
 

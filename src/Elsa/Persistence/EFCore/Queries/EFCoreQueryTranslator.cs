@@ -10,15 +10,16 @@ namespace Elsa.Persistence.EFCore.Queries;
 /// Translates a provider-neutral <see cref="Query{TEntity}"/> into LINQ over an
 /// <see cref="IQueryable{T}"/> so EF Core can execute it server-side. The emitted expression shapes
 /// (equality, <c>IN</c> via <see cref="Enumerable.Contains{TSource}(IEnumerable{TSource}, TSource)"/>,
-/// and the two-argument <see cref="string.Contains(string, StringComparison)"/> for case-insensitive
-/// substring search) are exactly the shapes the legacy <c>IFilter&lt;T&gt;.Apply</c> implementations
-/// already used, so EF translation behaviour is unchanged.
+/// and provider-translatable single-argument <see cref="string.Contains(string)"/> over normalized
+/// text for case-insensitive substring search).
 /// </summary>
 public static class EFCoreQueryTranslator
 {
     private static readonly NullabilityInfoContext NullabilityContext = new();
     private static readonly System.Reflection.MethodInfo ContainsStringMethod =
-        typeof(string).GetMethod(nameof(string.Contains), [typeof(string), typeof(StringComparison)])!;
+        typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+    private static readonly System.Reflection.MethodInfo ToLowerMethod =
+        typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
 
     /// <summary>
     /// Applies <paramref name="query"/>'s predicates and ordering to <paramref name="source"/>.
@@ -85,10 +86,9 @@ public static class EFCoreQueryTranslator
                     // (e.g. a non-relational provider's fallback): a null field yields no match
                     // instead of throwing, matching EF's effective LIKE-on-NULL semantics.
                     var call = Expression.Call(
-                        field,
+                        Expression.Call(field, ToLowerMethod),
                         ContainsStringMethod,
-                        Expression.Constant(comparison.Value, typeof(string)),
-                        Expression.Constant(StringComparison.CurrentCultureIgnoreCase));
+                        Expression.Constant(((string)comparison.Value!).ToLower()));
                     return RequiresNullGuard(field)
                         ? Expression.AndAlso(Expression.NotEqual(field, Expression.Constant(null, field.Type)), call)
                         : call;
