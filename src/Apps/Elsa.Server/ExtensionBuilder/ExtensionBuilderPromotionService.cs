@@ -82,7 +82,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
             return Rejected(copyRejection);
         if (TryDeactivateSupersededPackageVersions(feed.Path, target.PackageId, target.Version, promotions) is { } deactivateRejection)
             return Rejected(deactivateRejection);
-        var reconcile = MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
+        var reconcile = await TryTriggerRollbackReconcileAsync(target.PackageId);
 
         return new(
             PromotionStatus.Accepted,
@@ -91,6 +91,18 @@ internal sealed partial class ExtensionBuilderPromotionService(
             reconcile,
             RequiresReload: true,
             RequiresRestart: false);
+    }
+
+    private async Task<ExtensionBuilderReconcileOutcome> TryTriggerRollbackReconcileAsync(string packageId)
+    {
+        try
+        {
+            return MapReconcileOutcome(await nuplaneAdmin.TriggerReconcileAsync(CancellationToken.None));
+        }
+        catch
+        {
+            return new("failed", "", "Rollback reconciliation failed.", true, [packageId]);
+        }
     }
 
     public async Task<ExtensionBuilderReconcileOutcome> RetryReconciliationAsync(CancellationToken cancellationToken = default) =>

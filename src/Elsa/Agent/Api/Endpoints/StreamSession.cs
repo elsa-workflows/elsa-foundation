@@ -33,10 +33,13 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
             return;
         }
 
-        var streamedMessage = await sessions.FindLatestMessageAsync(req.SessionId, AgentRole.User, ct);
+        var streamedMessage = (await sessions.ListMessagesAsync(req.SessionId, ct))
+            .Where(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
         if (streamedMessage is null)
         {
-            await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.message.not_found", $"Agent session '{req.SessionId}' does not have a user message to stream.", 404)), 404, cancellation: ct);
+            await Send.ResponseAsync(AgentApiResponse<object>.Failure(new("agent.message.not_streamable", $"Agent session '{req.SessionId}' does not have a pending user message to stream.", 409)), 409, cancellation: ct);
             return;
         }
 

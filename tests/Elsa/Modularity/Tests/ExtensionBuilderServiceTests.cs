@@ -512,6 +512,32 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RollbackReturnsFailedOutcomeWhenReconcileFailsAfterFeedMutation()
+    {
+        var feed = Path.Combine(_directory, "packages");
+        Directory.CreateDirectory(feed);
+        var oldPackage = Path.Combine(feed, "Elsa.Test.Rollback.1.0.0.nupkg");
+        var newPackage = Path.Combine(feed, "Elsa.Test.Rollback.2.0.0.nupkg");
+        CreatePackage(oldPackage, "Elsa.Test.Rollback", "1.0.0", "Safe.Package", includeManifest: true);
+        CreatePackage(newPackage, "Elsa.Test.Rollback", "2.0.0", "Safe.Package", includeManifest: true);
+        var project = new ExtensionProject("project", "workspace", "generic-dotnet", ExtensionTemplateKind.GenericDotNet, "Elsa.Test.Rollback", "2.0.0", "net10.0", new("Test", null, [], Json("{}")), "rev", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var target = new PackagePromotionRecord(project.PackageId, "1.0.0", oldPackage, oldPackage, DateTimeOffset.UtcNow.AddMinutes(-1), new("completed", "corr-1", null, false, []), true, false);
+        var superseded = new PackagePromotionRecord(project.PackageId, "2.0.0", newPackage, newPackage, DateTimeOffset.UtcNow, new("completed", "corr-2", null, false, []), true, false);
+        var service = new ExtensionBuilderPromotionService(
+            new FakeEnvironment(_directory),
+            Options.Create(new ExtensionBuilderOptions()),
+            new FakeNuplaneAdmin { ThrowOnReconcile = true });
+
+        var rollback = await service.RollbackAsync(project, target, [target, superseded]);
+
+        Assert.Equal(PromotionStatus.Accepted, rollback.Status);
+        Assert.Equal("failed", rollback.ReconcileOutcome!.Outcome);
+        Assert.Contains(project.PackageId, rollback.ReconcileOutcome.FailedPackages);
+        Assert.True(File.Exists(oldPackage));
+        Assert.False(File.Exists(newPackage));
+    }
+
+    [Fact]
     public async Task RollbackUpdatesRuntimeStatusWithLatestReconcileOutcome()
     {
         var storage = CreateStorage();
@@ -1181,6 +1207,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     private sealed class FakeNuplaneAdmin : INuplaneAdminOperations
     {
         public IReadOnlyList<ActivePackage> Packages { get; set; } = [];
+        public bool ThrowOnReconcile { get; set; }
 
         public Task<ActivePackagesSnapshot> GetPackagesAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new ActivePackagesSnapshot(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, Packages, "corr"));
@@ -1188,12 +1215,17 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public Task<OperationalStateSnapshot> GetStateAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new OperationalStateSnapshot(DateTimeOffset.UtcNow, new("corr", DateTimeOffset.UtcNow, false, false, []), default, [], "corr"));
 
-        public Task<ManualReconcileOutcome> TriggerReconcileAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new ManualReconcileOutcome(
+        public Task<ManualReconcileOutcome> TriggerReconcileAsync(CancellationToken cancellationToken)
+        {
+            if (ThrowOnReconcile)
+                throw new InvalidOperationException("reconcile failed");
+
+            return Task.FromResult(new ManualReconcileOutcome(
                 ManualReconcileOutcomeCode.Completed,
                 "corr",
                 new ReconciliationRunResult(false, new PackageChangeSet([], [], [], "corr", DateTimeOffset.UtcNow), [], false),
                 null));
+        }
     }
 
     private sealed class FakeServerFeatureCatalog : IServerFeatureCatalog
