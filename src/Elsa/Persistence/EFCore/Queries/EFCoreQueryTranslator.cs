@@ -15,7 +15,6 @@ namespace Elsa.Persistence.EFCore.Queries;
 /// </summary>
 public static class EFCoreQueryTranslator
 {
-    private static readonly NullabilityInfoContext NullabilityContext = new();
     private static readonly System.Reflection.MethodInfo ContainsStringMethod =
         typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
     private static readonly System.Reflection.MethodInfo ToLowerMethod =
@@ -29,9 +28,10 @@ public static class EFCoreQueryTranslator
     public static IQueryable<TEntity> Apply<TEntity>(IQueryable<TEntity> source, Query<TEntity> query)
         where TEntity : Entity
     {
+        var nullabilityContext = new NullabilityInfoContext();
         foreach (var clause in query.Clauses)
         {
-            var predicate = BuildClause(clause);
+            var predicate = BuildClause(clause, nullabilityContext);
             if (predicate != null)
                 source = source.Where(predicate);
         }
@@ -42,7 +42,7 @@ public static class EFCoreQueryTranslator
         return source;
     }
 
-    private static Expression<Func<TEntity, bool>>? BuildClause<TEntity>(IReadOnlyList<QueryComparison<TEntity>> clause)
+    private static Expression<Func<TEntity, bool>>? BuildClause<TEntity>(IReadOnlyList<QueryComparison<TEntity>> clause, NullabilityInfoContext nullabilityContext)
         where TEntity : Entity
     {
         if (clause.Count == 0)
@@ -53,14 +53,14 @@ public static class EFCoreQueryTranslator
 
         foreach (var comparison in clause)
         {
-            var comparisonBody = BuildComparison(comparison, parameter);
+            var comparisonBody = BuildComparison(comparison, parameter, nullabilityContext);
             body = body == null ? comparisonBody : Expression.OrElse(body, comparisonBody);
         }
 
         return Expression.Lambda<Func<TEntity, bool>>(body!, parameter);
     }
 
-    private static Expression BuildComparison<TEntity>(QueryComparison<TEntity> comparison, ParameterExpression parameter)
+    private static Expression BuildComparison<TEntity>(QueryComparison<TEntity> comparison, ParameterExpression parameter, NullabilityInfoContext nullabilityContext)
         where TEntity : Entity
     {
         var field = new ParameterReplacer(parameter).Visit(comparison.FieldSelector.Body);
@@ -89,7 +89,7 @@ public static class EFCoreQueryTranslator
                         Expression.Call(field, ToLowerMethod),
                         ContainsStringMethod,
                         Expression.Constant(((string)comparison.Value!).ToLower()));
-                    return RequiresNullGuard(field)
+                    return RequiresNullGuard(field, nullabilityContext)
                         ? Expression.AndAlso(Expression.NotEqual(field, Expression.Constant(null, field.Type)), call)
                         : call;
                 }
@@ -114,13 +114,13 @@ public static class EFCoreQueryTranslator
         return (IQueryable<TEntity>)method.Invoke(null, [source, order.FieldSelector])!;
     }
 
-    private static bool RequiresNullGuard(Expression field)
+    private static bool RequiresNullGuard(Expression field, NullabilityInfoContext nullabilityContext)
     {
         var memberExpression = UnwrapMemberExpression(field);
         return memberExpression?.Member switch
         {
-            PropertyInfo property => NullabilityContext.Create(property).ReadState != NullabilityState.NotNull,
-            FieldInfo fieldInfo => NullabilityContext.Create(fieldInfo).ReadState != NullabilityState.NotNull,
+            PropertyInfo property => nullabilityContext.Create(property).ReadState != NullabilityState.NotNull,
+            FieldInfo fieldInfo => nullabilityContext.Create(fieldInfo).ReadState != NullabilityState.NotNull,
             _ => true
         };
     }
