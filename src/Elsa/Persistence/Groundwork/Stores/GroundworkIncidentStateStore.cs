@@ -28,7 +28,7 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
 
-        var id = GroundworkDocumentId.Compose(state.WorkflowExecutionId, state.IncidentId);
+        var id = DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId);
 
         var existing = await store.LoadAsync(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, id, cancellationToken);
         if (existing is not null)
@@ -57,7 +57,7 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-                GroundworkDocumentId.Compose(state.WorkflowExecutionId, state.IncidentId),
+                DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId),
                 ElsaRuntimeStorageManifest.SchemaVersion,
                 content),
             cancellationToken);
@@ -72,7 +72,7 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
 
         var envelope = await store.LoadAsync(
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-            GroundworkDocumentId.Compose(workflowExecutionId, incidentId),
+            DocumentId.Compose(workflowExecutionId, incidentId),
             cancellationToken);
 
         return envelope is null ? null : Map(envelope);

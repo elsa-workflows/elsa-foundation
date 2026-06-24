@@ -34,8 +34,7 @@ public sealed class GroundworkAddActivityDefinitionCommand(IDocumentStore store,
             version,
             GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
 
-        await GroundworkAtomicWrite.SaveAllAsync(
-            store,
+        await store.SaveAllAsync(
             DocumentCommitScope.Of(
                 ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind),

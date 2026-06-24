@@ -35,8 +35,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store,
             draft,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer));
 
-        await GroundworkAtomicWrite.SaveAllAsync(
-            store,
+        await store.SaveAllAsync(
             DocumentCommitScope.Of(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),

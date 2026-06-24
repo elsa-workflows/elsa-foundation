@@ -94,3 +94,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [073-diagnostics-structured-logs](../../specs/073-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Draft | - | 37 | 0 | retained, deferred, out of scope |
 | [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |
 | [074-diagnostics-opentelemetry](../../specs/074-diagnostics-opentelemetry/spec.md) | Diagnostics — OpenTelemetry (Ingestion, Live Streaming & Query) | Draft | - | 0 | 0 | retained, deferred, out of scope |
+| [075-extension-builder-backend](../../specs/075-extension-builder-backend/spec.md) | Extension Builder — Backend Pipeline (Trusted-Team v1) | Draft | - | 53 | 0 | deferred, out of scope |

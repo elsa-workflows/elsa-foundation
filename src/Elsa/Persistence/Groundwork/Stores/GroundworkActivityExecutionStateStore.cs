@@ -26,7 +26,7 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store) 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
-                GroundworkDocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
+                DocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
                 ElsaRuntimeStorageManifest.SchemaVersion,
                 content),
             cancellationToken);
@@ -41,7 +41,7 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store) 
 
         var envelope = await store.LoadAsync(
             ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
-            GroundworkDocumentId.Compose(workflowExecutionId, activityExecutionId),
+            DocumentId.Compose(workflowExecutionId, activityExecutionId),
             cancellationToken);
 
         return envelope is null ? null : Map(envelope);

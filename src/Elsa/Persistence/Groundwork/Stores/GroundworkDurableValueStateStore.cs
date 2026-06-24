@@ -24,7 +24,7 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDu
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-                GroundworkDocumentId.Compose(state.WorkflowExecutionId, state.DurableValueId),
+                DocumentId.Compose(state.WorkflowExecutionId, state.DurableValueId),
                 ElsaRuntimeStorageManifest.SchemaVersion,
                 content),
             cancellationToken);
@@ -40,7 +40,7 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDu
         var result = await store.DeleteAsync(
             new DeleteDocumentRequest(
                 ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-                GroundworkDocumentId.Compose(workflowExecutionId, durableValueId)),
+                DocumentId.Compose(workflowExecutionId, durableValueId)),
             cancellationToken);
 
         return result.Status == DocumentStoreWriteStatus.Deleted;
@@ -53,7 +53,7 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDu
 
         var envelope = await store.LoadAsync(
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-            GroundworkDocumentId.Compose(workflowExecutionId, durableValueId),
+            DocumentId.Compose(workflowExecutionId, durableValueId),
             cancellationToken);
 
         return envelope is null ? null : Map(envelope);

@@ -1,8 +1,6 @@
-using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -119,15 +117,15 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         var connectionString = $"Data Source={dbPath}";
         try
         {
-            await using (var documentStore = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
-                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(documentStore);
+                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
                 await store.SavePendingAsync(Pending("item-1", "wf-1"));
             }
 
-            await using (var documentStore = new SqliteGroundworkDocumentStore(connectionString, ElsaRuntimeStorageManifest.Create()))
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
-                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(documentStore);
+                IRuntimePostCommitOutboxStore store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
                 var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
                 Assert.Equal(new[] { "item-1" }, deliverable.Select(x => x.OutboxItemId));
             }
@@ -158,21 +156,6 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         availableAt: Now,
         retryPolicy: retryPolicy);
 
-    private static StoreFixture CreateStore(string provider) => provider switch
-    {
-        "sqlite" => new StoreFixture(new SqliteGroundworkDocumentStore("Data Source=:memory:", ElsaRuntimeStorageManifest.Create())),
-        "memory" => new StoreFixture(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create())),
-        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
-    };
-
-    private sealed class StoreFixture(IDocumentStore documentStore) : IAsyncDisposable
-    {
-        public IDocumentStore DocumentStore { get; } = documentStore;
-
-        public async ValueTask DisposeAsync()
-        {
-            if (DocumentStore is IAsyncDisposable asyncDisposable)
-                await asyncDisposable.DisposeAsync();
-        }
-    }
+    private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
+        GroundworkDocumentStoreFixture.Create(provider);
 }

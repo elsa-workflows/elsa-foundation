@@ -1,8 +1,6 @@
-using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Documents.Store;
 using System.Text.Json;
 using Xunit;
 
@@ -268,21 +266,6 @@ public sealed class GroundworkRuntimeStateStoreTests
         return document.RootElement.Clone();
     }
 
-    private static StoreFixture CreateStore(string provider) => provider switch
-    {
-        "sqlite" => new StoreFixture(new SqliteGroundworkDocumentStore("Data Source=:memory:", ElsaRuntimeStorageManifest.Create())),
-        "memory" => new StoreFixture(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create())),
-        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
-    };
-
-    private sealed class StoreFixture(IDocumentStore documentStore) : IAsyncDisposable
-    {
-        public IDocumentStore DocumentStore { get; } = documentStore;
-
-        public async ValueTask DisposeAsync()
-        {
-            if (DocumentStore is IAsyncDisposable asyncDisposable)
-                await asyncDisposable.DisposeAsync();
-        }
-    }
+    private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
+        GroundworkDocumentStoreFixture.Create(provider);
 }

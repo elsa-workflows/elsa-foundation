@@ -29,7 +29,7 @@ public sealed class GroundworkOperationalStateStore(IDocumentStore store) : IOpe
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-                GroundworkDocumentId.Compose(state.WorkflowExecutionId, state.OperationalStateId),
+                DocumentId.Compose(state.WorkflowExecutionId, state.OperationalStateId),
                 ElsaRuntimeStorageManifest.SchemaVersion,
                 content),
             cancellationToken);
@@ -44,7 +44,7 @@ public sealed class GroundworkOperationalStateStore(IDocumentStore store) : IOpe
 
         var envelope = await store.LoadAsync(
             ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-            GroundworkDocumentId.Compose(workflowExecutionId, operationalStateId),
+            DocumentId.Compose(workflowExecutionId, operationalStateId),
             cancellationToken);
 
         return envelope is null ? null : Map(envelope);
