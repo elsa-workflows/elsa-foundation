@@ -143,6 +143,25 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/diagnostics/open-telemetry",
     component: OpenTelemetryPage
   });
+
+  api.panels.add({
+    id: "open-telemetry",
+    title: "OpenTelemetry",
+    order: 1_020,
+    component: OpenTelemetryPanel
+  });
+}
+
+export function OpenTelemetryPanel() {
+  const state = useOpenTelemetry();
+  const selectedTrace = state.selectedTrace;
+  const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
+
+  return (
+    <section className="otel-panel">
+      <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} />
+    </section>
+  );
 }
 
 export function OpenTelemetryPage() {

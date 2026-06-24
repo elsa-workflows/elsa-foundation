@@ -230,8 +230,10 @@ describe("auth React SDK", () => {
       .mockRejectedValueOnce(new Error("capabilities unavailable"));
     const { container, unmount } = renderWithAuth(manager, <RefreshProbe />);
 
-    await flushPromises();
-    await flushPromises();
+    await waitFor(
+      () => manager.getCapabilities.mock.calls.length === 2 && !container.textContent?.includes("foundation-owned"),
+      "Expected capabilities to clear after refresh reload failed."
+    );
 
     expect(container.textContent).toContain("authenticated");
     expect(container.textContent).not.toContain("foundation-owned");
@@ -398,6 +400,15 @@ function capabilities(): AuthCapabilities {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitFor(predicate: () => boolean, message: string) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (predicate()) return;
+    await flushPromises();
+  }
+
+  throw new Error(message);
 }
 
 function deferred<T>() {

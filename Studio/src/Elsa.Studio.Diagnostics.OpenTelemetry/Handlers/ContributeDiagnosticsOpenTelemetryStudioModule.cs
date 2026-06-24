@@ -5,7 +5,7 @@ namespace Elsa.Studio.Diagnostics.OpenTelemetry.Handlers;
 
 public sealed class ContributeDiagnosticsOpenTelemetryStudioModule : IStudioEventHandler<OnStudioModuleManifestsCollecting>
 {
-    private const string ModuleVersion = "1.0.0";
+    private const string ModuleVersion = "1.0.1";
 
     public Task Handle(OnStudioModuleManifestsCollecting @event, CancellationToken cancellationToken)
     {
