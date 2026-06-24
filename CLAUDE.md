@@ -23,3 +23,17 @@ claude --add-dir ../elsa-foundation-project-management
 ```
 
 Use that sibling only when a task explicitly needs historical meeting notes, follow-up files, or project-management artifacts. For normal work in this repository, start from [AGENTS.md](AGENTS.md), the docs index, and the two constitution files.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation`; external PRs are not a triage request surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context domain-doc layout: root `CONTEXT.md` plus root `docs/adr/` when present. See `docs/agents/domain.md`.
