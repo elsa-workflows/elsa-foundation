@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -112,19 +113,13 @@ function PropertyRow({
       </div>
       {input.description ? <p>{input.description}</p> : null}
       {wrapped ? (
-        <select
-          className="wf-property-syntax"
+        <SyntaxPicker
+          label={`${input.displayName || input.name} expression syntax`}
           value={syntax}
+          descriptors={expressionDescriptors}
           disabled={readOnly}
-          aria-label={`${input.displayName || input.name} expression syntax`}
-          onChange={event => setSyntax(event.target.value)}
-        >
-          {expressionDescriptors.map(descriptor => (
-            <option key={descriptor.type} value={descriptor.type}>
-              {descriptor.displayName || descriptor.type}
-            </option>
-          ))}
-        </select>
+          onChange={setSyntax}
+        />
       ) : null}
       {EditorComponent ? (
         <EditorComponent
@@ -137,6 +132,66 @@ function PropertyRow({
       ) : (
         <input type="text" value={value == null ? "" : String(value)} disabled={readOnly} onChange={event => setRaw(event.target.value)} />
       )}
+    </div>
+  );
+}
+
+function SyntaxPicker({
+  label,
+  value,
+  descriptors,
+  disabled,
+  onChange
+}: {
+  label: string;
+  value: string;
+  descriptors: StudioExpressionDescriptor[];
+  disabled: boolean;
+  onChange(value: string): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const listboxId = useId();
+  const selected = descriptors.find(descriptor => descriptor.type === value);
+
+  return (
+    <div className="wf-syntax-picker" onBlur={event => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
+      <button
+        type="button"
+        className={open ? "wf-syntax-picker-trigger open" : "wf-syntax-picker-trigger"}
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        disabled={disabled}
+        onClick={() => setOpen(current => !current)}
+      >
+        <span>{selected?.displayName || selected?.type || value}</span>
+      </button>
+      {open ? (
+        <div id={listboxId} role="listbox" className="wf-syntax-picker-menu" aria-label={label}>
+          {descriptors.map(descriptor => {
+            const optionLabel = descriptor.displayName || descriptor.type;
+            const selectedOption = descriptor.type === value;
+            return (
+              <button
+                type="button"
+                role="option"
+                aria-selected={selectedOption}
+                key={descriptor.type}
+                className={selectedOption ? "selected" : ""}
+                onClick={() => {
+                  onChange(descriptor.type);
+                  setOpen(false);
+                }}
+              >
+                {optionLabel}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

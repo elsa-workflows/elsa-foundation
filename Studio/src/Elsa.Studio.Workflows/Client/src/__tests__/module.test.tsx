@@ -314,7 +314,10 @@ describe("workflows module", () => {
       const url = String(input);
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal" }] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal" },
+        { type: "JavaScript", displayName: "JavaScript" }
+      ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
           activityVersionId: "write-line-v1",
@@ -350,6 +353,12 @@ describe("workflows module", () => {
     await waitForText(container, "Write Line");
     await click(container.querySelector(".wf-canvas .react-flow__node"));
     await waitForText(container, "Text");
+    expect(container.querySelector("select.wf-property-syntax")).toBeNull();
+
+    await click(container.querySelector(".wf-syntax-picker-trigger"));
+    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
+    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
+
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
     await click(buttonByText(container, "Save"));
 

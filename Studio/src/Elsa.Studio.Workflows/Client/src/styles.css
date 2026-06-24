@@ -1055,6 +1055,8 @@
 }
 
 .wf-properties {
+  position: relative;
+  z-index: 2;
   display: grid;
   gap: 12px;
   margin: 0 0 18px;
@@ -1133,6 +1135,11 @@
   padding: 8px 9px;
 }
 
+.wf-property-row select option {
+  background: var(--wf-surface);
+  color: var(--wf-text);
+}
+
 .wf-property-row textarea {
   resize: vertical;
 }
@@ -1146,6 +1153,99 @@
 
 .wf-property-syntax {
   justify-self: stretch;
+}
+
+.wf-syntax-picker {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+}
+
+.wf-syntax-picker-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--wf-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  padding: 8px 9px;
+  text-align: left;
+}
+
+.wf-syntax-picker-trigger::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  opacity: 0.75;
+}
+
+.wf-syntax-picker-trigger.open::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.wf-syntax-picker-trigger:focus-visible,
+.wf-syntax-picker-trigger.open {
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-accent) 18%, transparent);
+}
+
+.wf-syntax-picker-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-syntax-picker-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 210px;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--wf-accent) 35%, var(--wf-border));
+  border-radius: 7px;
+  background: #1f2630;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.32);
+  padding: 4px;
+}
+
+.wf-syntax-picker-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 9px;
+  text-align: left;
+}
+
+.wf-syntax-picker-menu button:hover,
+.wf-syntax-picker-menu button:focus-visible {
+  background: color-mix(in srgb, var(--wf-accent) 16%, transparent);
+  color: var(--wf-text);
+  outline: none;
+}
+
+.wf-syntax-picker-menu button.selected {
+  background: color-mix(in srgb, var(--wf-accent) 28%, transparent);
+  color: var(--wf-text);
+  font-weight: 800;
 }
 
 .studio-property-checkbox {
@@ -1163,6 +1263,8 @@
 }
 
 .wf-slot-list {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 8px;
 }
