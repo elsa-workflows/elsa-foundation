@@ -33,6 +33,7 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
+import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import "./styles.css";
@@ -346,6 +347,7 @@ function ShellFrame({
 }
 
 function registerBuiltInAgentContributions(api: ElsaStudioModuleApi) {
+  registerBuiltInPropertyEditors(api);
   api.agent.contextProviders.add(createWorkflowAgentContextProvider());
   for (const capability of workflowAgentCapabilities) {
     api.agent.capabilities.add(capability);

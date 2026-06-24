@@ -3,6 +3,7 @@ declare module "@elsa-workflows/studio-sdk" {
 
   export interface StudioEndpointContext {
     readonly baseUrl: string;
+    readonly headers?: HeadersInit;
     readonly http: {
       getJson<T>(url: string, init?: RequestInit): Promise<T>;
     };

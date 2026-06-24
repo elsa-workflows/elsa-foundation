@@ -28,15 +28,18 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, ListTree, Play, Plus, RotateCcw, Save, Search, Sparkles, Trash2 } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
   deleteDefinitionPermanently,
   getDefinition,
   listActivities,
+  listActivityDescriptors,
   listDefinitions,
   listExecutables,
+  listExpressionDescriptors,
+  fallbackExpressionDescriptors,
   promoteDraft,
   publishVersion,
   restoreDefinition,
@@ -56,6 +59,7 @@ import {
   resolveScope,
   resolveScopeOwner,
   spliceWorkflowEdge,
+  updateActivity,
   updateLayout,
   updateScopeActivities,
   updateScopeOwner,
@@ -65,6 +69,7 @@ import {
   type WorkflowEdgeData,
   type WorkflowNodeData
 } from "./workflowAdapter";
+import { ActivityPropertiesPanel } from "./ActivityPropertiesPanel";
 import "./styles.css";
 
 const nodeTypes = { workflowActivity: WorkflowActivityNode };
@@ -127,7 +132,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} />
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} />
       },
       {
         id: "workflows-executables",
@@ -145,7 +150,15 @@ export function register(api: ElsaStudioModuleApi) {
   });
 }
 
-function WorkflowManagementPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+function WorkflowManagementPage({
+  context,
+  ai,
+  propertyEditors
+}: {
+  context: StudioEndpointContext;
+  ai: StudioAiContributionApi;
+  propertyEditors: StudioActivityPropertyEditorContribution[];
+}) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
 
   useEffect(() => {
@@ -161,7 +174,7 @@ function WorkflowManagementPage({ context, ai }: { context: StudioEndpointContex
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame activePath="/workflows/definitions" title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
@@ -884,10 +897,65 @@ function formatActivityTypeName(typeName: string) {
   return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
 }
 
-function WorkflowEditor({ context, definitionId, ai, onBack }: { context: StudioEndpointContext; definitionId: string; ai: StudioAiContributionApi; onBack(): void }) {
+function indexActivityDescriptors(descriptors: StudioActivityDescriptor[]) {
+  const index = new Map<string, StudioActivityDescriptor>();
+
+  for (const descriptor of descriptors) {
+    addDescriptorIndex(index, descriptor.typeName, descriptor);
+    addDescriptorIndex(index, descriptor.name, descriptor);
+    addDescriptorIndex(index, descriptor.displayName, descriptor);
+    const shortName = descriptor.typeName.split(".").filter(Boolean).at(-1);
+    addDescriptorIndex(index, shortName, descriptor);
+  }
+
+  return index;
+}
+
+function resolveActivityDescriptor(
+  activity: ActivityNode,
+  catalogByVersion: Map<string, ActivityCatalogItem>,
+  descriptorsByType: Map<string, StudioActivityDescriptor>
+) {
+  const catalogItem = catalogByVersion.get(activity.activityVersionId);
+  return descriptorsByType.get(normalizeDescriptorKey(catalogItem?.activityTypeKey)) ??
+    descriptorsByType.get(normalizeDescriptorKey(shortTypeName(catalogItem?.activityTypeKey))) ??
+    descriptorsByType.get(normalizeDescriptorKey(catalogItem?.displayName)) ??
+    descriptorsByType.get(normalizeDescriptorKey(activity.activityVersionId)) ??
+    null;
+}
+
+function addDescriptorIndex(index: Map<string, StudioActivityDescriptor>, key: string | null | undefined, descriptor: StudioActivityDescriptor) {
+  const normalized = normalizeDescriptorKey(key);
+  if (normalized && !index.has(normalized)) index.set(normalized, descriptor);
+}
+
+function normalizeDescriptorKey(key: string | null | undefined) {
+  return key?.trim().toLowerCase() ?? "";
+}
+
+function shortTypeName(key: string | null | undefined) {
+  return key?.split(".").filter(Boolean).at(-1);
+}
+
+function WorkflowEditor({
+  context,
+  definitionId,
+  ai,
+  propertyEditors,
+  onBack
+}: {
+  context: StudioEndpointContext;
+  definitionId: string;
+  ai: StudioAiContributionApi;
+  propertyEditors: StudioActivityPropertyEditorContribution[];
+  onBack(): void;
+}) {
   const [details, setDetails] = useState<WorkflowDefinitionDetails | null>(null);
   const [draft, setDraft] = useState<WorkflowDraft | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
+  const [activityDescriptors, setActivityDescriptors] = useState<StudioActivityDescriptor[]>([]);
+  const [expressionDescriptors, setExpressionDescriptors] = useState<StudioExpressionDescriptor[]>(fallbackExpressionDescriptors);
+  const [descriptorStatus, setDescriptorStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
@@ -914,6 +982,7 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
 
   const root = draft?.state.rootActivity ?? null;
   const catalogByVersion = useMemo(() => new Map(catalog.map(activity => [activity.activityVersionId, activity])), [catalog]);
+  const descriptorsByType = useMemo(() => indexActivityDescriptors(activityDescriptors), [activityDescriptors]);
   const scopeOwner = useMemo(() => resolveScopeOwner(root, frames), [root, frames]);
   const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
   const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
@@ -923,6 +992,10 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
     if (isUnsupportedDesigner && scopeOwner?.nodeId === selectedNodeId) return scopeOwner;
     return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
   }, [isUnsupportedDesigner, scope, scopeOwner, selectedNodeId]);
+  const selectedDescriptor = useMemo(
+    () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
+    [catalogByVersion, descriptorsByType, selectedNode]
+  );
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
   const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
@@ -931,15 +1004,27 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
 
   const load = useCallback(async () => {
     setError("");
-    const [nextDetails, nextCatalog] = await Promise.all([
+    setDescriptorStatus("loading");
+    const [nextDetails, nextCatalog, nextDescriptors, nextExpressions] = await Promise.all([
       getDefinition(context, definitionId),
-      listActivities(context)
+      listActivities(context),
+      listActivityDescriptors(context).then(
+        descriptors => ({ ok: true as const, descriptors }),
+        () => ({ ok: false as const, descriptors: [] as StudioActivityDescriptor[] })
+      ),
+      listExpressionDescriptors(context).then(
+        descriptors => ({ ok: true as const, descriptors }),
+        () => ({ ok: false as const, descriptors: fallbackExpressionDescriptors })
+      )
     ]);
     const nextDraft = nextDetails.draft ?? null;
     setDetails(nextDetails);
     lastSavedDraftSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
     setDraft(nextDraft);
     setCatalog(nextCatalog.activities ?? []);
+    setActivityDescriptors(nextDescriptors.descriptors);
+    setExpressionDescriptors(nextExpressions.descriptors.length > 0 ? nextExpressions.descriptors : fallbackExpressionDescriptors);
+    setDescriptorStatus(nextDescriptors.ok ? "ready" : "failed");
     setFrames([]);
     setSelectedNodeId(null);
   }, [context, definitionId]);
@@ -1522,6 +1607,20 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
     setSelectedNodeId(null);
   };
 
+  const updateSelectedActivity = useCallback((activity: ActivityNode) => {
+    setDraft(current => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return current;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity)
+        }
+      };
+    });
+  }, []);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1693,6 +1792,14 @@ function WorkflowEditor({ context, definitionId, ai, onBack }: { context: Studio
                 <dt>Activity version</dt>
                 <dd>{selectedNode.activityVersionId}</dd>
               </dl>
+              <ActivityPropertiesPanel
+                activity={selectedNode}
+                descriptor={selectedDescriptor}
+                editors={propertyEditors}
+                expressionDescriptors={expressionDescriptors}
+                descriptorStatus={descriptorStatus}
+                onChange={updateSelectedActivity}
+              />
               {selectedSlots.length > 0 ? (
                 <div className="wf-slot-list">
                   <span>Embedded slots</span>

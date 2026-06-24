@@ -13,44 +13,70 @@ interface ConsoleTarget {
 }
 
 interface ConsoleLogSource {
-  id: string;
+  id?: string;
+  Id?: string;
   displayName?: string | null;
+  DisplayName?: string | null;
   serviceName?: string | null;
+  ServiceName?: string | null;
   processId?: number | null;
+  ProcessId?: number | null;
   machineName?: string | null;
+  MachineName?: string | null;
   podName?: string | null;
+  PodName?: string | null;
   containerName?: string | null;
+  ContainerName?: string | null;
   namespace?: string | null;
+  Namespace?: string | null;
   nodeName?: string | null;
+  NodeName?: string | null;
   lastSeen?: string | null;
+  LastSeen?: string | null;
   health?: number | string | null;
+  Health?: number | string | null;
 }
 
 interface ConsoleLogLine {
   id?: string;
+  Id?: string;
   timestamp?: string;
+  Timestamp?: string;
   receivedAt?: string;
+  ReceivedAt?: string;
   sequence?: number;
+  Sequence?: number;
   stream?: number | string;
+  Stream?: number | string;
   text?: string;
+  Text?: string;
   source?: ConsoleLogSource | null;
+  Source?: ConsoleLogSource | null;
 }
 
 interface ConsoleDroppedSummary {
-  count: number;
+  count?: number;
+  Count?: number;
 }
 
 interface ConsoleStreamItem {
   line?: ConsoleLogLine;
+  Line?: ConsoleLogLine;
   droppedLines?: ConsoleDroppedSummary;
+  DroppedLines?: ConsoleDroppedSummary;
   dropped?: ConsoleDroppedSummary;
+  Dropped?: ConsoleDroppedSummary;
   source?: ConsoleLogSource;
+  Source?: ConsoleLogSource;
 }
 
 interface ConsoleRecentResponse {
   items?: ConsoleLogLine[];
+  Items?: ConsoleLogLine[];
   lines?: ConsoleLogLine[];
+  Lines?: ConsoleLogLine[];
   sources?: ConsoleLogSource[];
+  Sources?: ConsoleLogSource[];
 }
 
 export interface ConsoleEntry {
@@ -211,11 +237,12 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
 
   const loadRecentLines = useCallback(async () => {
     const response = await target.context.http.getJson<ConsoleRecentResponse>(createRecentPath(target, sourceFilter));
-    if (response.sources) {
-      setSources(response.sources);
+    const responseSources = response.sources ?? response.Sources;
+    if (responseSources) {
+      setSources(responseSources.map(normalizeConsoleSource).sort(compareConsoleSources));
     }
 
-    const recentLines = response.items ?? response.lines ?? [];
+    const recentLines = response.items ?? response.Items ?? response.lines ?? response.Lines ?? [];
     addEntries(recentLines.map(createConsoleEntryFromLine));
   }, [addEntries, sourceFilter, target]);
 
@@ -228,7 +255,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
       try {
         const response = await target.context.http.getJson<ConsoleLogSource[]>(`${target.endpointPrefix}/sources`);
         if (!cancelled) {
-          setSources(response);
+          setSources(response.map(normalizeConsoleSource).sort(compareConsoleSources));
           setSourcesState("ready");
         }
       } catch {
@@ -269,7 +296,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
     setPausedLines(null);
     setPausedLineCount(0);
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(resolveTargetUrl(target, `${target.endpointPrefix}/hub`))
+      .withUrl(resolveTargetUrl(target, `${target.endpointPrefix}/hub`), createConsoleConnectionOptions(target.context))
       .withAutomaticReconnect()
       .build();
     connection.serverTimeoutInMilliseconds = consoleStreamServerTimeoutInMilliseconds;
@@ -295,13 +322,15 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
       disposeSubscription();
       subscription = connection.stream<ConsoleStreamItem>("StreamAsync", createConsoleFilter(sourceFilter)).subscribe({
         next: item => {
-          if (item?.line) {
-            addEntries([createConsoleEntryFromLine(item.line)]);
-          } else if (item?.droppedLines || item?.dropped) {
-            const dropped = item.droppedLines ?? item.dropped;
-            addLine("stderr", `${dropped?.count ?? 0} console lines were dropped.`);
-          } else if (item?.source) {
-            setSources(current => upsertConsoleSource(current, item.source!));
+          const line = item?.line ?? item?.Line;
+          const dropped = item?.droppedLines ?? item?.DroppedLines ?? item?.dropped ?? item?.Dropped;
+          const source = item?.source ?? item?.Source;
+          if (line) {
+            addEntries([createConsoleEntryFromLine(line)]);
+          } else if (dropped) {
+            addLine("stderr", `${dropped.count ?? dropped.Count ?? 0} console lines were dropped.`);
+          } else if (source) {
+            setSources(current => upsertConsoleSource(current, normalizeConsoleSource(source)));
           }
         },
         error: error => {
@@ -475,14 +504,17 @@ export function createConsoleEntry(stream: "stdout" | "stderr", text: string): C
 }
 
 export function createConsoleEntryFromLine(line: ConsoleLogLine): ConsoleEntry {
+  const source = normalizeOptionalConsoleSource(line.source ?? line.Source);
+  const timestamp = line.timestamp ?? line.Timestamp ?? line.receivedAt ?? line.ReceivedAt ?? new Date().toISOString();
+  const sequence = line.sequence ?? line.Sequence ?? null;
   return {
-    id: line.id ?? `${line.sequence ?? Date.now()}-${Math.random()}`,
-    timestamp: line.timestamp ?? line.receivedAt ?? new Date().toISOString(),
-    sequence: line.sequence ?? null,
-    stream: getConsoleStreamName(line.stream),
-    text: line.text ?? "",
-    sourceId: line.source?.id ?? null,
-    sourceLabel: line.source ? formatConsoleSourceLabel(line.source) : null
+    id: line.id ?? line.Id ?? `${sequence ?? Date.now()}-${Math.random()}`,
+    timestamp,
+    sequence,
+    stream: getConsoleStreamName(line.stream ?? line.Stream),
+    text: line.text ?? line.Text ?? "",
+    sourceId: source?.id ?? null,
+    sourceLabel: source ? formatConsoleSourceLabel(source) : null
   };
 }
 
@@ -492,6 +524,10 @@ export function formatConsoleSourceLabel(source: ConsoleLogSource): string {
   }
 
   const name = source.displayName || source.serviceName || source.id;
+  if (!name) {
+    return "";
+  }
+
   if (source.machineName && source.processId) {
     return `${name} · ${source.machineName}:${source.processId}`;
   }
@@ -501,6 +537,11 @@ export function formatConsoleSourceLabel(source: ConsoleLogSource): string {
 
 export function createConsoleFilter(sourceId: string | null) {
   return sourceId ? { limit: consoleReplayLimit, sourceId } : { limit: consoleReplayLimit };
+}
+
+export function createConsoleConnectionOptions(context: StudioEndpointContext): signalR.IHttpConnectionOptions {
+  const headers = createSignalRHeaders(context.headers);
+  return headers ? { headers } : {};
 }
 
 export function createConsoleExportContent(entries: ConsoleEntry[]) {
@@ -668,6 +709,39 @@ function upsertConsoleSource(sources: ConsoleLogSource[], source: ConsoleLogSour
   const next = [...sources];
   next[index] = source;
   return next.sort(compareConsoleSources);
+}
+
+function normalizeOptionalConsoleSource(source: ConsoleLogSource | null | undefined) {
+  return source ? normalizeConsoleSource(source) : null;
+}
+
+function normalizeConsoleSource(source: ConsoleLogSource): ConsoleLogSource {
+  return {
+    id: source.id ?? source.Id ?? "",
+    displayName: source.displayName ?? source.DisplayName ?? null,
+    serviceName: source.serviceName ?? source.ServiceName ?? null,
+    processId: source.processId ?? source.ProcessId ?? null,
+    machineName: source.machineName ?? source.MachineName ?? null,
+    podName: source.podName ?? source.PodName ?? null,
+    containerName: source.containerName ?? source.ContainerName ?? null,
+    namespace: source.namespace ?? source.Namespace ?? null,
+    nodeName: source.nodeName ?? source.NodeName ?? null,
+    lastSeen: source.lastSeen ?? source.LastSeen ?? null,
+    health: source.health ?? source.Health ?? null
+  };
+}
+
+function createSignalRHeaders(headers: HeadersInit | undefined): signalR.MessageHeaders | undefined {
+  if (!headers) {
+    return undefined;
+  }
+
+  const signalRHeaders: signalR.MessageHeaders = {};
+  new Headers(headers).forEach((value, key) => {
+    signalRHeaders[key] = value;
+  });
+
+  return Object.keys(signalRHeaders).length > 0 ? signalRHeaders : undefined;
 }
 
 function compareConsoleSources(left: ConsoleLogSource, right: ConsoleLogSource) {

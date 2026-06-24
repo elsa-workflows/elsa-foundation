@@ -1,3 +1,5 @@
+import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+
 export interface WorkflowDefinitionsResponse {
   definitions: WorkflowDefinitionSummary[];
   page?: number;
@@ -56,6 +58,7 @@ export interface ActivityNode {
   inputs: unknown[];
   outputs: unknown[];
   structure?: ActivityNodeStructure | null;
+  [key: string]: unknown;
 }
 
 export interface ActivityNodeStructure {
@@ -95,6 +98,21 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets: unknown[];
+}
+
+export type ActivityDescriptor = StudioActivityDescriptor;
+export type ExpressionDescriptor = StudioExpressionDescriptor;
+
+export interface ActivityDescriptorsResponse {
+  items?: ActivityDescriptor[];
+  activities?: ActivityDescriptor[];
+  descriptors?: ActivityDescriptor[];
+}
+
+export interface ExpressionDescriptorsResponse {
+  items?: ExpressionDescriptor[];
+  descriptors?: ExpressionDescriptor[];
+  expressionDescriptors?: ExpressionDescriptor[];
 }
 
 export interface CreateDefinitionRequest {

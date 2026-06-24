@@ -304,6 +304,65 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("renders descriptor-driven properties and saves wrapped input edits", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal" }] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+    await waitForText(container, "Text");
+    await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
+    await click(buttonByText(container, "Save"));
+
+    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
+    expect(putCall).toBeTruthy();
+    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
+      typeName: "System.String",
+      expression: { type: "Literal", value: "Hello from properties" }
+    });
+
+    await unmount();
+  });
+
   it("filters the canvas activity picker with keyboard search", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -492,6 +551,7 @@ function testApi(): ElsaStudioModuleApi {
     featureAreas: featureAreaRegistry(navigation, routes),
     navigation,
     routes,
+    propertyEditors: registry(),
     ai: {
       promptActions: registry(),
       dispatchPrompt: vi.fn(),
@@ -688,6 +748,32 @@ function activity(overrides: Partial<Record<string, unknown>> = {}) {
     outputs: [],
     designFacets: [],
     ...overrides
+  };
+}
+
+function writeLineDescriptor() {
+  return {
+    typeName: "Elsa.Activities.Primitives.Activities.WriteLine",
+    namespace: "Elsa.Activities.Primitives",
+    name: "WriteLine",
+    version: 1,
+    category: "Primitives",
+    displayName: "Write Line",
+    kind: "Action",
+    inputs: [{
+      name: "Text",
+      typeName: "System.String",
+      displayName: "Text",
+      description: "Text to write.",
+      order: 0,
+      category: "General",
+      isBrowsable: true,
+      uiHint: "singleline",
+      isWrapped: true,
+      defaultSyntax: "Literal"
+    }],
+    outputs: [],
+    ports: []
   };
 }
 

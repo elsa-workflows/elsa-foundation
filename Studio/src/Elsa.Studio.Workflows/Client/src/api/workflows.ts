@@ -2,8 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityCatalogResponse,
+  ActivityDescriptor,
+  ActivityDescriptorsResponse,
   CreateDefinitionRequest,
   DefinitionListState,
+  ExpressionDescriptor,
+  ExpressionDescriptorsResponse,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
   WorkflowExecutableSummary,
@@ -20,7 +24,9 @@ export const workflowKeys = {
   definitionsList: (request: DefinitionListRequest) => [...workflowKeys.definitions, "list", request] as const,
   definition: (definitionId: string) => [...workflowKeys.definitions, "detail", definitionId] as const,
   executables: (definitionId?: string | null) => ["workflows", "executables", definitionId ?? "all"] as const,
-  activities: ["workflows", "activities"] as const
+  activities: ["workflows", "activities"] as const,
+  activityDescriptors: ["workflows", "activity-descriptors"] as const,
+  expressionDescriptors: ["workflows", "expression-descriptors"] as const
 };
 
 export function useWorkflowDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
@@ -146,3 +152,60 @@ export async function listExecutables(context: StudioEndpointContext) {
 export async function listActivities(context: StudioEndpointContext) {
   return context.http.getJson<ActivityCatalogResponse>(`${basePath}/activities`);
 }
+
+export async function listActivityDescriptors(context: StudioEndpointContext): Promise<ActivityDescriptor[]> {
+  const response = await getFirstAvailable<ActivityDescriptorsResponse | ActivityDescriptor[]>(context, [
+    `${basePath}/descriptors/activities`,
+    "/descriptors/activities"
+  ]);
+  if (Array.isArray(response)) return normalizeActivityDescriptors(response);
+  return normalizeActivityDescriptors(response.items ?? response.activities ?? response.descriptors ?? []);
+}
+
+export async function listExpressionDescriptors(context: StudioEndpointContext): Promise<ExpressionDescriptor[]> {
+  const response = await getFirstAvailable<ExpressionDescriptorsResponse | ExpressionDescriptor[]>(context, [
+    `${basePath}/descriptors/expression-descriptors`,
+    "/descriptors/expression-descriptors"
+  ]);
+  if (Array.isArray(response)) return response;
+  const descriptors = response.items ?? response.descriptors ?? response.expressionDescriptors ?? [];
+  return descriptors.length > 0 ? descriptors : fallbackExpressionDescriptors;
+}
+
+async function getFirstAvailable<T>(context: StudioEndpointContext, paths: string[]) {
+  let lastError: unknown;
+  for (const path of paths) {
+    try {
+      return await context.http.getJson<T>(path);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
+function normalizeActivityDescriptors(value: unknown): ActivityDescriptor[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is ActivityDescriptor => {
+      if (!item || typeof item !== "object") return false;
+      const descriptor = item as Partial<ActivityDescriptor>;
+      return typeof descriptor.typeName === "string" && Array.isArray(descriptor.inputs);
+    })
+    .map(descriptor => ({
+      ...descriptor,
+      inputs: descriptor.inputs ?? [],
+      outputs: descriptor.outputs ?? [],
+      ports: descriptor.ports ?? []
+    }));
+}
+
+export const fallbackExpressionDescriptors: ExpressionDescriptor[] = [
+  { type: "Literal", displayName: "Literal" },
+  { type: "JavaScript", displayName: "JavaScript" },
+  { type: "Liquid", displayName: "Liquid" },
+  { type: "Object", displayName: "Object" },
+  { type: "Variable", displayName: "Variable" },
+  { type: "Input", displayName: "Input" }
+];

@@ -193,6 +193,87 @@ export interface StudioSettingEditorContribution {
   component: ComponentType<StudioSettingEditorProps>;
 }
 
+export type StudioActivityKind = "Action" | "Trigger" | "Job" | "Task" | string;
+export type StudioActivityPortType = "Embedded" | "Flow" | string;
+
+export interface StudioActivityPropertyDescriptor {
+  name: string;
+  typeName: string;
+  displayName?: string | null;
+  description?: string | null;
+  order?: number;
+  category?: string | null;
+  isBrowsable?: boolean | null;
+  isSynthetic?: boolean;
+}
+
+export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
+  isWrapped?: boolean;
+  uiHint?: string | null;
+  defaultValue?: unknown;
+  defaultSyntax?: string | null;
+  isReadOnly?: boolean | null;
+  storageDriverType?: string | null;
+  uiSpecifications?: Record<string, unknown> | null;
+}
+
+export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+}
+
+export interface StudioActivityPortDescriptor {
+  name: string;
+  displayName?: string | null;
+  type: StudioActivityPortType;
+  isBrowsable?: boolean | null;
+}
+
+export interface StudioActivityDescriptor {
+  typeName: string;
+  namespace?: string;
+  name?: string;
+  version?: number;
+  category?: string;
+  displayName?: string | null;
+  description?: string | null;
+  kind?: StudioActivityKind;
+  inputs: StudioActivityInputDescriptor[];
+  outputs: StudioActivityOutputDescriptor[];
+  ports: StudioActivityPortDescriptor[];
+  customProperties?: Record<string, unknown>;
+  constructionProperties?: Record<string, unknown>;
+  isContainer?: boolean;
+  isBrowsable?: boolean;
+  isStart?: boolean;
+  isTerminal?: boolean;
+}
+
+export interface StudioExpressionDescriptor {
+  type: string;
+  displayName?: string | null;
+  description?: string | null;
+}
+
+export interface StudioActivityPropertyEditorContext {
+  activity: unknown;
+  expressionDescriptors: StudioExpressionDescriptor[];
+  readOnly?: boolean;
+}
+
+export interface StudioActivityPropertyEditorProps {
+  descriptor: StudioActivityInputDescriptor;
+  value: unknown;
+  disabled?: boolean;
+  context: StudioActivityPropertyEditorContext;
+  onChange(value: unknown): void;
+}
+
+export interface StudioActivityPropertyEditorContribution {
+  id: string;
+  order?: number;
+  supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
+  component: ComponentType<StudioActivityPropertyEditorProps>;
+}
+
 export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";
 export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
 export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
@@ -402,7 +483,7 @@ export interface ElsaStudioModuleApi {
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;
-  readonly propertyEditors: StudioContributionRegistry<unknown>;
+  readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {

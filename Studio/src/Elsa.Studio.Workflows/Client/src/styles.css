@@ -1054,16 +1054,117 @@
   font-size: 12px;
 }
 
-.wf-slot-list {
+.wf-properties {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  margin: 0 0 18px;
 }
 
+.wf-section-label,
 .wf-slot-list > span {
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.wf-property-group {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.wf-property-group h4 {
+  margin: 0;
+  color: var(--wf-text);
+  font-size: 12px;
+}
+
+.wf-property-row {
+  display: grid;
+  gap: 7px;
+}
+
+.wf-property-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wf-property-row-header label {
+  color: var(--wf-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wf-property-row-header span {
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  color: var(--wf-muted-text);
+  font-size: 10px;
+  font-weight: 700;
+  max-width: 120px;
+  overflow: hidden;
+  padding: 2px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-property-row p {
+  margin: 0;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wf-property-row input[type="text"],
+.wf-property-row select,
+.wf-property-row textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--wf-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  padding: 8px 9px;
+}
+
+.wf-property-row textarea {
+  resize: vertical;
+}
+
+.wf-property-row input[type="text"]:focus,
+.wf-property-row select:focus,
+.wf-property-row textarea:focus {
+  border-color: var(--wf-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wf-accent) 18%, transparent);
+}
+
+.wf-property-syntax {
+  justify-self: stretch;
+}
+
+.studio-property-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--wf-text);
+  font-size: 12px;
+}
+
+.studio-property-checkbox input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--wf-accent);
+}
+
+.wf-slot-list {
+  display: grid;
+  gap: 8px;
 }
 
 .wf-ai-action,

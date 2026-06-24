@@ -162,6 +162,27 @@ export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner
   return replaceSlotActivities(root, slot, updatedActivities);
 }
 
+export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode): ActivityNode {
+  if (root.nodeId === nodeId) return update(root);
+
+  const slots = getChildSlots(root);
+  if (slots.length === 0) return root;
+
+  let changed = false;
+  let next = root;
+  for (const slot of slots) {
+    const updatedActivities = slot.activities.map(activity => {
+      const updated = updateActivity(activity, nodeId, update);
+      if (updated !== activity) changed = true;
+      return updated;
+    });
+
+    if (changed) next = replaceSlotActivities(next, slot, updatedActivities);
+  }
+
+  return changed ? next : root;
+}
+
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
   if (!activity.structure) return activity;
 

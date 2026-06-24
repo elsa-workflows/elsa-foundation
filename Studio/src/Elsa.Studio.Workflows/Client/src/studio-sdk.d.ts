@@ -37,6 +37,84 @@ declare module "@elsa-workflows/studio-sdk" {
     list(): T[];
   }
 
+  export interface StudioActivityPropertyDescriptor {
+    name: string;
+    typeName: string;
+    displayName?: string | null;
+    description?: string | null;
+    order?: number;
+    category?: string | null;
+    isBrowsable?: boolean | null;
+    isSynthetic?: boolean;
+  }
+
+  export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
+    isWrapped?: boolean;
+    uiHint?: string | null;
+    defaultValue?: unknown;
+    defaultSyntax?: string | null;
+    isReadOnly?: boolean | null;
+    storageDriverType?: string | null;
+    uiSpecifications?: Record<string, unknown> | null;
+  }
+
+  export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+  }
+
+  export interface StudioActivityPortDescriptor {
+    name: string;
+    displayName?: string | null;
+    type: string;
+    isBrowsable?: boolean | null;
+  }
+
+  export interface StudioActivityDescriptor {
+    typeName: string;
+    namespace?: string;
+    name?: string;
+    version?: number;
+    category?: string;
+    displayName?: string | null;
+    description?: string | null;
+    kind?: string;
+    inputs: StudioActivityInputDescriptor[];
+    outputs: StudioActivityOutputDescriptor[];
+    ports: StudioActivityPortDescriptor[];
+    customProperties?: Record<string, unknown>;
+    constructionProperties?: Record<string, unknown>;
+    isContainer?: boolean;
+    isBrowsable?: boolean;
+    isStart?: boolean;
+    isTerminal?: boolean;
+  }
+
+  export interface StudioExpressionDescriptor {
+    type: string;
+    displayName?: string | null;
+    description?: string | null;
+  }
+
+  export interface StudioActivityPropertyEditorContext {
+    activity: unknown;
+    expressionDescriptors: StudioExpressionDescriptor[];
+    readOnly?: boolean;
+  }
+
+  export interface StudioActivityPropertyEditorProps {
+    descriptor: StudioActivityInputDescriptor;
+    value: unknown;
+    disabled?: boolean;
+    context: StudioActivityPropertyEditorContext;
+    onChange(value: unknown): void;
+  }
+
+  export interface StudioActivityPropertyEditorContribution {
+    id: string;
+    order?: number;
+    supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
+    component: ComponentType<StudioActivityPropertyEditorProps>;
+  }
+
   export interface StudioFeatureAreaNavLeaf {
     id?: string;
     title: string;
@@ -115,5 +193,6 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
     readonly ai: StudioAiContributionApi;
+    readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendConsoleEntries,
+  createConsoleConnectionOptions,
   createConsoleExportContent,
   createConsoleExportFilename,
   createConsoleFilter,
@@ -89,6 +90,32 @@ describe("console stream module", () => {
     });
   });
 
+  it("creates entries from PascalCase server DTOs", () => {
+    const entry = createConsoleEntryFromLine({
+      Id: "line-2",
+      ReceivedAt: "2026-06-15T00:00:00.000Z",
+      Sequence: 6,
+      Stream: "Stderr",
+      Text: "server failed",
+      Source: {
+        Id: "server-source",
+        DisplayName: "Elsa.Server",
+        MachineName: "machine",
+        ProcessId: 456
+      }
+    });
+
+    expect(entry).toEqual({
+      id: "line-2",
+      timestamp: "2026-06-15T00:00:00.000Z",
+      sequence: 6,
+      stream: "stderr",
+      text: "server failed",
+      sourceId: "server-source",
+      sourceLabel: "Elsa.Server · machine:456"
+    });
+  });
+
   it("trims appended entries to the maximum console size", () => {
     const current = Array.from({ length: 1_999 }, (_, index) => entry(index));
     const appended = appendConsoleEntries(current, [entry(1_999), entry(2_000)]);
@@ -135,6 +162,13 @@ describe("console stream module", () => {
   it("omits sourceId when all sources are selected", () => {
     expect(createConsoleFilter(null)).toEqual({ limit: 2000 });
     expect(createConsoleFilter("source-1")).toEqual({ limit: 2000, sourceId: "source-1" });
+  });
+
+  it("passes endpoint headers to SignalR connection options", () => {
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", headers: { "X-Elsa-Module-Management-Key": "secret" }, http: { getJson: async () => ({}) } }).headers)
+      .toEqual({ "x-elsa-module-management-key": "secret" });
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).headers)
+      .toBeUndefined();
   });
 
   it("exports visible console entries as plain text", () => {

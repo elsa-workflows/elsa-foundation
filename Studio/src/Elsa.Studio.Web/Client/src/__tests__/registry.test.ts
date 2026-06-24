@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
-import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioFeatureAreaContribution } from "../sdk";
+import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
+import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioFeatureAreaContribution } from "../sdk";
 
 describe("studio registry", () => {
   afterEach(() => {
@@ -19,6 +20,28 @@ describe("studio registry", () => {
     api.panels.add({ id: "first", title: "First", order: 10, component: () => null });
 
     expect(api.panels.list().map(panel => panel.id)).toEqual(["second", "first"]);
+  });
+
+  it("registers descriptor-driven property editors with fallback and order-based overrides", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const customEditor: StudioActivityPropertyEditorContribution = {
+      id: "custom.singleline",
+      order: 1,
+      supports: descriptor => descriptor.uiHint === "singleline",
+      component: () => null
+    };
+    const context: StudioActivityPropertyEditorContext = { activity: {}, expressionDescriptors: [] };
+
+    registerBuiltInPropertyEditors(api);
+    api.propertyEditors.add(customEditor);
+
+    expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "checkbox", typeName: "System.Boolean" }), context)?.id).toBe("studio.property.checkbox");
+    expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "unknown", typeName: "Acme.Custom" }), context)?.id).toBe("studio.property.text-fallback");
+    expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "singleline", typeName: "System.String" }), context)?.id).toBe("custom.singleline");
   });
 
   it("preserves navigation icon colors", () => {
@@ -233,6 +256,26 @@ describe("studio registry", () => {
     } satisfies Partial<StudioHttpError>);
   });
 });
+
+function resolveEditor(
+  editors: StudioActivityPropertyEditorContribution[],
+  descriptor: StudioActivityInputDescriptor,
+  context: StudioActivityPropertyEditorContext
+) {
+  return [...editors]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
+    .find(editor => editor.supports(descriptor, context));
+}
+
+function input(overrides: Partial<StudioActivityInputDescriptor>): StudioActivityInputDescriptor {
+  return {
+    name: "Text",
+    displayName: "Text",
+    typeName: "System.String",
+    inputs: [],
+    ...overrides
+  } as StudioActivityInputDescriptor;
+}
 
 function featureArea(id: string, ownedPaths: string[]): StudioFeatureAreaContribution {
   return {
