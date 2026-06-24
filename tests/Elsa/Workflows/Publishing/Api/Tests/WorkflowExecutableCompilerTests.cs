@@ -78,6 +78,38 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(3, executable.Nodes.Count);
     }
 
+    [Fact]
+    public async Task CompilesDraftSnapshotWithoutReadingDurableWorkflowVersion()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = new WorkflowExecutableCompiler(
+            new ThrowingVersionStore(),
+            new FakeActivityVersionStore([_writeLineActivity]),
+            _activityStructureService);
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "draft:snapshot-1",
+            Scope: WorkflowExecutableScope.TransientTestRun,
+            CreatedAt: now,
+            PublishedAt: null,
+            ExpiresAt: now.AddMinutes(30),
+            ArtifactIdPrefix: "test-artifact-")
+        {
+            Source = new WorkflowExecutableCompileSource(
+                DefinitionId: "definition-1",
+                DefinitionVersionId: "draft:snapshot-1",
+                ArtifactVersion: "draft",
+                State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
+                SourceReference: new WorkflowExecutableSourceReference("WorkflowDraftSnapshot", "snapshot-1", "draft"))
+        });
+
+        Assert.StartsWith("test-artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
+        Assert.Equal("definition-1", executable.Identity.DefinitionId);
+        Assert.Equal("draft:snapshot-1", executable.Identity.DefinitionVersionId);
+        Assert.Equal("WorkflowDraftSnapshot", executable.Identity.Source?.SourceKind);
+        Assert.Equal("snapshot-1", executable.Identity.Source?.SourceId);
+    }
+
     private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion) =>
         new(
             new FakeVersionStore(workflowVersion),
@@ -144,6 +176,18 @@ public sealed class WorkflowExecutableCompilerTests
             version.Id == versionId
                 ? Task.FromResult(version)
                 : throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
+
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingVersionStore : IWorkflowDefinitionVersionStore
+    {
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Draft snapshot compilation must not read durable workflow definition versions.");
 
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

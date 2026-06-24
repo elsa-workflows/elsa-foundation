@@ -14,6 +14,7 @@ public sealed class BridgeDependencyDirectionTests
     [Theory]
     [InlineData("Elsa.Activities.Runtime")]      // the Runtime IMPLEMENTATION (contracts live in .Runtime.Core)
     [InlineData("Elsa.Activities.Design.Api")]    // a peer Design feature
+    [InlineData("Elsa.Workflows.Design.Api")]     // Studio-facing DTOs must not become the bridge contract
     [InlineData("Elsa.Activities.Primitives")]    // a Runtime kind feature
     public void BridgeDoesNotReference(string forbiddenAssembly)
     {

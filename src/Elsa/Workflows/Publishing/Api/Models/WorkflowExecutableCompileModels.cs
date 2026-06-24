@@ -1,3 +1,4 @@
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Models;
@@ -9,4 +10,14 @@ public sealed record WorkflowExecutableCompileRequest(
     DateTimeOffset? PublishedAt,
     DateTimeOffset? ExpiresAt,
     string ArtifactIdPrefix,
-    IReadOnlyDictionary<string, string>? CompatibilityMetadata = null);
+    IReadOnlyDictionary<string, string>? CompatibilityMetadata = null)
+{
+    public WorkflowExecutableCompileSource? Source { get; init; }
+}
+
+public sealed record WorkflowExecutableCompileSource(
+    string DefinitionId,
+    string DefinitionVersionId,
+    string ArtifactVersion,
+    WorkflowDefinitionState State,
+    WorkflowExecutableSourceReference SourceReference);

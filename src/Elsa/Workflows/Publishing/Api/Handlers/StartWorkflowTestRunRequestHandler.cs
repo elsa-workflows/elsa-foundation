@@ -13,11 +13,14 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowTestRunStore testRunStore,
     IWorkflowExecutionStartDispatcher startDispatcher,
     TimeProvider timeProvider)
-    : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>
+    : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
+      IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
 {
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     private const string TestArtifactPrefix = "test-artifact-";
+    private const string DraftSnapshotSourceKind = "WorkflowDraftSnapshot";
+    private const string DraftArtifactVersion = "draft";
 
     public StartWorkflowTestRunRequestHandler(
         IWorkflowExecutableCompiler compiler,
@@ -34,30 +37,76 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var expiresAt = now.Add(DefaultRetention);
         var testRunId = $"testrun-{Guid.NewGuid():N}";
 
+        return await StartAsync(
+            new WorkflowExecutableCompileRequest(
+                request.VersionId,
+                WorkflowExecutableScope.TransientTestRun,
+                now,
+                PublishedAt: null,
+                expiresAt,
+                TestArtifactPrefix,
+                TestRunCompatibilityMetadata(testRunId)),
+            testRunId,
+            fallbackDefinitionId: request.VersionId,
+            fallbackDefinitionVersionId: request.VersionId,
+            now,
+            expiresAt,
+            cancellationToken);
+    }
+
+    public async Task<WorkflowTestRunView> Handle(StartWorkflowDraftTestRun request, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = now.Add(DefaultRetention);
+        var testRunId = $"testrun-{Guid.NewGuid():N}";
+        var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
+        var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
+
+        return await StartAsync(
+            new WorkflowExecutableCompileRequest(
+                sourceDefinitionVersionId,
+                WorkflowExecutableScope.TransientTestRun,
+                now,
+                PublishedAt: null,
+                expiresAt,
+                TestArtifactPrefix,
+                TestRunCompatibilityMetadata(testRunId))
+            {
+                Source = new WorkflowExecutableCompileSource(
+                    DefinitionId: request.DefinitionId,
+                    DefinitionVersionId: sourceDefinitionVersionId,
+                    ArtifactVersion: artifactVersion,
+                    State: request.State,
+                    SourceReference: new WorkflowExecutableSourceReference(DraftSnapshotSourceKind, request.SnapshotId, artifactVersion))
+            },
+            testRunId,
+            fallbackDefinitionId: request.DefinitionId,
+            fallbackDefinitionVersionId: sourceDefinitionVersionId,
+            now,
+            expiresAt,
+            cancellationToken);
+    }
+
+    private async Task<WorkflowTestRunView> StartAsync(
+        WorkflowExecutableCompileRequest compileRequest,
+        string testRunId,
+        string fallbackDefinitionId,
+        string fallbackDefinitionVersionId,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
         WorkflowExecutable executable;
         try
         {
-            executable = await compiler.CompileAsync(
-                new WorkflowExecutableCompileRequest(
-                    request.VersionId,
-                    WorkflowExecutableScope.TransientTestRun,
-                    now,
-                    PublishedAt: null,
-                    expiresAt,
-                    TestArtifactPrefix,
-                    new Dictionary<string, string>
-                    {
-                        ["runtime.scope"] = "test-run",
-                        ["runtime.testRunId"] = testRunId
-                    }),
-                cancellationToken);
+            executable = await compiler.CompileAsync(compileRequest, cancellationToken);
         }
         catch (WorkflowExecutableCompilationException exception)
         {
             var rejected = new WorkflowTestRun(
                 TestRunId: testRunId,
-                DefinitionId: exception.DefinitionId ?? request.VersionId,
-                DefinitionVersionId: exception.DefinitionVersionId ?? request.VersionId,
+                DefinitionId: exception.DefinitionId ?? fallbackDefinitionId,
+                DefinitionVersionId: exception.DefinitionVersionId ?? fallbackDefinitionVersionId,
                 ArtifactId: null,
                 WorkflowExecutionId: null,
                 Status: WorkflowTestRunStatus.Rejected,
@@ -74,8 +123,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         {
             var rejected = new WorkflowTestRun(
                 TestRunId: testRunId,
-                DefinitionId: request.VersionId,
-                DefinitionVersionId: request.VersionId,
+                DefinitionId: fallbackDefinitionId,
+                DefinitionVersionId: fallbackDefinitionVersionId,
                 ArtifactId: null,
                 WorkflowExecutionId: null,
                 Status: WorkflowTestRunStatus.Rejected,
@@ -134,5 +183,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
             WorkflowExecutionCommandDispatchStatus.Rejected => WorkflowTestRunStatus.DispatchRejected,
             WorkflowExecutionCommandDispatchStatus.Deferred => WorkflowTestRunStatus.DispatchDeferred,
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown workflow execution command dispatch status.")
+        };
+
+    private static IReadOnlyDictionary<string, string> TestRunCompatibilityMetadata(string testRunId) =>
+        new Dictionary<string, string>
+        {
+            ["runtime.scope"] = "test-run",
+            ["runtime.testRunId"] = testRunId
         };
 }
