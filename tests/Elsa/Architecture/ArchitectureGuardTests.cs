@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Xunit;
 
@@ -125,6 +126,18 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_flowchart_runtime_feature(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName));
+
+        Assert.True(
+            features.ContainsKey("ActivitiesFlowchart"),
+            $"{fileName} must enable ActivitiesFlowchart so Flowchart root activities can resolve runtime services.");
+    }
+
     [Fact]
     public void Workflows_runtime_core_does_not_use_authored_workflow_models()
     {
@@ -246,6 +259,15 @@ public sealed class ArchitectureGuardTests
         return document.Descendants("PackageReference")
             .Select(x => x.Attribute("Include")?.Value)
             .OfType<string>();
+    }
+
+    private static JsonObject ReadDefaultShellFeatures(string path)
+    {
+        var document = JsonNode.Parse(File.ReadAllText(path))?.AsObject()
+            ?? throw new InvalidOperationException($"{Path.GetFileName(path)} is not a JSON object.");
+
+        return document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject
+            ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
     }
 
     private static string StripCommentsAndStringLiterals(string text)

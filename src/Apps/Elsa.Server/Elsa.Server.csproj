@@ -22,6 +22,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Compile Remove="extension-builder\**\*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Content Update="shells.baseline.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>

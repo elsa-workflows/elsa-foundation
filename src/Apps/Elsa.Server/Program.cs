@@ -101,6 +101,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 builder.Services.AddNuplaneFeatureCatalog();
+builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
 builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
 

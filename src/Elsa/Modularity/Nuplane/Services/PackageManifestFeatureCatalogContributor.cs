@@ -44,8 +44,8 @@ public sealed class PackageManifestFeatureCatalogContributor(INuplaneAdminOperat
                 builder.DisplayName = string.IsNullOrWhiteSpace(feature.DisplayName) ? featureName : feature.DisplayName;
                 builder.Description = feature.Description ?? builder.Description;
                 builder.Categories = MergeCategories(feature.Category, feature.Categories);
-                builder.PackageId = manifest.Manifest.Package?.Id ?? package.PackageId;
-                builder.PackageVersion = manifest.Manifest.Package?.Version ?? package.Version;
+                builder.PackageId = package.PackageId;
+                builder.PackageVersion = package.Version;
                 builder.Advanced = feature.Advanced;
                 builder.Experimental = feature.Experimental;
                 builder.Settings = MapSettings(feature.Settings);

@@ -18,6 +18,7 @@
           "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignApi": {},
           "ActivitiesRuntime": {},
+          "ActivitiesFlowchart": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
           "ActivitiesCompositionRuntime": {},
