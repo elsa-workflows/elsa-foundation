@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a full workflow-instance inspection surface that keeps the existing instance list for triage, adds deep-linkable instance detail routes in Studio, and renders the executed workflow on a read-only designer canvas using the saved layout for the exact workflow definition version that produced the instance. The backend work completes the version-detail read contract by exposing version layout alongside authored state; runtime instance details remain runtime-owned and are joined with design-version data at the Studio/application layer.
+Add a full workflow-instance inspection surface that keeps the existing instance list for triage, adds deep-linkable instance detail routes in Studio, and renders the executed workflow on a read-only designer canvas using the saved layout for the exact workflow definition version that produced the instance. Runtime evidence is supplied by runtime-owned instance and activity execution inspection contracts, with detailed per-execution evidence provided by the prerequisite [Activity Execution Inspection](../079-activity-execution-inspection/spec.md) work unit. The backend work completes the version-detail read contract by exposing version layout alongside authored state; runtime instance details remain runtime-owned and are joined with design-version data at the Studio/application layer.
 
 ## Technical Context
 
@@ -14,7 +14,7 @@ Add a full workflow-instance inspection surface that keeps the existing instance
 
 **Primary Dependencies**: FastEndpoints via existing Elsa API base classes, Elsa mediator handlers, Workflows Design persistence stores, Workflows Runtime API views, Studio SDK HTTP client, React Flow (`@xyflow/react`)
 
-**Storage**: Existing workflow definition version and version-layout stores; existing runtime workflow/activity/incident stores. No new persistence store or migration is required.
+**Storage**: Existing workflow definition version and version-layout stores; existing runtime workflow/activity/incident stores. Detailed per-activity execution evidence depends on the runtime inspection projection store introduced by spec 079.
 
 **Testing**: xUnit for backend contract/handler/endpoint behavior; Vitest + jsdom for Studio module rendering and navigation behavior
 
@@ -24,7 +24,7 @@ Add a full workflow-instance inspection surface that keeps the existing instance
 
 **Performance Goals**: Instance detail route should load the instance summary, activity history, incidents, activity catalog, and definition version snapshot within interactive Studio expectations for typical local-development instances. Missing layout must not block the runtime evidence view.
 
-**Constraints**: Runtime packages must not reference Workflows.Design. Runtime instance details must remain runtime-state views; authored state/layout are read from Workflows.Design APIs and joined in Studio. Instance canvas is read-only and must not mutate definition drafts or versions.
+**Constraints**: Runtime packages must not reference Workflows.Design. Runtime instance details must remain runtime-owned views; authored state/layout are read from Workflows.Design APIs and joined in Studio. Detailed activity execution evidence is loaded lazily from runtime inspection projections. Instance canvas is read-only and must not mutate definition drafts or versions.
 
 **Scale/Scope**: Single selected workflow instance at a time; first implementation covers Flowchart and Sequence roots supported by the existing designer adapter. Advanced replay/path animation and edge-level execution semantics are deferred.
 
@@ -32,7 +32,7 @@ Add a full workflow-instance inspection surface that keeps the existing instance
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **Workflows.Design/Runtime split (§E2.2)**: PASS. Runtime API remains design-free; definition state/layout is served by Workflows.Design and consumed by Studio for visualization.
+- **Workflows.Design/Runtime split (§E2.2)**: PASS. Runtime API remains design-free; runtime activity execution inspection is served by Workflows.Runtime and definition state/layout is served by Workflows.Design, with Studio joining them for visualization.
 - **Artifact-only runtime (§E2.6.2)**: PASS. Runtime execution continues to depend only on runnable artifacts and runtime features; visualization traverses the executed instance → artifact/version identity → source design entities at the application layer, which the constitution explicitly permits.
 - **Triplet separation (§E2.9)**: PASS. `WorkflowDefinitionState`, version read projections, runtime instance views, and `WorkflowExecutable` remain separate contracts.
 - **Feature/API registration tests (§2.23.1)**: PASS with work required. Extending Workflows Design API registration/endpoint surface requires focused tests proving layout is available through the handler/endpoint path.
@@ -80,7 +80,7 @@ elsa-foundation-studio/
     └── __tests__/workflowAdapter.test.ts
 ```
 
-**Structure Decision**: Keep backend state/layout reads in `Elsa.Workflows.Design.Api`, keep runtime instance details in `Elsa.Workflows.Runtime.Api`, and join them in the Studio workflow module. This preserves the Design/Runtime boundary and avoids adding a runtime dependency on design persistence.
+**Structure Decision**: Keep backend state/layout reads in `Elsa.Workflows.Design.Api`, keep runtime instance and activity execution details in `Elsa.Workflows.Runtime.Api`, and join them in the Studio workflow module. This preserves the Design/Runtime boundary and avoids adding a runtime dependency on design persistence.
 
 ## Complexity Tracking
 

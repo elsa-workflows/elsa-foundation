@@ -45,6 +45,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 7. Remove generic `ActivityComposition` / `ExecutableActivityComposition` assumptions. Composite child structure belongs to activity-specific contracts such as `Sequence.Activities`, `If.Then` / `If.Else`, `ForEach.Body`, `Composite.Root`, and `Flowchart` activities/connections/start/join state.
 8. Keep `ActivityChildSlot` and `ExecutableChildSlot` as traversal projections only. Activity-owned relationship semantics belong to node/executable structure owned by the activity module, not slot metadata.
 9. Plan and implement [Flowchart scoped execution](../../specs/073-flowchart-scoped-execution/spec.md) as the clean-slate activity-owned execution model for advanced Flowchart joins, loops, races, and public gateway policies.
+10. Plan and implement [Activity execution inspection](../../specs/079-activity-execution-inspection/spec.md) as the checkpoint-gated runtime evidence model that supports repeated activity executions and workflow instance inspection.
 
 ## Linked Surfaces
 
@@ -54,6 +55,8 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - [Test maturity and weak implementation report](../reports/test-maturity-and-weak-implementation-report.md)
 - [Activity construction seam spec](../../specs/006-activity-construction-seam/spec.md)
 - [Flowchart scoped execution spec](../../specs/073-flowchart-scoped-execution/spec.md)
+- [Activity execution inspection spec](../../specs/079-activity-execution-inspection/spec.md)
+- [Checkpoint-gated activity execution inspection ADR](../adr/0001-checkpoint-gated-activity-execution-inspection.md)
 - [Elsa constitution](../../.specify/memory/constitution.md)
 - [Framework constitution](../../.specify/memory/constitution-framework.md)
 - [Skills catalog](../skills/catalog.md)

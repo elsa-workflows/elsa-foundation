@@ -21,7 +21,7 @@ A workflow author or operator opens a workflow instance and sees the executed wo
 **Acceptance Scenarios**:
 
 1. **Given** a workflow instance created from a Flowchart definition with saved designer layout, **When** the user opens the instance inspection view, **Then** the canvas displays the workflow graph using the saved layout.
-2. **Given** a workflow instance with activity execution history, **When** the canvas renders, **Then** each activity node with runtime history shows its latest runtime status.
+2. **Given** a workflow instance with activity execution history, **When** the canvas renders, **Then** each activity node with runtime history shows an aggregate execution badge with count and status summary.
 3. **Given** a workflow instance with an incident linked to an activity, **When** the canvas renders, **Then** the affected activity is visually marked and the incident is visible in the inspection details.
 
 ---
@@ -76,19 +76,21 @@ A user investigating a workflow execution can select a graph node, timeline item
 - **FR-004**: The inspection view MUST show the workflow graph for the definition version that produced the selected instance.
 - **FR-005**: The workflow graph MUST use the designer layout metadata saved for the relevant definition version when that metadata exists.
 - **FR-006**: The workflow graph MUST be read-only in the instance inspection context.
-- **FR-007**: The workflow graph MUST mark activity nodes that have runtime activity history.
+- **FR-007**: The workflow graph MUST mark activity nodes that have runtime activity execution history, including an execution count when an authored activity executed more than once.
 - **FR-008**: The workflow graph MUST mark activity nodes that have linked incidents.
-- **FR-009**: The inspection view MUST show ordered activity execution history with enough identity and timing information to correlate records with graph nodes.
+- **FR-009**: The inspection view MUST show ordered activity execution summaries with enough identity, timing, checkpoint, and provenance information to correlate records with graph nodes.
 - **FR-010**: The inspection view MUST show incidents with severity, status, message, and linked activity context when available.
 - **FR-011**: Users MUST be able to correlate graph nodes, activity history, and incidents by selecting any one of those evidence surfaces.
 - **FR-012**: The system MUST handle missing definition version data, missing layout metadata, and unmatched runtime activity records with clear non-blocking fallback states.
 - **FR-013**: The existing instance list MUST remain available for scanning and filtering workflow instances.
+- **FR-014**: The inspection view MUST consume committed activity execution inspection evidence from [Activity Execution Inspection](../079-activity-execution-inspection/spec.md) and MUST lazy-load detailed value snapshots only when a concrete activity execution is selected.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Workflow Instance**: A runtime execution of a workflow, including status, timestamps, correlation, artifact identity, and definition version identity.
 - **Workflow Definition Version Snapshot**: The authored workflow state and designer layout for the exact definition version that produced an instance.
-- **Activity Execution Record**: Runtime history for an activity execution, including authored activity identity, executable node identity, status, timing, hierarchy, and incidents.
+- **Activity Execution Summary**: Runtime summary for one concrete activity execution, including authored activity identity, executable node identity, status, timing, checkpoint identity, scheduling provenance, and incident/bookmark counts.
+- **Activity Execution Inspection Projection**: Runtime-owned detailed evidence for one concrete activity execution, supplied by [Activity Execution Inspection](../079-activity-execution-inspection/spec.md).
 - **Incident**: A runtime failure or blocking condition associated with a workflow instance and optionally with an activity execution or executable node.
 - **Instance Inspection View**: The user-facing composition of summary, graph, activity history, and incident evidence for one workflow instance.
 
@@ -98,9 +100,10 @@ A user investigating a workflow execution can select a graph node, timeline item
 
 - **SC-001**: A user can open an existing workflow instance from the instance list and reach a wider inspection view in no more than one selection.
 - **SC-002**: A Flowchart instance created from a definition with saved layout renders with all authored child activities positioned from that saved layout.
-- **SC-003**: For an instance with one or more incidents linked to activity execution records, the inspection view identifies the affected activity on both the graph and the incident list.
+- **SC-003**: For an instance with one or more incidents linked to activity execution summaries, the inspection view identifies the affected activity on both the graph and the incident list.
 - **SC-004**: A direct link to an existing workflow instance inspection view loads the selected instance without requiring previous navigation state.
 - **SC-005**: Missing layout or unmatched runtime records do not prevent the rest of the instance inspection view from loading.
+- **SC-006**: A graph node representing an authored activity that executed multiple times shows the execution count and allows the user to select each concrete execution.
 
 ## Assumptions
 
@@ -109,3 +112,4 @@ A user investigating a workflow execution can select a graph node, timeline item
 - The workflow graph should reflect the definition version that produced the runtime artifact, not the current mutable draft.
 - Flowchart and Sequence roots should be inspectable using the existing designer representation where supported.
 - Advanced path animation, replay controls, and edge-level execution semantics are deferred unless already available from current runtime records.
+- Detailed per-activity execution evidence is provided by the prerequisite [Activity Execution Inspection](../079-activity-execution-inspection/spec.md) work unit.
