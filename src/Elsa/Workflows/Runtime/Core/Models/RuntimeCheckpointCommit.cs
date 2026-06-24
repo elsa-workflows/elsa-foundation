@@ -25,9 +25,12 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational)
+        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null)
     {
+        activityExecutionInspections ??= [];
         ValidateBookmarks(bookmarks, nameof(bookmarks));
+        ValidateActivityExecutionInspections(activityExecutionInspections, nameof(activityExecutionInspections));
         ValidateDurableValues(durableValues, nameof(durableValues));
         ValidateIncidents(incidents, nameof(incidents));
         ValidateOperational(operational, nameof(operational));
@@ -35,6 +38,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         WorkflowExecution = workflowExecution;
         Scheduler = scheduler;
         ActivityExecutions = activityExecutions;
+        ActivityExecutionInspections = activityExecutionInspections;
         Bookmarks = bookmarks;
         DurableValues = durableValues;
         Incidents = incidents;
@@ -44,6 +48,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
     public RuntimeStateChange<SchedulerState>? Scheduler { get; }
     public IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions { get; }
+    public IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> ActivityExecutionInspections { get; }
     public IReadOnlyCollection<RuntimeStateChange<BookmarkState>> Bookmarks { get; }
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
@@ -55,6 +60,14 @@ public sealed class RuntimeCheckpointStateChangeSet
     {
         if (bookmarks.Any(change => change.StateId != change.State.BookmarkId))
             throw new ArgumentException("Bookmark state change StateId must match BookmarkState.BookmarkId.", parameterName);
+    }
+
+    private static void ValidateActivityExecutionInspections(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> activityExecutionInspections,
+        string parameterName)
+    {
+        if (activityExecutionInspections.Any(change => change.StateId != change.State.ActivityExecutionId))
+            throw new ArgumentException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", parameterName);
     }
 
     private static void ValidateIncidents(
@@ -155,6 +168,7 @@ public enum RuntimeStateCategory
     WorkflowExecution,
     Scheduler,
     ActivityExecution,
+    ActivityExecutionInspection,
     Bookmark,
     DurableValue,
     Incident,

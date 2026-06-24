@@ -14,13 +14,23 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCreateBookmarkSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
+    {
+    }
+
+    public WorkflowCreateBookmarkSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter)
-        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, TimeProvider.System)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, TimeProvider.System)
     {
     }
 
@@ -28,6 +38,16 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, timeProvider)
+    {
+    }
+
+    public WorkflowCreateBookmarkSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
@@ -38,6 +58,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         _workflowExecutableStore = workflowExecutableStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
+        _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
     }
 
@@ -86,22 +107,25 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         var bookmark = NewBookmark(workItem, payload);
         var suspendedState = SuspendActivity(workItem, payload, state);
-        var commit = NewCommit(workItem, payload, suspendedState, bookmark);
+        var commit = await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    private RuntimeCheckpointCommit NewCommit(
+    private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCreateBookmarkCommandPayload payload,
         ActivityExecutionState suspendedState,
-        BookmarkState bookmark)
+        BookmarkState bookmark,
+        CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}";
         var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
             ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
             ["runtime.commandId"] = workItem.CommandId,
             ["runtime.checkpointReason"] = payload.Reason,
+            ["runtime.checkpointRequirement"] = "Mandatory",
             ["runtime.bookmarkId"] = payload.BookmarkId,
             ["runtime.activityExecutionId"] = payload.ActivityExecutionId,
             ["runtime.executableNodeId"] = payload.ExecutableNodeId,
@@ -112,11 +136,20 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             ["runtime.executableArtifactVersion"] = payload.PinnedExecutable.ArtifactVersion,
             ["runtime.executableArtifactHash"] = payload.PinnedExecutable.ArtifactHash
         });
+        var inspection = _inspectionAccumulator is null
+            ? null
+            : await _inspectionAccumulator.BuildProjectionAsync(
+                suspendedState,
+                checkpointId,
+                occurredAt,
+                bookmarks: [ActivityExecutionBookmarkSummary.From(bookmark)],
+                metadata: metadata,
+                cancellationToken: cancellationToken);
 
         return new RuntimeCheckpointCommit(
             CommitId: $"commit:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}",
+                CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.BookmarkCreated,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
@@ -143,7 +176,17 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ],
                 durableValues: [],
                 incidents: [],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: payload.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: [],
             Metadata: metadata);
     }

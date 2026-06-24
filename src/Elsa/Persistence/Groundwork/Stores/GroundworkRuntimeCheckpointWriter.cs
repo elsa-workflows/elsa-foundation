@@ -35,6 +35,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly ISchedulerStateStore _schedulerStateStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
+    private readonly IActivityExecutionInspectionStore _activityExecutionInspectionStore;
     private readonly IBookmarkStateStore _bookmarkStateStore;
     private readonly IDurableValueStateStore _durableValueStateStore;
     private readonly IIncidentStateStore _incidentStateStore;
@@ -49,11 +50,35 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
         IOperationalStateStore operationalStateStore)
+        : this(
+            commitLedger,
+            workflowExecutionStateStore,
+            schedulerStateStore,
+            activityExecutionStateStore,
+            new GroundworkActivityExecutionInspectionStore(commitLedger),
+            bookmarkStateStore,
+            durableValueStateStore,
+            incidentStateStore,
+            operationalStateStore)
+    {
+    }
+
+    public GroundworkRuntimeCheckpointWriter(
+        IDocumentStore commitLedger,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        ISchedulerStateStore schedulerStateStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IActivityExecutionInspectionStore activityExecutionInspectionStore,
+        IBookmarkStateStore bookmarkStateStore,
+        IDurableValueStateStore durableValueStateStore,
+        IIncidentStateStore incidentStateStore,
+        IOperationalStateStore operationalStateStore)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(activityExecutionInspectionStore);
         ArgumentNullException.ThrowIfNull(bookmarkStateStore);
         ArgumentNullException.ThrowIfNull(durableValueStateStore);
         ArgumentNullException.ThrowIfNull(incidentStateStore);
@@ -62,6 +87,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _schedulerStateStore = schedulerStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
+        _activityExecutionInspectionStore = activityExecutionInspectionStore;
         _bookmarkStateStore = bookmarkStateStore;
         _durableValueStateStore = durableValueStateStore;
         _incidentStateStore = incidentStateStore;
@@ -84,6 +110,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateSchedulerStateChange(commit);
             ValidateActivityExecutionStateChanges(commit);
+            ValidateActivityExecutionInspectionChanges(commit);
             ValidateBookmarkStateChanges(commit);
             ValidateDurableValueStateChanges(commit);
             ValidateIncidentStateChanges(commit);
@@ -92,6 +119,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
+            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
@@ -151,6 +179,14 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     {
         foreach (var stateChange in stateChanges)
             await _activityExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private async ValueTask ApplyActivityExecutionInspectionChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        foreach (var stateChange in stateChanges)
+            await _activityExecutionInspectionStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
     private async ValueTask ApplyBookmarkStateChangesAsync(
@@ -245,6 +281,19 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
                 throw new InvalidOperationException("Activity execution state change StateId must match ActivityExecution.ActivityExecutionId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        }
+    }
+
+    private static void ValidateActivityExecutionInspectionChanges(RuntimeCheckpointCommit commit)
+    {
+        foreach (var stateChange in commit.StateChanges.ActivityExecutionInspections)
+        {
+            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+                throw new InvalidOperationException($"The Groundwork checkpoint writer can only project activity execution inspection '{RuntimeStateChangeOperation.Upsert}' changes.");
+            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.ActivityExecutionId))
+                throw new InvalidOperationException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.");
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
+                throw new InvalidOperationException("Activity execution inspection WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
     }
 

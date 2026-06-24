@@ -33,6 +33,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IActivityExecutionStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryActivityExecutionStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IActivityExecutionInspectionStore) &&
+            descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator) &&
+            descriptor.ImplementationType == typeof(RuntimeActivityExecutionInspectionAccumulator));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IBookmarkStateStore) &&
             descriptor.ImplementationType == typeof(InMemoryBookmarkStateStore));
         Assert.Contains(services, descriptor =>
@@ -174,6 +180,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
+        Assert.IsType<InMemoryActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
+        Assert.IsType<RuntimeActivityExecutionInspectionAccumulator>(provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>());
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<BookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
         Assert.IsType<BookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
@@ -199,6 +207,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
         Assert.IsType<RuntimeSchedulerPostCommitIntentDispatcher>(provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>());
         Assert.IsType<RuntimeCheckpointCommitter>(provider.GetRequiredService<RuntimeCheckpointCommitter>());
+        Assert.IsType<DefaultRuntimePayloadCapturePolicy>(provider.GetRequiredService<IRuntimePayloadCapturePolicy>());
         Assert.IsType<RuntimeInputBindingResolver>(provider.GetRequiredService<IRuntimeInputBindingResolver>());
         Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
         Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());

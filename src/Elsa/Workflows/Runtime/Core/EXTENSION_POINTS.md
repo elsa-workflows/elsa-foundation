@@ -156,6 +156,19 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** stores `ActivityExecutionState` keyed by `WorkflowExecutionId` and durable `ActivityExecutionId`. `SaveAsync` is an upsert for future lifecycle transitions. The default scheduler uses it to record `Scheduled` state when `ScheduleActivity` work is drained, but it does not overwrite an existing activity execution state when replaying the same schedule work. It does not invoke activities, store authored workflow documents, or project diagnostics/history.
 - **Default implementation:** `InMemoryActivityExecutionStateStore` *(single-node in-memory default for the current runtime slice)*.
 
+### `IActivityExecutionInspectionStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns committed inspection projections for concrete activity executions in a runtime composition).
+- **Signature:** `SaveAsync(ActivityExecutionInspectionProjection projection, ...)`, `FindAsync(string workflowExecutionId, string activityExecutionId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListByAuthoredActivityIdAsync(string workflowExecutionId, string authoredActivityId, ...)`.
+- **Usage:** stores runtime-owned inspection evidence keyed by concrete activity execution identity. Projections are written from accepted checkpoint commits through the activity-execution-inspection lane, so inspection evidence does not get ahead of lifecycle state. Consumers use this store for lightweight per-instance activity execution summaries and selected execution detail without loading authored workflow documents.
+- **Default implementation:** `InMemoryActivityExecutionInspectionStore` *(single-node in-memory default for the current runtime slice)*.
+- **Known provider implementations:** `Elsa.Persistence.Groundwork` — `GroundworkActivityExecutionInspectionStore` *(cross-domain persistence provider replacement)*.
+
+### `IRuntimeActivityExecutionInspectionAccumulator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one accumulator assembles checkpoint-scoped activity execution inspection projections for a runtime composition).
+- **Signature:** `BuildProjectionAsync(ActivityExecutionState state, string checkpointId, DateTimeOffset committedAt, ...)`.
+- **Usage:** merges lifecycle state with committed outcome, bookmark, incident, value-snapshot, provenance, checkpoint, and metadata evidence before the checkpoint writer persists the inspection projection. Provider implementations can replace this when a runtime composition needs different projection merge/enrichment behavior while preserving the checkpoint lane contract.
+- **Default implementation:** `RuntimeActivityExecutionInspectionAccumulator` *(intra-domain default)*.
+
 ### `IBookmarkStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for durable bookmark resume handles in a runtime composition).
 - **Signature:** `SaveAsync(BookmarkState state, ...)`, `DeleteAsync(string workflowExecutionId, string bookmarkId, ...)`, `FindAsync(string workflowExecutionId, string bookmarkId, ...)`, `ListAsync(string workflowExecutionId, ...)`.

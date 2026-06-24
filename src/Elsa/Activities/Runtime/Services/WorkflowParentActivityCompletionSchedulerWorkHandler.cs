@@ -252,7 +252,19 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 childActivityExecutionId,
                 RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
                 request.SchedulingActivityExecutionId ?? parentCompletionPayload.ActivityExecutionId,
-                parentCompletionPayload.ActivityExecutionId);
+                parentCompletionPayload.ActivityExecutionId,
+                request.SchedulingProvenance == ActivitySchedulingProvenance.Empty
+                    ? ActivitySchedulingProvenance.From(
+                        parentCompletionWorkItem.WorkflowExecutionId,
+                        parentCompletionPayload.ActivityExecutionId,
+                        request.SchedulingActivityExecutionId ?? parentCompletionPayload.ActivityExecutionId,
+                        branchId: null,
+                        iterationId: null,
+                        executionPathId: null,
+                        executionScopeId: null,
+                        schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
+                        metadata: request.Metadata)
+                    : request.SchedulingProvenance);
 
             var commandMetadata = parentCompletionWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
             foreach (var item in request.Metadata)

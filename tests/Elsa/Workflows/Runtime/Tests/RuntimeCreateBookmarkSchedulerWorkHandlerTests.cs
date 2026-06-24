@@ -13,14 +13,13 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 18, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryBookmarkStateStore _bookmarkStateStore = new();
     private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
 
     public RuntimeCreateBookmarkSchedulerWorkHandlerTests()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
-            activityExecutionStateStore: _activityStateStore,
-            bookmarkStateStore: _bookmarkStateStore);
+        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, _activityStateStore, _bookmarkStateStore, null, null, null, null, _inspectionStore);
     }
 
     [Fact]
@@ -67,6 +66,20 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         var bookmarkChange = Assert.Single(write.Commit.StateChanges.Bookmarks);
         Assert.Equal(RuntimeStateChangeOperation.Upsert, bookmarkChange.Operation);
         Assert.Equal("bookmark-1", bookmarkChange.State.BookmarkId);
+
+        var inspectionChange = Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, inspectionChange.Operation);
+        Assert.Equal(ActivityExecutionStatus.Suspended, inspectionChange.State.Status);
+        var bookmarkSummary = Assert.Single(inspectionChange.State.Bookmarks);
+        Assert.Equal("bookmark-1", bookmarkSummary.BookmarkId);
+        Assert.Equal("resume-target:delivery", bookmarkSummary.ResumeTargetId);
+        Assert.Equal("delivery-status", bookmarkSummary.StimulusType);
+        Assert.Equal("sha256:delivery-status:order-123", bookmarkSummary.StimulusHash);
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Suspended, projection.Status);
+        Assert.Single(projection.Bookmarks);
     }
 
     [Fact]
@@ -169,6 +182,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 _checkpointWriter,
                 new NoopRuntimePostCommitIntentDispatcher()),
+            new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now));
 
     private RuntimeSchedulerWorkItem NewCreateBookmarkWorkItem(

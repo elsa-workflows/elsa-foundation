@@ -1,12 +1,27 @@
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
+public sealed class ActivityFaultIncidentRecorder
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly TimeProvider _timeProvider;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+
+    public ActivityFaultIncidentRecorder(TimeProvider timeProvider)
+        : this(timeProvider, null)
+    {
+    }
+
+    public ActivityFaultIncidentRecorder(
+        TimeProvider timeProvider,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
+    {
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _inspectionAccumulator = inspectionAccumulator;
+    }
 
     public async ValueTask CommitAsync(ActivityFaultIncidentRecordRequest request, CancellationToken cancellationToken = default)
     {
@@ -18,10 +33,20 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
         var metadata = NewCommitMetadata(request, incidentId);
         var faultedState = NewFaultedActivityState(request, incidentId, occurredAt);
         var incident = NewIncident(request, incidentId, occurredAt);
+        var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
+        var inspection = _inspectionAccumulator is null
+            ? null
+            : await _inspectionAccumulator.BuildProjectionAsync(
+                faultedState,
+                checkpointId,
+                occurredAt,
+                incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                metadata: metadata,
+                cancellationToken: cancellationToken);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}",
+                CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.IncidentRecorded,
                 WorkflowExecutionId: request.WorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
@@ -48,7 +73,17 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
                         State: incident,
                         Metadata: metadata)
                 ],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: request.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: [],
             Metadata: metadata);
 
@@ -65,6 +100,7 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
             metadata[item.Key] = item.Value;
 
         metadata["runtime.incidentId"] = incidentId;
+        metadata["runtime.checkpointRequirement"] = "Mandatory";
 
         return metadata;
     }

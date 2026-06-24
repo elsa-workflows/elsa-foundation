@@ -39,6 +39,7 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutableCollection = "workflowExecutable";
 
     public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
+    public const string ActivityExecutionInspectionDocumentKind = "activityExecutionInspection";
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string DurableValueStateDocumentKind = "durableValueState";
     public const string SchedulerStateDocumentKind = "schedulerState";
@@ -71,6 +72,11 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 ActivityExecutionStateDocumentKind,
                 "Activity execution state",
+                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
+                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+            Unit(
+                ActivityExecutionInspectionDocumentKind,
+                "Activity execution inspection projection",
                 [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
                 [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
             Unit(

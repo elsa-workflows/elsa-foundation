@@ -3,6 +3,7 @@ using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -56,6 +57,28 @@ public sealed class FlowchartExecutionEngineTests
 
         var state = await fixture.GetFlowchartStateAsync();
         Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+    }
+
+    [Fact]
+    public async Task Start_ProjectsChildSchedulingProvenanceForInspection()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a");
+
+        await fixture.ExecuteAsync(executable);
+
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAsync("wfexec-1");
+        var childProjection = projections.Single(projection => projection.ActivityExecutionId == "actexec-a");
+        Assert.Equal(ActivityExecutionStatus.Completed, childProjection.Status);
+        Assert.Equal("actexec-flowchart", childProjection.Provenance.ParentActivityExecutionId);
+        Assert.Equal("actexec-flowchart", childProjection.Provenance.SchedulingActivityExecutionId);
+        Assert.Equal("path:root", childProjection.Provenance.ExecutionPathId);
+        Assert.Equal("scope:root", childProjection.Provenance.ExecutionScopeId);
+        Assert.Equal("start", childProjection.Provenance.SchedulingCause);
+        Assert.Equal("node-a", childProjection.Provenance.Metadata["flowchart.targetNodeId"]);
     }
 
     [Fact]

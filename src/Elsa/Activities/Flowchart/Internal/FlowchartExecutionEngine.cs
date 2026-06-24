@@ -595,7 +595,20 @@ public sealed class FlowchartExecutionEngine(
                 [ExecutionScopeIdMetadataKey] = executionScopeId,
                 [SchedulingCauseMetadataKey] = schedulingCause,
                 ["flowchart.targetNodeId"] = nodeId
-            });
+            },
+            ActivitySchedulingProvenance.From(
+                context.WorkflowExecutionId,
+                context.ActivityExecutionState.Execution.ActivityExecutionId,
+                schedulingActivityExecutionId,
+                branchId: context.ActivityExecutionState.BranchId,
+                iterationId: executionPathId,
+                executionPathId: executionPathId,
+                executionScopeId: executionScopeId,
+                schedulingCause: schedulingCause,
+                metadata: new Dictionary<string, string>
+                {
+                    ["flowchart.targetNodeId"] = nodeId
+                }));
 
         var activeChild = new FlowchartActiveChild(nodeId, executionPathId, executionScopeId, schedulingCause);
         return state with

@@ -10,6 +10,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly Dictionary<string, RuntimeCheckpointWriteRecord> _writes = new(StringComparer.Ordinal);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
+    private readonly IActivityExecutionInspectionStore? _activityExecutionInspectionStore;
     private readonly IBookmarkStateStore? _bookmarkStateStore;
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IIncidentStateStore? _incidentStateStore;
@@ -62,9 +63,23 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IIncidentStateStore? incidentStateStore,
         IOperationalStateStore? operationalStateStore,
         ISchedulerStateStore? schedulerStateStore)
+        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, operationalStateStore, schedulerStateStore, null)
+    {
+    }
+
+    public InMemoryRuntimeCheckpointWriter(
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IBookmarkStateStore? bookmarkStateStore,
+        IDurableValueStateStore? durableValueStateStore,
+        IIncidentStateStore? incidentStateStore,
+        IOperationalStateStore? operationalStateStore,
+        ISchedulerStateStore? schedulerStateStore,
+        IActivityExecutionInspectionStore? activityExecutionInspectionStore)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
+        _activityExecutionInspectionStore = activityExecutionInspectionStore;
         _bookmarkStateStore = bookmarkStateStore;
         _durableValueStateStore = durableValueStateStore;
         _incidentStateStore = incidentStateStore;
@@ -90,6 +105,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateSchedulerStateChange(commit);
             ValidateActivityExecutionStateChanges(commit);
+            ValidateActivityExecutionInspectionChanges(commit);
             ValidateBookmarkStateChanges(commit);
             ValidateDurableValueStateChanges(commit);
             ValidateIncidentStateChanges(commit);
@@ -97,6 +113,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
+            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
             await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
@@ -150,6 +167,25 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
         foreach (var stateChange in stateChanges)
             await _activityExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private async ValueTask ApplyActivityExecutionInspectionChangesAsync(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        if (_activityExecutionInspectionStore is null)
+            return;
+
+        foreach (var stateChange in stateChanges)
+        {
+            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
+            {
+                await _activityExecutionInspectionStore.SaveAsync(stateChange.State, cancellationToken);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unexpected activity execution inspection state change operation '{stateChange.Operation}' reached apply phase.");
+        }
     }
 
     private async ValueTask ApplyBookmarkStateChangesAsync(
@@ -299,6 +335,24 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
                 throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        }
+    }
+
+    private void ValidateActivityExecutionInspectionChanges(RuntimeCheckpointCommit commit)
+    {
+        if (_activityExecutionInspectionStore is null)
+            return;
+
+        foreach (var stateChange in commit.StateChanges.ActivityExecutionInspections)
+        {
+            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
+                throw new InvalidOperationException($"The in-memory checkpoint writer can only project activity execution inspection '{RuntimeStateChangeOperation.Upsert}' changes.");
+
+            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.ActivityExecutionId))
+                throw new InvalidOperationException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.");
+
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
+                throw new InvalidOperationException("Activity execution inspection WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
     }
 

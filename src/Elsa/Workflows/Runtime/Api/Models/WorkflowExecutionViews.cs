@@ -50,6 +50,152 @@ public sealed record WorkflowInstanceDetailsView(
     IReadOnlyCollection<ActivityExecutionStateView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents);
 
+public sealed record ActivityExecutionInspectionView(
+    string ActivityExecutionId,
+    string WorkflowExecutionId,
+    string ExecutableNodeId,
+    string AuthoredActivityId,
+    string ActivityType,
+    string ActivityTypeVersion,
+    string Status,
+    string? SubStatus,
+    long ExecutionSequence,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? FirstCheckpointId,
+    string? LastCheckpointId,
+    DateTimeOffset? LastCommittedAt,
+    ActivitySchedulingProvenanceView Provenance,
+    IReadOnlyCollection<string> OutcomeNames,
+    IReadOnlyCollection<ActivityExecutionBookmarkSummaryView> Bookmarks,
+    IReadOnlyCollection<ActivityExecutionIncidentSummaryView> Incidents,
+    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshotView> ValueSnapshots,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static ActivityExecutionInspectionView From(ActivityExecutionInspectionProjection projection) =>
+        new(
+            projection.ActivityExecutionId,
+            projection.WorkflowExecutionId,
+            projection.ExecutableNodeId,
+            projection.AuthoredActivityId,
+            projection.ActivityType,
+            projection.ActivityTypeVersion,
+            projection.Status.ToString(),
+            projection.SubStatus,
+            projection.ExecutionSequence,
+            projection.ScheduledAt,
+            projection.StartedAt,
+            projection.CompletedAt,
+            projection.FirstCheckpointId,
+            projection.LastCheckpointId,
+            projection.LastCommittedAt,
+            ActivitySchedulingProvenanceView.From(projection.Provenance),
+            projection.OutcomeNames,
+            projection.Bookmarks.Select(ActivityExecutionBookmarkSummaryView.From).ToArray(),
+            projection.Incidents.Select(ActivityExecutionIncidentSummaryView.From).ToArray(),
+            projection.ValueSnapshots.Select(ActivityExecutionInspectionValueSnapshotView.From).ToArray(),
+            projection.Metadata);
+}
+
+public sealed record ActivitySchedulingProvenanceView(
+    string? ParentActivityExecutionId,
+    string? SchedulingActivityExecutionId,
+    string? SchedulingWorkflowExecutionId,
+    string? BranchId,
+    string? IterationId,
+    string? ExecutionPathId,
+    string? ExecutionScopeId,
+    string? SchedulingCause,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static ActivitySchedulingProvenanceView From(ActivitySchedulingProvenance provenance) =>
+        new(
+            provenance.ParentActivityExecutionId,
+            provenance.SchedulingActivityExecutionId,
+            provenance.SchedulingWorkflowExecutionId,
+            provenance.BranchId,
+            provenance.IterationId,
+            provenance.ExecutionPathId,
+            provenance.ExecutionScopeId,
+            provenance.SchedulingCause,
+            provenance.Metadata);
+}
+
+public sealed record ActivityExecutionBookmarkSummaryView(
+    string BookmarkId,
+    string ResumeTargetId,
+    string StimulusType,
+    string StimulusHash,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ExpiresAt,
+    IReadOnlyDictionary<string, string> Metadata,
+    object? Payload)
+{
+    public static ActivityExecutionBookmarkSummaryView From(ActivityExecutionBookmarkSummary summary) =>
+        new(
+            summary.BookmarkId,
+            summary.ResumeTargetId,
+            summary.StimulusType,
+            summary.StimulusHash,
+            summary.CreatedAt,
+            summary.ExpiresAt,
+            summary.Metadata,
+            summary.Payload);
+}
+
+public sealed record ActivityExecutionIncidentSummaryView(
+    string IncidentId,
+    string Severity,
+    string Status,
+    string ResolutionAction,
+    string FailureType,
+    string Message,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ResolvedAt,
+    bool IsBlocking,
+    IReadOnlyDictionary<string, string> Metadata,
+    object? DiagnosticPayload)
+{
+    public static ActivityExecutionIncidentSummaryView From(ActivityExecutionIncidentSummary summary) =>
+        new(
+            summary.IncidentId,
+            summary.Severity.ToString(),
+            summary.Status.ToString(),
+            summary.ResolutionAction.ToString(),
+            summary.FailureType,
+            summary.Message,
+            summary.CreatedAt,
+            summary.ResolvedAt,
+            summary.IsBlocking,
+            summary.Metadata,
+            summary.DiagnosticPayload);
+}
+
+public sealed record ActivityExecutionInspectionValueSnapshotView(
+    string Name,
+    string Subject,
+    string CaptureMode,
+    RuntimeValueTypeDescriptor? Type,
+    DateTimeOffset CapturedAt,
+    object? Payload,
+    string CaptureReason,
+    bool IsSensitive,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot) =>
+        new(
+            snapshot.Name,
+            snapshot.Subject.ToString(),
+            snapshot.CaptureMode.ToString(),
+            snapshot.Type,
+            snapshot.CapturedAt,
+            snapshot.Payload,
+            snapshot.CaptureReason,
+            snapshot.IsSensitive,
+            snapshot.Metadata);
+}
+
 public sealed record ActivityExecutionStateView(
     string ActivityExecutionId,
     string WorkflowExecutionId,
@@ -59,6 +205,7 @@ public sealed record ActivityExecutionStateView(
     string ActivityTypeVersion,
     string Status,
     string? SubStatus,
+    long ExecutionSequence,
     DateTimeOffset ScheduledAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
@@ -83,6 +230,7 @@ public sealed record ActivityExecutionStateView(
             state.Execution.ActivityTypeVersion,
             state.Status.ToString(),
             state.SubStatus,
+            state.ExecutionSequence,
             state.ScheduledAt,
             state.StartedAt,
             state.CompletedAt,
