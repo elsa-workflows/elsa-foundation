@@ -10,6 +10,7 @@
             "PreserveAnsi": true
           },
           "OpenTelemetryStudio": {},
+          "SecretsStudio": {},
           "StructuredLogsStudio": {},
           "FeatureManagement": {},
           "WorkflowsStudio": {},

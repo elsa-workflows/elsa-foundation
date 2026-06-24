@@ -53,6 +53,8 @@ importers:
 
   src/Elsa.Studio.Samples.WeatherForecast/Client: {}
 
+  src/Elsa.Studio.Secrets/Client: {}
+
   src/Elsa.Studio.Weaver.Chat/Client: {}
 
   src/Elsa.Studio.Weaver.Workflows/Client: {}

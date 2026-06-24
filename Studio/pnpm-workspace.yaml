@@ -4,6 +4,7 @@ packages:
   - "src/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
   - "src/Elsa.Studio.Diagnostics.StructuredLogs/Client"
   - "src/Elsa.Studio.FeatureManagement/Client"
+  - "src/Elsa.Studio.Secrets/Client"
   - "src/Elsa.Studio.Weaver.Chat/Client"
   - "src/Elsa.Studio.Weaver.Workflows/Client"
   - "src/Elsa.Studio.Workflows/Client"

@@ -15,6 +15,7 @@
     <Project Path="src/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" />
     <Project Path="src/Elsa.Studio.Samples.Dashboard/Elsa.Studio.Samples.Dashboard.csproj" />
     <Project Path="src/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
+    <Project Path="src/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" />
     <Project Path="src/Elsa.Studio.Weaver.Chat/Elsa.Studio.Weaver.Chat.csproj" />
     <Project Path="src/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" />
     <Project Path="src/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" />
