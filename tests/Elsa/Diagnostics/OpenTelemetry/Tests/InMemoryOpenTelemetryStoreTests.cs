@@ -71,9 +71,11 @@ public class InMemoryOpenTelemetryStoreTests
             [], [], [], [], []));
 
         var result = await context.Store.QueryResourcesAsync(new OpenTelemetryResourceFilter { Take = 10 });
+        var diagnostics = await context.Store.GetDiagnosticsAsync();
 
         Assert.Equal(["resource-c", "resource-b"], result.Items.Select(x => x.Id));
         Assert.Equal(1, result.DroppedCount);
+        Assert.Equal(result.DroppedCount, diagnostics.DroppedResourceCount);
     }
 
     [Fact]

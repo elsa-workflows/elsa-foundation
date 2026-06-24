@@ -124,4 +124,5 @@ public record OpenTelemetryStorageDiagnostics(
     long DroppedTraceCount,
     long DroppedSpanCount,
     long DroppedMetricPointCount,
-    long DroppedLogRecordCount);
+    long DroppedLogRecordCount,
+    long DroppedResourceCount);

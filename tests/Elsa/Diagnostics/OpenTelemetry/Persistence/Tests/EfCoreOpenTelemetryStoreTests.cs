@@ -165,6 +165,7 @@ public sealed class EfCoreOpenTelemetryStoreTests
                    diagnostics.DroppedSpanCount == 4 &&
                    diagnostics.DroppedMetricPointCount == 4 &&
                    diagnostics.DroppedLogRecordCount == 4 &&
+                   diagnostics.DroppedResourceCount > 0 &&
                    traces.Items.Select(x => x.TraceId).SequenceEqual(["trace-5", "trace-6"]);
         });
 
@@ -178,6 +179,7 @@ public sealed class EfCoreOpenTelemetryStoreTests
         var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 10 });
         Assert.Equal(["trace-5", "trace-6"], traces.Items.Select(x => x.TraceId));
         Assert.True(finalResources.DroppedCount > 0);
+        Assert.Equal(finalResources.DroppedCount, finalDiagnostics.DroppedResourceCount);
         Assert.Equal(4, traces.DroppedCount);
         Assert.Equal(4, metrics.DroppedCount);
         Assert.Equal(4, logs.DroppedCount);
@@ -206,10 +208,12 @@ public sealed class EfCoreOpenTelemetryStoreTests
         var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 0 });
         var metrics = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { Take = 0 });
         var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { Take = 0 });
+        var diagnostics = await context.Store.GetDiagnosticsAsync();
 
         Assert.InRange(acceptedCount, 1, writeCount - 1);
         var rejectedCount = writeCount - acceptedCount;
         Assert.Equal(rejectedCount, resources.DroppedCount);
+        Assert.Equal(rejectedCount, diagnostics.DroppedResourceCount);
         Assert.Equal(rejectedCount, traces.DroppedCount);
         Assert.Equal(rejectedCount, metrics.DroppedCount);
         Assert.Equal(rejectedCount, logs.DroppedCount);

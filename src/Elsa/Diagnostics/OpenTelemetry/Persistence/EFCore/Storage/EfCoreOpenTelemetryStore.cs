@@ -290,7 +290,8 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             DroppedTraceCount,
             DroppedSpanCount,
             DroppedMetricPointCount,
-            DroppedLogRecordCount);
+            DroppedLogRecordCount,
+            DroppedResourceCount);
     }
 
     private async Task RunDrainLoopAsync(CancellationToken cancellationToken)
