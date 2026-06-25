@@ -37,7 +37,12 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
-          "GitHubCopilotAgent": {},
+          "GitHubCopilotAgent": {
+            "Enabled": true,
+            "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
+            "Model": "auto",
+            "BaseDirectory": ".elsa/copilot"
+          },
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           }
