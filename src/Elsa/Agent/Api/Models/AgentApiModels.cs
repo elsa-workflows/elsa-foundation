@@ -16,7 +16,7 @@ public sealed record AgentBootstrapResponse(
     string ProviderStatus,
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<AgentCapabilityResponse> Capabilities,
-    IReadOnlyCollection<AgentProviderDiagnostics> Providers,
+    IReadOnlyCollection<AgentProviderDiagnosticsResponse> Providers,
     AgentPolicySummaryResponse Policy);
 
 public sealed record AgentPolicySummaryResponse(
@@ -34,6 +34,15 @@ public sealed record AgentCapabilityResponse(
     IReadOnlyCollection<string> Surfaces,
     IReadOnlyCollection<string> RequiredPermissions,
     bool RequiresApproval);
+
+public sealed record AgentProviderDiagnosticsResponse(
+    string ProviderId,
+    bool IsAvailable,
+    string Status,
+    string ProviderKind,
+    IReadOnlyCollection<string> SupportedOperations,
+    string RiskProfile,
+    IReadOnlyDictionary<string, string> Metadata);
 
 public sealed class AgentCreateSessionRequest
 {
@@ -186,6 +195,16 @@ internal static class AgentApiMapping
             capability.RequiredPermissions,
             capability.Risk != AgentRisk.ReadOnly);
 
+    public static AgentProviderDiagnosticsResponse ToResponse(this AgentProviderDiagnostics diagnostics)
+        => new(
+            diagnostics.ProviderId,
+            diagnostics.IsAvailable,
+            diagnostics.Status,
+            diagnostics.Kind.ToContractString(),
+            diagnostics.SupportedOperations.Select(x => x.ToContractString()).ToList(),
+            diagnostics.RiskProfile.ToContractString(),
+            diagnostics.Metadata);
+
     public static AgentContextAttachmentResponse ToResponse(this AgentContextAttachment attachment)
         => new(
             attachment.Id,
@@ -278,6 +297,35 @@ internal static class AgentApiMapping
         AgentRisk.Destructive => "destructive",
         AgentRisk.Admin => "admin",
         _ => risk.ToString().ToLowerInvariant()
+    };
+
+    public static string ToContractString(this AgentProviderKind kind) => kind switch
+    {
+        AgentProviderKind.ProviderSdkBinding => "provider-sdk-binding",
+        AgentProviderKind.AgentHarnessProvider => "agent-harness-provider",
+        _ => kind.ToString().ToLowerInvariant()
+    };
+
+    public static string ToContractString(this AgentProviderOperation operation) => operation switch
+    {
+        AgentProviderOperation.Chat => "chat",
+        AgentProviderOperation.Streaming => "streaming",
+        AgentProviderOperation.ToolApproval => "tool-approval",
+        AgentProviderOperation.RunStatus => "run-status",
+        AgentProviderOperation.Artifacts => "artifacts",
+        AgentProviderOperation.Skills => "skills",
+        AgentProviderOperation.Memory => "memory",
+        AgentProviderOperation.FileUpload => "file-upload",
+        _ => operation.ToString().ToLowerInvariant()
+    };
+
+    public static string ToContractString(this AgentProviderRiskProfile riskProfile) => riskProfile switch
+    {
+        AgentProviderRiskProfile.ReadOnly => "read-only",
+        AgentProviderRiskProfile.ReviewRequired => "review-required",
+        AgentProviderRiskProfile.SandboxedExecution => "sandboxed-execution",
+        AgentProviderRiskProfile.PrivilegedExecution => "privileged-execution",
+        _ => riskProfile.ToString().ToLowerInvariant()
     };
 
     public static string ToContractString(this AgentActionProposalStatus status) => status switch

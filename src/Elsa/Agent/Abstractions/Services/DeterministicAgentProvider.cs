@@ -34,5 +34,8 @@ public sealed class DeterministicAgentProvider : IAgentProvider
             ProviderId,
             IsAvailable: true,
             Status: "Deterministic provider is available for backend contract validation.",
+            AgentProviderKind.ProviderSdkBinding,
+            [AgentProviderOperation.Chat, AgentProviderOperation.Streaming, AgentProviderOperation.ToolApproval],
+            AgentProviderRiskProfile.ReadOnly,
             new Dictionary<string, string> { ["adapter"] = "deterministic" }));
 }

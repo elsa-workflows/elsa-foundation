@@ -92,6 +92,32 @@ public enum AgentStreamEventKind
     Error
 }
 
+public enum AgentProviderKind
+{
+    ProviderSdkBinding,
+    AgentHarnessProvider
+}
+
+public enum AgentProviderOperation
+{
+    Chat,
+    Streaming,
+    ToolApproval,
+    RunStatus,
+    Artifacts,
+    Skills,
+    Memory,
+    FileUpload
+}
+
+public enum AgentProviderRiskProfile
+{
+    ReadOnly,
+    ReviewRequired,
+    SandboxedExecution,
+    PrivilegedExecution
+}
+
 public sealed record AgentError(string Code, string Message, int StatusCode = 400);
 
 public sealed record AgentResult<T>(T? Value, AgentError? Error)
@@ -294,4 +320,7 @@ public sealed record AgentProviderDiagnostics(
     string ProviderId,
     bool IsAvailable,
     string Status,
+    AgentProviderKind Kind,
+    IReadOnlyCollection<AgentProviderOperation> SupportedOperations,
+    AgentProviderRiskProfile RiskProfile,
     IReadOnlyDictionary<string, string> Metadata);
