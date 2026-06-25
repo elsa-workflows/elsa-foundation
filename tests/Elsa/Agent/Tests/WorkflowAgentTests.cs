@@ -11,6 +11,64 @@ namespace Elsa.Agent.Tests;
 public sealed class WorkflowAgentTests
 {
     [Fact]
+    public void Workflow_graph_operation_vocabulary_covers_designer_authoring_edits()
+    {
+        var operationKinds = Enum.GetValues<WorkflowGraphOperationKind>();
+
+        Assert.Equal(
+            [
+                WorkflowGraphOperationKind.AddActivity,
+                WorkflowGraphOperationKind.UpdateActivity,
+                WorkflowGraphOperationKind.RemoveActivity,
+                WorkflowGraphOperationKind.ConnectActivities,
+                WorkflowGraphOperationKind.DisconnectActivities,
+                WorkflowGraphOperationKind.SetRoot,
+                WorkflowGraphOperationKind.SetDesignerPosition,
+                WorkflowGraphOperationKind.SetActivityProperty
+            ],
+            operationKinds);
+    }
+
+    [Fact]
+    public void Workflow_graph_operation_batch_carries_schema_version_and_temporary_references()
+    {
+        var batch = CreateGraphOperationBatch();
+
+        Assert.Equal(WorkflowGraphOperationBatchSchema.CurrentVersion, batch.SchemaVersion);
+        Assert.Equal("wf-1", batch.WorkflowDefinitionId);
+        Assert.Equal("rev-1", batch.BaseRevision);
+        Assert.Equal("designer", batch.Metadata["surface"]);
+
+        var addActivity = Assert.Single(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.AddActivity);
+        Assert.Equal("temp:activity:email-1", addActivity.Parameters["activityId"]);
+        Assert.Contains("temp:activity:email-1", addActivity.TemporaryReferences);
+
+        var setDesignerPosition = Assert.Single(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.SetDesignerPosition);
+        Assert.Equal(320, setDesignerPosition.Parameters["x"]);
+        Assert.Equal(180, setDesignerPosition.Parameters["y"]);
+    }
+
+    [Fact]
+    public void Agent_stream_event_can_transport_workflow_graph_operation_batch_as_typed_result()
+    {
+        var batch = CreateGraphOperationBatch();
+        var streamEvent = new AgentStreamEvent(
+            Guid.NewGuid().ToString("N"),
+            AgentStreamEventKind.WorkflowGraphOperationBatchCreated,
+            null,
+            null,
+            null,
+            DateTimeOffset.UtcNow,
+            AgentResultKind.WorkflowGraphOperationBatch,
+            batch);
+
+        Assert.Equal(AgentStreamEventKind.WorkflowGraphOperationBatchCreated, streamEvent.Kind);
+        Assert.Equal(AgentResultKind.WorkflowGraphOperationBatch, streamEvent.ResultKind);
+        var payload = Assert.IsType<WorkflowGraphOperationBatch>(streamEvent.Payload);
+        Assert.Same(batch, payload);
+    }
+
+    [Fact]
     public async Task Workflow_context_provider_returns_minimized_workflow_attachment_shape()
     {
         using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
@@ -108,6 +166,49 @@ public sealed class WorkflowAgentTests
             [new Dictionary<string, object?> { ["op"] = "replace-input", ["path"] = "workflow:wf-1" }],
             ["Changes draft workflow behavior."],
             "Restore the previous draft revision.");
+
+    private static WorkflowGraphOperationBatch CreateGraphOperationBatch()
+        => new(
+            WorkflowGraphOperationBatchSchema.CurrentVersion,
+            "wf-1",
+            "rev-1",
+            [
+                new(
+                    "op-add-email",
+                    WorkflowGraphOperationKind.AddActivity,
+                    new Dictionary<string, object?>
+                    {
+                        ["activityId"] = "temp:activity:email-1",
+                        ["activityType"] = "Elsa.Email.SendEmail"
+                    },
+                    ["temp:activity:email-1"],
+                    "Add email activity."),
+                new(
+                    "op-connect-root",
+                    WorkflowGraphOperationKind.ConnectActivities,
+                    new Dictionary<string, object?>
+                    {
+                        ["sourceActivityId"] = "root",
+                        ["targetActivityId"] = "temp:activity:email-1"
+                    },
+                    ["temp:activity:email-1"],
+                    "Connect root to email activity."),
+                new(
+                    "op-position-email",
+                    WorkflowGraphOperationKind.SetDesignerPosition,
+                    new Dictionary<string, object?>
+                    {
+                        ["activityId"] = "temp:activity:email-1",
+                        ["x"] = 320,
+                        ["y"] = 180
+                    },
+                    ["temp:activity:email-1"],
+                    "Place email activity on the designer canvas.")
+            ],
+            new Dictionary<string, string>
+            {
+                ["surface"] = "designer"
+            });
 
     private sealed class FixedWorkflowRevisionProvider(string revision) : IWorkflowRevisionProvider
     {
