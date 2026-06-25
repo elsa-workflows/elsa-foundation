@@ -86,6 +86,12 @@ public sealed class SecretManagerTests : IDisposable
         Assert.True(await _manager.DeleteAsync("payments.api"));
         Assert.Empty((await _manager.ListAsync(new SecretQuery())).Items);
         Assert.Null(await _manager.FindAsync("payments.api"));
+        Assert.False(await _manager.DeleteAsync("payments.api"));
+        Assert.Equal("not-found", (await _manager.TestAsync("payments.api")).Code);
+
+        var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
+
+        Assert.Equal(SecretResolutionFailureCode.NotFound, resolved.FailureCode);
     }
 
     [Fact]

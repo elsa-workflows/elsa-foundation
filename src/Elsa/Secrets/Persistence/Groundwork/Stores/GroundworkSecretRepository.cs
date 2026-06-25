@@ -28,7 +28,7 @@ public sealed class GroundworkSecretRepository(IDocumentStore store) : ISecretRe
                 SecretsStorageManifest.SecretCollection),
             cancellationToken);
 
-        return envelopes.Select(Map).Where(x => x.Status != SecretStatus.Deleted).ToArray();
+        return envelopes.Select(Map).ToArray();
     }
 
     public async ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default)

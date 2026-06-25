@@ -62,13 +62,13 @@ public sealed class DefaultSecretManager(
     {
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
-        return secret is null ? null : mapper.Map(secret);
+        return secret is null || secret.Status == SecretStatus.Deleted ? null : mapper.Map(secret);
     }
 
     public async ValueTask<Page<SecretMetadata>> ListAsync(SecretQuery query, CancellationToken cancellationToken = default)
     {
         var secrets = await repository.ListAsync(cancellationToken);
-        var filtered = secrets.AsEnumerable();
+        var filtered = secrets.Where(x => x.Status != SecretStatus.Deleted);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -160,7 +160,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null)
+        if (secret is null || secret.Status == SecretStatus.Deleted)
             return null;
 
         secret.Status = SecretStatus.Revoked;
@@ -178,7 +178,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null)
+        if (secret is null || secret.Status == SecretStatus.Deleted)
             return false;
 
         var store = storeRegistry.Get(secret.StoreName);
@@ -196,7 +196,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null)
+        if (secret is null || secret.Status == SecretStatus.Deleted)
             return SecretTestResult.Failure("not-found", "Secret not found.");
 
         var version = secret.LatestActiveVersion;
@@ -222,7 +222,11 @@ public sealed class DefaultSecretManager(
     {
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
-        return secret ?? throw new InvalidOperationException("Secret not found.");
+
+        if (secret is null || secret.Status == SecretStatus.Deleted)
+            throw new InvalidOperationException("Secret not found.");
+
+        return secret;
     }
 
     private static SecretPayload ToPayload(string? value, string? configurationKey, IDictionary<string, string> metadata)
