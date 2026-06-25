@@ -44,7 +44,9 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
         services.TryAddSingleton<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
-        services.TryAddSingleton<IRuntimePostCommitOutboxStore, InMemoryRuntimePostCommitOutboxStore>();
+        services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
+        services.TryAddSingleton<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IWorkflowExecutionAmbientServicesAccessor, AsyncLocalWorkflowExecutionAmbientServicesAccessor>();
@@ -58,7 +60,6 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.TryAddSingleton<IRuntimeCheckpointWriter, InMemoryRuntimeCheckpointWriter>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.TryAddSingleton<RuntimeCheckpointCommitter>();
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();

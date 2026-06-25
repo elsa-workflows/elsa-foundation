@@ -17,6 +17,7 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Workflow definition state | The authored workflow document stored with drafts and versions in the design domain. It owns authored content, including one root activity, not runtime state. |
 | Facet | A module-owned, kinded, schema-versioned design metadata fragment attached to a broader model. Core stores, hashes, validates generic shape, and round-trips facets without owning their payload semantics. |
 | Artifact-only runtime | The rule that runtime execution must be able to load and run from the published artifact without requiring design documents. |
+| Runtime checkpoint commit | The atomic runtime operation that applies a named checkpoint's state changes and records any post-commit delivery work. Delivery of recorded work is handled by a separate post-commit delivery module. |
 | Reconciliation | A process that updates persisted design/catalog state from authoritative sources such as CLR activities, JSON import, or workflow definitions. |
 | Activity construction | The runtime-side process that turns a descriptor type, descriptor payload, and argument bags into a live `IActivity`. |
 | Activity execution | One concrete runtime invocation of an executable activity node within a workflow execution. Multiple activity executions may reference the same authored activity when loops, retries, composite slots, or repeated scheduling revisit that activity. |

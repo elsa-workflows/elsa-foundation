@@ -10,18 +10,18 @@ public sealed class RuntimePostCommitOutboxStoreTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 15, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_SavesAndQueriesDeliverablePendingItems()
+    public async Task InMemoryRuntimeCheckpointCommitStore_SavesAndQueriesDeliverablePendingItems()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var available = NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-1));
         var duplicateAvailable = NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-1));
         var unavailable = NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddMinutes(1));
         var otherWorkflow = NewOutboxItem("outbox-3", "intent-3", "wfexec-2", availableAt: _now.AddSeconds(-1));
 
-        await store.SavePendingAsync(unavailable);
-        await store.SavePendingAsync(otherWorkflow);
-        await store.SavePendingAsync(available);
-        await store.SavePendingAsync(duplicateAvailable);
+        await store.AddPendingForTestingAsync(unavailable);
+        await store.AddPendingForTestingAsync(otherWorkflow);
+        await store.AddPendingForTestingAsync(available);
+        await store.AddPendingForTestingAsync(duplicateAvailable);
 
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1"));
 
@@ -32,10 +32,10 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RejectsOwnerFilteredQueriesBecauseClaimingIsOutOfScope()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RejectsOwnerFilteredQueriesBecauseClaimingIsOutOfScope()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
 
         var exception = await Assert.ThrowsAsync<NotSupportedException>(() => store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
             now: _now,
@@ -46,16 +46,16 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_ReturnsDeliverableItemsInDeterministicOrderWithLimit()
+    public async Task InMemoryRuntimeCheckpointCommitStore_ReturnsDeliverableItemsInDeterministicOrderWithLimit()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var second = NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddSeconds(-3));
         var first = NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-5));
         var third = NewOutboxItem("outbox-3", "intent-3", "wfexec-1", availableAt: _now.AddSeconds(-1));
 
-        await store.SavePendingAsync(third);
-        await store.SavePendingAsync(second);
-        await store.SavePendingAsync(first);
+        await store.AddPendingForTestingAsync(third);
+        await store.AddPendingForTestingAsync(second);
+        await store.AddPendingForTestingAsync(first);
 
         var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 2));
 
@@ -63,9 +63,9 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RejectsNonPendingSaveAndConflictingDuplicate()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RejectsNonPendingSaveAndConflictingDuplicate()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var pending = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
         var conflicting = NewOutboxItem("outbox-1", "intent-2", "wfexec-1");
         var conflictingWaitDependency = NewOutboxItem(
@@ -86,13 +86,13 @@ public sealed class RuntimePostCommitOutboxStoreTests
             metadata: new Dictionary<string, string> { ["source"] = "different" });
         var delivered = NewOutboxItem("outbox-2", "intent-3", "wfexec-1", RuntimePostCommitOutboxStatus.Delivered, deliveredAt: _now);
 
-        await store.SavePendingAsync(pending);
+        await store.AddPendingForTestingAsync(pending);
 
-        var duplicateException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflicting).AsTask());
-        var waitDependencyException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflictingWaitDependency).AsTask());
-        var payloadException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflictingPayload).AsTask());
-        var metadataException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(conflictingMetadata).AsTask());
-        var statusException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SavePendingAsync(delivered).AsTask());
+        var duplicateException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddPendingForTestingAsync(conflicting).AsTask());
+        var waitDependencyException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddPendingForTestingAsync(conflictingWaitDependency).AsTask());
+        var payloadException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddPendingForTestingAsync(conflictingPayload).AsTask());
+        var metadataException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddPendingForTestingAsync(conflictingMetadata).AsTask());
+        var statusException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddPendingForTestingAsync(delivered).AsTask());
 
         Assert.Contains("already exists", duplicateException.Message);
         Assert.Contains("already exists", waitDependencyException.Message);
@@ -102,12 +102,12 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RecordDeliveredResultRemovesItemFromDeliverableQuery()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RecordDeliveredResultRemovesItemFromDeliverableQuery()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
 
-        await store.SavePendingAsync(item);
+        await store.AddPendingForTestingAsync(item);
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.Delivered,
@@ -117,12 +117,12 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RetryableFailureRespectsRetryDelay()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RetryableFailureRespectsRetryDelay()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
 
-        await store.SavePendingAsync(item);
+        await store.AddPendingForTestingAsync(item);
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.FailedRetryable,
@@ -139,16 +139,16 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RetryableFailureWithoutRemainingAttemptsBecomesTerminal()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RetryableFailureWithoutRemainingAttemptsBecomesTerminal()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var item = NewOutboxItem(
             "outbox-1",
             "intent-1",
             "wfexec-1",
             retryPolicy: RuntimePostCommitRetryPolicy.None);
 
-        await store.SavePendingAsync(item);
+        await store.AddPendingForTestingAsync(item);
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.FailedRetryable,
@@ -165,12 +165,12 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_FailedFinalResultIsTerminalAndNotDeliverable()
+    public async Task InMemoryRuntimeCheckpointCommitStore_FailedFinalResultIsTerminalAndNotDeliverable()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
 
-        await store.SavePendingAsync(item);
+        await store.AddPendingForTestingAsync(item);
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.FailedFinal,
@@ -187,9 +187,9 @@ public sealed class RuntimePostCommitOutboxStoreTests
     }
 
     [Fact]
-    public async Task InMemoryRuntimePostCommitOutboxStore_RejectsDeliveryResultForMissingOrTerminalItem()
+    public async Task InMemoryRuntimeCheckpointCommitStore_RejectsDeliveryResultForMissingOrTerminalItem()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var item = NewOutboxItem("outbox-1", "intent-1", "wfexec-1");
 
         var missingException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
@@ -197,7 +197,7 @@ public sealed class RuntimePostCommitOutboxStoreTests
             status: RuntimePostCommitOutboxStatus.Cancelled,
             recordedAt: _now)).AsTask());
 
-        await store.SavePendingAsync(item);
+        await store.AddPendingForTestingAsync(item);
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             outboxItemId: "outbox-1",
             status: RuntimePostCommitOutboxStatus.Cancelled,

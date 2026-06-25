@@ -94,8 +94,11 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(ISchedulerStateStore) &&
             descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(InMemoryRuntimeCheckpointCommitStore) &&
+            descriptor.ImplementationType == typeof(InMemoryRuntimeCheckpointCommitStore));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore) &&
-            descriptor.ImplementationType == typeof(InMemoryRuntimePostCommitOutboxStore));
+            descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimePostCommitOutboxProcessor) &&
             descriptor.ImplementationType == typeof(RuntimePostCommitOutboxProcessor));
@@ -112,8 +115,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy) &&
             descriptor.ImplementationType == typeof(ImmediateRuntimeCheckpointPersistencePolicy));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeCheckpointWriter) &&
-            descriptor.ImplementationType == typeof(InMemoryRuntimeCheckpointWriter));
+            descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore) &&
+            descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimePostCommitIntentDispatcher) &&
             descriptor.ImplementationType == typeof(RuntimeSchedulerPostCommitIntentDispatcher));
@@ -207,12 +210,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<RuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
         Assert.IsType<WorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
         Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
-        Assert.IsType<InMemoryRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
         Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
         Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
-        Assert.IsType<InMemoryRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
+        Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<RuntimeSchedulerPostCommitIntentDispatcher>(provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>());
         Assert.IsType<RuntimeCheckpointCommitter>(provider.GetRequiredService<RuntimeCheckpointCommitter>());
         Assert.IsType<DefaultRuntimePayloadCapturePolicy>(provider.GetRequiredService<IRuntimePayloadCapturePolicy>());
@@ -442,7 +445,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var bookmarkStateStore = provider.GetRequiredService<IBookmarkStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -482,7 +485,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }
@@ -495,7 +498,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var schedulerStateStore = provider.GetRequiredService<ISchedulerStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -538,7 +541,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         var schedulerState = await schedulerStateStore.FindAsync("wfexec-1");
         Assert.NotNull(schedulerState);
@@ -554,7 +557,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var durableValueStateStore = provider.GetRequiredService<IDurableValueStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -594,7 +597,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await durableValueStateStore.FindAsync("wfexec-1", "durable-1"));
     }
@@ -607,7 +610,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var incidentStateStore = provider.GetRequiredService<IIncidentStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -648,7 +651,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await incidentStateStore.FindAsync("wfexec-1", "incident-1"));
         Assert.Single(await incidentStateStore.ListBlockingAsync("wfexec-1"));
@@ -662,7 +665,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var writer = provider.GetRequiredService<IRuntimeCheckpointWriter>();
+        var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
         var operationalStateStore = provider.GetRequiredService<IOperationalStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -710,7 +713,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
         Assert.NotNull(operationalState);

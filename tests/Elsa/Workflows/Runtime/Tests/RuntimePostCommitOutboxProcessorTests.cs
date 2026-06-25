@@ -14,12 +14,12 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     [Fact]
     public async Task Processor_DispatchesDeliverableItemsAndRecordsDelivered()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var dispatcher = new RecordingDispatcher();
         var processor = NewProcessor(store, dispatcher, _now.AddSeconds(5));
 
-        await store.SavePendingAsync(NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddSeconds(-1)));
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-2)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddSeconds(-1)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-2)));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -34,11 +34,11 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     [Fact]
     public async Task Processor_RecordsRetryableFailureWhenDispatchFails()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new InvalidOperationException("Dispatch failed."));
         var processor = NewProcessor(store, dispatcher, _now);
 
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1"));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -57,11 +57,11 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     [Fact]
     public async Task Processor_ResultReportsRequestedFailedStatusWhenStoreNormalizesToFinal()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new InvalidOperationException("Dispatch failed."));
         var processor = NewProcessor(store, dispatcher, _now);
 
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", retryPolicy: new RuntimePostCommitRetryPolicy(1, TimeSpan.FromSeconds(10))));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", retryPolicy: new RuntimePostCommitRetryPolicy(1, TimeSpan.FromSeconds(10))));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -74,13 +74,13 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     [Fact]
     public async Task Processor_UsesWorkflowExecutionFilterAndLimit()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var dispatcher = new RecordingDispatcher();
         var processor = NewProcessor(store, dispatcher, _now);
 
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-3)));
-        await store.SavePendingAsync(NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddSeconds(-2)));
-        await store.SavePendingAsync(NewOutboxItem("outbox-3", "intent-3", "wfexec-2", availableAt: _now.AddSeconds(-1)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-3)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-2", "intent-2", "wfexec-1", availableAt: _now.AddSeconds(-2)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-3", "intent-3", "wfexec-2", availableAt: _now.AddSeconds(-1)));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 1, workflowExecutionId: "wfexec-1"));
 
@@ -95,11 +95,11 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     [Fact]
     public async Task Processor_ReturnsEmptyResultWhenNoItemsAreDeliverable()
     {
-        var store = new InMemoryRuntimePostCommitOutboxStore();
+        var store = new InMemoryRuntimeCheckpointCommitStore();
         var dispatcher = new RecordingDispatcher();
         var processor = NewProcessor(store, dispatcher, _now);
 
-        await store.SavePendingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(1)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(1)));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -221,7 +221,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         RuntimePostCommitOutboxItem item,
         Exception exception) : IRuntimePostCommitOutboxStore
     {
-        public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default) =>
+        public ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
 
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>

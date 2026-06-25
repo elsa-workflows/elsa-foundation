@@ -39,7 +39,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var executableStore = new InMemoryWorkflowExecutableStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         var executable = NewExecutable(["node-source", "node-next"]);
         await executableStore.SaveAsync(executable);
         await activityStateStore.SaveAsync(NewCompletedActivityState());
@@ -66,7 +66,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             first => Assert.Equal("work-1", first.WorkItemId),
             second => Assert.Equal("work-1:continuation:actexec-source", second.WorkItemId),
             third => Assert.Equal("work-1:continuation:actexec-source:checkpoint:WorkflowCompleted:actexec-source", third.WorkItemId));
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
         Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
@@ -136,13 +136,13 @@ public sealed class RuntimeDownstreamSchedulingTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
 
         await handler.HandleAsync(NewCheckpointWorkItem([], RuntimeCheckpointNames.WorkflowCompleted));
 
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
         var workflowChange = write.Commit.StateChanges.WorkflowExecution;
         Assert.NotNull(workflowChange);
@@ -161,7 +161,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         var startedAt = _now.AddMinutes(-5);
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
@@ -174,7 +174,7 @@ public sealed class RuntimeDownstreamSchedulingTests
                 [RuntimeMetadataKeys.WorkflowStartedAt] = startedAt.ToString("O", CultureInfo.InvariantCulture)
             }));
 
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         var workflowChange = write.Commit.StateChanges.WorkflowExecution;
         Assert.NotNull(workflowChange);
         Assert.Equal(startedAt, workflowChange.State.CreatedAt);
@@ -187,7 +187,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         var startedAt = _now.AddMinutes(-5);
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
 
@@ -200,7 +200,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             },
             []));
 
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         var workflowChange = write.Commit.StateChanges.WorkflowExecution;
         Assert.NotNull(workflowChange);
         Assert.Equal(WorkflowExecutionStatus.Running, workflowChange.State.Status);
@@ -216,7 +216,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
         var startedAt = _now.AddMinutes(-5);
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
 
@@ -244,7 +244,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
         var startedAt = _now.AddMinutes(-5);
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
@@ -265,19 +265,21 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CheckpointHandler_DispatchesSchedulerIntentAfterSuccessfulCommit()
+    public async Task CheckpointHandler_RecordsSchedulerIntentAfterSuccessfulCommit()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
         var downstreamWork = NewScheduleWorkItem();
 
         await handler.HandleAsync(NewCheckpointWorkItem([NewSchedulerIntent(downstreamWork)]));
 
-        Assert.Single(checkpointWriter.ListWrites());
-        var queued = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(checkpointWriter.ListCommits());
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
+        var queued = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(downstreamWork.WorkItemId, queued.WorkItemId);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, queued.CommandKind);
     }
@@ -333,14 +335,13 @@ public sealed class RuntimeDownstreamSchedulingTests
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
-        IRuntimeCheckpointWriter checkpointWriter,
+        IRuntimeCheckpointCommitStore checkpointWriter,
         IWorkflowSchedulerWorkQueue queue) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter,
-                new RuntimeSchedulerPostCommitIntentDispatcher(queue)),
+                checkpointWriter),
             new FixedTimeProvider(_now));
 
     private RuntimeSchedulerWorkItem NewCompleteWorkItem(
@@ -528,9 +529,9 @@ public sealed class RuntimeDownstreamSchedulingTests
         public string NewActivityExecutionId() => $"actexec-{++_activityExecutionIndex}";
     }
 
-    private sealed class ThrowingCheckpointWriter : IRuntimeCheckpointWriter
+    private sealed class ThrowingCheckpointWriter : IRuntimeCheckpointCommitStore
     {
-        public ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("checkpoint write failed");
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("checkpoint commit failed");
     }
 }

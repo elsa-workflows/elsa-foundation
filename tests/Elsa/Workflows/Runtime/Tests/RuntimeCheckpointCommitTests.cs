@@ -153,52 +153,35 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task CheckpointCommitter_UsesPolicyDecisionWithoutChangingCheckpointSemantics()
     {
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
-        var immediateWriter = new RecordingWriter();
-        var deferredWriter = new RecordingWriter();
+        var immediateStore = new RecordingCommitStore();
+        var deferredStore = new RecordingCommitStore();
 
-        await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, immediateWriter).CommitAsync(commit);
-        await NewCommitter(RuntimeCheckpointPersistenceMode.Deferred, deferredWriter).CommitAsync(commit);
+        await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, immediateStore).CommitAsync(commit);
+        await NewCommitter(RuntimeCheckpointPersistenceMode.Deferred, deferredStore).CommitAsync(commit);
 
-        var immediateWrite = Assert.Single(immediateWriter.Writes);
-        var deferredWrite = Assert.Single(deferredWriter.Writes);
-        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, immediateWrite.Decision.Mode);
-        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, deferredWrite.Decision.Mode);
-        Assert.Equal(immediateWrite.Commit.Checkpoint, deferredWrite.Commit.Checkpoint);
-        Assert.Equal(immediateWrite.Commit.StateChanges.WorkflowExecution!.State, deferredWrite.Commit.StateChanges.WorkflowExecution!.State);
-        Assert.Equal(immediateWrite.Commit.StateChanges.Scheduler!.State, deferredWrite.Commit.StateChanges.Scheduler!.State);
+        var immediateCommit = Assert.Single(immediateStore.Commits);
+        var deferredCommit = Assert.Single(deferredStore.Commits);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, immediateCommit.Decision.Mode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred, deferredCommit.Decision.Mode);
+        Assert.Equal(immediateCommit.Commit.Checkpoint, deferredCommit.Commit.Checkpoint);
+        Assert.Equal(immediateCommit.Commit.StateChanges.WorkflowExecution!.State, deferredCommit.Commit.StateChanges.WorkflowExecution!.State);
+        Assert.Equal(immediateCommit.Commit.StateChanges.Scheduler!.State, deferredCommit.Commit.StateChanges.Scheduler!.State);
         Assert.Equal(
-            immediateWrite.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId),
-            deferredWrite.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
+            immediateCommit.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId),
+            deferredCommit.Commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
         Assert.Equal(
-            immediateWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId),
-            deferredWrite.Commit.StateChanges.DurableValues.Select(change => change.StateId));
+            immediateCommit.Commit.StateChanges.DurableValues.Select(change => change.StateId),
+            deferredCommit.Commit.StateChanges.DurableValues.Select(change => change.StateId));
         Assert.Equal(
-            immediateWrite.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId),
-            deferredWrite.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId));
+            immediateCommit.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId),
+            deferredCommit.Commit.StateChanges.Bookmarks.Select(change => change.State.ResumeTargetId));
     }
 
     [Fact]
-    public async Task CheckpointCommitter_DispatchesPostCommitIntentsAfterSuccessfulWrite()
+    public async Task CheckpointCommitter_ReturnsCommitResultWithPendingWorkIdsWithoutInlineDelivery()
     {
         var events = new List<string>();
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events);
-
-        await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.BookmarkCreated));
-
-        Assert.Equal(["write:commit-1", "dispatch:intent-1"], events);
-        Assert.Single(writer.Writes);
-        Assert.Single(dispatcher.Intents);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_RecordsPendingOutboxItemsBeforeDispatchAndMarksDelivered()
-    {
-        var events = new List<string>();
-        var deliveryResultRecordedAt = _now.AddSeconds(30);
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events);
-        var outboxStore = new RecordingOutboxStore(events);
+        var commitStore = new RecordingCommitStore(events, pendingPostCommitWorkIds: ["commit-1:intent-1", "commit-1:intent-2"]);
         var commit = NewCommit(
             RuntimeCheckpointNames.PostCommitIntentRecorded,
             [
@@ -206,277 +189,78 @@ public sealed class RuntimeCheckpointCommitTests
                 NewIntent("intent-2")
             ]);
 
-        await NewCommitter(
-            RuntimeCheckpointPersistenceMode.Immediate,
-            writer,
-            dispatcher,
-            outboxStore,
-            new FixedTimeProvider(deliveryResultRecordedAt)).CommitAsync(commit);
+        var result = await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, commitStore).CommitAsync(commit);
 
-        Assert.Equal(
-            [
-                "write:commit-1",
-                "outbox-pending:commit-1:intent-1",
-                "outbox-pending:commit-1:intent-2",
-                "dispatch:intent-1",
-                "outbox-result:commit-1:intent-1:Delivered",
-                "dispatch:intent-2",
-                "outbox-result:commit-1:intent-2:Delivered"
-            ],
-            events);
-        Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
-        Assert.Equal([_now, _now], outboxStore.PendingItems.Select(item => item.AvailableAt));
-        Assert.Equal([deliveryResultRecordedAt, deliveryResultRecordedAt], outboxStore.Results.Select(result => result.RecordedAt));
-        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered], outboxStore.Results.Select(result => result.Status));
+        Assert.True(result.Succeeded);
+        Assert.Equal("commit-1", result.CommitId);
+        Assert.Equal("wfexec-1", result.WorkflowExecutionId);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, result.PersistenceDecision.Mode);
+        Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], result.PendingPostCommitWorkIds);
+        Assert.Equal(["commit:commit-1"], events);
+        Assert.Equal([commit], commitStore.Commits.Select(commitRecord => commitRecord.Commit));
     }
 
     [Fact]
-    public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenWriteFails()
+    public async Task CheckpointCommitter_PropagatesProviderCommitFailures()
     {
         var events = new List<string>();
-        var writer = new RecordingWriter(events, new InvalidOperationException("checkpoint write failed"));
-        var dispatcher = new RecordingDispatcher(events);
+        var commitStore = new RecordingCommitStore(events, new InvalidOperationException("checkpoint commit failed"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
+            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, commitStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
 
-        Assert.Equal(["write:commit-1"], events);
-        Assert.Empty(dispatcher.Intents);
+        Assert.Equal(["commit:commit-1"], events);
     }
 
     [Fact]
-    public async Task CheckpointCommitter_DoesNotRecordOutboxItemsWhenWriteFails()
+    public async Task CheckpointCommitter_DoesNotCommitWhenPolicySkipsPersistenceWithoutPostCommitWork()
     {
-        var events = new List<string>();
-        var writer = new RecordingWriter(events, new InvalidOperationException("checkpoint write failed"));
-        var dispatcher = new RecordingDispatcher(events);
-        var outboxStore = new RecordingOutboxStore(events);
+        var commitStore = new RecordingCommitStore();
+        var result = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, commitStore)
+            .CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted, []));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-
-        Assert.Equal(["write:commit-1"], events);
-        Assert.Empty(outboxStore.PendingItems);
-        Assert.Empty(outboxStore.Results);
+        Assert.True(result.Succeeded);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Skip, result.PersistenceDecision.Mode);
+        Assert.Empty(result.PendingPostCommitWorkIds);
+        Assert.Empty(commitStore.Commits);
     }
 
     [Fact]
-    public async Task CheckpointCommitter_DoesNotDispatchPostCommitIntentsWhenPendingOutboxRecordFails()
+    public async Task CheckpointCommitter_ReturnsFailureWhenPolicySkipsCommitWithPostCommitWork()
     {
-        var events = new List<string>();
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events);
-        var failure = new InvalidOperationException("pending outbox failed");
-        var outboxStore = new RecordingOutboxStore(events, failOnPendingItemId: "commit-1:intent-2", failure: failure);
-        var commit = NewCommit(
-            RuntimeCheckpointNames.PostCommitIntentRecorded,
-            [
-                NewIntent("intent-1"),
-                NewIntent("intent-2")
-            ]);
+        var commitStore = new RecordingCommitStore();
+        var result = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, commitStore)
+            .CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
-
-        Assert.Same(failure, exception);
-        Assert.Equal(
-            [
-                "write:commit-1",
-                "outbox-pending:commit-1:intent-1",
-                "outbox-pending:commit-1:intent-2"
-            ],
-            events);
-        Assert.Equal(["commit-1:intent-1"], outboxStore.PendingItems.Select(item => item.OutboxItemId));
-        Assert.Empty(dispatcher.Intents);
-        Assert.Empty(outboxStore.Results);
+        Assert.False(result.Succeeded);
+        Assert.Equal(RuntimeCheckpointCommitFailureCodes.SkipHasPostCommitWork, result.FailureCode);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Skip, result.PersistenceDecision.Mode);
+        Assert.Empty(result.PendingPostCommitWorkIds);
+        Assert.Empty(commitStore.Commits);
     }
 
     [Fact]
-    public async Task CheckpointCommitter_ReportsPartialPostCommitIntentDispatchFailures()
+    public async Task InMemoryCheckpointCommitStore_IsIdempotentByCommitId()
     {
-        var events = new List<string>();
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-2", failure: new InvalidOperationException("Intent failed."));
-        var commit = NewCommit(
-            RuntimeCheckpointNames.PostCommitIntentRecorded,
-            [
-                NewIntent("intent-1"),
-                NewIntent("intent-2"),
-                NewIntent("intent-3")
-            ]);
-
-        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher).CommitAsync(commit));
-
-        Assert.Equal("commit-1", exception.CommitId);
-        Assert.Equal("intent-2", exception.FailedIntentId);
-        Assert.Equal(["intent-1"], exception.DispatchedIntentIds);
-        Assert.Equal(["intent-3"], exception.UndispatchedIntentIds);
-        Assert.Equal(["write:commit-1", "dispatch:intent-1", "dispatch:intent-2"], events);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_RecordsFailedOutboxResultBeforeReportingDispatchFailure()
-    {
-        var events = new List<string>();
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-2", failure: new InvalidOperationException("Intent failed."));
-        var outboxStore = new RecordingOutboxStore(events);
-        var commit = NewCommit(
-            RuntimeCheckpointNames.PostCommitIntentRecorded,
-            [
-                NewIntent("intent-1"),
-                NewIntent("intent-2"),
-                NewIntent("intent-3")
-            ]);
-
-        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(commit));
-
-        Assert.Equal(
-            [
-                "write:commit-1",
-                "outbox-pending:commit-1:intent-1",
-                "outbox-pending:commit-1:intent-2",
-                "outbox-pending:commit-1:intent-3",
-                "dispatch:intent-1",
-                "outbox-result:commit-1:intent-1:Delivered",
-                "dispatch:intent-2",
-                "outbox-result:commit-1:intent-2:FailedFinal"
-            ],
-            events);
-        Assert.Equal([RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal], outboxStore.Results.Select(result => result.Status));
-        Assert.Equal("Intent failed.", outboxStore.Results[1].FailureMessage);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_PreservesDispatchFailureWhenFailedOutboxResultRecordingFails()
-    {
-        var events = new List<string>();
-        var dispatchFailure = new InvalidOperationException("Intent failed.");
-        var outboxFailure = new InvalidOperationException("failed-final outbox failed");
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events, failOnIntentId: "intent-1", failure: dispatchFailure);
-        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.FailedFinal, failure: outboxFailure);
-
-        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-
-        Assert.Same(dispatchFailure, exception.InnerException);
-        Assert.Same(outboxFailure, exception.DeliveryResultRecordingException);
-        Assert.Equal(
-            [
-                "write:commit-1",
-                "outbox-pending:commit-1:intent-1",
-                "dispatch:intent-1",
-                "outbox-result:commit-1:intent-1:FailedFinal"
-            ],
-            events);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_PreservesDispatchFailureWhenFailedOutboxResultRecordingIsCanceled()
-    {
-        var dispatchFailure = new InvalidOperationException("Intent failed.");
-        var outboxFailure = new OperationCanceledException();
-        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: dispatchFailure);
-        var outboxStore = new RecordingOutboxStore(failOnResultStatus: RuntimePostCommitOutboxStatus.FailedFinal, failure: outboxFailure);
-
-        var exception = await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-
-        Assert.Same(dispatchFailure, exception.InnerException);
-        Assert.Same(outboxFailure, exception.DeliveryResultRecordingException);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_DoesNotMisclassifyDeliveredOutboxRecordFailureAsDispatchFailure()
-    {
-        var events = new List<string>();
-        var writer = new RecordingWriter(events);
-        var dispatcher = new RecordingDispatcher(events);
-        var failure = new InvalidOperationException("delivered outbox failed");
-        var outboxStore = new RecordingOutboxStore(events, failOnResultStatus: RuntimePostCommitOutboxStatus.Delivered, failure: failure);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-
-        Assert.Same(failure, exception);
-        Assert.Equal(
-            [
-                "write:commit-1",
-                "outbox-pending:commit-1:intent-1",
-                "dispatch:intent-1",
-                "outbox-result:commit-1:intent-1:Delivered"
-            ],
-            events);
-        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
-        Assert.Empty(outboxStore.Results);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_RecordsExceptionTypeWhenDispatchFailureMessageIsBlank()
-    {
-        var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: new BlankMessageException());
-        var outboxStore = new RecordingOutboxStore();
-
-        await Assert.ThrowsAsync<RuntimePostCommitIntentDispatchException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-
-        var result = Assert.Single(outboxStore.Results);
-        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, result.Status);
-        Assert.Equal(nameof(BlankMessageException), result.FailureMessage);
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_DoesNotWrapPostCommitIntentDispatchCancellation()
-    {
-        var dispatcher = new RecordingDispatcher(
-            failOnIntentId: "intent-1",
-            failure: new OperationCanceledException());
-
-        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await NewCommitter(RuntimeCheckpointPersistenceMode.Immediate, new RecordingWriter(), dispatcher).CommitAsync(NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded)));
-    }
-
-    [Fact]
-    public async Task CheckpointCommitter_DoesNotWriteOrDispatchWhenPolicySkipsPersistence()
-    {
-        var writer = new RecordingWriter();
-        var dispatcher = new RecordingDispatcher();
-        var outboxStore = new RecordingOutboxStore();
-
-        var decision = await NewCommitter(RuntimeCheckpointPersistenceMode.Skip, writer, dispatcher, outboxStore).CommitAsync(NewCommit(RuntimeCheckpointNames.WorkflowCompleted));
-
-        Assert.Equal(RuntimeCheckpointPersistenceMode.Skip, decision.Mode);
-        Assert.Empty(writer.Writes);
-        Assert.Empty(dispatcher.Intents);
-        Assert.Empty(outboxStore.PendingItems);
-        Assert.Empty(outboxStore.Results);
-    }
-
-    [Fact]
-    public async Task InMemoryCheckpointWriter_IsIdempotentByCommitId()
-    {
-        var writer = new InMemoryRuntimeCheckpointWriter();
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal("commit-1", write.Commit.CommitId);
         Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsWorkflowExecutionStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsWorkflowExecutionStateChanges()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var running = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var completed = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -490,21 +274,21 @@ public sealed class RuntimeCheckpointCommitTests
             })
         };
 
-        await writer.WriteAsync(running, decision);
-        await writer.WriteAsync(completed, decision);
+        await writer.CommitAsync(running, decision);
+        await writer.CommitAsync(completed, decision);
 
         var state = await workflowStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
         Assert.Equal(WorkflowExecutionStatus.Completed, state.Status);
         Assert.Equal(_now.AddMinutes(5), state.CompletedAt);
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingReplay()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -522,22 +306,22 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>()))
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var state = await workflowStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
         Assert.Equal(WorkflowExecutionStatus.Running, state.Status);
         Assert.Null(state.CompletedAt);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedWorkflowStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedWorkflowStateProjectionBeforeRecordingWrite()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
         {
@@ -549,102 +333,102 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>()))
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await workflowStateStore.ListAsync());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenWorkflowStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenWorkflowStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(new ThrowingWorkflowExecutionStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(new ThrowingWorkflowExecutionStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenActivityStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenActivityStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: new ThrowingActivityExecutionStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: new ThrowingActivityExecutionStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenBookmarkStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenBookmarkStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: new ThrowingBookmarkStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: new ThrowingBookmarkStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenDurableValueStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenDurableValueStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, new ThrowingDurableValueStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, new ThrowingDurableValueStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenIncidentStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenIncidentStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, new ThrowingIncidentStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, new ThrowingIncidentStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenOperationalStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenOperationalStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, new ThrowingOperationalStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, new ThrowingOperationalStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotRecordWhenSchedulerStateProjectionFails()
+    public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenSchedulerStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, new ThrowingSchedulerStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, new ThrowingSchedulerStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsSchedulerStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsSchedulerStateChanges()
     {
         var schedulerStateStore = new InMemorySchedulerStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, schedulerStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var initial = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
         var updatedSchedulerState = _schedulerState with
@@ -670,21 +454,21 @@ public sealed class RuntimeCheckpointCommitTests
             StateChanges = NewStateChanges(schedulerState: updatedSchedulerState)
         };
 
-        await writer.WriteAsync(initial, decision);
-        await writer.WriteAsync(updated, decision);
+        await writer.CommitAsync(initial, decision);
+        await writer.CommitAsync(updated, decision);
 
         var state = await schedulerStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
         Assert.Equal(2, state.Version);
         Assert.Equal("node-2", Assert.Single(state.PendingWork).ExecutableNodeId);
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedSchedulerStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedSchedulerStateProjectionBeforeRecordingWrite()
     {
         var schedulerStateStore = new InMemorySchedulerStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, schedulerStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
         {
@@ -696,18 +480,18 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>()))
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await schedulerStateStore.ListAsync());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsSchedulerStateFromDifferentWorkflowBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsSchedulerStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var schedulerStateStore = new InMemorySchedulerStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, schedulerStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var schedulerState = _schedulerState with { WorkflowExecutionId = "wfexec-2" };
         var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
@@ -715,18 +499,18 @@ public sealed class RuntimeCheckpointCommitTests
             StateChanges = NewStateChanges(schedulerState: schedulerState)
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await schedulerStateStore.ListAsync());
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingSchedulerReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingSchedulerReplay()
     {
         var schedulerStateStore = new InMemorySchedulerStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, schedulerStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, schedulerStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.ActivityScheduled);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
@@ -734,21 +518,21 @@ public sealed class RuntimeCheckpointCommitTests
             StateChanges = NewStateChanges(schedulerState: _schedulerState with { Version = 2 })
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var state = await schedulerStateStore.FindAsync("wfexec-1");
         Assert.NotNull(state);
         Assert.Equal(1, state.Version);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityScheduled, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsActivityExecutionStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsActivityExecutionStateChanges()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var running = NewCommit(RuntimeCheckpointNames.ActivityStarted);
         var completed = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
@@ -761,21 +545,21 @@ public sealed class RuntimeCheckpointCommitTests
             })
         };
 
-        await writer.WriteAsync(running, decision);
-        await writer.WriteAsync(completed, decision);
+        await writer.CommitAsync(running, decision);
+        await writer.CommitAsync(completed, decision);
 
         var state = await activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Equal(_now.AddMinutes(5), state.CompletedAt);
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedActivityStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedActivityStateProjectionBeforeRecordingWrite()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
         {
@@ -787,18 +571,18 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>()))
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await activityStateStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingActivityReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingActivityReplay()
     {
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(activityExecutionStateStore: activityStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: activityStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.ActivityStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with
@@ -815,22 +599,22 @@ public sealed class RuntimeCheckpointCommitTests
                     Metadata: new Dictionary<string, string>()))
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var state = await activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Running, state.Status);
         Assert.Null(state.CompletedAt);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsBookmarkStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsBookmarkStateChanges()
     {
         var bookmarkStateStore = new InMemoryBookmarkStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: bookmarkStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var created = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
         var consumed = NewCommit(RuntimeCheckpointNames.BookmarkConsumed) with
@@ -842,23 +626,23 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(created, decision);
+        await writer.CommitAsync(created, decision);
 
         var bookmark = await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
         Assert.NotNull(bookmark);
         Assert.Equal("node-resume-1", bookmark.ResumeTargetId);
 
-        await writer.WriteAsync(consumed, decision);
+        await writer.CommitAsync(consumed, decision);
 
         Assert.Null(await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedBookmarkStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedBookmarkStateProjectionBeforeRecordingWrite()
     {
         var bookmarkStateStore = new InMemoryBookmarkStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: bookmarkStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
         {
@@ -868,19 +652,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
         Assert.Contains("Delete", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsBookmarkStateFromDifferentWorkflowBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsBookmarkStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var bookmarkStateStore = new InMemoryBookmarkStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: bookmarkStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.BookmarkCreated) with
         {
@@ -890,19 +674,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-1"));
         Assert.Empty(await bookmarkStateStore.ListAsync("wfexec-2"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingBookmarkReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingBookmarkReplay()
     {
         var bookmarkStateStore = new InMemoryBookmarkStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(bookmarkStateStore: bookmarkStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: bookmarkStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.BookmarkCreated);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.BookmarkConsumed) with
@@ -913,21 +697,21 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var bookmark = await bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1");
         Assert.NotNull(bookmark);
         Assert.Equal("node-resume-1", bookmark.ResumeTargetId);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsDurableValueStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsDurableValueStateChanges()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var captured = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
         var deleted = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -939,23 +723,23 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(captured, decision);
+        await writer.CommitAsync(captured, decision);
 
         var durableValue = await durableValueStateStore.FindAsync("wfexec-1", "durable-1");
         Assert.NotNull(durableValue);
         Assert.Equal("customer", durableValue.ValueId);
 
-        await writer.WriteAsync(deleted, decision);
+        await writer.CommitAsync(deleted, decision);
 
         Assert.Null(await durableValueStateStore.FindAsync("wfexec-1", "durable-1"));
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedDurableValueStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedDurableValueStateProjectionBeforeRecordingWrite()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
         {
@@ -965,19 +749,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
         Assert.Contains("Delete", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsDurableValueStateFromDifferentWorkflowBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsDurableValueStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.DurableValueCaptured) with
         {
@@ -987,19 +771,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await durableValueStateStore.ListAsync("wfexec-1"));
         Assert.Empty(await durableValueStateStore.ListAsync("wfexec-2"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingDurableValueReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingDurableValueReplay()
     {
         var durableValueStateStore = new InMemoryDurableValueStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, durableValueStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, durableValueStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.DurableValueCaptured);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -1010,21 +794,21 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var durableValue = await durableValueStateStore.FindAsync("wfexec-1", "durable-1");
         Assert.NotNull(durableValue);
         Assert.Equal("customer", durableValue.ValueId);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.DurableValueCaptured, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsIncidentStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsIncidentStateChanges()
     {
         var incidentStateStore = new InMemoryIncidentStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, incidentStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var recorded = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
         var resolved = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
@@ -1040,27 +824,27 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(recorded, decision);
+        await writer.CommitAsync(recorded, decision);
 
         var incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
         Assert.NotNull(incident);
         Assert.True(incident.IsBlocking);
         Assert.Single(await incidentStateStore.ListBlockingAsync("wfexec-1"));
 
-        await writer.WriteAsync(resolved, decision);
+        await writer.CommitAsync(resolved, decision);
 
         incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
         Assert.NotNull(incident);
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
         Assert.Empty(await incidentStateStore.ListBlockingAsync("wfexec-1"));
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedIncidentStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedIncidentStateProjectionBeforeRecordingWrite()
     {
         var incidentStateStore = new InMemoryIncidentStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, incidentStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
         {
@@ -1070,19 +854,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Append", exception.Message);
         Assert.Contains("Upsert", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await incidentStateStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsIncidentStateFromDifferentWorkflowBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsIncidentStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var incidentStateStore = new InMemoryIncidentStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, incidentStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
         {
@@ -1092,19 +876,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await incidentStateStore.ListAsync("wfexec-1"));
         Assert.Empty(await incidentStateStore.ListAsync("wfexec-2"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingIncidentReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingIncidentReplay()
     {
         var incidentStateStore = new InMemoryIncidentStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, incidentStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
@@ -1119,21 +903,21 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var incident = await incidentStateStore.FindAsync("wfexec-1", "incident-1");
         Assert.NotNull(incident);
         Assert.Equal(IncidentStatus.Blocking, incident.Status);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsDuplicateIncidentAppendBeforeRecordingSecondWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsDuplicateIncidentAppendBeforeRecordingSecondWrite()
     {
         var incidentStateStore = new InMemoryIncidentStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, incidentStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, incidentStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.IncidentRecorded);
         var duplicateAppend = NewCommit(RuntimeCheckpointNames.IncidentRecorded) with
@@ -1149,21 +933,21 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(first, decision);
+        await writer.CommitAsync(first, decision);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(duplicateAppend, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(duplicateAppend, decision).AsTask());
 
         Assert.Contains("already exists", exception.Message);
         Assert.Equal(IncidentStatus.Blocking, (await incidentStateStore.FindAsync("wfexec-1", "incident-1"))!.Status);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_ProjectsOperationalStateChanges()
+    public async Task InMemoryCheckpointCommitStore_ProjectsOperationalStateChanges()
     {
         var operationalStateStore = new InMemoryOperationalStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var recorded = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
         var updated = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
@@ -1175,26 +959,26 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(recorded, decision);
+        await writer.CommitAsync(recorded, decision);
 
         var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
         Assert.NotNull(operationalState);
         Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
 
-        await writer.WriteAsync(updated, decision);
+        await writer.CommitAsync(updated, decision);
 
         operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
         Assert.NotNull(operationalState);
         Assert.Equal("worker-2", operationalState.ExecutionLease!.OwnerId);
         Assert.Equal(2, operationalState.ExecutionLease.FencingToken);
-        Assert.Equal(2, writer.ListWrites().Count);
+        Assert.Equal(2, writer.ListCommits().Count);
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsUnsupportedOperationalStateProjectionBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedOperationalStateProjectionBeforeRecordingWrite()
     {
         var operationalStateStore = new InMemoryOperationalStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
         {
@@ -1204,18 +988,18 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("Upsert", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await operationalStateStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_RejectsOperationalStateFromDifferentWorkflowBeforeRecordingWrite()
+    public async Task InMemoryCheckpointCommitStore_RejectsOperationalStateFromDifferentWorkflowBeforeRecordingWrite()
     {
         var operationalStateStore = new InMemoryOperationalStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
         {
@@ -1225,19 +1009,19 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.WriteAsync(commit, decision).AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
 
         Assert.Contains("WorkflowExecutionId", exception.Message);
-        Assert.Empty(writer.ListWrites());
+        Assert.Empty(writer.ListCommits());
         Assert.Empty(await operationalStateStore.ListAsync("wfexec-1"));
         Assert.Empty(await operationalStateStore.ListAsync("wfexec-2"));
     }
 
     [Fact]
-    public async Task InMemoryCheckpointWriter_DoesNotProjectConflictingOperationalReplay()
+    public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingOperationalReplay()
     {
         var operationalStateStore = new InMemoryOperationalStateStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, operationalStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
@@ -1248,13 +1032,13 @@ public sealed class RuntimeCheckpointCommitTests
             ])
         };
 
-        await writer.WriteAsync(first, decision);
-        await writer.WriteAsync(conflictingReplay, decision);
+        await writer.CommitAsync(first, decision);
+        await writer.CommitAsync(conflictingReplay, decision);
 
         var operationalState = await operationalStateStore.FindAsync("wfexec-1", "operational-1");
         Assert.NotNull(operationalState);
         Assert.Equal("worker-1", operationalState.ExecutionLease!.OwnerId);
-        var write = Assert.Single(writer.ListWrites());
+        var write = Assert.Single(writer.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.PostCommitIntentRecorded, write.Commit.Checkpoint.Name);
     }
 
@@ -1503,16 +1287,10 @@ public sealed class RuntimeCheckpointCommitTests
 
     private RuntimeCheckpointCommitter NewCommitter(
         RuntimeCheckpointPersistenceMode mode,
-        RecordingWriter writer,
-        RecordingDispatcher? dispatcher = null,
-        RecordingOutboxStore? outboxStore = null,
-        TimeProvider? timeProvider = null) =>
+        RecordingCommitStore commitStore) =>
         new(
             new FixedPolicy(mode),
-            writer,
-            dispatcher ?? new RecordingDispatcher(),
-            outboxStore,
-            timeProvider ?? TimeProvider.System);
+            commitStore);
 
     private static JsonElement Json(string json)
     {
@@ -1526,81 +1304,23 @@ public sealed class RuntimeCheckpointCommitTests
             ValueTask.FromResult(new RuntimeCheckpointPersistenceDecision(mode));
     }
 
-    private sealed class RecordingWriter(List<string>? events = null, Exception? exception = null) : IRuntimeCheckpointWriter
+    private sealed class RecordingCommitStore(
+        List<string>? events = null,
+        Exception? exception = null,
+        IReadOnlyCollection<string>? pendingPostCommitWorkIds = null) : IRuntimeCheckpointCommitStore
     {
-        public List<(RuntimeCheckpointCommit Commit, RuntimeCheckpointPersistenceDecision Decision)> Writes { get; } = [];
+        public List<(RuntimeCheckpointCommit Commit, RuntimeCheckpointPersistenceDecision Decision)> Commits { get; } = [];
 
-        public ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
         {
-            events?.Add($"write:{commit.CommitId}");
+            events?.Add($"commit:{commit.CommitId}");
 
             if (exception is not null)
                 throw exception;
 
-            Writes.Add((commit, decision));
-            return ValueTask.CompletedTask;
+            Commits.Add((commit, decision));
+            return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult(pendingPostCommitWorkIds ?? commit.PostCommitIntents.Select(intent => $"{commit.CommitId}:{intent.IntentId}").ToArray()));
         }
-    }
-
-    private sealed class RecordingDispatcher(
-        List<string>? events = null,
-        string? failOnIntentId = null,
-        Exception? failure = null) : IRuntimePostCommitIntentDispatcher
-    {
-        public List<RuntimePostCommitIntent> Intents { get; } = [];
-
-        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"dispatch:{intent.IntentId}");
-
-            if (intent.IntentId == failOnIntentId)
-                throw failure ?? new InvalidOperationException($"Intent {intent.IntentId} failed.");
-
-            Intents.Add(intent);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingOutboxStore(
-        List<string>? events = null,
-        string? failOnPendingItemId = null,
-        RuntimePostCommitOutboxStatus? failOnResultStatus = null,
-        Exception? failure = null) : IRuntimePostCommitOutboxStore
-    {
-        public List<RuntimePostCommitOutboxItem> PendingItems { get; } = [];
-        public List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
-
-        public ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"outbox-pending:{item.OutboxItemId}");
-
-            if (item.OutboxItemId == failOnPendingItemId)
-                throw failure ?? new InvalidOperationException($"Pending outbox item {item.OutboxItemId} failed.");
-
-            PendingItems.Add(item);
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(PendingItems);
-
-        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"outbox-result:{result.OutboxItemId}:{result.Status}");
-
-            if (result.Status == failOnResultStatus)
-                throw failure ?? new InvalidOperationException($"Outbox result {result.OutboxItemId} failed.");
-
-            Results.Add(result);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class BlankMessageException() : Exception(string.Empty);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore

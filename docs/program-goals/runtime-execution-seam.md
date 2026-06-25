@@ -46,6 +46,7 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 8. Keep `ActivityChildSlot` and `ExecutableChildSlot` as traversal projections only. Activity-owned relationship semantics belong to node/executable structure owned by the activity module, not slot metadata.
 9. Plan and implement [Flowchart scoped execution](../../specs/073-flowchart-scoped-execution/spec.md) as the clean-slate activity-owned execution model for advanced Flowchart joins, loops, races, and public gateway policies.
 10. Plan and implement [Activity execution inspection](../../specs/079-activity-execution-inspection/spec.md) as the checkpoint-gated runtime evidence model that supports repeated activity executions and workflow instance inspection.
+11. Plan and implement [Runtime checkpoint commit](../../specs/080-runtime-checkpoint-commit/spec.md), based on [ADR 0020](../adr/0020-runtime-checkpoint-commit-post-commit-work.md): deepen runtime checkpoint commit so it records post-commit work without inline delivery, replaces `IRuntimeCheckpointWriter` with `IRuntimeCheckpointCommitStore`, and keeps post-commit delivery in the outbox processor.
 
 ## Linked Surfaces
 
@@ -56,6 +57,8 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 - [Activity construction seam spec](../../specs/006-activity-construction-seam/spec.md)
 - [Flowchart scoped execution spec](../../specs/073-flowchart-scoped-execution/spec.md)
 - [Activity execution inspection spec](../../specs/079-activity-execution-inspection/spec.md)
+- [Runtime checkpoint commit spec](../../specs/080-runtime-checkpoint-commit/spec.md)
+- [Runtime checkpoint commit post-commit work ADR](../adr/0020-runtime-checkpoint-commit-post-commit-work.md)
 - [Checkpoint-gated activity execution inspection ADR](../adr/0001-checkpoint-gated-activity-execution-inspection.md)
 - [Elsa constitution](../../.specify/memory/constitution.md)
 - [Framework constitution](../../.specify/memory/constitution-framework.md)
