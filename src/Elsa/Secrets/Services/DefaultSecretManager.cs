@@ -11,6 +11,7 @@ public sealed class DefaultSecretManager(
     ISecretStoreRegistry storeRegistry,
     ISecretTypeRegistry typeRegistry,
     ISecretAuditSink auditSink,
+    SecretLifecyclePolicy lifecyclePolicy,
     SecretModelMapper mapper,
     TimeProvider timeProvider) : ISecretManager
 {
@@ -62,13 +63,17 @@ public sealed class DefaultSecretManager(
     {
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
-        return secret is null || secret.Status == SecretStatus.Deleted ? null : mapper.Map(secret);
+
+        if (secret is null || !lifecyclePolicy.EvaluatePublicVisibility(secret).Allowed)
+            return null;
+
+        return mapper.Map(secret);
     }
 
     public async ValueTask<Page<SecretMetadata>> ListAsync(SecretQuery query, CancellationToken cancellationToken = default)
     {
         var secrets = await repository.ListAsync(cancellationToken);
-        var filtered = secrets.Where(x => x.Status != SecretStatus.Deleted);
+        var filtered = secrets.Where(x => lifecyclePolicy.EvaluatePublicVisibility(x).Allowed);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -160,7 +165,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || secret.Status == SecretStatus.Deleted)
+        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
             return null;
 
         secret.Status = SecretStatus.Revoked;
@@ -178,7 +183,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || secret.Status == SecretStatus.Deleted)
+        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
             return false;
 
         var store = storeRegistry.Get(secret.StoreName);
@@ -196,7 +201,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || secret.Status == SecretStatus.Deleted)
+        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
             return SecretTestResult.Failure("not-found", "Secret not found.");
 
         var version = secret.LatestActiveVersion;
@@ -223,7 +228,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || secret.Status == SecretStatus.Deleted)
+        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
             throw new InvalidOperationException("Secret not found.");
 
         return secret;
