@@ -101,6 +101,38 @@ public sealed class SecretManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_Deleted_Tombstone_Behaves_As_Not_Found()
+    {
+        await CreateEncryptedAsync("payments.api");
+        await _manager.DeleteAsync("payments.api");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _manager.UpdateAsync("payments.api", new UpdateSecretMetadataRequest { DisplayName = "Updated" }));
+
+        var tombstone = (await _repository.FindAsync("payments.api"))!;
+
+        Assert.Equal(SecretStatus.Deleted, tombstone.Status);
+        Assert.NotEqual("Updated", tombstone.DisplayName);
+        Assert.Null(await _manager.FindAsync("payments.api"));
+    }
+
+    [Fact]
+    public async Task Rotate_Deleted_Tombstone_Behaves_As_Not_Found()
+    {
+        await CreateEncryptedAsync("payments.api");
+        await _manager.DeleteAsync("payments.api");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" }));
+
+        var tombstone = (await _repository.FindAsync("payments.api"))!;
+
+        Assert.Equal(SecretStatus.Deleted, tombstone.Status);
+        Assert.Single(tombstone.Versions);
+        Assert.Null(await _manager.FindAsync("payments.api"));
+    }
+
+    [Fact]
     public async Task Configuration_Store_Resolves_Host_Configuration_Value()
     {
         await _manager.CreateAsync(new CreateSecretRequest
