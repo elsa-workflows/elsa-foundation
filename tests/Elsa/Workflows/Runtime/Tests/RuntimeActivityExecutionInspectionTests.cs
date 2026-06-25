@@ -187,9 +187,11 @@ public sealed class RuntimeActivityExecutionInspectionTests
     [Fact]
     public async Task GetActivityExecutionRequestHandler_Returns_Committed_Projection()
     {
-        var store = new InMemoryActivityExecutionInspectionStore();
-        await store.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
-        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(store);
+        var workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        await workflowExecutionStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
+        await inspectionStore.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, inspectionStore);
 
         var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
 
@@ -200,9 +202,23 @@ public sealed class RuntimeActivityExecutionInspectionTests
     [Fact]
     public async Task GetActivityExecutionRequestHandler_Returns_Null_When_Projection_Is_Missing()
     {
-        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(new InMemoryActivityExecutionInspectionStore());
+        var workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowExecutionStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(workflowExecutionStateStore, new InMemoryActivityExecutionInspectionStore());
 
         var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-missing"), CancellationToken.None);
+
+        Assert.Null(response.ActivityExecution);
+    }
+
+    [Fact]
+    public async Task GetActivityExecutionRequestHandler_Returns_Null_When_WorkflowExecution_Is_Missing()
+    {
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        await inspectionStore.SaveAsync(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
+        IRequestHandler<GetActivityExecution, GetActivityExecutionResponse> handler = new GetActivityExecutionRequestHandler(new InMemoryWorkflowExecutionStateStore(), inspectionStore);
+
+        var response = await handler.Handle(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
 
         Assert.Null(response.ActivityExecution);
     }

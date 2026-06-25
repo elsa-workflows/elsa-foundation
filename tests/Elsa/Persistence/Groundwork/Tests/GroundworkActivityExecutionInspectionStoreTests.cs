@@ -212,6 +212,23 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     }
 
     [Fact]
+    public async Task CheckpointWriter_Wraps_UnitOfWork_Begin_Exception()
+    {
+        var documentStore = new BeginFailingDocumentStore(
+            new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()),
+            new InvalidOperationException("Transaction begin failed."));
+        var writer = NewCheckpointWriter(documentStore);
+        var commit = InspectionCommit(Projection("wf-1", "ae-1", sequence: 1));
+
+        var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(
+            () => writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("commit-1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CheckpointWriter_Rolls_Back_State_When_CommitMarker_Save_Fails()
     {
         var innerStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
@@ -398,6 +415,35 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            throw exception;
+    }
+
+    private sealed class BeginFailingDocumentStore(InMemoryDocumentStore innerStore, Exception exception) : IDocumentStore
+    {
+        public TransactionBoundary TransactionBoundary => innerStore.TransactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            innerStore.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            innerStore.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            innerStore.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            innerStore.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            innerStore.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            innerStore.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            innerStore.AnyAsync(query, cancellationToken);
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             throw exception;
