@@ -68,9 +68,8 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var processor = new WorkflowSchedulerCommandProcessor(
             queue,
-            ThrowingSchedulerDrainer.Instance,
             DeferredSchedulerDrainPolicy.Instance,
-            [],
+            new WorkflowExecutionDrainCoordinator(ThrowingSchedulerDrainer.Instance, []),
             new FixedTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
@@ -94,9 +93,8 @@ public sealed class RuntimeSchedulerWorkQueueTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var processor = new WorkflowSchedulerCommandProcessor(
             queue,
-            ThrowingSchedulerDrainer.Instance,
             DeferredSchedulerDrainPolicy.Instance,
-            []);
+            new WorkflowExecutionDrainCoordinator(ThrowingSchedulerDrainer.Instance, []));
         var provider = new InProcessWorkflowExecutionAgentProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1);

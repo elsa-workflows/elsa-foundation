@@ -142,7 +142,13 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
 - **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
-- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work, then applies the scheduler drain policy; activity execution remains handler/provider behavior, not command acceptance behavior)*.
+- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work, applies the scheduler drain policy, then delegates command-triggered draining to `IWorkflowExecutionDrainCoordinator`; activity execution remains handler/provider behavior, not command acceptance behavior)*.
+
+### `IWorkflowExecutionDrainCoordinator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one coordinator owns command-triggered workflow execution drain orchestration for a runtime composition).
+- **Signature:** `DrainAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** bridges the accepted command boundary to scheduler draining after scheduler work is recorded and the drain policy requests immediate advancement. The default coordinator preserves the current single scheduler-drain behavior and reports its result to scheduler drain observers. Later coordinators can compose post-commit outbox delivery and follow-up scheduler drains without making command acceptance or checkpoint commit own that orchestration.
+- **Default implementation:** `WorkflowExecutionDrainCoordinator`.
 
 ### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one queue owns recorded scheduler work for a runtime composition).

@@ -19,7 +19,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new RecordingSchedulerDrainer(queue, _now);
         var observer = new RecordingSchedulerDrainObserver();
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
@@ -44,7 +44,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new RecordingSchedulerDrainer(queue, _now);
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
@@ -62,7 +62,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new RecordingSchedulerDrainer(queue, _now);
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             drainer,
             DeferredSchedulerDrainPolicy.Instance,
@@ -80,7 +80,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new RecordingSchedulerDrainer(queue, _now);
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             drainer,
             MismatchedSchedulerDrainPolicy.Instance,
@@ -100,7 +100,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var observer = new RecordingSchedulerDrainObserver();
         var drainer = new FaultingResultSchedulerDrainer(_now);
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
@@ -119,7 +119,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var recordingObserver = new RecordingSchedulerDrainObserver();
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             new RecordingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
@@ -137,7 +137,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         using var cancellation = new CancellationTokenSource();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = NewProcessor(
             queue,
             new RecordingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
@@ -294,6 +294,18 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             startedAt: _now,
             completedAt: _now,
             items: []);
+
+    private static WorkflowSchedulerCommandProcessor NewProcessor(
+        IWorkflowSchedulerWorkQueue queue,
+        IWorkflowSchedulerDrainer drainer,
+        IWorkflowSchedulerDrainPolicy drainPolicy,
+        IEnumerable<IWorkflowSchedulerDrainObserver> observers,
+        TimeProvider timeProvider) =>
+        new(
+            queue,
+            drainPolicy,
+            new WorkflowExecutionDrainCoordinator(drainer, observers),
+            timeProvider);
 
     private sealed class RecordingSchedulerDrainer(
         IWorkflowSchedulerWorkQueue queue,
