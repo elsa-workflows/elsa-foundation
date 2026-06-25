@@ -2027,6 +2027,53 @@ p {
   background: var(--surface-2);
 }
 
+.designer-apply-summary {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(420px, calc(100% - 220px));
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.designer-apply-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.designer-apply-summary strong,
+.designer-apply-summary span,
+.designer-apply-summary code {
+  min-width: 0;
+}
+
+.designer-apply-summary strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.designer-apply-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.designer-apply-summary code {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .designer-surface-label {
   position: absolute;
   z-index: 5;
