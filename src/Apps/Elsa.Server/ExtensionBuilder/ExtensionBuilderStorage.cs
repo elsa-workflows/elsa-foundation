@@ -8,6 +8,7 @@ namespace Elsa.Server.ExtensionBuilder;
 internal interface IExtensionBuilderStorage
 {
     string RootPath { get; }
+    Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(string ownerId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default);
@@ -57,6 +58,24 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     }
 
     public string RootPath { get; }
+
+    public async Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(string ownerId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            return state.Workspaces.Values
+                .Where(x => string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal))
+                .Select(workspace => ToRepositorySummary(state, workspace))
+                .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     public async Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default)
     {
@@ -611,6 +630,31 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
         project = null!;
         return false;
+    }
+
+    private static ExtensionRepositorySummary ToRepositorySummary(ExtensionBuilderState state, ExtensionWorkspace workspace)
+    {
+        var projectIds = workspace.ProjectIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var latestBuild = state.Builds.Values
+            .Where(build => projectIds.Contains(build.ProjectId))
+            .OrderByDescending(build => build.CreatedAt)
+            .FirstOrDefault();
+        var failedBuilds = state.Builds.Values.Count(build => projectIds.Contains(build.ProjectId) && build.Status is BuildStatus.Failed);
+        var failedPromotions = projectIds
+            .Where(projectId => state.Promotions.TryGetValue(projectId, out _))
+            .Sum(projectId => state.Promotions[projectId].Count(promotion => promotion.ReconcileOutcome.IsDegraded));
+
+        return new(
+            workspace.Id,
+            workspace.DisplayName,
+            workspace.OwnerId,
+            null,
+            false,
+            "not-connected",
+            latestBuild?.Status,
+            failedBuilds + failedPromotions,
+            workspace.ProjectIds.Count,
+            workspace.UpdatedAt);
     }
 
     private async Task<string> WriteFileCoreAsync(string projectId, string path, string content, CancellationToken cancellationToken)

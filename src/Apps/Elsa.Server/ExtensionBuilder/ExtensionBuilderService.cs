@@ -8,6 +8,7 @@ internal interface IExtensionBuilderService
 {
     ExtensionBuilderCapabilities GetCapabilities(ExtensionBuilderCaller caller);
     Task<IReadOnlyList<ExtensionTemplate>> ListTemplatesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(ExtensionBuilderCaller caller, CreateWorkspaceRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
@@ -43,6 +44,9 @@ internal sealed class ExtensionBuilderService(
 
     public Task<IReadOnlyList<ExtensionTemplate>> ListTemplatesAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(templates.List());
+
+    public Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default) =>
+        storage.ListRepositoriesAsync(caller.OwnerId, cancellationToken);
 
     public Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default) =>
         storage.ListWorkspacesAsync(caller.OwnerId, cancellationToken);
