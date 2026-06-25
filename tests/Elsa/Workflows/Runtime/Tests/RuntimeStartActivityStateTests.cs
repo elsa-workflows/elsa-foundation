@@ -54,7 +54,7 @@ public sealed class RuntimeStartActivityStateTests
 
         var write = Assert.Single(checkpointWriter.ListWrites());
         Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
-        Assert.Equal("Mandatory", write.Commit.Checkpoint.Metadata["runtime.checkpointRequirement"]);
+        Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
         Assert.Single(write.Commit.StateChanges.ActivityExecutions);
         Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
         Assert.Single(write.Commit.PostCommitIntents);

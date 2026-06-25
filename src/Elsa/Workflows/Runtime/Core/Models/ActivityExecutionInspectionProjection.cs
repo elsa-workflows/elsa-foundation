@@ -116,3 +116,58 @@ public sealed record ActivityExecutionInspectionProjection(
         return result.Values.ToArray();
     }
 }
+
+/// <summary>
+/// Lightweight runtime-owned summary for workflow-instance activity execution inspection lists.
+/// </summary>
+public sealed record ActivityExecutionInspectionSummaryProjection(
+    string ActivityExecutionId,
+    string WorkflowExecutionId,
+    string ExecutableNodeId,
+    string AuthoredActivityId,
+    string ActivityType,
+    string ActivityTypeVersion,
+    ActivityExecutionStatus Status,
+    string? SubStatus,
+    long ExecutionSequence,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? FirstCheckpointId,
+    string? LastCheckpointId,
+    DateTimeOffset? LastCommittedAt,
+    ActivitySchedulingProvenance Provenance,
+    IReadOnlyCollection<string> OutcomeNames,
+    int BookmarkCount,
+    int IncidentCount,
+    int ValueSnapshotCount,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static ActivityExecutionInspectionSummaryProjection FromProjection(ActivityExecutionInspectionProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+
+        return new ActivityExecutionInspectionSummaryProjection(
+            projection.ActivityExecutionId,
+            projection.WorkflowExecutionId,
+            projection.ExecutableNodeId,
+            projection.AuthoredActivityId,
+            projection.ActivityType,
+            projection.ActivityTypeVersion,
+            projection.Status,
+            projection.SubStatus,
+            projection.ExecutionSequence,
+            projection.ScheduledAt,
+            projection.StartedAt,
+            projection.CompletedAt,
+            projection.FirstCheckpointId,
+            projection.LastCheckpointId,
+            projection.LastCommittedAt,
+            projection.Provenance,
+            projection.OutcomeNames,
+            projection.Bookmarks.Count,
+            projection.Incidents.Count,
+            projection.ValueSnapshots.Count,
+            projection.Metadata);
+    }
+}

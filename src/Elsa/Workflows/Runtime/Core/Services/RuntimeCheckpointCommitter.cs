@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -168,6 +169,6 @@ public sealed class RuntimeCheckpointCommitter
         RuntimeFailureMessages.For(exception);
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
-        checkpoint.Metadata.TryGetValue("runtime.checkpointRequirement", out var requirement) &&
-        StringComparer.Ordinal.Equals(requirement, "Mandatory");
+        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
+        StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 }

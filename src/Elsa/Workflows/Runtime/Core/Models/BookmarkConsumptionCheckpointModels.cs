@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -8,7 +9,9 @@ public sealed class BookmarkConsumptionCheckpointRequest
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         BookmarkState bookmark,
-        ActivityExecutionState completedActivityExecutionState)
+        ActivityExecutionState completedActivityExecutionState,
+        RuntimeSchedulerWorkItem? completionWorkItem = null,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null)
     {
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
@@ -23,17 +26,23 @@ public sealed class BookmarkConsumptionCheckpointRequest
 
         ValidateBookmarkMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, bookmark, nameof(bookmark));
         ValidateActivityStateMatchesResumePayload(resumeWorkItem.WorkflowExecutionId, resumePayload, completedActivityExecutionState, nameof(completedActivityExecutionState));
+        if (completionWorkItem is not null)
+            ValidateCompletionWorkItem(resumeWorkItem.WorkflowExecutionId, completedActivityExecutionState.Execution.ActivityExecutionId, completionWorkItem, nameof(completionWorkItem));
 
         ResumeWorkItem = resumeWorkItem;
         ResumePayload = resumePayload;
         Bookmark = bookmark;
         CompletedActivityExecutionState = completedActivityExecutionState;
+        CompletionWorkItem = completionWorkItem;
+        ValueSnapshots = valueSnapshots ?? [];
     }
 
     public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
     public RuntimeResumeBookmarkCommandPayload ResumePayload { get; }
     public BookmarkState Bookmark { get; }
     public ActivityExecutionState CompletedActivityExecutionState { get; }
+    public RuntimeSchedulerWorkItem? CompletionWorkItem { get; }
+    public IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots { get; }
 
     private static void ValidateBookmarkMatchesResumePayload(
         string workflowExecutionId,
@@ -77,6 +86,27 @@ public sealed class BookmarkConsumptionCheckpointRequest
 
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, payload.ExecutableNodeId))
             throw new ArgumentException("Activity execution state executable node ID must match ResumeBookmark payload.", parameterName);
+    }
+
+    private static void ValidateCompletionWorkItem(
+        string workflowExecutionId,
+        string activityExecutionId,
+        RuntimeSchedulerWorkItem workItem,
+        string parameterName)
+    {
+        if (workItem.CommandKind != WorkflowExecutionCommandKind.CompleteActivity)
+            throw new ArgumentException("Bookmark consumption completion work must be CompleteActivity scheduler work.", parameterName);
+
+        if (!StringComparer.Ordinal.Equals(workItem.WorkflowExecutionId, workflowExecutionId))
+            throw new ArgumentException("Bookmark consumption completion work workflow execution ID must match ResumeBookmark scheduler work.", parameterName);
+
+        if (workItem.Payload is not { } payload)
+            throw new ArgumentException("Bookmark consumption completion work requires a complete activity payload.", parameterName);
+
+        var completePayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>()
+                              ?? throw new ArgumentException("Bookmark consumption completion work payload resolved to null.", parameterName);
+        if (!StringComparer.Ordinal.Equals(completePayload.ActivityExecutionId, activityExecutionId))
+            throw new ArgumentException("Bookmark consumption completion work activity execution ID must match completed state.", parameterName);
     }
 }
 

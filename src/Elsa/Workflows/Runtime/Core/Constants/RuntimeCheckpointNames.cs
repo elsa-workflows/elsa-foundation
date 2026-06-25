@@ -9,6 +9,8 @@ public static class RuntimeCheckpointNames
     public const string ActivityStarted = nameof(ActivityStarted);
     public const string ActivityCompleted = nameof(ActivityCompleted);
     public const string ActivitySuspended = nameof(ActivitySuspended);
+    public const string ActivityRecovered = nameof(ActivityRecovered);
+    public const string ActivityInspectionCaptured = nameof(ActivityInspectionCaptured);
     public const string BookmarkCreated = nameof(BookmarkCreated);
     public const string BookmarkConsumed = nameof(BookmarkConsumed);
     public const string DurableValueCaptured = nameof(DurableValueCaptured);

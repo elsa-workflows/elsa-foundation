@@ -93,5 +93,6 @@ public enum ActivityExecutionStatus
     Suspended,
     Completed,
     Faulted,
-    Cancelled
+    Cancelled,
+    Recovered
 }

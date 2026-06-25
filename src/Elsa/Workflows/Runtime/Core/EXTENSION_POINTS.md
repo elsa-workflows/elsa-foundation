@@ -158,7 +158,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ### `IActivityExecutionInspectionStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns committed inspection projections for concrete activity executions in a runtime composition).
-- **Signature:** `SaveAsync(ActivityExecutionInspectionProjection projection, ...)`, `FindAsync(string workflowExecutionId, string activityExecutionId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListByAuthoredActivityIdAsync(string workflowExecutionId, string authoredActivityId, ...)`.
+- **Signature:** `SaveAsync(ActivityExecutionInspectionProjection projection, ...)`, `FindAsync(string workflowExecutionId, string activityExecutionId, ...)`, `ListSummariesAsync(string workflowExecutionId, ...)`.
 - **Usage:** stores runtime-owned inspection evidence keyed by concrete activity execution identity. Projections are written from accepted checkpoint commits through the activity-execution-inspection lane, so inspection evidence does not get ahead of lifecycle state. Consumers use this store for lightweight per-instance activity execution summaries and selected execution detail without loading authored workflow documents.
 - **Default implementation:** `InMemoryActivityExecutionInspectionStore` *(single-node in-memory default for the current runtime slice)*.
 - **Known provider implementations:** `Elsa.Persistence.Groundwork` — `GroundworkActivityExecutionInspectionStore` *(cross-domain persistence provider replacement)*.

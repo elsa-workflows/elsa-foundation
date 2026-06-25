@@ -34,29 +34,17 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         }
     }
 
-    public ValueTask<IReadOnlyCollection<ActivityExecutionInspectionProjection>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection>> ListSummariesAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            return new ValueTask<IReadOnlyCollection<ActivityExecutionInspectionProjection>>(ListByWorkflowExecutionId(workflowExecutionId).ToArray());
-        }
-    }
-
-    public ValueTask<IReadOnlyCollection<ActivityExecutionInspectionProjection>> ListByAuthoredActivityIdAsync(string workflowExecutionId, string authoredActivityId, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(authoredActivityId);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_syncRoot)
-        {
-            var projections = ListByWorkflowExecutionId(workflowExecutionId)
-                .Where(projection => StringComparer.Ordinal.Equals(projection.AuthoredActivityId, authoredActivityId))
-                .ToArray();
-            return new ValueTask<IReadOnlyCollection<ActivityExecutionInspectionProjection>>(projections);
+            return new ValueTask<IReadOnlyCollection<ActivityExecutionInspectionSummaryProjection>>(
+                ListByWorkflowExecutionId(workflowExecutionId)
+                    .Select(ActivityExecutionInspectionSummaryProjection.FromProjection)
+                    .ToArray());
         }
     }
 

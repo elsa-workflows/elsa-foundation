@@ -75,6 +75,10 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Equal("resume-target:delivery", bookmarkSummary.ResumeTargetId);
         Assert.Equal("delivery-status", bookmarkSummary.StimulusType);
         Assert.Equal("sha256:delivery-status:order-123", bookmarkSummary.StimulusHash);
+        var snapshot = Assert.Single(inspectionChange.State.ValueSnapshots);
+        Assert.Equal("Text", snapshot.Name);
+        Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, snapshot.Subject);
+        Assert.Equal(RuntimePayloadCaptureMode.Payload, snapshot.CaptureMode);
 
         var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(projection);
@@ -119,6 +123,27 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
+        Assert.Empty(state.BookmarkIds);
+        Assert.Empty(_checkpointWriter.ListWrites());
+    }
+
+    [Fact]
+    public async Task HandleAsync_DoesNotRewriteRecoveredActivityState()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState() with
+        {
+            Status = ActivityExecutionStatus.Recovered,
+            CompletedAt = _now.AddMinutes(-1)
+        });
+        var handler = NewHandler();
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Recovered, state.Status);
         Assert.Empty(state.BookmarkIds);
         Assert.Empty(_checkpointWriter.ListWrites());
     }
@@ -200,7 +225,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             payload: Json("""{"orderId":"order-123"}"""),
             expiresAt: _now.AddMinutes(30),
             reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
-            metadata: new Dictionary<string, string> { ["customer"] = "northwind" }));
+            metadata: new Dictionary<string, string> { ["customer"] = "northwind" },
+            valueSnapshots: [NewInputSnapshot()]));
 
         return new RuntimeSchedulerWorkItem(
             workItemId: "create-bookmark-work",
@@ -240,6 +266,18 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             IncidentIds: [],
             FaultCount: 0,
             AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+
+    private ActivityExecutionInspectionValueSnapshot NewInputSnapshot() =>
+        new(
+            Name: "Text",
+            Subject: ActivityExecutionInspectionValueSubject.ActivityInput,
+            CaptureMode: RuntimePayloadCaptureMode.Payload,
+            Type: new RuntimeValueTypeDescriptor("primitive", "string", null),
+            CapturedAt: _now,
+            Payload: JsonSerializer.SerializeToElement("hello"),
+            CaptureReason: "Test capture",
+            IsSensitive: false,
             Metadata: new Dictionary<string, string>());
 
     private static WorkflowExecutable NewExecutable(

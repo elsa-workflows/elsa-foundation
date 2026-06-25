@@ -34,10 +34,9 @@ public sealed record ActivityExecutionIncidentSummary(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt,
     bool IsBlocking,
-    IReadOnlyDictionary<string, string> Metadata,
-    JsonElement? DiagnosticPayload = null)
+    IReadOnlyDictionary<string, string> Metadata)
 {
-    public static ActivityExecutionIncidentSummary From(IncidentState incident, JsonElement? diagnosticPayload = null) =>
+    public static ActivityExecutionIncidentSummary From(IncidentState incident) =>
         new(
             IncidentId: incident.IncidentId,
             Severity: incident.Severity,
@@ -48,6 +47,5 @@ public sealed record ActivityExecutionIncidentSummary(
             CreatedAt: incident.CreatedAt,
             ResolvedAt: incident.ResolvedAt,
             IsBlocking: incident.IsBlocking,
-            Metadata: incident.Metadata,
-            DiagnosticPayload: diagnosticPayload?.Clone());
+            Metadata: incident.Metadata);
 }

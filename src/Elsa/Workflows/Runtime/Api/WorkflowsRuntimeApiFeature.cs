@@ -23,6 +23,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionInspectionStore, InMemoryActivityExecutionInspectionStore>();
+        // Stateless merge helper over runtime stores; singleton avoids captive scopes in singleton scheduler handlers.
         services.TryAddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IBookmarkStimulusLookup, BookmarkStimulusLookup>();

@@ -161,8 +161,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         ActivityExecutionState state)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.startReason"] = startPayload.Reason;
-        metadata["runtime.startSchedulerWorkItemId"] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.StartReason] = startPayload.Reason;
+        metadata[RuntimeMetadataKeys.StartSchedulerWorkItemId] = workItem.WorkItemId;
 
         return state with
         {
@@ -182,15 +182,15 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-started:{startPayload.ActivityExecutionId}";
         var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
-            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.commandId"] = workItem.CommandId,
-            ["runtime.checkpointReason"] = startPayload.Reason,
-            ["runtime.checkpointRequirement"] = "Mandatory",
-            ["runtime.activityExecutionId"] = startPayload.ActivityExecutionId,
-            ["runtime.executableNodeId"] = startPayload.ExecutableNodeId,
-            ["runtime.executableArtifactId"] = startPayload.PinnedExecutable.ArtifactId,
-            ["runtime.executableArtifactVersion"] = startPayload.PinnedExecutable.ArtifactVersion,
-            ["runtime.executableArtifactHash"] = startPayload.PinnedExecutable.ArtifactHash
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = startPayload.Reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = startPayload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = startPayload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = startPayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = startPayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = startPayload.PinnedExecutable.ArtifactHash
         });
         var inspection = await _inspectionAccumulator!.BuildProjectionAsync(runningState, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
         var invokeWorkItem = NewInvokeActivityWorkItem(workItem, startPayload);

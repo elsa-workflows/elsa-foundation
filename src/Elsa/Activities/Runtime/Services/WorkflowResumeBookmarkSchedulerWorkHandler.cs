@@ -3,6 +3,8 @@ using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -15,7 +17,6 @@ namespace Elsa.Activities.Runtime.Services;
 public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
 {
     public const string HandlerName = nameof(WorkflowResumeBookmarkSchedulerWorkHandler);
-    private const string CompletionOutcomeNamesMetadataKey = "runtime.completionOutcomeNames";
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -59,6 +60,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
         var activityFaultIncidentRecorder = scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        var payloadCapturePolicy = scope.ServiceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
         var executable = await workflowExecutableStore.FindAsync(resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
@@ -89,14 +91,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (bookmark is not null)
             {
                 ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
-                await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, state), cancellationToken);
+                await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, state, NewCompletionWorkItem(workItem, resumePayload, state)), cancellationToken);
             }
 
-            await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, resumePayload, state, cancellationToken);
             return;
         }
 
-        if (state.Status is ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled)
+        if (state.Status is ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return;
 
         if (bookmark is null)
@@ -104,7 +105,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, payloadCapturePolicy, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -114,6 +115,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         BookmarkState bookmark,
@@ -135,12 +137,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
             return;
         }
+        var valueSnapshots = BuildInputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, inputs, _timeProvider.GetUtcNow()).ToList();
 
         var activity = await activityFactory.Create(
             executableNode.DescriptorType,
             executableNode.DescriptorPayload,
             inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            outputs: null,
+            BuildOutputArguments(executableNode),
             cancellationToken);
 
         activity.NodeId = executableNode.ExecutableNodeId;
@@ -160,21 +163,26 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted"), cancellationToken);
+            valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
+            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted", valueSnapshots), cancellationToken);
             return;
         }
 
+        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
         var completedState = CompleteActivity(workItem, resumePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState), cancellationToken);
-        await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, resumePayload, completedState, cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots), cancellationToken);
     }
 
-    private async ValueTask EnqueueCompletionWorkAsync(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+    private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>
+        executableNode.OutputCaptures.ToDictionary(
+            item => item.Key,
+            item => (OutputArgument)new OutputArgument<object?>(new RuntimeOutputMemoryBlockReference(item.Key)),
+            StringComparer.Ordinal);
+
+    private RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
-        ActivityExecutionState completedState,
-        CancellationToken cancellationToken)
+        ActivityExecutionState completedState)
     {
         var now = _timeProvider.GetUtcNow();
         var payload = new RuntimeCompleteActivityCommandPayload(
@@ -186,7 +194,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             ReadCompletionOutcomeNames(completedState),
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
-        var workItem = new RuntimeSchedulerWorkItem(
+        return new RuntimeSchedulerWorkItem(
             workItemId: $"{resumeWorkItem.WorkItemId}:complete:{resumePayload.ActivityExecutionId}",
             workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
             commandId: $"{resumeWorkItem.CommandId}:complete:{resumePayload.ActivityExecutionId}",
@@ -199,8 +207,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: resumeWorkItem.CommandMetadata,
             envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
-
-        await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
     private static RuntimeResumeBookmarkCommandPayload DeserializeResumePayload(RuntimeSchedulerWorkItem workItem)
@@ -346,11 +352,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<string> outcomeNames)
     {
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.resumeReason"] = resumePayload.Reason;
-        metadata["runtime.resumeSchedulerWorkItemId"] = workItem.WorkItemId;
-        metadata["runtime.bookmarkId"] = resumePayload.BookmarkId;
-        metadata["runtime.resumeTargetId"] = resumePayload.ResumeTargetId;
-        metadata[CompletionOutcomeNamesMetadataKey] = JsonSerializer.Serialize(outcomeNames);
+        metadata[RuntimeMetadataKeys.ResumeReason] = resumePayload.Reason;
+        metadata[RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.BookmarkId] = resumePayload.BookmarkId;
+        metadata[RuntimeMetadataKeys.ResumeTargetId] = resumePayload.ResumeTargetId;
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames);
 
         return state with
         {
@@ -363,7 +369,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
     private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)
     {
-        if (completedState.Metadata.TryGetValue(CompletionOutcomeNamesMetadataKey, out var serializedOutcomeNames))
+        if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
         {
             var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
@@ -395,21 +401,22 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
         Exception exception,
-        string subStatus)
+        string subStatus,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null)
     {
         var activityMetadata = new Dictionary<string, string>
         {
-            ["runtime.resumeReason"] = resumePayload.Reason,
-            ["runtime.resumeSchedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.bookmarkId"] = resumePayload.BookmarkId,
-            ["runtime.resumeTargetId"] = resumePayload.ResumeTargetId
+            [RuntimeMetadataKeys.ResumeReason] = resumePayload.Reason,
+            [RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.BookmarkId] = resumePayload.BookmarkId,
+            [RuntimeMetadataKeys.ResumeTargetId] = resumePayload.ResumeTargetId
         };
         var incidentMetadata = new Dictionary<string, string>
         {
-            ["runtime.bookmarkId"] = resumePayload.BookmarkId,
-            ["runtime.resumeTargetId"] = resumePayload.ResumeTargetId,
-            ["runtime.stimulusType"] = resumePayload.StimulusType,
-            ["runtime.stimulusHash"] = resumePayload.StimulusHash
+            [RuntimeMetadataKeys.BookmarkId] = resumePayload.BookmarkId,
+            [RuntimeMetadataKeys.ResumeTargetId] = resumePayload.ResumeTargetId,
+            [RuntimeMetadataKeys.StimulusType] = resumePayload.StimulusType,
+            [RuntimeMetadataKeys.StimulusHash] = resumePayload.StimulusHash
         };
 
         return new ActivityFaultIncidentRecordRequest(
@@ -421,6 +428,112 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             Exception: exception,
             SubStatus: subStatus,
             ActivityMetadata: activityMetadata,
-            IncidentMetadata: incidentMetadata);
+            IncidentMetadata: incidentMetadata,
+            ValueSnapshots: valueSnapshots ?? []);
+    }
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        IReadOnlyCollection<RuntimeMaterializedActivityInput> inputs,
+        DateTimeOffset capturedAt) =>
+        inputs
+            .Select(input =>
+            {
+                var type = TypeDescriptorFor(input.Value);
+                var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
+                    RuntimePayloadCaptureSubject.ActivityInput,
+                    workItem.WorkflowExecutionId,
+                    capturedAt,
+                    activityExecutionId: resumePayload.ActivityExecutionId,
+                    valueName: input.Name,
+                    type: type,
+                    metadata: new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.ExecutableNodeId] = resumePayload.ExecutableNodeId,
+                        [RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId
+                    }));
+                return ActivityExecutionInspectionValueSnapshot.FromDecision(
+                    input.Name,
+                    ActivityExecutionInspectionValueSubject.ActivityInput,
+                    decision,
+                    type,
+                    capturedAt,
+                    SerializeCapturedValue(decision, input.Value),
+                    isSensitive: false,
+                    metadata: decision.Metadata);
+            })
+            .ToArray();
+
+    private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
+        IRuntimePayloadCapturePolicy payloadCapturePolicy,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ExecutableNode executableNode,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
+        DateTimeOffset capturedAt) =>
+        outputs
+            .Select(output =>
+            {
+                executableNode.OutputCaptures.TryGetValue(output.OutputName, out var capture);
+                var type = capture?.Type ?? TypeDescriptorFor(output.Value);
+                var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
+                    RuntimePayloadCaptureSubject.ActivityOutput,
+                    workItem.WorkflowExecutionId,
+                    capturedAt,
+                    activityExecutionId: resumePayload.ActivityExecutionId,
+                    valueName: output.OutputName,
+                    type: type,
+                    metadata: new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.ExecutableNodeId] = resumePayload.ExecutableNodeId,
+                        [RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId
+                    }));
+                return ActivityExecutionInspectionValueSnapshot.FromDecision(
+                    output.OutputName,
+                    ActivityExecutionInspectionValueSubject.ActivityOutput,
+                    decision,
+                    type,
+                    capturedAt,
+                    SerializeCapturedValue(decision, output.Value),
+                    isSensitive: false,
+                    metadata: decision.Metadata);
+            })
+            .ToArray();
+
+    private static JsonElement SerializeValue(object? value) =>
+        value is JsonElement json
+            ? json.Clone()
+            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
+
+    private static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value) =>
+        decision.CapturesPayload ? SerializeValue(value) : null;
+
+    private static RuntimeValueTypeDescriptor RuntimeObjectType { get; } = new("clr", typeof(object).FullName, null);
+
+    private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
+        value is null ? RuntimeObjectType : new RuntimeValueTypeDescriptor("clr", value.GetType().FullName, null);
+
+    private sealed class RuntimeOutputMemoryBlockReference(string id) : IMemoryBlockReference
+    {
+        public string Id { get; set; } = id;
+
+        public IMemoryBlock Declare() => new RuntimeOutputMemoryBlock();
+
+        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
+            context.Get<T>(this);
+
+        public T? Get<T>(IExpressionExecutionContext context) =>
+            context.Get<T>(this);
+
+        public void Set<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context, T? value) =>
+            context.Set(this, value);
+    }
+
+    private sealed class RuntimeOutputMemoryBlock : IMemoryBlock
+    {
+        public object? Value { get; set; }
+        public object? Metadata { get; set; }
     }
 }

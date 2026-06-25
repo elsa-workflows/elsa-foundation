@@ -41,6 +41,7 @@ public sealed class ActivityFaultIncidentRecorder
                 checkpointId,
                 occurredAt,
                 incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                valueSnapshots: request.ValueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
         var commit = new RuntimeCheckpointCommit(
@@ -99,8 +100,8 @@ public sealed class ActivityFaultIncidentRecorder
         foreach (var item in NewBaseMetadata(request))
             metadata[item.Key] = item.Value;
 
-        metadata["runtime.incidentId"] = incidentId;
-        metadata["runtime.checkpointRequirement"] = "Mandatory";
+        metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
+        metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
 
         return metadata;
     }
@@ -108,11 +109,11 @@ public sealed class ActivityFaultIncidentRecorder
     private static Dictionary<string, string> NewBaseMetadata(ActivityFaultIncidentRecordRequest request) =>
         new(StringComparer.Ordinal)
         {
-            ["runtime.schedulerWorkItemId"] = request.WorkItem.WorkItemId,
-            ["runtime.commandId"] = request.WorkItem.CommandId,
-            ["runtime.activityExecutionId"] = request.ActivityExecutionId,
-            ["runtime.executableNodeId"] = request.ExecutableNodeId,
-            ["runtime.faultSubStatus"] = request.SubStatus
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = request.WorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = request.WorkItem.CommandId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = request.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = request.ExecutableNodeId,
+            [RuntimeMetadataKeys.FaultSubStatus] = request.SubStatus
         };
 
     private static ActivityExecutionState NewFaultedActivityState(
@@ -124,9 +125,9 @@ public sealed class ActivityFaultIncidentRecorder
         foreach (var item in request.ActivityMetadata)
             metadata[item.Key] = item.Value;
 
-        metadata["runtime.faultType"] = request.Exception.GetType().FullName ?? request.Exception.GetType().Name;
-        metadata["runtime.faultMessage"] = request.Exception.Message;
-        metadata["runtime.incidentId"] = incidentId;
+        metadata[RuntimeMetadataKeys.FaultType] = request.Exception.GetType().FullName ?? request.Exception.GetType().Name;
+        metadata[RuntimeMetadataKeys.FaultMessage] = request.Exception.Message;
+        metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
         return request.State with
         {
@@ -174,4 +175,5 @@ public sealed record ActivityFaultIncidentRecordRequest(
     Exception Exception,
     string SubStatus,
     IReadOnlyDictionary<string, string> ActivityMetadata,
-    IReadOnlyDictionary<string, string> IncidentMetadata);
+    IReadOnlyDictionary<string, string> IncidentMetadata,
+    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? ValueSnapshots = null);

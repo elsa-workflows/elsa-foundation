@@ -47,7 +47,7 @@ public sealed record WorkflowInstanceSummaryView(
 
 public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
-    IReadOnlyCollection<ActivityExecutionStateView> Activities,
+    IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
     IReadOnlyCollection<IncidentStateView> Incidents);
 
 public sealed record ActivityExecutionInspectionView(
@@ -154,8 +154,7 @@ public sealed record ActivityExecutionIncidentSummaryView(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ResolvedAt,
     bool IsBlocking,
-    IReadOnlyDictionary<string, string> Metadata,
-    object? DiagnosticPayload)
+    IReadOnlyDictionary<string, string> Metadata)
 {
     public static ActivityExecutionIncidentSummaryView From(ActivityExecutionIncidentSummary summary) =>
         new(
@@ -168,8 +167,7 @@ public sealed record ActivityExecutionIncidentSummaryView(
             summary.CreatedAt,
             summary.ResolvedAt,
             summary.IsBlocking,
-            summary.Metadata,
-            summary.DiagnosticPayload);
+            summary.Metadata);
 }
 
 public sealed record ActivityExecutionInspectionValueSnapshotView(
@@ -196,7 +194,7 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.Metadata);
 }
 
-public sealed record ActivityExecutionStateView(
+public sealed record ActivityExecutionInspectionSummaryView(
     string ActivityExecutionId,
     string WorkflowExecutionId,
     string ExecutableNodeId,
@@ -206,6 +204,53 @@ public sealed record ActivityExecutionStateView(
     string Status,
     string? SubStatus,
     long ExecutionSequence,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    string? FirstCheckpointId,
+    string? LastCheckpointId,
+    DateTimeOffset? LastCommittedAt,
+    ActivitySchedulingProvenanceView Provenance,
+    IReadOnlyCollection<string> OutcomeNames,
+    int BookmarkCount,
+    int IncidentCount,
+    int ValueSnapshotCount,
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    public static ActivityExecutionInspectionSummaryView From(ActivityExecutionInspectionSummaryProjection projection) =>
+        new(
+            projection.ActivityExecutionId,
+            projection.WorkflowExecutionId,
+            projection.ExecutableNodeId,
+            projection.AuthoredActivityId,
+            projection.ActivityType,
+            projection.ActivityTypeVersion,
+            projection.Status.ToString(),
+            projection.SubStatus,
+            projection.ExecutionSequence,
+            projection.ScheduledAt,
+            projection.StartedAt,
+            projection.CompletedAt,
+            projection.FirstCheckpointId,
+            projection.LastCheckpointId,
+            projection.LastCommittedAt,
+            ActivitySchedulingProvenanceView.From(projection.Provenance),
+            projection.OutcomeNames,
+            projection.BookmarkCount,
+            projection.IncidentCount,
+            projection.ValueSnapshotCount,
+            projection.Metadata);
+}
+
+public sealed record ActivityExecutionStateView(
+    string ActivityExecutionId,
+    string WorkflowExecutionId,
+    string ExecutableNodeId,
+    string AuthoredActivityId,
+    string ActivityType,
+    string ActivityTypeVersion,
+    string Status,
+    string? SubStatus,
     DateTimeOffset ScheduledAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
@@ -230,7 +275,6 @@ public sealed record ActivityExecutionStateView(
             state.Execution.ActivityTypeVersion,
             state.Status.ToString(),
             state.SubStatus,
-            state.ExecutionSequence,
             state.ScheduledAt,
             state.StartedAt,
             state.CompletedAt,

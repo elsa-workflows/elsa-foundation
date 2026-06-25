@@ -188,9 +188,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>
             {
-                ["runtime.scheduleReason"] = schedulePayload.Reason,
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                ["runtime.pinnedArtifactId"] = schedulePayload.PinnedExecutable.ArtifactId
+                [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId
             });
     }
 
@@ -204,15 +204,15 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-scheduled:{schedulePayload.ActivityExecutionId}";
         var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
-            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.commandId"] = workItem.CommandId,
-            ["runtime.checkpointReason"] = schedulePayload.Reason,
-            ["runtime.checkpointRequirement"] = "Mandatory",
-            ["runtime.activityExecutionId"] = schedulePayload.ActivityExecutionId,
-            ["runtime.executableNodeId"] = schedulePayload.ExecutableNodeId,
-            ["runtime.executableArtifactId"] = schedulePayload.PinnedExecutable.ArtifactId,
-            ["runtime.executableArtifactVersion"] = schedulePayload.PinnedExecutable.ArtifactVersion,
-            ["runtime.executableArtifactHash"] = schedulePayload.PinnedExecutable.ArtifactHash
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = schedulePayload.Reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = schedulePayload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = schedulePayload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = schedulePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = schedulePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = schedulePayload.PinnedExecutable.ArtifactHash
         });
         var inspection = await _inspectionAccumulator!.BuildProjectionAsync(state, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
         var startWorkItem = NewStartActivityWorkItem(workItem, schedulePayload);
@@ -315,7 +315,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             provenance.BranchId,
             provenance.IterationId,
             provenance.ExecutionPathId,
-            provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, "flowchart.executionScopeId"),
+            provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, RuntimeMetadataKeys.FlowchartExecutionScopeId),
             provenance.SchedulingCause ?? schedulePayload.Reason,
             provenance.Metadata);
     }

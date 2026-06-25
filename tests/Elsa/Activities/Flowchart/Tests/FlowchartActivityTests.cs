@@ -110,6 +110,23 @@ public sealed class FlowchartActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompletedAsync_ProjectsLoopIterationKeyInSchedulingProvenance()
+    {
+        var root = NewFlowchartNode(
+            [NewNode("node-a")],
+            connections: [NewConnection("node-a", "node-a")]);
+        var context = NewContext(root);
+        var flowchart = new FlowchartActivity();
+
+        await flowchart.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Done]));
+
+        var request = Assert.Single(context.GetChildActivityScheduleRequests());
+        Assert.Equal("node-a", request.ExecutableNodeId);
+        Assert.Equal("node-a:1", request.SchedulingProvenance.IterationId);
+        Assert.NotEqual(request.SchedulingProvenance.ExecutionPathId, request.SchedulingProvenance.IterationId);
+    }
+
+    [Fact]
     public async Task OnChildCompletedAsync_CompletesWhenNoOutboundConnectionMatches()
     {
         var root = NewFlowchartNode(

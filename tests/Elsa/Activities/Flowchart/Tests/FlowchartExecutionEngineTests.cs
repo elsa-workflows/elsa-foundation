@@ -70,7 +70,7 @@ public sealed class FlowchartExecutionEngineTests
 
         await fixture.ExecuteAsync(executable);
 
-        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAsync("wfexec-1");
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
         var childProjection = projections.Single(projection => projection.ActivityExecutionId == "actexec-a");
         Assert.Equal(ActivityExecutionStatus.Completed, childProjection.Status);
         Assert.Equal("actexec-flowchart", childProjection.Provenance.ParentActivityExecutionId);

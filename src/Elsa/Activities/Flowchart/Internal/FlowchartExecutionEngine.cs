@@ -19,6 +19,7 @@ public sealed class FlowchartExecutionEngine(
     public const string ExecutionPathIdMetadataKey = "flowchart.executionPathId";
     public const string ExecutionScopeIdMetadataKey = "flowchart.executionScopeId";
     public const string SchedulingCauseMetadataKey = "flowchart.schedulingCause";
+    public const string TargetNodeIdMetadataKey = "flowchart.targetNodeId";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -38,7 +39,7 @@ public sealed class FlowchartExecutionEngine(
 
         var state = LoadState(context.ActivityExecutionState) ?? CreateInitialState(startNode.ExecutableNodeId);
         var rootPath = state.ExecutionPaths.Single(path => path.ExecutionPathId == "path:root");
-        state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
+        state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, rootPath.IterationKey, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
         SaveState(context, state);
     }
 
@@ -241,7 +242,7 @@ public sealed class FlowchartExecutionEngine(
             ? $"Implicit join '{targetNodeId}' fired after {arrivals.Length} active arrival(s)."
             : $"Flowchart scheduled node '{targetNodeId}'.");
 
-        return ScheduleNode(context, state, targetNodeId, scheduledPath.ExecutionPathId, executionScopeId, schedulingActivityExecutionId, arrivals.Length > 1 ? "join" : "continuation");
+        return ScheduleNode(context, state, targetNodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, arrivals.Length > 1 ? "join" : "continuation");
     }
 
     private FlowchartExecutionState ApplyDecision(
@@ -350,7 +351,7 @@ public sealed class FlowchartExecutionEngine(
         var scheduledPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, command.ConnectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
         state = AddPath(state, scheduledPath);
         state = AddDiagnostic(state, FlowchartDiagnosticKind.Scheduled, nodeId, command.ConnectionId, scheduledPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' scheduled node '{nodeId}'.");
-        return ScheduleNode(context, state, nodeId, scheduledPath.ExecutionPathId, executionScopeId, schedulingActivityExecutionId, $"policy:{policyKind}");
+        return ScheduleNode(context, state, nodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, $"policy:{policyKind}");
     }
 
     private static string ResolveScheduleTargetScopeId(FlowchartPolicyCommand command, ExecutionPath currentPath)
@@ -582,6 +583,7 @@ public sealed class FlowchartExecutionEngine(
         string nodeId,
         string executionPathId,
         string executionScopeId,
+        string? iterationKey,
         string schedulingActivityExecutionId,
         string schedulingCause)
     {
@@ -594,20 +596,20 @@ public sealed class FlowchartExecutionEngine(
                 [ExecutionPathIdMetadataKey] = executionPathId,
                 [ExecutionScopeIdMetadataKey] = executionScopeId,
                 [SchedulingCauseMetadataKey] = schedulingCause,
-                ["flowchart.targetNodeId"] = nodeId
+                [TargetNodeIdMetadataKey] = nodeId
             },
             ActivitySchedulingProvenance.From(
                 context.WorkflowExecutionId,
                 context.ActivityExecutionState.Execution.ActivityExecutionId,
                 schedulingActivityExecutionId,
                 branchId: context.ActivityExecutionState.BranchId,
-                iterationId: executionPathId,
+                iterationId: iterationKey,
                 executionPathId: executionPathId,
                 executionScopeId: executionScopeId,
                 schedulingCause: schedulingCause,
                 metadata: new Dictionary<string, string>
                 {
-                    ["flowchart.targetNodeId"] = nodeId
+                    [TargetNodeIdMetadataKey] = nodeId
                 }));
 
         var activeChild = new FlowchartActiveChild(nodeId, executionPathId, executionScopeId, schedulingCause);

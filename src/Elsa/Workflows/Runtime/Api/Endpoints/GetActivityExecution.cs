@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
-internal sealed class GetActivityExecutionEndpoint(IRequestSender requestSender, ILogger<GetActivityExecutionEndpoint> logger)
+public sealed class GetActivityExecutionEndpoint(IRequestSender requestSender, ILogger<GetActivityExecutionEndpoint> logger)
     : ElsaEndpoint<GetActivityExecution, ActivityExecutionInspectionView>
 {
     public override void Configure()

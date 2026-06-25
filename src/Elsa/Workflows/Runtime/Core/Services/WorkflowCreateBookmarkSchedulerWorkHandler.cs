@@ -99,7 +99,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', but activity execution '{payload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
-        if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled)
+        if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return;
 
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
@@ -122,19 +122,19 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var checkpointId = $"checkpoint:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}";
         var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
-            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.commandId"] = workItem.CommandId,
-            ["runtime.checkpointReason"] = payload.Reason,
-            ["runtime.checkpointRequirement"] = "Mandatory",
-            ["runtime.bookmarkId"] = payload.BookmarkId,
-            ["runtime.activityExecutionId"] = payload.ActivityExecutionId,
-            ["runtime.executableNodeId"] = payload.ExecutableNodeId,
-            ["runtime.resumeTargetId"] = payload.ResumeTargetId,
-            ["runtime.stimulusType"] = payload.StimulusType,
-            ["runtime.stimulusHash"] = payload.StimulusHash,
-            ["runtime.executableArtifactId"] = payload.PinnedExecutable.ArtifactId,
-            ["runtime.executableArtifactVersion"] = payload.PinnedExecutable.ArtifactVersion,
-            ["runtime.executableArtifactHash"] = payload.PinnedExecutable.ArtifactHash
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = payload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId,
+            [RuntimeMetadataKeys.StimulusType] = payload.StimulusType,
+            [RuntimeMetadataKeys.StimulusHash] = payload.StimulusHash,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = payload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash
         });
         var inspection = _inspectionAccumulator is null
             ? null
@@ -143,6 +143,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 checkpointId,
                 occurredAt,
                 bookmarks: [ActivityExecutionBookmarkSummary.From(bookmark)],
+                valueSnapshots: payload.ValueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
 
@@ -210,9 +211,9 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeCreateBookmarkCommandPayload payload)
     {
         var metadata = payload.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.schedulerWorkItemId"] = workItem.WorkItemId;
-        metadata["runtime.commandId"] = workItem.CommandId;
-        metadata["runtime.reason"] = payload.Reason;
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
+        metadata[RuntimeMetadataKeys.Reason] = payload.Reason;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 
@@ -226,10 +227,10 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.bookmarkId"] = payload.BookmarkId;
-        metadata["runtime.resumeTargetId"] = payload.ResumeTargetId;
-        metadata["runtime.suspendReason"] = payload.Reason;
-        metadata["runtime.createBookmarkSchedulerWorkItemId"] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId;
+        metadata[RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId;
+        metadata[RuntimeMetadataKeys.SuspendReason] = payload.Reason;
+        metadata[RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId] = workItem.WorkItemId;
 
         return state with
         {
