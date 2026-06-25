@@ -6,13 +6,16 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Flowchart.Internal;
 
 public sealed class FlowchartExecutionEngine(
     FlowchartReachabilityAnalyzer reachabilityAnalyzer,
     IFlowchartPolicyRegistry policyRegistry,
-    IActivityExecutionStateStore activityExecutionStateStore)
+    RuntimeCheckpointCommitter checkpointCommitter,
+    IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
+    TimeProvider? timeProvider = null)
 {
     public const string StateMetadataKey = "elsa.flowchart.executionState";
     public const string ParentActivityExecutionIdMetadataKey = "flowchart.parentActivityExecutionId";
@@ -20,6 +23,7 @@ public sealed class FlowchartExecutionEngine(
     public const string ExecutionScopeIdMetadataKey = "flowchart.executionScopeId";
     public const string SchedulingCauseMetadataKey = "flowchart.schedulingCause";
     public const string TargetNodeIdMetadataKey = "flowchart.targetNodeId";
+    private const string FlowchartStatePersistenceReason = "FlowchartStatePersistence";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -534,9 +538,7 @@ public sealed class FlowchartExecutionEngine(
 
     private void SaveState(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
     {
-        var metadata = context.ActivityExecutionState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata[StateMetadataKey] = JsonSerializer.Serialize(state, SerializerOptions);
-        activityExecutionStateStore.SaveAsync(context.ActivityExecutionState with { Metadata = metadata }, context.CancellationToken)
+        SaveStateAsync(context, state)
             .AsTask()
             .GetAwaiter()
             .GetResult();
@@ -546,7 +548,70 @@ public sealed class FlowchartExecutionEngine(
     {
         var metadata = context.ActivityExecutionState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[StateMetadataKey] = JsonSerializer.Serialize(state, SerializerOptions);
-        await activityExecutionStateStore.SaveAsync(context.ActivityExecutionState with { Metadata = metadata }, context.CancellationToken);
+        var updatedState = context.ActivityExecutionState with { Metadata = metadata };
+        var occurredAt = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        var checkpointId = $"checkpoint:{context.SchedulerWorkItem.WorkItemId}:flowchart-state";
+        var commitId = $"commit:{context.SchedulerWorkItem.WorkItemId}:flowchart-state";
+        var checkpointMetadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = context.SchedulerWorkItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = FlowchartStatePersistenceReason,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = context.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = context.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = context.PinnedExecutable.ArtifactHash
+        };
+        var stateChangeMetadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CheckpointReason] = FlowchartStatePersistenceReason
+        };
+        var inspection = await inspectionAccumulator.BuildProjectionAsync(
+            updatedState,
+            checkpointId,
+            occurredAt,
+            metadata: stateChangeMetadata,
+            cancellationToken: context.CancellationToken);
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: commitId,
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.ActivityInspectionCaptured,
+                WorkflowExecutionId: context.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [updatedState.Execution.ActivityExecutionId],
+                Metadata: checkpointMetadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: updatedState.Execution.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: updatedState,
+                        Metadata: stateChangeMetadata)
+                ],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [],
+                activityExecutionInspections:
+                [
+                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                        StateId: updatedState.Execution.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: inspection,
+                        Metadata: stateChangeMetadata)
+                ]),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
+                [RuntimeMetadataKeys.CommandKind] = context.SchedulerWorkItem.CommandKind.ToString()
+            });
+
+        await checkpointCommitter.CommitAsync(commit, context.CancellationToken);
     }
 
     private static string ResolveExecutionPathId(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, string completedNodeId)

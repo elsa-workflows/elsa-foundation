@@ -146,6 +146,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(WorkflowCheckpointSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            descriptor.ImplementationType == typeof(WorkflowCancelSchedulerWorkHandler));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(MissingActivityInvocationSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&

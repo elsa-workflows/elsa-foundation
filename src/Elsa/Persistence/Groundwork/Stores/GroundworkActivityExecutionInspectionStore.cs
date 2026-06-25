@@ -94,8 +94,11 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
 
     private static ActivityExecutionInspectionSummaryProjection MapSummary(DocumentEnvelope envelope)
     {
-        var document = JsonSerializer.Deserialize<ActivityExecutionInspectionProjectionDocument>(envelope.ContentJson, GroundworkRuntimeJson.Options)!;
-        return document.Summary ?? ActivityExecutionInspectionSummaryProjection.FromProjection(document.Projection);
+        using var document = JsonDocument.Parse(envelope.ContentJson);
+        if (document.RootElement.TryGetProperty("summary", out var summaryElement) && summaryElement.ValueKind is not JsonValueKind.Null)
+            return summaryElement.Deserialize<ActivityExecutionInspectionSummaryProjection>(GroundworkRuntimeJson.Options)!;
+
+        return ActivityExecutionInspectionSummaryProjection.FromProjection(Map(envelope));
     }
 
     private sealed record ActivityExecutionInspectionProjectionDocument(

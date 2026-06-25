@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Exceptions;
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
@@ -53,6 +54,47 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
                     Metadata: new Dictionary<string, string>())
             ]
         });
+
+        var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
+
+        Assert.Equal("ae-1", summary.ActivityExecutionId);
+        Assert.Equal(1, summary.ValueSnapshotCount);
+    }
+
+    [Fact]
+    public async Task ListSummariesAsync_Does_Not_Deserialize_Full_Projection_When_Summary_Is_Present()
+    {
+        var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
+        var projection = Projection("wf-1", "ae-1", sequence: 1) with
+        {
+            ValueSnapshots =
+            [
+                new ActivityExecutionInspectionValueSnapshot(
+                    "Input",
+                    ActivityExecutionInspectionValueSubject.ActivityInput,
+                    RuntimePayloadCaptureMode.Payload,
+                    Type: null,
+                    DateTimeOffset.UnixEpoch,
+                    Payload: JsonSerializer.SerializeToElement("large-payload"),
+                    "test",
+                    IsSensitive: false,
+                    Metadata: new Dictionary<string, string>())
+            ]
+        };
+        var document = new
+        {
+            WorkflowExecutionId = projection.WorkflowExecutionId,
+            AuthoredActivityId = projection.AuthoredActivityId,
+            Summary = ActivityExecutionInspectionSummaryProjection.FromProjection(projection),
+            Projection = new { Invalid = "not a projection" }
+        };
+        await documentStore.SaveAsync(
+            new SaveDocumentRequest(
+                ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+                DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
+                ElsaRuntimeStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options)));
+        var store = new GroundworkActivityExecutionInspectionStore(documentStore);
 
         var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
 

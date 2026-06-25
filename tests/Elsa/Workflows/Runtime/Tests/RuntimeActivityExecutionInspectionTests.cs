@@ -128,6 +128,63 @@ public sealed class RuntimeActivityExecutionInspectionTests
     }
 
     [Fact]
+    public async Task CancelHandler_Commits_Cancelled_ActivityExecutionInspection()
+    {
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore, activityStateStore, null, null, null, null, null, inspectionStore);
+        var workflowState = NewWorkflowState(WorkflowExecutionStatus.Running);
+        var activityState = NewStateForStatus(ActivityExecutionStatus.Running) with
+        {
+            CompletedAt = null
+        };
+        await workflowStateStore.SaveAsync(workflowState);
+        await activityStateStore.SaveAsync(activityState);
+        var handler = new WorkflowCancelSchedulerWorkHandler(
+            workflowStateStore,
+            activityStateStore,
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                checkpointWriter,
+                new NoopRuntimePostCommitIntentDispatcher()),
+            new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
+            TimeProvider.System);
+
+        await handler.HandleAsync(NewCancelWorkItem());
+
+        var cancelledWorkflowState = await workflowStateStore.FindAsync("wf-1");
+        var cancelledActivityState = await activityStateStore.FindAsync("wf-1", activityState.Execution.ActivityExecutionId);
+        var projection = await inspectionStore.FindAsync("wf-1", activityState.Execution.ActivityExecutionId);
+        Assert.NotNull(cancelledWorkflowState);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, cancelledWorkflowState.Status);
+        Assert.NotNull(cancelledActivityState);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, cancelledActivityState.Status);
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, projection.Status);
+        Assert.Equal("checkpoint:cancel-work:cancel", projection.LastCheckpointId);
+    }
+
+    [Fact]
+    public async Task CancelHandler_Throws_When_WorkflowExecutionState_Is_Missing()
+    {
+        var handler = new WorkflowCancelSchedulerWorkHandler(
+            new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryActivityExecutionStateStore(),
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                new InMemoryRuntimeCheckpointWriter(),
+                new NoopRuntimePostCommitIntentDispatcher()),
+            new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
+            TimeProvider.System);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewCancelWorkItem()).AsTask());
+
+        Assert.Contains("cancel-work", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("wf-1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetActivityExecutionRequestHandler_Returns_Committed_Projection()
     {
         var store = new InMemoryActivityExecutionInspectionStore();
@@ -354,6 +411,36 @@ public sealed class RuntimeActivityExecutionInspectionTests
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason)),
             commandMetadata: new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
+
+    private static RuntimeSchedulerWorkItem NewCancelWorkItem() =>
+        new(
+            workItemId: "cancel-work",
+            workflowExecutionId: "wf-1",
+            commandId: "command-cancel",
+            commandKind: WorkflowExecutionCommandKind.Cancel,
+            envelopeId: "envelope-cancel",
+            idempotencyKey: "wf-1:cancel",
+            enqueuedAt: DateTimeOffset.UnixEpoch,
+            recordedAt: DateTimeOffset.UnixEpoch,
+            sequence: 10,
+            payload: null,
+            commandMetadata: new Dictionary<string, string>(),
+            envelopeMetadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutionState NewWorkflowState(WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: "wf-1",
+            PinnedExecutable: NewIdentity(),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            StartedAt: DateTimeOffset.UnixEpoch,
+            UpdatedAt: DateTimeOffset.UnixEpoch,
+            CompletedAt: null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");

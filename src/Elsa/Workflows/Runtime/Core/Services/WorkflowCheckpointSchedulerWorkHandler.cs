@@ -94,6 +94,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             var state = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, activityExecutionId, cancellationToken);
             if (state is null)
                 throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' references missing activity execution '{activityExecutionId}' for workflow execution '{workItem.WorkflowExecutionId}'.");
+            ValidateTerminalCheckpointStatus(workItem, payload, state);
 
             activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
                 StateId: activityExecutionId,
@@ -149,6 +150,20 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             }));
+    }
+
+    private static void ValidateTerminalCheckpointStatus(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCheckpointCommandPayload payload,
+        ActivityExecutionState state)
+    {
+        if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.ActivityCancelled) &&
+            state.Status != ActivityExecutionStatus.Cancelled)
+            throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' cannot commit '{RuntimeCheckpointNames.ActivityCancelled}' for activity execution '{state.Execution.ActivityExecutionId}' with status '{state.Status}'.");
+
+        if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.ActivityRecovered) &&
+            state.Status != ActivityExecutionStatus.Recovered)
+            throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' cannot commit '{RuntimeCheckpointNames.ActivityRecovered}' for activity execution '{state.Execution.ActivityExecutionId}' with status '{state.Status}'.");
     }
 
     private static RuntimeStateChange<WorkflowExecutionState>? BuildWorkflowExecutionStateChange(
