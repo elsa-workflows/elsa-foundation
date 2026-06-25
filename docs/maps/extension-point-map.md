@@ -6,10 +6,10 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 37
-- Source catalogs discovered: 36
+- Catalog files discovered: 39
+- Source catalogs discovered: 38
 - Source catalogs indexed from root: 36
-- Discovered source catalogs not linked from root index: 0
+- Discovered source catalogs not linked from root index: 2
 - Root-indexed catalogs missing on disk: 0
 
 ## Catalogs
@@ -42,6 +42,8 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/Elsa/Modularity/Api/EXTENSION_POINTS.md](../../src/Elsa/Modularity/Api/EXTENSION_POINTS.md) | Elsa.Modularity.Api | Elsa.Modularity | Overridable contracts<br>Implementable contributor interfaces | 0 | yes |  |  |
 | [src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md](../../src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) | Elsa.Persistence.EFCore | Elsa.Persistence | Overridable contracts<br>Implementable contributor interfaces<br>Writing a persistence feature (`EFCorePersistenceShellFeatureBase<TDbContext>`)<br>Events | Named read ports + `EFCoreReadStore<TDbContext, TEntity>` *(closed-query read surface)*<br>`IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IElsaDbContextSchema` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntitySavingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntityLoadingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>Out-of-band hooks (NOT event-dispatched)<br>OnEntitySaving<br>OnEntityLoading | entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).<br>entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`). | 2 | yes |
 | [src/Elsa/Pipelines/Core/EXTENSION_POINTS.md](../../src/Elsa/Pipelines/Core/EXTENSION_POINTS.md) | Elsa.Pipelines.Core | Elsa.Pipelines | Implementable contributor interfaces | `IMiddleware` *(Core — `Elsa.Pipelines.Core`)* | Contributor (pipeline middleware step). | 1 | yes |
+| [src/Elsa/Secrets/Core/EXTENSION_POINTS.md](../../src/Elsa/Secrets/Core/EXTENSION_POINTS.md) | Elsa.Secrets.Core | Elsa.Secrets | Contracts<br>Safety Rules | 0 | no |  |  |
+| [src/Elsa/Secrets/EXTENSION_POINTS.md](../../src/Elsa/Secrets/EXTENSION_POINTS.md) | Elsa.Secrets | Elsa.Secrets | Service Overrides<br>Built-In Stores<br>Runtime Integration | 0 | no |  |  |
 | [src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md](../../src/Elsa/Serialization/SystemText/EXTENSION_POINTS.md) | Elsa.Serialization.SystemText | Elsa.Serialization | Implementable contributor interfaces<br>Events | `IJsonConverterSource` *(Core — `Elsa.Serialization.Core`)*<br>OnJsonPayloadConvertersInitializing | Source (returns values — pull pattern). | 1 | yes |
 | [src/Elsa/Tasks/EXTENSION_POINTS.md](../../src/Elsa/Tasks/EXTENSION_POINTS.md) | Elsa.Tasks | Elsa.Tasks | Overridable contracts<br>Implementable contributor interfaces | `ITaskManager` *(Core — `Elsa.Tasks.Core`)*<br>`ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*<br>`ITopologicalTaskSorter` *(Core — `Elsa.Tasks.Core`)*<br>`IStartupTask : ITask` *(Core — `Elsa.Tasks.Core`)*<br>`IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*<br>`IBackgroundTask : ITask` *(Core — `Elsa.Tasks.Core`)* | Contributor — run once at application startup in topological order (respecting `[TaskDependency]` + `[Order]`).<br>Contributor — run on a schedule. Configure schedule via `ITaskSchedule` (`Elsa.Tasks.Schedules`).<br>Contributor — long-running background work (hosted service lifecycle). | 2 | yes |
 | [src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md](../../src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) | Elsa.Workflows.Design.Api | Elsa.Workflows | Overridable contracts<br>Implementable contributor interfaces<br>Events | `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*<br>`IWorkflowDesignContextFactory` *(Core — `Elsa.Workflows.Design.Core`)*<br>Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*<br>`IDraftStateDiffEngine` *(Feature contract — `Elsa.Workflows.Design.Persistence.EFCore`)*<br>Domain-model abstractions<br>OnDraftCreated<br>OnDraftDiscarded<br>OnActivityAddedToDraft<br>OnActivityRemovedFromDraft<br>OnActivityMovedInDraft<br>OnActivityInputAddedToDraft<br>OnActivityInputUpdatedInDraft<br>OnActivityInputRemovedFromDraft<br>OnActivityOutputAddedToDraft<br>OnActivityOutputUpdatedInDraft<br>OnActivityOutputRemovedFromDraft<br>OnVariableDeclaredInDraft<br>OnVariableUpdatedInDraft<br>OnVariableRemovedFromDraft<br>OnWorkflowInputAddedToDraft<br>OnWorkflowInputUpdatedInDraft<br>OnWorkflowInputRemovedFromDraft<br>OnWorkflowOutputAddedToDraft<br>OnWorkflowOutputUpdatedInDraft<br>OnWorkflowOutputRemovedFromDraft | 0 | yes |  |
@@ -58,4 +60,5 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 | Status | Catalog |
 |---|---|
-| ok | Root index and discovered source catalogs match. |
+| discovered but not root-indexed | [src/Elsa/Secrets/Core/EXTENSION_POINTS.md](../../src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
+| discovered but not root-indexed | [src/Elsa/Secrets/EXTENSION_POINTS.md](../../src/Elsa/Secrets/EXTENSION_POINTS.md) |

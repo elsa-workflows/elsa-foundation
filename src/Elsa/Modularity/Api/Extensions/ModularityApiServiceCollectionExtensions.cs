@@ -15,8 +15,10 @@ public static class ModularityApiServiceCollectionExtensions
             services.Configure(configure);
 
         services.AddNuplaneFeatureCatalog();
-        services.TryAddScoped<IShellFeatureConfigurationStore, JsonShellFeatureConfigurationStore>();
-        services.TryAddScoped<IShellReloader, ShellReloader>();
+        services.RemoveAll<IShellFeatureConfigurationStore>();
+        services.RemoveAll<IShellReloader>();
+        services.AddScoped<IShellFeatureConfigurationStore, JsonShellFeatureConfigurationStore>();
+        services.AddScoped<IShellReloader, ShellReloader>();
 
         return services;
     }

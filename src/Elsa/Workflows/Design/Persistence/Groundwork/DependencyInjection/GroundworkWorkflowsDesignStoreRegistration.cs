@@ -1,7 +1,9 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -41,6 +43,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
 
         services.RemoveAll<IAddWorkflowDefinitionCommand>();
         services.AddScoped<IAddWorkflowDefinitionCommand, GroundworkAddWorkflowDefinitionCommand>();
+
+        services.RemoveAll<IAddCommand<WorkflowDefinitionVersion>>();
+        services.AddScoped<IAddCommand<WorkflowDefinitionVersion>, GroundworkAddWorkflowDefinitionVersionCommand>();
 
         services.RemoveAll<ISaveWorkflowDefinitionCommand>();
         services.AddScoped<ISaveWorkflowDefinitionCommand, GroundworkSaveWorkflowDefinitionCommand>();
