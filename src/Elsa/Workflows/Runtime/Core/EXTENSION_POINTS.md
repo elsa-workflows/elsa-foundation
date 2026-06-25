@@ -231,9 +231,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Default implementation:** `ImmediateWorkflowSchedulerDrainPolicy`.
 
 ### `IWorkflowSchedulerDrainObserver` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Contributor (observers consume drain results produced by command processing).
+- **Kind:** Contributor (observers consume coordinated drain results produced by workflow execution draining).
 - **Signature:** `OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)`.
-- **Usage:** modules can project drain outcomes into diagnostics or future checkpoint/outbox behavior without making history continuation state.
+- **Usage:** modules can project one command-triggered coordinated drain outcome into diagnostics or future checkpoint/outbox behavior without making history continuation state. Coordinated results aggregate scheduler work item results across scheduler drain passes, include post-commit outbox delivery counts/results, and expose a stop reason such as quiesced, paused, faulted, or outbox delivery failed.
 - **Default implementation:** `NoopWorkflowSchedulerDrainObserver`.
 
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*

@@ -50,6 +50,8 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         RuntimeSchedulerDrainResult? firstDrainResult = null;
         RuntimeSchedulerDrainResult? lastDrainResult = null;
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
+        var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
+        var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var completed = false;
 
         for (var cycle = 0; cycle < MaxDrainCycles; cycle++)
@@ -61,6 +63,9 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
 
             if (drainResult.StoppedOnFault || drainResult.StoppedOnPause)
             {
+                stopReason = drainResult.StoppedOnFault
+                    ? RuntimeSchedulerDrainStopReason.Faulted
+                    : RuntimeSchedulerDrainStopReason.Paused;
                 completed = true;
                 break;
             }
@@ -71,9 +76,13 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
                     workflowExecutionId: request.WorkflowExecutionId,
                     intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
                 cancellationToken);
+            outboxDeliveryResults.Add(outboxResult);
 
             if (outboxResult.DeliveredCount == 0)
             {
+                stopReason = outboxResult.FailedCount > 0
+                    ? RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed
+                    : RuntimeSchedulerDrainStopReason.Quiesced;
                 completed = true;
                 break;
             }
@@ -89,7 +98,9 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
             workflowExecutionId: request.WorkflowExecutionId,
             startedAt: firstDrainResult.StartedAt,
             completedAt: lastDrainResult.CompletedAt,
-            items: itemResults);
+            items: itemResults,
+            outboxDeliveryResults: outboxDeliveryResults,
+            stopReason: stopReason);
     }
 
     private async ValueTask NotifyObserversAsync(

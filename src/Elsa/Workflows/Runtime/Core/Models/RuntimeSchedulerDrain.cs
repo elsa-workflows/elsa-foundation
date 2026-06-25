@@ -31,12 +31,15 @@ public sealed class RuntimeSchedulerDrainResult
         string workflowExecutionId,
         DateTimeOffset startedAt,
         DateTimeOffset completedAt,
-        IReadOnlyCollection<RuntimeSchedulerWorkItemResult> items)
+        IReadOnlyCollection<RuntimeSchedulerWorkItemResult> items,
+        IReadOnlyCollection<RuntimePostCommitOutboxProcessResult>? outboxDeliveryResults = null,
+        RuntimeSchedulerDrainStopReason? stopReason = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(items);
 
         var itemSnapshot = items.ToArray();
+        var outboxDeliverySnapshot = outboxDeliveryResults?.ToArray() ?? [];
 
         if (itemSnapshot.Any(item => !string.Equals(item.WorkflowExecutionId, workflowExecutionId, StringComparison.Ordinal)))
             throw new ArgumentException("Scheduler drain item results must belong to the drain workflow execution.", nameof(items));
@@ -45,6 +48,8 @@ public sealed class RuntimeSchedulerDrainResult
         StartedAt = startedAt;
         CompletedAt = completedAt;
         Items = itemSnapshot;
+        OutboxDeliveryResults = outboxDeliverySnapshot;
+        StopReason = stopReason ?? InferStopReason(itemSnapshot);
     }
 
     public string WorkflowExecutionId { get; }
@@ -54,6 +59,31 @@ public sealed class RuntimeSchedulerDrainResult
     public bool StoppedOnFault => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Faulted);
     public bool StoppedOnPause => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Paused);
     public IReadOnlyCollection<RuntimeSchedulerWorkItemResult> Items { get; }
+    public IReadOnlyCollection<RuntimePostCommitOutboxProcessResult> OutboxDeliveryResults { get; }
+    public int OutboxAttemptedCount => OutboxDeliveryResults.Sum(result => result.AttemptedCount);
+    public int OutboxDeliveredCount => OutboxDeliveryResults.Sum(result => result.DeliveredCount);
+    public int OutboxFailedCount => OutboxDeliveryResults.Sum(result => result.FailedCount);
+    public RuntimeSchedulerDrainStopReason StopReason { get; }
+
+    private static RuntimeSchedulerDrainStopReason InferStopReason(IReadOnlyCollection<RuntimeSchedulerWorkItemResult> items)
+    {
+        if (items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Faulted))
+            return RuntimeSchedulerDrainStopReason.Faulted;
+
+        if (items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Paused))
+            return RuntimeSchedulerDrainStopReason.Paused;
+
+        return RuntimeSchedulerDrainStopReason.Quiesced;
+    }
+}
+
+public enum RuntimeSchedulerDrainStopReason
+{
+    Quiesced,
+    Paused,
+    Faulted,
+    OutboxDeliveryFailed,
+    CycleCapExhausted
 }
 
 public sealed class RuntimeSchedulerWorkItemResult
