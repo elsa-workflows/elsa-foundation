@@ -557,6 +557,7 @@ public sealed class FlowchartExecutionEngine(
             [RuntimeMetadataKeys.SchedulerWorkItemId] = context.SchedulerWorkItem.WorkItemId,
             [RuntimeMetadataKeys.CommandId] = context.SchedulerWorkItem.CommandId,
             [RuntimeMetadataKeys.CheckpointReason] = FlowchartStatePersistenceReason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
             [RuntimeMetadataKeys.ExecutableArtifactId] = context.PinnedExecutable.ArtifactId,
             [RuntimeMetadataKeys.ExecutableArtifactVersion] = context.PinnedExecutable.ArtifactVersion,
             [RuntimeMetadataKeys.ExecutableArtifactHash] = context.PinnedExecutable.ArtifactHash

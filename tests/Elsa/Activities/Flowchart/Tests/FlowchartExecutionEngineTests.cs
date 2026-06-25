@@ -2,8 +2,10 @@ using Elsa.Activities.Flowchart.Contracts;
 using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -57,6 +59,34 @@ public sealed class FlowchartExecutionEngineTests
 
         var state = await fixture.GetFlowchartStateAsync();
         Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+    }
+
+    [Fact]
+    public async Task Start_MarksFlowchartStateInspectionCheckpointAsMandatory()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a");
+
+        await fixture.ExecuteAsync(executable);
+
+        var writer = Assert.IsType<InMemoryRuntimeCheckpointWriter>(fixture.Provider.GetRequiredService<IRuntimeCheckpointWriter>());
+        var flowchartStateWrites = writer.ListWrites()
+            .Where(write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured &&
+                            write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(flowchartStateWrites);
+        Assert.All(flowchartStateWrites, write => Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]));
+        var committer = new RuntimeCheckpointCommitter(
+            new SkipFlowchartInspectionCheckpointPolicy(),
+            new InMemoryRuntimeCheckpointWriter(),
+            new NoopRuntimePostCommitIntentDispatcher());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => committer.CommitAsync(flowchartStateWrites[0].Commit).AsTask());
+        Assert.Contains("Mandatory runtime checkpoint", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("flowchart-state", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -510,5 +540,13 @@ public sealed class FlowchartExecutionEngineTests
         public string PolicyKind => Kind;
         public string DisplayName => "Wait";
         public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) => new([new FlowchartPolicyCommand(FlowchartPolicyCommandKind.WaitExecutionPath)]);
+    }
+
+    private sealed class SkipFlowchartInspectionCheckpointPolicy : IRuntimeCheckpointPersistencePolicy
+    {
+        public ValueTask<RuntimeCheckpointPersistenceDecision> DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default) =>
+            new(StringComparer.Ordinal.Equals(checkpoint.Name, RuntimeCheckpointNames.ActivityInspectionCaptured)
+                ? new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Skip)
+                : new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
     }
 }
