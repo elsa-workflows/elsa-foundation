@@ -41,7 +41,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         var items = await _outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
             now: _timeProvider.GetUtcNow(),
             limit: request.Limit,
-            workflowExecutionId: request.WorkflowExecutionId),
+            workflowExecutionId: request.WorkflowExecutionId,
+            intentKind: request.IntentKind),
             cancellationToken);
         var processedItems = new List<RuntimePostCommitOutboxProcessedItem>();
 

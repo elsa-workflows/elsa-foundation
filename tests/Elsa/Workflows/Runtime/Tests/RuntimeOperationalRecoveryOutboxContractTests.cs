@@ -205,6 +205,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxQuery(_now, 0));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxQuery(_now, 10, workflowExecutionId: " "));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxQuery(_now, 10, ownerId: " "));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxQuery(_now, 10, intentKind: " "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(-1, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitRetryPolicy(3, TimeSpan.Zero));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitRetryPolicy(0, TimeSpan.FromSeconds(10)));
