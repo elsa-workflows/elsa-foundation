@@ -1,22 +1,22 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainCoordinator
 {
-    private const int MaxDrainCycles = 64;
-    private const int OutboxDeliveryBatchSize = 64;
-
     private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
+    private readonly WorkflowExecutionDrainCoordinatorOptions _options;
 
     public WorkflowExecutionDrainCoordinator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers)
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowExecutionDrainCoordinatorOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -25,6 +25,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         _schedulerDrainer = schedulerDrainer;
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
+        _options = options ?? new WorkflowExecutionDrainCoordinatorOptions();
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -54,7 +55,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
         var completed = false;
 
-        for (var cycle = 0; cycle < MaxDrainCycles; cycle++)
+        for (var cycle = 0; cycle < _options.MaxDrainCycles; cycle++)
         {
             var drainResult = await _schedulerDrainer.DrainAsync(request, cancellationToken);
             firstDrainResult ??= drainResult;
@@ -72,7 +73,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
 
             var outboxResult = await _postCommitOutboxProcessor.ProcessAsync(
                 new RuntimePostCommitOutboxProcessRequest(
-                    limit: OutboxDeliveryBatchSize,
+                    limit: _options.OutboxDeliveryBatchSize,
                     workflowExecutionId: request.WorkflowExecutionId,
                     intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
                 cancellationToken);
@@ -92,7 +93,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
             throw new InvalidOperationException("Workflow execution draining did not produce a scheduler drain result.");
 
         if (!completed)
-            throw new InvalidOperationException($"Workflow execution drain exceeded the maximum cycle count of {MaxDrainCycles} for workflow execution '{request.WorkflowExecutionId}'.");
+            throw new WorkflowExecutionDrainCycleLimitExceededException(request.WorkflowExecutionId, _options.MaxDrainCycles);
 
         return new RuntimeSchedulerDrainResult(
             workflowExecutionId: request.WorkflowExecutionId,

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -170,6 +171,66 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Equal(0, observed.OutboxDeliveredCount);
         Assert.Equal(1, observed.OutboxFailedCount);
         Assert.Single(drainer.Requests);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_StopsOnPauseAfterPostCommitDeliveryAndLeavesDeliveredWorkQueued()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var followUpWorkItem = FollowUpWorkItem();
+        var drainer = new PauseAfterFirstDrainSchedulerDrainer(queue, _now, followUpWorkItem.WorkItemId);
+        var outboxProcessor = new EnqueueOncePostCommitOutboxProcessor(queue, followUpWorkItem);
+        var observer = new RecordingSchedulerDrainObserver();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [observer],
+            new FixedTimeProvider(_now),
+            outboxProcessor);
+
+        await processor.ProcessAsync(NewEnvelope(1));
+
+        var observed = Assert.Single(observer.ObservedResults);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Paused, observed.StopReason);
+        Assert.True(observed.StoppedOnPause);
+        var queuedItem = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(followUpWorkItem.WorkItemId, queuedItem.WorkItemId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_PropagatesOutboxCancellation()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var processor = NewProcessor(
+            queue,
+            new DequeuingSchedulerDrainer(queue, _now),
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FixedTimeProvider(_now),
+            CancelingPostCommitOutboxProcessor.Instance);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ThrowsDomainExceptionWhenCycleCapIsExceeded()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var options = new WorkflowExecutionDrainCoordinatorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
+        var processor = NewProcessor(
+            queue,
+            new DequeuingSchedulerDrainer(queue, _now),
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FixedTimeProvider(_now),
+            AlwaysDeliveringPostCommitOutboxProcessor.Instance,
+            options);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutionDrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+
+        Assert.Equal("wfexec-1", exception.WorkflowExecutionId);
+        Assert.Equal(2, exception.MaxDrainCycles);
     }
 
     [Fact]
@@ -355,11 +416,12 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         IWorkflowSchedulerDrainPolicy drainPolicy,
         IEnumerable<IWorkflowSchedulerDrainObserver> observers,
         TimeProvider timeProvider,
-        IRuntimePostCommitOutboxProcessor? outboxProcessor = null) =>
+        IRuntimePostCommitOutboxProcessor? outboxProcessor = null,
+        WorkflowExecutionDrainCoordinatorOptions? options = null) =>
         new(
             queue,
             drainPolicy,
-            new WorkflowExecutionDrainCoordinator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers),
+            new WorkflowExecutionDrainCoordinator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
             timeProvider);
 
     private RuntimeSchedulerWorkItem FollowUpWorkItem() =>
@@ -453,6 +515,58 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         }
     }
 
+    private sealed class PauseAfterFirstDrainSchedulerDrainer(
+        InMemoryWorkflowSchedulerWorkQueue queue,
+        DateTimeOffset now,
+        string pausedWorkItemId) : IWorkflowSchedulerDrainer
+    {
+        private bool _pauseNextDrain;
+
+        public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
+        {
+            if (_pauseNextDrain)
+            {
+                return new RuntimeSchedulerDrainResult(
+                    workflowExecutionId: request.WorkflowExecutionId,
+                    startedAt: now,
+                    completedAt: now,
+                    items:
+                    [
+                        new RuntimeSchedulerWorkItemResult(
+                            workItemId: pausedWorkItemId,
+                            workflowExecutionId: request.WorkflowExecutionId,
+                            commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
+                            status: RuntimeSchedulerWorkItemResultStatus.Paused,
+                            handlerName: nameof(PauseAfterFirstDrainSchedulerDrainer),
+                            startedAt: now,
+                            completedAt: now,
+                            error: "Paused for test.")
+                    ]);
+            }
+
+            _pauseNextDrain = true;
+            var results = new List<RuntimeSchedulerWorkItemResult>();
+
+            while (await queue.DequeueAsync(request.WorkflowExecutionId, cancellationToken) is { } item)
+            {
+                results.Add(new RuntimeSchedulerWorkItemResult(
+                    workItemId: item.WorkItemId,
+                    workflowExecutionId: item.WorkflowExecutionId,
+                    commandKind: item.CommandKind,
+                    status: RuntimeSchedulerWorkItemResultStatus.Completed,
+                    handlerName: nameof(PauseAfterFirstDrainSchedulerDrainer),
+                    startedAt: now,
+                    completedAt: now));
+            }
+
+            return new RuntimeSchedulerDrainResult(
+                workflowExecutionId: request.WorkflowExecutionId,
+                startedAt: now,
+                completedAt: now,
+                items: results);
+        }
+    }
+
     private sealed class EnqueueOncePostCommitOutboxProcessor(
         IWorkflowSchedulerWorkQueue queue,
         RuntimeSchedulerWorkItem workItem) : IRuntimePostCommitOutboxProcessor
@@ -494,6 +608,41 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                     IntentId: "intent-failed",
                     RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.FailedRetryable,
                     FailureMessage: "Dispatch failed.")
+            ]));
+    }
+
+    private sealed class CancelingPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public static readonly CancelingPostCommitOutboxProcessor Instance = new();
+
+        private CancelingPostCommitOutboxProcessor()
+        {
+        }
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new OperationCanceledException();
+    }
+
+    private sealed class AlwaysDeliveringPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public static readonly AlwaysDeliveringPostCommitOutboxProcessor Instance = new();
+
+        private AlwaysDeliveringPostCommitOutboxProcessor()
+        {
+        }
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult(
+            [
+                new RuntimePostCommitOutboxProcessedItem(
+                    OutboxItemId: Guid.NewGuid().ToString("N"),
+                    IntentId: Guid.NewGuid().ToString("N"),
+                    RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
+                    FailureMessage: null)
             ]));
     }
 
