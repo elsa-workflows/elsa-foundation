@@ -2,7 +2,7 @@ using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Secrets.Services;
 
-public sealed class SecretLifecyclePolicy
+public sealed class SecretLifecyclePolicy(TimeProvider timeProvider)
 {
     public SecretLifecycleDecision EvaluatePublicVisibility(Secret? secret)
     {
@@ -40,11 +40,27 @@ public sealed class SecretLifecyclePolicy
 
         return SecretLifecycleDecision.Allow();
     }
+
+    public SecretLifecycleDecision EvaluateRuntimeVersion(Secret secret)
+    {
+        var version = secret.Versions
+            .Where(x => x.Status == SecretStatus.Active)
+            .OrderByDescending(x => x.Version)
+            .FirstOrDefault();
+
+        if (version is null)
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.NoActiveVersion, "Secret has no active version.");
+
+        if (version.IsExpired(timeProvider.GetUtcNow()))
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.Expired, "Secret version has expired.");
+
+        return SecretLifecycleDecision.Allow(version);
+    }
 }
 
-public readonly record struct SecretLifecycleDecision(bool Allowed, SecretLifecycleFailureCode FailureCode, string Reason)
+public readonly record struct SecretLifecycleDecision(bool Allowed, SecretLifecycleFailureCode FailureCode, string Reason, SecretVersion? Version = null)
 {
-    public static SecretLifecycleDecision Allow() => new(true, SecretLifecycleFailureCode.None, "");
+    public static SecretLifecycleDecision Allow(SecretVersion? version = null) => new(true, SecretLifecycleFailureCode.None, "", version);
     public static SecretLifecycleDecision Deny(SecretLifecycleFailureCode failureCode, string reason) => new(false, failureCode, reason);
 }
 
@@ -54,6 +70,8 @@ public enum SecretLifecycleFailureCode
     NotFound,
     Deleted,
     Inactive,
+    NoActiveVersion,
+    Expired,
     Revoked,
     TypeMismatch,
     ScopeMismatch

@@ -217,7 +217,12 @@ public sealed class DefaultSecretManager(
 
     public async ValueTask<SecretPayload> ResolvePayloadAsync(Secret secret, CancellationToken cancellationToken = default)
     {
-        var version = secret.LatestActiveVersion ?? throw new InvalidOperationException("Secret has no active version.");
+        var versionDecision = lifecyclePolicy.EvaluateRuntimeVersion(secret);
+
+        if (!versionDecision.Allowed)
+            throw new InvalidOperationException(versionDecision.Reason);
+
+        var version = versionDecision.Version!;
         var store = storeRegistry.Get(secret.StoreName);
         var payload = await store.ReadAsync(new SecretReadContext(secret, version), cancellationToken);
         return payload ?? throw new InvalidOperationException("Secret payload could not be resolved.");
