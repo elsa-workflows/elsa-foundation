@@ -1323,67 +1323,6 @@ public sealed class RuntimeCheckpointCommitTests
         }
     }
 
-    private sealed class RecordingDispatcher(
-        List<string>? events = null,
-        string? failOnIntentId = null,
-        Exception? failure = null) : IRuntimePostCommitIntentDispatcher
-    {
-        public List<RuntimePostCommitIntent> Intents { get; } = [];
-
-        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"dispatch:{intent.IntentId}");
-
-            if (intent.IntentId == failOnIntentId)
-                throw failure ?? new InvalidOperationException($"Intent {intent.IntentId} failed.");
-
-            Intents.Add(intent);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class RecordingOutboxStore(
-        List<string>? events = null,
-        string? failOnPendingItemId = null,
-        RuntimePostCommitOutboxStatus? failOnResultStatus = null,
-        Exception? failure = null) : IRuntimePostCommitOutboxStore
-    {
-        public List<RuntimePostCommitOutboxItem> PendingItems { get; } = [];
-        public List<RuntimePostCommitOutboxDeliveryResult> Results { get; } = [];
-
-        public ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"outbox-pending:{item.OutboxItemId}");
-
-            if (item.OutboxItemId == failOnPendingItemId)
-                throw failure ?? new InvalidOperationException($"Pending outbox item {item.OutboxItemId} failed.");
-
-            PendingItems.Add(item);
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(PendingItems);
-
-        public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default)
-        {
-            events?.Add($"outbox-result:{result.OutboxItemId}:{result.Status}");
-
-            if (result.Status == failOnResultStatus)
-                throw failure ?? new InvalidOperationException($"Outbox result {result.OutboxItemId} failed.");
-
-            Results.Add(result);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class BlankMessageException() : Exception(string.Empty);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
     {
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>

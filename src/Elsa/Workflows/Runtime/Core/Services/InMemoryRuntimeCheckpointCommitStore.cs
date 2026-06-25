@@ -154,7 +154,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
-    public ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
+    internal ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
         cancellationToken.ThrowIfCancellationRequested();
@@ -497,7 +497,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
                 throw new InvalidOperationException($"The in-memory checkpoint commit store can only project bookmark state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
 
-            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
+            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.BookmarkId))
                 throw new InvalidOperationException("Bookmark state change StateId must match BookmarkState.BookmarkId.");
 
@@ -516,7 +516,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
                 throw new InvalidOperationException($"The in-memory checkpoint commit store can only project durable value state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
 
-            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
+            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.DurableValueId))
                 throw new InvalidOperationException("Durable value state change StateId must match DurableValueState.DurableValueId.");
 
@@ -535,7 +535,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (stateChange.Operation is not RuntimeStateChangeOperation.Append and not RuntimeStateChangeOperation.Upsert)
                 throw new InvalidOperationException($"The in-memory checkpoint commit store can only project incident state '{RuntimeStateChangeOperation.Append}' or '{RuntimeStateChangeOperation.Upsert}' changes.");
 
-            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
+            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.IncidentId))
                 throw new InvalidOperationException("Incident state change StateId must match IncidentState.IncidentId.");
 
@@ -554,7 +554,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
                 throw new InvalidOperationException($"The in-memory checkpoint commit store can only project operational state '{RuntimeStateChangeOperation.Upsert}' changes.");
 
-            // RuntimeCheckpointStateChangeSet also enforces this; the writer repeats it to keep the projection boundary self-validating.
+            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.OperationalStateId))
                 throw new InvalidOperationException("Operational state change StateId must match OperationalState.OperationalStateId.");
 
