@@ -47,6 +47,50 @@ test("supports whole-batch undo by restoring the previous working-state snapshot
   assert.equal(restored.state.rootActivity.inputs[0].value.value, "Hello World");
 });
 
+test("rejects unsupported operations without mutating the workflow", () => {
+  const workflow = createWorkflow();
+  const previousJson = JSON.stringify(workflow, null, 2);
+  const batch = createDemoWeaverGraphOperationBatch();
+  batch.operations = [
+    ...batch.operations,
+    {
+      id: "op-disconnect",
+      kind: "DisconnectActivities",
+      parameters: {},
+      temporaryReferences: [],
+      summary: "Unsupported by the demo designer apply path."
+    }
+  ];
+
+  assert.throws(
+    () => applyWorkflowGraphOperationBatchToWorkflow(workflow, batch),
+    /operation 'DisconnectActivities' is not supported/
+  );
+  assert.equal(JSON.stringify(workflow, null, 2), previousJson);
+});
+
+test("rejects unknown operations without mutating the workflow", () => {
+  const workflow = createWorkflow();
+  const previousJson = JSON.stringify(workflow, null, 2);
+  const batch = createDemoWeaverGraphOperationBatch();
+  batch.operations = [
+    ...batch.operations,
+    {
+      id: "op-unknown",
+      kind: "ReplaceEverything",
+      parameters: {},
+      temporaryReferences: [],
+      summary: "Unknown provider operation."
+    }
+  ];
+
+  assert.throws(
+    () => applyWorkflowGraphOperationBatchToWorkflow(workflow, batch),
+    /operation 'ReplaceEverything' is not supported/
+  );
+  assert.equal(JSON.stringify(workflow, null, 2), previousJson);
+});
+
 function createWorkflow() {
   return {
     name: "Hello World",

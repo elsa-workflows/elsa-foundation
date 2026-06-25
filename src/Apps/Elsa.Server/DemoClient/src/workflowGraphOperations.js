@@ -129,12 +129,27 @@ function ensureActivityInput(activity, referenceKey, value) {
   };
 }
 
+function cloneWorkflow(workflow) {
+  if (typeof structuredClone === "function")
+    return structuredClone(workflow);
+
+  return JSON.parse(JSON.stringify(workflow));
+}
+
+function replaceWorkflow(target, source) {
+  for (const key of Object.keys(target))
+    delete target[key];
+
+  Object.assign(target, source);
+}
+
 export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch) {
   if (!batch || !Array.isArray(batch.operations))
     throw new Error("Weaver batch does not contain operations.");
 
-  workflow.state ??= {};
-  const usedIds = collectActivityIds(workflow.state.rootActivity);
+  const working = cloneWorkflow(workflow);
+  working.state ??= {};
+  const usedIds = collectActivityIds(working.state.rootActivity);
   const activityMap = new Map();
   const temporaryReferences = new Map();
   const touchedIds = [];
@@ -151,7 +166,7 @@ export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch) {
 
   const getActivity = (value) => {
     const resolvedId = resolveId(value);
-    return activityMap.get(resolvedId) ?? findActivityByNodeId(workflow.state.rootActivity, resolvedId);
+    return activityMap.get(resolvedId) ?? findActivityByNodeId(working.state.rootActivity, resolvedId);
   };
 
   for (const operation of batch.operations) {
@@ -174,7 +189,7 @@ export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch) {
       if (!activity)
         throw new Error("Weaver batch referenced an unknown root activity.");
 
-      workflow.state.rootActivity = activity;
+      working.state.rootActivity = activity;
       continue;
     }
 
@@ -205,10 +220,14 @@ export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch) {
       Object.assign(activity, parameters.patch ?? {});
       continue;
     }
+
+    throw new Error(`Weaver batch operation '${kind || "unknown"}' is not supported by this designer apply path.`);
   }
 
-  if (!workflow.state.rootActivity)
+  if (!working.state.rootActivity)
     throw new Error("Weaver batch did not produce a root activity.");
+
+  replaceWorkflow(workflow, working);
 
   return {
     appliedCount: batch.operations.length,
