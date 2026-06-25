@@ -58,6 +58,33 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_DeliversSchedulerPostCommitWorkAndContinuesDraining()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new DequeuingSchedulerDrainer(queue, _now);
+        var outboxProcessor = new EnqueueOncePostCommitOutboxProcessor(queue, FollowUpWorkItem());
+        var observer = new RecordingSchedulerDrainObserver();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [observer],
+            new FixedTimeProvider(_now),
+            outboxProcessor);
+
+        await processor.ProcessAsync(NewEnvelope(1));
+
+        var observed = Assert.Single(observer.ObservedResults);
+        Assert.Equal(2, drainer.Requests.Count);
+        Assert.Equal(2, outboxProcessor.Requests.Count);
+        Assert.All(outboxProcessor.Requests, request => Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, request.IntentKind));
+        Assert.Equal(
+            new[] { WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity },
+            observed.Items.Select(item => item.CommandKind).ToArray());
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task ProcessAsync_CanRecordSchedulerWorkWithoutDrainingWhenPolicyDefers()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -179,7 +206,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
-    public async Task InProcessAgent_StartCommandRecordsPostCommitWorkWithoutInlineDelivery()
+    public async Task InProcessAgent_StartCommandDeliversPostCommitSchedulerWorkAndRecordsActivityState()
     {
         var observer = new RecordingSchedulerDrainObserver();
         var services = new ServiceCollection();
@@ -198,19 +225,14 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
         var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         var activityStates = await activityStateStore.ListAsync("wfexec-1");
-        var pending = Assert.Single(await outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10, workflowExecutionId: "wfexec-1")));
+        var pending = await outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10, workflowExecutionId: "wfexec-1"));
         var drainResult = Assert.Single(observer.ObservedResults);
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
         Assert.Empty(queuedItems);
-        Assert.Empty(activityStates);
-        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, pending.Intent.Kind);
-        var scheduled = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
-        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
-        Assert.False(drainResult.StoppedOnFault);
-        Assert.Equal(
-            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.Checkpoint },
-            drainResult.Items.Select(item => item.CommandKind).ToArray());
+        Assert.NotEmpty(activityStates);
+        Assert.Empty(pending);
+        Assert.Contains(drainResult.Items, item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
@@ -300,12 +322,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         IWorkflowSchedulerDrainer drainer,
         IWorkflowSchedulerDrainPolicy drainPolicy,
         IEnumerable<IWorkflowSchedulerDrainObserver> observers,
-        TimeProvider timeProvider) =>
+        TimeProvider timeProvider,
+        IRuntimePostCommitOutboxProcessor? outboxProcessor = null) =>
         new(
             queue,
             drainPolicy,
-            new WorkflowExecutionDrainCoordinator(drainer, observers),
+            new WorkflowExecutionDrainCoordinator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers),
             timeProvider);
+
+    private RuntimeSchedulerWorkItem FollowUpWorkItem() =>
+        new(
+            workItemId: "work-follow-up",
+            workflowExecutionId: "wfexec-1",
+            commandId: "command-follow-up",
+            commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
+            envelopeId: "envelope-follow-up",
+            idempotencyKey: "wfexec-1:command-follow-up",
+            enqueuedAt: _now,
+            recordedAt: _now,
+            sequence: 2);
 
     private sealed class RecordingSchedulerDrainer(
         IWorkflowSchedulerWorkQueue queue,
@@ -353,6 +388,80 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                         completedAt: now,
                         error: "Faulted for test.")
                 ]));
+    }
+
+    private sealed class DequeuingSchedulerDrainer(
+        InMemoryWorkflowSchedulerWorkQueue queue,
+        DateTimeOffset now) : IWorkflowSchedulerDrainer
+    {
+        public List<RuntimeSchedulerDrainRequest> Requests { get; } = [];
+
+        public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            var results = new List<RuntimeSchedulerWorkItemResult>();
+
+            while (await queue.DequeueAsync(request.WorkflowExecutionId, cancellationToken) is { } item)
+            {
+                results.Add(new RuntimeSchedulerWorkItemResult(
+                    workItemId: item.WorkItemId,
+                    workflowExecutionId: item.WorkflowExecutionId,
+                    commandKind: item.CommandKind,
+                    status: RuntimeSchedulerWorkItemResultStatus.Completed,
+                    handlerName: nameof(DequeuingSchedulerDrainer),
+                    startedAt: now,
+                    completedAt: now));
+            }
+
+            return new RuntimeSchedulerDrainResult(
+                workflowExecutionId: request.WorkflowExecutionId,
+                startedAt: now,
+                completedAt: now,
+                items: results);
+        }
+    }
+
+    private sealed class EnqueueOncePostCommitOutboxProcessor(
+        IWorkflowSchedulerWorkQueue queue,
+        RuntimeSchedulerWorkItem workItem) : IRuntimePostCommitOutboxProcessor
+    {
+        private bool _delivered;
+        public List<RuntimePostCommitOutboxProcessRequest> Requests { get; } = [];
+
+        public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+
+            if (_delivered)
+                return new RuntimePostCommitOutboxProcessResult([]);
+
+            _delivered = true;
+            await queue.EnqueueAsync(workItem, cancellationToken);
+            return new RuntimePostCommitOutboxProcessResult(
+            [
+                new RuntimePostCommitOutboxProcessedItem(
+                    OutboxItemId: "outbox-follow-up",
+                    IntentId: "intent-follow-up",
+                    RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
+                    FailureMessage: null)
+            ]);
+        }
+    }
+
+    private sealed class EmptyPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public static readonly EmptyPostCommitOutboxProcessor Instance = new();
+
+        private EmptyPostCommitOutboxProcessor()
+        {
+        }
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
     }
 
     private sealed class RecordingSchedulerDrainObserver : IWorkflowSchedulerDrainObserver

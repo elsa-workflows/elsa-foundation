@@ -125,7 +125,8 @@ public sealed class RuntimePostCommitOutboxQuery
         DateTimeOffset now,
         int limit,
         string? workflowExecutionId = null,
-        string? ownerId = null)
+        string? ownerId = null,
+        string? intentKind = null)
     {
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Outbox query limit must be greater than zero.");
@@ -136,16 +137,21 @@ public sealed class RuntimePostCommitOutboxQuery
         if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
             throw new ArgumentException("Outbox owner filter cannot be blank.", nameof(ownerId));
 
+        if (intentKind is not null && string.IsNullOrWhiteSpace(intentKind))
+            throw new ArgumentException("Outbox intent kind filter cannot be blank.", nameof(intentKind));
+
         Now = now;
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
         OwnerId = ownerId;
+        IntentKind = intentKind;
     }
 
     public DateTimeOffset Now { get; }
     public int Limit { get; }
     public string? WorkflowExecutionId { get; }
     public string? OwnerId { get; }
+    public string? IntentKind { get; }
 }
 
 public sealed class RuntimePostCommitOutboxDeliveryResult

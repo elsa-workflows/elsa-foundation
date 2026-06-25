@@ -93,6 +93,26 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
+    public async Task Processor_UsesIntentKindFilter()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var dispatcher = new RecordingDispatcher();
+        var processor = NewProcessor(store, dispatcher, _now);
+
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: "DispatchSignal"));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-2", "intent-2", "wfexec-1", kind: "OtherIntent"));
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10, intentKind: "DispatchSignal"));
+
+        var processed = Assert.Single(result.Items);
+        Assert.Equal("outbox-1", processed.OutboxItemId);
+        Assert.Equal(["intent-1"], dispatcher.Intents.Select(intent => intent.IntentId));
+
+        var remaining = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10));
+        Assert.Equal(["outbox-2"], remaining.Select(item => item.OutboxItemId));
+    }
+
+    [Fact]
     public async Task Processor_ReturnsEmptyResultWhenNoItemsAreDeliverable()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
@@ -164,6 +184,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 0));
         Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 10, workflowExecutionId: " "));
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxProcessRequest(limit: 10, intentKind: " "));
     }
 
     private static RuntimePostCommitOutboxProcessor NewProcessor(
@@ -177,23 +198,24 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         string intentId,
         string workflowExecutionId,
         DateTimeOffset? availableAt = null,
-        RuntimePostCommitRetryPolicy? retryPolicy = null) =>
+        RuntimePostCommitRetryPolicy? retryPolicy = null,
+        string kind = "DispatchSignal") =>
         new(
             outboxItemId: outboxItemId,
-            intent: NewIntent(intentId, workflowExecutionId),
+            intent: NewIntent(intentId, workflowExecutionId, kind),
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: _now,
             availableAt: availableAt ?? _now,
             retryPolicy: retryPolicy ?? new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10)));
 
-    private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId)
+    private RuntimePostCommitIntent NewIntent(string intentId, string workflowExecutionId, string kind)
     {
         using var document = JsonDocument.Parse("""{"signal":"sent"}""");
 
         return new RuntimePostCommitIntent(
             intentId: intentId,
             workflowExecutionId: workflowExecutionId,
-            kind: "DispatchSignal",
+            kind: kind,
             recordedAt: _now,
             activityExecutionId: "actexec-1",
             idempotencyKey: $"checkpoint-1:{intentId}",
