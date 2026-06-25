@@ -49,6 +49,26 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("renders repository summaries even when workspace details are not hydrated", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/repositories")) return [repositorySummary()];
+        if (url.endsWith("/workspaces")) return [];
+        if (url.endsWith("/templates")) return templates();
+        return {};
+      }
+    }));
+
+    await waitForText(container, "Team Extensions");
+
+    expect(container.textContent).toContain("Repositories");
+    expect(container.textContent).toContain("not connected");
+    expect(container.textContent).not.toContain("No Extension Builder repositories are available");
+
+    await unmount();
+  });
+
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });

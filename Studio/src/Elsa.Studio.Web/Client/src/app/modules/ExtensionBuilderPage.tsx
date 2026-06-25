@@ -87,11 +87,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
   const editorDirty = editorText !== savedEditorText;
-  const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? workspaces[0] ?? null;
-  const selectedRepository = repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
+  const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
+  const selectedRepository = repositories.find(repository => repository.id === selectedWorkspaceId) ?? repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
+  const hasRepositoryRows = repositories.length > 0 || workspaces.length > 0;
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
   const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
@@ -187,7 +188,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setRepositories(repositoryList);
       setTemplates(templateList);
       setWorkspaces(workspaceList);
-      setSelectedWorkspaceId(current => (current || workspaceList[0]?.id) ?? "");
+      setSelectedWorkspaceId(current => (current || workspaceList[0]?.id || repositoryList[0]?.id) ?? "");
       setState("ready");
     } catch (e) {
       setError(getErrorMessage(e));
@@ -202,8 +203,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     ]);
     setRepositories(repositoryList);
     setWorkspaces(workspaceList);
-    if (!options?.preserveSelection || !workspaceList.some(workspace => workspace.id === selectedWorkspaceId)) {
-      setSelectedWorkspaceId(workspaceList[0]?.id ?? "");
+    if (!options?.preserveSelection || !workspaceList.some(workspace => workspace.id === selectedWorkspaceId) && !repositoryList.some(repository => repository.id === selectedWorkspaceId)) {
+      setSelectedWorkspaceId(workspaceList[0]?.id ?? repositoryList[0]?.id ?? "");
     }
   }
 
@@ -573,8 +574,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} />
       </div>
 
-      {workspaces.length === 0 ? (
-        <EmptyState icon={<Boxes size={22} />}>No Extension Builder workspaces are available for this owner.</EmptyState>
+      {!hasRepositoryRows ? (
+        <EmptyState icon={<Boxes size={22} />}>No Extension Builder repositories are available for this owner.</EmptyState>
       ) : null}
 
       <div className="extension-builder-workbench">
@@ -583,7 +584,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           templates={templates}
           repositories={repositories}
           workspaces={workspaces}
-          selectedWorkspaceId={selectedWorkspace?.id ?? ""}
+          selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
           projectDraft={projectDraft}
