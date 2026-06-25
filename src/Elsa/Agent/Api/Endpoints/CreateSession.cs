@@ -30,6 +30,14 @@ internal sealed class CreateSession(
             return;
         }
 
+        var diagnostics = await provider.GetDiagnosticsAsync(ct);
+        if (!diagnostics.IsAvailable)
+        {
+            var error = new AgentError("agent.provider.unavailable", diagnostics.Status, 503);
+            await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), 503, cancellation: ct);
+            return;
+        }
+
         var session = await sessions.CreateAsync(new(
             tenantId,
             actorId,

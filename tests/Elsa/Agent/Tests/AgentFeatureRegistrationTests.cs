@@ -52,9 +52,9 @@ public sealed class AgentFeatureRegistrationTests
         var diagnostics = await agentProvider.GetDiagnosticsAsync();
         Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
         Assert.Equal(AgentProviderRiskProfile.ReviewRequired, diagnostics.RiskProfile);
+        Assert.False(diagnostics.IsAvailable);
         Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
         Assert.Contains(AgentProviderOperation.Streaming, diagnostics.SupportedOperations);
-        Assert.Contains(AgentProviderOperation.ToolApproval, diagnostics.SupportedOperations);
     }
 
     [Fact]
