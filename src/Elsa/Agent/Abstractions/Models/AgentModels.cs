@@ -89,6 +89,17 @@ public enum AgentStreamEventKind
     ToolApprovalRequested,
     ProposalCreated,
     Completed,
+    Error,
+    ClarificationRequested,
+    WorkflowGraphOperationBatchCreated
+}
+
+public enum AgentResultKind
+{
+    Message,
+    Clarification,
+    WorkflowGraphOperationBatch,
+    Proposal,
     Error
 }
 
@@ -304,7 +315,9 @@ public sealed record AgentStreamEvent(
     string? Content,
     string? ProposalId,
     AgentError? Error,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    AgentResultKind? ResultKind = null,
+    object? Payload = null);
 
 public sealed record AgentProviderToolApprovalRequest(
     string ProviderSessionId,

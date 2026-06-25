@@ -25,6 +25,37 @@ public sealed record WorkflowAgentDiagnosticSummary(
     string Severity,
     string Message);
 
+public static class WorkflowGraphOperationBatchSchema
+{
+    public const string CurrentVersion = "elsa.workflow-graph-operation-batch.v1";
+}
+
+public enum WorkflowGraphOperationKind
+{
+    AddActivity,
+    UpdateActivity,
+    RemoveActivity,
+    ConnectActivities,
+    DisconnectActivities,
+    SetRoot,
+    SetDesignerPosition,
+    SetActivityProperty
+}
+
+public sealed record WorkflowGraphOperationBatch(
+    string SchemaVersion,
+    string WorkflowDefinitionId,
+    string? BaseRevision,
+    IReadOnlyCollection<WorkflowGraphOperation> Operations,
+    IReadOnlyDictionary<string, string> Metadata);
+
+public sealed record WorkflowGraphOperation(
+    string Id,
+    WorkflowGraphOperationKind Kind,
+    IReadOnlyDictionary<string, object?> Parameters,
+    IReadOnlyCollection<string> TemporaryReferences,
+    string? Summary);
+
 public sealed record WorkflowChangeProposalRequest(
     string SessionId,
     string ActorId,
