@@ -3,12 +3,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutionInspectionStore
+public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<ActivityExecutionInspectionProjectionKey, ActivityExecutionInspectionProjection> _projections = new();
 
-    public ValueTask<ActivityExecutionInspectionProjection> SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
+    public ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(projection);
         cancellationToken.ThrowIfCancellationRequested();
@@ -17,7 +17,7 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         {
             var key = new ActivityExecutionInspectionProjectionKey(projection.WorkflowExecutionId, projection.ActivityExecutionId);
             _projections[key] = projection;
-            return new ValueTask<ActivityExecutionInspectionProjection>(projection);
+            return ValueTask.CompletedTask;
         }
     }
 

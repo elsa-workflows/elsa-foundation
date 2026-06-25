@@ -34,7 +34,10 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ImplementationType == typeof(InMemoryActivityExecutionStateStore));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IActivityExecutionInspectionStore) &&
-            descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
+            descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter) &&
+            descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator) &&
             descriptor.ImplementationType == typeof(RuntimeActivityExecutionInspectionAccumulator) &&
@@ -182,6 +185,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
+        Assert.IsType<InMemoryActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionWriter>());
         Assert.IsType<RuntimeActivityExecutionInspectionAccumulator>(provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>());
         Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<BookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
@@ -403,8 +407,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Collection(remaining, item => Assert.Equal("work-1", item.WorkItemId));
     }
 
-    [Fact]
-    public async Task RegisteredCheckpointHandlerProjectsRecoveredActivityInspection()
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Cancelled, RuntimeCheckpointNames.ActivityCancelled)]
+    [InlineData(ActivityExecutionStatus.Recovered, RuntimeCheckpointNames.ActivityRecovered)]
+    public async Task RegisteredCheckpointHandlerProjectsTerminalActivityInspection(
+        ActivityExecutionStatus status,
+        string checkpointName)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
@@ -413,14 +421,14 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         var stateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
         var inspectionStore = provider.GetRequiredService<IActivityExecutionInspectionStore>();
         var handler = provider.GetServices<IWorkflowSchedulerWorkHandler>().Single(x => x is WorkflowCheckpointSchedulerWorkHandler);
-        var recoveredState = NewStateForStatus(ActivityExecutionStatus.Recovered);
-        await stateStore.SaveAsync(recoveredState);
+        var terminalState = NewStateForStatus(status);
+        await stateStore.SaveAsync(terminalState);
 
-        await handler.HandleAsync(NewCheckpointWorkItem(recoveredState.Execution.ActivityExecutionId));
+        await handler.HandleAsync(NewCheckpointWorkItem(terminalState.Execution.ActivityExecutionId, checkpointName));
 
-        var projection = await inspectionStore.FindAsync("wf-1", recoveredState.Execution.ActivityExecutionId);
+        var projection = await inspectionStore.FindAsync("wf-1", terminalState.Execution.ActivityExecutionId);
         Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Recovered, projection.Status);
+        Assert.Equal(status, projection.Status);
     }
 
     [Fact]
@@ -741,7 +749,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
-    private static RuntimeSchedulerWorkItem NewCheckpointWorkItem(string activityExecutionId) =>
+    private static RuntimeSchedulerWorkItem NewCheckpointWorkItem(
+        string activityExecutionId,
+        string checkpointName = RuntimeCheckpointNames.ActivityRecovered) =>
         new(
             workItemId: "checkpoint-work",
             workflowExecutionId: "wf-1",
@@ -754,7 +764,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             sequence: 10,
             payload: JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(
                 new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
-                RuntimeCheckpointNames.ActivityRecovered,
+                checkpointName,
                 [activityExecutionId],
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason)),
             commandMetadata: new Dictionary<string, string>(),

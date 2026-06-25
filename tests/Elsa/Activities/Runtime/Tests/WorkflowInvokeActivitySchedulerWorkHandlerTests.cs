@@ -34,7 +34,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             incidentStateStore: _incidentStateStore,
             operationalStateStore: null,
             schedulerStateStore: null,
-            activityExecutionInspectionStore: _inspectionStore);
+            activityExecutionInspectionWriter: _inspectionStore);
     }
 
     [Fact]

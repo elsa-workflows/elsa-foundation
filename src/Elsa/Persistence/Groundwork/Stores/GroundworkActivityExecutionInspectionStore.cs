@@ -7,10 +7,10 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore store) : IActivityExecutionInspectionStore
+public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore store) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
     /// <exception cref="GroundworkActivityExecutionInspectionStoreException">Thrown when the Groundwork document store or JSON projection mapping fails.</exception>
-    public async ValueTask<ActivityExecutionInspectionProjection> SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
+    public async ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(projection);
         ArgumentException.ThrowIfNullOrWhiteSpace(projection.WorkflowExecutionId);
@@ -35,10 +35,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            throw new GroundworkActivityExecutionInspectionStoreException("Failed to save the activity execution inspection projection.", e);
+            throw new GroundworkActivityExecutionInspectionStoreException($"Failed to save the activity execution inspection projection for workflow execution '{projection.WorkflowExecutionId}' and activity execution '{projection.ActivityExecutionId}'.", e);
         }
-
-        return projection;
     }
 
     /// <exception cref="GroundworkActivityExecutionInspectionStoreException">Thrown when the Groundwork document store or JSON projection mapping fails.</exception>
@@ -58,7 +56,7 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            throw new GroundworkActivityExecutionInspectionStoreException("Failed to load the activity execution inspection projection.", e);
+            throw new GroundworkActivityExecutionInspectionStoreException($"Failed to load the activity execution inspection projection for workflow execution '{workflowExecutionId}' and activity execution '{activityExecutionId}'.", e);
         }
     }
 
@@ -80,7 +78,7 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            throw new GroundworkActivityExecutionInspectionStoreException("Failed to list activity execution inspection summaries.", e);
+            throw new GroundworkActivityExecutionInspectionStoreException($"Failed to list activity execution inspection summaries for workflow execution '{workflowExecutionId}'.", e);
         }
     }
 

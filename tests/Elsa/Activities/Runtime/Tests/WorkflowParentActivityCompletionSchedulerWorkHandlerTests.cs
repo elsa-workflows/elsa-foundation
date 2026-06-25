@@ -32,7 +32,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             incidentStateStore: _incidentStateStore,
             operationalStateStore: null,
             schedulerStateStore: null,
-            activityExecutionInspectionStore: _inspectionStore);
+            activityExecutionInspectionWriter: _inspectionStore);
     }
 
     [Fact]

@@ -98,14 +98,18 @@ public sealed class RuntimeActivityExecutionInspectionTests
         Assert.NotNull(await store.FindAsync("wf-1", "ae-1"));
     }
 
-    [Fact]
-    public async Task CheckpointHandler_Projects_Recovered_ActivityExecutionInspection()
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Cancelled, RuntimeCheckpointNames.ActivityCancelled)]
+    [InlineData(ActivityExecutionStatus.Recovered, RuntimeCheckpointNames.ActivityRecovered)]
+    public async Task CheckpointHandler_Projects_Terminal_ActivityExecutionInspection(
+        ActivityExecutionStatus status,
+        string checkpointName)
     {
         var stateStore = new InMemoryActivityExecutionStateStore();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
         var checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, stateStore, null, null, null, null, null, inspectionStore);
-        var recoveredState = NewStateForStatus(ActivityExecutionStatus.Recovered);
-        await stateStore.SaveAsync(recoveredState);
+        var terminalState = NewStateForStatus(status);
+        await stateStore.SaveAsync(terminalState);
         var handler = new WorkflowCheckpointSchedulerWorkHandler(
             stateStore,
             new RuntimeCheckpointCommitter(
@@ -114,13 +118,13 @@ public sealed class RuntimeActivityExecutionInspectionTests
                 new NoopRuntimePostCommitIntentDispatcher()),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             TimeProvider.System);
-        var workItem = NewCheckpointWorkItem(recoveredState.Execution.ActivityExecutionId);
+        var workItem = NewCheckpointWorkItem(terminalState.Execution.ActivityExecutionId, checkpointName);
 
         await handler.HandleAsync(workItem);
 
-        var projection = await inspectionStore.FindAsync("wf-1", recoveredState.Execution.ActivityExecutionId);
+        var projection = await inspectionStore.FindAsync("wf-1", terminalState.Execution.ActivityExecutionId);
         Assert.NotNull(projection);
-        Assert.Equal(ActivityExecutionStatus.Recovered, projection.Status);
+        Assert.Equal(status, projection.Status);
     }
 
     [Fact]
@@ -330,7 +334,9 @@ public sealed class RuntimeActivityExecutionInspectionTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
-    private static RuntimeSchedulerWorkItem NewCheckpointWorkItem(string activityExecutionId) =>
+    private static RuntimeSchedulerWorkItem NewCheckpointWorkItem(
+        string activityExecutionId,
+        string checkpointName = RuntimeCheckpointNames.ActivityRecovered) =>
         new(
             workItemId: "checkpoint-work",
             workflowExecutionId: "wf-1",
@@ -343,7 +349,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             sequence: 10,
             payload: JsonSerializer.SerializeToElement(new RuntimeCheckpointCommandPayload(
                 NewIdentity(),
-                RuntimeCheckpointNames.ActivityRecovered,
+                checkpointName,
                 [activityExecutionId],
                 RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason)),
             commandMetadata: new Dictionary<string, string>(),

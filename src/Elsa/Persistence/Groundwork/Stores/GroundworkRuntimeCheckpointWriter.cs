@@ -1,7 +1,11 @@
+using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
@@ -11,35 +15,18 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Groundwork's document store is autonomous per operation in the preview packages: a single
-/// <c>SaveAsync</c>/<c>DeleteAsync</c> commits independently and there is no cross-document
-/// transaction. The runtime checkpoint contract does not require cross-store atomicity — the
-/// reference <see cref="InMemoryRuntimeCheckpointWriter"/> applies the seam stores sequentially and
-/// relies on idempotent redelivery keyed by <see cref="RuntimeCheckpointCommit.CommitId"/>. This
-/// writer follows the same model but makes it durable:
+/// Runtime checkpoints are applied through one Groundwork document unit-of-work so lifecycle state,
+/// inspection projections, side-effect state, and the commit marker succeed or roll back together:
 /// </para>
 /// <list type="bullet">
-/// <item>The commit is applied through the host-selected seam stores (Groundwork-backed when this
-/// bridge is composed). Upserts and deletes are naturally idempotent; the incident append is treated
-/// idempotently so a redelivered commit does not fail.</item>
-/// <item>A marker document keyed by <c>CommitId</c> is written last. On entry, an existing marker
-/// short-circuits the commit, giving restart-safe dedup that the in-memory writer's in-process set
-/// cannot. A crash before the marker is written leaves a partially-applied commit that is completed by
-/// re-applying the same commit (at-least-once), because every apply step is idempotent.</item>
+/// <item>On entry, an existing marker document keyed by <c>CommitId</c> short-circuits redelivery.</item>
+/// <item>The marker is committed in the same document unit-of-work as the runtime state changes.</item>
 /// </list>
 /// </remarks>
 public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 {
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly IDocumentStore _commitLedger;
-    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
-    private readonly ISchedulerStateStore _schedulerStateStore;
-    private readonly IActivityExecutionStateStore _activityExecutionStateStore;
-    private readonly IActivityExecutionInspectionStore _activityExecutionInspectionStore;
-    private readonly IBookmarkStateStore _bookmarkStateStore;
-    private readonly IDurableValueStateStore _durableValueStateStore;
-    private readonly IIncidentStateStore _incidentStateStore;
-    private readonly IOperationalStateStore _operationalStateStore;
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
@@ -68,7 +55,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         ISchedulerStateStore schedulerStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
-        IActivityExecutionInspectionStore activityExecutionInspectionStore,
+        IActivityExecutionInspectionWriter activityExecutionInspectionWriter,
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
@@ -78,20 +65,12 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
-        ArgumentNullException.ThrowIfNull(activityExecutionInspectionStore);
+        ArgumentNullException.ThrowIfNull(activityExecutionInspectionWriter);
         ArgumentNullException.ThrowIfNull(bookmarkStateStore);
         ArgumentNullException.ThrowIfNull(durableValueStateStore);
         ArgumentNullException.ThrowIfNull(incidentStateStore);
         ArgumentNullException.ThrowIfNull(operationalStateStore);
         _commitLedger = commitLedger;
-        _workflowExecutionStateStore = workflowExecutionStateStore;
-        _schedulerStateStore = schedulerStateStore;
-        _activityExecutionStateStore = activityExecutionStateStore;
-        _activityExecutionInspectionStore = activityExecutionInspectionStore;
-        _bookmarkStateStore = bookmarkStateStore;
-        _durableValueStateStore = durableValueStateStore;
-        _incidentStateStore = incidentStateStore;
-        _operationalStateStore = operationalStateStore;
     }
 
     public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -104,7 +83,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         await _writeGate.WaitAsync(cancellationToken);
         try
         {
-            if (await IsCommittedAsync(commit.CommitId, cancellationToken))
+            if (await IsCommittedAsync(commit, cancellationToken))
                 return;
 
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
@@ -116,16 +95,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             ValidateIncidentStateChanges(commit);
             ValidateOperationalStateChanges(commit);
 
-            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
-            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
-            await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
-            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
-            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
-            await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
-            await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, cancellationToken);
-
-            await MarkCommittedAsync(commit, cancellationToken);
+            await ApplyAtomicallyAsync(commit, cancellationToken);
         }
         finally
         {
@@ -133,63 +103,122 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         }
     }
 
-    private async ValueTask<bool> IsCommittedAsync(string commitId, CancellationToken cancellationToken)
+    private async ValueTask<bool> IsCommittedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
-        var envelope = await _commitLedger.LoadAsync(
-            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-            commitId,
-            cancellationToken);
-        return envelope is not null;
-    }
-
-    private async ValueTask MarkCommittedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
-    {
-        var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
-        var content = JsonSerializer.Serialize(marker, GroundworkRuntimeJson.Options);
-        await _commitLedger.SaveAsync(
-            new SaveDocumentRequest(
+        try
+        {
+            var envelope = await _commitLedger.LoadAsync(
                 ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
                 commit.CommitId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
-                content),
-            cancellationToken);
+                cancellationToken);
+            return envelope is not null;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException($"Failed to load the runtime checkpoint commit marker for commit '{commit.CommitId}' and workflow execution '{commit.WorkflowExecutionId}'.", e);
+        }
     }
 
-    private async ValueTask ApplyWorkflowExecutionStateChangeAsync(
+    private async ValueTask ApplyAtomicallyAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (_commitLedger.TransactionBoundary != TransactionBoundary.CrossUnitAtomic)
+            throw new GroundworkRuntimeCheckpointWriterException($"The Groundwork document store cannot atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}' because it does not support cross-unit atomic transactions.", new NotSupportedException($"Unsupported transaction boundary '{_commitLedger.TransactionBoundary}'."));
+
+        await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
+        var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, unitOfWork);
+        var stores = GroundworkApplyStores.Create(transactionalStore);
+
+        try
+        {
+            await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
+            await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
+            await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
+            await ApplyActivityExecutionInspectionChangesAsync(stores.ActivityExecutionInspectionWriter, commit.StateChanges.ActivityExecutionInspections, cancellationToken);
+            await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
+            await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
+            await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
+            await ApplyOperationalStateChangesAsync(stores.OperationalStateStore, commit.StateChanges.Operational, cancellationToken);
+            await MarkCommittedAsync(transactionalStore, commit, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException and not GroundworkRuntimeCheckpointWriterException)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException($"Failed to atomically commit runtime checkpoint '{commit.CommitId}' for workflow execution '{commit.WorkflowExecutionId}'.", e);
+        }
+    }
+
+    private static DocumentCommitScope RuntimeCheckpointCommitScope() =>
+        DocumentCommitScope.Of(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+            ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
+            ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
+            ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
+            ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
+            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
+            ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
+
+    private static async ValueTask MarkCommittedAsync(IDocumentStore store, RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
+            var content = JsonSerializer.Serialize(marker, GroundworkRuntimeJson.Options);
+            await store.SaveAsync(
+                new SaveDocumentRequest(
+                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+                    commit.CommitId,
+                    ElsaRuntimeStorageManifest.SchemaVersion,
+                    content),
+                cancellationToken);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            throw new GroundworkRuntimeCheckpointWriterException($"Failed to save the runtime checkpoint commit marker for commit '{commit.CommitId}' and workflow execution '{commit.WorkflowExecutionId}'.", e);
+        }
+    }
+
+    private static async ValueTask ApplyWorkflowExecutionStateChangeAsync(
+        IWorkflowExecutionStateStore store,
         RuntimeStateChange<WorkflowExecutionState>? stateChange,
         CancellationToken cancellationToken)
     {
         if (stateChange is null)
             return;
-        await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+        await store.SaveAsync(stateChange.State, cancellationToken);
     }
 
-    private async ValueTask ApplySchedulerStateChangeAsync(
+    private static async ValueTask ApplySchedulerStateChangeAsync(
+        ISchedulerStateStore store,
         RuntimeStateChange<SchedulerState>? stateChange,
         CancellationToken cancellationToken)
     {
         if (stateChange is null)
             return;
-        await _schedulerStateStore.SaveAsync(stateChange.State, cancellationToken);
+        await store.SaveAsync(stateChange.State, cancellationToken);
     }
 
-    private async ValueTask ApplyActivityExecutionStateChangesAsync(
+    private static async ValueTask ApplyActivityExecutionStateChangesAsync(
+        IActivityExecutionStateStore store,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> stateChanges,
         CancellationToken cancellationToken)
     {
         foreach (var stateChange in stateChanges)
-            await _activityExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
+            await store.SaveAsync(stateChange.State, cancellationToken);
     }
 
-    private async ValueTask ApplyActivityExecutionInspectionChangesAsync(
+    private static async ValueTask ApplyActivityExecutionInspectionChangesAsync(
+        IActivityExecutionInspectionWriter writer,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
         CancellationToken cancellationToken)
     {
         foreach (var stateChange in stateChanges)
-            await _activityExecutionInspectionStore.SaveAsync(stateChange.State, cancellationToken);
+            await writer.SaveAsync(stateChange.State, cancellationToken);
     }
 
-    private async ValueTask ApplyBookmarkStateChangesAsync(
+    private static async ValueTask ApplyBookmarkStateChangesAsync(
+        IBookmarkStateStore store,
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> stateChanges,
         CancellationToken cancellationToken)
     {
@@ -197,14 +226,15 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         {
             if (stateChange.Operation == RuntimeStateChangeOperation.Delete)
             {
-                await _bookmarkStateStore.DeleteAsync(stateChange.State.WorkflowExecutionId, stateChange.State.BookmarkId, cancellationToken);
+                await store.DeleteAsync(stateChange.State.WorkflowExecutionId, stateChange.State.BookmarkId, cancellationToken);
                 continue;
             }
-            await _bookmarkStateStore.SaveAsync(stateChange.State, cancellationToken);
+            await store.SaveAsync(stateChange.State, cancellationToken);
         }
     }
 
-    private async ValueTask ApplyDurableValueStateChangesAsync(
+    private static async ValueTask ApplyDurableValueStateChangesAsync(
+        IDurableValueStateStore store,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> stateChanges,
         CancellationToken cancellationToken)
     {
@@ -212,14 +242,15 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         {
             if (stateChange.Operation == RuntimeStateChangeOperation.Delete)
             {
-                await _durableValueStateStore.DeleteAsync(stateChange.State.WorkflowExecutionId, stateChange.State.DurableValueId, cancellationToken);
+                await store.DeleteAsync(stateChange.State.WorkflowExecutionId, stateChange.State.DurableValueId, cancellationToken);
                 continue;
             }
-            await _durableValueStateStore.SaveAsync(stateChange.State, cancellationToken);
+            await store.SaveAsync(stateChange.State, cancellationToken);
         }
     }
 
-    private async ValueTask ApplyIncidentStateChangesAsync(
+    private static async ValueTask ApplyIncidentStateChangesAsync(
+        IIncidentStateStore store,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> stateChanges,
         CancellationToken cancellationToken)
     {
@@ -231,21 +262,22 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             // incident exists without throwing on a second pass.
             if (stateChange.Operation == RuntimeStateChangeOperation.Append)
             {
-                var added = await _incidentStateStore.TryAddAsync(stateChange.State, cancellationToken);
+                var added = await store.TryAddAsync(stateChange.State, cancellationToken);
                 if (!added)
-                    await _incidentStateStore.SaveAsync(stateChange.State, cancellationToken);
+                    await store.SaveAsync(stateChange.State, cancellationToken);
                 continue;
             }
-            await _incidentStateStore.SaveAsync(stateChange.State, cancellationToken);
+            await store.SaveAsync(stateChange.State, cancellationToken);
         }
     }
 
-    private async ValueTask ApplyOperationalStateChangesAsync(
+    private static async ValueTask ApplyOperationalStateChangesAsync(
+        IOperationalStateStore store,
         IReadOnlyCollection<RuntimeStateChange<OperationalState>> stateChanges,
         CancellationToken cancellationToken)
     {
         foreach (var stateChange in stateChanges)
-            await _operationalStateStore.SaveAsync(stateChange.State, cancellationToken);
+            await store.SaveAsync(stateChange.State, cancellationToken);
     }
 
     private static void ValidateWorkflowExecutionStateChange(RuntimeStateChange<WorkflowExecutionState>? stateChange)
@@ -350,4 +382,57 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     }
 
     private sealed record CheckpointCommitMarker(string CommitId, string WorkflowExecutionId, DateTimeOffset OccurredAt);
+
+    private sealed record GroundworkApplyStores(
+        IWorkflowExecutionStateStore WorkflowExecutionStateStore,
+        ISchedulerStateStore SchedulerStateStore,
+        IActivityExecutionStateStore ActivityExecutionStateStore,
+        IActivityExecutionInspectionWriter ActivityExecutionInspectionWriter,
+        IBookmarkStateStore BookmarkStateStore,
+        IDurableValueStateStore DurableValueStateStore,
+        IIncidentStateStore IncidentStateStore,
+        IOperationalStateStore OperationalStateStore)
+    {
+        public static GroundworkApplyStores Create(IDocumentStore store) =>
+            new(
+                new GroundworkWorkflowExecutionStateStore(store),
+                new GroundworkSchedulerStateStore(store),
+                new GroundworkActivityExecutionStateStore(store),
+                new GroundworkActivityExecutionInspectionStore(store),
+                new GroundworkBookmarkStateStore(store),
+                new GroundworkDurableValueStateStore(store),
+                new GroundworkIncidentStateStore(store),
+                new GroundworkOperationalStateStore(store));
+    }
+
+    private sealed class DocumentUnitOfWorkStore(
+        TransactionBoundary transactionBoundary,
+        IDocumentUnitOfWork unitOfWork) : IDocumentStore
+    {
+        public TransactionBoundary TransactionBoundary => transactionBoundary;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            unitOfWork.SaveAsync(request, cancellationToken);
+
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
+            unitOfWork.LoadAsync(documentKind, id, cancellationToken);
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            unitOfWork.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Runtime checkpoint commit unit-of-work does not query documents.");
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("Nested document unit-of-work scopes are not supported.");
+    }
 }

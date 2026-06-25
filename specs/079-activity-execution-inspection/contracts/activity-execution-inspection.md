@@ -90,19 +90,25 @@ Response behavior:
 
 ### IActivityExecutionInspectionStore
 
-Purpose: persist current inspection projection per concrete activity execution.
+Purpose: read current inspection projection per concrete activity execution.
+
+Operations:
+
+- `FindAsync(string workflowExecutionId, string activityExecutionId)`
+- `ListSummariesAsync(string workflowExecutionId)`
+
+### IActivityExecutionInspectionWriter
+
+Purpose: persist current inspection projection per concrete activity execution from the checkpoint writer lane.
 
 Operations:
 
 - `SaveAsync(ActivityExecutionInspectionProjection projection)`
-- `FindAsync(string workflowExecutionId, string activityExecutionId)`
-- `ListAsync(string workflowExecutionId)`
-- optional query by authored activity id for efficient node selection
 
 Rules:
 
 - Store key is `(workflowExecutionId, activityExecutionId)`.
-- `ListAsync(workflowExecutionId)` returns all committed inspection projections for an instance.
+- `ListSummariesAsync(workflowExecutionId)` returns committed inspection summaries for an instance without loading snapshot payloads.
 - Storage providers must preserve deterministic ordering fields.
 
 ## Checkpoint Contract

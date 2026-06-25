@@ -10,7 +10,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
     private readonly Dictionary<string, RuntimeCheckpointWriteRecord> _writes = new(StringComparer.Ordinal);
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
-    private readonly IActivityExecutionInspectionStore? _activityExecutionInspectionStore;
+    private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
     private readonly IBookmarkStateStore? _bookmarkStateStore;
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IIncidentStateStore? _incidentStateStore;
@@ -75,11 +75,11 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IIncidentStateStore? incidentStateStore,
         IOperationalStateStore? operationalStateStore,
         ISchedulerStateStore? schedulerStateStore,
-        IActivityExecutionInspectionStore? activityExecutionInspectionStore)
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
-        _activityExecutionInspectionStore = activityExecutionInspectionStore;
+        _activityExecutionInspectionWriter = activityExecutionInspectionWriter;
         _bookmarkStateStore = bookmarkStateStore;
         _durableValueStateStore = durableValueStateStore;
         _incidentStateStore = incidentStateStore;
@@ -173,14 +173,14 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> stateChanges,
         CancellationToken cancellationToken)
     {
-        if (_activityExecutionInspectionStore is null)
+        if (_activityExecutionInspectionWriter is null)
             return;
 
         foreach (var stateChange in stateChanges)
         {
             if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
             {
-                await _activityExecutionInspectionStore.SaveAsync(stateChange.State, cancellationToken);
+                await _activityExecutionInspectionWriter.SaveAsync(stateChange.State, cancellationToken);
                 continue;
             }
 
@@ -340,7 +340,7 @@ public sealed class InMemoryRuntimeCheckpointWriter : IRuntimeCheckpointWriter
 
     private void ValidateActivityExecutionInspectionChanges(RuntimeCheckpointCommit commit)
     {
-        if (_activityExecutionInspectionStore is null)
+        if (_activityExecutionInspectionWriter is null)
             return;
 
         foreach (var stateChange in commit.StateChanges.ActivityExecutionInspections)
