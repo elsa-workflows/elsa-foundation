@@ -1515,6 +1515,20 @@ textarea:focus {
   padding-top: 10px;
 }
 
+.extension-builder-create summary {
+  min-height: 30px;
+  color: var(--studio-text);
+  cursor: pointer;
+  font-size: var(--studio-body-size);
+  font-weight: 700;
+  list-style-position: inside;
+  padding: 4px 0;
+}
+
+.extension-builder-create summary:hover {
+  color: var(--studio-accent);
+}
+
 .extension-builder-create label,
 .extension-builder-file-create {
   display: grid;

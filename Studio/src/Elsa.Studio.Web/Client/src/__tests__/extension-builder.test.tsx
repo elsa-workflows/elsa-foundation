@@ -32,8 +32,11 @@ describe("extension builder page", () => {
     await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Extension Builder");
+    expect(container.textContent).toContain("Repositories");
     expect(container.textContent).toContain("Team Extensions");
-    expect(container.textContent).toContain("owner alice");
+    expect(container.textContent).toContain("alice");
+    expect(container.textContent).toContain("not connected");
+    expect(container.textContent).toContain("main");
     expect(container.textContent).toContain("Elsa activity/module");
     expect(container.textContent).toContain("Generic .NET class library");
     expect(container.querySelector<HTMLInputElement>("[aria-label='Project name']")?.value).toBe("ElsaActivityExtension");
@@ -238,11 +241,11 @@ describe("extension builder page", () => {
         return {};
       }
     }));
-    await waitForText(container, "FailedReconciliation");
+    await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Generic .NET class library");
-    expect(container.textContent).toContain("FailedReconciliation");
     await clickTab(container, "Runtime");
+    expect(container.textContent).toContain("FailedReconciliation");
     expect(container.textContent).toContain("contributed no runtime capabilities");
 
     await clickButton(container, "Retry reconciliation");
@@ -274,6 +277,7 @@ function stubApi(options?: {
 
 async function defaultGetJson(url: string): Promise<unknown> {
   if (url.endsWith("/capabilities")) return trustedCapabilities();
+  if (url.endsWith("/repositories")) return [repositorySummary()];
   if (url.endsWith("/workspaces")) return [workspaceWithProject()];
   if (url.endsWith("/templates")) return templates();
   if (url.endsWith("/files")) return projectFiles();
@@ -402,6 +406,21 @@ function workspaceWithProject(options?: { project?: ReturnType<typeof project> }
     ownerId: "alice",
     trustContext: "trusted-team",
     projectIds: [selectedProject.id]
+  };
+}
+
+function repositorySummary() {
+  return {
+    id: "ws-1",
+    name: "Team Extensions",
+    ownerId: "alice",
+    activeBranch: "main",
+    isDirty: false,
+    remoteState: "not-connected",
+    latestBuildStatus: "Succeeded",
+    attentionCount: 0,
+    projectCount: 1,
+    updatedAt: new Date().toISOString()
   };
 }
 

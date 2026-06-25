@@ -15,6 +15,7 @@ import {
   getRuntimeStatus,
   isTrusted,
   listProjectFiles,
+  listRepositories,
   listTemplates,
   listWorkspaces,
   promoteBuild,
@@ -28,6 +29,7 @@ import {
   type BuildResult,
   type ExtensionBuilderCapabilities,
   type ExtensionProject,
+  type ExtensionRepositorySummary,
   type ExtensionRuntimeStatus,
   type ExtensionTemplate,
   type ExtensionWorkspace,
@@ -57,6 +59,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const context = api.backend;
   const [state, setState] = useState<BuilderState>("loading");
   const [capabilities, setCapabilities] = useState<ExtensionBuilderCapabilities | null>(null);
+  const [repositories, setRepositories] = useState<ExtensionRepositorySummary[]>([]);
   const [workspaces, setWorkspaces] = useState<ExtensionWorkspace[]>([]);
   const [templates, setTemplates] = useState<ExtensionTemplate[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -85,6 +88,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
   const editorDirty = editorText !== savedEditorText;
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? workspaces[0] ?? null;
+  const selectedRepository = repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
@@ -175,10 +179,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         return;
       }
 
-      const [workspaceList, templateList] = await Promise.all([
+      const [repositoryList, workspaceList, templateList] = await Promise.all([
+        listRepositories(context).catch(() => []),
         listWorkspaces(context),
         listTemplates(context)
       ]);
+      setRepositories(repositoryList);
       setTemplates(templateList);
       setWorkspaces(workspaceList);
       setSelectedWorkspaceId(current => (current || workspaceList[0]?.id) ?? "");
@@ -190,7 +196,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function refreshWorkspaces(options?: { preserveSelection?: boolean }) {
-    const workspaceList = await listWorkspaces(context);
+    const [repositoryList, workspaceList] = await Promise.all([
+      listRepositories(context).catch(() => []),
+      listWorkspaces(context)
+    ]);
+    setRepositories(repositoryList);
     setWorkspaces(workspaceList);
     if (!options?.preserveSelection || !workspaceList.some(workspace => workspace.id === selectedWorkspaceId)) {
       setSelectedWorkspaceId(workspaceList[0]?.id ?? "");
@@ -540,7 +550,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="section-header modules-header">
         <div>
           <h2>Extension Builder</h2>
-          <p>{selectedWorkspace ? `${selectedWorkspace.name}: ${selectedWorkspace.projects.length} project(s), owner ${selectedWorkspace.owner ?? "current user"}.` : "Create an owner-scoped workspace to start building extensions."}</p>
+          <p>{selectedRepository ? `${selectedRepository.name}: ${selectedRepository.projectCount} project(s), ${formatRemoteState(selectedRepository.remoteState)}${selectedRepository.activeBranch ? ` on ${selectedRepository.activeBranch}` : ""}.` : "Select, create, or clone a Git-backed repository to start building extensions."}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
@@ -556,11 +566,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
-        <SummaryItem label="Workspaces" value={workspaces.length} />
-        <SummaryItem label="Projects" value={workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
+        <SummaryItem label="Repositories" value={repositories.length || workspaces.length} />
+        <SummaryItem label="Projects" value={repositories.reduce((count, repository) => count + repository.projectCount, 0) || workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
         <SummaryItem label="Build" value={activeBuild?.status ?? selectedProject?.latestBuildStatus ?? "none"} />
-        <SummaryItem label="Runtime" value={runtimeStatus?.state ?? selectedProject?.runtimeStatus ?? "unknown"} />
-        <SummaryItem label="Capabilities" value={capabilityCount(capabilities)} />
+        <SummaryItem label="Remote" value={selectedRepository ? formatRemoteState(selectedRepository.remoteState) : "unknown"} />
+        <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} />
       </div>
 
       {workspaces.length === 0 ? (
@@ -571,6 +581,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         <WorkspaceBrowser
           capabilities={capabilities!}
           templates={templates}
+          repositories={repositories}
           workspaces={workspaces}
           selectedWorkspaceId={selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
@@ -647,6 +658,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 function WorkspaceBrowser({
   capabilities,
   templates,
+  repositories,
   workspaces,
   selectedWorkspaceId,
   selectedProjectId,
@@ -664,6 +676,7 @@ function WorkspaceBrowser({
 }: {
   capabilities: ExtensionBuilderCapabilities;
   templates: ExtensionTemplate[];
+  repositories: ExtensionRepositorySummary[];
   workspaces: ExtensionWorkspace[];
   selectedWorkspaceId: string;
   selectedProjectId: string;
@@ -681,30 +694,46 @@ function WorkspaceBrowser({
 }) {
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? null;
   const canCreate = capabilities.canCreateWorkspace;
+  const repositoryRows = repositories.length > 0
+    ? repositories
+    : workspaces.map(workspace => ({
+      id: workspace.id,
+      name: workspace.name,
+      owner: workspace.owner,
+      activeBranch: null,
+      isDirty: false,
+      remoteState: "unknown",
+      latestBuildStatus: workspace.projects[0]?.latestBuildStatus ?? null,
+      attentionCount: 0,
+      projectCount: workspace.projects.length,
+      updatedAt: workspace.updatedAt
+    } satisfies ExtensionRepositorySummary));
 
   return (
-    <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder workspaces">
+    <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder repositories">
       <div className="modules-source-nav-heading">
-        <span>Workspaces</span>
-        <strong>{workspaces.length}</strong>
+        <span>Repositories</span>
+        <strong>{repositoryRows.length}</strong>
       </div>
-      <div className="extension-builder-create">
+      <details className="extension-builder-create">
+        <summary>New or Clone</summary>
         <label>
-          <span>Workspace name</span>
+          <span>Repository name</span>
           <input aria-label="Workspace name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
         </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create workspace" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
+        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
-          Create workspace
+          Create managed repo
         </button>
-      </div>
-      {workspaces.map(workspace => (
-        <button key={workspace.id} type="button" className={workspace.id === selectedWorkspaceId ? "modules-source-button active" : "modules-source-button"} onClick={() => onSelectWorkspace(workspace.id)}>
+      </details>
+      {repositoryRows.map(repository => (
+        <button key={repository.id} type="button" className={repository.id === selectedWorkspaceId ? "modules-source-button active" : "modules-source-button"} onClick={() => onSelectWorkspace(repository.id)}>
           <span>
-            <strong>{workspace.name}</strong>
-            <small>{workspace.owner ?? "current owner"} · {workspace.projects.length} project(s)</small>
+            <strong>{repository.name}</strong>
+            <small>{repository.owner ?? "current owner"} · {repository.projectCount} project(s)</small>
+            <small>{repository.activeBranch ?? "no branch"} · {formatRemoteState(repository.remoteState)}{repository.isDirty ? " · dirty" : ""}</small>
           </span>
-          <em>{workspace.projects.length}</em>
+          <em>{repository.attentionCount}</em>
         </button>
       ))}
 
@@ -720,7 +749,8 @@ function WorkspaceBrowser({
       </div>
 
       {selectedWorkspace ? (
-        <div className="extension-builder-create">
+        <details className="extension-builder-create">
+          <summary>Add project</summary>
           <label>
             <span>Template</span>
             <select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
@@ -753,7 +783,7 @@ function WorkspaceBrowser({
               Delete workspace
             </button>
           </div>
-        </div>
+        </details>
       ) : null}
     </aside>
   );
@@ -1267,9 +1297,12 @@ function isBuildSucceeded(build: BuildResult | null) {
   return build?.status === "succeeded" || build?.status === "Succeeded";
 }
 
-function capabilityCount(capabilities: ExtensionBuilderCapabilities | null) {
-  if (!capabilities) return 0;
-  return Object.values(capabilities).filter(Boolean).length;
+function formatRemoteState(value?: string | null) {
+  if (!value) return "unknown remote";
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .join(" ");
 }
 
 function buildTone(status?: string | null): StudioStatusTone {

@@ -25,6 +25,19 @@ export interface ExtensionWorkspace {
   projects: ExtensionProject[];
 }
 
+export interface ExtensionRepositorySummary {
+  id: string;
+  name: string;
+  owner?: string | null;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  remoteState: string;
+  latestBuildStatus?: BuildStatus | null;
+  attentionCount: number;
+  projectCount: number;
+  updatedAt?: string | null;
+}
+
 export interface ExtensionProject {
   id: string;
   workspaceId?: string | null;
@@ -166,6 +179,12 @@ export async function listWorkspaces(context: StudioEndpointContext) {
   return Promise.all(workspaces.map(workspace => hydrateWorkspace(context, workspace)));
 }
 
+export async function listRepositories(context: StudioEndpointContext) {
+  const response = await context.http.getJson<RawExtensionRepositorySummary[] | { repositories: RawExtensionRepositorySummary[] }>(`${root}/repositories`);
+  const repositories = Array.isArray(response) ? response : response.repositories;
+  return repositories.map(normalizeRepositorySummary);
+}
+
 export async function createWorkspace(context: StudioEndpointContext, request: CreateWorkspaceRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/workspaces`, { displayName: request.name }), []);
 }
@@ -301,6 +320,21 @@ function normalizeWorkspace(workspace: RawExtensionWorkspace, projects: Extensio
     createdAt: workspace.createdAt,
     updatedAt: workspace.updatedAt,
     projects
+  };
+}
+
+function normalizeRepositorySummary(repository: RawExtensionRepositorySummary): ExtensionRepositorySummary {
+  return {
+    id: repository.id,
+    name: repository.name ?? repository.displayName,
+    owner: repository.owner ?? repository.ownerId,
+    activeBranch: repository.activeBranch,
+    isDirty: repository.isDirty ?? false,
+    remoteState: repository.remoteState ?? "unknown",
+    latestBuildStatus: repository.latestBuildStatus == null ? repository.latestBuildStatus : normalizeBuildStatus(repository.latestBuildStatus),
+    attentionCount: repository.attentionCount ?? 0,
+    projectCount: repository.projectCount ?? repository.projects ?? 0,
+    updatedAt: repository.updatedAt
   };
 }
 
@@ -478,6 +512,22 @@ interface RawExtensionWorkspace {
   updatedAt?: string | null;
   projectIds?: string[];
   projects?: RawExtensionProject[];
+}
+
+interface RawExtensionRepositorySummary {
+  id: string;
+  name?: string;
+  displayName?: string;
+  owner?: string | null;
+  ownerId?: string | null;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  remoteState?: string | null;
+  latestBuildStatus?: BuildStatus | number | null;
+  attentionCount?: number | null;
+  projectCount?: number | null;
+  projects?: number | null;
+  updatedAt?: string | null;
 }
 
 interface RawExtensionProject {
