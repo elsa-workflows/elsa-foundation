@@ -21,6 +21,9 @@ public sealed class DefaultSecretResolver(
         if (secret is null)
             return await FailureAsync(reference.Name, SecretResolutionFailureCode.NotFound, "Secret not found.", cancellationToken);
 
+        if (secret.Status == SecretStatus.Deleted)
+            return await FailureAsync(secret.Name, SecretResolutionFailureCode.NotFound, "Secret not found.", cancellationToken);
+
         if (reference.TypeName is not null && !string.Equals(secret.TypeName, reference.TypeName, StringComparison.OrdinalIgnoreCase))
             return await FailureAsync(secret.Name, SecretResolutionFailureCode.TypeMismatch, "Secret type does not match the requested type.", cancellationToken);
 
@@ -30,7 +33,7 @@ public sealed class DefaultSecretResolver(
         if (secret.Status == SecretStatus.Revoked)
             return await FailureAsync(secret.Name, SecretResolutionFailureCode.Revoked, "Secret has been revoked.", cancellationToken);
 
-        if (secret.Status is SecretStatus.Retired or SecretStatus.Deleted)
+        if (secret.Status is SecretStatus.Retired)
             return await FailureAsync(secret.Name, SecretResolutionFailureCode.Inactive, "Secret is not active.", cancellationToken);
 
         var version = secret.LatestActiveVersion;

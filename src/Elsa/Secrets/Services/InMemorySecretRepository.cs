@@ -11,12 +11,12 @@ public sealed class InMemorySecretRepository : ISecretRepository
     public ValueTask<Secret?> FindAsync(string normalizedName, CancellationToken cancellationToken = default)
     {
         _secrets.TryGetValue(normalizedName, out var secret);
-        return new(secret?.Status == SecretStatus.Deleted ? null : secret);
+        return new(secret);
     }
 
     public ValueTask<IReadOnlyCollection<Secret>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var secrets = _secrets.Values.Where(x => x.Status != SecretStatus.Deleted).ToArray();
+        var secrets = _secrets.Values.ToArray();
         return new(secrets);
     }
 

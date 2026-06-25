@@ -26,7 +26,7 @@ public sealed class GroundworkSecretRepositoryTests
     }
 
     [Fact]
-    public async Task List_Excludes_Deleted_Secrets()
+    public async Task List_Includes_Deleted_Tombstones()
     {
         var repository = new GroundworkSecretRepository(new InMemoryDocumentStore(SecretsStorageManifest.Create()));
         var secret = Secret("payments.api", "v1");
@@ -35,7 +35,7 @@ public sealed class GroundworkSecretRepositoryTests
         secret.Status = SecretStatus.Deleted;
         await repository.SaveAsync(secret);
 
-        Assert.Empty(await repository.ListAsync());
+        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync()).Status);
         Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("payments.api"))!.Status);
     }
 
