@@ -6,37 +6,32 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionCommandProcessor
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
-    private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IWorkflowSchedulerDrainPolicy _schedulerDrainPolicy;
-    private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
+    private readonly IWorkflowExecutionDrainCoordinator _drainCoordinator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowSchedulerCommandProcessor(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowSchedulerDrainer schedulerDrainer,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers)
-        : this(schedulerWorkQueue, schedulerDrainer, schedulerDrainPolicy, schedulerDrainObservers, TimeProvider.System)
+        IWorkflowExecutionDrainCoordinator drainCoordinator)
+        : this(schedulerWorkQueue, schedulerDrainPolicy, drainCoordinator, TimeProvider.System)
     {
     }
 
     public WorkflowSchedulerCommandProcessor(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowSchedulerDrainer schedulerDrainer,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        IWorkflowExecutionDrainCoordinator drainCoordinator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
-        ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
-        ArgumentNullException.ThrowIfNull(schedulerDrainObservers);
+        ArgumentNullException.ThrowIfNull(drainCoordinator);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _schedulerWorkQueue = schedulerWorkQueue;
-        _schedulerDrainer = schedulerDrainer;
         _schedulerDrainPolicy = schedulerDrainPolicy;
-        _schedulerDrainObservers = schedulerDrainObservers.ToArray();
+        _drainCoordinator = drainCoordinator;
         _timeProvider = timeProvider;
     }
 
@@ -79,41 +74,6 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
         if (options.AmbientServices is not null)
             drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
-        var drainResult = await _schedulerDrainer.DrainAsync(drainRequest, cancellationToken);
-        await NotifyObserversAsync(envelope, drainResult, cancellationToken);
-    }
-
-    private async ValueTask NotifyObserversAsync(
-        WorkflowExecutionCommandEnvelope envelope,
-        RuntimeSchedulerDrainResult drainResult,
-        CancellationToken cancellationToken)
-    {
-        List<Exception>? observerExceptions = null;
-
-        foreach (var observer in _schedulerDrainObservers)
-        {
-            try
-            {
-                await observer.OnDrainedAsync(envelope, drainResult, cancellationToken);
-            }
-            catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
-            {
-                if (observerExceptions is not null)
-                {
-                    observerExceptions.Add(exception);
-                    throw new AggregateException("One or more scheduler drain observers failed before cancellation.", observerExceptions);
-                }
-
-                throw;
-            }
-            catch (Exception exception)
-            {
-                observerExceptions ??= [];
-                observerExceptions.Add(exception);
-            }
-        }
-
-        if (observerExceptions is not null)
-            throw new AggregateException("One or more scheduler drain observers failed.", observerExceptions);
+        await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
     }
 }
