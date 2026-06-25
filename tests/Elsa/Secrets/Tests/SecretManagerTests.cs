@@ -71,9 +71,12 @@ public sealed class SecretManagerTests : IDisposable
     {
         await CreateEncryptedAsync("payments.api");
 
-        await _manager.RevokeAsync("payments.api");
+        var revoked = await _manager.RevokeAsync("payments.api");
         var resolved = await _resolver.ResolveAsync(new SecretReference("payments.api"));
 
+        Assert.NotNull(revoked);
+        Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("payments.api"))!.Status);
+        Assert.Equal(SecretStatus.Revoked, Assert.Single((await _manager.ListAsync(new SecretQuery { Status = SecretStatus.Revoked })).Items).Status);
         Assert.False(resolved.Succeeded);
         Assert.Equal(SecretResolutionFailureCode.Revoked, resolved.FailureCode);
     }
@@ -85,6 +88,7 @@ public sealed class SecretManagerTests : IDisposable
 
         Assert.True(await _manager.DeleteAsync("payments.api"));
         Assert.Empty((await _manager.ListAsync(new SecretQuery())).Items);
+        Assert.Empty((await _manager.ListAsync(new SecretQuery { Status = SecretStatus.Deleted })).Items);
         Assert.Null(await _manager.FindAsync("payments.api"));
         Assert.False(await _manager.DeleteAsync("payments.api"));
         Assert.Equal("not-found", (await _manager.TestAsync("payments.api")).Code);

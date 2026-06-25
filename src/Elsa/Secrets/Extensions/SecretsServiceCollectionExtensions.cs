@@ -33,6 +33,7 @@ public static class SecretsServiceCollectionExtensions
         services.TryAddSingleton<ISecretValueProtector, DefaultSecretValueProtector>();
         services.TryAddSingleton<ISecretRepository, InMemorySecretRepository>();
         services.TryAddSingleton<ISecretAuditSink, NullSecretAuditSink>();
+        services.TryAddSingleton<SecretLifecyclePolicy>();
         services.TryAddSingleton<SecretModelMapper>();
         services.TryAddSingleton<ISecretManager, DefaultSecretManager>();
         services.TryAddSingleton<ISecretResolver, DefaultSecretResolver>();
