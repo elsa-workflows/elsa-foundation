@@ -58,6 +58,14 @@ queryable, provenance-bearing catalog rows. CLR activities, JSON descriptors,
 workflow descriptors, scripts, and future sources can all enter through the same
 catalog contract.
 
+Activity availability is a policy layer on top of the catalog, not a replacement
+for it. Host configuration may optionally define the maximum baseline through
+activity keys and host-defined activity sets; management settings may narrow that
+baseline; future user-context policy such as RBAC can narrow it further. This
+policy controls picker addability only: existing workflow definitions still
+render their authored activity nodes even when those activity types are no longer
+available for new selection.
+
 ## Framework composition rationale
 
 Replacement-contract examples:
