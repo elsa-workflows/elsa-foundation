@@ -16,6 +16,7 @@ public static class WorkflowAgentServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WorkflowAgentCapabilityProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, DefaultWorkflowAgentContextProvider>());
         services.TryAddScoped<IWorkflowAgentContextProvider, DefaultWorkflowAgentContextProvider>();
+        services.TryAddScoped<IWorkflowActivityCatalogProvider, DefaultWorkflowActivityCatalogProvider>();
         services.TryAddScoped<IWorkflowRevisionProvider, DefaultWorkflowRevisionProvider>();
         services.TryAddScoped<IWorkflowChangePermissionEvaluator, DenyAllWorkflowChangePermissionEvaluator>();
         services.TryAddScoped<IWorkflowChangeProposalService, DefaultWorkflowChangeProposalService>();
