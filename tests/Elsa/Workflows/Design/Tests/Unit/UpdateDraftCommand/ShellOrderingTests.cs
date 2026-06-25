@@ -1,4 +1,4 @@
-using Elsa.Workflows.Design.Persistence.EFCore.Constants;
+using LockKeys = Elsa.Workflows.Design.Persistence.Core.Constants.WorkflowDesignPersistenceLockKeys;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Microsoft.EntityFrameworkCore;

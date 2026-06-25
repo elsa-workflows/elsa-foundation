@@ -163,7 +163,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
             .AddScoped<Persistence.Core.Contracts.IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
             .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraft>()
             // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
-            .AddScoped<Persistence.EFCore.Contracts.IDraftStateDiffEngine, DraftStateDiffEngine>()
+            .AddScoped<Persistence.Core.Contracts.IDraftStateDiffEngine, Persistence.Core.Services.DraftStateDiffEngine>()
             .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraft>();
     }
 

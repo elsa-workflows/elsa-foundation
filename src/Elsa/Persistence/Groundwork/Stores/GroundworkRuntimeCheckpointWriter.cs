@@ -11,7 +11,7 @@ using System.Text.Json;
 namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
-/// Durable <see cref="IRuntimeCheckpointWriter"/> for the Groundwork bridge.
+/// Durable <see cref="IRuntimeCheckpointCommitStore"/> for the Groundwork bridge.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,7 +23,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <item>The marker is committed in the same document unit-of-work as the runtime state changes.</item>
 /// </list>
 /// </remarks>
-public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
+public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
 {
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly IDocumentStore _commitLedger;
@@ -73,7 +73,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         _commitLedger = commitLedger;
     }
 
-    public async ValueTask WriteAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
+    public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
@@ -84,7 +84,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
         try
         {
             if (await IsCommittedAsync(commit, cancellationToken))
-                return;
+                return new RuntimeCheckpointCommitStoreResult([]);
 
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateSchedulerStateChange(commit);
@@ -96,6 +96,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointWriter
             ValidateOperationalStateChanges(commit);
 
             await ApplyAtomicallyAsync(commit, cancellationToken);
+
+            return new RuntimeCheckpointCommitStoreResult([]);
         }
         finally
         {

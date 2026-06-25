@@ -40,8 +40,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
         services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
-        services.TryAddSingleton<IRuntimeCheckpointWriter, InMemoryRuntimeCheckpointWriter>();
-        services.TryAddSingleton<IRuntimePostCommitOutboxStore, InMemoryRuntimePostCommitOutboxStore>();
+        services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
+        services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
 
         services.AddGroundworkRuntimeStores();
@@ -57,7 +58,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
         Assert.IsType<GroundworkControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
-        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
+        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
     }
 
@@ -76,7 +77,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
-        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointWriter>());
+        Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
     }
 

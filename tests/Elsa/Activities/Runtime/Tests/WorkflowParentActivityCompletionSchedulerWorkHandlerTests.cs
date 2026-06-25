@@ -20,11 +20,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
-    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public WorkflowParentActivityCompletionSchedulerWorkHandlerTests()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+        _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
             workflowExecutionStateStore: null,
             activityExecutionStateStore: _activityStateStore,
             bookmarkStateStore: null,
@@ -46,7 +46,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
 
         await handler.HandleAsync(NewParentCompletionWorkItem());
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
         Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
         Assert.Single(write.Commit.StateChanges.ActivityExecutions);
@@ -80,7 +80,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
 
         await handler.HandleAsync(NewParentCompletionWorkItem());
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityInspectionCaptured, write.Commit.Checkpoint.Name);
         Assert.Empty(write.Commit.StateChanges.ActivityExecutions);
         Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
@@ -146,7 +146,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
         services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
         services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
-        services.AddSingleton<IRuntimeCheckpointWriter>(_ => _checkpointWriter);
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();

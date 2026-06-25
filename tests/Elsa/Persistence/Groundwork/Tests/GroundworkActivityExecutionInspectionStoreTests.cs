@@ -146,7 +146,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await inspectionStore.FindAsync("wf-1", "ae-1"));
     }
@@ -204,7 +204,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         var commit = InspectionCommit(Projection("wf-1", "ae-1", sequence: 1));
 
         var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(
-            () => writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+            () => writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
 
         Assert.IsType<InvalidOperationException>(exception.InnerException);
         Assert.Contains("commit-1", exception.Message, StringComparison.Ordinal);
@@ -221,7 +221,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         var commit = InspectionCommit(Projection("wf-1", "ae-1", sequence: 1));
 
         var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(
-            () => writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+            () => writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
 
         Assert.IsType<InvalidOperationException>(exception.InnerException);
         Assert.Contains("commit-1", exception.Message, StringComparison.Ordinal);
@@ -272,7 +272,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             Metadata: new Dictionary<string, string>());
 
         var exception = await Assert.ThrowsAsync<GroundworkRuntimeCheckpointWriterException>(
-            () => writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+            () => writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
 
         Assert.Contains("commit-1", exception.Message, StringComparison.Ordinal);
         Assert.Null(await innerStore.LoadAsync(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, DocumentId.Compose("wf-1", "ae-1")));

@@ -28,7 +28,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
                 var writer = CreateWriter(fixture.DocumentStore);
-                await writer.WriteAsync(BuildCommit("commit-1"), Decision);
+                await writer.CommitAsync(BuildCommit("commit-1"), Decision);
             }
 
             // Second "process": a brand-new store over the same database file. Nothing is in memory, so anything
@@ -61,9 +61,9 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var writer = CreateWriter(store);
 
-        await writer.WriteAsync(BuildCommit("commit-1", bookmarkNode: "node-v1"), Decision);
+        await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v1"), Decision);
         // Same CommitId, different content. The marker must short-circuit the second write so the original wins.
-        await writer.WriteAsync(BuildCommit("commit-1", bookmarkNode: "node-v2"), Decision);
+        await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v2"), Decision);
 
         var bookmark = await new GroundworkBookmarkStateStore(store).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
@@ -75,12 +75,12 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var writer = CreateWriter(store);
 
-        await writer.WriteAsync(BuildCommit("commit-1"), Decision);
+        await writer.CommitAsync(BuildCommit("commit-1"), Decision);
 
         // Simulate a crash that applied the state but lost the marker: drop the marker and replay the same commit.
         // The incident Append in particular must not fail on the second pass.
         await store.DeleteAsync(new DeleteDocumentRequest(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
-        await writer.WriteAsync(BuildCommit("commit-1"), Decision);
+        await writer.CommitAsync(BuildCommit("commit-1"), Decision);
 
         Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store).FindAsync("wf-1", "inc-1"))!.Status);
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));

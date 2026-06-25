@@ -1,6 +1,8 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.EFCore.Services;
 using Elsa.Activities.Design.Tests.Integration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
@@ -25,10 +27,11 @@ public sealed class ActivityDefinitionLookupTests
             await ctx.SaveChangesAsync();
         }
 
+        var dbContextFactory = new TestDbContextFactory(host);
+        var definitionStore = new EFCoreActivityDefinitionStore(dbContextFactory, new ServiceCollection().BuildServiceProvider());
         var lookup = new ActivityDefinitionLookup(
             new ThrowingActivityDefinitionVersionStore(),
-            new ThrowingActivityDefinitionStore(),
-            new TestDbContextFactory(host));
+            definitionStore);
 
         var results = await lookup.ListDefinitions(searchTerm: "WriteLine");
 

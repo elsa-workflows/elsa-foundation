@@ -22,11 +22,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
-    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public WorkflowInvokeActivitySchedulerWorkHandlerTests()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+        _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
             workflowExecutionStateStore: null,
             activityExecutionStateStore: _activityStateStore,
             bookmarkStateStore: null,
@@ -79,7 +79,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
         Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
         Assert.Single(write.Commit.StateChanges.ActivityExecutions);
@@ -218,7 +218,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("customer", durableValue.ValueId);
         Assert.Equal("actexec-1", durableValue.SourceActivityExecutionId);
         Assert.Equal("customer-1", durableValue.InlineValue!.Value.GetProperty("id").GetString());
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, write.Commit.Checkpoint.Name);
         var durableChange = Assert.Single(write.Commit.StateChanges.DurableValues);
         Assert.Equal("durable-customer", durableChange.State!.DurableValueId);
@@ -325,7 +325,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         Assert.False(_activityOutputRegister.TryGet(new ActiveActivityOutputKey("wfexec-1", "actexec-1", "customer"), out _));
         Assert.Null(await _durableValueStateStore.FindAsync("wfexec-1", "durable-customer"));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
         Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).CommandKind);
     }
 
@@ -362,7 +362,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityInspectionCaptured, write.Commit.Checkpoint.Name);
         var inspectionChange = Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
         Assert.Contains(inspectionChange.State.ValueSnapshots, snapshot =>
@@ -470,7 +470,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("InputMaterializationFailed", incident.FailureType);
         Assert.True(incident.IsBlocking);
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
         Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
     }
@@ -650,7 +650,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal(failureType, incident.Metadata["runtime.faultSubStatus"]);
         assertMessage(incident.Message);
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
         Assert.Equal(incidentId, write.Commit.Checkpoint.Metadata["runtime.incidentId"]);
         Assert.Equal(["actexec-1"], write.Commit.Checkpoint.ActivityExecutionIds);
@@ -677,7 +677,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
         services.AddSingleton(_incidentStateStore);
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
-        services.AddSingleton<IRuntimeCheckpointWriter>(_ => _checkpointWriter);
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         if (includeInspection)
             services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();

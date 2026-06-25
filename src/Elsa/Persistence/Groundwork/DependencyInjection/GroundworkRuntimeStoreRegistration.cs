@@ -43,8 +43,8 @@ public static class GroundworkRuntimeStoreRegistration
 
         // Durable checkpoint writer. It orchestrates the Groundwork-backed seam stores above and records a
         // restart-safe per-CommitId marker, replacing the in-memory writer registered by the runtime feature.
-        services.RemoveAll<IRuntimeCheckpointWriter>();
-        services.AddSingleton<IRuntimeCheckpointWriter, GroundworkRuntimeCheckpointWriter>();
+        services.RemoveAll<IRuntimeCheckpointCommitStore>();
+        services.AddSingleton<IRuntimeCheckpointCommitStore, GroundworkRuntimeCheckpointWriter>();
 
         services.RemoveAll<IRuntimePostCommitOutboxStore>();
         services.AddSingleton<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();

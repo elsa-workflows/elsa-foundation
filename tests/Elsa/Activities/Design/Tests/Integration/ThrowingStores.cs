@@ -18,6 +18,7 @@ internal sealed class ThrowingActivityDefinitionStore : IActivityDefinitionStore
     public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
     public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
     public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
+    public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
 }
 
 internal sealed class ThrowingActivityDefinitionVersionStore : IActivityDefinitionVersionStore

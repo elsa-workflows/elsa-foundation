@@ -22,11 +22,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
-    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public WorkflowResumeBookmarkSchedulerWorkHandlerTests()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(
+        _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
             workflowExecutionStateStore: null,
             activityExecutionStateStore: _activityStateStore,
             bookmarkStateStore: _bookmarkStateStore,
@@ -239,7 +239,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Suspended, state.Status);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(0, factory.CreateCalls);
         Assert.False(activity.ContextResumeInvoked);
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -277,7 +277,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Contains("references stimulus hash 'sha256:delivery-status:order-123'", exception.Message);
         Assert.Equal(0, factory.CreateCalls);
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.AddSingleton<IRuntimeCheckpointWriter>(_checkpointWriter);
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(_checkpointWriter);
         services.AddSingleton(_incidentStateStore);
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
         services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
@@ -358,7 +358,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private async Task AssertBookmarkConsumedCheckpointAsync()
     {
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
         Assert.Equal("commit:resume-work:bookmark-consumed:bookmark-1", write.Commit.CommitId);
         Assert.Equal("checkpoint:resume-work:bookmark-consumed:bookmark-1", write.Commit.Checkpoint.CheckpointId);
@@ -411,7 +411,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(resumeTargetId, incident.Metadata["runtime.resumeTargetId"]);
         assertMessage(incident.Message);
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, write.Commit.Checkpoint.Name);
         Assert.Equal(incidentId, write.Commit.Checkpoint.Metadata["runtime.incidentId"]);
         Assert.Equal("bookmark-1", write.Commit.Checkpoint.Metadata["runtime.bookmarkId"]);

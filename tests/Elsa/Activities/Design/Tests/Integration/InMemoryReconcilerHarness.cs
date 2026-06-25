@@ -128,6 +128,9 @@ internal static class InMemoryReconcilerHarness
 
         public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) =>
             Task.FromResult(items.Any(x => x.ActivityTypeKey == activityTypeKey));
+
+        public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ActivityDefinition>>(EFCoreQueryTranslator.Apply(items.AsQueryable(), filter.ToQuery()).ToList());
     }
 
     private sealed class InMemoryActivityDefinitionVersionStore(List<ActivityDefinitionVersion> items) : IActivityDefinitionVersionStore
