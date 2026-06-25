@@ -40,7 +40,7 @@ public sealed class AgentFeatureRegistrationTests
     }
 
     [Fact]
-    public void Github_copilot_feature_registers_provider_facade()
+    public async Task Github_copilot_feature_registers_provider_facade()
     {
         var services = new ServiceCollection();
 
@@ -49,6 +49,12 @@ public sealed class AgentFeatureRegistrationTests
 
         var agentProvider = Assert.Single(provider.GetServices<IAgentProvider>());
         Assert.IsType<GitHubCopilotAgentProvider>(agentProvider);
+        var diagnostics = await agentProvider.GetDiagnosticsAsync();
+        Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
+        Assert.Equal(AgentProviderRiskProfile.ReviewRequired, diagnostics.RiskProfile);
+        Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
+        Assert.Contains(AgentProviderOperation.Streaming, diagnostics.SupportedOperations);
+        Assert.Contains(AgentProviderOperation.ToolApproval, diagnostics.SupportedOperations);
     }
 
     [Fact]
@@ -68,6 +74,7 @@ public sealed class AgentFeatureRegistrationTests
     public async Task Deterministic_provider_streams_contract_events_without_external_sdk()
     {
         var provider = new DeterministicAgentProvider();
+        var diagnostics = await provider.GetDiagnosticsAsync();
         var session = new AgentSession(
             "session-1",
             "Test session",
@@ -82,6 +89,10 @@ public sealed class AgentFeatureRegistrationTests
             DateTimeOffset.UtcNow,
             null,
             new Dictionary<string, string>());
+
+        Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
+        Assert.Equal(AgentProviderRiskProfile.ReadOnly, diagnostics.RiskProfile);
+        Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
 
         var events = new List<AgentStreamEvent>();
         await foreach (var item in provider.SendMessageAsync(new(session.Id, "Hello", [])))
@@ -147,6 +158,13 @@ public sealed class AgentFeatureRegistrationTests
             => Task.FromResult(new AgentToolApprovalResult(request.Approved, string.Empty));
 
         public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new AgentProviderDiagnostics(ProviderId, true, "available", new Dictionary<string, string>()));
+            => Task.FromResult(new AgentProviderDiagnostics(
+                ProviderId,
+                true,
+                "available",
+                AgentProviderKind.ProviderSdkBinding,
+                [AgentProviderOperation.Chat, AgentProviderOperation.Streaming],
+                AgentProviderRiskProfile.ReadOnly,
+                new Dictionary<string, string>()));
     }
 }

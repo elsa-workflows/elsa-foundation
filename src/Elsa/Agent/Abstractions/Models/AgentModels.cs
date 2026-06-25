@@ -89,7 +89,44 @@ public enum AgentStreamEventKind
     ToolApprovalRequested,
     ProposalCreated,
     Completed,
+    Error,
+    ClarificationRequested,
+    WorkflowGraphOperationBatchCreated
+}
+
+public enum AgentResultKind
+{
+    Message,
+    Clarification,
+    WorkflowGraphOperationBatch,
+    Proposal,
     Error
+}
+
+public enum AgentProviderKind
+{
+    ProviderSdkBinding,
+    AgentHarnessProvider
+}
+
+public enum AgentProviderOperation
+{
+    Chat,
+    Streaming,
+    ToolApproval,
+    RunStatus,
+    Artifacts,
+    Skills,
+    Memory,
+    FileUpload
+}
+
+public enum AgentProviderRiskProfile
+{
+    ReadOnly,
+    ReviewRequired,
+    SandboxedExecution,
+    PrivilegedExecution
 }
 
 public sealed record AgentError(string Code, string Message, int StatusCode = 400);
@@ -278,7 +315,9 @@ public sealed record AgentStreamEvent(
     string? Content,
     string? ProposalId,
     AgentError? Error,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    AgentResultKind? ResultKind = null,
+    object? Payload = null);
 
 public sealed record AgentProviderToolApprovalRequest(
     string ProviderSessionId,
@@ -294,4 +333,7 @@ public sealed record AgentProviderDiagnostics(
     string ProviderId,
     bool IsAvailable,
     string Status,
+    AgentProviderKind Kind,
+    IReadOnlyCollection<AgentProviderOperation> SupportedOperations,
+    AgentProviderRiskProfile RiskProfile,
     IReadOnlyDictionary<string, string> Metadata);

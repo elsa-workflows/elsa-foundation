@@ -35,6 +35,13 @@ import {
   Terminal,
   Trash2,
 } from "lucide-react";
+import {
+  applyWorkflowGraphOperationBatchToWorkflow,
+  createDemoWeaverGraphOperationBatch,
+  getActivityChildSlots,
+  getDesignerPosition,
+  getSlotActivities
+} from "./workflowGraphOperations.js";
 
 const sampleWorkflows = {
   hello: {
@@ -674,30 +681,6 @@ function getPrimaryActivityInput(activity) {
   return input ? `${input.referenceKey}: ${input.value.value}` : "";
 }
 
-function getActivityStructurePayload(activity) {
-  return activity?.structure?.payload ?? null;
-}
-
-function getActivityChildSlots(activity) {
-  const payload = getActivityStructurePayload(activity);
-  const activities = Array.isArray(payload?.activities) ? payload.activities : [];
-  if (activities.length === 0)
-    return [];
-
-  const kind = activity?.structure?.kind ?? "";
-  if (kind === "elsa.flowchart.structure")
-    return [{ name: "Flowchart.Activities", activities }];
-
-  if (kind === "elsa.sequence.structure")
-    return [{ name: "Sequence.Activities", activities }];
-
-  return [{ name: "Activities", activities }];
-}
-
-function getSlotActivities(slot) {
-  return Array.isArray(slot?.activities) ? slot.activities : [];
-}
-
 function getActivityContainerKind(activity) {
   if (!activity)
     return null;
@@ -744,11 +727,12 @@ function buildWorkflowDesignerModel(workflow) {
   const activityPaths = [];
 
   function addActivityNode(activity, path, position, role = "") {
+    const normalizedPosition = getDesignerPosition(activity, position);
     activityPaths.push(path);
     nodes.push({
       id: path,
       type: "activity",
-      position,
+      position: normalizedPosition,
       data: {
         title: getActivityDisplayName(activity),
         nodeId: activity.nodeId || "unnamed",
@@ -909,6 +893,8 @@ export function App() {
   const [dropFolder, setDropFolder] = useState("");
   const [mainView, setMainView] = useState("workflow");
   const [selectedDesignerPath, setSelectedDesignerPath] = useState("root");
+  const [weaverApplySummary, setWeaverApplySummary] = useState(null);
+  const [weaverUndoSnapshot, setWeaverUndoSnapshot] = useState(null);
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
@@ -1359,6 +1345,61 @@ export function App() {
     setWorkflowVersionId("");
     setArtifactId("");
     setExecutionId("");
+  }
+
+  function applyWeaverGraphOperationBatch(batch) {
+    const previous = {
+      workflowJson,
+      workflowVersionId,
+      artifactId,
+      executionId
+    };
+    const workflow = JSON.parse(workflowJson);
+    const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch);
+    const summary = {
+      title: "Weaver batch applied",
+      detail: `${result.appliedCount} operation${result.appliedCount === 1 ? "" : "s"} applied as one undoable designer transaction.`,
+      meta: result.finalActivityIds.length > 0 ? `Final ID: ${result.finalActivityIds.join(", ")}` : "Designer graph updated"
+    };
+
+    setWorkflowJson(JSON.stringify(workflow, null, 2));
+    setWorkflowVersionId("");
+    setArtifactId("");
+    setExecutionId("");
+    setSelectedDesignerPath("root");
+    setMainView("designer");
+    setWeaverUndoSnapshot(previous);
+    setWeaverApplySummary(summary);
+    setStatus("Weaver batch applied to unsaved designer draft.");
+    addConsoleLine("stdout", `${summary.title}: ${summary.detail}`);
+  }
+
+  function applyDemoWeaverBatch() {
+    try {
+      applyWeaverGraphOperationBatch(createDemoWeaverGraphOperationBatch());
+    } catch (error) {
+      setStatus(error.message);
+      addConsoleLine("stderr", error.message);
+    }
+  }
+
+  function undoWeaverApply() {
+    if (!weaverUndoSnapshot)
+      return;
+
+    setWorkflowJson(weaverUndoSnapshot.workflowJson);
+    setWorkflowVersionId(weaverUndoSnapshot.workflowVersionId);
+    setArtifactId(weaverUndoSnapshot.artifactId);
+    setExecutionId(weaverUndoSnapshot.executionId);
+    setSelectedDesignerPath("root");
+    setWeaverUndoSnapshot(null);
+    setWeaverApplySummary({
+      title: "Weaver batch undone",
+      detail: "The previous designer draft working state was restored.",
+      meta: "No save or publish was performed"
+    });
+    setStatus("Weaver batch undone.");
+    addConsoleLine("stdout", "Weaver batch undone.");
   }
 
   async function runAction(stepKey, message, action) {
@@ -1876,6 +1917,7 @@ export function App() {
             </div>
             {mainView === "workflow" || mainView === "designer" ? (
               <>
+                <ActionButton icon={GitBranch} onClick={applyDemoWeaverBatch}>Apply Weaver</ActionButton>
                 <ActionButton icon={Save} busy={busy === "save"} onClick={saveWorkflow}>Save</ActionButton>
                 <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
                 <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
@@ -1929,6 +1971,9 @@ export function App() {
                 selectedActivity={selectedDesignerActivity}
                 onSelectPath={setSelectedDesignerPath}
                 onUpdateActivity={applyDesignerActivityUpdate}
+                applySummary={weaverApplySummary}
+                canUndoApply={Boolean(weaverUndoSnapshot)}
+                onUndoApply={undoWeaverApply}
               />
               <ArtifactStrip
                 workflowVersionId={workflowVersionId}
@@ -2099,7 +2144,10 @@ function WorkflowDesigner({
   selectedPath,
   selectedActivity,
   onSelectPath,
-  onUpdateActivity
+  onUpdateActivity,
+  applySummary,
+  canUndoApply,
+  onUndoApply
 }) {
   const nodes = useMemo(() => model.nodes.map((node) => ({
     ...node,
@@ -2121,6 +2169,20 @@ function WorkflowDesigner({
   return (
     <div className="workflow-designer">
       <div className="designer-canvas">
+        {applySummary && (
+          <div className="designer-apply-summary">
+            <div>
+              <strong>{applySummary.title}</strong>
+              <span>{applySummary.detail}</span>
+              <code>{applySummary.meta}</code>
+            </div>
+            {canUndoApply && (
+              <button type="button" className="small-button" onClick={onUndoApply}>
+                Undo
+              </button>
+            )}
+          </div>
+        )}
         <div className="designer-surface-label">
           <span>{model.mode}</span>
           <strong>{model.mode === "single" ? "Root activity" : `${model.containerTitle} surface`}</strong>

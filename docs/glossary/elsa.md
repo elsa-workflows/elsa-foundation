@@ -8,8 +8,13 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Elsa host | The `Elsa.Server` ASP.NET Core application instance that composes selected Elsa features. |
 | Elsa application | The Elsa application defined by the domain tree in the Elsa constitution. |
 | Elsa foundation repo | `elsa-foundation`, this repository: the transitional baseline for Elsa foundation libraries, architecture knowledge, maps, specs, and default implementation work. |
+| Weaver | The user-facing AI assistant experience in Elsa Studio. It is implemented through provider-neutral agent contracts, but Weaver is not the AI provider, SDK adapter, or workflow execution agent. |
+| Provider SDK binding | An adapter from Elsa's AI-provider-neutral agent facade to one model or provider SDK, such as the GitHub Copilot SDK. |
+| Agent harness provider | An adapter from Elsa's AI-provider-neutral agent facade to a higher-level agent runtime that can own long-running runs, skills, tools, artifacts, memory, sandbox execution, and sub-agent progress. |
+| Agent run | One long-running harness execution inside an agent session. A run may produce progress, tool activity, artifacts, and proposals without redefining the user-visible conversation boundary. |
 | Elsa.Primitives | The primitives domain replacing the historical `Elsa.Common`; it carries truly cross-cutting primitive abstractions without becoming a dumping ground. |
 | Workflow design | The authoring side of workflows: definitions, drafts, versions, design-time validation, design-time persistence, and read models. |
+| Workflow graph operation | A provider-neutral workflow-design edit intent, such as adding an activity, connecting activities, setting the root, changing a property, or setting designer metadata. Agent providers may generate graph operations, but workflow design owns their meaning and the designer owns their application to working state. |
 | Workflow runtime | The execution side of workflows: executable artifacts, instances, runtime state, bookmarks, logs, and execution integrations. |
 | Activity catalog | The persisted source of truth for activities visible to design-time consumers. Picker visibility comes from catalog rows, not live scanning. |
 | Workflow root activity | The single activity a workflow definition/executable runs. It may be a primitive activity or a composite activity such as `Sequence`, `Flowchart`, or `StateMachine`; composition details belong to that activity. |

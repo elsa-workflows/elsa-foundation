@@ -37,5 +37,8 @@ public sealed class GitHubCopilotAgentProvider : IAgentProvider
             ProviderId,
             IsAvailable: false,
             Status: "GitHub Copilot SDK adapter seam is registered, but no SDK binding is configured.",
+            AgentProviderKind.ProviderSdkBinding,
+            [AgentProviderOperation.Chat, AgentProviderOperation.Streaming, AgentProviderOperation.ToolApproval],
+            AgentProviderRiskProfile.ReviewRequired,
             new Dictionary<string, string> { ["adapter"] = "stub", ["sdk"] = "unbound" }));
 }

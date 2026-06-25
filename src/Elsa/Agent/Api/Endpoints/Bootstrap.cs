@@ -37,7 +37,7 @@ internal sealed class Bootstrap(IAgentCapabilityCatalog capabilities, IAgentProv
             providerStatus,
             modes,
             listedCapabilities.Select(x => x.ToResponse()).ToList(),
-            diagnostics,
+            diagnostics.Select(x => x.ToResponse()).ToList(),
             new(activePolicy.ContextVisibility, activePolicy.RequireProposalApproval, activePolicy.RetentionLabel));
 
         await Send.OkAsync(AgentApiResponse<AgentBootstrapResponse>.Success(response), ct);

@@ -12,9 +12,11 @@ public static class WorkflowAgentServiceCollectionExtensions
     public static IServiceCollection AddFoundationWorkflowsAgent(this IServiceCollection services)
     {
         services.AddFoundationAgentAbstractions();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentProvider, DeterministicWorkflowAgentProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WorkflowAgentCapabilityProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, DefaultWorkflowAgentContextProvider>());
         services.TryAddScoped<IWorkflowAgentContextProvider, DefaultWorkflowAgentContextProvider>();
+        services.TryAddScoped<IWorkflowActivityCatalogProvider, DefaultWorkflowActivityCatalogProvider>();
         services.TryAddScoped<IWorkflowRevisionProvider, DefaultWorkflowRevisionProvider>();
         services.TryAddScoped<IWorkflowChangePermissionEvaluator, DenyAllWorkflowChangePermissionEvaluator>();
         services.TryAddScoped<IWorkflowChangeProposalService, DefaultWorkflowChangeProposalService>();
