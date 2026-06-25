@@ -154,6 +154,37 @@ public sealed class SecretManagerTests : IDisposable
         Assert.Equal(SecretResolutionFailureCode.Inactive, resolved.FailureCode);
     }
 
+    [Fact]
+    public async Task Resolve_Expired_Latest_Active_Version_Does_Not_Fallback()
+    {
+        await _repository.SaveAsync(new Secret
+        {
+            Name = "expiring.secret",
+            DisplayName = "expiring.secret",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Versions =
+            [
+                new SecretVersion
+                {
+                    Version = 1,
+                    Payload = SecretPayload.FromValue("old-value")
+                },
+                new SecretVersion
+                {
+                    Version = 2,
+                    ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+                    Payload = SecretPayload.FromValue("expired-new-value")
+                }
+            ]
+        });
+
+        var resolved = await _resolver.ResolveAsync(new SecretReference("expiring.secret"));
+
+        Assert.False(resolved.Succeeded);
+        Assert.Equal(SecretResolutionFailureCode.Expired, resolved.FailureCode);
+    }
+
     private ValueTask<SecretMetadata> CreateEncryptedAsync(string name, string value = "secret-value") =>
         _manager.CreateAsync(new CreateSecretRequest
         {
