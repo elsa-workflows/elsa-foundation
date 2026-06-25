@@ -14,19 +14,25 @@ export function register(api: ElsaStudioModuleApi) {
     id: "secrets",
     title: "Secrets",
     description: "Manage named secrets and bind workflow inputs to secret references.",
-    navGroup: "Workspace",
-    ownedPaths: ["/secrets"],
+    navGroup: "Security",
+    ownedPaths: ["/security/secrets", "/secrets"],
     required: false,
     defaultEnabled: true,
     order: 45,
     nav: {
       title: "Secrets",
-      path: "/secrets",
+      path: "/security/secrets",
       iconColor: "#64748b"
     },
     routes: [
       {
         id: "secrets",
+        path: "/security/secrets",
+        label: "Secrets",
+        component: () => <SecretsPage context={api.backend} />
+      },
+      {
+        id: "secrets-legacy",
         path: "/secrets",
         label: "Secrets",
         component: () => <SecretsPage context={api.backend} />

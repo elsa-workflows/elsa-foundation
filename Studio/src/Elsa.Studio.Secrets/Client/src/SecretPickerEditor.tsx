@@ -8,7 +8,9 @@ export function SecretPickerEditor({ value, disabled, onChange, endpointContext 
   const reference = useMemo(() => toReference(value), [value]);
 
   useEffect(() => {
-    void pickSecrets(endpointContext).then(response => setItems(response.items));
+    void pickSecrets(endpointContext, { activeOnly: true }).then(response => {
+      setItems(response.items.filter(secret => !secret.status || secret.status === "Active"));
+    });
   }, [endpointContext]);
 
   return (
@@ -19,7 +21,12 @@ export function SecretPickerEditor({ value, disabled, onChange, endpointContext 
         value={reference?.name ?? ""}
         onChange={event => {
           const selected = items.find(item => item.name === event.target.value);
-          onChange(selected ? { type: "Secret", value: { name: selected.name, typeName: selected.typeName } } : null);
+          if (!selected) {
+            onChange(null);
+            return;
+          }
+          const nextValue = { name: selected.name, typeName: selected.typeName, ...(selected.scope ? { scope: selected.scope } : {}) };
+          onChange({ type: "Secret", value: nextValue });
         }}
       >
         <option value="">Select secret</option>

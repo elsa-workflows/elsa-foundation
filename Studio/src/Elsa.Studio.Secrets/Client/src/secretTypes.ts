@@ -21,19 +21,25 @@ export interface ListSecretsResponse {
   totalCount: number;
 }
 
+export interface ListSecretsRequest {
+  search?: string;
+  pageSize?: number;
+  activeOnly?: boolean;
+}
+
 export interface SecretTypeDescriptor {
   name: string;
   displayName: string;
-  description: string;
-  editorHint: string;
+  description?: string | null;
+  editorHint?: string | null;
   supportedStoreNames: string[];
 }
 
 export interface SecretStoreDescriptor {
   name: string;
   displayName: string;
-  description: string;
-  capabilities: number;
+  description?: string | null;
+  capabilities?: number | string[] | null;
   isReadOnly: boolean;
 }
 
@@ -48,13 +54,30 @@ export interface CreateSecretRequest {
   description?: string;
   typeName: string;
   storeName: string;
+  scope?: string;
+  tags?: string[];
   value?: string;
   configurationKey?: string;
+  expiresAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateSecretRequest {
+  displayName: string;
+  description?: string;
 }
 
 export interface RotateSecretRequest {
   value?: string;
   configurationKey?: string;
+  expiresAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SecretTestResponse {
+  succeeded: boolean;
+  code: string;
+  message?: string | null;
 }
 
 export interface SecretReference {
@@ -66,4 +89,12 @@ export interface SecretReference {
 export interface SecretPickerResponse {
   items: SecretMetadata[];
   canCreateInline: boolean;
+}
+
+export interface SecretPickerRequest {
+  search?: string;
+  typeNames?: string[];
+  storeNames?: string[];
+  scope?: string;
+  activeOnly?: boolean;
 }

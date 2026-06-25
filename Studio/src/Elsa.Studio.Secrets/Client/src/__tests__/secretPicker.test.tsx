@@ -10,6 +10,7 @@ describe("secret picker", () => {
     const { container, unmount } = render(onChange);
 
     await waitFor(() => container.querySelectorAll("option").length > 1);
+    expect(container.textContent).not.toContain("Revoked API");
     const select = container.querySelector("select")!;
     select.value = "payments.api";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -35,7 +36,13 @@ function render(onChange: (value: unknown) => void) {
         http: {
           requestJson: vi.fn(),
           getJson: vi.fn(),
-          postJson: vi.fn(async () => ({ items: [{ name: "payments.api", displayName: "Payments API", typeName: "text" }], canCreateInline: true })),
+          postJson: vi.fn(async () => ({
+            items: [
+              { name: "payments.api", displayName: "Payments API", typeName: "text", status: "Active" },
+              { name: "revoked.api", displayName: "Revoked API", typeName: "text", status: "Revoked" }
+            ],
+            canCreateInline: true
+          })),
           putJson: vi.fn(),
           deleteJson: vi.fn(),
           postForm: vi.fn()

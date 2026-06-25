@@ -9,7 +9,7 @@ describe("secrets module", () => {
     register(api);
 
     expect(api.featureAreas.list()).toEqual([
-      expect.objectContaining({ id: "secrets", title: "Secrets", ownedPaths: ["/secrets"] })
+      expect.objectContaining({ id: "secrets", title: "Secrets", navGroup: "Security", ownedPaths: ["/security/secrets", "/secrets"] })
     ]);
     expect(api.propertyEditors.list()).toEqual([
       expect.objectContaining({ id: "secret-picker" })
