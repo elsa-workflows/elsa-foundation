@@ -140,7 +140,7 @@ public sealed class GitHubCopilotAgentProvider(
         var value = options.Value;
         return new(
             sessionId,
-            string.IsNullOrWhiteSpace(value.Model) ? "auto" : value.Model,
+            NormalizeModel(value.Model),
             value.ReasoningEffort,
             value.Streaming,
             value.SystemMessage,
@@ -168,14 +168,8 @@ public sealed class GitHubCopilotAgentProvider(
 
         if (!string.IsNullOrWhiteSpace(value.RuntimeUrl))
         {
-            try
-            {
-                _ = GitHub.Copilot.RuntimeConnection.ForUri(value.RuntimeUrl, value.RuntimeConnectionToken);
-            }
-            catch (Exception ex)
-            {
-                return new(false, "misconfigured", $"GitHub Copilot runtime URL is invalid: {NormalizeMessage(ex)}", null, "invalid-runtime-url");
-            }
+            if (!IsValidRuntimeUrl(value.RuntimeUrl))
+                return new(false, "misconfigured", "GitHub Copilot runtime URL is invalid. Use a port, host:port, or http(s)://host:port.", null, "invalid-runtime-url");
         }
 
         var token = ResolveToken(value, out var authMode);
@@ -219,6 +213,33 @@ public sealed class GitHubCopilotAgentProvider(
         return null;
     }
 
+    private static string? NormalizeModel(string? model)
+        => string.IsNullOrWhiteSpace(model) || string.Equals(model, "auto", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : model;
+
+    private static bool IsValidRuntimeUrl(string runtimeUrl)
+    {
+        if (int.TryParse(runtimeUrl, out var port))
+            return IsValidPort(port);
+
+        if (Uri.TryCreate(runtimeUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
+            return (uri.Scheme is "http" or "https") && !string.IsNullOrWhiteSpace(uri.Host) && IsValidPort(uri.Port);
+
+        if (runtimeUrl.Contains("://", StringComparison.Ordinal))
+            return false;
+
+        var separator = runtimeUrl.LastIndexOf(':');
+        if (separator <= 0 || separator == runtimeUrl.Length - 1)
+            return false;
+
+        var host = runtimeUrl[..separator];
+        var portText = runtimeUrl[(separator + 1)..];
+        return !string.IsNullOrWhiteSpace(host) && int.TryParse(portText, out port) && IsValidPort(port);
+    }
+
+    private static bool IsValidPort(int port) => port is > 0 and <= 65535;
+
     private string BuildPrompt(AgentProviderMessage message)
     {
         if (message.Context.Count == 0)
@@ -250,13 +271,13 @@ public sealed class GitHubCopilotAgentProvider(
         => attachment.Sensitivity <= AgentContextSensitivity.Internal
            || (options.Value.IncludeSensitiveContextContent && attachment.Sensitivity <= AgentContextSensitivity.Sensitive);
 
-    private static AgentStreamEvent MapStreamEvent(GitHubCopilotStreamEvent item)
+    private AgentStreamEvent MapStreamEvent(GitHubCopilotStreamEvent item)
         => item.Kind switch
         {
             GitHubCopilotStreamEventKind.Started => new(NewId(), AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow),
             GitHubCopilotStreamEventKind.MessageDelta => new(NewId(), AgentStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
             GitHubCopilotStreamEventKind.Completed => new(NewId(), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow),
-            GitHubCopilotStreamEventKind.Error => Error(item.ErrorCode ?? "agent.provider.github_copilot.sdk_error", item.ErrorMessage ?? "GitHub Copilot SDK call failed.", 502),
+            GitHubCopilotStreamEventKind.Error => Error(item.ErrorCode ?? "agent.provider.github_copilot.sdk_error", NormalizeMessage(item.ErrorMessage), 502),
             _ => Error("agent.provider.github_copilot.unknown_event", "GitHub Copilot SDK returned an unknown stream event.", 502)
         };
 
@@ -282,8 +303,26 @@ public sealed class GitHubCopilotAgentProvider(
     private static AgentStreamEvent Error(string code, string message, int statusCode)
         => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, statusCode), DateTimeOffset.UtcNow, AgentResultKind.Error);
 
-    private static string NormalizeMessage(Exception ex)
-        => string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message;
+    private string NormalizeMessage(Exception ex)
+        => NormalizeMessage(string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
+
+    private string NormalizeMessage(string? message)
+    {
+        var normalized = string.IsNullOrWhiteSpace(message) ? "GitHub Copilot SDK call failed." : message;
+        var value = options.Value;
+        if (!string.IsNullOrWhiteSpace(value.GitHubToken))
+            normalized = normalized.Replace(value.GitHubToken, "[redacted]", StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(value.RuntimeConnectionToken))
+            normalized = normalized.Replace(value.RuntimeConnectionToken, "[redacted]", StringComparison.Ordinal);
+        if (!string.IsNullOrWhiteSpace(value.GitHubTokenEnvironmentVariable))
+        {
+            var environmentToken = Environment.GetEnvironmentVariable(value.GitHubTokenEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(environmentToken))
+                normalized = normalized.Replace(environmentToken, "[redacted]", StringComparison.Ordinal);
+        }
+
+        return normalized;
+    }
 
     private static string NewId() => Guid.NewGuid().ToString("N");
 

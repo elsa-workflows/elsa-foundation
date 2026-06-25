@@ -39,7 +39,7 @@ public sealed record GitHubCopilotClientRequest(
 
 public sealed record GitHubCopilotSessionRequest(
     string SessionId,
-    string Model,
+    string? Model,
     string? ReasoningEffort,
     bool Streaming,
     string? SystemMessage,

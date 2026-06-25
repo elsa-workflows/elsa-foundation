@@ -48,17 +48,59 @@ public sealed class GitHubCopilotAgentProviderTests
     }
 
     [Fact]
+    public async Task Diagnostics_reports_missing_auth_when_enabled_without_backend_identity()
+    {
+        _options.Enabled = true;
+        _options.GitHubTokenEnvironmentVariable = "ELSA_COPILOT_TEST_TOKEN_NOT_SET";
+        Environment.SetEnvironmentVariable(_options.GitHubTokenEnvironmentVariable, null);
+
+        var diagnostics = await _provider.GetDiagnosticsAsync();
+
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Equal("missing-auth", diagnostics.Metadata["statusCode"]);
+    }
+
+    [Fact]
+    public async Task Diagnostics_reports_misconfigured_runtime_url()
+    {
+        _options.Enabled = true;
+        _options.RuntimeUrl = "not-a-runtime-url";
+
+        var diagnostics = await _provider.GetDiagnosticsAsync();
+
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Equal("misconfigured", diagnostics.Metadata["statusCode"]);
+    }
+
+    [Theory]
+    [InlineData("8080")]
+    [InlineData("localhost:8080")]
+    [InlineData("http://localhost:8080")]
+    [InlineData("https://localhost:8080")]
+    public async Task Diagnostics_accepts_sdk_runtime_url_formats(string runtimeUrl)
+    {
+        _options.Enabled = true;
+        _options.RuntimeUrl = runtimeUrl;
+
+        var diagnostics = await _provider.GetDiagnosticsAsync();
+
+        Assert.True(diagnostics.IsAvailable);
+        Assert.Equal("external-runtime", diagnostics.Metadata["authMode"]);
+    }
+
+    [Fact]
     public async Task Diagnostics_reports_sdk_failure_without_exposing_token()
     {
         _options.Enabled = true;
         _options.GitHubToken = "test-token";
-        _factory.Client.PingException = new InvalidOperationException("not authenticated");
+        _factory.Client.PingException = new InvalidOperationException("not authenticated with test-token");
 
         var diagnostics = await _provider.GetDiagnosticsAsync();
 
         Assert.False(diagnostics.IsAvailable);
         Assert.Equal("sdk-unavailable", diagnostics.Metadata["statusCode"]);
         Assert.DoesNotContain("test-token", diagnostics.Status);
+        Assert.Contains("[redacted]", diagnostics.Status);
         Assert.DoesNotContain("test-token", diagnostics.Metadata.Values);
     }
 
@@ -76,6 +118,19 @@ public sealed class GitHubCopilotAgentProviderTests
         Assert.Equal("session-1", _factory.Client.CreatedSessionRequest?.SessionId);
         Assert.Equal("gpt-5", _factory.Client.CreatedSessionRequest?.Model);
         Assert.Equal("session-1", providerSession.Metadata["sessionId"]);
+    }
+
+    [Fact]
+    public async Task Create_session_does_not_send_auto_as_model_id()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _options.Model = "auto";
+        var session = CreateSession("session-1");
+
+        _ = await _provider.CreateSessionAsync(session);
+
+        Assert.Null(_factory.Client.CreatedSessionRequest?.Model);
     }
 
     [Fact]
@@ -130,14 +185,14 @@ public sealed class GitHubCopilotAgentProviderTests
     {
         _options.Enabled = true;
         _options.GitHubToken = "test-token";
-        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Error, ErrorCode: "sdk.error", ErrorMessage: "SDK failed"));
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Error, ErrorCode: "sdk.error", ErrorMessage: "SDK failed for test-token"));
 
         var events = await StreamAsync(new("session-1", "Explain", []));
 
         var error = Assert.Single(events);
         Assert.Equal(AgentStreamEventKind.Error, error.Kind);
         Assert.Equal("sdk.error", error.Error?.Code);
-        Assert.Equal("SDK failed", error.Error?.Message);
+        Assert.Equal("SDK failed for [redacted]", error.Error?.Message);
     }
 
     [Fact]

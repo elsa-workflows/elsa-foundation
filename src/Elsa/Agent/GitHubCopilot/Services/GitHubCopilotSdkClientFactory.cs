@@ -71,7 +71,8 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
 
     private static void ApplyConfig(SessionConfigBase config, GitHubCopilotSessionRequest request)
     {
-        config.Model = request.Model;
+        if (!string.IsNullOrWhiteSpace(request.Model))
+            config.Model = request.Model;
         config.ReasoningEffort = request.ReasoningEffort;
         config.Streaming = request.Streaming;
         config.AvailableTools = request.AvailableTools.ToList();
