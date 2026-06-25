@@ -16,9 +16,9 @@
     <PackageVersion Include="DistributedLock.FileSystem" Version="1.0.3" />
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.7" />
-    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.7" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.7" />
+    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.10" />
+    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.10" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.10" />
     <PackageVersion Include="Jint" Version="4.9.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Authorization" Version="10.0.8" />
     <PackageVersion Include="Microsoft.AspNetCore.Authorization.Policy" Version="2.3.10" />
