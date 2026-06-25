@@ -24,6 +24,7 @@ internal static class ElsaExtensionBuilderApi
         var trusted = group.MapGroup("");
         trusted.AddEndpointFilter(RequireTrustedCallerAsync);
         trusted.MapGet("/templates", ListTemplatesAsync);
+        trusted.MapGet("/repositories", ListRepositoriesAsync);
         trusted.MapPost("/workspaces", CreateWorkspaceAsync);
         trusted.MapGet("/workspaces", ListWorkspacesAsync);
         trusted.MapGet("/workspaces/{workspaceId}", GetWorkspaceAsync);
@@ -52,6 +53,9 @@ internal static class ElsaExtensionBuilderApi
 
     private static async Task<IResult> ListTemplatesAsync([FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         Results.Ok(await service.ListTemplatesAsync(cancellationToken));
+
+    private static async Task<IResult> ListRepositoriesAsync(HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
+        Results.Ok(await service.ListRepositoriesAsync(GetCaller(httpContext), cancellationToken));
 
     private static async Task<IResult> CreateWorkspaceAsync(
         HttpContext httpContext,

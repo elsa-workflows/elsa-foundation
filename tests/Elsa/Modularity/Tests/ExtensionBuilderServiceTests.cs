@@ -45,6 +45,30 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RepositorySummariesAreOwnerScopedAndExposeWorkbenchHealth()
+    {
+        var service = CreateService(buildRunner: new FakeBuildRunner(BuildStatus.Failed));
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Team Extensions"));
+        await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.Repository", "1.0.0", "net10.0", null, null));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.Failed", "1.0.0", "net10.0", null, null));
+        await service.SubmitBuildAsync(_caller, project.Id);
+
+        var repositories = await service.ListRepositoriesAsync(_caller);
+        var otherOwnerRepositories = await service.ListRepositoriesAsync(_caller with { OwnerId = "other" });
+
+        var repository = Assert.Single(repositories);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("Team Extensions", repository.Name);
+        Assert.Equal(_caller.OwnerId, repository.OwnerId);
+        Assert.Equal(2, repository.ProjectCount);
+        Assert.Equal(BuildStatus.Failed, repository.LatestBuildStatus);
+        Assert.Equal(1, repository.AttentionCount);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+        Assert.Empty(otherOwnerRepositories);
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();

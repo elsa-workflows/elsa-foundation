@@ -61,6 +61,18 @@ internal enum ExtensionPackageRuntimeState
     FailedReconciliation
 }
 
+internal sealed record ExtensionRepositorySummary(
+    string Id,
+    string Name,
+    string OwnerId,
+    string? ActiveBranch,
+    bool IsDirty,
+    string RemoteState,
+    BuildStatus? LatestBuildStatus,
+    int AttentionCount,
+    int ProjectCount,
+    DateTimeOffset UpdatedAt);
+
 internal sealed record ExtensionBuilderCaller(
     string OwnerId,
     string DisplayName,
