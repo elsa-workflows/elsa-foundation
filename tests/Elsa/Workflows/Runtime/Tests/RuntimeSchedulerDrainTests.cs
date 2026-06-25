@@ -597,6 +597,28 @@ public sealed class RuntimeSchedulerDrainTests
     [Fact]
     public void RuntimeSchedulerDrainModels_RejectInvalidResults()
     {
+        var result = new RuntimeSchedulerDrainResult(
+            workflowExecutionId: "wfexec-1",
+            startedAt: _now,
+            completedAt: _now,
+            items: [CompletedResult("wfexec-1")],
+            outboxDeliveryResults:
+            [
+                new RuntimePostCommitOutboxProcessResult(
+                [
+                    new RuntimePostCommitOutboxProcessedItem(
+                        OutboxItemId: "outbox-1",
+                        IntentId: "intent-1",
+                        RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
+                        FailureMessage: null)
+                ])
+            ]);
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(1, result.OutboxAttemptedCount);
+        Assert.Equal(1, result.OutboxDeliveredCount);
+        Assert.Equal(0, result.OutboxFailedCount);
+
         Assert.Throws<ArgumentException>(() => new RuntimeSchedulerDrainRequest(" "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 0));
         Assert.Throws<ArgumentNullException>(() => new RuntimeSchedulerWorkItemResult(

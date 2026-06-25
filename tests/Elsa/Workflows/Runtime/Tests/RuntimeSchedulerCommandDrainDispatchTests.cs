@@ -78,6 +78,11 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Equal(2, drainer.Requests.Count);
         Assert.Equal(2, outboxProcessor.Requests.Count);
         Assert.All(outboxProcessor.Requests, request => Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, request.IntentKind));
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, observed.StopReason);
+        Assert.Equal(2, observed.OutboxDeliveryResults.Count);
+        Assert.Equal(1, observed.OutboxAttemptedCount);
+        Assert.Equal(1, observed.OutboxDeliveredCount);
+        Assert.Equal(0, observed.OutboxFailedCount);
         Assert.Equal(
             new[] { WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity },
             observed.Items.Select(item => item.CommandKind).ToArray());
@@ -137,8 +142,34 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         await processor.ProcessAsync(NewEnvelope(1));
 
         var result = Assert.Single(observer.ObservedResults);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
         Assert.True(result.StoppedOnFault);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, result.Items.Single().Status);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ReportsOutboxDeliveryFailureStopReasonToObservers()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new DequeuingSchedulerDrainer(queue, _now);
+        var outboxProcessor = new FailingPostCommitOutboxProcessor();
+        var observer = new RecordingSchedulerDrainObserver();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [observer],
+            new FixedTimeProvider(_now),
+            outboxProcessor);
+
+        await processor.ProcessAsync(NewEnvelope(1));
+
+        var observed = Assert.Single(observer.ObservedResults);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed, observed.StopReason);
+        Assert.Equal(1, observed.OutboxAttemptedCount);
+        Assert.Equal(0, observed.OutboxDeliveredCount);
+        Assert.Equal(1, observed.OutboxFailedCount);
+        Assert.Single(drainer.Requests);
     }
 
     [Fact]
@@ -233,6 +264,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.NotEmpty(activityStates);
         Assert.Empty(pending);
         Assert.Contains(drainResult.Items, item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity);
+        Assert.True(drainResult.OutboxDeliveredCount > 0);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
@@ -448,6 +480,21 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                     FailureMessage: null)
             ]);
         }
+    }
+
+    private sealed class FailingPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult(
+            [
+                new RuntimePostCommitOutboxProcessedItem(
+                    OutboxItemId: "outbox-failed",
+                    IntentId: "intent-failed",
+                    RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.FailedRetryable,
+                    FailureMessage: "Dispatch failed.")
+            ]));
     }
 
     private sealed class EmptyPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
