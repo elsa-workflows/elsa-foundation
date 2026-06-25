@@ -1,6 +1,7 @@
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Api.Services;
 using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
