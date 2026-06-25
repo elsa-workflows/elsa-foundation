@@ -8,6 +8,11 @@ public interface IWorkflowAgentContextProvider
     Task<WorkflowAgentContext> GetContextAsync(WorkflowAgentContextRequest request, CancellationToken cancellationToken = default);
 }
 
+public interface IWorkflowActivityCatalogProvider
+{
+    Task<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>> ListAsync(CancellationToken cancellationToken = default);
+}
+
 public interface IWorkflowRevisionProvider
 {
     Task<string> GetCurrentRevisionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default);

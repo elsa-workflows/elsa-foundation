@@ -200,8 +200,26 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
         => content.Contains(value, StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed class DefaultWorkflowAgentContextProvider(IWorkflowRevisionProvider revisionProvider) : IWorkflowAgentContextProvider, IAgentContextProvider
+public sealed class DefaultWorkflowActivityCatalogProvider : IWorkflowActivityCatalogProvider
 {
+    public Task<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>> ListAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>>(
+        [
+            new("Elsa.Workflows.WriteLine", "Write line", true, ["write", "line", "console", "log", "text"]),
+            new("Elsa.Workflows.Sequence", "Sequence", true, ["sequence", "flow", "container", "multiple"]),
+            new("Elsa.Email.SendEmail", "Send email", true, ["email", "mail", "send", "notification"]),
+            new("Elsa.Http.SendHttpRequest", "Send HTTP request", true, ["http", "webhook", "request", "api"]),
+            new("Elsa.Timers.Delay", "Delay", true, ["delay", "timer", "wait", "schedule"]),
+            new("Elsa.Secrets.LegacySecretActivity", "Legacy secret activity", false, ["secret", "credential", "unavailable"])
+        ]);
+}
+
+public sealed class DefaultWorkflowAgentContextProvider(
+    IWorkflowRevisionProvider revisionProvider,
+    IWorkflowActivityCatalogProvider activityCatalogProvider) : IWorkflowAgentContextProvider, IAgentContextProvider
+{
+    private const int MaxActivityCatalogItems = 5;
+
     public string ScopeKind => "workflow";
 
     public async ValueTask<IReadOnlyCollection<AgentContextAttachment>> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
@@ -210,7 +228,10 @@ public sealed class DefaultWorkflowAgentContextProvider(IWorkflowRevisionProvide
             throw new ArgumentException("Workflow context collection requires a 'workflowDefinitionId' input.", nameof(request));
 
         request.Inputs.TryGetValue("workflowVersionId", out var workflowVersionId);
-        var context = await GetContextAsync(new(request.SessionId, workflowDefinitionId, workflowVersionId), cancellationToken);
+        request.Inputs.TryGetValue("prompt", out var prompt);
+        request.Inputs.TryGetValue("selectedNodeId", out var selectedNodeId);
+        request.Inputs.TryGetValue("selectedActivityType", out var selectedActivityType);
+        var context = await GetContextAsync(new(request.SessionId, workflowDefinitionId, workflowVersionId, prompt, selectedNodeId, selectedActivityType), cancellationToken);
 
         return
         [
@@ -222,15 +243,20 @@ public sealed class DefaultWorkflowAgentContextProvider(IWorkflowRevisionProvide
                 "workflow.definition",
                 AgentContextSensitivity.Internal,
                 "selection",
-                $"Workflow definition '{context.WorkflowDefinitionId}' at revision '{context.Revision}' with {context.Activities.Count} activity summaries. Redactions: {string.Join("; ", context.Redactions)}",
+                $"Workflow definition '{context.WorkflowDefinitionId}' at revision '{context.Revision}' with {context.Activities.Count} activity summaries, {context.ActivityCatalog.Count} catalog items, and selection hint '{context.Selection.NodeId ?? "none"}'. Redactions: {string.Join("; ", context.Redactions)}",
                 new
                 {
                     workflowId = context.WorkflowDefinitionId,
                     version = context.WorkflowVersionId ?? "draft",
+                    revision = context.Revision,
                     summary = context.Summary,
                     activities = context.Activities,
                     connections = Array.Empty<object>(),
-                    diagnostics = context.Diagnostics
+                    selection = context.Selection,
+                    diagnostics = context.Diagnostics,
+                    designerConstraints = context.DesignerConstraints,
+                    permissions = context.Permissions,
+                    activityCatalog = context.ActivityCatalog
                 },
                 new Dictionary<string, string>
                 {
@@ -244,15 +270,91 @@ public sealed class DefaultWorkflowAgentContextProvider(IWorkflowRevisionProvide
     public async Task<WorkflowAgentContext> GetContextAsync(WorkflowAgentContextRequest request, CancellationToken cancellationToken = default)
     {
         var revision = await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken);
+        var activities = Array.Empty<WorkflowAgentActivitySummary>();
+        var activityCatalog = await SelectActivityCatalogAsync(request, activities, cancellationToken);
+        var diagnostics = CreateDiagnostics(request, activityCatalog);
+
         return new(
             request.WorkflowDefinitionId,
             request.WorkflowVersionId,
             revision,
-            $"Workflow {request.WorkflowDefinitionId}",
-            [],
-            [],
-            ["Secrets, credentials, provider tokens, and full execution payloads are excluded from the MVP workflow context."]);
+            $"Draft workflow {request.WorkflowDefinitionId}",
+            activities,
+            diagnostics,
+            [
+                "Secrets, credentials, and provider tokens are excluded from workflow authoring context.",
+                "Runtime payloads, incidents, unrelated workflow versions, and arbitrary workspace files are excluded.",
+                "Unavailable activities are excluded from Activity Catalog subsets."
+            ],
+            new WorkflowAgentSelectionHint(request.SelectedNodeId, request.SelectedActivityType, "studio-hint"),
+            new WorkflowAgentDesignerConstraints(MaxActivityCatalogItems, Enum.GetValues<WorkflowGraphOperationKind>()),
+            new WorkflowAgentPermissionSummary(
+                CanDirectApply: false,
+                CanProposeChange: true,
+                ["workflow.explain", "workflow.troubleshoot", "workflow.propose-change"]),
+            activityCatalog);
     }
+
+    private async Task<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>> SelectActivityCatalogAsync(
+        WorkflowAgentContextRequest request,
+        IReadOnlyCollection<WorkflowAgentActivitySummary> activities,
+        CancellationToken cancellationToken)
+    {
+        var availableItems = (await activityCatalogProvider.ListAsync(cancellationToken))
+            .Where(x => x.IsAvailable)
+            .ToList();
+        var selectedAvailableItem = availableItems.FirstOrDefault(x => string.Equals(x.Type, request.SelectedActivityType, StringComparison.OrdinalIgnoreCase));
+        if (selectedAvailableItem is not null)
+            return [selectedAvailableItem];
+
+        var tokens = Tokenize($"{request.Prompt} {request.SelectedActivityType} {string.Join(' ', activities.Select(x => x.Type))}");
+
+        if (tokens.Count == 0)
+            return availableItems.Take(MaxActivityCatalogItems).ToList();
+
+        var selected = availableItems
+            .Select(x => new { Item = x, Score = Score(x, tokens, request.SelectedActivityType) })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Item.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxActivityCatalogItems)
+            .Select(x => x.Item)
+            .ToList();
+
+        return selected;
+    }
+
+    private static IReadOnlyCollection<WorkflowAgentDiagnosticSummary> CreateDiagnostics(WorkflowAgentContextRequest request, IReadOnlyCollection<WorkflowAgentActivityCatalogItem> activityCatalog)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Prompt) && activityCatalog.Count == 0)
+            return [new("Warning", "No available Activity Catalog items matched the prompt or selected draft context.")];
+
+        return [];
+    }
+
+    private static int Score(WorkflowAgentActivityCatalogItem item, IReadOnlyCollection<string> tokens, string? selectedActivityType)
+    {
+        var score = string.Equals(item.Type, selectedActivityType, StringComparison.OrdinalIgnoreCase) ? 100 : 0;
+        var haystack = Tokenize($"{item.Type} {item.DisplayName} {string.Join(' ', item.Keywords)}");
+
+        foreach (var token in tokens)
+        {
+            if (haystack.Contains(token))
+                score += 10;
+        }
+
+        return score;
+    }
+
+    private static HashSet<string> Tokenize(string value)
+        => value
+            .Split([' ', '.', '-', '_', ':', '/', '\\', ',', ';', '(', ')', '[', ']'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => x.ToLowerInvariant())
+            .Where(x => x.Length > 2 && !IsStopWord(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsStopWord(string value)
+        => value is "elsa" or "workflow" or "workflows" or "activity" or "activities" or "draft" or "node" or "use" or "the";
 }
 
 public sealed class DefaultWorkflowRevisionProvider : IWorkflowRevisionProvider

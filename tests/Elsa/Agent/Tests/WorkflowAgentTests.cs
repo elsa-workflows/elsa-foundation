@@ -165,7 +165,61 @@ public sealed class WorkflowAgentTests
         Assert.Equal("wf-1", attachment.References["workflowDefinitionId"]);
         Assert.Equal("rev-1", attachment.References["revision"]);
         Assert.Contains("Redactions:", attachment.Summary);
+        Assert.Contains("catalog items", attachment.Summary);
         Assert.NotNull(attachment.Content);
+    }
+
+    [Fact]
+    public async Task Workflow_context_provider_selects_bounded_activity_catalog_subset_from_prompt_and_selection_hint()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var contextProvider = provider.GetRequiredService<IWorkflowAgentContextProvider>();
+
+        var context = await contextProvider.GetContextAsync(new(
+            "session-1",
+            "wf-1",
+            "draft",
+            "Send an email notification.",
+            "node-1",
+            "Elsa.Email.SendEmail"));
+
+        Assert.Equal("wf-1", context.WorkflowDefinitionId);
+        Assert.Equal("rev-1", context.Revision);
+        Assert.Equal("Draft workflow wf-1", context.Summary);
+        Assert.Equal("node-1", context.Selection.NodeId);
+        Assert.Equal("Elsa.Email.SendEmail", context.Selection.ActivityType);
+        Assert.Equal("studio-hint", context.Selection.Source);
+        Assert.True(context.ActivityCatalog.Count <= context.DesignerConstraints.MaxActivityCatalogItems);
+
+        var item = Assert.Single(context.ActivityCatalog);
+        Assert.Equal("Elsa.Email.SendEmail", item.Type);
+        Assert.True(item.IsAvailable);
+        Assert.Contains(WorkflowGraphOperationKind.SetActivityProperty, context.DesignerConstraints.SupportedOperations);
+        Assert.True(context.Permissions.CanProposeChange);
+        Assert.False(context.Permissions.CanDirectApply);
+        Assert.Contains("workflow.propose-change", context.Permissions.Capabilities);
+    }
+
+    [Fact]
+    public async Task Workflow_context_provider_excludes_unavailable_catalog_items_even_when_studio_hints_them()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var contextProvider = provider.GetRequiredService<IWorkflowAgentContextProvider>();
+
+        var context = await contextProvider.GetContextAsync(new(
+            "session-1",
+            "wf-1",
+            "draft",
+            "Use the secret credential activity.",
+            "node-secret",
+            "Elsa.Secrets.LegacySecretActivity"));
+
+        Assert.Equal("Elsa.Secrets.LegacySecretActivity", context.Selection.ActivityType);
+        Assert.DoesNotContain(context.ActivityCatalog, x => x.Type == "Elsa.Secrets.LegacySecretActivity");
+        Assert.Empty(context.ActivityCatalog);
+        Assert.Contains(context.Diagnostics, x => x.Severity == "Warning" && x.Message.Contains("No available Activity Catalog items", StringComparison.Ordinal));
+        Assert.Contains(context.Redactions, x => x.Contains("Runtime payloads", StringComparison.Ordinal));
+        Assert.Contains(context.Redactions, x => x.Contains("Unavailable activities", StringComparison.Ordinal));
     }
 
     [Fact]
