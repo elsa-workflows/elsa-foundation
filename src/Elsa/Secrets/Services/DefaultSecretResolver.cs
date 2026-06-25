@@ -7,6 +7,7 @@ public sealed class DefaultSecretResolver(
     ISecretRepository repository,
     ISecretNameValidator nameValidator,
     ISecretManager secretManager,
+    SecretLifecyclePolicy lifecyclePolicy,
     ISecretAuditSink auditSink,
     SecretModelMapper mapper,
     TimeProvider timeProvider) : ISecretResolver
@@ -17,42 +18,29 @@ public sealed class DefaultSecretResolver(
             return await FailureAsync(reference.Name, SecretResolutionFailureCode.NotFound, "Secret name is required.", cancellationToken);
 
         var secret = await repository.FindAsync(nameValidator.Normalize(reference.Name), cancellationToken);
+        var decision = lifecyclePolicy.EvaluateRuntimeResolution(secret, reference);
 
-        if (secret is null)
-            return await FailureAsync(reference.Name, SecretResolutionFailureCode.NotFound, "Secret not found.", cancellationToken);
+        if (!decision.Allowed)
+            return await FailureAsync(secret?.Name ?? reference.Name, ToResolutionFailureCode(decision.FailureCode), decision.Reason, cancellationToken);
 
-        if (reference.TypeName is not null && !string.Equals(secret.TypeName, reference.TypeName, StringComparison.OrdinalIgnoreCase))
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.TypeMismatch, "Secret type does not match the requested type.", cancellationToken);
+        var resolvedSecret = secret!;
+        var versionDecision = lifecyclePolicy.EvaluateRuntimeVersion(resolvedSecret);
 
-        if (reference.Scope is not null && !string.Equals(secret.Scope, reference.Scope, StringComparison.OrdinalIgnoreCase))
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.ScopeMismatch, "Secret scope does not match the requested scope.", cancellationToken);
-
-        if (secret.Status == SecretStatus.Revoked)
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.Revoked, "Secret has been revoked.", cancellationToken);
-
-        if (secret.Status is SecretStatus.Retired or SecretStatus.Deleted)
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.Inactive, "Secret is not active.", cancellationToken);
-
-        var version = secret.LatestActiveVersion;
-
-        if (version is null)
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.Inactive, "Secret has no active version.", cancellationToken);
-
-        if (version.IsExpired())
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.Expired, "Secret version has expired.", cancellationToken);
+        if (!versionDecision.Allowed)
+            return await FailureAsync(resolvedSecret.Name, ToResolutionFailureCode(versionDecision.FailureCode), versionDecision.Reason, cancellationToken);
 
         try
         {
-            var payload = await secretManager.ResolvePayloadAsync(secret, cancellationToken);
+            var payload = await secretManager.ResolvePayloadAsync(resolvedSecret, cancellationToken);
             if (payload.Value is null)
-                return await FailureAsync(secret.Name, SecretResolutionFailureCode.CorruptState, "Secret store returned an empty value.", cancellationToken);
+                return await FailureAsync(resolvedSecret.Name, SecretResolutionFailureCode.CorruptState, "Secret store returned an empty value.", cancellationToken);
 
-            await auditSink.RecordAsync(new("resolve", secret.Name, "succeeded", timeProvider.GetUtcNow()), cancellationToken);
-            return ResolvedSecret.Success(payload.Value, mapper.Map(secret));
+            await auditSink.RecordAsync(new("resolve", resolvedSecret.Name, "succeeded", timeProvider.GetUtcNow()), cancellationToken);
+            return ResolvedSecret.Success(payload.Value, mapper.Map(resolvedSecret));
         }
         catch (Exception e)
         {
-            return await FailureAsync(secret.Name, SecretResolutionFailureCode.StoreUnavailable, e.Message, cancellationToken);
+            return await FailureAsync(resolvedSecret.Name, SecretResolutionFailureCode.StoreUnavailable, e.Message, cancellationToken);
         }
     }
 
@@ -61,4 +49,15 @@ public sealed class DefaultSecretResolver(
         await auditSink.RecordAsync(new("resolve", name ?? "", "failed", timeProvider.GetUtcNow(), Reason: code.ToString()), cancellationToken);
         return ResolvedSecret.Failure(code, error);
     }
+
+    private static SecretResolutionFailureCode ToResolutionFailureCode(SecretLifecycleFailureCode failureCode) => failureCode switch
+    {
+        SecretLifecycleFailureCode.Deleted or SecretLifecycleFailureCode.NotFound => SecretResolutionFailureCode.NotFound,
+        SecretLifecycleFailureCode.Inactive or SecretLifecycleFailureCode.NoActiveVersion => SecretResolutionFailureCode.Inactive,
+        SecretLifecycleFailureCode.Expired => SecretResolutionFailureCode.Expired,
+        SecretLifecycleFailureCode.Revoked => SecretResolutionFailureCode.Revoked,
+        SecretLifecycleFailureCode.TypeMismatch => SecretResolutionFailureCode.TypeMismatch,
+        SecretLifecycleFailureCode.ScopeMismatch => SecretResolutionFailureCode.ScopeMismatch,
+        _ => SecretResolutionFailureCode.Inactive
+    };
 }
