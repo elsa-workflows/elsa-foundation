@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -178,7 +179,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
-    public async Task InProcessAgent_StartCommandFaultsAtInvokeActivityWhenNoActivityInvocationProviderIsComposed()
+    public async Task InProcessAgent_StartCommandRecordsPostCommitWorkWithoutInlineDelivery()
     {
         var observer = new RecordingSchedulerDrainObserver();
         var services = new ServiceCollection();
@@ -191,26 +192,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         await store.SaveAsync(executable);
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var outboxStore = provider.GetRequiredService<IRuntimePostCommitOutboxStore>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
         var queuedItems = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
         var activityStates = await activityStateStore.ListAsync("wfexec-1");
+        var pending = Assert.Single(await outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10, workflowExecutionId: "wfexec-1")));
         var drainResult = Assert.Single(observer.ObservedResults);
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
         Assert.Empty(queuedItems);
-        var state = Assert.Single(activityStates);
-        Assert.Equal("node-start", state.Execution.ExecutableNodeId);
-        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-        Assert.True(drainResult.StoppedOnFault);
+        Assert.Empty(activityStates);
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, pending.Intent.Kind);
+        var scheduled = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+        Assert.False(drainResult.StoppedOnFault);
         Assert.Equal(
-            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.Checkpoint, WorkflowExecutionCommandKind.ScheduleActivity, WorkflowExecutionCommandKind.StartActivity, WorkflowExecutionCommandKind.InvokeActivity },
+            new[] { WorkflowExecutionCommandKind.Start, WorkflowExecutionCommandKind.Checkpoint },
             drainResult.Items.Select(item => item.CommandKind).ToArray());
-        var invokeResult = drainResult.Items.Last();
-        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, invokeResult.Status);
-        Assert.Equal(MissingActivityInvocationSchedulerWorkHandler.HandlerName, invokeResult.HandlerName);
-        Assert.Contains("no activity invocation provider", invokeResult.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>

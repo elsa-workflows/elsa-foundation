@@ -1,5 +1,4 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -7,168 +6,40 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
-    private readonly IRuntimeCheckpointWriter _checkpointWriter;
-    private readonly IRuntimePostCommitIntentDispatcher _postCommitIntentDispatcher;
-    private readonly IRuntimePostCommitOutboxStore? _postCommitOutboxStore;
-    private readonly TimeProvider _timeProvider;
+    private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointWriter checkpointWriter,
-        IRuntimePostCommitIntentDispatcher postCommitIntentDispatcher)
-        : this(persistencePolicy, checkpointWriter, postCommitIntentDispatcher, null)
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointWriter checkpointWriter,
-        IRuntimePostCommitIntentDispatcher postCommitIntentDispatcher,
-        IRuntimePostCommitOutboxStore? postCommitOutboxStore)
-        : this(persistencePolicy, checkpointWriter, postCommitIntentDispatcher, postCommitOutboxStore, TimeProvider.System)
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointWriter checkpointWriter,
-        IRuntimePostCommitIntentDispatcher postCommitIntentDispatcher,
-        IRuntimePostCommitOutboxStore? postCommitOutboxStore,
-        TimeProvider timeProvider)
+        IRuntimeCheckpointCommitStore checkpointCommitStore)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
-        ArgumentNullException.ThrowIfNull(checkpointWriter);
-        ArgumentNullException.ThrowIfNull(postCommitIntentDispatcher);
-        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(checkpointCommitStore);
 
         _persistencePolicy = persistencePolicy;
-        _checkpointWriter = checkpointWriter;
-        _postCommitIntentDispatcher = postCommitIntentDispatcher;
-        _postCommitOutboxStore = postCommitOutboxStore;
-        _timeProvider = timeProvider;
+        _checkpointCommitStore = checkpointCommitStore;
     }
 
-    public async ValueTask<RuntimeCheckpointPersistenceDecision> CommitAsync(
+    public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(commit);
+
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
         {
-            if (IsMandatoryCheckpoint(commit.Checkpoint))
-                throw new InvalidOperationException($"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
+            if (commit.PostCommitIntents.Count > 0)
+                return RuntimeCheckpointCommitResult.Failure(
+                    commit,
+                    decision,
+                    RuntimeCheckpointCommitFailureCodes.SkipHasPostCommitWork,
+                    "Checkpoint persistence policy skipped a commit that contains pending post-commit work.");
 
-            return decision;
+            return RuntimeCheckpointCommitResult.Success(commit, decision, []);
         }
 
-        await _checkpointWriter.WriteAsync(commit, decision, cancellationToken);
-
-        var postCommitIntents = commit.PostCommitIntents.ToArray();
-        var dispatchedIntentIds = new List<string>();
-
-        await SavePendingOutboxItemsAsync(commit, postCommitIntents, cancellationToken);
-
-        for (var index = 0; index < postCommitIntents.Length; index++)
-        {
-            var intent = postCommitIntents[index];
-
-            try
-            {
-                await _postCommitIntentDispatcher.DispatchAsync(intent, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                var undispatchedIntentIds = postCommitIntents
-                    .Skip(index + 1)
-                    .Select(undispatchedIntent => undispatchedIntent.IntentId)
-                    .ToArray();
-                var deliveryResultRecordingException = await TryRecordFailedOutboxDeliveryResultAsync(commit, intent, exception, cancellationToken);
-
-                throw new RuntimePostCommitIntentDispatchException(
-                    commit.CommitId,
-                    intent.IntentId,
-                    dispatchedIntentIds.ToArray(),
-                    undispatchedIntentIds,
-                    exception,
-                    deliveryResultRecordingException);
-            }
-
-            dispatchedIntentIds.Add(intent.IntentId);
-            await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.Delivered, null, cancellationToken);
-        }
-
-        return decision;
+        var storeResult = await _checkpointCommitStore.CommitAsync(commit, decision, cancellationToken);
+        return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
-
-    private async ValueTask SavePendingOutboxItemsAsync(
-        RuntimeCheckpointCommit commit,
-        IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents,
-        CancellationToken cancellationToken)
-    {
-        if (_postCommitOutboxStore is null)
-            return;
-
-        foreach (var intent in postCommitIntents)
-        {
-            await _postCommitOutboxStore.SavePendingAsync(new RuntimePostCommitOutboxItem(
-                outboxItemId: NewOutboxItemId(commit, intent),
-                intent: intent,
-                status: RuntimePostCommitOutboxStatus.Pending,
-                recordedAt: intent.RecordedAt,
-                availableAt: commit.Checkpoint.OccurredAt,
-                retryPolicy: RuntimePostCommitRetryPolicy.None,
-                metadata: commit.Metadata),
-                cancellationToken);
-        }
-    }
-
-    private async ValueTask RecordOutboxDeliveryResultAsync(
-        RuntimeCheckpointCommit commit,
-        RuntimePostCommitIntent intent,
-        RuntimePostCommitOutboxStatus status,
-        string? failureMessage,
-        CancellationToken cancellationToken)
-    {
-        if (_postCommitOutboxStore is null)
-            return;
-
-        await _postCommitOutboxStore.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
-            outboxItemId: NewOutboxItemId(commit, intent),
-            status: status,
-            recordedAt: _timeProvider.GetUtcNow(),
-            failureMessage: failureMessage),
-            cancellationToken);
-    }
-
-    private async ValueTask<Exception?> TryRecordFailedOutboxDeliveryResultAsync(
-        RuntimeCheckpointCommit commit,
-        RuntimePostCommitIntent intent,
-        Exception dispatchException,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await RecordOutboxDeliveryResultAsync(commit, intent, RuntimePostCommitOutboxStatus.FailedFinal, FailureMessage(dispatchException), cancellationToken);
-            return null;
-        }
-        catch (Exception exception)
-        {
-            return exception;
-        }
-    }
-
-    private static string NewOutboxItemId(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>
-        $"{commit.CommitId}:{intent.IntentId}";
-
-    private static string FailureMessage(Exception exception) =>
-        RuntimeFailureMessages.For(exception);
-
-    private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
-        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
-        StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 }

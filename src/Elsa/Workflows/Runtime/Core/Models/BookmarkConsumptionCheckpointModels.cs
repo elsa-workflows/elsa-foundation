@@ -113,7 +113,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
 public sealed record BookmarkConsumptionCheckpointResult(
     string CommitId,
     string CheckpointId,
-    RuntimeCheckpointPersistenceDecision PersistenceDecision)
+    RuntimeCheckpointCommitResult CommitResult)
 {
     public string CheckpointName => RuntimeCheckpointNames.BookmarkConsumed;
+    public RuntimeCheckpointPersistenceDecision PersistenceDecision => CommitResult.PersistenceDecision;
 }

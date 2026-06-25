@@ -63,7 +63,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
     public async Task CheckpointWriter_Projects_ActivityExecutionInspection_Lane()
     {
         var store = new InMemoryActivityExecutionInspectionStore();
-        var writer = new InMemoryRuntimeCheckpointWriter(null, null, null, null, null, null, null, store);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, null, store);
         var projection = Projection("wf-1", "ae-1", "authored-a", sequence: 1);
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -93,7 +93,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-        await writer.WriteAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+        await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await store.FindAsync("wf-1", "ae-1"));
     }
@@ -107,15 +107,14 @@ public sealed class RuntimeActivityExecutionInspectionTests
     {
         var stateStore = new InMemoryActivityExecutionStateStore();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, stateStore, null, null, null, null, null, inspectionStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, stateStore, null, null, null, null, null, inspectionStore);
         var terminalState = NewStateForStatus(status);
         await stateStore.SaveAsync(terminalState);
         var handler = new WorkflowCheckpointSchedulerWorkHandler(
             stateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter,
-                new NoopRuntimePostCommitIntentDispatcher()),
+                checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             TimeProvider.System);
         var workItem = NewCheckpointWorkItem(terminalState.Execution.ActivityExecutionId, checkpointName);
@@ -133,7 +132,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var inspectionStore = new InMemoryActivityExecutionInspectionStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(workflowStateStore, activityStateStore, null, null, null, null, null, inspectionStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, activityStateStore, null, null, null, null, null, inspectionStore);
         var workflowState = NewWorkflowState(WorkflowExecutionStatus.Running);
         var activityState = NewStateForStatus(ActivityExecutionStatus.Running) with
         {
@@ -146,8 +145,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter,
-                new NoopRuntimePostCommitIntentDispatcher()),
+                checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             TimeProvider.System);
 
@@ -173,8 +171,7 @@ public sealed class RuntimeActivityExecutionInspectionTests
             new InMemoryActivityExecutionStateStore(),
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                new InMemoryRuntimeCheckpointWriter(),
-                new NoopRuntimePostCommitIntentDispatcher()),
+                new InMemoryRuntimeCheckpointCommitStore()),
             new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
             TimeProvider.System);
 

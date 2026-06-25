@@ -47,12 +47,12 @@ public sealed class RuntimeStartActivityStateTests
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewScheduledState());
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
         var handler = NewCheckpointingHandler(checkpointWriter);
 
         await handler.HandleAsync(NewStartWorkItem(executable.Identity));
 
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
         Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
         Assert.Single(write.Commit.StateChanges.ActivityExecutions);
@@ -64,7 +64,9 @@ public sealed class RuntimeStartActivityStateTests
         Assert.Equal(ActivityExecutionStatus.Running, projection.Status);
         Assert.Equal(_now, projection.StartedAt);
 
-        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
+        var invokeWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
     }
 
@@ -219,15 +221,14 @@ public sealed class RuntimeStartActivityStateTests
     private WorkflowStartActivitySchedulerWorkHandler NewHandler() =>
         new(_executableStore, _activityStateStore, _schedulerWorkQueue, new FixedTimeProvider(_now));
 
-    private WorkflowStartActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointWriter checkpointWriter) =>
+    private WorkflowStartActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointCommitStore checkpointWriter) =>
         new(
             _executableStore,
             _activityStateStore,
             _schedulerWorkQueue,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter,
-                new RuntimeSchedulerPostCommitIntentDispatcher(_schedulerWorkQueue)),
+                checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now));
 

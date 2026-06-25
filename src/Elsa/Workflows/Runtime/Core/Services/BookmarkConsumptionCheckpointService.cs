@@ -125,8 +125,8 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 : [NewEnqueueSchedulerWorkIntent(request.ResumeWorkItem, request.CompletedActivityExecutionState.Execution.ActivityExecutionId, request.CompletionWorkItem, occurredAt)],
             Metadata: metadata);
 
-        var decision = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
-        return new BookmarkConsumptionCheckpointResult(commitId, checkpointId, decision);
+        var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return new BookmarkConsumptionCheckpointResult(commitId, checkpointId, result);
     }
 
     private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(

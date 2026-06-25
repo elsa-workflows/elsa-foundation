@@ -15,11 +15,11 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryBookmarkStateStore _bookmarkStateStore = new();
-    private readonly InMemoryRuntimeCheckpointWriter _checkpointWriter;
+    private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public RuntimeCreateBookmarkSchedulerWorkHandlerTests()
     {
-        _checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, _activityStateStore, _bookmarkStateStore, null, null, null, null, _inspectionStore);
+        _checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, _bookmarkStateStore, null, null, null, null, _inspectionStore);
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Equal("bookmark-1", state.Metadata["runtime.bookmarkId"]);
         Assert.Equal("resume-target:delivery", state.Metadata["runtime.resumeTargetId"]);
 
-        var write = Assert.Single(_checkpointWriter.ListWrites());
+        var write = Assert.Single(_checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
         Assert.Equal("commit:create-bookmark-work:bookmark-created:bookmark-1", write.Commit.CommitId);
         Assert.Equal("checkpoint:create-bookmark-work:bookmark-created:bookmark-1", write.Commit.Checkpoint.CheckpointId);
@@ -124,7 +124,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Completed, state.Status);
         Assert.Empty(state.BookmarkIds);
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.NotNull(state);
         Assert.Equal(ActivityExecutionStatus.Recovered, state.Status);
         Assert.Empty(state.BookmarkIds);
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.Contains("references resume target 'resume-target:delivery'", exception.Message);
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
         Assert.Equal(ActivityExecutionStatus.Running, (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.Status);
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
         Assert.Contains("references missing activity execution 'actexec-1'", exception.Message);
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
 
         Assert.Contains("but pinned executable artifact", exception.Message);
         Assert.Null(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
-        Assert.Empty(_checkpointWriter.ListWrites());
+        Assert.Empty(_checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -205,8 +205,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             _activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                _checkpointWriter,
-                new NoopRuntimePostCommitIntentDispatcher()),
+                _checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now));
 

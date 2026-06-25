@@ -324,7 +324,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
         var drainer = new WorkflowSchedulerDrainer(
             queue,
@@ -340,7 +340,7 @@ public sealed class RuntimeSchedulerDrainTests
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status);
         Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
-        var write = Assert.Single(checkpointWriter.ListWrites());
+        var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, write.Decision.Mode);
         Assert.Equal("commit:work-1", write.Commit.CommitId);
         Assert.Equal("checkpoint:work-1", write.Commit.Checkpoint.CheckpointId);
@@ -365,7 +365,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainer = new WorkflowSchedulerDrainer(
             queue,
-            [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointWriter()), new NoopWorkflowSchedulerWorkHandler()],
+            [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointCommitStore()), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
         using var document = JsonDocument.Parse("""{"checkpointName":" "}""");
         await queue.EnqueueAsync(NewWorkItem(
@@ -385,7 +385,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_FaultsCheckpointWorkWhenReferencedActivityStateIsMissing()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         var drainer = new WorkflowSchedulerDrainer(
             queue,
             [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
@@ -401,7 +401,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Faulted, item.Status);
         Assert.Equal(WorkflowCheckpointSchedulerWorkHandler.HandlerName, item.HandlerName);
         Assert.Contains("missing activity execution 'actexec-1'", item.Error);
-        Assert.Empty(checkpointWriter.ListWrites());
+        Assert.Empty(checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -496,7 +496,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointWriter();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
         await executableStore.SaveAsync(NewExecutable(["node-start", "node-next"]));
         await activityStateStore.SaveAsync(NewActivityState("actexec-parent", ActivityExecutionStatus.Completed));
@@ -525,7 +525,7 @@ public sealed class RuntimeSchedulerDrainTests
         var item = Assert.Single(result.Items);
         Assert.Equal("work-1", item.WorkItemId);
         Assert.Equal(NoopWorkflowSchedulerWorkHandler.HandlerName, item.HandlerName);
-        Assert.Empty(checkpointWriter.ListWrites());
+        Assert.Empty(checkpointWriter.ListCommits());
     }
 
     [Fact]
@@ -771,13 +771,12 @@ public sealed class RuntimeSchedulerDrainTests
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
-        IRuntimeCheckpointWriter checkpointWriter) =>
+        IRuntimeCheckpointCommitStore checkpointWriter) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter,
-                new NoopRuntimePostCommitIntentDispatcher()),
+                checkpointWriter),
             new FixedTimeProvider(_now));
 
     private static string CompletionReason(SchedulerCompletionKind completionKind) =>
