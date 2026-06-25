@@ -1,12 +1,27 @@
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
+public sealed class ActivityFaultIncidentRecorder
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly TimeProvider _timeProvider;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+
+    public ActivityFaultIncidentRecorder(TimeProvider timeProvider)
+        : this(timeProvider, null)
+    {
+    }
+
+    public ActivityFaultIncidentRecorder(
+        TimeProvider timeProvider,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
+    {
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _inspectionAccumulator = inspectionAccumulator;
+    }
 
     public async ValueTask CommitAsync(ActivityFaultIncidentRecordRequest request, CancellationToken cancellationToken = default)
     {
@@ -18,10 +33,21 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
         var metadata = NewCommitMetadata(request, incidentId);
         var faultedState = NewFaultedActivityState(request, incidentId, occurredAt);
         var incident = NewIncident(request, incidentId, occurredAt);
+        var checkpointId = $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}";
+        var inspection = _inspectionAccumulator is null
+            ? null
+            : await _inspectionAccumulator.BuildProjectionAsync(
+                faultedState,
+                checkpointId,
+                occurredAt,
+                incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                valueSnapshots: request.ValueSnapshots,
+                metadata: metadata,
+                cancellationToken: cancellationToken);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{request.WorkItem.WorkItemId}:incident-recorded:{incidentId}",
+                CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.IncidentRecorded,
                 WorkflowExecutionId: request.WorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
@@ -48,7 +74,17 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
                         State: incident,
                         Metadata: metadata)
                 ],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: request.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: [],
             Metadata: metadata);
 
@@ -64,7 +100,8 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
         foreach (var item in NewBaseMetadata(request))
             metadata[item.Key] = item.Value;
 
-        metadata["runtime.incidentId"] = incidentId;
+        metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
+        metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
 
         return metadata;
     }
@@ -72,11 +109,11 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
     private static Dictionary<string, string> NewBaseMetadata(ActivityFaultIncidentRecordRequest request) =>
         new(StringComparer.Ordinal)
         {
-            ["runtime.schedulerWorkItemId"] = request.WorkItem.WorkItemId,
-            ["runtime.commandId"] = request.WorkItem.CommandId,
-            ["runtime.activityExecutionId"] = request.ActivityExecutionId,
-            ["runtime.executableNodeId"] = request.ExecutableNodeId,
-            ["runtime.faultSubStatus"] = request.SubStatus
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = request.WorkItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = request.WorkItem.CommandId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = request.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = request.ExecutableNodeId,
+            [RuntimeMetadataKeys.FaultSubStatus] = request.SubStatus
         };
 
     private static ActivityExecutionState NewFaultedActivityState(
@@ -88,9 +125,9 @@ public sealed class ActivityFaultIncidentRecorder(TimeProvider timeProvider)
         foreach (var item in request.ActivityMetadata)
             metadata[item.Key] = item.Value;
 
-        metadata["runtime.faultType"] = request.Exception.GetType().FullName ?? request.Exception.GetType().Name;
-        metadata["runtime.faultMessage"] = request.Exception.Message;
-        metadata["runtime.incidentId"] = incidentId;
+        metadata[RuntimeMetadataKeys.FaultType] = request.Exception.GetType().FullName ?? request.Exception.GetType().Name;
+        metadata[RuntimeMetadataKeys.FaultMessage] = request.Exception.Message;
+        metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
         return request.State with
         {
@@ -138,4 +175,5 @@ public sealed record ActivityFaultIncidentRecordRequest(
     Exception Exception,
     string SubStatus,
     IReadOnlyDictionary<string, string> ActivityMetadata,
-    IReadOnlyDictionary<string, string> IncidentMetadata);
+    IReadOnlyDictionary<string, string> IncidentMetadata,
+    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? ValueSnapshots = null);

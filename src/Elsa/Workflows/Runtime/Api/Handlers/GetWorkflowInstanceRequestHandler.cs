@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 public sealed class GetWorkflowInstanceRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
-    IActivityExecutionStateStore activityExecutionStateStore,
+    IActivityExecutionInspectionStore activityExecutionInspectionStore,
     IIncidentStateStore incidentStateStore)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {
@@ -19,10 +19,11 @@ public sealed class GetWorkflowInstanceRequestHandler(
         if (state is null)
             return new GetWorkflowInstanceResponse(null);
 
-        var activities = (await activityExecutionStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken))
-            .OrderBy(activity => activity.ScheduledAt)
-            .ThenBy(activity => activity.Execution.ActivityExecutionId, StringComparer.Ordinal)
-            .Select(ActivityExecutionStateView.From)
+        var activities = (await activityExecutionInspectionStore.ListSummariesAsync(request.WorkflowExecutionId, cancellationToken))
+            .OrderBy(activity => activity.ExecutionSequence)
+            .ThenBy(activity => activity.ScheduledAt)
+            .ThenBy(activity => activity.ActivityExecutionId, StringComparer.Ordinal)
+            .Select(ActivityExecutionInspectionSummaryView.From)
             .ToArray();
         var incidents = (await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken))
             .OrderBy(incident => incident.CreatedAt)

@@ -93,12 +93,14 @@ public sealed class SimpleActivityExecutionContext(
     public void ScheduleChildActivity(
         string executableNodeId,
         string? schedulingActivityExecutionId = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ActivitySchedulingProvenance? schedulingProvenance = null)
     {
         _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
             executableNodeId,
             schedulingActivityExecutionId,
-            metadata));
+            metadata,
+            schedulingProvenance));
     }
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>

@@ -8,7 +8,8 @@ public sealed class RuntimeChildActivityScheduleRequest
     public RuntimeChildActivityScheduleRequest(
         string executableNodeId,
         string? schedulingActivityExecutionId,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        ActivitySchedulingProvenance? schedulingProvenance = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
 
@@ -18,9 +19,11 @@ public sealed class RuntimeChildActivityScheduleRequest
         ExecutableNodeId = executableNodeId;
         SchedulingActivityExecutionId = schedulingActivityExecutionId;
         Metadata = RuntimeModelMetadata.Snapshot(metadata ?? new Dictionary<string, string>());
+        SchedulingProvenance = schedulingProvenance ?? ActivitySchedulingProvenance.Empty;
     }
 
     public string ExecutableNodeId { get; }
     public string? SchedulingActivityExecutionId { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public ActivitySchedulingProvenance SchedulingProvenance { get; }
 }

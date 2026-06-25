@@ -22,6 +22,11 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
+        services.TryAddSingleton<InMemoryActivityExecutionInspectionStore>();
+        services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
+        services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
+        // Stateless merge helper over runtime stores; singleton avoids captive scopes in singleton scheduler handlers.
+        services.TryAddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
@@ -56,6 +61,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeCheckpointWriter, InMemoryRuntimeCheckpointWriter>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.TryAddSingleton<RuntimeCheckpointCommitter>();
+        services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
@@ -65,6 +71,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCompleteActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCreateBookmarkSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCheckpointSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowCancelSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingActivityInvocationSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());

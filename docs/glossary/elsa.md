@@ -19,7 +19,13 @@ These are Elsa-specific terms and bindings. Framework-level terms live in [root.
 | Artifact-only runtime | The rule that runtime execution must be able to load and run from the published artifact without requiring design documents. |
 | Reconciliation | A process that updates persisted design/catalog state from authoritative sources such as CLR activities, JSON import, or workflow definitions. |
 | Activity construction | The runtime-side process that turns a descriptor type, descriptor payload, and argument bags into a live `IActivity`. |
+| Activity execution | One concrete runtime invocation of an executable activity node within a workflow execution. Multiple activity executions may reference the same authored activity when loops, retries, composite slots, or repeated scheduling revisit that activity. |
+| Activity execution inspection projection | A runtime-owned read model for inspecting one activity execution, separate from continuation state and keyed by activity execution identity. It may include captured evidence such as outcomes, value snapshots, bookmarks, incidents, and scheduling provenance. |
+| Activity execution value snapshot | Policy-governed inspection evidence for an activity input or output observed during one activity execution. A value snapshot may contain metadata only or include payload when runtime payload capture policy allows it. |
+| Activity scheduling provenance | Runtime-owned correlation data that explains why and from where an activity execution was scheduled, including structural parent, temporal scheduler, optional branch or iteration identity, optional execution path or scope identity, and scheduling cause. |
 | Publishing/compile bridge | The domain that reads design-side state and produces runtime artifacts without making Runtime depend on Design. |
+| Runtime checkpoint | The workflow runtime commit boundary where continuation state, inspection projections, outbox intents, and related runtime changes become durable together according to runtime checkpoint policy. |
+| Scheduler-boundary checkpoint | A runtime checkpoint that must persist before scheduler work can safely continue, such as scheduling an activity execution, starting invocation, suspending on a bookmark, completing, faulting, or canceling. |
 | Elsa 3 import | Compatibility strategy for Elsa 3 assets. The boundary is import into Elsa 4-native models, not running Elsa 3 behavior in place. |
 | Feature composition | Selecting and activating a set of Elsa features and their dependencies into a shell/API host. |
 | Seam | In Elsa docs, a published contract boundary between sub-domains, normally represented by `.Core` contracts. See [seams and bridges](../seams.md). |

@@ -10,6 +10,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
 {
     private readonly InMemoryWorkflowExecutionStateStore _workflowStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStore = new();
+    private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStore = new();
 
     [Fact]
@@ -40,8 +41,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Faulted, "definition-1"));
         await _activityStore.SaveAsync(Activity("wf-1", "activity-2", ActivityExecutionStatus.Faulted, scheduledAt: Now(-1)));
         await _activityStore.SaveAsync(Activity("wf-1", "activity-1", ActivityExecutionStatus.Completed, scheduledAt: Now(-2)));
+        await _inspectionStore.SaveAsync(Inspection(Activity("wf-1", "activity-2", ActivityExecutionStatus.Faulted, scheduledAt: Now(-1))));
+        await _inspectionStore.SaveAsync(Inspection(Activity("wf-1", "activity-1", ActivityExecutionStatus.Completed, scheduledAt: Now(-2))));
         await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
-        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _inspectionStore, _incidentStore);
 
         var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
@@ -55,7 +58,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task GetWorkflowInstance_ReturnsNullForMissingInstance()
     {
-        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _inspectionStore, _incidentStore);
 
         var result = await handler.Handle(new GetWorkflowInstance("missing"), CancellationToken.None);
 
@@ -129,6 +132,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
             message: "The activity failed.",
             createdAt: Now(-7),
             resolvedAt: null);
+
+    private static ActivityExecutionInspectionProjection Inspection(ActivityExecutionState state) =>
+        ActivityExecutionInspectionProjection.FromState(
+            state,
+            checkpointId: $"checkpoint-{state.Execution.ActivityExecutionId}",
+            committedAt: Now(-1));
 
     private static DateTimeOffset Now(int minutes) =>
         new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero) + TimeSpan.FromMinutes(minutes);

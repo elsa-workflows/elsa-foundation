@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -10,6 +12,7 @@ public sealed class RuntimeStartActivityStateTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStateStore = new();
+    private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
 
     [Fact]
@@ -36,6 +39,33 @@ public sealed class RuntimeStartActivityStateTests
         Assert.Equal("actexec-1", invokePayload.ActivityExecutionId);
         Assert.Equal("node-start", invokePayload.ExecutableNodeId);
         Assert.Equal(RuntimeInvokeActivityCommandPayload.StartedActivityReason, invokePayload.Reason);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CheckpointsRunningStateAndInspectionBeforePostCommitInvokeWork()
+    {
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+        var checkpointWriter = new InMemoryRuntimeCheckpointWriter(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
+        var handler = NewCheckpointingHandler(checkpointWriter);
+
+        await handler.HandleAsync(NewStartWorkItem(executable.Identity));
+
+        var write = Assert.Single(checkpointWriter.ListWrites());
+        Assert.Equal(RuntimeCheckpointNames.ActivityStarted, write.Commit.Checkpoint.Name);
+        Assert.Equal(RuntimeMetadataKeys.CheckpointRequirementMandatory, write.Commit.Checkpoint.Metadata[RuntimeMetadataKeys.CheckpointRequirement]);
+        Assert.Single(write.Commit.StateChanges.ActivityExecutions);
+        Assert.Single(write.Commit.StateChanges.ActivityExecutionInspections);
+        Assert.Single(write.Commit.PostCommitIntents);
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Running, projection.Status);
+        Assert.Equal(_now, projection.StartedAt);
+
+        var invokeWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
     }
 
     [Fact]
@@ -188,6 +218,18 @@ public sealed class RuntimeStartActivityStateTests
 
     private WorkflowStartActivitySchedulerWorkHandler NewHandler() =>
         new(_executableStore, _activityStateStore, _schedulerWorkQueue, new FixedTimeProvider(_now));
+
+    private WorkflowStartActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointWriter checkpointWriter) =>
+        new(
+            _executableStore,
+            _activityStateStore,
+            _schedulerWorkQueue,
+            new RuntimeCheckpointCommitter(
+                new ImmediateRuntimeCheckpointPersistencePolicy(),
+                checkpointWriter,
+                new RuntimeSchedulerPostCommitIntentDispatcher(_schedulerWorkQueue)),
+            new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
+            new FixedTimeProvider(_now));
 
     private RuntimeSchedulerWorkItem NewStartWorkItem(
         WorkflowExecutableIdentity? pinnedExecutable = null,

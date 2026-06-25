@@ -12,18 +12,36 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
 
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter)
-        : this(activityExecutionStateStore, checkpointCommitter, TimeProvider.System)
+        : this(activityExecutionStateStore, checkpointCommitter, null, TimeProvider.System)
     {
     }
 
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider)
+        : this(activityExecutionStateStore, checkpointCommitter, null, timeProvider)
+    {
+    }
+
+    public WorkflowCheckpointSchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
+        : this(activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
+    {
+    }
+
+    public WorkflowCheckpointSchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -32,6 +50,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
 
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
+        _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
     }
 
@@ -60,11 +79,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}";
+        var commitId = $"commit:{workItem.WorkItemId}";
         var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
+        var activityInspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
         var activityStateChangeMetadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
-            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.checkpointReason"] = payload.Reason
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
         });
 
         foreach (var activityExecutionId in payload.ActivityExecutionIds)
@@ -72,31 +94,47 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             var state = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, activityExecutionId, cancellationToken);
             if (state is null)
                 throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' references missing activity execution '{activityExecutionId}' for workflow execution '{workItem.WorkflowExecutionId}'.");
+            ValidateTerminalCheckpointStatus(workItem, payload, state);
 
             activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
                 StateId: activityExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: state,
                 Metadata: activityStateChangeMetadata));
+            if (_inspectionAccumulator is not null)
+            {
+                var inspection = await _inspectionAccumulator.BuildProjectionAsync(
+                    state,
+                    checkpointId,
+                    occurredAt,
+                    metadata: activityStateChangeMetadata,
+                    cancellationToken: cancellationToken);
+                activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                    StateId: activityExecutionId,
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: inspection,
+                    Metadata: activityStateChangeMetadata));
+            }
         }
 
+        var checkpointMetadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = payload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash
+        });
         return new RuntimeCheckpointCommit(
-            CommitId: $"commit:{workItem.WorkItemId}",
+            CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{workItem.WorkItemId}",
+                CheckpointId: checkpointId,
                 Name: payload.CheckpointName,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: payload.ActivityExecutionIds,
-                Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
-                {
-                    ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                    ["runtime.commandId"] = workItem.CommandId,
-                    ["runtime.checkpointReason"] = payload.Reason,
-                    ["runtime.executableArtifactId"] = payload.PinnedExecutable.ArtifactId,
-                    ["runtime.executableArtifactVersion"] = payload.PinnedExecutable.ArtifactVersion,
-                    ["runtime.executableArtifactHash"] = payload.PinnedExecutable.ArtifactHash
-                })),
+                Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt),
                 scheduler: null,
@@ -104,13 +142,28 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 bookmarks: [],
                 durableValues: [],
                 incidents: [],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: activityInspectionChanges.ToArray()),
             PostCommitIntents: payload.PostCommitIntents.ToArray(),
             Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                ["runtime.commandKind"] = workItem.CommandKind.ToString()
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             }));
+    }
+
+    private static void ValidateTerminalCheckpointStatus(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCheckpointCommandPayload payload,
+        ActivityExecutionState state)
+    {
+        if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.ActivityCancelled) &&
+            state.Status != ActivityExecutionStatus.Cancelled)
+            throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' cannot commit '{RuntimeCheckpointNames.ActivityCancelled}' for activity execution '{state.Execution.ActivityExecutionId}' with status '{state.Status}'.");
+
+        if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.ActivityRecovered) &&
+            state.Status != ActivityExecutionStatus.Recovered)
+            throw new InvalidOperationException($"Checkpoint scheduler work item '{workItem.WorkItemId}' cannot commit '{RuntimeCheckpointNames.ActivityRecovered}' for activity execution '{state.Execution.ActivityExecutionId}' with status '{state.Status}'.");
     }
 
     private static RuntimeStateChange<WorkflowExecutionState>? BuildWorkflowExecutionStateChange(
@@ -147,8 +200,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             TenantId: null,
             SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
-                ["runtime.checkpointReason"] = payload.Reason,
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId
+                [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -174,8 +227,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             TenantId: null,
             SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
-                ["runtime.checkpointReason"] = payload.Reason,
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId
+                [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
             }));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -205,8 +258,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             State: state,
             Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                ["runtime.checkpointReason"] = payload.Reason
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
             }));
 
     private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem)

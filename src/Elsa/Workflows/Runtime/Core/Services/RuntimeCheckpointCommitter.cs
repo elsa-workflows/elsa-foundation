@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -54,7 +55,12 @@ public sealed class RuntimeCheckpointCommitter
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
+        {
+            if (IsMandatoryCheckpoint(commit.Checkpoint))
+                throw new InvalidOperationException($"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
+
             return decision;
+        }
 
         await _checkpointWriter.WriteAsync(commit, decision, cancellationToken);
 
@@ -161,4 +167,8 @@ public sealed class RuntimeCheckpointCommitter
 
     private static string FailureMessage(Exception exception) =>
         RuntimeFailureMessages.For(exception);
+
+    private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
+        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
+        StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 }

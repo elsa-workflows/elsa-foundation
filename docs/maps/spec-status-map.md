@@ -95,3 +95,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |
 | [074-diagnostics-opentelemetry](../../specs/074-diagnostics-opentelemetry/spec.md) | Diagnostics — OpenTelemetry (Ingestion, Live Streaming & Query) | Draft | - | 0 | 0 | retained, deferred, out of scope |
 | [075-extension-builder-backend](../../specs/075-extension-builder-backend/spec.md) | Extension Builder — Backend Pipeline (Trusted-Team v1) | Draft | - | 53 | 0 | deferred, out of scope |
+| [076-workflow-test-runs](../../specs/076-workflow-test-runs/spec.md) | Workflow Definition Test Runs | Draft | - | 39 | 0 | - |
+| [077-workflow-instance-inspection](../../specs/077-workflow-instance-inspection/spec.md) | Workflow Instance Inspection | Draft | - | 31 | 0 | deferred, out of scope |
+| [078-package-first-module-registry](../../specs/078-package-first-module-registry/spec.md) | Package-First Module Registry | unknown | - | 0 | 0 | - |
+| [079-activity-execution-inspection](../../specs/079-activity-execution-inspection/spec.md) | Activity Execution Inspection | Draft | - | 51 | 0 | deferred, out of scope |

@@ -22,6 +22,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
         services.RemoveAll<IActivityExecutionStateStore>();
         services.AddSingleton<IActivityExecutionStateStore, GroundworkActivityExecutionStateStore>();
+        services.RemoveAll<IActivityExecutionInspectionStore>();
+        services.RemoveAll<IActivityExecutionInspectionWriter>();
+        services.RemoveAll<GroundworkActivityExecutionInspectionStore>();
+        services.AddSingleton<GroundworkActivityExecutionInspectionStore>();
+        services.AddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
+        services.AddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
         services.RemoveAll<IWorkflowExecutionStateStore>();
         services.AddSingleton<IWorkflowExecutionStateStore, GroundworkWorkflowExecutionStateStore>();
         services.RemoveAll<IDurableValueStateStore>();

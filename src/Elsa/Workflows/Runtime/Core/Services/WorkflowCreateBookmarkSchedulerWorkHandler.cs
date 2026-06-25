@@ -14,13 +14,23 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCreateBookmarkSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
+    {
+    }
+
+    public WorkflowCreateBookmarkSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter)
-        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, TimeProvider.System)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, TimeProvider.System)
     {
     }
 
@@ -28,6 +38,16 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider)
+        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, timeProvider)
+    {
+    }
+
+    public WorkflowCreateBookmarkSchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
@@ -38,6 +58,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         _workflowExecutableStore = workflowExecutableStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
+        _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
     }
 
@@ -78,7 +99,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!StringComparer.Ordinal.Equals(state.Execution.ExecutableNodeId, payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', but activity execution '{payload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
-        if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled)
+        if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
             return;
 
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
@@ -86,37 +107,50 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         var bookmark = NewBookmark(workItem, payload);
         var suspendedState = SuspendActivity(workItem, payload, state);
-        var commit = NewCommit(workItem, payload, suspendedState, bookmark);
+        var commit = await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    private RuntimeCheckpointCommit NewCommit(
+    private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCreateBookmarkCommandPayload payload,
         ActivityExecutionState suspendedState,
-        BookmarkState bookmark)
+        BookmarkState bookmark,
+        CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}";
         var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
         {
-            ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-            ["runtime.commandId"] = workItem.CommandId,
-            ["runtime.checkpointReason"] = payload.Reason,
-            ["runtime.bookmarkId"] = payload.BookmarkId,
-            ["runtime.activityExecutionId"] = payload.ActivityExecutionId,
-            ["runtime.executableNodeId"] = payload.ExecutableNodeId,
-            ["runtime.resumeTargetId"] = payload.ResumeTargetId,
-            ["runtime.stimulusType"] = payload.StimulusType,
-            ["runtime.stimulusHash"] = payload.StimulusHash,
-            ["runtime.executableArtifactId"] = payload.PinnedExecutable.ArtifactId,
-            ["runtime.executableArtifactVersion"] = payload.PinnedExecutable.ArtifactVersion,
-            ["runtime.executableArtifactHash"] = payload.PinnedExecutable.ArtifactHash
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId,
+            [RuntimeMetadataKeys.ActivityExecutionId] = payload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = payload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId,
+            [RuntimeMetadataKeys.StimulusType] = payload.StimulusType,
+            [RuntimeMetadataKeys.StimulusHash] = payload.StimulusHash,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = payload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash
         });
+        var inspection = _inspectionAccumulator is null
+            ? null
+            : await _inspectionAccumulator.BuildProjectionAsync(
+                suspendedState,
+                checkpointId,
+                occurredAt,
+                bookmarks: [ActivityExecutionBookmarkSummary.From(bookmark)],
+                valueSnapshots: payload.ValueSnapshots,
+                metadata: metadata,
+                cancellationToken: cancellationToken);
 
         return new RuntimeCheckpointCommit(
             CommitId: $"commit:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{workItem.WorkItemId}:bookmark-created:{payload.BookmarkId}",
+                CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.BookmarkCreated,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
@@ -143,7 +177,17 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ],
                 durableValues: [],
                 incidents: [],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? []
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: payload.ActivityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata)
+                    ]),
             PostCommitIntents: [],
             Metadata: metadata);
     }
@@ -167,9 +211,9 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeCreateBookmarkCommandPayload payload)
     {
         var metadata = payload.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.schedulerWorkItemId"] = workItem.WorkItemId;
-        metadata["runtime.commandId"] = workItem.CommandId;
-        metadata["runtime.reason"] = payload.Reason;
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
+        metadata[RuntimeMetadataKeys.Reason] = payload.Reason;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 
@@ -183,10 +227,10 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.bookmarkId"] = payload.BookmarkId;
-        metadata["runtime.resumeTargetId"] = payload.ResumeTargetId;
-        metadata["runtime.suspendReason"] = payload.Reason;
-        metadata["runtime.createBookmarkSchedulerWorkItemId"] = workItem.WorkItemId;
+        metadata[RuntimeMetadataKeys.BookmarkId] = payload.BookmarkId;
+        metadata[RuntimeMetadataKeys.ResumeTargetId] = payload.ResumeTargetId;
+        metadata[RuntimeMetadataKeys.SuspendReason] = payload.Reason;
+        metadata[RuntimeMetadataKeys.CreateBookmarkSchedulerWorkItemId] = workItem.WorkItemId;
 
         return state with
         {

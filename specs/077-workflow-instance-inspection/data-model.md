@@ -35,7 +35,7 @@ Validation:
 
 ## Activity Execution Record
 
-Represents one runtime activity execution row for the selected instance.
+Represents one runtime activity execution summary row for the selected instance. Detailed per-execution evidence is owned by [Activity Execution Inspection](../079-activity-execution-inspection/spec.md).
 
 Fields:
 - `activityExecutionId`, `workflowExecutionId`.
@@ -43,6 +43,7 @@ Fields:
 - `activityType`, `activityTypeVersion`.
 - `status`, `subStatus`.
 - `scheduledAt`, `startedAt`, `completedAt`.
+- `executionSequence`, `firstCheckpointId`, `lastCheckpointId`.
 - `schedulingActivityExecutionId`, `parentActivityExecutionId`.
 - `branchId`, `iterationId`, `callStackDepth`.
 - `bookmarkIds`, `incidentIds`.
@@ -53,6 +54,7 @@ Relationships:
 - Belongs to one `Workflow Instance`.
 - May map to one graph node by `authoredActivityId`.
 - May link to zero or more `Incidents`.
+- May lazy-load one `Activity Execution Inspection Projection` by `activityExecutionId`.
 
 ## Incident
 

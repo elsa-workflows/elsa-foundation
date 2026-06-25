@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -12,13 +13,25 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
+    private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowScheduleActivitySchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
+        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
+    {
+    }
+
+    public WorkflowScheduleActivitySchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, TimeProvider.System)
+        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, null, null, TimeProvider.System)
     {
     }
 
@@ -26,6 +39,17 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        TimeProvider timeProvider)
+        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, null, null, timeProvider)
+    {
+    }
+
+    public WorkflowScheduleActivitySchedulerWorkHandler(
+        IWorkflowExecutableStore workflowExecutableStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        RuntimeCheckpointCommitter? checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
@@ -36,6 +60,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         _workflowExecutableStore = workflowExecutableStore;
         _activityExecutionStateStore = activityExecutionStateStore;
         _schedulerWorkQueue = schedulerWorkQueue;
+        _checkpointCommitter = checkpointCommitter;
+        _inspectionAccumulator = inspectionAccumulator;
         _timeProvider = timeProvider;
     }
 
@@ -76,8 +102,15 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         }
 
         var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
-        await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
-        await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+        if (_checkpointCommitter is null || _inspectionAccumulator is null)
+        {
+            await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
+            await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+            return;
+        }
+
+        var commit = await NewCommitAsync(workItem, schedulePayload, state, cancellationToken);
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem)
@@ -126,6 +159,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         ExecutableNode executableNode)
     {
         var scheduledAt = _timeProvider.GetUtcNow();
+        var provenance = NormalizeProvenance(workItem.WorkflowExecutionId, schedulePayload);
         var execution = new ActivityExecution(
             ActivityExecutionId: schedulePayload.ActivityExecutionId,
             WorkflowExecutionId: workItem.WorkflowExecutionId,
@@ -138,13 +172,15 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             Execution: execution,
             Status: ActivityExecutionStatus.Scheduled,
             SubStatus: null,
+            ExecutionSequence: ResolveExecutionSequence(workItem, schedulePayload.ActivityExecutionId),
             ScheduledAt: scheduledAt,
             StartedAt: null,
             CompletedAt: null,
-            SchedulingActivityExecutionId: schedulePayload.SchedulingActivityExecutionId,
-            ParentActivityExecutionId: schedulePayload.ParentActivityExecutionId,
-            BranchId: null,
-            IterationId: null,
+            SchedulingActivityExecutionId: provenance.SchedulingActivityExecutionId,
+            ParentActivityExecutionId: provenance.ParentActivityExecutionId,
+            BranchId: provenance.BranchId,
+            IterationId: provenance.IterationId,
+            Provenance: provenance,
             CallStackDepth: null,
             BookmarkIds: [],
             IncidentIds: [],
@@ -152,16 +188,83 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>
             {
-                ["runtime.scheduleReason"] = schedulePayload.Reason,
-                ["runtime.schedulerWorkItemId"] = workItem.WorkItemId,
-                ["runtime.pinnedArtifactId"] = schedulePayload.PinnedExecutable.ArtifactId
+                [RuntimeMetadataKeys.ScheduleReason] = schedulePayload.Reason,
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.PinnedArtifactId] = schedulePayload.PinnedExecutable.ArtifactId
             });
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeScheduleActivityCommandPayload schedulePayload,
+        ActivityExecutionState state,
+        CancellationToken cancellationToken)
+    {
+        var occurredAt = _timeProvider.GetUtcNow();
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-scheduled:{schedulePayload.ActivityExecutionId}";
+        var metadata = RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
+            [RuntimeMetadataKeys.CheckpointReason] = schedulePayload.Reason,
+            [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory,
+            [RuntimeMetadataKeys.ActivityExecutionId] = schedulePayload.ActivityExecutionId,
+            [RuntimeMetadataKeys.ExecutableNodeId] = schedulePayload.ExecutableNodeId,
+            [RuntimeMetadataKeys.ExecutableArtifactId] = schedulePayload.PinnedExecutable.ArtifactId,
+            [RuntimeMetadataKeys.ExecutableArtifactVersion] = schedulePayload.PinnedExecutable.ArtifactVersion,
+            [RuntimeMetadataKeys.ExecutableArtifactHash] = schedulePayload.PinnedExecutable.ArtifactHash
+        });
+        var inspection = await _inspectionAccumulator!.BuildProjectionAsync(state, checkpointId, occurredAt, metadata: metadata, cancellationToken: cancellationToken);
+        var startWorkItem = NewStartActivityWorkItem(workItem, schedulePayload);
+
+        return new RuntimeCheckpointCommit(
+            CommitId: $"commit:{workItem.WorkItemId}:activity-scheduled:{schedulePayload.ActivityExecutionId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.ActivityScheduled,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [schedulePayload.ActivityExecutionId],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: schedulePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: state,
+                        Metadata: metadata)
+                ],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [],
+                activityExecutionInspections:
+                [
+                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                        StateId: schedulePayload.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: inspection,
+                        Metadata: metadata)
+                ]),
+            PostCommitIntents: [NewEnqueueSchedulerWorkIntent(workItem, schedulePayload.ActivityExecutionId, startWorkItem, occurredAt)],
+            Metadata: metadata);
     }
 
     private async ValueTask EnqueueStartActivityAsync(
         RuntimeSchedulerWorkItem scheduleWorkItem,
         RuntimeScheduleActivityCommandPayload schedulePayload,
         CancellationToken cancellationToken)
+    {
+        var workItem = NewStartActivityWorkItem(scheduleWorkItem, schedulePayload);
+        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    }
+
+    private RuntimeSchedulerWorkItem NewStartActivityWorkItem(
+        RuntimeSchedulerWorkItem scheduleWorkItem,
+        RuntimeScheduleActivityCommandPayload schedulePayload)
     {
         var now = _timeProvider.GetUtcNow();
         var payload = new RuntimeStartActivityCommandPayload(
@@ -170,7 +273,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             schedulePayload.ActivityExecutionId,
             RuntimeStartActivityCommandPayload.ScheduledActivityReason);
 
-        var workItem = new RuntimeSchedulerWorkItem(
+        return new RuntimeSchedulerWorkItem(
             workItemId: $"{scheduleWorkItem.WorkItemId}:start:{schedulePayload.ActivityExecutionId}",
             workflowExecutionId: scheduleWorkItem.WorkflowExecutionId,
             commandId: $"{scheduleWorkItem.CommandId}:start:{schedulePayload.ActivityExecutionId}",
@@ -183,7 +286,57 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             payload: JsonSerializer.SerializeToElement(payload),
             commandMetadata: scheduleWorkItem.CommandMetadata,
             envelopeMetadata: scheduleWorkItem.EnvelopeMetadata);
+    }
 
-        await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
+        RuntimeSchedulerWorkItem sourceWorkItem,
+        string activityExecutionId,
+        RuntimeSchedulerWorkItem schedulerWorkItem,
+        DateTimeOffset recordedAt) =>
+        new(
+            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
+            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
+            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            recordedAt: recordedAt,
+            activityExecutionId: activityExecutionId,
+            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
+            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
+            metadata: sourceWorkItem.CommandMetadata);
+
+    private static ActivitySchedulingProvenance NormalizeProvenance(
+        string workflowExecutionId,
+        RuntimeScheduleActivityCommandPayload schedulePayload)
+    {
+        var provenance = schedulePayload.SchedulingProvenance;
+        return ActivitySchedulingProvenance.From(
+            workflowExecutionId,
+            provenance.ParentActivityExecutionId ?? schedulePayload.ParentActivityExecutionId,
+            provenance.SchedulingActivityExecutionId ?? schedulePayload.SchedulingActivityExecutionId,
+            provenance.BranchId,
+            provenance.IterationId,
+            provenance.ExecutionPathId,
+            provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, RuntimeMetadataKeys.FlowchartExecutionScopeId),
+            provenance.SchedulingCause ?? schedulePayload.Reason,
+            provenance.Metadata);
+    }
+
+    private static string? ReadMetadata(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static long ResolveExecutionSequence(RuntimeSchedulerWorkItem workItem, string activityExecutionId) =>
+        workItem.Sequence ?? StableHash(activityExecutionId);
+
+    private static long StableHash(string value)
+    {
+        const ulong offset = 14695981039346656037;
+        const ulong prime = 1099511628211;
+        var hash = offset;
+        foreach (var character in value)
+        {
+            hash ^= character;
+            hash *= prime;
+        }
+
+        return (long)(hash & long.MaxValue);
     }
 }
