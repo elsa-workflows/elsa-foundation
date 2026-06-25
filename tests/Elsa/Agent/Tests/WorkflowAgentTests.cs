@@ -4,6 +4,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Extensions;
 using Elsa.Agent.Workflows.Models;
+using Elsa.Agent.Workflows.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Agent.Tests;
@@ -66,6 +67,80 @@ public sealed class WorkflowAgentTests
         Assert.Equal(AgentResultKind.WorkflowGraphOperationBatch, streamEvent.ResultKind);
         var payload = Assert.IsType<WorkflowGraphOperationBatch>(streamEvent.Payload);
         Assert.Same(batch, payload);
+    }
+
+    [Fact]
+    public async Task Deterministic_workflow_provider_streams_one_workflow_graph_operation_batch()
+    {
+        var provider = new DeterministicWorkflowAgentProvider();
+
+        var events = await CollectAsync(provider.SendMessageAsync(new(
+            "session-1",
+            "Create workflow graph operation batch to add activity.",
+            [CreateWorkflowContext()])));
+
+        var batchEvent = Assert.Single(events, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
+        Assert.Equal(AgentStreamEventKind.WorkflowGraphOperationBatchCreated, batchEvent.Kind);
+
+        var batch = Assert.IsType<WorkflowGraphOperationBatch>(batchEvent.Payload);
+        Assert.Equal(WorkflowGraphOperationBatchSchema.CurrentVersion, batch.SchemaVersion);
+        Assert.Equal("wf-1", batch.WorkflowDefinitionId);
+        Assert.Equal("rev-1", batch.BaseRevision);
+        Assert.Contains(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.AddActivity);
+        Assert.Contains(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.SetRoot);
+        Assert.Contains(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.SetDesignerPosition);
+        Assert.Contains(batch.Operations, x => x.Kind == WorkflowGraphOperationKind.SetActivityProperty);
+        Assert.Equal(AgentStreamEventKind.Completed, events.Last().Kind);
+    }
+
+    [Fact]
+    public async Task Deterministic_workflow_provider_can_return_message_or_error_results()
+    {
+        var provider = new DeterministicWorkflowAgentProvider();
+
+        var messageEvents = await CollectAsync(provider.SendMessageAsync(new("session-1", "Explain this workflow.", [])));
+        var messageDelta = Assert.Single(messageEvents, x => x.Kind == AgentStreamEventKind.MessageDelta);
+        Assert.Equal(AgentResultKind.Message, messageDelta.ResultKind);
+        Assert.DoesNotContain(messageEvents, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
+
+        var errorEvents = await CollectAsync(provider.SendMessageAsync(new("session-1", "Force error.", [])));
+        var error = Assert.Single(errorEvents, x => x.Kind == AgentStreamEventKind.Error);
+        Assert.Equal(AgentResultKind.Error, error.ResultKind);
+        Assert.Equal("agent.workflow.deterministic_error", error.Error?.Code);
+        Assert.DoesNotContain(errorEvents, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
+    }
+
+    [Fact]
+    public async Task Streaming_service_preserves_deterministic_workflow_graph_operation_batch_payload()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var sessions = provider.GetRequiredService<IAgentSessionService>();
+        var streaming = provider.GetRequiredService<IAgentStreamingService>();
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            DeterministicWorkflowAgentProvider.Id,
+            "workflow-authoring",
+            "Workflow authoring",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Direct apply a workflow graph operation batch that adds an email activity.",
+            AgentMessageStatus.Pending,
+            "workflow.propose-change",
+            ["ctx-1"],
+            [CreateWorkflowContext()]));
+
+        var events = await CollectAsync(streaming.StreamAsync(session.Id));
+
+        var batchEvent = Assert.Single(events, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
+        Assert.Equal(AgentStreamEventKind.WorkflowGraphOperationBatchCreated, batchEvent.Kind);
+        var batch = Assert.IsType<WorkflowGraphOperationBatch>(batchEvent.Payload);
+        Assert.Equal("wf-1", batch.WorkflowDefinitionId);
+        Assert.Equal("rev-1", batch.BaseRevision);
+        Assert.Single(events.Where(x => x.Kind == AgentStreamEventKind.WorkflowGraphOperationBatchCreated));
     }
 
     [Fact]
@@ -166,6 +241,32 @@ public sealed class WorkflowAgentTests
             [new Dictionary<string, object?> { ["op"] = "replace-input", ["path"] = "workflow:wf-1" }],
             ["Changes draft workflow behavior."],
             "Restore the previous draft revision.");
+
+    private static AgentContextAttachment CreateWorkflowContext()
+        => new(
+            "ctx-1",
+            "workflow.definition",
+            "wf-1",
+            "Workflow",
+            "workflow.definition",
+            AgentContextSensitivity.Internal,
+            "selection",
+            "Workflow definition 'wf-1' at revision 'rev-1'.",
+            null,
+            new Dictionary<string, string>
+            {
+                ["workflowDefinitionId"] = "wf-1",
+                ["revision"] = "rev-1"
+            });
+
+    private static async Task<List<AgentStreamEvent>> CollectAsync(IAsyncEnumerable<AgentStreamEvent> events)
+    {
+        var result = new List<AgentStreamEvent>();
+        await foreach (var item in events)
+            result.Add(item);
+
+        return result;
+    }
 
     private static WorkflowGraphOperationBatch CreateGraphOperationBatch()
         => new(
