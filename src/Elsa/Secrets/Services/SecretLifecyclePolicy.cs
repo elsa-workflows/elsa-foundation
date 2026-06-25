@@ -16,6 +16,30 @@ public sealed class SecretLifecyclePolicy
     }
 
     public SecretLifecycleDecision EvaluatePublicOperation(Secret? secret) => EvaluatePublicVisibility(secret);
+
+    public SecretLifecycleDecision EvaluateRuntimeResolution(Secret? secret, SecretReference reference)
+    {
+        var visibility = EvaluatePublicVisibility(secret);
+
+        if (!visibility.Allowed)
+            return visibility;
+
+        var existingSecret = secret!;
+
+        if (reference.TypeName is not null && !string.Equals(existingSecret.TypeName, reference.TypeName, StringComparison.OrdinalIgnoreCase))
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.TypeMismatch, "Secret type does not match the requested type.");
+
+        if (reference.Scope is not null && !string.Equals(existingSecret.Scope, reference.Scope, StringComparison.OrdinalIgnoreCase))
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.ScopeMismatch, "Secret scope does not match the requested scope.");
+
+        if (existingSecret.Status == SecretStatus.Revoked)
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.Revoked, "Secret has been revoked.");
+
+        if (existingSecret.Status == SecretStatus.Retired)
+            return SecretLifecycleDecision.Deny(SecretLifecycleFailureCode.Inactive, "Secret is not active.");
+
+        return SecretLifecycleDecision.Allow();
+    }
 }
 
 public readonly record struct SecretLifecycleDecision(bool Allowed, SecretLifecycleFailureCode FailureCode, string Reason)
@@ -28,5 +52,9 @@ public enum SecretLifecycleFailureCode
 {
     None,
     NotFound,
-    Deleted
+    Deleted,
+    Inactive,
+    Revoked,
+    TypeMismatch,
+    ScopeMismatch
 }
