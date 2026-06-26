@@ -3,6 +3,7 @@ packages:
   - "src/Elsa.Studio.ConsoleStream/Client"
   - "src/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
   - "src/Elsa.Studio.Diagnostics.StructuredLogs/Client"
+  - "src/Elsa.Studio.CodeEditor/Client"
   - "src/Elsa.Studio.ExpressionEditors.JavaScript/Client"
   - "src/Elsa.Studio.FeatureManagement/Client"
   - "src/Elsa.Studio.Secrets/Client"
