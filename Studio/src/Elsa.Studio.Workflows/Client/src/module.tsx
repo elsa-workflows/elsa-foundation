@@ -243,10 +243,10 @@ function WorkflowManagementPage({
 }
 
 function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
-  const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
+  const [definitionFilter, setDefinitionFilter] = useState(readDefinitionFilterFromUrl);
 
   useEffect(() => {
-    const syncFromLocation = () => setDefinitionFilter(readExecutableDefinitionFilterFromUrl());
+    const syncFromLocation = () => setDefinitionFilter(readDefinitionFilterFromUrl());
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
@@ -273,9 +273,31 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
 }
 
 function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const [definitionFilter, setDefinitionFilter] = useState(readDefinitionFilterFromUrl);
+
+  useEffect(() => {
+    const syncFromLocation = () => setDefinitionFilter(readDefinitionFilterFromUrl());
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
+
+  const updateDefinitionFilter = useCallback((filter: string | null) => {
+    const normalizedFilter = filter?.trim() ?? "";
+    const url = new URL(window.location.href);
+
+    if (normalizedFilter) {
+      url.searchParams.set("definition", normalizedFilter);
+    } else {
+      url.searchParams.delete("definition");
+    }
+
+    setDefinitionFilter(normalizedFilter || null);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   return (
     <WorkflowsPageFrame title="Instances">
-      <WorkflowInstances context={context} ai={ai} />
+      <WorkflowInstances context={context} ai={ai} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
     </WorkflowsPageFrame>
   );
 }
@@ -308,7 +330,7 @@ function readDefinitionIdFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
 }
 
-function readExecutableDefinitionFilterFromUrl() {
+function readDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
 }
 
@@ -328,7 +350,6 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   const [definitions, setDefinitions] = useState<WorkflowDefinitionDetails["definition"][]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<Set<string>>(() => new Set());
-  const [bulkOperation, setBulkOperation] = useState<"idle" | "deleting" | "publishing">("idle");
   const [createDraft, setCreateDraft] = useState<CreateWorkflowDraft | null>(null);
   const [creating, setCreating] = useState(false);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
@@ -337,11 +358,8 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const suggestMetadataAction = findAiAction(ai, "weaver.workflows.suggest-create-metadata");
   const explainDefinitionAction = findAiAction(ai, "weaver.workflows.explain-definition");
-  const selectedDefinitions = useMemo(() => definitions.filter(definition => selectedDefinitionIds.has(definition.id)), [definitions, selectedDefinitionIds]);
-  const selectedDraftDefinitions = useMemo(() => selectedDefinitions.filter((definition): definition is WorkflowDefinitionDetails["definition"] & { draftId: string } => !!definition.draftId), [selectedDefinitions]);
   const selectedVisibleCount = visibleDefinitionIds.filter(id => selectedDefinitionIds.has(id)).length;
   const allVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCount === visibleDefinitionIds.length;
-  const bulkBusy = bulkOperation !== "idle";
 
   const load = useCallback(async () => {
     setState("loading");
@@ -465,59 +483,6 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
     clearSelection();
   };
 
-  const bulkDelete = async () => {
-    if (selectedDefinitions.length === 0 || bulkBusy) return;
-    const permanent = listState === "deleted";
-    const message = permanent
-      ? `Permanently delete ${selectedDefinitions.length} selected workflow definition${selectedDefinitions.length === 1 ? "" : "s"}? This cannot be undone.`
-      : `Delete ${selectedDefinitions.length} selected workflow definition${selectedDefinitions.length === 1 ? "" : "s"}? You can restore them from the Deleted view.`;
-    if (!window.confirm(message)) return;
-
-    setBulkOperation("deleting");
-    setStatus(permanent ? "Deleting selected definitions..." : "Moving selected definitions to Deleted...");
-    setError("");
-    try {
-      await Promise.all(selectedDefinitions.map(definition =>
-        permanent
-          ? deleteDefinitionPermanently(context, definition.id)
-          : deleteDefinition(context, definition.id)));
-      clearSelection();
-      setStatus(permanent
-        ? `Deleted ${selectedDefinitions.length} workflow definition${selectedDefinitions.length === 1 ? "" : "s"} permanently`
-        : `Deleted ${selectedDefinitions.length} workflow definition${selectedDefinitions.length === 1 ? "" : "s"}`);
-      await refreshAfterMutation();
-    } catch (e) {
-      setStatus("");
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBulkOperation("idle");
-    }
-  };
-
-  const bulkPublish = async () => {
-    if (selectedDraftDefinitions.length === 0 || bulkBusy) return;
-    if (!window.confirm(`Publish drafts for ${selectedDraftDefinitions.length} selected workflow definition${selectedDraftDefinitions.length === 1 ? "" : "s"}?`)) return;
-
-    setBulkOperation("publishing");
-    setStatus("Publishing selected definitions...");
-    setError("");
-    try {
-      const published = await Promise.all(selectedDraftDefinitions.map(async definition => {
-        const promoted = await promoteDraft(context, definition.draftId);
-        return publishVersion(context, promoted.versionId);
-      }));
-      clearSelection();
-      const skippedCount = selectedDefinitions.length - selectedDraftDefinitions.length;
-      setStatus(`Published ${published.length} workflow definition${published.length === 1 ? "" : "s"}${skippedCount > 0 ? `; skipped ${skippedCount} without drafts` : ""}`);
-      await load();
-    } catch (e) {
-      setStatus("");
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBulkOperation("idle");
-    }
-  };
-
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
     if (!window.confirm(`Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`)) return;
     setStatus("");
@@ -570,7 +535,7 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
           <Search size={15} />
           <input value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
         </label>
-        <button type="button" className="wf-icon-button" aria-label="Refresh workflow definitions" title="Refresh" onClick={() => void load()}><RefreshCcw size={15} /></button>
+        <button type="button" onClick={() => void load()}>Refresh</button>
         <div className="wf-actions">
           <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
         </div>
@@ -582,17 +547,7 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
       {selectedDefinitionIds.size > 0 ? (
         <div className="wf-selection-bar" aria-live="polite">
           <span>{selectedDefinitionIds.size} selected</span>
-          <div className="wf-selection-actions">
-            <button type="button" className="danger" disabled={bulkBusy || selectedDefinitions.length === 0} onClick={() => void bulkDelete()}>
-              <Trash2 size={13} /> {listState === "deleted" ? "Delete permanently" : "Delete"}
-            </button>
-            {listState === "active" ? (
-              <button type="button" disabled={bulkBusy || selectedDraftDefinitions.length === 0} onClick={() => void bulkPublish()} title={selectedDraftDefinitions.length === 0 ? "Selected definitions do not have drafts to publish." : "Publish selected workflow drafts"}>
-                <GitBranch size={13} /> Publish
-              </button>
-            ) : null}
-            <button type="button" disabled={bulkBusy} onClick={clearSelection}>Clear selection</button>
-          </div>
+          <button type="button" onClick={clearSelection}>Clear selection</button>
         </div>
       ) : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow definitions...</div> : null}
@@ -671,14 +626,10 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
             page={page}
             pageSize={pageSize}
             totalCount={totalCount}
-            onPageChange={nextPage => {
-              setPage(nextPage);
-              clearSelection();
-            }}
+            onPageChange={setPage}
             onPageSizeChange={value => {
               setPageSize(value);
               setPage(1);
-              clearSelection();
             }}
           />
         </>
@@ -1136,17 +1087,23 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
   );
 }
 
-function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+function WorkflowTestRunsPanel({ context, definitionId, currentRun, runs }: {
+  context: StudioEndpointContext;
+  definitionId: string;
+  currentRun: WorkflowTestRunView | null;
+  runs: WorkflowTestRunView[];
+}) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
+  const uniqueRuns = deduplicateTestRuns(currentRun ? [currentRun, ...runs] : runs);
+  const sessionRuns = currentRun ? uniqueRuns.slice(1) : uniqueRuns;
 
   const load = useCallback(async () => {
     setState("loading");
     setError("");
     try {
-      const nextInstances = await listWorkflowInstances(context, { status: statusFilter || undefined, take: 100 });
+      const nextInstances = await listWorkflowInstances(context, { definitionId, take: 8 });
       setInstances(nextInstances);
       setState("ready");
     } catch (e) {
@@ -1154,21 +1111,162 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
       setInstances([]);
       setState("failed");
     }
-  }, [context, statusFilter]);
+  }, [context, definitionId]);
+
+  useEffect(() => {
+    void load();
+  }, [load, currentRun?.workflowExecutionId]);
+
+  return (
+    <div id="wf-test-runs-panel" className="wf-test-runs-panel">
+      <div className="wf-artifacts-toolbar">
+        <span>{uniqueRuns.length} transient run{uniqueRuns.length === 1 ? "" : "s"}</span>
+        <button type="button" className="wf-icon-button" aria-label="Refresh workflow test runs" title="Refresh" onClick={() => void load()}><RefreshCcw size={13} /></button>
+        <button type="button" onClick={() => openInstancesPage(definitionId)}>Open list</button>
+      </div>
+      {currentRun ? (
+        <TestRunCard testRun={currentRun} current />
+      ) : (
+        <p className="wf-muted">Run the current draft to inspect transient run details here.</p>
+      )}
+      {sessionRuns.length > 0 ? (
+        <section className="wf-test-run-section" aria-label="Transient run session history">
+          <h4>Session history</h4>
+          <div className="wf-test-run-list">
+            {sessionRuns.map(testRun => <TestRunCard testRun={testRun} key={testRun.testRunId} />)}
+          </div>
+        </section>
+      ) : null}
+      <section className="wf-test-run-section" aria-label="Persisted workflow instance history">
+        <h4>Recent instances</h4>
+        {state === "failed" ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
+        {state === "loading" ? <p className="wf-muted">Loading recent instances...</p> : null}
+        {state === "ready" && instances.length === 0 ? <p className="wf-muted">No persisted instances for this workflow yet.</p> : null}
+        {state === "ready" && instances.length > 0 ? (
+          <div className="wf-test-run-list" role="list" aria-label="Recent workflow instances">
+            {instances.map(instance => (
+              <div role="listitem" key={instance.workflowExecutionId}>
+                <button
+                  type="button"
+                  className="wf-test-run-instance"
+                  onClick={() => openWorkflowInstance(instance.workflowExecutionId)}
+                >
+                  <span>
+                    <strong>{instance.workflowExecutionId}</strong>
+                    <small>{instance.artifactId}</small>
+                  </span>
+                  <WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} />
+                  <small>{instance.activityCount} activities · {instance.incidentCount} incidents</small>
+                  <small>{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</small>
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function TestRunCard({ testRun, current = false }: { testRun: WorkflowTestRunView; current?: boolean }) {
+  const rejected = isRejectedTestRun(testRun);
+  const workflowExecutionId = testRun.workflowExecutionId;
+  return (
+    <article className="wf-test-run-card" data-state={rejected ? "rejected" : "accepted"} data-current={current ? "true" : undefined}>
+      <div className="wf-test-run-card-heading">
+        <div>
+          {rejected ? <AlertCircle size={15} /> : <Check size={15} />}
+          <strong>{rejected ? "Test run rejected" : "Test run dispatched"}</strong>
+        </div>
+        <span>{current ? "Current draft" : "Session"}</span>
+      </div>
+      <small className="wf-test-run-scope">Ephemeral - not promoted</small>
+      {rejected && testRun.reason ? <p>{testRun.reason}</p> : null}
+      <dl>
+        <div><dt>Status</dt><dd title={testRun.status}>{testRun.status}</dd></div>
+        {testRun.commandDispatchStatus ? <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus}>{testRun.commandDispatchStatus}</dd></div> : null}
+        <div><dt>Test run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
+        {testRun.artifactId ? <div><dt>Artifact</dt><dd title={testRun.artifactId}>{testRun.artifactId}</dd></div> : null}
+        {workflowExecutionId ? <div><dt>Execution</dt><dd title={workflowExecutionId}>{workflowExecutionId}</dd></div> : null}
+        {testRun.expiresAt ? <div><dt>Expires</dt><dd title={formatDate(testRun.expiresAt)}>{formatDate(testRun.expiresAt)}</dd></div> : null}
+      </dl>
+      {workflowExecutionId ? (
+        <button type="button" onClick={() => openWorkflowInstance(workflowExecutionId)}>Open instance</button>
+      ) : null}
+    </article>
+  );
+}
+
+function deduplicateTestRuns(runs: WorkflowTestRunView[]) {
+  const seen = new Set<string>();
+  return runs.filter(run => {
+    if (seen.has(run.testRunId)) return false;
+    seen.add(run.testRunId);
+    return true;
+  });
+}
+
+function openWorkflowInstance(workflowExecutionId: string) {
+  window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function openInstancesPage(definitionId: string) {
+  window.history.pushState({}, "", `/workflows/instances?definition=${encodeURIComponent(definitionId)}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function WorkflowInstances({
+  context,
+  definitionFilter,
+  onDefinitionFilterChange
+}: {
+  context: StudioEndpointContext;
+  ai: StudioAiContributionApi;
+  definitionFilter: string | null;
+  onDefinitionFilterChange(filter: string | null): void;
+}) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
+  const normalizedDefinitionFilter = definitionFilter?.trim() || "";
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setError("");
+    try {
+      const nextInstances = await listWorkflowInstances(context, {
+        definitionId: normalizedDefinitionFilter || undefined,
+        status: statusFilter || undefined,
+        take: 100
+      });
+      setInstances(nextInstances);
+      setState("ready");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setInstances([]);
+      setState("failed");
+    }
+  }, [context, normalizedDefinitionFilter, statusFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const openInstance = (workflowExecutionId: string) => {
-    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
   return (
     <>
       <div className="wf-toolbar">
-        <button type="button" className="wf-icon-button" aria-label="Refresh workflow instances" title="Refresh" onClick={() => void load()}><RefreshCcw size={15} /></button>
+        <button type="button" onClick={() => void load()}>Refresh</button>
+        <label className="wf-toolbar-field">
+          <span>Definition</span>
+          <input
+            aria-label="Filter workflow instances by definition"
+            placeholder="Definition id"
+            value={normalizedDefinitionFilter}
+            onChange={event => onDefinitionFilterChange(event.target.value || null)}
+          />
+        </label>
         <label className="wf-toolbar-field">
           <span>Status</span>
           <select aria-label="Workflow instance status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
@@ -1202,7 +1300,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
               role="row"
               aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
               key={instance.workflowExecutionId}
-              onClick={() => openInstance(instance.workflowExecutionId)}
+              onClick={() => openWorkflowInstance(instance.workflowExecutionId)}
             >
               <span>
                 <strong>{instance.workflowExecutionId}</strong>
@@ -1291,7 +1389,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
     <>
       <div className="wf-toolbar">
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Instances</button>
-        <button type="button" className="wf-icon-button" aria-label="Refresh workflow instance" title="Refresh" onClick={() => void load()}><RefreshCcw size={14} /></button>
+        <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data && instanceAction ? (
           <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
             <Sparkles size={13} /> Explain
@@ -1948,7 +2046,7 @@ function WorkflowEditor({
   const [status, setStatus] = useState("");
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [testRun, setTestRun] = useState<WorkflowTestRunState | null>(null);
-  const [testRunDetailsOpen, setTestRunDetailsOpen] = useState(false);
+  const [testRunHistory, setTestRunHistory] = useState<WorkflowTestRunState[]>([]);
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
@@ -2020,11 +2118,6 @@ function WorkflowEditor({
       }
     };
   }, [catalogByVersion, details, draft, selectedDescriptor, selectedNode, selectedNodeId]);
-
-  useEffect(() => {
-    if (!draft || !testRun) return;
-    if (testRun.draftSignature !== getDraftSignature(draft)) setTestRunDetailsOpen(false);
-  }, [draft, testRun]);
 
   useEffect(() => {
     const handleApply = (event: Event) => {
@@ -2586,7 +2679,7 @@ function WorkflowEditor({
   const promoteAndPublish = async () => {
     if (!draft || busy) return;
     setOperation("promoting");
-    setStatus("Publishing...");
+    setStatus("Promoting...");
     try {
       const promoted = await promoteDraft(context, draft.id);
       const published = await publishVersion(context, promoted.versionId);
@@ -2606,7 +2699,6 @@ function WorkflowEditor({
     const draftSnapshot = draft;
     const draftSignature = getDraftSignature(draftSnapshot);
     setTestRun(null);
-    setTestRunDetailsOpen(false);
     setStatus("Preparing test run...");
     try {
       setOperation("testRunPreparing");
@@ -2620,7 +2712,12 @@ function WorkflowEditor({
         snapshotId,
         state: draftSnapshot.state
       });
-      setTestRun({ draftSignature, view: nextTestRun });
+      const nextRunState = { draftSignature, view: nextTestRun };
+      setTestRun(nextRunState);
+      setTestRunHistory(current => [
+        nextRunState,
+        ...current.filter(item => item.view.testRunId !== nextTestRun.testRunId)
+      ].slice(0, 10));
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
@@ -2915,6 +3012,7 @@ function WorkflowEditor({
   const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
     ? testRun.view
     : null;
+  const renderedTestRunHistory = testRunHistory.filter(item => item.draftSignature === getDraftSignature(draft)).map(item => item.view);
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
   const panelContext: WorkflowDesignerPanelContext = {
     definition: details.definition,
@@ -2967,6 +3065,20 @@ function WorkflowEditor({
           ai={ai}
           definitionId={details.definition.id}
           publishedArtifactId={publishedArtifactId}
+        />
+      )
+    },
+    {
+      id: "test-runs",
+      title: "Test runs",
+      order: 20,
+      icon: <Terminal size={15} />,
+      render: () => (
+        <WorkflowTestRunsPanel
+          context={context}
+          definitionId={details.definition.id}
+          currentRun={renderedTestRun}
+          runs={renderedTestRunHistory}
         />
       )
     },
@@ -3092,8 +3204,11 @@ function WorkflowEditor({
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
-              open={testRunDetailsOpen}
-              onToggle={() => setTestRunDetailsOpen(open => !open)}
+              onOpen={() => {
+                setInspectorCollapsed(false);
+                setMaximizedSidePanel(current => current === "palette" ? null : current);
+                setActiveRightPanelId("test-runs");
+              }}
             />
           ) : null}
           <button
@@ -3189,7 +3304,10 @@ function WorkflowEditor({
                 onDragLeave={onCanvasDragLeave}
                 onDrop={onCanvasDrop}
                 onPaneClick={() => setSelectedNodeId(null)}
-                onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                onNodeClick={(_, node) => {
+                  setSelectedNodeId(node.id);
+                  setActiveRightPanelId("inspector");
+                }}
                 onNodeDragStop={isUnsupportedDesigner ? undefined : commitLayout}
                 fitView
                 minZoom={0.2}
@@ -3553,46 +3671,20 @@ function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
   );
 }
 
-function TestRunStatus({
-  testRun,
-  open,
-  onToggle
-}: {
-  testRun: WorkflowTestRunView;
-  open: boolean;
-  onToggle(): void;
-}) {
+function TestRunStatus({ testRun, onOpen }: { testRun: WorkflowTestRunView; onOpen(): void }) {
   const rejected = isRejectedTestRun(testRun);
   return (
     <div className="wf-test-run-status" data-state={rejected ? "rejected" : "accepted"}>
       <button
         type="button"
         className="wf-test-run-trigger"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={onToggle}
+        aria-controls="wf-test-runs-panel"
+        onClick={onOpen}
       >
         {rejected ? <AlertCircle size={16} /> : <Check size={16} />}
         {rejected ? "Test run rejected" : "Test run dispatched"}
         <ChevronDown size={14} />
       </button>
-      {open ? (
-        <section className="wf-test-run-popover" role="dialog" aria-label="Test run details">
-          <div className="wf-test-run-popover-heading">
-            <strong>{rejected ? "Rejected by the server" : "Transient run accepted"}</strong>
-            <span>Ephemeral - not promoted</span>
-          </div>
-          {rejected && testRun.reason ? <p>{testRun.reason}</p> : null}
-          <dl>
-            <div><dt>Status</dt><dd title={testRun.status}>{testRun.status}</dd></div>
-            {testRun.commandDispatchStatus ? <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus}>{testRun.commandDispatchStatus}</dd></div> : null}
-            <div><dt>Test run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
-            {testRun.artifactId ? <div><dt>Artifact</dt><dd title={testRun.artifactId}>{testRun.artifactId}</dd></div> : null}
-            {testRun.workflowExecutionId ? <div><dt>Execution</dt><dd title={testRun.workflowExecutionId}>{testRun.workflowExecutionId}</dd></div> : null}
-            {testRun.expiresAt ? <div><dt>Expires</dt><dd title={formatDate(testRun.expiresAt)}>{formatDate(testRun.expiresAt)}</dd></div> : null}
-          </dl>
-        </section>
-      ) : null}
     </div>
   );
 }

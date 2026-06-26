@@ -749,89 +749,6 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("bulk-deletes selected workflow definitions", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "DELETE") return response(null, 204);
-      return response({
-        definitions: [
-          definition(),
-          definition({ id: "definition-2", name: "Second workflow" })
-        ],
-        page: 1,
-        pageSize: 10,
-        totalCount: 2
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
-    const { container, unmount } = await renderRegisteredRoute();
-
-    await waitForText(container, "Second workflow");
-    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
-    await click(checkboxByLabel(container, "Select workflow definition Second workflow"));
-    await click(buttonByText(container, "Delete"));
-    await flushPromises();
-
-    expect(window.confirm).toHaveBeenCalledWith("Delete 2 selected workflow definitions? You can restore them from the Deleted view.");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/definitions/definition-1",
-      expect.objectContaining({ method: "DELETE" })
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/definitions/definition-2",
-      expect.objectContaining({ method: "DELETE" })
-    );
-
-    await unmount();
-  });
-
-  it("bulk-publishes selected workflow definition drafts", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) return response({ versionId: "version-2" });
-      if (init?.method === "POST" && url.includes("/drafts/draft-2/promote")) return response({ versionId: "version-3" });
-      if (init?.method === "POST" && url.includes("/versions/version-2/publish")) return response(publishedWorkflow({ definitionVersionId: "version-2", artifactVersion: "2.0.0" }));
-      if (init?.method === "POST" && url.includes("/versions/version-3/publish")) return response(publishedWorkflow({ definitionVersionId: "version-3", artifactVersion: "3.0.0" }));
-      return response({
-        definitions: [
-          definition(),
-          definition({ id: "definition-2", name: "Second workflow", draftId: "draft-2" })
-        ],
-        page: 1,
-        pageSize: 10,
-        totalCount: 2
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
-    const { container, unmount } = await renderRegisteredRoute();
-
-    await waitForText(container, "Second workflow");
-    await click(checkboxByLabel(container, "Select visible workflow definitions"));
-    await click(buttonByText(container, "Publish"));
-    await flushPromises();
-
-    expect(window.confirm).toHaveBeenCalledWith("Publish drafts for 2 selected workflow definitions?");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/drafts/draft-1/promote",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/versions/version-2/publish",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/drafts/draft-2/promote",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/versions/version-3/publish",
-      expect.objectContaining({ method: "POST" })
-    );
-
-    await unmount();
-  });
-
   it("renders workflow executables and runs an artifact", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -973,6 +890,9 @@ describe("workflows module", () => {
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
       if (init?.method === "POST" && url.includes("/versions/")) throw new Error("Designer Run must not publish versions.");
       if (init?.method === "POST" && url.includes("/executables/")) throw new Error("Designer Run must not call durable executable run.");
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([
+        workflowInstance({ workflowExecutionId: "wfexec-history", artifactId: "artifact-history", definitionId: "definition-1" })
+      ]);
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
         activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
@@ -1007,9 +927,17 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-test-run-popover")).toBeNull();
     await click(buttonByText(container, "Test run dispatched"));
     await waitForText(container, "test-run-1");
+    expect(activeInspectorTab(container)?.textContent).toContain("Test runs");
+    expect(container.textContent).toContain("Current draft");
     expect(container.textContent).toContain("Ephemeral - not promoted");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
+    expect(container.textContent).toContain("Recent instances");
+    expect(container.textContent).toContain("wfexec-history");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?definitionId=definition-1&take=8",
+      expect.any(Object)
+    );
 
     await unmount();
   });
@@ -1024,6 +952,7 @@ describe("workflows module", () => {
       const url = String(input);
       if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([]);
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
         { type: "Literal", displayName: "Literal" },
@@ -1099,6 +1028,7 @@ describe("workflows module", () => {
       }), 400);
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([]);
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
       ] });
@@ -1119,7 +1049,7 @@ describe("workflows module", () => {
     await waitForText(container, "Workflow version has no root activity to publish.");
 
     expect(container.textContent).toContain("Test run rejected");
-    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(activeInspectorTab(container)?.textContent).toContain("Test runs");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
@@ -1441,19 +1371,6 @@ function executable(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function publishedWorkflow(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    artifactId: "artifact-1",
-    definitionId: "definition-1",
-    definitionVersionId: "version-1",
-    artifactVersion: "1.0.0",
-    artifactHash: "sha256:abc",
-    rootActivityId: "root",
-    nodeCount: 1,
-    ...overrides
-  };
-}
-
 function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     testRunId: "test-run-1",
@@ -1651,6 +1568,10 @@ function buttonByText(container: HTMLElement, text: string) {
 function buttonByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll("button"))
     .find(button => button.getAttribute("aria-label") === label) ?? null;
+}
+
+function activeInspectorTab(container: HTMLElement) {
+  return container.querySelector("[role='tablist'][aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']");
 }
 
 function checkboxByLabel(container: HTMLElement, label: string) {
