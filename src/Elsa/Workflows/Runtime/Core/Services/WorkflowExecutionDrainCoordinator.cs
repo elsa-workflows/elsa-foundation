@@ -53,6 +53,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
         var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
+        var outboxDeliveryFailed = false;
         var completed = false;
 
         for (var cycle = 0; cycle < _options.MaxDrainCycles; cycle++)
@@ -78,10 +79,11 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
                     intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
                 cancellationToken);
             outboxDeliveryResults.Add(outboxResult);
+            outboxDeliveryFailed = outboxDeliveryFailed || outboxResult.FailedCount > 0;
 
             if (outboxResult.DeliveredCount == 0)
             {
-                stopReason = outboxResult.FailedCount > 0
+                stopReason = outboxDeliveryFailed
                     ? RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed
                     : RuntimeSchedulerDrainStopReason.Quiesced;
                 completed = true;

@@ -174,6 +174,36 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_PreservesOutboxDeliveryFailureStopReasonAfterMixedDeliveryBatch()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new DequeuingSchedulerDrainer(queue, _now);
+        var outboxProcessor = new MixedDeliveryPostCommitOutboxProcessor(queue, FollowUpWorkItem());
+        var observer = new RecordingSchedulerDrainObserver();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [observer],
+            new FixedTimeProvider(_now),
+            outboxProcessor);
+
+        await processor.ProcessAsync(NewEnvelope(1));
+
+        var observed = Assert.Single(observer.ObservedResults);
+        Assert.Equal(2, drainer.Requests.Count);
+        Assert.Equal(2, outboxProcessor.Requests.Count);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed, observed.StopReason);
+        Assert.Equal(2, observed.OutboxAttemptedCount);
+        Assert.Equal(1, observed.OutboxDeliveredCount);
+        Assert.Equal(1, observed.OutboxFailedCount);
+        Assert.Equal(
+            new[] { WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionCommandKind.ScheduleActivity },
+            observed.Items.Select(item => item.CommandKind).ToArray());
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task ProcessAsync_StopsOnPauseAfterPostCommitDeliveryAndLeavesDeliveredWorkQueued()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -592,6 +622,40 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                     IntentId: "intent-follow-up",
                     RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
                     FailureMessage: null)
+            ]);
+        }
+    }
+
+    private sealed class MixedDeliveryPostCommitOutboxProcessor(
+        IWorkflowSchedulerWorkQueue queue,
+        RuntimeSchedulerWorkItem workItem) : IRuntimePostCommitOutboxProcessor
+    {
+        private bool _processed;
+        public List<RuntimePostCommitOutboxProcessRequest> Requests { get; } = [];
+
+        public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+
+            if (_processed)
+                return new RuntimePostCommitOutboxProcessResult([]);
+
+            _processed = true;
+            await queue.EnqueueAsync(workItem, cancellationToken);
+            return new RuntimePostCommitOutboxProcessResult(
+            [
+                new RuntimePostCommitOutboxProcessedItem(
+                    OutboxItemId: "outbox-follow-up",
+                    IntentId: "intent-follow-up",
+                    RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
+                    FailureMessage: null),
+                new RuntimePostCommitOutboxProcessedItem(
+                    OutboxItemId: "outbox-failed",
+                    IntentId: "intent-failed",
+                    RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.FailedRetryable,
+                    FailureMessage: "Dispatch failed.")
             ]);
         }
     }
