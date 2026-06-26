@@ -1,4 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -7,6 +9,7 @@ using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Events.Core.Contracts;
@@ -80,6 +83,41 @@ public sealed class FeatureRegistrationTests
         // reconciliation feature; this feature only wires the reconciler, its startup task, and handler.
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetService<IActivityVersionReconciler>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilityEvaluator()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_UsesHostConfiguredActivityAvailabilityOptions()
+    {
+        var services = MinimalServices();
+        services.AddOptions();
+        services.Configure<ActivityAvailabilityOptions>(options =>
+            options.Exclude.ActivityTypes = ["Elsa.Scripting.RunJavaScript"]);
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var evaluator = provider.GetRequiredService<IActivityAvailabilityEvaluator>();
+
+        var result = evaluator.FilterAddable(
+        [
+            new ActivityDefinitionModel("write-line", "Elsa.Primitives.WriteLine", "Test", "WriteLine", null),
+            new ActivityDefinitionModel("run-js", "Elsa.Scripting.RunJavaScript", "Test", "RunJavaScript", null)
+        ]);
+
+        var definition = Assert.Single(result);
+        Assert.Equal("Elsa.Primitives.WriteLine", definition.ActivityTypeKey);
     }
 
     [Fact]
