@@ -346,10 +346,10 @@ describe("workflows module", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/_elsa/workflow-management/executables")) return response({ executables: [
+      if (url.includes("/_demo/workflows/executables")) return response([
         executable({ artifactId: "artifact-current", definitionId: "definition-1", artifactVersion: "2.0.0" }),
         executable({ artifactId: "artifact-other", definitionId: "definition-2", sourceId: "definition-2" })
-      ] });
+      ]);
       if (url.includes("/activities")) return response({ activities: [
         activity({
           activityVersionId: "write-line-v1",
@@ -623,619 +623,6 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders the ordered expanded expression editor contribution and preserves wrapper metadata", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "Literal", value: "Before contribution" },
-                memoryReference: { id: "text-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "late-javascript-expanded",
-        order: 200,
-        supports: context => context.syntax === "JavaScript",
-        surfaces: {
-          expanded: ({ value, onChange }) => (
-            <textarea
-              aria-label="Late JavaScript expanded editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-      api.expressionEditors.add({
-        id: "preferred-javascript-expanded",
-        order: 50,
-        supports: context => context.syntax === "JavaScript",
-        surfaces: {
-          expanded: ({ value, onChange }) => (
-            <textarea
-              aria-label="Preferred JavaScript expanded editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(container.querySelector(".wf-syntax-picker-trigger"));
-    await click(buttonByText(container, "JavaScript"));
-    await click(buttonByLabel(container, "Open expanded Text editor"));
-
-    expect(textareaByLabel(container, "Preferred JavaScript expanded editor")).toBeTruthy();
-    expect(textareaByLabel(container, "Late JavaScript expanded editor")).toBeNull();
-    expect(container.textContent).not.toContain("No enhanced editor is registered for JavaScript");
-
-    await fill(textareaByLabel(container, "Preferred JavaScript expanded editor"), "return 42;");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "return 42;" },
-      memoryReference: { id: "text-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("falls back for missing expanded expression editors and preserves values across syntax changes", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "Literal", value: "Before syntax switch" },
-                memoryReference: { id: "fallback-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(container.querySelector(".wf-syntax-picker-trigger"));
-    await click(buttonByText(container, "JavaScript"));
-    await click(buttonByLabel(container, "Open expanded Text editor"));
-
-    expect(container.textContent).toContain("No enhanced editor is registered for JavaScript. Using the generic text editor.");
-    expect(container.textContent).not.toContain("Monaco");
-    expect(textareaByLabel(container, "Text expanded value")?.value).toBe("Before syntax switch");
-
-    await fill(textareaByLabel(container, "Text expanded value"), "After fallback edit");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "After fallback edit" },
-      memoryReference: { id: "fallback-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("uses optional expression editor metadata for missing-enhancement fallback hints", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "Literal", value: "Before metadata hint" },
-                memoryReference: { id: "metadata-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "javascript-metadata-only",
-        supports: context => context.syntax === "JavaScript",
-        metadata: {
-          displayName: "JavaScript expression editor module",
-          installHint: "Install the JavaScript editor package to enable the enhanced editor."
-        },
-        surfaces: {}
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(container.querySelector(".wf-syntax-picker-trigger"));
-    await click(buttonByText(container, "JavaScript"));
-    await click(buttonByLabel(container, "Open expanded Text editor"));
-
-    expect(container.textContent).toContain("No JavaScript expression editor module is registered for JavaScript. Using the generic text editor.");
-    expect(container.textContent).toContain("Install the JavaScript editor package to enable the enhanced editor.");
-    expect(container.textContent).not.toContain("Monaco");
-
-    await fill(textareaByLabel(container, "Text expanded value"), "Edited with metadata fallback");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "Edited with metadata fallback" },
-      memoryReference: { id: "metadata-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("renders the ordered inline expression editor contribution and preserves wrapper metadata", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "Literal", value: "Before inline contribution" },
-                memoryReference: { id: "inline-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "late-javascript-inline",
-        order: 200,
-        supports: context => context.syntax === "JavaScript",
-        surfaces: {
-          inline: ({ value, onChange }) => (
-            <textarea
-              aria-label="Late JavaScript inline editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-      api.expressionEditors.add({
-        id: "preferred-javascript-inline",
-        order: 50,
-        supports: context => context.syntax === "JavaScript",
-        surfaces: {
-          inline: ({ value, onChange }) => (
-            <textarea
-              aria-label="Preferred JavaScript inline editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(container.querySelector(".wf-syntax-picker-trigger"));
-    await click(buttonByText(container, "JavaScript"));
-
-    expect(textareaByLabel(container, "Preferred JavaScript inline editor")).toBeTruthy();
-    expect(textareaByLabel(container, "Late JavaScript inline editor")).toBeNull();
-
-    await fill(textareaByLabel(container, "Preferred JavaScript inline editor"), "return 7;");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "return 7;" },
-      memoryReference: { id: "inline-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("falls back inline independently when only an expanded expression editor is registered", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "Literal", value: "Before inline fallback" },
-                memoryReference: { id: "surface-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "javascript-expanded-only",
-        supports: context => context.syntax === "JavaScript",
-        surfaces: {
-          expanded: ({ value, onChange }) => (
-            <textarea
-              aria-label="Expanded-only JavaScript editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(container.querySelector(".wf-syntax-picker-trigger"));
-    await click(buttonByText(container, "JavaScript"));
-
-    expect(textareaByLabel(container, "Expanded-only JavaScript editor")).toBeNull();
-    expect(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']")?.value).toBe("Before inline fallback");
-
-    await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Inline fallback edit");
-    await click(buttonByLabel(container, "Open expanded Text editor"));
-
-    expect(textareaByLabel(container, "Expanded-only JavaScript editor")?.value).toBe("Inline fallback edit");
-
-    await fill(textareaByLabel(container, "Expanded-only JavaScript editor"), "Expanded editor edit");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "Expanded editor edit" },
-      memoryReference: { id: "surface-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("renders expanded expression editor diagnostics without blocking saves", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "JavaScript", value: "bad expanded expression" },
-                memoryReference: { id: "expanded-diagnostic-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "diagnostic-javascript-expanded",
-        supports: context => context.syntax === "JavaScript",
-        diagnostics: (_context, value) => String(value).includes("bad")
-          ? [{ severity: "warning", code: "JS001", message: "Review this JavaScript expression." }]
-          : [],
-        surfaces: {
-          expanded: ({ value, onChange }) => (
-            <textarea
-              aria-label="Diagnostic JavaScript expanded editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-    await click(buttonByLabel(container, "Open expanded Text editor"));
-
-    expect(container.textContent).toContain("JS001");
-    expect(container.textContent).toContain("Review this JavaScript expression.");
-
-    await fill(textareaByLabel(container, "Diagnostic JavaScript expanded editor"), "bad but saveable");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "bad but saveable" },
-      memoryReference: { id: "expanded-diagnostic-memory" }
-    });
-
-    await unmount();
-  });
-
-  it("renders inline expression editor diagnostics without blocking draft updates", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
-      if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
-      ] });
-      if (url.includes("/activities")) return response({ activities: [
-        activity({
-          activityVersionId: "write-line-v1",
-          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-          category: "Primitives",
-          displayName: "Write Line",
-          description: "Writes a line to the console."
-        })
-      ] });
-      if (url.includes("/definitions/definition-1")) return response({
-        definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: writeLineRoot({
-              text: {
-                typeName: "System.String",
-                expression: { type: "JavaScript", value: "warn inline" },
-                memoryReference: { id: "inline-diagnostic-memory" }
-              }
-            }),
-            inputs: [],
-            outputs: []
-          }
-        }),
-        versions: []
-      });
-      return response({ definitions: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
-      api.expressionEditors.add({
-        id: "diagnostic-javascript-inline",
-        supports: context => context.syntax === "JavaScript",
-        diagnostics: (_context, value) => String(value).includes("warn")
-          ? [{ severity: "info", message: "Inline advisory diagnostic." }]
-          : [],
-        surfaces: {
-          inline: ({ value, onChange }) => (
-            <textarea
-              aria-label="Diagnostic JavaScript inline editor"
-              value={value == null ? "" : String(value)}
-              onChange={event => onChange(event.target.value)}
-            />
-          )
-        }
-      });
-    });
-
-    await waitForText(container, "Write Line");
-    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Line")) ?? null);
-    await waitForText(container, "Text");
-
-    expect(container.textContent).toContain("Inline advisory diagnostic.");
-
-    await fill(textareaByLabel(container, "Diagnostic JavaScript inline editor"), "warn and save");
-    await click(buttonByText(container, "Save"));
-
-    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "JavaScript", value: "warn and save" },
-      memoryReference: { id: "inline-diagnostic-memory" }
-    });
-
-    await unmount();
-  });
-
   it("filters the canvas activity picker with keyboard search", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -1366,12 +753,12 @@ describe("workflows module", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return response(null, 204);
-      expect(url).toBe("https://server.example/_elsa/workflow-management/executables?state=active");
-      return response({ executables: [executable({
+      expect(url).toBe("https://server.example/_demo/workflows/executables");
+      return response([executable({
         rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
         sourceKind: "WorkflowDefinitionVersion",
         sourceId: "version-1"
-      })] });
+      })]);
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
@@ -1389,50 +776,6 @@ describe("workflows module", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/_elsa/workflow-management/executables/artifact-1/run",
       expect.objectContaining({ method: "POST" })
-    );
-
-    await unmount();
-  });
-
-  it("soft-deletes, restores, and permanently deletes executable artifacts", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "DELETE" || init?.method === "POST") return response(null, 204);
-      if (url.includes("state=deleted")) return response({ executables: [
-        executable({ artifactId: "artifact-restore", deletedAt: "2026-06-26T00:00:00Z" }),
-        executable({ artifactId: "artifact-destroy", deletedAt: "2026-06-26T00:01:00Z" })
-      ] });
-      return response({ executables: [executable()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
-    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
-
-    await waitForText(container, "artifact-1");
-    await click(buttonByText(container, "Delete"));
-
-    expect(window.confirm).toHaveBeenCalledWith("Delete executable artifact \"artifact-1\"? You can restore it from the Deleted view.");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/executables/artifact-1",
-      expect.objectContaining({ method: "DELETE" })
-    );
-
-    await click(buttonByText(container, "Deleted"));
-    await waitForText(container, "artifact-restore");
-    expect(container.textContent).toContain("Delete permanently");
-    expect(container.textContent).not.toContain("Run");
-
-    await click(buttonByText(container, "Restore"));
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/executables/artifact-restore/restore",
-      expect.objectContaining({ method: "POST" })
-    );
-
-    await click(buttonByText(container, "Delete permanently"));
-    expect(window.confirm).toHaveBeenCalledWith("Permanently delete executable artifact \"artifact-restore\"? This cannot be undone.");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/_elsa/workflow-management/executables/artifact-restore/permanent",
-      expect.objectContaining({ method: "DELETE" })
     );
 
     await unmount();
@@ -1503,9 +846,6 @@ describe("workflows module", () => {
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
       if (init?.method === "POST" && url.includes("/versions/")) throw new Error("Designer Run must not publish versions.");
       if (init?.method === "POST" && url.includes("/executables/")) throw new Error("Designer Run must not call durable executable run.");
-      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([
-        workflowInstance({ workflowExecutionId: "wfexec-history", artifactId: "artifact-history", definitionId: "definition-1" })
-      ]);
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
         activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
@@ -1540,17 +880,9 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-test-run-popover")).toBeNull();
     await click(buttonByText(container, "Test run dispatched"));
     await waitForText(container, "test-run-1");
-    expect(activeInspectorTab(container)?.textContent).toContain("Test runs");
-    expect(container.textContent).toContain("Current draft");
     expect(container.textContent).toContain("Ephemeral - not promoted");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
-    expect(container.textContent).toContain("Recent instances");
-    expect(container.textContent).toContain("wfexec-history");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/runtime/workflows/instances?definitionId=definition-1&take=8",
-      expect.any(Object)
-    );
 
     await unmount();
   });
@@ -1565,7 +897,6 @@ describe("workflows module", () => {
       const url = String(input);
       if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
-      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([]);
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
         { type: "Literal", displayName: "Literal" },
@@ -1641,7 +972,6 @@ describe("workflows module", () => {
       }), 400);
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
-      if (url.startsWith("https://server.example/runtime/workflows/instances")) return response([]);
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
       ] });
@@ -1662,7 +992,7 @@ describe("workflows module", () => {
     await waitForText(container, "Workflow version has no root activity to publish.");
 
     expect(container.textContent).toContain("Test run rejected");
-    expect(activeInspectorTab(container)?.textContent).toContain("Test runs");
+    expect(container.textContent).toContain("Ephemeral - not promoted");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
@@ -1825,7 +1155,6 @@ function testApi(): ElsaStudioModuleApi {
     navigation,
     routes,
     propertyEditors: registry(),
-    expressionEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
@@ -2118,17 +1447,6 @@ function flowchartRoot(activities: unknown[]) {
   };
 }
 
-function writeLineRoot(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    nodeId: "write-line-root",
-    activityVersionId: "write-line-v1",
-    inputs: [],
-    outputs: [],
-    structure: null,
-    ...overrides
-  };
-}
-
 function activity(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     activityVersionId: "activity-1",
@@ -2193,10 +1511,6 @@ function buttonByText(container: HTMLElement, text: string) {
 function buttonByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll("button"))
     .find(button => button.getAttribute("aria-label") === label) ?? null;
-}
-
-function activeInspectorTab(container: HTMLElement) {
-  return container.querySelector("[role='tablist'][aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']");
 }
 
 function checkboxByLabel(container: HTMLElement, label: string) {

@@ -67,7 +67,7 @@ describe("AgentPanel", () => {
     });
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
 
-    await flushPromises();
+    await waitForText(container, "Explain screen");
     clickButton(container, "Explain screen");
     await flushPromises();
     await flushPromises();
@@ -122,7 +122,7 @@ describe("AgentPanel", () => {
     });
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
 
-    await flushPromises();
+    await waitForText(container, "Explain screen");
     clickButton(container, "Explain screen");
     await flushPromises();
     await flushPromises();
@@ -154,7 +154,7 @@ describe("AgentPanel", () => {
     });
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} onClose={() => {}} />);
 
-    await flushPromises();
+    await waitForText(container, "Weaver features are disabled or unavailable.");
 
     expect(container.textContent).toContain("Weaver features are disabled or unavailable.");
     expect(container.querySelector<HTMLTextAreaElement>("#studio-agent-composer")?.disabled).toBe(true);
@@ -375,4 +375,13 @@ function clickButton(container: HTMLElement, text: string) {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitForText(container: Element, text: string) {
+  for (let i = 0; i < 20; i++) {
+    if (container.textContent?.includes(text)) return;
+    await flushPromises();
+  }
+
+  throw new Error(`Timed out waiting for text: ${text}`);
 }

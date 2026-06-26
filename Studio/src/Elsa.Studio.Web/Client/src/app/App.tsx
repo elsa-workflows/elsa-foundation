@@ -11,13 +11,11 @@ import {
   Github,
   LayoutDashboard,
   Maximize2,
-  Menu,
   Minimize2,
   PackagePlus,
   PackageSearch,
   Search,
-  ShieldCheck,
-  X
+  ShieldCheck
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -251,7 +249,6 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
-  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
     if (!item.parentId) {
@@ -267,28 +264,11 @@ function ShellFrame({
     { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
     { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
   ].filter(section => section.items.length > 0);
-  const navigateFromShell = (targetPath: string) => {
-    setMobileNavigationOpen(false);
-    onNavigate(targetPath);
-  };
-
-  useEffect(() => {
-    if (!mobileNavigationOpen) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMobileNavigationOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mobileNavigationOpen]);
 
   return (
     <div className="studio-shell">
-      <aside className={mobileNavigationOpen ? "sidebar nav-open" : "sidebar"}>
-        <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromShell("/"); }}>
+      <aside className="sidebar">
+        <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
           <span className="brand-mark" aria-hidden="true">
             <img src={elsaLogo} alt="" />
           </span>
@@ -298,72 +278,59 @@ function ShellFrame({
           </span>
         </a>
 
-        <button
-          type="button"
-          className="sidebar-menu-button"
-          aria-label={mobileNavigationOpen ? "Close navigation menu" : "Open navigation menu"}
-          aria-controls="studio-sidebar-navigation"
-          aria-expanded={mobileNavigationOpen}
-          onClick={() => setMobileNavigationOpen(open => !open)}
-        >
-          {mobileNavigationOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+        <label className="sidebar-search">
+          <Search size={16} />
+          <input aria-label="Search modules" placeholder="Search modules" />
+        </label>
 
-        <div id="studio-sidebar-navigation" className="sidebar-navigation">
-          <label className="sidebar-search">
-            <Search size={16} />
-            <input aria-label="Search modules" placeholder="Search modules" />
-          </label>
+        {navigationSections.map(section => (
+          <nav key={section.id} className="nav-section" aria-label={section.label}>
+            <span className="nav-heading">{section.label}</span>
+            {section.items.map(item => {
+              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              return (
+                <div className="nav-item-group" key={item.id}>
+                  <a
+                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    href={item.path}
+                    onClick={event => {
+                      event.preventDefault();
+                      onNavigate(item.path);
+                    }}
+                  >
+                    <NavIconTile item={item} />
+                    {item.label}
+                  </a>
+                  {childItems.length > 0 ? (
+                    <div className="nav-children">
+                      {childItems.map(child => (
+                        <a
+                          key={child.id}
+                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
+                          href={child.path}
+                          onClick={event => {
+                            event.preventDefault();
+                            onNavigate(child.path);
+                          }}
+                        >
+                          {child.label}
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </nav>
+        ))}
 
-          {navigationSections.map(section => (
-            <nav key={section.id} className="nav-section" aria-label={section.label}>
-              <span className="nav-heading">{section.label}</span>
-              {section.items.map(item => {
-                const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
-                const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
-                return (
-                  <div className="nav-item-group" key={item.id}>
-                    <a
-                      className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-                      href={item.path}
-                      onClick={event => {
-                        event.preventDefault();
-                        navigateFromShell(item.path);
-                      }}
-                    >
-                      <NavIconTile item={item} />
-                      {item.label}
-                    </a>
-                    {childItems.length > 0 ? (
-                      <div className="nav-children">
-                        {childItems.map(child => (
-                          <a
-                            key={child.id}
-                            className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
-                            href={child.path}
-                            onClick={event => {
-                              event.preventDefault();
-                              navigateFromShell(child.path);
-                            }}
-                          >
-                            {child.label}
-                          </a>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </nav>
-          ))}
-
-          <div className="sidebar-footer" aria-label="Backend API status">
-            <span className="sidebar-status-dot" aria-hidden="true" />
-            <span>
-              <strong>Backend API</strong>
-              <small>{new URL(backendBaseUrl).host}</small>
-            </span>
-          </div>
+        <div className="sidebar-footer" aria-label="Backend API status">
+          <span className="sidebar-status-dot" aria-hidden="true" />
+          <span>
+            <strong>Backend API</strong>
+            <small>{new URL(backendBaseUrl).host}</small>
+          </span>
         </div>
       </aside>
 

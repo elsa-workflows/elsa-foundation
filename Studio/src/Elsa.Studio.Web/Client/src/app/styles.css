@@ -157,18 +157,6 @@ textarea:focus {
   min-height: 0;
 }
 
-.sidebar-navigation {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.sidebar-menu-button {
-  display: none;
-}
-
 .brand {
   display: flex;
   align-items: center;
@@ -2351,59 +2339,13 @@ textarea:focus {
   }
 
   .sidebar {
-    position: relative;
-    z-index: 20;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
     border-right: 0;
     border-bottom: 1px solid var(--border);
-    gap: 12px;
-    overflow: visible;
-    padding: 10px 14px;
-  }
-
-  .sidebar-menu-button {
-    display: inline-grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
-    color: var(--foreground);
-  }
-
-  .sidebar-menu-button:hover {
-    border-color: var(--primary);
-    background: var(--muted);
-    color: var(--primary);
-  }
-
-  .sidebar-menu-button:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--ring) 34%, transparent);
-    outline-offset: 2px;
-  }
-
-  .sidebar-navigation {
-    position: absolute;
-    top: calc(100% + 1px);
-    right: 10px;
-    left: 10px;
-    z-index: 30;
-    display: none;
-    max-height: min(calc(100vh - 82px), 620px);
-    min-height: 0;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--sidebar);
-    box-shadow: var(--shadow-xl);
-    padding: 12px;
-  }
-
-  .sidebar.nav-open .sidebar-navigation {
-    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 12px 16px;
   }
 
   .bottom-panel {
@@ -2414,9 +2356,9 @@ textarea:focus {
     grid-row: 1 / -1;
   }
 
+  .nav-section,
   .sidebar-footer {
-    margin-top: 4px;
-    padding-bottom: 0;
+    white-space: nowrap;
   }
 
   .topbar {
@@ -2469,7 +2411,9 @@ textarea:focus {
   }
 
   .sidebar {
-    padding: 10px 12px;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
   }
 
   .brand {

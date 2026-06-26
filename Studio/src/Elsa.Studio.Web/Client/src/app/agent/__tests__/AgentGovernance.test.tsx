@@ -17,7 +17,7 @@ describe("agent governance UI", () => {
     }, "https://foundation.example/");
     const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={disabledClient()} onClose={() => {}} />);
 
-    await flushPromises();
+    await waitForText(container, "Weaver features are disabled or unavailable.");
 
     expect(container.textContent).toContain("Weaver features are disabled or unavailable.");
     expect(container.querySelector("#studio-agent-composer")).toHaveProperty("disabled", true);
@@ -76,4 +76,13 @@ function render(element: React.ReactElement) {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitForText(container: Element, text: string) {
+  for (let i = 0; i < 20; i++) {
+    if (container.textContent?.includes(text)) return;
+    await flushPromises();
+  }
+
+  throw new Error(`Timed out waiting for text: ${text}`);
 }

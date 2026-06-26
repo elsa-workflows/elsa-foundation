@@ -18,7 +18,6 @@ import type {
   WorkflowDefinitionVersionDetails,
   WorkflowDefinitionsResponse,
   WorkflowDraft,
-  WorkflowExecutablesResponse,
   WorkflowTestRunView
 } from "../workflowTypes";
 const basePath = "/_elsa/workflow-management";
@@ -168,21 +167,8 @@ export async function runExecutable(context: StudioEndpointContext, artifactId: 
   return context.http.postJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}/run`, {});
 }
 
-export async function listExecutables(context: StudioEndpointContext, state: DefinitionListState = "active") {
-  const response = await context.http.getJson<WorkflowExecutablesResponse | WorkflowExecutableSummary[]>(`${basePath}/executables?state=${encodeURIComponent(state)}`);
-  return Array.isArray(response) ? response : response.executables;
-}
-
-export async function deleteExecutable(context: StudioEndpointContext, artifactId: string) {
-  await context.http.deleteJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}`);
-}
-
-export async function restoreExecutable(context: StudioEndpointContext, artifactId: string) {
-  await context.http.postJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}/restore`, {});
-}
-
-export async function deleteExecutablePermanently(context: StudioEndpointContext, artifactId: string) {
-  await context.http.deleteJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}/permanent`);
+export async function listExecutables(context: StudioEndpointContext) {
+  return context.http.getJson<WorkflowExecutableSummary[]>("/_demo/workflows/executables");
 }
 
 export interface ListWorkflowInstancesRequest {
