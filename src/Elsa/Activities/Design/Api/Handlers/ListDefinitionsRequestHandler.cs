@@ -11,8 +11,9 @@ namespace Elsa.Activities.Design.Api.Handlers;
 /// visibility filter — to <see cref="IActivityDefinitionLookup"/>. Per spec FR-007 and SC-009,
 /// the catalog store is the single source of truth; no live-provider enumeration path remains.
 /// </summary>
-public sealed class ListDefinitionsRequestHandler(IActivityDefinitionLookup lookup)
-
+public sealed class ListDefinitionsRequestHandler(
+    IActivityDefinitionLookup lookup,
+    IActivityAvailabilityEvaluator availabilityEvaluator)
     : IRequestHandler<ListDefinitions, IEnumerable<ActivityDefinitionView>>
 {
     public async Task<IEnumerable<ActivityDefinitionView>> Handle(ListDefinitions request, CancellationToken cancellationToken)
@@ -25,6 +26,9 @@ public sealed class ListDefinitionsRequestHandler(IActivityDefinitionLookup look
             description: request.Description,
             cancellationToken: cancellationToken);
 
-        return activities.Select(a => a.ToView()).ToArray();
+        return availabilityEvaluator
+            .FilterAddable(activities)
+            .Select(a => a.ToView())
+            .ToArray();
     }
 }

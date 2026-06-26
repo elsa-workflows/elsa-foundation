@@ -6,6 +6,7 @@ using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
@@ -77,6 +78,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddNuplaneAdmin();
+builder.Services.Configure<ActivityAvailabilityOptions>(configuration.GetSection(ActivityAvailabilityOptions.SectionName));
 builder.Services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
 builder.Services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
 builder.Services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
