@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -92,6 +93,74 @@ public sealed class ComposedRuntimeActivityExecutionTests
         Assert.Equal($"probe:node-start:{activityState.Execution.ActivityExecutionId}", requestProbe.Invocation);
     }
 
+    [Fact]
+    public async Task InProcessAgent_DrainsComposedParentAndChildActivityExecutionToQuiescence()
+    {
+        var observer = new RecordingSchedulerDrainObserver();
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
+        services.AddSingleton<InlineExecutionProbe>();
+        services.AddScoped<RequestScopedExecutionProbe>();
+        services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
+        services.AddSingleton<IActivityConstructor, ParentCompositeActivityConstructor>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        var executable = NewCompositeExecutable(_now);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var startEnvelope = NewStartEnvelope(executable.Identity);
+        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+            .GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var dispatchResult = await agent.EnqueueAsync(startEnvelope);
+
+        var queuedItems = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var activityStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var parentState = Assert.Single(activityStates, state => state.Execution.ExecutableNodeId == "node-parent");
+        var childState = Assert.Single(activityStates, state => state.Execution.ExecutableNodeId == "node-child");
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        var inspectionSummaries = await provider.GetRequiredService<IActivityExecutionInspectionStore>()
+            .ListSummariesAsync("wfexec-1");
+        var drainResult = Assert.Single(observer.ObservedResults);
+        var probe = provider.GetRequiredService<InlineExecutionProbe>();
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatchResult.Status);
+        Assert.Empty(queuedItems);
+        Assert.All(activityStates, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
+        Assert.Null(parentState.ParentActivityExecutionId);
+        Assert.Equal(parentState.Execution.ActivityExecutionId, childState.ParentActivityExecutionId);
+        Assert.Equal(parentState.Execution.ActivityExecutionId, childState.SchedulingActivityExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        Assert.Contains($"parent:execute:node-parent:{parentState.Execution.ActivityExecutionId}", probe.Invocations);
+        Assert.Contains($"probe:node-child:{childState.Execution.ActivityExecutionId}", probe.Invocations);
+        Assert.Contains($"parent:child-completed:node-parent:{parentState.Execution.ActivityExecutionId}:{childState.Execution.ActivityExecutionId}", probe.Invocations);
+        Assert.Equal(2, inspectionSummaries.Count);
+        Assert.Contains(inspectionSummaries, summary => summary.ActivityExecutionId == parentState.Execution.ActivityExecutionId && summary.Status == ActivityExecutionStatus.Completed);
+        Assert.Contains(inspectionSummaries, summary => summary.ActivityExecutionId == childState.Execution.ActivityExecutionId && summary.Status == ActivityExecutionStatus.Completed);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, drainResult.StopReason);
+        Assert.False(drainResult.StoppedOnFault);
+        Assert.False(drainResult.StoppedOnPause);
+        Assert.True(drainResult.OutboxDeliveredCount >= 2);
+        Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity) >= 2);
+        Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.StartActivity) >= 2);
+        Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.InvokeActivity) >= 2);
+        Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.CompleteActivity) >= 3);
+
+        var rerunResult = await provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>()
+            .DrainAsync(startEnvelope, new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var rerunStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var rerunQueuedItems = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, rerunResult.StopReason);
+        Assert.Empty(rerunResult.Items);
+        Assert.Equal(0, rerunResult.OutboxDeliveredCount);
+        Assert.Empty(rerunQueuedItems);
+        Assert.Equal(2, rerunStates.Count);
+        Assert.Equal(2, observer.ObservedResults.Count);
+    }
+
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
@@ -145,6 +214,50 @@ public sealed class ComposedRuntimeActivityExecutionTests
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
+    private static WorkflowExecutable NewCompositeExecutable(DateTimeOffset now)
+    {
+        var child = NewNode(
+            executableNodeId: "node-child",
+            activityType: "test/probe",
+            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeActivityDescriptor("probe")));
+        var parent = NewNode(
+            executableNodeId: "node-parent",
+            activityType: "test/parent",
+            descriptorType: ParentCompositeActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ParentCompositeActivityDescriptor("parent")),
+            childSlots:
+            [
+                new ExecutableChildSlot("children", [child])
+            ]);
+
+        return new(
+            identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            rootActivity: parent,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: now,
+            publishedAt: now,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private static ExecutableNode NewNode(
+        string executableNodeId,
+        string activityType,
+        string descriptorType,
+        JsonElement descriptorPayload,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null) =>
+        new(
+            executableNodeId: executableNodeId,
+            authoredActivityId: $"authored-{executableNodeId}",
+            activityType: activityType,
+            activityTypeVersion: "1.0.0",
+            descriptorType: descriptorType,
+            descriptorPayload: descriptorPayload,
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: childSlots);
+
     private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeActivityDescriptor>
     {
         public static string DescriptorTypeKey => typeof(ProbeActivityDescriptor).FullName!;
@@ -182,18 +295,76 @@ public sealed class ComposedRuntimeActivityExecutionTests
         }
     }
 
+    private sealed class ParentCompositeActivityConstructor : IActivityConstructor<ParentCompositeActivityDescriptor>
+    {
+        public static string DescriptorTypeKey => typeof(ParentCompositeActivityDescriptor).FullName!;
+
+        public string DescriptorType => DescriptorTypeKey;
+
+        public ValueTask<IActivity> Construct(
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken)
+        {
+            var descriptor = payload.Deserialize<ParentCompositeActivityDescriptor>()
+                             ?? throw new InvalidOperationException("Parent composite descriptor resolved to null.");
+            return Construct(descriptor, inputs, outputs, cancellationToken);
+        }
+
+        public ValueTask<IActivity> Construct(
+            ParentCompositeActivityDescriptor descriptor,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken) =>
+            new(new ParentCompositeActivity(descriptor.Message));
+    }
+
+    private sealed record ParentCompositeActivityDescriptor(string Message);
+
+    private sealed class ParentCompositeActivity(string message) : CodeActivity("test/parent"), IActivityChildCompletionHandler
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            var runtimeContext = Assert.IsAssignableFrom<IRuntimeActivityExecutionContext>(context);
+            var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
+            context.GetRequiredService<InlineExecutionProbe>()
+                .Record($"{message}:execute:{NodeId}:{Id}");
+
+            runtimeContext.ScheduleChildActivity(
+                "node-child",
+                parentActivityExecutionId,
+                new Dictionary<string, string> { ["test.parentActivityExecutionId"] = parentActivityExecutionId });
+        }
+
+        public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            var runtimeContext = Assert.IsAssignableFrom<IRuntimeActivityExecutionContext>(context.ParentContext);
+            context.ParentContext.GetRequiredService<InlineExecutionProbe>()
+                .Record($"{message}:child-completed:{NodeId}:{Id}:{context.CompletedChildActivityExecutionId}");
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class InlineExecutionProbe
     {
-        public string? Invocation { get; private set; }
+        private readonly List<string> _invocations = [];
 
-        public void Record(string invocation) => Invocation = invocation;
+        public string? Invocation => _invocations.LastOrDefault();
+        public IReadOnlyList<string> Invocations => _invocations;
+
+        public void Record(string invocation) => _invocations.Add(invocation);
     }
 
     private sealed class RequestScopedExecutionProbe
     {
-        public string? Invocation { get; private set; }
+        private readonly List<string> _invocations = [];
 
-        public void Record(string invocation) => Invocation = invocation;
+        public string? Invocation => _invocations.LastOrDefault();
+        public IReadOnlyList<string> Invocations => _invocations;
+
+        public void Record(string invocation) => _invocations.Add(invocation);
     }
 
     private sealed class RecordingSchedulerDrainObserver : IWorkflowSchedulerDrainObserver

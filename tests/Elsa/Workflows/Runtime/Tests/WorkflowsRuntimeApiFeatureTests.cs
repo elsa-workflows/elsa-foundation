@@ -106,6 +106,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
             descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutionDrainCoordinator) &&
+            descriptor.ImplementationType == typeof(WorkflowExecutionDrainCoordinator));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(WorkflowExecutionDrainCoordinatorOptions) &&
+            descriptor.ImplementationType == typeof(WorkflowExecutionDrainCoordinatorOptions));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer) &&
             descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor =>
@@ -187,6 +193,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         Assert.IsType<InProcessWorkflowExecutionAgentProvider>(provider.GetRequiredService<IWorkflowExecutionAgentProvider>());
         Assert.IsType<WorkflowSchedulerCommandProcessor>(provider.GetRequiredService<IWorkflowExecutionCommandProcessor>());
+        Assert.IsType<WorkflowExecutionDrainCoordinator>(provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>());
+        Assert.IsType<WorkflowExecutionDrainCoordinatorOptions>(provider.GetRequiredService<WorkflowExecutionDrainCoordinatorOptions>());
         Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());

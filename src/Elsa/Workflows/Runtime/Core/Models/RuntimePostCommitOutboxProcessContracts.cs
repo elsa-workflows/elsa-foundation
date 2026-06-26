@@ -6,7 +6,8 @@ public sealed class RuntimePostCommitOutboxProcessRequest
 {
     public RuntimePostCommitOutboxProcessRequest(
         int limit,
-        string? workflowExecutionId = null)
+        string? workflowExecutionId = null,
+        string? intentKind = null)
     {
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Outbox processing limit must be greater than zero.");
@@ -14,12 +15,17 @@ public sealed class RuntimePostCommitOutboxProcessRequest
         if (workflowExecutionId is not null && string.IsNullOrWhiteSpace(workflowExecutionId))
             throw new ArgumentException("Outbox workflow execution filter cannot be blank.", nameof(workflowExecutionId));
 
+        if (intentKind is not null && string.IsNullOrWhiteSpace(intentKind))
+            throw new ArgumentException("Outbox intent kind filter cannot be blank.", nameof(intentKind));
+
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
+        IntentKind = intentKind;
     }
 
     public int Limit { get; }
     public string? WorkflowExecutionId { get; }
+    public string? IntentKind { get; }
 }
 
 public sealed class RuntimePostCommitOutboxProcessResult

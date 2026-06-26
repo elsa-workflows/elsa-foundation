@@ -58,7 +58,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
         Assert.Equal(["Approved"], projection.OutcomeNames);
 
-        var completionWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var completionWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
         Assert.Equal("parent-work:complete:actexec-parent", completionWork.WorkItemId);
         Assert.Equal("command-parent:complete:actexec-parent", completionWork.CommandId);
@@ -90,7 +90,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         Assert.NotNull(projection);
         Assert.Equal(ActivityExecutionStatus.Running, projection.Status);
 
-        var scheduleWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var scheduleWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.ScheduleActivity);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduleWork.CommandKind);
     }
 
@@ -127,6 +127,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
             new RuntimeActivityInputMaterializer(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
+
+    private RuntimeSchedulerWorkItem AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind commandKind)
+    {
+        var intent = Assert.Single(_checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents));
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
+        Assert.NotNull(intent.Payload);
+        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(commandKind, workItem.CommandKind);
+        return workItem;
+    }
 
     private ServiceProvider NewProvider(IActivityFactory factory)
     {
