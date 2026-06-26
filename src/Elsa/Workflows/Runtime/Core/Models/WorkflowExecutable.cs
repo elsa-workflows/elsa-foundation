@@ -15,7 +15,9 @@ public sealed class WorkflowExecutable
         DateTimeOffset? publishedAt,
         IReadOnlyDictionary<string, string> compatibilityMetadata,
         WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
-        DateTimeOffset? expiresAt = null)
+        DateTimeOffset? expiresAt = null,
+        DateTimeOffset? deletedAt = null,
+        string? deletedReason = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
@@ -37,6 +39,8 @@ public sealed class WorkflowExecutable
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
         Scope = scope;
         ExpiresAt = expiresAt;
+        DeletedAt = deletedAt;
+        DeletedReason = deletedReason;
     }
 
     public WorkflowExecutableIdentity Identity { get; }
@@ -49,6 +53,14 @@ public sealed class WorkflowExecutable
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
     public WorkflowExecutableScope Scope { get; }
     public DateTimeOffset? ExpiresAt { get; }
+    public DateTimeOffset? DeletedAt { get; }
+    public string? DeletedReason { get; }
+
+    public WorkflowExecutable WithDeleted(DateTimeOffset deletedAt, string? reason = null) =>
+        new(Identity, RootActivity, ResumeTargets, CreatedAt, PublishedAt, CompatibilityMetadata, Scope, ExpiresAt, deletedAt, reason);
+
+    public WorkflowExecutable WithRestored() =>
+        new(Identity, RootActivity, ResumeTargets, CreatedAt, PublishedAt, CompatibilityMetadata, Scope, ExpiresAt);
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {

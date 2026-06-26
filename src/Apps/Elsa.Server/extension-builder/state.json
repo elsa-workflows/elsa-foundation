@@ -10,6 +10,15 @@
       "projectIds": [
         "proj_4a777bfc17b641a8a125d6a5f74fb1db"
       ]
+    },
+    "ws_dbf980bd66b24231b42668a790a447ec": {
+      "id": "ws_dbf980bd66b24231b42668a790a447ec",
+      "ownerId": "module-management",
+      "trustContext": "Module Management API Key",
+      "displayName": "Extension workspace",
+      "createdAt": "2026-06-25T22:34:42.281032+00:00",
+      "updatedAt": "2026-06-25T22:34:42.281032+00:00",
+      "projectIds": []
     }
   },
   "projects": {

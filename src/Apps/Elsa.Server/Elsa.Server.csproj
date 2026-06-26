@@ -56,6 +56,15 @@
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Composition\Runtime\Elsa.Activities.Composition.Runtime.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+		<ProjectReference Include="..\..\Elsa\Http\Elsa.Http.csproj" />
+		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
+		<ProjectReference Include="..\..\Elsa\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\Elsa\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
+		<ProjectReference Include="..\..\Elsa\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
+		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />

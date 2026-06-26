@@ -328,7 +328,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
-    public async Task InProcessAgent_StartCommandDeliversPostCommitSchedulerWorkAndRecordsActivityState()
+    public async Task InProcessAgent_StartCommandProcessesPostCommitSchedulerWorkAndRecordsActivityState()
     {
         var observer = new RecordingSchedulerDrainObserver();
         var services = new ServiceCollection();
@@ -349,13 +349,26 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var activityStates = await activityStateStore.ListAsync("wfexec-1");
         var pending = await outboxStore.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddYears(1), limit: 10, workflowExecutionId: "wfexec-1"));
         var drainResult = Assert.Single(observer.ObservedResults);
+        var rootState = Assert.Single(activityStates);
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
         Assert.Empty(queuedItems);
-        Assert.NotEmpty(activityStates);
         Assert.Empty(pending);
-        Assert.Contains(drainResult.Items, item => item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity);
+        Assert.Equal("node-start", rootState.Execution.ExecutableNodeId);
+        Assert.Equal(ActivityExecutionStatus.Running, rootState.Status);
+        Assert.True(drainResult.StoppedOnFault);
         Assert.True(drainResult.OutboxDeliveredCount > 0);
+        Assert.Equal(
+            new[]
+            {
+                WorkflowExecutionCommandKind.Start,
+                WorkflowExecutionCommandKind.Checkpoint,
+                WorkflowExecutionCommandKind.ScheduleActivity,
+                WorkflowExecutionCommandKind.StartActivity,
+                WorkflowExecutionCommandKind.InvokeActivity
+            },
+            drainResult.Items.Select(item => item.CommandKind).ToArray());
+        Assert.Contains(drainResult.Items, item => item.HandlerName == MissingActivityInvocationSchedulerWorkHandler.HandlerName);
     }
 
     private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
