@@ -53,7 +53,9 @@ export function createStudioRegistry(
       contextProviders: createContributionRegistry(studioSlots.agentContextProviders),
       promptStarters: createContributionRegistry(studioSlots.agentPromptStarters),
       capabilities: createContributionRegistry(studioSlots.agentCapabilities),
-      actions: createContributionRegistry(studioSlots.agentActions)
+      actions: createContributionRegistry(studioSlots.agentActions),
+      toolSlots: createContributionRegistry(studioSlots.agentToolSlots),
+      toolContracts: createContributionRegistry(studioSlots.agentToolContracts)
     },
     workflowDesigner: {
       nodeRenderers: createContributionRegistry(studioSlots.workflowDesignerNodeRenderers),
