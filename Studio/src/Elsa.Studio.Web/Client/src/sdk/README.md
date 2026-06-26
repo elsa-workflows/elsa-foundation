@@ -1,4 +1,26 @@
-# Studio SDK Weaver contributions
+# Studio SDK Slots and Contributions
+
+Studio extensibility is described with Slots and Contributions.
+
+- A `StudioSlotDefinition` names a stable Slot ID, Slot Kind, Slot Owner, accepted Contribution type, and unavailable-state behavior.
+- A `StudioContribution` is a module-provided item registered into a Slot. UI Contributions add a `StudioComponent` that renders the visible surface.
+- A Slot Owner defines the local contribution shape and admission rules. Host Policy can still hide, disable, or veto any Contribution through `StudioContributionAvailability`.
+- Module Policy describes module-owned rules, but it does not bypass Host Policy.
+- An unavailable Contribution can be represented with `StudioUnavailableContribution` when a surface should show a disabled reason instead of hiding the item.
+
+The public registries on `ElsaStudioModuleApi` map to Slot definitions through
+their optional `slot` metadata. For example, `api.routes.slot.id` is
+`studio.routes`, `api.dashboardWidgets.slot.id` is `studio.dashboard.widgets`,
+`api.panels.slot.id` is `studio.shell.panels`, and workflow property/expression
+editor registries map to `workflow.activity.property-editors` and
+`workflow.expression.editors`.
+
+Modules should register Contributions through the existing typed registries.
+The Slot metadata is descriptive and additive, so module code that calls
+`api.routes.add(...)`, `api.dashboardWidgets.add(...)`, or
+`api.expressionEditors.add(...)` continues to work unchanged.
+
+## Weaver contributions
 
 Studio modules can enrich Weaver through `api.agent` without calling an external
 agent provider from the browser. Weaver is the visible assistant name; `agent`
