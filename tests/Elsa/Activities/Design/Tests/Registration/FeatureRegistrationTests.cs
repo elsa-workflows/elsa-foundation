@@ -100,10 +100,12 @@ public sealed class FeatureRegistrationTests
     [Fact]
     public void ActivitiesDesignApiFeature_UsesHostConfiguredActivityAvailabilityOptions()
     {
+        const string writeLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
+        const string runJavaScriptTypeKey = "Elsa.Activities.Scripting.Activities.RunJavaScript";
         var services = MinimalServices();
         services.AddOptions();
         services.Configure<ActivityAvailabilityOptions>(options =>
-            options.Exclude.ActivityTypes = ["Elsa.Scripting.RunJavaScript"]);
+            options.Exclude.ActivityTypes = [runJavaScriptTypeKey]);
 
         new ActivitiesDesignApiFeature().ConfigureServices(services);
 
@@ -112,12 +114,12 @@ public sealed class FeatureRegistrationTests
 
         var result = evaluator.FilterAddable(
         [
-            new ActivityDefinitionModel("write-line", "Elsa.Primitives.WriteLine", "Test", "WriteLine", null),
-            new ActivityDefinitionModel("run-js", "Elsa.Scripting.RunJavaScript", "Test", "RunJavaScript", null)
+            new ActivityDefinitionModel("write-line", writeLineTypeKey, "Test", "WriteLine", null),
+            new ActivityDefinitionModel("run-js", runJavaScriptTypeKey, "Test", "RunJavaScript", null)
         ]);
 
         var definition = Assert.Single(result);
-        Assert.Equal("Elsa.Primitives.WriteLine", definition.ActivityTypeKey);
+        Assert.Equal(writeLineTypeKey, definition.ActivityTypeKey);
     }
 
     [Fact]

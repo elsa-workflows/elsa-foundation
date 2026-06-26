@@ -10,19 +10,22 @@ namespace Elsa.Activities.Design.Tests.Unit;
 
 public sealed class ListDefinitionsRequestHandlerTests
 {
+    private const string WriteLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
+    private const string RunJavaScriptTypeKey = "Elsa.Activities.Scripting.Activities.RunJavaScript";
+
     [Fact]
     public async Task Handle_AppliesActivityAvailabilityPolicyToPickerResults()
     {
         var lookup = new StubActivityDefinitionLookup(
         [
-            Activity("write-line", "Elsa.Primitives.WriteLine"),
-            Activity("run-js", "Elsa.Scripting.RunJavaScript")
+            Activity("write-line", WriteLineTypeKey),
+            Activity("run-js", RunJavaScriptTypeKey)
         ]);
         var evaluator = new DefaultActivityAvailabilityEvaluator(new ActivityAvailabilityOptions
         {
             Exclude = new ActivityAvailabilityRuleSet
             {
-                ActivityTypes = ["Elsa.Scripting.RunJavaScript"]
+                ActivityTypes = [RunJavaScriptTypeKey]
             }
         });
         var handler = new ListDefinitionsRequestHandler(lookup, evaluator);
@@ -30,7 +33,7 @@ public sealed class ListDefinitionsRequestHandlerTests
         var result = await handler.Handle(new ListDefinitions(null, null, null, null, null, null), CancellationToken.None);
 
         var definition = Assert.Single(result);
-        Assert.Equal("Elsa.Primitives.WriteLine", definition.ActivityTypeKey);
+        Assert.Equal(WriteLineTypeKey, definition.ActivityTypeKey);
     }
 
     private static ActivityDefinitionModel Activity(string id, string activityTypeKey) =>

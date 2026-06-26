@@ -7,9 +7,13 @@ namespace Elsa.Activities.Design.Tests.Unit;
 
 public sealed class ActivityAvailabilityEvaluatorTests
 {
-    private readonly ActivityDefinitionModel _writeLine = Activity("write-line", "Elsa.Primitives.WriteLine");
-    private readonly ActivityDefinitionModel _sendHttp = Activity("send-http", "Elsa.Http.SendHttpRequest");
-    private readonly ActivityDefinitionModel _runJavaScript = Activity("run-js", "Elsa.Scripting.RunJavaScript");
+    private const string WriteLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
+    private const string SendHttpTypeKey = "Elsa.Activities.Http.Activities.SendHttpRequest";
+    private const string RunJavaScriptTypeKey = "Elsa.Activities.Scripting.Activities.RunJavaScript";
+
+    private readonly ActivityDefinitionModel _writeLine = Activity("write-line", WriteLineTypeKey);
+    private readonly ActivityDefinitionModel _sendHttp = Activity("send-http", SendHttpTypeKey);
+    private readonly ActivityDefinitionModel _runJavaScript = Activity("run-js", RunJavaScriptTypeKey);
 
     [Fact]
     public void Evaluate_NoRules_ReturnsAllActivities()
@@ -17,7 +21,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         var result = Evaluate(new ActivityAvailabilityOptions());
 
         Assert.Equal(
-            ["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest", "Elsa.Scripting.RunJavaScript"],
+            [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
             result);
     }
 
@@ -28,13 +32,13 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Exclude = new ActivityAvailabilityRuleSet
             {
-                ActivityTypes = ["Elsa.Scripting.RunJavaScript"]
+                ActivityTypes = [RunJavaScriptTypeKey]
             }
         };
 
         var result = Evaluate(options);
 
-        Assert.Equal(["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest"], result);
+        Assert.Equal([WriteLineTypeKey, SendHttpTypeKey], result);
     }
 
     [Fact]
@@ -44,13 +48,13 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Include = new ActivityAvailabilityRuleSet
             {
-                ActivityTypes = ["Elsa.Http.SendHttpRequest"]
+                ActivityTypes = [SendHttpTypeKey]
             }
         };
 
         var result = Evaluate(options);
 
-        Assert.Equal(["Elsa.Http.SendHttpRequest"], result);
+        Assert.Equal([SendHttpTypeKey], result);
     }
 
     [Fact]
@@ -60,7 +64,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Sets =
             {
-                ["Core"] = ["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest"]
+                ["Core"] = [WriteLineTypeKey, SendHttpTypeKey]
             },
             Include = new ActivityAvailabilityRuleSet
             {
@@ -70,7 +74,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
 
         var result = Evaluate(options);
 
-        Assert.Equal(["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest"], result);
+        Assert.Equal([WriteLineTypeKey, SendHttpTypeKey], result);
     }
 
     [Fact]
@@ -80,7 +84,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Sets =
             {
-                ["Http"] = ["Elsa.Http"]
+                ["Http"] = ["Elsa.Activities.Http"]
             },
             Include = new ActivityAvailabilityRuleSet
             {
@@ -100,7 +104,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Sets =
             {
-                ["Core"] = ["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest"]
+                ["Core"] = [WriteLineTypeKey, SendHttpTypeKey]
             },
             Include = new ActivityAvailabilityRuleSet
             {
@@ -108,13 +112,13 @@ public sealed class ActivityAvailabilityEvaluatorTests
             },
             Exclude = new ActivityAvailabilityRuleSet
             {
-                ActivityTypes = ["Elsa.Http.SendHttpRequest"]
+                ActivityTypes = [SendHttpTypeKey]
             }
         };
 
         var result = Evaluate(options);
 
-        Assert.Equal(["Elsa.Primitives.WriteLine"], result);
+        Assert.Equal([WriteLineTypeKey], result);
     }
 
     [Fact]
@@ -131,7 +135,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         var result = Evaluate(options);
 
         Assert.Equal(
-            ["Elsa.Primitives.WriteLine", "Elsa.Http.SendHttpRequest", "Elsa.Scripting.RunJavaScript"],
+            [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
             result);
     }
 
