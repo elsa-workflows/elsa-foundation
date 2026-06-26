@@ -7,6 +7,10 @@ export interface WorkflowDefinitionsResponse {
   totalCount?: number;
 }
 
+export interface WorkflowExecutablesResponse {
+  executables: WorkflowExecutableSummary[];
+}
+
 export interface WorkflowDefinitionSummary {
   id: string;
   name: string;
@@ -176,6 +180,7 @@ export interface WorkflowExecutableSummary {
   definitionVersionId: string;
   createdAt: string;
   publishedAt?: string | null;
+  deletedAt?: string | null;
   sourceKind?: string | null;
   sourceId?: string | null;
   sourceVersion?: string | null;

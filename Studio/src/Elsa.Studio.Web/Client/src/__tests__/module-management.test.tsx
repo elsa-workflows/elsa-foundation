@@ -432,6 +432,49 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("renders a sparse Server registry without blanking the page", async () => {
+    const backendGetJson = vi.fn(async () => ({
+      host: { id: "server", displayName: "Server", runtime: "Elsa.Server", contentRootPath: "/server" },
+      generatedAt: new Date().toISOString(),
+      modules: [{
+        id: "ServerOnlyModule",
+        displayName: "Server only module",
+        surface: "Server",
+        runtime: "Elsa.Server",
+        sourceKind: "backend",
+        scope: "backend",
+        version: "",
+        status: "available",
+        compatibility: "unknown",
+        packageId: null,
+        packageVersion: null,
+        contributions: null,
+        diagnostics: null,
+        manifest: null
+      }],
+      packages: null,
+      dropFolderPackages: null,
+      feeds: null,
+      retentionPolicy: null,
+      capabilities: null,
+      diagnostics: null
+    }));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Server only module");
+    expect(container.textContent).not.toBe("");
+
+    await unmount();
+  });
+
   it("includes endpoint context headers in module management operations", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);

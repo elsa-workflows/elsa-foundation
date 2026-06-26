@@ -41,7 +41,7 @@
   inset: 4.5rem 1.25rem 1.25rem auto;
   z-index: 40;
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto auto;
+  grid-template-rows: auto auto auto auto 1fr auto auto auto;
   width: min(28rem, calc(100vw - 2rem));
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-lg);
@@ -74,7 +74,8 @@
 .agent-panel-header button,
 .agent-feedback button,
 .agent-composer button,
-.agent-proposal footer button {
+.agent-proposal footer button,
+.agent-workflow-batch footer button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -91,7 +92,8 @@
 .agent-panel-header button:hover:not(:disabled),
 .agent-feedback button:hover:not(:disabled),
 .agent-composer button:hover:not(:disabled),
-.agent-proposal footer button:hover:not(:disabled) {
+.agent-proposal footer button:hover:not(:disabled),
+.agent-workflow-batch footer button:hover:not(:disabled) {
   border-color: var(--studio-accent);
 }
 
@@ -109,6 +111,33 @@
 
 .agent-banner[data-tone="danger"] {
   border-color: var(--studio-danger);
+}
+
+.agent-provider-status {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.75rem 1rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.agent-provider-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.agent-provider-status small {
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.agent-provider-status[data-tone="success"] {
+  border-color: var(--studio-success);
 }
 
 .agent-context-chips,
@@ -217,7 +246,8 @@
   font-size: 0.85rem;
 }
 
-.agent-proposals {
+.agent-proposals,
+.agent-workflow-batches {
   display: grid;
   gap: 0.75rem;
   max-height: 16rem;
@@ -225,14 +255,16 @@
   padding: 0 1rem 1rem;
 }
 
-.agent-proposal {
+.agent-proposal,
+.agent-workflow-batch {
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface);
   padding: 0.75rem;
 }
 
-.agent-proposal header {
+.agent-proposal header,
+.agent-workflow-batch header {
   display: grid;
   gap: 0.4rem;
 }
@@ -242,8 +274,82 @@
   font-size: 0.8125rem;
 }
 
-.agent-proposal footer {
+.agent-proposal footer,
+.agent-workflow-batch footer {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.agent-workflow-batch header span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-workflow-batch dl {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.agent-workflow-batch dl div {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.5rem;
+}
+
+.agent-workflow-batch dt {
+  color: var(--studio-text-muted);
+}
+
+.agent-workflow-batch dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-workflow-operation-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.agent-workflow-operation-groups span {
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0.2rem 0.5rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+}
+
+.agent-workflow-apply-result {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--studio-success);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.agent-workflow-apply-result ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-workflow-apply-result li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+.agent-workflow-batch-error {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--studio-danger);
 }

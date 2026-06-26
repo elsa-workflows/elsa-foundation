@@ -9,12 +9,15 @@
             "MaxRecentQuerySize": 2000,
             "PreserveAnsi": true
           },
-          "OpenTelemetryStudio": {},
+          "DashboardSample": {},
+          "FeatureManagement": {},
           "SecretsStudio": {},
           "StructuredLogsStudio": {},
-          "FeatureManagement": {},
-          "WorkflowsStudio": {},
-          "StudioApi": {}
+          "StudioApi": {},
+          "WeatherForecastSample": {},
+          "WeaverChatStudio": {},
+          "WeaverWorkflowsStudio": {},
+          "WorkflowsStudio": {}
         },
         "Configuration": {
           "WebRouting": {

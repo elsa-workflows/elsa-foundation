@@ -152,6 +152,22 @@ export function defaultRetentionPolicy(): ModuleManagementRetentionPolicy {
   };
 }
 
+export function normalizeModuleManagementRegistry(value?: Partial<ModuleManagementRegistryResponse> | null): ModuleManagementRegistryResponse {
+  const registry = value ?? {};
+
+  return {
+    host: normalizeHost(registry.host),
+    generatedAt: registry.generatedAt ?? new Date().toISOString(),
+    modules: asArray(registry.modules).map(normalizeModule),
+    packages: asArray(registry.packages).map(normalizePackage),
+    dropFolderPackages: asArray(registry.dropFolderPackages),
+    feeds: asArray(registry.feeds).map(normalizeFeed),
+    retentionPolicy: normalizeRetentionPolicy(registry.retentionPolicy),
+    capabilities: normalizeCapabilities(registry.capabilities),
+    diagnostics: asArray(registry.diagnostics).map(normalizeDiagnostic)
+  };
+}
+
 export function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -196,4 +212,99 @@ export function numberOrNull(value: string) {
 
 export function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeModule(module: Partial<ModuleManagementModule>): ModuleManagementModule {
+  return {
+    id: module.id ?? "unknown-module",
+    displayName: module.displayName ?? module.id ?? "Unknown module",
+    surface: module.surface ?? "",
+    runtime: module.runtime ?? "",
+    sourceKind: module.sourceKind ?? "",
+    scope: module.scope ?? "",
+    version: module.version ?? "",
+    status: module.status ?? "unknown",
+    compatibility: module.compatibility ?? "unknown",
+    packageId: module.packageId ?? null,
+    packageVersion: module.packageVersion ?? null,
+    contributions: asArray(module.contributions),
+    diagnostics: asArray(module.diagnostics).map(normalizeDiagnostic),
+    manifest: module.manifest ? normalizeStudioManifest(module.manifest) : null
+  };
+}
+
+function normalizeHost(host?: Partial<ModuleManagementHost> | null): ModuleManagementHost {
+  return {
+    id: host?.id ?? "unknown",
+    displayName: host?.displayName ?? host?.id ?? "Unknown host",
+    runtime: host?.runtime ?? "unknown",
+    contentRootPath: host?.contentRootPath ?? ""
+  };
+}
+
+function normalizeStudioManifest(manifest: Partial<ModuleManagementStudioManifest>): ModuleManagementStudioManifest {
+  return {
+    entry: manifest.entry ?? "",
+    styles: asArray(manifest.styles),
+    capabilities: asArray(manifest.capabilities)
+  };
+}
+
+function normalizePackage(pkg: Partial<ModuleManagementPackage>): ModuleManagementPackage {
+  return {
+    id: pkg.id ?? "unknown-package",
+    version: pkg.version ?? "",
+    feedName: pkg.feedName ?? "",
+    sourceName: pkg.sourceName ?? "",
+    installPath: pkg.installPath ?? "",
+    manifest: pkg.manifest ?? null,
+    dependencies: asArray(pkg.dependencies)
+  };
+}
+
+function normalizeFeed(feed: Partial<ModuleManagementFeed>): ModuleManagementFeed {
+  return {
+    name: feed.name ?? "unnamed-feed",
+    serviceIndex: feed.serviceIndex ?? null,
+    directoryPath: feed.directoryPath ?? null,
+    credentials: feed.credentials ?? null,
+    includeAll: feed.includeAll ?? false,
+    includePatterns: asArray(feed.includePatterns),
+    directory: {
+      watch: feed.directory?.watch ?? false,
+      debounceWindow: feed.directory?.debounceWindow ?? "00:00:01"
+    }
+  };
+}
+
+function normalizeRetentionPolicy(policy?: Partial<ModuleManagementRetentionPolicy> | null): ModuleManagementRetentionPolicy {
+  const defaults = defaultRetentionPolicy();
+  return {
+    retainLastNVersions: policy?.retainLastNVersions ?? defaults.retainLastNVersions,
+    retainYoungerThanDays: policy?.retainYoungerThanDays ?? defaults.retainYoungerThanDays,
+    mode: policy?.mode ?? defaults.mode,
+    protectLastKnownGood: policy?.protectLastKnownGood ?? defaults.protectLastKnownGood
+  };
+}
+
+function normalizeCapabilities(capabilities?: Partial<ModuleManagementCapabilities> | null): ModuleManagementCapabilities {
+  return {
+    canUploadPackages: capabilities?.canUploadPackages ?? false,
+    canManageFeeds: capabilities?.canManageFeeds ?? false,
+    canReconcile: capabilities?.canReconcile ?? false,
+    canPrunePackages: capabilities?.canPrunePackages ?? false,
+    feedChangesRequireRestart: capabilities?.feedChangesRequireRestart ?? false
+  };
+}
+
+function normalizeDiagnostic(diagnostic: Partial<ModuleManagementDiagnostic>): ModuleManagementDiagnostic {
+  return {
+    source: diagnostic.source ?? "module-management",
+    status: diagnostic.status ?? "unknown",
+    reason: diagnostic.reason ?? ""
+  };
+}
+
+function asArray<T>(value: T[] | readonly T[] | null | undefined): T[] {
+  return Array.isArray(value) ? [...value] : [];
 }

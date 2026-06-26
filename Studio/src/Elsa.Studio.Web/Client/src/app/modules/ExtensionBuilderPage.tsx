@@ -227,17 +227,25 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setActiveBuild(project.builds?.[0] ?? null);
       const firstFile = projectFiles.find(file => file.type === "file");
       if (firstFile) {
-        const file = await readProjectFile(context, workspaceId, projectId, firstFile.path);
+        const file = await readProjectFile(context, workspaceId, projectId, firstFile.path).catch(() => firstFile.content != null ? firstFile : null);
         if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
-        const content = file.content ?? "";
-        setActiveFilePath(file.path);
-        setEditorText(content);
-        setSavedEditorText(content);
-        setLineHint(null);
+        if (file) {
+          const content = file.content ?? "";
+          setActiveFilePath(file.path);
+          setEditorText(content);
+          setSavedEditorText(content);
+          setLineHint(null);
+        } else {
+          setActiveFilePath("");
+          setEditorText("");
+          setSavedEditorText("");
+          setLineHint(null);
+        }
       } else {
         setActiveFilePath("");
         setEditorText("");
         setSavedEditorText("");
+        setLineHint(null);
       }
     } catch (e) {
       setError(getErrorMessage(e));
@@ -544,9 +552,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => bootstrap()} disabled={state === "loading" || operationBusy}>
+            <button type="button" className="studio-icon-button" aria-label="Refresh extension builder" title="Refresh" onClick={() => bootstrap()} disabled={state === "loading" || operationBusy}>
               <RefreshCcw size={15} />
-              Refresh
             </button>
           </StudioToolbarGroup>
         </StudioToolbar>
@@ -1097,9 +1104,8 @@ function RuntimePanel({
     <div className="modules-inspector-section">
       <div className="extension-builder-runtime-heading">
         <h4>Runtime status</h4>
-        <button type="button" className="studio-button" disabled={busy} onClick={onRefreshRuntime}>
+        <button type="button" className="studio-icon-button" aria-label="Refresh runtime status" title="Refresh" disabled={busy} onClick={onRefreshRuntime}>
           <RefreshCcw size={15} />
-          Refresh
         </button>
       </div>
       {!runtimeStatus ? <p className="modules-muted">Runtime status is not available for this project yet.</p> : null}

@@ -17,7 +17,7 @@ describe("extension builder page", () => {
       getJson: async url => url.endsWith("/capabilities") ? deniedCapabilities() : []
     }));
 
-    await flushPromises();
+    await waitForText(container, "You do not have Extension Builder capabilities");
 
     expect(container.textContent).toContain("You do not have Extension Builder capabilities");
     expect(container.textContent).toContain("GetCapabilities");
@@ -42,6 +42,28 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("Loaded");
     await clickTab(container, "Runtime");
     expect(container.textContent).toContain("Hello activity");
+
+    await unmount();
+  });
+
+  it("does not show a global 404 when the initial file detail endpoint is unavailable", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/files")) return projectFiles();
+        if (url.endsWith("/runtime-status")) return loadedRuntime();
+        if (url.endsWith("Activities%2FHelloActivity.cs")) throw new Error("Request failed with 404.");
+        if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
+        return {};
+      }
+    }));
+
+    await waitForText(container, "Activities/HelloActivity.cs");
+    await flushPromises();
+
+    expect(container.textContent).not.toContain("Request failed with 404.");
 
     await unmount();
   });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, MessageSquare, RefreshCcw, Send, Sparkles } from "lucide-react";
+import { Bot, MessageSquare, RefreshCcw, Send } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAiContextAttachment, StudioAiPromptRequest } from "@elsa-workflows/studio-sdk";
 import { getWeaverCapabilities, listWeaverTools, streamWeaverChat, type WeaverCapabilities, type WeaverTool } from "./weaverClient";
 import "./styles.css";
@@ -18,6 +18,7 @@ interface QueuedPrompt extends StudioAiPromptRequest {
 }
 
 const promptSubscribers = new Set<(prompt: QueuedPrompt) => void>();
+const pendingPrompts: QueuedPrompt[] = [];
 let promptSequence = 0;
 
 export function register(api: ElsaStudioModuleApi) {
@@ -105,10 +106,25 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
     };
 
     promptSubscribers.add(subscriber);
+    if (pendingPrompts.length > 0) {
+      const pending = pendingPrompts.splice(0);
+      for (const prompt of pending) {
+        subscriber(prompt);
+      }
+    }
     return () => {
       promptSubscribers.delete(subscriber);
     };
   }, []);
+
+  useEffect(() => {
+    if (capabilityState !== "ready" || chatState !== "idle") return;
+
+    const prompt = queuedPrompts.find(item => item.mode !== "steer");
+    if (!prompt) return;
+
+    submitQueuedPrompt(prompt);
+  }, [capabilityState, chatState, queuedPrompts]);
 
   async function submitPrompt(prompt: StudioAiPromptRequest) {
     const message = prompt.message.trim();
@@ -164,7 +180,6 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
     <section className={variant === "panel" ? "weaver-surface panel" : "weaver-surface"}>
       <div className="weaver-header">
         <div>
-          <span className="weaver-kicker"><Sparkles size={14} /> Optional module</span>
           <h2>Weaver</h2>
           <p>{capabilitySummary(capabilityState, capabilities)}</p>
         </div>
@@ -277,6 +292,11 @@ function ContributionSummary({ promptActions, contextProviders, proposalRenderer
 
 function publishPrompt(prompt: StudioAiPromptRequest) {
   const queued = { ...prompt, id: createId("prompt") };
+  if (promptSubscribers.size === 0) {
+    pendingPrompts.push(queued);
+    return;
+  }
+
   for (const subscriber of promptSubscribers) {
     subscriber(queued);
   }

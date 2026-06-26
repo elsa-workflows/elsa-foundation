@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { CheckCircle2, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentMode, StudioAgentSurface } from "../../sdk";
 import { createAgentClient, type AgentClient } from "./agentClient";
 import { collectAgentContext } from "./agentContext";
@@ -11,7 +11,9 @@ import { AgentContextChips } from "./AgentContextChips";
 import { AgentMessageList } from "./AgentMessageList";
 import { AgentPromptStarters } from "./AgentPromptStarters";
 import { AgentProposalReview } from "./AgentProposalReview";
-import type { AgentActionProposal, AgentActionProposalPayload, AgentBootstrapResponse, AgentMessageViewModel, AgentStreamEvent } from "./agentTypes";
+import { AgentWorkflowBatchReview, type WorkflowBatchReviewModel } from "./AgentWorkflowBatchReview";
+import type { AgentActionProposal, AgentActionProposalPayload, AgentBootstrapResponse, AgentMessageViewModel, AgentProviderDiagnostics, AgentStreamEvent, WorkflowGraphOperationBatch } from "./agentTypes";
+import { canDirectApplyWorkflowBatch, requestWorkflowBatchApply, requestWorkflowBatchUndo } from "./workflowGraphOperations";
 
 export function AgentPanel({
   api,
@@ -31,6 +33,7 @@ export function AgentPanel({
   const [attachments, setAttachments] = useState<StudioAgentContextAttachment[]>([]);
   const [messages, setMessages] = useState<AgentMessageViewModel[]>([]);
   const [proposals, setProposals] = useState<AgentActionProposal[]>([]);
+  const [workflowBatches, setWorkflowBatches] = useState<WorkflowBatchReviewModel[]>([]);
   const [busy, setBusy] = useState(false);
   const [pendingProposalIds, setPendingProposalIds] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +51,10 @@ export function AgentPanel({
   }), [bootstrap]);
   const capabilities = useMemo(() => getActiveAgentCapabilities(api, surface, contributionFilter), [api, surface, contributionFilter]);
   const promptStarters = useMemo(() => getActivePromptStarters(api, surface, capabilities, contributionFilter), [api, surface, capabilities, contributionFilter]);
+  const activeProvider = useMemo(() => bootstrap?.providers?.find(provider => provider.isAvailable) ?? bootstrap?.providers?.[0], [bootstrap]);
+  const providerStatus = useMemo(() => getProviderStatus(bootstrap, capabilities, activeProvider), [activeProvider, bootstrap, capabilities]);
   const disabled = busy || !canUseWeaver(bootstrap) || capabilities.length === 0;
+  const showUnavailableBanner = !!bootstrap && (!canUseWeaver(bootstrap) || capabilities.length === 0);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -69,6 +75,7 @@ export function AgentPanel({
             providerStatus: "unavailable",
             modes: [],
             capabilities: [],
+            providers: [],
             policy: { contextVisibility: true, requiresApprovalForMutations: true }
           });
           setError(getAgentErrorMessage(e));
@@ -218,6 +225,21 @@ export function AgentPanel({
       case "proposal-created":
         setProposals(current => upsertProposal(current, normalizeProposal(event.proposalId, event.proposal)));
         break;
+      case "workflow-batch-created":
+        setWorkflowBatches(current => upsertWorkflowBatch(current, createWorkflowBatchReviewModel(event.batch, activeProvider)));
+        break;
+      case "clarification-requested":
+        setMessages(current => [
+          ...current,
+          {
+            id: event.clarification.id,
+            role: "assistant",
+            content: event.clarification.prompt,
+            status: "completed"
+          }
+        ]);
+        setBusy(false);
+        break;
       case "progress":
         setMessages(current => [
           ...current,
@@ -237,6 +259,34 @@ export function AgentPanel({
     }
   }
 
+  async function applyWorkflowBatch(item: WorkflowBatchReviewModel) {
+    if (item.status === "applying" || !item.canApply) return;
+
+    setWorkflowBatches(current => current.map(batch => batch.id === item.id ? { ...batch, status: "applying", error: undefined } : batch));
+    const response = await requestWorkflowBatchApply(item.batch);
+    setWorkflowBatches(current => current.map(batch => {
+      if (batch.id !== item.id) return batch;
+      return response.ok
+        ? { ...batch, status: "applied", result: response.result, error: undefined }
+        : { ...batch, status: "failed", error: response.message };
+    }));
+    if (!response.ok) setError(response.message);
+  }
+
+  async function undoWorkflowBatch(item: WorkflowBatchReviewModel) {
+    const undoToken = item.result?.undoToken;
+    if (!undoToken) return;
+
+    const response = await requestWorkflowBatchUndo(undoToken);
+    setWorkflowBatches(current => current.map(batch => {
+      if (batch.id !== item.id) return batch;
+      return response.ok
+        ? { ...batch, status: "undone", error: undefined, result: batch.result ? { ...batch.result, summary: response.summary } : batch.result }
+        : { ...batch, error: response.message };
+    }));
+    if (!response.ok) setError(response.message);
+  }
+
   return (
     <aside id="studio-agent-panel" className="agent-panel" aria-label="Weaver assistant" aria-busy={busy}>
       <header className="agent-panel-header">
@@ -249,16 +299,18 @@ export function AgentPanel({
         </button>
       </header>
 
-      {bootstrap?.enabled === false ? (
+      {showUnavailableBanner ? (
         <div className="agent-banner" data-tone="warning">
-          Weaver features are disabled or unavailable. Studio remains fully usable.
+          Weaver features are disabled or unavailable. {providerStatus.detail === "Weaver features are disabled or unavailable. Studio remains fully usable." ? "Studio remains fully usable." : providerStatus.detail}
         </div>
       ) : null}
+      {bootstrap ? <ProviderStatus provider={activeProvider} status={providerStatus} /> : null}
       {error ? <div className="agent-banner" data-tone="danger">{error}</div> : null}
 
       <AgentContextChips attachments={attachments} />
       <AgentPromptStarters prompts={promptStarters} disabled={disabled} onSelect={(prompt, capabilityId) => sendMessage(prompt, capabilityId)} />
       <AgentMessageList messages={messages} onFeedback={submitFeedback} />
+      <AgentWorkflowBatchReview batches={workflowBatches} disabled={busy} onApply={applyWorkflowBatch} onUndo={undoWorkflowBatch} />
       <AgentProposalReview proposals={proposals} disabled={busy} pendingProposalIds={pendingProposalIds} onApprove={approveProposal} onDeny={denyProposal} onExecute={executeProposal} />
       <AgentComposer disabled={disabled} onSubmit={sendMessage} />
     </aside>
@@ -298,6 +350,23 @@ function upsertProposal(proposals: AgentActionProposal[], next: AgentActionPropo
     : [...proposals, next];
 }
 
+function upsertWorkflowBatch(batches: WorkflowBatchReviewModel[], next: WorkflowBatchReviewModel) {
+  return batches.some(batch => batch.id === next.id)
+    ? batches.map(batch => batch.id === next.id ? { ...batch, ...next, status: batch.status, result: batch.result, error: batch.error } : batch)
+    : [...batches, next];
+}
+
+function createWorkflowBatchReviewModel(batch: WorkflowGraphOperationBatch, provider: AgentProviderDiagnostics | undefined): WorkflowBatchReviewModel {
+  const canApply = canDirectApplyWorkflowBatch(batch, provider?.riskProfile, provider?.supportedOperations);
+  return {
+    id: `${batch.workflowDefinitionId}:${batch.baseRevision ?? "draft"}:${batch.operations.map(operation => operation.id).join(",")}`,
+    batch,
+    status: "ready",
+    canApply,
+    disabledReason: canApply ? undefined : "Provider requires review before direct apply."
+  };
+}
+
 function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPayload): AgentActionProposal {
   const revision = proposal?.revision ?? proposal?.baseRevision;
   const reviewReady = Boolean(
@@ -327,4 +396,50 @@ function appendDelta(current: string, delta: string) {
 
 function canUseWeaver(bootstrap: AgentBootstrapResponse | null) {
   return bootstrap?.enabled === true && bootstrap.providerStatus !== "unavailable";
+}
+
+function getProviderStatus(
+  bootstrap: AgentBootstrapResponse | null,
+  capabilities: AgentBootstrapResponse["capabilities"],
+  provider: AgentProviderDiagnostics | undefined
+) {
+  if (!bootstrap || bootstrap.providerStatus === "unavailable") {
+    return { label: "Unavailable", detail: "Weaver features are disabled or unavailable. Studio remains fully usable.", tone: "warning" as const };
+  }
+
+  const hasMutation = capabilities.some(capability => capability.risk !== "read-only");
+  const directApply = provider?.riskProfile === "sandboxed-execution" || provider?.supportedOperations.includes("tool-approval");
+  if (capabilities.length === 0) {
+    return { label: "Read-only unavailable", detail: "Weaver has no enabled capabilities for this surface.", tone: "warning" as const };
+  }
+
+  if (!hasMutation) {
+    return { label: "Read-only", detail: "Weaver can answer from available context.", tone: "neutral" as const };
+  }
+
+  if (directApply) {
+    return { label: "Direct apply available", detail: "Workflow authoring batches can be reviewed and applied to the active draft.", tone: "success" as const };
+  }
+
+  return { label: "Review required", detail: "Weaver can prepare workflow actions that require review before apply.", tone: "neutral" as const };
+}
+
+function ProviderStatus({
+  provider,
+  status
+}: {
+  provider?: AgentProviderDiagnostics;
+  status: ReturnType<typeof getProviderStatus>;
+}) {
+  return (
+    <div className="agent-provider-status" data-tone={status.tone} data-testid="weaver-provider-status">
+      <span>{status.tone === "success" ? <CheckCircle2 size={14} /> : <Shield size={14} />} {status.label}</span>
+      {provider ? (
+        <small>
+          {provider.providerId} · {provider.providerKind} · {provider.riskProfile}
+          {provider.supportedOperations.length > 0 ? ` · ${provider.supportedOperations.join(", ")}` : ""}
+        </small>
+      ) : <small>{status.detail}</small>}
+    </div>
+  );
 }

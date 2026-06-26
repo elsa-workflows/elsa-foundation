@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { RefreshCcw } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioSettingDescriptor,
@@ -410,7 +411,9 @@ export function FeatureManagementPage() {
           <p>{activeHost.label}: {enabledCount} enabled of {draft.length} available{dirty ? " - Unsaved changes" : ""}</p>
         </div>
         <div className="feature-management-actions">
-          <button type="button" onClick={() => refreshHost()} disabled={loading || applying}>Refresh</button>
+          <button type="button" className="feature-management-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
+            <RefreshCcw size={15} />
+          </button>
           <button type="button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
           <button type="button" className="primary" onClick={apply} disabled={!dirty || loading || applying || readOnly}>
             {applying ? "Applying" : "Apply"}

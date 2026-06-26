@@ -81,6 +81,13 @@
   cursor: not-allowed;
 }
 
+.feature-management-actions button.feature-management-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  padding: 0;
+}
+
 .feature-management-error,
 .feature-management-warning {
   border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 55%, var(--border));

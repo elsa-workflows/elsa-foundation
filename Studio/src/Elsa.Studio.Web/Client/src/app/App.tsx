@@ -11,11 +11,13 @@ import {
   Github,
   LayoutDashboard,
   Maximize2,
+  Menu,
   Minimize2,
   PackagePlus,
   PackageSearch,
   Search,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -56,7 +58,7 @@ interface HostHealthEntry {
 }
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "home", label: "Overview", path: "/", order: 0, iconColor: "#0ea5e9" },
+  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: "#0ea5e9" },
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
@@ -146,9 +148,7 @@ function AppContent() {
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
-    () => [...builtInNavigation, ...(api?.navigation.list() ?? [])]
-      .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
-      .sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
+    () => getStudioNavigation(api?.navigation.list() ?? []),
     [api, state]
   );
   const panels = useMemo(
@@ -176,10 +176,11 @@ function AppContent() {
     );
   }
 
-  const activeRoute = findRouteForPath(routes, path);
+  const dashboardPath = isDashboardPath(path);
+  const activeRoute = dashboardPath ? undefined : findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
-  const pageTitle = navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
+  const pageTitle = dashboardPath ? "Dashboard" : navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
 
   return (
     <>
@@ -192,13 +193,13 @@ function AppContent() {
         backendBaseUrl={backendBaseUrl}
         assistantAction={<AgentLauncher open={assistantOpen} onClick={() => setAssistantOpen(current => !current)} />}
       >
-        {path === "/" ? <Home api={api!} /> : null}
+        {dashboardPath ? <Dashboard api={api!} /> : null}
         {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
         {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
         {ActiveComponent ? <ActiveComponent /> : null}
-        {!ActiveComponent && path !== "/" && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -250,6 +251,7 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
     if (!item.parentId) {
@@ -265,11 +267,28 @@ function ShellFrame({
     { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
     { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
   ].filter(section => section.items.length > 0);
+  const navigateFromShell = (targetPath: string) => {
+    setMobileNavigationOpen(false);
+    onNavigate(targetPath);
+  };
+
+  useEffect(() => {
+    if (!mobileNavigationOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavigationOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileNavigationOpen]);
 
   return (
     <div className="studio-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+      <aside className={mobileNavigationOpen ? "sidebar nav-open" : "sidebar"}>
+        <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromShell("/"); }}>
           <span className="brand-mark" aria-hidden="true">
             <img src={elsaLogo} alt="" />
           </span>
@@ -279,59 +298,72 @@ function ShellFrame({
           </span>
         </a>
 
-        <label className="sidebar-search">
-          <Search size={16} />
-          <input aria-label="Search modules" placeholder="Search modules" />
-        </label>
+        <button
+          type="button"
+          className="sidebar-menu-button"
+          aria-label={mobileNavigationOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-controls="studio-sidebar-navigation"
+          aria-expanded={mobileNavigationOpen}
+          onClick={() => setMobileNavigationOpen(open => !open)}
+        >
+          {mobileNavigationOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
 
-        {navigationSections.map(section => (
-          <nav key={section.id} className="nav-section" aria-label={section.label}>
-            <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => {
-              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
-              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
-              return (
-                <div className="nav-item-group" key={item.id}>
-                  <a
-                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-                    href={item.path}
-                    onClick={event => {
-                      event.preventDefault();
-                      onNavigate(item.path);
-                    }}
-                  >
-                    <NavIconTile item={item} />
-                    {item.label}
-                  </a>
-                  {childItems.length > 0 ? (
-                    <div className="nav-children">
-                      {childItems.map(child => (
-                        <a
-                          key={child.id}
-                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
-                          href={child.path}
-                          onClick={event => {
-                            event.preventDefault();
-                            onNavigate(child.path);
-                          }}
-                        >
-                          {child.label}
-                        </a>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </nav>
-        ))}
+        <div id="studio-sidebar-navigation" className="sidebar-navigation">
+          <label className="sidebar-search">
+            <Search size={16} />
+            <input aria-label="Search modules" placeholder="Search modules" />
+          </label>
 
-        <div className="sidebar-footer" aria-label="Backend API status">
-          <span className="sidebar-status-dot" aria-hidden="true" />
-          <span>
-            <strong>Backend API</strong>
-            <small>{new URL(backendBaseUrl).host}</small>
-          </span>
+          {navigationSections.map(section => (
+            <nav key={section.id} className="nav-section" aria-label={section.label}>
+              <span className="nav-heading">{section.label}</span>
+              {section.items.map(item => {
+                const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+                const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+                return (
+                  <div className="nav-item-group" key={item.id}>
+                    <a
+                      className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                      href={item.path}
+                      onClick={event => {
+                        event.preventDefault();
+                        navigateFromShell(item.path);
+                      }}
+                    >
+                      <NavIconTile item={item} />
+                      {item.label}
+                    </a>
+                    {childItems.length > 0 ? (
+                      <div className="nav-children">
+                        {childItems.map(child => (
+                          <a
+                            key={child.id}
+                            className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
+                            href={child.path}
+                            onClick={event => {
+                              event.preventDefault();
+                              navigateFromShell(child.path);
+                            }}
+                          >
+                            {child.label}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </nav>
+          ))}
+
+          <div className="sidebar-footer" aria-label="Backend API status">
+            <span className="sidebar-status-dot" aria-hidden="true" />
+            <span>
+              <strong>Backend API</strong>
+              <small>{new URL(backendBaseUrl).host}</small>
+            </span>
+          </div>
         </div>
       </aside>
 
@@ -562,7 +594,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-export function Home({ api }: { api: ElsaStudioModuleApi }) {
+export function Dashboard({ api }: { api: ElsaStudioModuleApi }) {
   const widgets = api.dashboardWidgets.list().sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 
   return (
@@ -823,9 +855,20 @@ function getDefaultNavIconColor(id: string) {
 }
 
 function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
+  if (item.id === "dashboard" && isDashboardPath(path)) return true;
   if (path === item.path) return true;
   if (!item.activePathPrefix) return false;
   return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
+}
+
+function isDashboardPath(path: string) {
+  return path === "/" || path === "/dashboard";
+}
+
+export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[]) {
+  return [...builtInNavigation, ...moduleNavigation.filter(item => !isDashboardPath(item.path))]
+    .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
+    .sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {

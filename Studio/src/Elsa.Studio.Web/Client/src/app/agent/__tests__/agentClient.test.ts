@@ -62,6 +62,46 @@ describe("agent client", () => {
 
     await expect(client.submitFeedback("agt_01", "msg_01", { rating: "negative" })).rejects.toThrow("Feedback failed.");
   });
+
+  it("maps PascalCase backend contract responses", async () => {
+    const context = stubPascalCaseContext();
+    const client = createAgentClient(context);
+
+    const bootstrap = await client.bootstrap();
+    const session = await client.createSession({
+      mode: "build",
+      activeSurface: { route: "/workflows/order", resourceId: "workflow-1" },
+      clientContext: { studioVersion: "1.0.0", sdkVersion: "1.0.0", moduleIds: ["workflows"] }
+    });
+    const message = await client.sendMessage("agt_01", {
+      message: "Add email activity.",
+      mode: "build",
+      contextAttachments: []
+    });
+    const approval = await client.approveProposal("prop_01", {});
+    const execution = await client.executeProposal("prop_01", {});
+
+    expect(bootstrap.providerStatus).toBe("available");
+    expect(bootstrap.providers[0]).toMatchObject({
+      providerId: "deterministic-workflow-authoring",
+      isAvailable: true,
+      providerKind: "agent-harness-provider",
+      riskProfile: "sandboxed-execution",
+      supportedOperations: ["chat", "tool-approval"]
+    });
+    expect(bootstrap.capabilities[0]).toMatchObject({
+      id: "workflow.author",
+      kind: "proposal",
+      risk: "review-required"
+    });
+    expect(session).toMatchObject({ sessionId: "agt_01", status: "active" });
+    expect(message).toMatchObject({ messageId: "msg_01", status: "pending" });
+    expect(approval).toMatchObject({ proposalId: "prop_01", approvalStatus: "approved" });
+    expect(execution).toMatchObject({ proposalId: "prop_01", approvalStatus: "executed" });
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({
+      providerId: "deterministic-workflow-authoring"
+    }));
+  });
 });
 
 function stubContext(): StudioEndpointContext {
@@ -75,6 +115,42 @@ function stubContext(): StudioEndpointContext {
         if (url.endsWith("/execute")) return { data: { proposalId: "prop_01", executed: true, message: "Executed." } };
         if (url === "/_elsa/agent/feedback") return { data: { id: "feedback_01" } };
         return { data: { id: "prop_01", status: "approved" } };
+      })
+    }
+  };
+}
+
+function stubPascalCaseContext(): StudioEndpointContext {
+  return {
+    baseUrl: "https://foundation.example/",
+    http: {
+      getJson: vi.fn(async () => ({
+        Data: {
+          Enabled: true,
+          ProviderStatus: "Available",
+          Providers: [{
+            ProviderId: "deterministic-workflow-authoring",
+            IsAvailable: true,
+            Status: "Available",
+            ProviderKind: 1,
+            SupportedOperations: [0, 2],
+            RiskProfile: 2
+          }],
+          Capabilities: [{
+            Id: "workflow.author",
+            DisplayName: "Workflow authoring",
+            Description: "Author workflows.",
+            Kind: 3,
+            Risk: 1,
+            Surfaces: ["workflow.definition"]
+          }]
+        }
+      })),
+      postJson: vi.fn(async url => {
+        if (url === "/_elsa/agent/sessions") return { Data: { SessionId: "agt_01", Status: "Active" } };
+        if (url.endsWith("/messages")) return { Data: { Message: { Id: "msg_01" }, Warnings: [] } };
+        if (url.endsWith("/execute")) return { Data: { ProposalId: "prop_01", Executed: true, Message: "Executed." } };
+        return { Data: { ProposalId: "prop_01", ApprovalStatus: "Approved", ApprovedAt: "2026-06-25T21:00:00Z" } };
       })
     }
   };

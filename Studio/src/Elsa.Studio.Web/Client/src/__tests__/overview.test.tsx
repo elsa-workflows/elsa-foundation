@@ -2,18 +2,18 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getNavigationSection, getTopLevelNavigationItems, Home } from "../app/App";
+import { Dashboard, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems } from "../app/App";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("overview", () => {
+describe("dashboard", () => {
   it("shows host health instead of Studio-only module count cards", async () => {
     stubBackendFetch();
     const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { container, unmount } = await renderHome(stubApi({ backendGetJson }));
+    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
 
     await flushPromises();
 
@@ -35,7 +35,7 @@ describe("overview", () => {
     const backendGetJson = vi.fn(async () => {
       throw new Error("Request failed with 404.");
     });
-    const { container, unmount } = await renderHome(stubApi({ backendGetJson }));
+    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
 
     await flushPromises();
 
@@ -46,11 +46,41 @@ describe("overview", () => {
 
     await unmount();
   });
+
+  it("renders dashboard widgets contributed through the Studio SDK", async () => {
+    stubBackendFetch();
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      widgets: [
+        {
+          id: "sample-widget",
+          title: "Sample",
+          component: () => <div>Contributed widget</div>
+        }
+      ]
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Contributed widget");
+
+    await unmount();
+  });
 });
 
 describe("navigation sections", () => {
+  it("keeps Dashboard owned by the host shell", () => {
+    const navigation = getStudioNavigation([
+      { id: "dashboard-sample", label: "Dashboard", path: "/dashboard", order: 100 },
+      { id: "weather", label: "Weather", path: "/weather", order: 20 }
+    ]);
+
+    expect(navigation.filter(item => item.path === "/dashboard").map(item => item.id)).toEqual(["dashboard"]);
+    expect(navigation.map(item => item.id)).toContain("weather");
+  });
+
   it("groups module and feature management under Settings", () => {
-    expect(getNavigationSection({ id: "home", path: "/" })).toBe("workspace");
+    expect(getNavigationSection({ id: "dashboard", path: "/dashboard" })).toBe("workspace");
     expect(getNavigationSection({ id: "weather", path: "/weather" })).toBe("workspace");
     expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("settings");
     expect(getNavigationSection({ id: "modules", path: "/modules" })).toBe("settings");
@@ -69,7 +99,10 @@ describe("navigation sections", () => {
   });
 });
 
-function stubApi(options: { backendGetJson: (url: string) => Promise<unknown> }): ElsaStudioModuleApi {
+function stubApi(options: {
+  backendGetJson: (url: string) => Promise<unknown>;
+  widgets?: Array<{ id: string; title: string; order?: number; component: React.ComponentType }>;
+}): ElsaStudioModuleApi {
   return {
     host: {
       baseUrl: "https://studio.example/",
@@ -89,7 +122,7 @@ function stubApi(options: { backendGetJson: (url: string) => Promise<unknown> })
     },
     dashboardWidgets: {
       add() {},
-      list: () => []
+      list: () => options.widgets ?? []
     }
   } as ElsaStudioModuleApi;
 }
@@ -103,13 +136,13 @@ function healthyRegistry() {
   };
 }
 
-async function renderHome(api: ElsaStudioModuleApi) {
+async function renderDashboard(api: ElsaStudioModuleApi) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(<Home api={api} />);
+    root.render(<Dashboard api={api} />);
   });
 
   return {

@@ -7,22 +7,36 @@ import type {
 } from "../../sdk";
 
 export type AgentProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
+export type AgentProviderKind = "provider-sdk-binding" | "agent-harness-provider" | string;
+export type AgentProviderOperation = "chat" | "streaming" | "tool-approval" | "run-status" | "artifacts" | "skills" | "memory" | "file-upload" | string;
+export type AgentProviderRiskProfile = "read-only" | "review-required" | "sandboxed-execution" | "privileged-execution" | string;
 export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed" | "expired";
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled";
-export type AgentStreamEventType = "message-started" | "message-delta" | "context-used" | "proposal-created" | "progress" | "message-completed" | "error";
+export type AgentStreamEventType = "message-started" | "message-delta" | "context-used" | "clarification-requested" | "workflow-batch-created" | "proposal-created" | "progress" | "message-completed" | "error";
 
 export interface AgentBootstrapResponse {
   enabled: boolean;
   providerStatus: AgentProviderStatus;
   modes: StudioAgentMode[];
   capabilities: StudioAgentCapabilityContribution[];
+  providers: AgentProviderDiagnostics[];
   policy: {
     contextVisibility: boolean;
     requiresApprovalForMutations: boolean;
     retentionLabel?: string;
   };
+}
+
+export interface AgentProviderDiagnostics {
+  providerId: string;
+  isAvailable: boolean;
+  status: string;
+  providerKind: AgentProviderKind;
+  supportedOperations: AgentProviderOperation[];
+  riskProfile: AgentProviderRiskProfile;
+  metadata: Record<string, string>;
 }
 
 export interface AgentCreateSessionRequest {
@@ -84,10 +98,43 @@ export type AgentActionProposalPayload = Partial<AgentActionProposal> & {
   baseRevision?: string;
 };
 
+export interface AgentClarificationRequest {
+  id: string;
+  prompt: string;
+  choices?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface WorkflowGraphOperationBatch {
+  schemaVersion: string;
+  workflowDefinitionId: string;
+  baseRevision?: string | null;
+  operations: WorkflowGraphOperation[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface WorkflowGraphOperation {
+  id: string;
+  kind: string;
+  parameters: Record<string, unknown>;
+  temporaryReferences: string[];
+  summary?: string | null;
+}
+
+export interface WorkflowGraphOperationBatchApplyResult {
+  appliedCount: number;
+  finalActivityIds: string[];
+  temporaryReferences: Record<string, string>;
+  summary: string;
+  undoToken?: string;
+}
+
 export type AgentStreamEvent =
   | { type: "message-started"; messageId: string; role: AgentMessageRole }
   | { type: "message-delta"; messageId: string; content: string }
   | { type: "context-used"; messageId: string; attachmentIds: string[] }
+  | { type: "clarification-requested"; messageId: string; clarification: AgentClarificationRequest }
+  | { type: "workflow-batch-created"; messageId: string; batch: WorkflowGraphOperationBatch }
   | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
   | { type: "progress"; label: string; percent?: number }
   | { type: "message-completed"; messageId: string }
