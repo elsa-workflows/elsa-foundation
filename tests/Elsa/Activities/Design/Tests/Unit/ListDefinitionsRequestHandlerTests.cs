@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
+using Elsa.Activities.Design.Core.Stores;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
@@ -28,7 +29,35 @@ public sealed class ListDefinitionsRequestHandlerTests
                 ActivityTypes = [RunJavaScriptTypeKey]
             }
         });
-        var handler = new ListDefinitionsRequestHandler(lookup, evaluator);
+        var handler = new ListDefinitionsRequestHandler(lookup, evaluator, new InMemoryActivityAvailabilitySettingsStore());
+
+        var result = await handler.Handle(new ListDefinitions(null, null, null, null, null, null), CancellationToken.None);
+
+        var definition = Assert.Single(result);
+        Assert.Equal(WriteLineTypeKey, definition.ActivityTypeKey);
+    }
+
+    [Fact]
+    public async Task Handle_AppliesSavedManagementSettingsImmediately()
+    {
+        var lookup = new StubActivityDefinitionLookup(
+        [
+            Activity("write-line", WriteLineTypeKey),
+            Activity("run-js", RunJavaScriptTypeKey)
+        ]);
+        var settingsStore = new InMemoryActivityAvailabilitySettingsStore();
+        await settingsStore.SaveAsync(new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [WriteLineTypeKey]
+            }
+        });
+        var handler = new ListDefinitionsRequestHandler(
+            lookup,
+            new DefaultActivityAvailabilityEvaluator(new ActivityAvailabilityOptions()),
+            settingsStore);
 
         var result = await handler.Handle(new ListDefinitions(null, null, null, null, null, null), CancellationToken.None);
 
