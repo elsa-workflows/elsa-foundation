@@ -2504,6 +2504,45 @@
   padding: 14px;
 }
 
+.wf-expression-editor-hint {
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  background: var(--wf-panel-muted);
+  margin: 0;
+  padding: 7px 9px;
+}
+
+.wf-expression-editor-diagnostics {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.wf-expression-editor-diagnostic {
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  background: var(--wf-panel-muted);
+  color: var(--wf-muted);
+  margin: 0;
+  padding: 6px 8px;
+}
+
+.wf-expression-editor-diagnostic.warning {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #f8c36a;
+}
+
+.wf-expression-editor-diagnostic.error {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.wf-expression-editor-diagnostic span {
+  color: inherit;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .wf-property-editor-toolbar {
   display: grid;
   grid-template-columns: minmax(180px, 260px) auto;

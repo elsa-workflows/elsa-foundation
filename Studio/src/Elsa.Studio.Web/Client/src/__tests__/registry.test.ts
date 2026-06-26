@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
-import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioFeatureAreaContribution } from "../sdk";
+import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioExpressionEditorContribution, type StudioFeatureAreaContribution } from "../sdk";
 
 describe("studio registry", () => {
   afterEach(() => {
@@ -42,6 +42,31 @@ describe("studio registry", () => {
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "checkbox", typeName: "System.Boolean" }), context)?.id).toBe("studio.property.checkbox");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "unknown", typeName: "Acme.Custom" }), context)?.id).toBe("studio.property.text-fallback");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "singleline", typeName: "System.String" }), context)?.id).toBe("custom.singleline");
+  });
+
+  it("tracks expression editor contributions through the public SDK registry", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const expandedEditor: StudioExpressionEditorContribution = {
+      id: "javascript.expanded",
+      order: 20,
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { expanded: () => null }
+    };
+    const inlineEditor: StudioExpressionEditorContribution = {
+      id: "javascript.inline",
+      order: 10,
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { inline: () => null }
+    };
+
+    api.expressionEditors.add(expandedEditor);
+    api.expressionEditors.add(inlineEditor);
+
+    expect(api.expressionEditors.list()).toEqual([expandedEditor, inlineEditor]);
   });
 
   it("preserves navigation icon colors", () => {

@@ -291,6 +291,49 @@ export interface StudioActivityPropertyEditorContribution {
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
 
+export type StudioExpressionEditorSurface = "inline" | "expanded";
+
+export interface StudioExpressionEditorContext {
+  syntax: string;
+  surface: StudioExpressionEditorSurface;
+  descriptor: StudioActivityInputDescriptor;
+  activity: unknown;
+  expressionDescriptors: StudioExpressionDescriptor[];
+  readOnly?: boolean;
+}
+
+export interface StudioExpressionEditorProps {
+  descriptor: StudioActivityInputDescriptor;
+  syntax: string;
+  value: unknown;
+  disabled?: boolean;
+  context: StudioExpressionEditorContext;
+  onChange(value: unknown): void;
+}
+
+export type StudioExpressionEditorDiagnosticSeverity = "info" | "warning" | "error";
+
+export interface StudioExpressionEditorDiagnostic {
+  severity?: StudioExpressionEditorDiagnosticSeverity;
+  code?: string;
+  message: string;
+}
+
+export interface StudioExpressionEditorMetadata {
+  displayName?: string;
+  installHint?: string;
+  packageId?: string;
+}
+
+export interface StudioExpressionEditorContribution {
+  id: string;
+  order?: number;
+  supports(context: StudioExpressionEditorContext): boolean;
+  surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+  diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
+  metadata?: StudioExpressionEditorMetadata;
+}
+
 export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" | "administer";
 export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
 export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
@@ -501,6 +544,7 @@ export interface ElsaStudioModuleApi {
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
+  readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {

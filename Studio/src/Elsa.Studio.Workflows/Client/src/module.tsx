@@ -28,7 +28,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Package, Play, Plus, RefreshCcw, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, X, Zap } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -184,7 +184,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} workflowDesignerPanels={api.workflowDesigner.panels.list()} />
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()} workflowDesignerPanels={api.workflowDesigner.panels.list()} />
       },
       {
         id: "workflows-executables",
@@ -212,11 +212,13 @@ function WorkflowManagementPage({
   context,
   ai,
   propertyEditors,
+  expressionEditors,
   workflowDesignerPanels
 }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
@@ -234,7 +236,7 @@ function WorkflowManagementPage({
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
@@ -2019,6 +2021,7 @@ function WorkflowEditor({
   definitionId,
   ai,
   propertyEditors,
+  expressionEditors,
   workflowDesignerPanels,
   onBack
 }: {
@@ -2026,6 +2029,7 @@ function WorkflowEditor({
   definitionId: string;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   onBack(): void;
 }) {
@@ -3161,6 +3165,7 @@ function WorkflowEditor({
           activity={selectedNode}
           descriptor={selectedDescriptor}
           editors={propertyEditors}
+          expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
           descriptorStatus={descriptorStatus}
           onChange={updateSelectedActivity}

@@ -46,6 +46,7 @@ export function createStudioRegistry(
     toolbarActions: createContributionRegistry(),
     activityEditors: createContributionRegistry(),
     propertyEditors: createContributionRegistry(),
+    expressionEditors: createContributionRegistry(),
     settingEditors: createContributionRegistry(),
     agent: {
       contextProviders: createContributionRegistry(),
