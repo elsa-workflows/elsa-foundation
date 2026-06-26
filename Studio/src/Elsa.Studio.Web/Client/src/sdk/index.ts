@@ -67,6 +67,102 @@ export interface StudioModuleContributionSummary {
   status: string;
 }
 
+export type StudioSlotId = string;
+export type StudioSlotKind =
+  | "feature-area"
+  | "navigation"
+  | "route"
+  | "dashboard-widget"
+  | "panel"
+  | "toolbar-action"
+  | "activity-editor"
+  | "property-editor"
+  | "expression-editor"
+  | "setting-editor"
+  | "agent-context-provider"
+  | "agent-prompt-starter"
+  | "agent-capability"
+  | "agent-action"
+  | "ai-context-provider"
+  | "ai-prompt-action"
+  | "ai-tool"
+  | "ai-proposal-renderer"
+  | "ai-surface"
+  | "workflow-designer-node-renderer"
+  | "workflow-designer-toolbox-item"
+  | "workflow-designer-panel"
+  | "diagnostic"
+  | (string & {});
+
+export type StudioSlotOwnerKind = "host" | "module";
+
+export interface StudioSlotOwner {
+  kind: StudioSlotOwnerKind;
+  id: string;
+  displayName: string;
+  moduleId?: string;
+}
+
+export interface StudioHostPolicy {
+  id: string;
+  displayName: string;
+  description?: string;
+}
+
+export interface StudioModulePolicy {
+  moduleId: string;
+  displayName?: string;
+  description?: string;
+}
+
+export type StudioContributionAvailabilityState =
+  | "available"
+  | "hidden"
+  | "disabled"
+  | "unavailable"
+  | "policy-denied"
+  | "permission-denied"
+  | "backend-unavailable"
+  | "unknown";
+
+export interface StudioContributionAvailability {
+  state: StudioContributionAvailabilityState;
+  reason?: string;
+  policyId?: string;
+}
+
+export interface StudioContribution {
+  id: string;
+  moduleId?: string;
+  order?: number;
+  availability?: StudioContributionAvailability;
+}
+
+export type StudioComponent<TProps = Record<string, never>> = ComponentType<TProps>;
+
+export interface StudioUiContribution<TProps = Record<string, never>> extends StudioContribution {
+  title?: string;
+  label?: string;
+  component: StudioComponent<TProps>;
+}
+
+export interface StudioUnavailableContribution extends StudioContribution {
+  slotId: StudioSlotId;
+  availability: StudioContributionAvailability & {
+    state: Exclude<StudioContributionAvailabilityState, "available">;
+    reason: string;
+  };
+}
+
+export interface StudioSlotDefinition<TContribution = unknown> {
+  id: StudioSlotId;
+  kind: StudioSlotKind;
+  owner: StudioSlotOwner;
+  contributionName: string;
+  description?: string;
+  unavailableContributions?: "hide" | "show-disabled";
+}
+
 export type StudioValidationErrors = Record<string, string[]>;
 
 export interface StudioHttpClient {
@@ -507,7 +603,198 @@ export interface StudioAiSurfaceContribution {
   order?: number;
 }
 
+export const studioSlotOwners = {
+  host: {
+    kind: "host",
+    id: "studio.host",
+    displayName: "Studio host"
+  },
+  workflowDesigner: {
+    kind: "module",
+    id: "studio.workflows",
+    moduleId: "elsa.studio.workflows",
+    displayName: "Workflows module"
+  },
+  ai: {
+    kind: "host",
+    id: "studio.ai",
+    displayName: "Studio AI host"
+  }
+} as const satisfies Record<string, StudioSlotOwner>;
+
+function defineStudioSlot<TContribution>(definition: StudioSlotDefinition<TContribution>) {
+  return definition;
+}
+
+export const studioSlots = {
+  featureAreas: defineStudioSlot<StudioFeatureAreaContribution>({
+    id: "studio.feature-areas",
+    kind: "feature-area",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioFeatureAreaContribution",
+    description: "Top-level module-owned feature areas that expand into navigation and routes."
+  }),
+  navigation: defineStudioSlot<StudioNavigationContribution>({
+    id: "studio.navigation",
+    kind: "navigation",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioNavigationContribution",
+    description: "Shell navigation entries shown in the Studio workbench."
+  }),
+  routes: defineStudioSlot<StudioRouteContribution>({
+    id: "studio.routes",
+    kind: "route",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioRouteContribution",
+    description: "Routable Studio pages and feature-area routes."
+  }),
+  dashboardWidgets: defineStudioSlot<StudioDashboardWidgetContribution>({
+    id: "studio.dashboard.widgets",
+    kind: "dashboard-widget",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioDashboardWidgetContribution",
+    description: "Dashboard workspace summary widgets contributed by modules."
+  }),
+  panels: defineStudioSlot<StudioPanelContribution>({
+    id: "studio.shell.panels",
+    kind: "panel",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioPanelContribution",
+    description: "Global shell panels such as assistant or utility panels."
+  }),
+  toolbarActions: defineStudioSlot<unknown>({
+    id: "studio.shell.toolbar-actions",
+    kind: "toolbar-action",
+    owner: studioSlotOwners.host,
+    contributionName: "unknown",
+    description: "Global shell toolbar actions."
+  }),
+  activityEditors: defineStudioSlot<unknown>({
+    id: "studio.activity.editors",
+    kind: "activity-editor",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "unknown",
+    description: "Activity editing surfaces owned by the workflow designer."
+  }),
+  propertyEditors: defineStudioSlot<StudioActivityPropertyEditorContribution>({
+    id: "workflow.activity.property-editors",
+    kind: "property-editor",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "StudioActivityPropertyEditorContribution",
+    description: "Activity property editors selected by descriptor and context."
+  }),
+  expressionEditors: defineStudioSlot<StudioExpressionEditorContribution>({
+    id: "workflow.expression.editors",
+    kind: "expression-editor",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "StudioExpressionEditorContribution",
+    description: "Expression editors selected by expression type and surface."
+  }),
+  settingEditors: defineStudioSlot<StudioSettingEditorContribution>({
+    id: "studio.settings.editors",
+    kind: "setting-editor",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioSettingEditorContribution",
+    description: "Host setting editors selected by setting descriptor."
+  }),
+  agentContextProviders: defineStudioSlot<StudioAgentContextProviderContribution>({
+    id: "studio.agent.context-providers",
+    kind: "agent-context-provider",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAgentContextProviderContribution",
+    description: "Provider-neutral context collectors for Weaver and agent surfaces."
+  }),
+  agentPromptStarters: defineStudioSlot<StudioAgentPromptStarterContribution>({
+    id: "studio.agent.prompt-starters",
+    kind: "agent-prompt-starter",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAgentPromptStarterContribution",
+    description: "Route-aware prompt starters."
+  }),
+  agentCapabilities: defineStudioSlot<StudioAgentCapabilityContribution>({
+    id: "studio.agent.capabilities",
+    kind: "agent-capability",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAgentCapabilityContribution",
+    description: "Agent capability declarations with risk and permission metadata."
+  }),
+  agentActions: defineStudioSlot<StudioAgentActionContribution>({
+    id: "studio.agent.actions",
+    kind: "agent-action",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAgentActionContribution",
+    description: "Reviewable agent actions that produce backend-owned proposals."
+  }),
+  aiContextProviders: defineStudioSlot<StudioAiContextProviderContribution>({
+    id: "studio.ai.context-providers",
+    kind: "ai-context-provider",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAiContextProviderContribution",
+    description: "Legacy AI context attachment providers."
+  }),
+  aiPromptActions: defineStudioSlot<StudioAiPromptActionContribution>({
+    id: "studio.ai.prompt-actions",
+    kind: "ai-prompt-action",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAiPromptActionContribution",
+    description: "Prompt-producing AI actions."
+  }),
+  aiTools: defineStudioSlot<StudioAiToolContribution>({
+    id: "studio.ai.tools",
+    kind: "ai-tool",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAiToolContribution",
+    description: "Tool declarations exposed through backend-governed agent providers."
+  }),
+  aiProposalRenderers: defineStudioSlot<StudioAiProposalRendererContribution>({
+    id: "studio.ai.proposal-renderers",
+    kind: "ai-proposal-renderer",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAiProposalRendererContribution",
+    description: "Renderers for proposal summaries and review shells."
+  }),
+  aiSurfaces: defineStudioSlot<StudioAiSurfaceContribution>({
+    id: "studio.ai.surfaces",
+    kind: "ai-surface",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAiSurfaceContribution",
+    description: "AI surfaces such as routes, panels, drawers, and inline placements."
+  }),
+  workflowDesignerNodeRenderers: defineStudioSlot<unknown>({
+    id: "workflow.designer.node-renderers",
+    kind: "workflow-designer-node-renderer",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "unknown",
+    description: "Workflow designer node renderer contributions."
+  }),
+  workflowDesignerToolboxItems: defineStudioSlot<unknown>({
+    id: "workflow.designer.toolbox-items",
+    kind: "workflow-designer-toolbox-item",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "unknown",
+    description: "Workflow designer toolbox item contributions."
+  }),
+  workflowDesignerPanels: defineStudioSlot<StudioWorkflowDesignerPanelContribution>({
+    id: "workflow.designer.panels",
+    kind: "workflow-designer-panel",
+    owner: studioSlotOwners.workflowDesigner,
+    contributionName: "StudioWorkflowDesignerPanelContribution",
+    description: "Workflow designer side-panel tabs and panel surfaces."
+  }),
+  diagnostics: defineStudioSlot<StudioModuleDiagnostic>({
+    id: "studio.diagnostics",
+    kind: "diagnostic",
+    owner: studioSlotOwners.host,
+    contributionName: "StudioModuleDiagnostic",
+    description: "Module diagnostics surfaced by the host registry.",
+    unavailableContributions: "show-disabled"
+  })
+} as const;
+
+export type StudioSlotCatalog = typeof studioSlots;
+
 export interface StudioContributionRegistry<T> {
+  readonly slot?: StudioSlotDefinition<T>;
   add(contribution: T): void;
   list(): T[];
 }
@@ -560,10 +847,11 @@ export interface ElsaStudioModule {
   register(api: ElsaStudioModuleApi): void | Promise<void>;
 }
 
-export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
+export function createContributionRegistry<T>(slot?: StudioSlotDefinition<T>): StudioContributionRegistry<T> {
   const contributions: T[] = [];
 
   return {
+    slot,
     add(contribution) {
       contributions.push(contribution);
     },
@@ -577,11 +865,11 @@ export function createAiContributionApi(): StudioAiContributionApi {
   const listeners = new Set<(request: StudioAiPromptRequest) => void>();
 
   return {
-    contextProviders: createContributionRegistry(),
-    promptActions: createContributionRegistry(),
-    tools: createContributionRegistry(),
-    proposalRenderers: createContributionRegistry(),
-    surfaces: createContributionRegistry(),
+    contextProviders: createContributionRegistry(studioSlots.aiContextProviders),
+    promptActions: createContributionRegistry(studioSlots.aiPromptActions),
+    tools: createContributionRegistry(studioSlots.aiTools),
+    proposalRenderers: createContributionRegistry(studioSlots.aiProposalRenderers),
+    surfaces: createContributionRegistry(studioSlots.aiSurfaces),
     dispatchPrompt(request) {
       for (const listener of listeners) {
         listener(request);

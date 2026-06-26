@@ -2,6 +2,7 @@ import {
   createEndpointContext,
   createAiContributionApi,
   createContributionRegistry,
+  studioSlots,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
   type StudioContributionRegistry,
@@ -31,8 +32,8 @@ export function createStudioRegistry(
     : backendBaseUrlOrOptions ?? {};
   const hostContext = options.hostHttp ? { ...host, http: options.hostHttp } : host;
   const backend = createBackendContext(hostContext, options);
-  const navigation = createContributionRegistry<StudioNavigationContribution>();
-  const routes = createContributionRegistry<StudioRouteContribution>();
+  const navigation = createContributionRegistry<StudioNavigationContribution>(studioSlots.navigation);
+  const routes = createContributionRegistry<StudioRouteContribution>(studioSlots.routes);
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
 
   return {
@@ -41,26 +42,26 @@ export function createStudioRegistry(
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createContributionRegistry(),
-    panels: createContributionRegistry(),
-    toolbarActions: createContributionRegistry(),
-    activityEditors: createContributionRegistry(),
-    propertyEditors: createContributionRegistry(),
-    expressionEditors: createContributionRegistry(),
-    settingEditors: createContributionRegistry(),
+    dashboardWidgets: createContributionRegistry(studioSlots.dashboardWidgets),
+    panels: createContributionRegistry(studioSlots.panels),
+    toolbarActions: createContributionRegistry(studioSlots.toolbarActions),
+    activityEditors: createContributionRegistry(studioSlots.activityEditors),
+    propertyEditors: createContributionRegistry(studioSlots.propertyEditors),
+    expressionEditors: createContributionRegistry(studioSlots.expressionEditors),
+    settingEditors: createContributionRegistry(studioSlots.settingEditors),
     agent: {
-      contextProviders: createContributionRegistry(),
-      promptStarters: createContributionRegistry(),
-      capabilities: createContributionRegistry(),
-      actions: createContributionRegistry()
+      contextProviders: createContributionRegistry(studioSlots.agentContextProviders),
+      promptStarters: createContributionRegistry(studioSlots.agentPromptStarters),
+      capabilities: createContributionRegistry(studioSlots.agentCapabilities),
+      actions: createContributionRegistry(studioSlots.agentActions)
     },
     workflowDesigner: {
-      nodeRenderers: createContributionRegistry(),
-      toolboxItems: createContributionRegistry(),
-      panels: createContributionRegistry()
+      nodeRenderers: createContributionRegistry(studioSlots.workflowDesignerNodeRenderers),
+      toolboxItems: createContributionRegistry(studioSlots.workflowDesignerToolboxItems),
+      panels: createContributionRegistry(studioSlots.workflowDesignerPanels)
     },
     ai: createAiContributionApi(),
-    diagnostics: createContributionRegistry<StudioModuleDiagnostic>()
+    diagnostics: createContributionRegistry<StudioModuleDiagnostic>(studioSlots.diagnostics)
   };
 }
 
@@ -73,9 +74,10 @@ function createFeatureAreaRegistry(
   navigation: StudioContributionRegistry<StudioNavigationContribution>,
   routes: StudioContributionRegistry<StudioRouteContribution>
 ): StudioContributionRegistry<StudioFeatureAreaContribution> {
-  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>();
+  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>(studioSlots.featureAreas);
 
   return {
+    slot: featureAreas.slot,
     add(featureArea) {
       featureAreas.add(featureArea);
       for (const item of createNavigationContributions(featureArea)) {

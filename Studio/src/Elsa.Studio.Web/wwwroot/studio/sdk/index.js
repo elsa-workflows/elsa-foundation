@@ -1,23 +1,23 @@
 import { j as f } from "../vendor/chunks/jsx-runtime.js";
-import { r as d } from "../vendor/chunks/index.js";
-const C = {
+import { r as l } from "../vendor/chunks/index.js";
+const T = {
   status: "anonymous",
   roles: [],
   permissions: []
-}, z = {
+}, M = {
   status: "unknown",
   roles: [],
   permissions: []
 };
-function Q(t) {
-  return new W(t);
+function X(t) {
+  return new Y(t);
 }
-class W {
+class Y {
   constructor(e) {
     this.options = e;
     for (const n of e.adapters ?? []) {
       if (this.adapters.has(n.id))
-        throw new m(`Duplicate auth provider adapter '${n.id}'.`);
+        throw new S(`Duplicate auth provider adapter '${n.id}'.`);
       this.adapters.set(n.id, n);
     }
   }
@@ -25,7 +25,7 @@ class W {
   adapters = /* @__PURE__ */ new Map();
   activeAdapter = null;
   pendingLoginProviderId = null;
-  session = z;
+  session = M;
   getSession() {
     return this.session;
   }
@@ -55,7 +55,7 @@ class W {
     return await this.applySession(await n.handleCallback(), n), this.pendingLoginProviderId = null, this.session;
   }
   async logout() {
-    await (await this.resolveActiveAdapter()).logout(), this.session = C;
+    await (await this.resolveActiveAdapter()).logout(), this.session = T;
   }
   async getAccessToken() {
     return (await this.resolveActiveAdapter()).getAccessToken();
@@ -67,9 +67,9 @@ class W {
   async resolveActiveAdapter() {
     if (this.activeAdapter)
       return this.activeAdapter;
-    const e = await this.options.bootstrap(), n = e.providers.find((s) => s.enabled && s.isDefault) ?? e.providers.find((s) => s.enabled);
+    const e = await this.options.bootstrap(), n = e.providers.find((i) => i.enabled && i.isDefault) ?? e.providers.find((i) => i.enabled);
     if (!n)
-      throw new m("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
+      throw new S("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
     const r = this.resolveProviderAdapter(n);
     return this.activeAdapter = r, r;
   }
@@ -77,17 +77,17 @@ class W {
     const n = this.adapters.get(e);
     if (n)
       return n;
-    const s = (await this.options.bootstrap()).providers.find((i) => i.enabled && i.id === e);
-    if (!s)
-      throw new m(`No auth provider adapter is registered for '${e}'.`);
-    return this.resolveProviderAdapter(s);
+    const i = (await this.options.bootstrap()).providers.find((o) => o.enabled && o.id === e);
+    if (!i)
+      throw new S(`No auth provider adapter is registered for '${e}'.`);
+    return this.resolveProviderAdapter(i);
   }
   resolveProviderAdapter(e) {
     const n = this.adapters.get(e.id);
     if (n)
       return n;
     if (!this.options.adapterFactory)
-      throw new m(`No auth provider adapter is registered for '${e.id}'.`);
+      throw new S(`No auth provider adapter is registered for '${e.id}'.`);
     const r = this.options.adapterFactory(e);
     return this.adapters.set(e.id, r), r;
   }
@@ -100,7 +100,7 @@ class W {
     this.session = e, this.activeAdapter = r;
   }
 }
-class m extends Error {
+class S extends Error {
   constructor(e) {
     super(e), this.name = "AuthConfigurationError";
   }
@@ -110,100 +110,100 @@ function H(t) {
   return {
     id: t.id,
     kind: t.kind,
-    initialize: () => k(e, n, t),
-    login: (s) => {
-      const i = t.challenge;
-      if (!i || i.type === "none")
+    initialize: () => C(e, n, t),
+    login: (i) => {
+      const o = t.challenge;
+      if (!o || o.type === "none")
         throw new A(`Provider '${t.id}' does not expose a redirect challenge.`);
-      const o = "method" in i ? i.method.toUpperCase() : "GET";
-      if (o !== "GET")
-        throw new A(`Provider '${t.id}' exposes an unsupported ${o} challenge.`);
-      const c = new URL(Z(i), x(t)), a = s?.returnUrl ?? t.location?.href ?? window.location.href;
-      return c.searchParams.set("returnUrl", tt(a, s?.providerId ?? t.id, t)), (t.location ?? window.location).assign(c.toString()), Promise.resolve();
+      const s = "method" in o ? o.method.toUpperCase() : "GET";
+      if (s !== "GET")
+        throw new A(`Provider '${t.id}' exposes an unsupported ${s} challenge.`);
+      const d = new URL(et(o), N(t)), a = i?.returnUrl ?? t.location?.href ?? window.location.href;
+      return d.searchParams.set("returnUrl", nt(a, i?.providerId ?? t.id, t)), (t.location ?? window.location).assign(d.toString()), Promise.resolve();
     },
-    handleCallback: () => k(e, n, t),
+    handleCallback: () => C(e, n, t),
     logout: async () => {
-      const s = await e(E(r, t), { method: "POST", credentials: "include" });
-      if (!s.ok)
-        throw new A(`Sign-out failed with ${s.status}.`);
+      const i = await e(x(r, t), { method: "POST", credentials: "include" });
+      if (!i.ok)
+        throw new A(`Sign-out failed with ${i.status}.`);
     },
     getAccessToken: async () => {
       if (!t.tokenEndpoint)
         return null;
-      const s = await e(E(t.tokenEndpoint, t), { credentials: "include", cache: "no-store" });
-      if (s.status === 401)
+      const i = await e(x(t.tokenEndpoint, t), { credentials: "include", cache: "no-store" });
+      if (i.status === 401)
         return null;
-      if (!s.ok)
-        throw new A(`Access-token request failed with ${s.status}.`);
-      const i = await s.json();
-      return typeof i.accessToken == "string" ? i.accessToken : null;
+      if (!i.ok)
+        throw new A(`Access-token request failed with ${i.status}.`);
+      const o = await i.json();
+      return typeof o.accessToken == "string" ? o.accessToken : null;
     },
     refresh: async () => {
-      const s = await t.getRefreshToken?.(), i = t.refreshEndpoint;
-      if (!i || !s)
-        return k(e, n, t);
-      const o = await e(E(i, t), {
+      const i = await t.getRefreshToken?.(), o = t.refreshEndpoint;
+      if (!o || !i)
+        return C(e, n, t);
+      const s = await e(x(o, t), {
         method: "POST",
         credentials: "include",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ refreshToken: s })
+        body: JSON.stringify({ refreshToken: i })
       });
-      if (o.status === 401)
-        return C;
-      if (!o.ok)
-        throw new A(`Session refresh failed with ${o.status}.`);
-      const c = await o.json();
-      return c.status ? M(c) : k(e, n, t);
+      if (s.status === 401)
+        return T;
+      if (!s.ok)
+        throw new A(`Session refresh failed with ${s.status}.`);
+      const d = await s.json();
+      return d.status ? z(d) : C(e, n, t);
     }
   };
 }
-async function k(t, e, n) {
-  const r = await t(E(e, n), { credentials: "include", cache: "no-store" });
+async function C(t, e, n) {
+  const r = await t(x(e, n), { credentials: "include", cache: "no-store" });
   if (r.status === 401)
-    return C;
+    return T;
   if (!r.ok)
     throw new A(`Session request failed with ${r.status}.`);
-  return X(r);
+  return Z(r);
 }
-async function X(t) {
+async function Z(t) {
   const e = await t.json();
-  return M(e);
+  return z(e);
 }
-function M(t) {
-  const e = Y(t.status) ? t.status : "anonymous";
+function z(t) {
+  const e = tt(t.status) ? t.status : "anonymous";
   return {
     ...t,
     status: e,
-    roles: L(t.roles),
-    permissions: L(t.permissions)
+    roles: J(t.roles),
+    permissions: J(t.permissions)
   };
 }
-function L(t) {
+function J(t) {
   return Array.isArray(t) ? t.filter((e) => typeof e == "string") : [];
 }
-function Y(t) {
+function tt(t) {
   return t === "unknown" || t === "anonymous" || t === "authenticated";
 }
-function Z(t) {
+function et(t) {
   return "loginPath" in t ? t.loginPath : t.url;
 }
-function E(t, e) {
-  return new URL(t, x(e)).toString();
+function x(t, e) {
+  return new URL(t, N(e)).toString();
 }
-function x(t) {
+function N(t) {
   return t?.baseUrl ?? t?.location?.origin ?? window.location.origin;
 }
-function tt(t, e, n) {
-  const r = new URL(t, et(n));
-  return r.searchParams.set("authProviderId", e), nt(t) ? `${r.pathname}${r.search}${r.hash}` : r.toString();
+function nt(t, e, n) {
+  const r = new URL(t, rt(n));
+  return r.searchParams.set("authProviderId", e), it(t) ? `${r.pathname}${r.search}${r.hash}` : r.toString();
 }
-function et(t) {
-  return t?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? t?.location?.origin ?? x(t);
+function rt(t) {
+  return t?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? t?.location?.origin ?? N(t);
 }
-function nt(t) {
+function it(t) {
   try {
     return new URL(t), !1;
   } catch {
@@ -215,11 +215,11 @@ class A extends Error {
     super(e), this.name = "AuthAdapterError";
   }
 }
-function mt(t = {}) {
+function St(t = {}) {
   const e = t.baseUrl ?? window.location.origin, n = t.fetch ?? fetch;
-  return Q({
-    bootstrap: () => I(n, e, "/_elsa/identity/bootstrap"),
-    capabilities: () => I(n, e, "/_elsa/identity/capabilities"),
+  return X({
+    bootstrap: () => D(n, e, "/_elsa/identity/bootstrap"),
+    capabilities: () => D(n, e, "/_elsa/identity/capabilities"),
     isCallback: t.isCallback,
     getCallbackProviderId: t.getCallbackProviderId,
     adapterFactory: (r) => H({
@@ -231,7 +231,7 @@ function mt(t = {}) {
     })
   });
 }
-async function I(t, e, n) {
+async function D(t, e, n) {
   const r = await t(new URL(n, e).toString(), {
     credentials: "include",
     cache: "no-store",
@@ -241,73 +241,73 @@ async function I(t, e, n) {
     throw new Error(`Auth discovery request failed with ${r.status}.`);
   return await r.json();
 }
-const N = d.createContext(null);
-function R() {
-  const t = d.useContext(N);
+const B = l.createContext(null);
+function j() {
+  const t = l.useContext(B);
   if (!t)
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return t;
 }
-function kt({ manager: t, children: e }) {
-  const [n, r] = d.useState(() => t.getSession() ?? z), [s, i] = d.useState(null), o = d.useRef(!1), c = d.useRef(0), a = d.useCallback((u) => o.current && c.current === u, []), h = d.useCallback(async (u) => {
+function Ct({ manager: t, children: e }) {
+  const [n, r] = l.useState(() => t.getSession() ?? M), [i, o] = l.useState(null), s = l.useRef(!1), d = l.useRef(0), a = l.useCallback((u) => s.current && d.current === u, []), p = l.useCallback(async (u) => {
     if (a(u)) {
-      i(null);
+      o(null);
       try {
-        const l = await t.getCapabilities();
-        a(u) && i(l);
-      } catch (l) {
-        a(u) && (console.error("Auth capabilities request failed.", l), i(null));
+        const h = await t.getCapabilities();
+        a(u) && o(h);
+      } catch (h) {
+        a(u) && (console.error("Auth capabilities request failed.", h), o(null));
       }
     }
   }, [t, a]);
-  d.useLayoutEffect(() => {
-    o.current = !0;
-    const u = ++c.current;
-    async function l() {
+  l.useLayoutEffect(() => {
+    s.current = !0;
+    const u = ++d.current;
+    async function h() {
       try {
-        const p = await t.initialize();
+        const w = await t.initialize();
         if (!a(u))
           return;
-        if (r(p), p.status !== "authenticated") {
-          i(null);
+        if (r(w), w.status !== "authenticated") {
+          o(null);
           return;
         }
-        await h(u);
-      } catch (p) {
-        a(u) && (console.error("Auth initialization failed.", p), r(C), i(null));
+        await p(u);
+      } catch (w) {
+        a(u) && (console.error("Auth initialization failed.", w), r(T), o(null));
       }
     }
-    return l(), () => {
-      o.current = !1, c.current += 1;
+    return h(), () => {
+      s.current = !1, d.current += 1;
     };
-  }, [h, t, a]);
-  const j = d.useCallback(async (u) => {
-    const l = ++c.current;
-    if (await t.login(u), !a(l))
+  }, [p, t, a]);
+  const $ = l.useCallback(async (u) => {
+    const h = ++d.current;
+    if (await t.login(u), !a(h))
       return;
-    const p = t.getSession();
-    r(p), p.status === "authenticated" ? await h(l) : i(null);
-  }, [h, t, a]), $ = d.useCallback(async () => {
-    const u = ++c.current;
-    await t.logout(), a(u) && (r(t.getSession()), i(null));
-  }, [t, a]), J = d.useCallback(async () => {
-    const u = ++c.current, l = await t.refresh();
-    return a(u) && (r(l), l.status === "authenticated" ? await h(u) : i(null)), l;
-  }, [h, t, a]), V = d.useMemo(() => ({
+    const w = t.getSession();
+    r(w), w.status === "authenticated" ? await p(h) : o(null);
+  }, [p, t, a]), I = l.useCallback(async () => {
+    const u = ++d.current;
+    await t.logout(), a(u) && (r(t.getSession()), o(null));
+  }, [t, a]), L = l.useCallback(async () => {
+    const u = ++d.current, h = await t.refresh();
+    return a(u) && (r(h), h.status === "authenticated" ? await p(u) : o(null)), h;
+  }, [p, t, a]), Q = l.useMemo(() => ({
     session: n,
-    capabilities: s,
-    login: j,
-    logout: $,
-    refresh: J
-  }), [s, j, $, J, n]);
-  return /* @__PURE__ */ f.jsx(N.Provider, { value: V, children: e });
+    capabilities: i,
+    login: $,
+    logout: I,
+    refresh: L
+  }), [i, $, I, L, n]);
+  return /* @__PURE__ */ f.jsx(B.Provider, { value: Q, children: e });
 }
-function rt() {
-  return R().session;
+function ot() {
+  return j().session;
 }
 function st() {
-  const { permissions: t } = rt();
-  return d.useMemo(() => {
+  const { permissions: t } = ot();
+  return l.useMemo(() => {
     const e = new Set(t);
     return {
       has: (n) => e.has(n),
@@ -316,102 +316,102 @@ function st() {
     };
   }, [t]);
 }
-function St() {
-  return R().capabilities;
+function Pt() {
+  return j().capabilities;
 }
-function Pt({ requires: t, requireAll: e = !0, fallback: n = null, children: r }) {
-  const s = st(), i = typeof t == "string" ? [t] : t ?? [];
-  return i.length === 0 || (e ? s.hasAll(i) : s.hasAny(i)) ? /* @__PURE__ */ f.jsx(f.Fragment, { children: r }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: n });
+function Et({ requires: t, requireAll: e = !0, fallback: n = null, children: r }) {
+  const i = st(), o = typeof t == "string" ? [t] : t ?? [];
+  return o.length === 0 || (e ? i.hasAll(o) : i.hasAny(o)) ? /* @__PURE__ */ f.jsx(f.Fragment, { children: r }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: n });
 }
-function Et({ children: t, fallback: e = null, loginOptions: n }) {
-  const { session: r, login: s } = R(), i = d.useRef(null);
-  return d.useEffect(() => {
+function xt({ children: t, fallback: e = null, loginOptions: n }) {
+  const { session: r, login: i } = j(), o = l.useRef(null);
+  return l.useEffect(() => {
     if (r.status === "anonymous") {
-      const o = it(n), c = i.current;
-      if (c?.key === o && c.login === s)
+      const s = at(n), d = o.current;
+      if (d?.key === s && d.login === i)
         return;
-      const a = { key: o, login: s };
-      i.current = a, s(n).catch((h) => {
-        i.current === a && (i.current = null), console.error("Auth login failed.", h);
+      const a = { key: s, login: i };
+      o.current = a, i(n).catch((p) => {
+        o.current === a && (o.current = null), console.error("Auth login failed.", p);
       });
     } else
-      i.current = null;
-  }, [s, n, r.status]), r.status !== "authenticated" ? /* @__PURE__ */ f.jsx(f.Fragment, { children: e }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: t });
+      o.current = null;
+  }, [i, n, r.status]), r.status !== "authenticated" ? /* @__PURE__ */ f.jsx(f.Fragment, { children: e }) : /* @__PURE__ */ f.jsx(f.Fragment, { children: t });
 }
-function it(t) {
+function at(t) {
   return `${t?.providerId ?? ""}
 ${t?.returnUrl ?? ""}`;
 }
-function Ct(t) {
+function Tt(t) {
   return H({
     ...t,
     kind: "external-oidc"
   });
 }
-function Tt(t, e, n = {}) {
+function Rt(t, e, n = {}) {
   return {
-    requestJson(r, s) {
-      return g(t, r, e, n, S(s));
+    requestJson(r, i) {
+      return y(t, r, e, n, P(i));
     },
-    getJson(r, s) {
-      return g(t, r, e, n, S(s));
+    getJson(r, i) {
+      return y(t, r, e, n, P(i));
     },
-    postJson(r, s, i) {
-      return g(t, r, e, n, {
-        ...i,
+    postJson(r, i, o) {
+      return y(t, r, e, n, {
+        ...o,
         method: "POST",
-        headers: O(i?.headers),
-        body: JSON.stringify(s)
+        headers: O(o?.headers),
+        body: JSON.stringify(i)
       });
     },
-    putJson(r, s, i) {
-      return g(t, r, e, n, {
-        ...i,
+    putJson(r, i, o) {
+      return y(t, r, e, n, {
+        ...o,
         method: "PUT",
-        headers: O(i?.headers),
-        body: JSON.stringify(s)
+        headers: O(o?.headers),
+        body: JSON.stringify(i)
       });
     },
-    deleteJson(r, s) {
-      return g(t, r, e, n, S({
-        ...s,
+    deleteJson(r, i) {
+      return y(t, r, e, n, P({
+        ...i,
         method: "DELETE"
       }));
     },
-    postForm(r, s, i) {
-      return g(t, r, e, n, S({
-        ...i,
+    postForm(r, i, o) {
+      return y(t, r, e, n, P({
+        ...o,
         method: "POST",
-        body: s
+        body: i
       }));
     }
   };
 }
-const T = /* @__PURE__ */ new Map();
-async function g(t, e, n, r, s) {
-  const i = r.fetch ?? fetch, o = new URL(e, t).toString(), c = await i(o, await B(n, U(r, s))), a = c.status === 401 && r.refreshOnUnauthorized !== !1 ? await ot(i, o, n, U(r, s)) : c;
+const R = /* @__PURE__ */ new Map();
+async function y(t, e, n, r, i) {
+  const o = r.fetch ?? fetch, s = new URL(e, t).toString(), d = await o(s, await W(n, U(r, i))), a = d.status === 401 && r.refreshOnUnauthorized !== !1 ? await ct(o, s, n, U(r, i)) : d;
   if (!a.ok)
-    throw await D(a);
-  const h = await a.text();
-  if (!h.trim())
+    throw await G(a);
+  const p = await a.text();
+  if (!p.trim())
     return {};
   try {
-    return JSON.parse(h);
+    return JSON.parse(p);
   } catch {
-    throw new b(a.status, `Expected JSON from ${o}.`);
+    throw new v(a.status, `Expected JSON from ${s}.`);
   }
 }
-async function ot(t, e, n, r) {
-  return await at(e, n) ? t(e, await B(n, r)) : new Response("Authentication required.", { status: 401 });
+async function ct(t, e, n, r) {
+  return await dt(e, n) ? t(e, await W(n, r)) : new Response("Authentication required.", { status: 401 });
 }
-async function at(t, e) {
-  const n = new URL(t).origin, r = T.get(n);
+async function dt(t, e) {
+  const n = new URL(t).origin, r = R.get(n);
   if (r)
     return r;
-  const s = e.refresh().then((i) => i.status === "authenticated").finally(() => T.delete(n));
-  return T.set(n, s), s;
+  const i = e.refresh().then((o) => o.status === "authenticated").finally(() => R.delete(n));
+  return R.set(n, i), i;
 }
-async function B(t, e) {
+async function W(t, e) {
   const n = new Headers(e?.headers), r = await t.getAccessToken();
   return r && n.set("Authorization", `Bearer ${r}`), {
     ...e,
@@ -419,7 +419,7 @@ async function B(t, e) {
     headers: n
   };
 }
-function S(t) {
+function P(t) {
   const e = new Headers(t?.headers);
   return e.has("Accept") || e.set("Accept", "application/json"), {
     ...t,
@@ -432,41 +432,223 @@ function O(t) {
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
 function U(t, e) {
-  return w(t.defaultHeaders ?? t.headers, e);
+  return g(t.defaultHeaders ?? t.headers, e);
 }
-function ct(t, e = {}) {
+function ut(t, e = {}) {
   return async () => await t.getAccessToken() ?? await e.fallbackAccessTokenFactory?.() ?? e.anonymousToken ?? "";
 }
-function xt(t, e) {
-  const n = ut(t.accessTokenFactory) ? t.accessTokenFactory.bind(t) : void 0;
+function Nt(t, e) {
+  const n = lt(t.accessTokenFactory) ? t.accessTokenFactory.bind(t) : void 0;
   return {
     ...t,
-    accessTokenFactory: ct(e, { fallbackAccessTokenFactory: n })
+    accessTokenFactory: ut(e, { fallbackAccessTokenFactory: n })
   };
 }
-function ut(t) {
+function lt(t) {
   return typeof t == "function";
 }
-const F = 1e4;
-function v() {
-  const t = [];
+const F = 1e4, c = {
+  host: {
+    kind: "host",
+    id: "studio.host",
+    displayName: "Studio host"
+  },
+  workflowDesigner: {
+    kind: "module",
+    id: "studio.workflows",
+    moduleId: "elsa.studio.workflows",
+    displayName: "Workflows module"
+  },
+  ai: {
+    kind: "host",
+    id: "studio.ai",
+    displayName: "Studio AI host"
+  }
+};
+const k = {
+  featureAreas: {
+    id: "studio.feature-areas",
+    kind: "feature-area",
+    owner: c.host,
+    contributionName: "StudioFeatureAreaContribution",
+    description: "Top-level module-owned feature areas that expand into navigation and routes."
+  },
+  navigation: {
+    id: "studio.navigation",
+    kind: "navigation",
+    owner: c.host,
+    contributionName: "StudioNavigationContribution",
+    description: "Shell navigation entries shown in the Studio workbench."
+  },
+  routes: {
+    id: "studio.routes",
+    kind: "route",
+    owner: c.host,
+    contributionName: "StudioRouteContribution",
+    description: "Routable Studio pages and feature-area routes."
+  },
+  dashboardWidgets: {
+    id: "studio.dashboard.widgets",
+    kind: "dashboard-widget",
+    owner: c.host,
+    contributionName: "StudioDashboardWidgetContribution",
+    description: "Dashboard workspace summary widgets contributed by modules."
+  },
+  panels: {
+    id: "studio.shell.panels",
+    kind: "panel",
+    owner: c.host,
+    contributionName: "StudioPanelContribution",
+    description: "Global shell panels such as assistant or utility panels."
+  },
+  toolbarActions: {
+    id: "studio.shell.toolbar-actions",
+    kind: "toolbar-action",
+    owner: c.host,
+    contributionName: "unknown",
+    description: "Global shell toolbar actions."
+  },
+  activityEditors: {
+    id: "studio.activity.editors",
+    kind: "activity-editor",
+    owner: c.workflowDesigner,
+    contributionName: "unknown",
+    description: "Activity editing surfaces owned by the workflow designer."
+  },
+  propertyEditors: {
+    id: "workflow.activity.property-editors",
+    kind: "property-editor",
+    owner: c.workflowDesigner,
+    contributionName: "StudioActivityPropertyEditorContribution",
+    description: "Activity property editors selected by descriptor and context."
+  },
+  expressionEditors: {
+    id: "workflow.expression.editors",
+    kind: "expression-editor",
+    owner: c.workflowDesigner,
+    contributionName: "StudioExpressionEditorContribution",
+    description: "Expression editors selected by expression type and surface."
+  },
+  settingEditors: {
+    id: "studio.settings.editors",
+    kind: "setting-editor",
+    owner: c.host,
+    contributionName: "StudioSettingEditorContribution",
+    description: "Host setting editors selected by setting descriptor."
+  },
+  agentContextProviders: {
+    id: "studio.agent.context-providers",
+    kind: "agent-context-provider",
+    owner: c.ai,
+    contributionName: "StudioAgentContextProviderContribution",
+    description: "Provider-neutral context collectors for Weaver and agent surfaces."
+  },
+  agentPromptStarters: {
+    id: "studio.agent.prompt-starters",
+    kind: "agent-prompt-starter",
+    owner: c.ai,
+    contributionName: "StudioAgentPromptStarterContribution",
+    description: "Route-aware prompt starters."
+  },
+  agentCapabilities: {
+    id: "studio.agent.capabilities",
+    kind: "agent-capability",
+    owner: c.ai,
+    contributionName: "StudioAgentCapabilityContribution",
+    description: "Agent capability declarations with risk and permission metadata."
+  },
+  agentActions: {
+    id: "studio.agent.actions",
+    kind: "agent-action",
+    owner: c.ai,
+    contributionName: "StudioAgentActionContribution",
+    description: "Reviewable agent actions that produce backend-owned proposals."
+  },
+  aiContextProviders: {
+    id: "studio.ai.context-providers",
+    kind: "ai-context-provider",
+    owner: c.ai,
+    contributionName: "StudioAiContextProviderContribution",
+    description: "Legacy AI context attachment providers."
+  },
+  aiPromptActions: {
+    id: "studio.ai.prompt-actions",
+    kind: "ai-prompt-action",
+    owner: c.ai,
+    contributionName: "StudioAiPromptActionContribution",
+    description: "Prompt-producing AI actions."
+  },
+  aiTools: {
+    id: "studio.ai.tools",
+    kind: "ai-tool",
+    owner: c.ai,
+    contributionName: "StudioAiToolContribution",
+    description: "Tool declarations exposed through backend-governed agent providers."
+  },
+  aiProposalRenderers: {
+    id: "studio.ai.proposal-renderers",
+    kind: "ai-proposal-renderer",
+    owner: c.ai,
+    contributionName: "StudioAiProposalRendererContribution",
+    description: "Renderers for proposal summaries and review shells."
+  },
+  aiSurfaces: {
+    id: "studio.ai.surfaces",
+    kind: "ai-surface",
+    owner: c.ai,
+    contributionName: "StudioAiSurfaceContribution",
+    description: "AI surfaces such as routes, panels, drawers, and inline placements."
+  },
+  workflowDesignerNodeRenderers: {
+    id: "workflow.designer.node-renderers",
+    kind: "workflow-designer-node-renderer",
+    owner: c.workflowDesigner,
+    contributionName: "unknown",
+    description: "Workflow designer node renderer contributions."
+  },
+  workflowDesignerToolboxItems: {
+    id: "workflow.designer.toolbox-items",
+    kind: "workflow-designer-toolbox-item",
+    owner: c.workflowDesigner,
+    contributionName: "unknown",
+    description: "Workflow designer toolbox item contributions."
+  },
+  workflowDesignerPanels: {
+    id: "workflow.designer.panels",
+    kind: "workflow-designer-panel",
+    owner: c.workflowDesigner,
+    contributionName: "StudioWorkflowDesignerPanelContribution",
+    description: "Workflow designer side-panel tabs and panel surfaces."
+  },
+  diagnostics: {
+    id: "studio.diagnostics",
+    kind: "diagnostic",
+    owner: c.host,
+    contributionName: "StudioModuleDiagnostic",
+    description: "Module diagnostics surfaced by the host registry.",
+    unavailableContributions: "show-disabled"
+  }
+};
+function m(t) {
+  const e = [];
   return {
-    add(e) {
-      t.push(e);
+    slot: t,
+    add(n) {
+      e.push(n);
     },
     list() {
-      return [...t];
+      return [...e];
     }
   };
 }
-function Rt() {
+function jt() {
   const t = /* @__PURE__ */ new Set();
   return {
-    contextProviders: v(),
-    promptActions: v(),
-    tools: v(),
-    proposalRenderers: v(),
-    surfaces: v(),
+    contextProviders: m(k.aiContextProviders),
+    promptActions: m(k.aiPromptActions),
+    tools: m(k.aiTools),
+    proposalRenderers: m(k.aiProposalRenderers),
+    surfaces: m(k.aiSurfaces),
     dispatchPrompt(e) {
       for (const n of t)
         n(e);
@@ -476,90 +658,90 @@ function Rt() {
     }
   };
 }
-function jt(t, e = {}) {
+function $t(t, e = {}) {
   return {
     baseUrl: t,
     headers: e.headers,
-    http: dt(t, e.headers)
+    http: ht(t, e.headers)
   };
 }
-function dt(t, e) {
+function ht(t, e) {
   return {
     requestJson(n, r) {
-      return y(t, n, w(e, P(r)));
+      return b(t, n, g(e, E(r)));
     },
     async getJson(n, r) {
-      return y(t, n, w(e, P(r)));
+      return b(t, n, g(e, E(r)));
     },
-    async postJson(n, r, s) {
-      return y(t, n, w(e, {
-        ...s,
+    async postJson(n, r, i) {
+      return b(t, n, g(e, {
+        ...i,
         method: "POST",
-        headers: q(s?.headers),
+        headers: q(i?.headers),
         body: JSON.stringify(r)
       }));
     },
-    async putJson(n, r, s) {
-      return y(t, n, w(e, {
-        ...s,
+    async putJson(n, r, i) {
+      return b(t, n, g(e, {
+        ...i,
         method: "PUT",
-        headers: q(s?.headers),
+        headers: q(i?.headers),
         body: JSON.stringify(r)
       }));
     },
     async deleteJson(n, r) {
-      return y(t, n, w(e, P({
+      return b(t, n, g(e, E({
         ...r,
         method: "DELETE"
       })));
     },
-    async postForm(n, r, s) {
-      return y(t, n, w(e, P({
-        ...s,
+    async postForm(n, r, i) {
+      return b(t, n, g(e, E({
+        ...i,
         method: "POST",
         body: r
       })));
     }
   };
 }
-function w(t, e = {}) {
+function g(t, e = {}) {
   return t ? {
     ...e,
-    headers: lt(t, e.headers)
+    headers: pt(t, e.headers)
   } : e;
 }
-function lt(t, e) {
+function pt(t, e) {
   const n = new Headers(t);
-  return new Headers(e).forEach((r, s) => n.set(s, r)), n;
+  return new Headers(e).forEach((r, i) => n.set(i, r)), n;
 }
-async function y(t, e, n) {
-  const r = yt(t, e), s = new AbortController(), i = globalThis.setTimeout(() => s.abort(), F);
-  let o;
+async function b(t, e, n) {
+  const r = At(t, e), i = new AbortController(), o = globalThis.setTimeout(() => i.abort(), F);
+  let s;
   try {
-    o = await fetch(r, {
+    s = await fetch(r, {
       ...n,
-      signal: ht(n?.signal, s.signal)
+      signal: ft(n?.signal, i.signal)
     });
   } catch (a) {
-    throw s.signal.aborted && !n?.signal?.aborted ? new Error(`Request to ${r} timed out after ${F / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : a;
+    throw i.signal.aborted && !n?.signal?.aborted ? new Error(`Request to ${r} timed out after ${F / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : a;
   } finally {
-    globalThis.clearTimeout(i);
+    globalThis.clearTimeout(o);
   }
-  if (!o.ok)
-    throw await D(o);
-  const c = await o.text();
-  if (!c.trim())
+  if (!s.ok)
+    throw await G(s);
+  const d = await s.text();
+  if (!d.trim())
     return {};
   try {
-    return JSON.parse(c);
+    return JSON.parse(d);
   } catch {
-    throw new b(
-      o.status,
-      `Expected JSON from ${r}, but received ${At(o, c)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+    throw new v(
+      s.status,
+      `Expected JSON from ${r}, but received ${kt(s, d)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
-function ht(t, e) {
+function ft(t, e) {
   if (!t)
     return e;
   if (typeof AbortSignal.any == "function")
@@ -567,21 +749,21 @@ function ht(t, e) {
   const n = new AbortController(), r = () => n.abort();
   return t.aborted || e.aborted ? n.abort() : (t.addEventListener("abort", r, { once: !0 }), e.addEventListener("abort", r, { once: !0 })), n.signal;
 }
-async function ft(t) {
+async function wt(t) {
   return (await _(t)).message;
 }
-async function D(t) {
+async function G(t) {
   const e = await _(t);
-  return new b(t.status, e.message, e.validationErrors, e.payload);
+  return new v(t.status, e.message, e.validationErrors, e.payload);
 }
 async function _(t) {
   const e = t.headers.get("content-type") ?? "";
-  if (pt(e))
+  if (gt(e))
     try {
-      const r = await t.json(), s = G(r);
+      const r = await t.json(), i = K(r);
       return {
-        message: wt(r) ?? gt(s) ?? `Request failed with ${t.status}.`,
-        validationErrors: s,
+        message: yt(r) ?? bt(i) ?? `Request failed with ${t.status}.`,
+        validationErrors: i,
         payload: r
       };
     } catch {
@@ -589,33 +771,33 @@ async function _(t) {
     }
   return { message: (await t.text()).trim() || `Request failed with ${t.status}.`, validationErrors: null, payload: null };
 }
-function pt(t) {
+function gt(t) {
   return t.toLowerCase().includes("json");
 }
-async function $t(t) {
-  if (t instanceof b)
+async function It(t) {
+  if (t instanceof v)
     return t.message;
-  if (K(t))
+  if (V(t))
     try {
-      return await ft(t.response.clone());
+      return await wt(t.response.clone());
     } catch {
       return t.response.statusText || "Request failed.";
     }
   return t instanceof Error ? t.message : "Unknown error.";
 }
-async function Jt(t) {
-  if (t instanceof b)
+async function Lt(t) {
+  if (t instanceof v)
     return t.validationErrors;
-  if (!K(t))
+  if (!V(t))
     return null;
   try {
     const e = await t.response.clone().json();
-    return G(e);
+    return K(e);
   } catch {
     return null;
   }
 }
-function wt(t) {
+function yt(t) {
   if (typeof t.detail == "string" && t.detail.length > 0) return t.detail;
   if (typeof t.title == "string" && t.title.length > 0) return t.title;
   if (typeof t.reason == "string" && t.reason.length > 0) return t.reason;
@@ -626,27 +808,27 @@ function wt(t) {
   }
   return null;
 }
-function G(t) {
+function K(t) {
   const e = t.errors;
   if (!e || typeof e != "object" || Array.isArray(e))
     return null;
   const n = {};
-  for (const [r, s] of Object.entries(e)) {
-    const i = Array.isArray(s) ? s.map(String) : [String(s)];
-    i.length > 0 && (n[r] = i);
+  for (const [r, i] of Object.entries(e)) {
+    const o = Array.isArray(i) ? i.map(String) : [String(i)];
+    o.length > 0 && (n[r] = o);
   }
   return Object.keys(n).length > 0 ? n : null;
 }
-function gt(t) {
+function bt(t) {
   return t ? Object.values(t).flat().join(" ") : null;
 }
-function K(t) {
+function V(t) {
   return typeof t == "object" && t !== null && "response" in t && t.response instanceof Response;
 }
-function yt(t, e) {
+function At(t, e) {
   return new URL(e, t).toString();
 }
-function P(t) {
+function E(t) {
   const e = new Headers(t?.headers);
   return e.has("Accept") || e.set("Accept", "application/json"), {
     ...t,
@@ -658,13 +840,13 @@ function q(t) {
   const e = new Headers(t);
   return e.has("Content-Type") || e.set("Content-Type", "application/json"), e.has("Accept") || e.set("Accept", "application/json"), e;
 }
-function At(t, e) {
-  const n = t.headers.get("content-type") ?? "an unknown content type", r = e.trim(), s = r.length > 0 ? `: ${r.slice(0, 80)}` : "";
-  return `${n}${s}`;
+function kt(t, e) {
+  const n = t.headers.get("content-type") ?? "an unknown content type", r = e.trim(), i = r.length > 0 ? `: ${r.slice(0, 80)}` : "";
+  return `${n}${i}`;
 }
-class b extends Error {
-  constructor(e, n, r = null, s = null) {
-    super(n), this.status = e, this.validationErrors = r, this.payload = s, this.name = "StudioHttpError";
+class v extends Error {
+  constructor(e, n, r = null, i = null) {
+    super(n), this.status = e, this.validationErrors = r, this.payload = i, this.name = "StudioHttpError";
   }
   status;
   validationErrors;
@@ -672,29 +854,31 @@ class b extends Error {
 }
 export {
   A as AuthAdapterError,
-  m as AuthConfigurationError,
-  Pt as AuthGuard,
-  kt as AuthProvider,
-  Et as RequireAuth,
-  b as StudioHttpError,
-  Rt as createAiContributionApi,
-  Q as createAuthProviderManager,
-  Tt as createAuthenticatedHttpClient,
-  mt as createBackendAuthProviderManager,
-  v as createContributionRegistry,
-  jt as createEndpointContext,
-  dt as createHttpClient,
-  Ct as createOidcAuthAdapter,
+  S as AuthConfigurationError,
+  Et as AuthGuard,
+  Ct as AuthProvider,
+  xt as RequireAuth,
+  v as StudioHttpError,
+  jt as createAiContributionApi,
+  X as createAuthProviderManager,
+  Rt as createAuthenticatedHttpClient,
+  St as createBackendAuthProviderManager,
+  m as createContributionRegistry,
+  $t as createEndpointContext,
+  ht as createHttpClient,
+  Tt as createOidcAuthAdapter,
   H as createRedirectAuthAdapter,
-  ct as createSignalRAccessTokenFactory,
-  D as createStudioHttpError,
-  $t as describeApiError,
-  ft as readStudioHttpErrorMessage,
-  Jt as tryExtractValidationErrors,
-  St as useAuthCapabilities,
-  R as useAuthContext,
-  rt as useAuthSession,
+  ut as createSignalRAccessTokenFactory,
+  G as createStudioHttpError,
+  It as describeApiError,
+  wt as readStudioHttpErrorMessage,
+  c as studioSlotOwners,
+  k as studioSlots,
+  Lt as tryExtractValidationErrors,
+  Pt as useAuthCapabilities,
+  j as useAuthContext,
+  ot as useAuthSession,
   st as usePermissions,
-  xt as withAuthenticatedSignalROptions,
-  w as withDefaultHeaders
+  Nt as withAuthenticatedSignalROptions,
+  g as withDefaultHeaders
 };

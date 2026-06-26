@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
-import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioExpressionEditorContribution, type StudioFeatureAreaContribution } from "../sdk";
+import { createEndpointContext, describeApiError, studioSlots, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioExpressionEditorContribution, type StudioFeatureAreaContribution, type StudioSlotDefinition, type StudioUnavailableContribution } from "../sdk";
 
 describe("studio registry", () => {
   afterEach(() => {
@@ -20,6 +20,43 @@ describe("studio registry", () => {
     api.panels.add({ id: "first", title: "First", order: 10, component: () => null });
 
     expect(api.panels.list().map(panel => panel.id)).toEqual(["second", "first"]);
+  });
+
+  it("exposes SDK Slot vocabulary and unavailable contribution reasons", () => {
+    const routeSlot: StudioSlotDefinition = studioSlots.routes;
+    const unavailable: StudioUnavailableContribution = {
+      id: "dashboard.offline",
+      moduleId: "sample.dashboard",
+      slotId: studioSlots.dashboardWidgets.id,
+      availability: {
+        state: "backend-unavailable",
+        reason: "The dashboard sample backend endpoint is offline."
+      }
+    };
+
+    expect(routeSlot).toMatchObject({
+      id: "studio.routes",
+      kind: "route",
+      contributionName: "StudioRouteContribution",
+      owner: expect.objectContaining({ kind: "host" })
+    });
+    expect(unavailable.availability.reason).toContain("offline");
+  });
+
+  it("maps existing public registries to Slot definitions", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    expect(api.featureAreas.slot).toMatchObject({ id: "studio.feature-areas", kind: "feature-area" });
+    expect(api.routes.slot).toMatchObject({ id: "studio.routes", kind: "route" });
+    expect(api.dashboardWidgets.slot).toMatchObject({ id: "studio.dashboard.widgets", kind: "dashboard-widget" });
+    expect(api.panels.slot).toMatchObject({ id: "studio.shell.panels", kind: "panel" });
+    expect(api.propertyEditors.slot).toMatchObject({ id: "workflow.activity.property-editors", kind: "property-editor" });
+    expect(api.expressionEditors.slot).toMatchObject({ id: "workflow.expression.editors", kind: "expression-editor" });
+    expect(api.workflowDesigner.panels.slot).toMatchObject({ id: "workflow.designer.panels", kind: "workflow-designer-panel" });
   });
 
   it("registers descriptor-driven property editors with fallback and order-based overrides", () => {
