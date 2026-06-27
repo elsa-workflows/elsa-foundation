@@ -163,6 +163,11 @@ export interface AttachServerLocalRepositoryRequest {
   name?: string;
 }
 
+export interface CloneRepositoryRequest {
+  repositoryUrl: string;
+  name?: string;
+}
+
 export interface CreateProjectRequest {
   templateId: string;
   name: string;
@@ -197,6 +202,13 @@ export async function createWorkspace(context: StudioEndpointContext, request: C
 export async function attachServerLocalRepository(context: StudioEndpointContext, request: AttachServerLocalRepositoryRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/server-local`, {
     path: request.path,
+    displayName: request.name || null
+  }), []);
+}
+
+export async function cloneRepository(context: StudioEndpointContext, request: CloneRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/clone`, {
+    repositoryUrl: request.repositoryUrl,
     displayName: request.name || null
   }), []);
 }
