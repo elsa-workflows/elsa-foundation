@@ -806,6 +806,57 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PromoteRepositoryPackRejectsDirtySourceArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "project pack ok", packageFiles: ["Elsa.Test.RepositoryDirtyPack.1.0.0.nupkg"]);
+        var promotion = new FakePromotionService();
+        var service = CreateService(promotion: promotion, options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryDirtyPack", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj", new("<Project />"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add dirty pack project"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj", new("<Project><PropertyGroup /></Project>"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj"));
+        var result = await service.PromoteBuildAsync(_caller, build!.Id);
+
+        Assert.True(build.Artifact!.SourceIsDirty);
+        Assert.Equal(PromotionStatus.Rejected, result!.Status);
+        Assert.Equal(PromotionRejectionReason.UncommittedSource, result.RejectionReason);
+        Assert.Empty(promotion.PromotedArtifacts);
+    }
+
+    [Fact]
+    public async Task PromoteRepositoryPackArtifactRecordsSelectedSolutionPackage()
+    {
+        var dotnet = await CreateFakeDotNetAsync(
+            exitCode: 0,
+            "solution pack ok",
+            packageFiles: ["Elsa.Test.PromoteA.1.0.0.nupkg", "Elsa.Test.PromoteB.2.0.0.nupkg"]);
+        var promotion = new FakePromotionService();
+        var service = CreateService(promotion: promotion, options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPromotePack", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "RepositoryPromotePack.slnx", new("<Solution />"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add pack solution"));
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "RepositoryPromotePack.slnx"));
+        var selectedArtifact = build!.Artifacts!.Single(artifact => artifact.PackageId == "Elsa.Test.PromoteB");
+
+        var result = await service.PromoteBuildArtifactAsync(_caller, build.Id, selectedArtifact.Id);
+        var runtime = await service.GetRuntimeStatusAsync(_caller, project.Id);
+
+        Assert.False(selectedArtifact.SourceIsDirty);
+        Assert.Equal(PromotionStatus.Accepted, result!.Status);
+        Assert.Equal(selectedArtifact.Id, Assert.Single(promotion.PromotedArtifacts).Id);
+        var package = Assert.Single(runtime!.Packages);
+        Assert.Equal("Elsa.Test.PromoteB", package.PackageId);
+        Assert.Equal("2.0.0", package.Version);
+        Assert.Contains("2.0.0", runtime.AvailableRollbackVersions);
+    }
+
+    [Fact]
     public async Task SubmitBuildReturnsPollableRunningBuildWhenQueued()
     {
         var queue = new CapturingBuildQueue();
@@ -1489,10 +1540,12 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringPromote { get; set; }
         public CancellationTokenSource? CancelDuringRollback { get; set; }
         public CancellationTokenSource? CancelDuringRetry { get; set; }
+        public List<BuildArtifact> PromotedArtifacts { get; } = [];
 
         public Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
         {
             var artifact = build.Artifact!;
+            PromotedArtifacts.Add(artifact);
             CancelDuringPromote?.Cancel();
             return Task.FromResult(new PackagePromotionResult(
                 PromotionStatus.Accepted,
