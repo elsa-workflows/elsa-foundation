@@ -111,6 +111,18 @@ public sealed class FeatureRegistrationTests
     }
 
     [Fact]
+    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilityDiagnosticsProjector()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<IActivityAvailabilityDiagnosticsProjector>());
+    }
+
+    [Fact]
     public void ActivitiesDesignApiFeature_UsesHostConfiguredActivityAvailabilityOptions()
     {
         const string writeLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
