@@ -41,7 +41,10 @@ import {
 } from "lucide-react";
 import {
   applyWorkflowGraphOperationBatchToWorkflow,
+  collectActivityVersionIds,
   createDemoWeaverGraphOperationBatch,
+  findActivityAvailabilityDiagnostic,
+  getActivityAvailabilityStateName,
   getActivityChildSlots,
   getDesignerPosition,
   getSlotActivities
@@ -697,19 +700,6 @@ function createAvailabilityDraft(settings) {
   };
 }
 
-function getAvailabilityStateName(value) {
-  if (typeof value === "string")
-    return value;
-
-  return [
-    "Available",
-    "BlockedByHostBaseline",
-    "HiddenByManagementSettings",
-    "RemovedFromCatalog",
-    "UnresolvedReference"
-  ][value] ?? "Available";
-}
-
 function getAvailabilityStateLabel(value) {
   const state = getAvailabilityStateName(value);
   return {
@@ -794,7 +784,7 @@ function getDesignerMode(rootActivity) {
   return "sequence";
 }
 
-function buildWorkflowDesignerModel(workflow) {
+function buildWorkflowDesignerModel(workflow, availabilityDiagnostics, activityVersionDefinitions) {
   const rootActivity = workflow?.state?.rootActivity;
   if (!rootActivity)
     return { mode: "single", containerTitle: "", nodes: [], edges: [], activityPaths: [] };
@@ -807,6 +797,11 @@ function buildWorkflowDesignerModel(workflow) {
 
   function addActivityNode(activity, path, position, role = "") {
     const normalizedPosition = getDesignerPosition(activity, position);
+    const availabilityWarning = findActivityAvailabilityDiagnostic(
+      activity,
+      availabilityDiagnostics,
+      activityVersionDefinitions
+    );
     activityPaths.push(path);
     nodes.push({
       id: path,
@@ -816,7 +811,8 @@ function buildWorkflowDesignerModel(workflow) {
         title: getActivityDisplayName(activity),
         nodeId: activity.nodeId || "unnamed",
         subtitle: getPrimaryActivityInput(activity),
-        role
+        role,
+        availabilityWarning
       }
     });
   }
@@ -981,6 +977,7 @@ export function App() {
   const [availabilitySettings, setAvailabilitySettings] = useState(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [activityVersionDefinitions, setActivityVersionDefinitions] = useState({});
   const [featureCatalogItems, setFeatureCatalogItems] = useState([]);
   const [featureSearch, setFeatureSearch] = useState("");
   const [featuresLoading, setFeaturesLoading] = useState(false);
@@ -1060,11 +1057,16 @@ export function App() {
   }, [featureCatalogItems, featureSearch]);
 
   const designerParseResult = useMemo(() => parseWorkflowDesignerJson(workflowJson), [workflowJson]);
+  const authoredActivityVersionIds = useMemo(() =>
+    designerParseResult.workflow?.state?.rootActivity
+      ? [...collectActivityVersionIds(designerParseResult.workflow.state.rootActivity)].sort((left, right) => left.localeCompare(right))
+      : [],
+  [designerParseResult.workflow]);
   const designerModel = useMemo(() =>
     designerParseResult.workflow
-      ? buildWorkflowDesignerModel(designerParseResult.workflow)
+      ? buildWorkflowDesignerModel(designerParseResult.workflow, availabilityDiagnostics, activityVersionDefinitions)
       : { mode: "single", containerTitle: "", nodes: [], edges: [], activityPaths: [] },
-  [designerParseResult.workflow]);
+  [activityVersionDefinitions, availabilityDiagnostics, designerParseResult.workflow]);
   const selectedDesignerActivity = useMemo(() =>
     designerModel.activityPaths.includes(selectedDesignerPath)
       ? findActivityByDesignerPath(designerParseResult.workflow?.state?.rootActivity, selectedDesignerPath)
@@ -1189,6 +1191,34 @@ export function App() {
 
     return await response.json();
   }, []);
+
+  useEffect(() => {
+    if (authoredActivityVersionIds.length === 0) {
+      setActivityVersionDefinitions({});
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadAuthoredActivityVersions() {
+      const entries = await Promise.all(authoredActivityVersionIds.map(async (versionId) => {
+        try {
+          const version = await request(`/default/design/activities/versions/${encodeURIComponent(versionId)}`);
+          return [versionId, version?.definition ?? null];
+        } catch {
+          return [versionId, null];
+        }
+      }));
+
+      if (!cancelled)
+        setActivityVersionDefinitions(Object.fromEntries(entries.filter(([, definition]) => definition)));
+    }
+
+    loadAuthoredActivityVersions();
+    return () => {
+      cancelled = true;
+    };
+  }, [authoredActivityVersionIds, request]);
 
   const refreshState = useCallback(async () => {
     const [state, shell] = await Promise.all([
@@ -2297,6 +2327,7 @@ function WorkflowDesigner({
   })), [model.nodes, selectedPath]);
 
   const literalInputs = getActivityLiteralInputs(selectedActivity);
+  const selectedAvailabilityWarning = model.nodes.find((node) => node.id === selectedPath)?.data?.availabilityWarning ?? null;
 
   if (parseError) {
     return (
@@ -2362,6 +2393,15 @@ function WorkflowDesigner({
           <p className="muted">Select an activity node to edit its properties.</p>
         ) : (
           <>
+            {selectedAvailabilityWarning && (
+              <div className="designer-warning">
+                <TriangleAlert size={16} />
+                <div>
+                  <strong>No longer available for new use</strong>
+                  <span>{getAvailabilityStateLabel(selectedAvailabilityWarning.state)}</span>
+                </div>
+              </div>
+            )}
             <label className="designer-field">
               <span>Node ID</span>
               <input
@@ -2403,15 +2443,22 @@ function WorkflowDesigner({
 }
 
 const ActivityDesignerNode = memo(function ActivityDesignerNode({ data, selected }) {
+  const warningLabel = data.availabilityWarning
+    ? getAvailabilityStateLabel(data.availabilityWarning.state)
+    : "";
+
   return (
-    <div className={`designer-node ${selected ? "selected" : ""}`}>
+    <div className={`designer-node ${selected ? "selected" : ""} ${data.availabilityWarning ? "warning" : ""}`}>
       <Handle type="target" position={Position.Top} className="designer-node-handle" />
-      <div className="designer-node-icon"><Activity size={16} /></div>
+      <div className="designer-node-icon">
+        {data.availabilityWarning ? <TriangleAlert size={16} /> : <Activity size={16} />}
+      </div>
       <div>
         <span>{data.role}</span>
         <strong>{data.title}</strong>
         <code>{data.nodeId}</code>
         {data.subtitle && <p>{data.subtitle}</p>}
+        {data.availabilityWarning && <em>{warningLabel}</em>}
       </div>
       <Handle type="source" position={Position.Bottom} className="designer-node-handle" />
     </div>
