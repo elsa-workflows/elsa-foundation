@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Hosting;
@@ -46,14 +47,17 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string _gitExecutable;
     private readonly string _statePath;
 
     public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options)
     {
-        var configuredPath = options.Value.StoragePath;
+        var extensionBuilderOptions = options.Value;
+        var configuredPath = extensionBuilderOptions.StoragePath;
         RootPath = Path.GetFullPath(Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(environment.ContentRootPath, configuredPath));
+        _gitExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.GitExecutable) ? "git" : extensionBuilderOptions.GitExecutable;
         _statePath = Path.Combine(RootPath, "state.json");
     }
 
@@ -119,10 +123,19 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var state = await LoadStateAsync(cancellationToken);
             var now = DateTimeOffset.UtcNow;
             var workspace = new ExtensionWorkspace(CreateId("ws"), ownerId, trustContext, displayName.Trim(), now, now, []);
-            state.Workspaces[workspace.Id] = workspace;
-            Directory.CreateDirectory(GetWorkspacePath(workspace.Id));
-            await SaveStateAsync(state, cancellationToken);
-            return workspace;
+            var workspacePath = GetWorkspacePath(workspace.Id);
+            try
+            {
+                await InitializeManagedRepositoryAsync(workspacePath, workspace.DisplayName, cancellationToken);
+                state.Workspaces[workspace.Id] = workspace;
+                await SaveStateAsync(state, cancellationToken);
+                return workspace;
+            }
+            catch
+            {
+                DeleteDirectoryIfExists(workspacePath);
+                throw;
+            }
         }
         finally
         {
@@ -632,7 +645,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         return false;
     }
 
-    private static ExtensionRepositorySummary ToRepositorySummary(ExtensionBuilderState state, ExtensionWorkspace workspace)
+    private ExtensionRepositorySummary ToRepositorySummary(ExtensionBuilderState state, ExtensionWorkspace workspace)
     {
         var projectIds = workspace.ProjectIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var latestBuild = state.Builds.Values
@@ -643,19 +656,140 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var failedPromotions = projectIds
             .Where(projectId => state.Promotions.TryGetValue(projectId, out _))
             .Sum(projectId => state.Promotions[projectId].Count(promotion => promotion.ReconcileOutcome.IsDegraded));
+        var repositoryState = GetRepositoryState(GetWorkspacePath(workspace.Id));
 
         return new(
             workspace.Id,
             workspace.DisplayName,
             workspace.OwnerId,
-            null,
-            false,
-            "not-connected",
+            repositoryState.ActiveBranch,
+            repositoryState.IsDirty,
+            repositoryState.RemoteState,
             latestBuild?.Status,
             failedBuilds + failedPromotions,
             workspace.ProjectIds.Count,
             workspace.UpdatedAt);
     }
+
+    private async Task InitializeManagedRepositoryAsync(string repositoryPath, string displayName, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(repositoryPath);
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), StarterReadme(displayName), cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, ".gitignore"), StarterGitIgnore(), cancellationToken);
+        Directory.CreateDirectory(Path.Combine(repositoryPath, "src"));
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "src", ".gitkeep"), "", cancellationToken);
+
+        await RunGitAsync(repositoryPath, cancellationToken, "init", "-b", "main");
+        await RunGitAsync(repositoryPath, cancellationToken, "add", ".");
+        await RunGitAsync(
+            repositoryPath,
+            cancellationToken,
+            "-c",
+            "user.name=Elsa Extension Builder",
+            "-c",
+            "user.email=extension-builder@elsa.local",
+            "commit",
+            "-m",
+            "Initial managed repository");
+    }
+
+    private RepositoryState GetRepositoryState(string repositoryPath)
+    {
+        if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
+            return new(null, false, "not-connected");
+
+        var activeBranch = RunGitOrDefault(repositoryPath, "branch", "--show-current");
+        var status = RunGitOrDefault(repositoryPath, "status", "--porcelain");
+        var remotes = RunGitOrDefault(repositoryPath, "remote");
+        return new(
+            string.IsNullOrWhiteSpace(activeBranch) ? null : activeBranch,
+            !string.IsNullOrWhiteSpace(status),
+            string.IsNullOrWhiteSpace(remotes) ? "not-connected" : "connected");
+    }
+
+    private async Task RunGitAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var result = await RunProcessAsync(_gitExecutable, workingDirectory, cancellationToken, arguments);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Git command failed: {string.Join(' ', arguments)}{Environment.NewLine}{result.Error}".TrimEnd());
+    }
+
+    private string RunGitOrDefault(string workingDirectory, params string[] arguments)
+    {
+        try
+        {
+            var result = RunProcess(_gitExecutable, workingDirectory, arguments);
+            return result.ExitCode == 0 ? result.Output.Trim() : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static async Task<ProcessResult> RunProcessAsync(string fileName, string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    {
+        try
+        {
+            using var process = StartProcess(fileName, workingDirectory, arguments);
+            try
+            {
+                var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+                var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+                await process.WaitForExitAsync(cancellationToken);
+                return new(process.ExitCode, await outputTask, await errorTask);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+
+                throw;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidOperationException($"Could not start '{fileName}'.", ex);
+        }
+    }
+
+    private static ProcessResult RunProcess(string fileName, string workingDirectory, params string[] arguments)
+    {
+        using var process = StartProcess(fileName, workingDirectory, arguments);
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new(process.ExitCode, output, error);
+    }
+
+    private static Process StartProcess(string fileName, string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo(fileName)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        return Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
+    }
+
+    private static string StarterReadme(string displayName) =>
+        $$"""
+        # {{displayName}}
+
+        Managed Extension Builder repository.
+        """;
+
+    private static string StarterGitIgnore() =>
+        """
+        bin/
+        obj/
+        *.user
+        """;
 
     private async Task<string> WriteFileCoreAsync(string projectId, string path, string content, CancellationToken cancellationToken)
     {
@@ -770,6 +904,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     }
 
     private static string CreateId(string prefix) => $"{prefix}_{Guid.NewGuid():N}";
+
+    private sealed record RepositoryState(string? ActiveBranch, bool IsDirty, string RemoteState);
+
+    private sealed record ProcessResult(int ExitCode, string Output, string Error);
 
     private sealed class ExtensionBuilderState
     {

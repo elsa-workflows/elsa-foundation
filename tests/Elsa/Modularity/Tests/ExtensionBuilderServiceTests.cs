@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using Elsa.Modularity.Core.Contracts;
@@ -66,6 +67,41 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.Equal("not-connected", repository.RemoteState);
         Assert.False(repository.IsDirty);
         Assert.Empty(otherOwnerRepositories);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceInitializesManagedRepositoryWithStarterCommit()
+    {
+        var service = CreateService();
+
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Managed Extensions"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.True(Directory.Exists(Path.Combine(repositoryPath, ".git")));
+        Assert.Contains("Managed Extensions", await File.ReadAllTextAsync(Path.Combine(repositoryPath, "README.md")));
+        Assert.Equal("1", await GitAsync(repositoryPath, "rev-list", "--count", "HEAD"));
+        Assert.Equal("Elsa Extension Builder|extension-builder@elsa.local|Initial managed repository", await GitAsync(repositoryPath, "log", "-1", "--pretty=%an|%ae|%s"));
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceCleansUpWhenManagedRepositoryInitializationFails()
+    {
+        var service = CreateService(options: new ExtensionBuilderOptions
+        {
+            StoragePath = Path.Combine(_directory, "state"),
+            GitExecutable = "missing-git-executable"
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateWorkspaceAsync(_caller, new("Broken Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        var workspacesPath = Path.Combine(_directory, "state", "workspaces");
+        Assert.True(!Directory.Exists(workspacesPath) || !Directory.EnumerateDirectories(workspacesPath).Any());
     }
 
     [Fact]
@@ -630,10 +666,11 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         IExtensionBuilderPromotionService? promotion = null,
         FakeNuplaneAdmin? nuplane = null,
         IFeatureManagementService? featureManagement = null,
-        ExtensionBuilderStorage? storage = null)
+        ExtensionBuilderStorage? storage = null,
+        ExtensionBuilderOptions? options = null)
     {
         nuplane ??= new FakeNuplaneAdmin();
-        storage ??= CreateStorage();
+        storage ??= CreateStorage(options);
         buildRunner ??= new FakeBuildRunner(BuildStatus.Succeeded);
         buildQueue ??= new ImmediateBuildQueue(new ExtensionBuilderBuildExecutor(storage, buildRunner, NullLogger<ExtensionBuilderBuildExecutor>.Instance));
         return new(
@@ -646,12 +683,34 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             NullLogger<ExtensionBuilderService>.Instance);
     }
 
-    private ExtensionBuilderStorage CreateStorage() =>
+    private ExtensionBuilderStorage CreateStorage(ExtensionBuilderOptions? options = null) =>
         new(
             new FakeEnvironment(_directory),
-            Options.Create(new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+            Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)!;
+        var output = await process.StandardOutput.ReadToEndAsync();
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException(error);
+
+        return output.Trim();
+    }
 
     private static void CreatePackage(
         string path,
