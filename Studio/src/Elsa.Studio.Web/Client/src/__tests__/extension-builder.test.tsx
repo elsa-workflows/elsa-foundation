@@ -116,6 +116,40 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("creates a managed repository, refreshes the rail, and selects it", async () => {
+    let created = false;
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/workspaces")) {
+        created = true;
+        expect(body).toEqual({ displayName: "Managed Repository" });
+        return managedWorkspace();
+      }
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/capabilities")) return trustedCapabilities();
+      if (url.endsWith("/repositories")) return created ? [repositorySummary(), managedRepositorySummary()] : [repositorySummary()];
+      if (url.endsWith("/workspaces")) return created ? [workspaceWithProject(), managedWorkspace()] : [workspaceWithProject()];
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Team Extensions");
+
+    const repositoryName = await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']");
+    await fill(repositoryName, "Managed Repository");
+    await clickButton(container, "Create managed repo");
+    await waitForText(container, "Created managed repository Managed Repository.");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces", { displayName: "Managed Repository" });
+    expect(container.textContent).toContain("Managed Repository: 0 project(s), not connected on main.");
+    const activeRepository = container.querySelector(".modules-source-button.active");
+    expect(activeRepository?.textContent).toContain("Managed Repository");
+    expect(activeRepository?.textContent).toContain("main · not connected");
+    expect(activeRepository?.textContent).not.toContain("dirty");
+
+    await unmount();
+  });
+
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
@@ -489,6 +523,31 @@ function repositorySummary(overrides?: Partial<ExtensionRepositorySummary>) {
     projectCount: 1,
     updatedAt: new Date().toISOString(),
     ...overrides
+  };
+}
+
+function managedWorkspace() {
+  return {
+    id: "ws-managed",
+    displayName: "Managed Repository",
+    ownerId: "alice",
+    trustContext: "trusted-team",
+    projectIds: []
+  };
+}
+
+function managedRepositorySummary() {
+  return {
+    id: "ws-managed",
+    name: "Managed Repository",
+    ownerId: "alice",
+    activeBranch: "main",
+    isDirty: false,
+    remoteState: "not-connected",
+    latestBuildStatus: null,
+    attentionCount: 0,
+    projectCount: 0,
+    updatedAt: new Date().toISOString()
   };
 }
 

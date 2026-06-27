@@ -312,11 +312,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleCreateWorkspace() {
     if (!workspaceName.trim()) {
-      setError("Workspace name is required.");
+      setError("Repository name is required.");
       return;
     }
 
-    const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created workspace ${workspaceName.trim()}.`);
+    const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created managed repository ${workspaceName.trim()}.`);
     if (workspace) {
       if (await refreshWorkspacesSafely({ preserveSelection: true })) {
         setSelectedWorkspaceId(workspace.id);
@@ -758,7 +758,7 @@ function WorkspaceBrowser({
         <summary>New or Clone</summary>
         <label>
           <span>Repository name</span>
-          <input aria-label="Workspace name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
+          <input aria-label="Repository name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
         </label>
         <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
