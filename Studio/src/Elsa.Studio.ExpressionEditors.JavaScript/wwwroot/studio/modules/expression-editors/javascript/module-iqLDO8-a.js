@@ -1,46 +1,46 @@
-import { lazy as C, Suspense as E } from "react";
-var d = { exports: {} }, l = {};
-var p;
-function S() {
-  if (p) return l;
-  p = 1;
+import { useMemo as E, lazy as S, Suspense as R } from "react";
+var c = { exports: {} }, u = {};
+var v;
+function J() {
+  if (v) return u;
+  v = 1;
   var e = /* @__PURE__ */ Symbol.for("react.transitional.element"), r = /* @__PURE__ */ Symbol.for("react.fragment");
-  function s(i, a, n) {
+  function s(n, a, i) {
     var o = null;
-    if (n !== void 0 && (o = "" + n), a.key !== void 0 && (o = "" + a.key), "key" in a) {
-      n = {};
-      for (var u in a)
-        u !== "key" && (n[u] = a[u]);
-    } else n = a;
-    return a = n.ref, {
+    if (i !== void 0 && (o = "" + i), a.key !== void 0 && (o = "" + a.key), "key" in a) {
+      i = {};
+      for (var l in a)
+        l !== "key" && (i[l] = a[l]);
+    } else i = a;
+    return a = i.ref, {
       $$typeof: e,
-      type: i,
+      type: n,
       key: o,
       ref: a !== void 0 ? a : null,
-      props: n
+      props: i
     };
   }
-  return l.Fragment = r, l.jsx = s, l.jsxs = s, l;
+  return u.Fragment = r, u.jsx = s, u.jsxs = s, u;
 }
-var x;
-function R() {
-  return x || (x = 1, d.exports = S()), d.exports;
+var f;
+function N() {
+  return f || (f = 1, c.exports = J()), c.exports;
 }
-var t = R();
-function v({
+var t = N();
+function j({
   document: e,
   readOnly: r,
   minHeight: s,
-  ariaLabel: i,
+  ariaLabel: n,
   onChange: a
 }) {
-  const n = (o) => {
+  const i = (o) => {
     r || a({ ...e, value: o.target.value });
   };
   return /* @__PURE__ */ t.jsx(
     "textarea",
     {
-      "aria-label": i,
+      "aria-label": n,
       "aria-readonly": r,
       className: "studio-code-editor-input",
       readOnly: r,
@@ -49,92 +49,77 @@ function v({
       autoCorrect: "off",
       value: e.value,
       style: { minHeight: s },
-      onChange: n
+      onChange: i
     }
   );
 }
-const f = {
-  language: "javascript",
-  displayName: "JavaScript",
-  async loadSupport() {
-    return { language: "javascript" };
-  }
-};
-function J(e) {
-  const r = e.trim().toLowerCase();
-  return r === "javascript" || r === "typescript" ? f : null;
-}
-const N = C(() => import("./CodeMirrorStudioCodeEditor-DXWjxCLM.js").then((e) => e.C).then((e) => ({
-  default: e.CodeMirrorStudioCodeEditor
-})));
-function k({
+function g({
   document: e,
   diagnostics: r = [],
   readOnly: s = !1,
-  theme: i = "studio",
+  theme: n = "studio",
   minHeight: a = "220px",
-  ariaLabel: n,
+  ariaLabel: i,
   languageAdapter: o,
-  onChange: u
+  onChange: l
 }) {
-  const h = r.filter((c) => !c.uri || c.uri === e.uri), m = (o ?? J(e.language))?.displayName ?? e.language, g = L(e.language);
+  const h = r.filter((x) => !x.uri || x.uri === e.uri), C = o?.displayName ?? e.language, d = o?.loadEditor, p = E(
+    () => d ? S(d) : null,
+    [d]
+  );
   return /* @__PURE__ */ t.jsxs(
     "section",
     {
       className: "studio-code-editor",
       "data-language": e.language,
-      "data-theme": i,
+      "data-theme": n,
       "data-readonly": s,
       children: [
         /* @__PURE__ */ t.jsxs("div", { className: "studio-code-editor-header", children: [
-          /* @__PURE__ */ t.jsx("span", { children: m }),
+          /* @__PURE__ */ t.jsx("span", { children: C }),
           /* @__PURE__ */ t.jsx("code", { children: e.uri })
         ] }),
-        g ? /* @__PURE__ */ t.jsx(E, { fallback: /* @__PURE__ */ t.jsx(
-          v,
+        p ? /* @__PURE__ */ t.jsx(R, { fallback: /* @__PURE__ */ t.jsx(
+          j,
           {
             document: e,
             readOnly: s,
             minHeight: a,
-            ariaLabel: n,
-            onChange: u
+            ariaLabel: i,
+            onChange: l
           }
         ), children: /* @__PURE__ */ t.jsx(
-          N,
+          p,
           {
             document: e,
             readOnly: s,
-            theme: i,
+            theme: n,
             minHeight: a,
-            ariaLabel: n,
-            onChange: u
+            ariaLabel: i,
+            onChange: l
           }
         ) }) : /* @__PURE__ */ t.jsx(
-          v,
+          j,
           {
             document: e,
             readOnly: s,
             minHeight: a,
-            ariaLabel: n,
-            onChange: u
+            ariaLabel: i,
+            onChange: l
           }
         ),
-        /* @__PURE__ */ t.jsx($, { diagnostics: h })
+        /* @__PURE__ */ t.jsx(k, { diagnostics: h })
       ]
     }
   );
 }
-function L(e) {
-  const r = e.trim().toLowerCase();
-  return r === "javascript" || r === "typescript";
-}
-function $({ diagnostics: e }) {
+function k({ diagnostics: e }) {
   return e.length === 0 ? null : /* @__PURE__ */ t.jsx("div", { className: "studio-code-editor-diagnostics", role: "status", children: e.map((r, s) => {
-    const i = r.severity ?? "info", a = A(r);
+    const n = r.severity ?? "info", a = $(r);
     return /* @__PURE__ */ t.jsxs(
       "p",
       {
-        className: `studio-code-editor-diagnostic ${i}`,
+        className: `studio-code-editor-diagnostic ${n}`,
         children: [
           r.code ? /* @__PURE__ */ t.jsx("span", { children: r.code }) : null,
           a ? /* @__PURE__ */ t.jsx("small", { children: a }) : null,
@@ -145,65 +130,74 @@ function $({ diagnostics: e }) {
     );
   }) });
 }
-function A(e) {
+function $(e) {
   return e.startLineNumber ? e.startColumn ? `${e.startLineNumber}:${e.startColumn}` : String(e.startLineNumber) : null;
 }
-const y = "JavaScript";
+const _ = {
+  language: "javascript",
+  displayName: "JavaScript",
+  async loadEditor() {
+    return { default: (await import("./CodeMirrorStudioCodeEditor-CmsxsL0Q.js").then((r) => r.C)).CodeMirrorStudioCodeEditor };
+  },
+  async loadSupport() {
+    return { language: "javascript" };
+  }
+}, y = "JavaScript";
 function q(e) {
   e.expressionEditors.add({
     id: "elsa.javascript-expression-editor",
     order: 100,
     supports: (r) => r.syntax === y,
     surfaces: {
-      inline: _,
+      inline: L,
       expanded: T
     }
   });
 }
-function _({ value: e, disabled: r, onChange: s }) {
+function L({ value: e, disabled: r, onChange: s }) {
   return /* @__PURE__ */ t.jsx(
     "textarea",
     {
       "aria-label": "JavaScript expression",
       className: "js-expression-editor inline",
-      value: j(e),
+      value: m(e),
       disabled: r,
       rows: 2,
       spellCheck: !1,
       autoCapitalize: "off",
       autoCorrect: "off",
-      onChange: (i) => s(i.target.value)
+      onChange: (n) => s(n.target.value)
     }
   );
 }
-function T({ descriptor: e, value: r, disabled: s, onChange: i }) {
+function T({ descriptor: e, value: r, disabled: s, onChange: n }) {
   const a = {
     uri: `elsa://expressions/javascript/${encodeURIComponent(e.name || "expression")}`,
     language: "javascript",
-    value: j(r)
+    value: m(r)
   };
   return /* @__PURE__ */ t.jsxs("div", { className: "js-expression-expanded", children: [
     /* @__PURE__ */ t.jsx("div", { className: "js-expression-toolbar", "aria-hidden": "true", children: /* @__PURE__ */ t.jsx("span", { children: "JavaScript" }) }),
     /* @__PURE__ */ t.jsx(
-      k,
+      g,
       {
         ariaLabel: "JavaScript expanded expression",
         document: a,
-        languageAdapter: f,
+        languageAdapter: _,
         minHeight: "260px",
         readOnly: s,
         theme: "dark",
-        onChange: (n) => i(n.value)
+        onChange: (i) => n(i.value)
       }
     )
   ] });
 }
-function j(e) {
+function m(e) {
   return e == null ? "" : String(e);
 }
 export {
   T as J,
-  _ as a,
+  L as a,
   t as j,
   q as r
 };

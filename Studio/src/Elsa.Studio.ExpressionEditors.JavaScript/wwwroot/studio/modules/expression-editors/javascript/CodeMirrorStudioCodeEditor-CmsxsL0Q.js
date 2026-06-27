@@ -1,4 +1,4 @@
-import { j as La } from "./module-BVvtQwcp.js";
+import { j as La } from "./module-iqLDO8-a.js";
 import { useState as Ut, useLayoutEffect as Ef, useEffect as _t, forwardRef as Rf, useRef as Pf, useImperativeHandle as If, useCallback as Nf } from "react";
 function sr() {
   return sr = Object.assign ? Object.assign.bind() : function(n) {
@@ -17495,7 +17495,7 @@ var kb = ["className", "value", "selection", "extensions", "onChange", "onStatis
 Df.displayName = "CodeMirror";
 async function Sb(n) {
   const e = n.trim().toLowerCase();
-  return e === "javascript" || e === "typescript" ? (await import("./javascriptCodeMirror-AeICnAPs.js")).createJavaScriptCodeMirrorExtensions() : [];
+  return e === "javascript" || e === "typescript" ? (await import("./javascriptCodeMirror-XUjYMPWK.js")).createJavaScriptCodeMirrorExtensions() : [];
 }
 function Cb({
   document: n,

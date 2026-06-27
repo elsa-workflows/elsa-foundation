@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { Extension } from "@codemirror/state";
-import type { StudioCodeEditorProps } from "../types";
+import type { StudioCodeEditorEngineProps } from "../types";
 import { loadCodeMirrorLanguageExtensions } from "./codeMirrorLanguages";
 
 export function CodeMirrorStudioCodeEditor({
@@ -11,7 +11,7 @@ export function CodeMirrorStudioCodeEditor({
   minHeight = "220px",
   ariaLabel,
   onChange
-}: StudioCodeEditorProps) {
+}: StudioCodeEditorEngineProps) {
   const [extensions, setExtensions] = useState<Extension[]>([]);
 
   useEffect(() => {

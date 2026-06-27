@@ -72,6 +72,12 @@ importers:
         specifier: workspace:*
         version: link:../../Elsa.Studio.CodeEditor/Client
 
+  src/Elsa.Studio.ExpressionEditors.Liquid/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.CodeEditor/Client
+
   src/Elsa.Studio.FeatureManagement/Client: {}
 
   src/Elsa.Studio.Samples.Dashboard/Client: {}
