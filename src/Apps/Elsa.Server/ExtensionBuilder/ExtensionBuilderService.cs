@@ -8,10 +8,29 @@ internal interface IExtensionBuilderService
 {
     ExtensionBuilderCapabilities GetCapabilities(ExtensionBuilderCaller caller);
     Task<IReadOnlyList<ExtensionTemplate>> ListTemplatesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(ExtensionBuilderCaller caller, CreateWorkspaceRequest request, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkspace> AttachServerLocalRepositoryAsync(ExtensionBuilderCaller caller, AttachServerLocalRepositoryRequest request, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkspace> CloneRepositoryAsync(ExtensionBuilderCaller caller, CloneRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(ExtensionBuilderCaller caller, string workspaceId, string? sessionId, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default);
+    Task<RepositoryTree?> GetRepositoryTreeAsync(ExtensionBuilderCaller caller, string workspaceId, string? selectedSolutionPath, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> ReadRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
+    Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(ExtensionBuilderCaller caller, string workspaceId, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> GetSourceControlStatusAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<SourceControlDiff?> GetSourceControlDiffAsync(ExtensionBuilderCaller caller, string workspaceId, string path, bool staged, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> UnstageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageAllRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PushRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PullRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -19,11 +38,13 @@ internal interface IExtensionBuilderService
     Task<ProjectFile?> ReadProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default);
     Task<ProjectFile?> WriteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default);
+    Task<BuildResult?> SubmitRepositoryBuildAsync(ExtensionBuilderCaller caller, string workspaceId, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default);
     Task<BuildResult?> SubmitBuildAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<BuildResult?> GetBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<string?> GetBuildLogAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<BuildArtifact?> GetBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
+    Task<PackagePromotionResult?> PromoteBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, string artifactId, CancellationToken cancellationToken = default);
     Task<ExtensionRuntimeStatus?> GetRuntimeStatusAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<PackagePromotionResult?> RollbackPackageAsync(ExtensionBuilderCaller caller, string projectId, RollbackPackageRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionBuilderOperationResponse?> RetryReconciliationAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -44,11 +65,25 @@ internal sealed class ExtensionBuilderService(
     public Task<IReadOnlyList<ExtensionTemplate>> ListTemplatesAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(templates.List());
 
+    public Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default) =>
+        storage.ListRepositoriesAsync(caller.OwnerId, cancellationToken);
+
     public Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default) =>
         storage.ListWorkspacesAsync(caller.OwnerId, cancellationToken);
 
     public Task<ExtensionWorkspace> CreateWorkspaceAsync(ExtensionBuilderCaller caller, CreateWorkspaceRequest request, CancellationToken cancellationToken = default) =>
         storage.CreateWorkspaceAsync(caller.OwnerId, caller.DisplayName, request.DisplayName, cancellationToken);
+
+    public Task<ExtensionWorkspace> AttachServerLocalRepositoryAsync(ExtensionBuilderCaller caller, AttachServerLocalRepositoryRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!caller.HasManagementAccess || !caller.IsTrusted)
+            throw new UnauthorizedAccessException("Server-local repository attach requires an administrative caller.");
+
+        return storage.AttachServerLocalRepositoryAsync(caller.OwnerId, caller.DisplayName, request, cancellationToken);
+    }
+
+    public Task<ExtensionWorkspace> CloneRepositoryAsync(ExtensionBuilderCaller caller, CloneRepositoryRequest request, CancellationToken cancellationToken = default) =>
+        storage.CloneRepositoryAsync(caller.OwnerId, caller.DisplayName, request, cancellationToken);
 
     public Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
         storage.GetWorkspaceAsync(workspaceId, caller.OwnerId, cancellationToken);
@@ -56,9 +91,62 @@ internal sealed class ExtensionBuilderService(
     public Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
         storage.DeleteWorkspaceAsync(workspaceId, caller.OwnerId, cancellationToken);
 
+    public Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(ExtensionBuilderCaller caller, string workspaceId, string? sessionId, CancellationToken cancellationToken = default) =>
+        storage.ListWorkingCopiesAsync(workspaceId, caller.OwnerId, sessionId, cancellationToken);
+
+    public Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default) =>
+        storage.SelectWorkingCopyAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<RepositoryTree?> GetRepositoryTreeAsync(ExtensionBuilderCaller caller, string workspaceId, string? selectedSolutionPath, CancellationToken cancellationToken = default) =>
+        storage.GetRepositoryTreeAsync(workspaceId, caller.OwnerId, selectedSolutionPath, cancellationToken);
+
+    public Task<RepositoryFile?> ReadRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default) =>
+        storage.ReadRepositoryFileAsync(workspaceId, caller.OwnerId, path, cancellationToken);
+
+    public Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default) =>
+        storage.WriteRepositoryFileAsync(workspaceId, caller.OwnerId, path, request.Content, cancellationToken);
+
+    public Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(ExtensionBuilderCaller caller, string workspaceId, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default)
+    {
+        var template = templates.Find(request.TemplateId) ?? throw new ArgumentException($"Trusted template '{request.TemplateId}' was not found.", nameof(request));
+        return storage.ApplyRepositoryTemplateAsync(workspaceId, caller.OwnerId, template, request, cancellationToken);
+    }
+
+    public Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default) =>
+        storage.MoveRepositoryFileAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default) =>
+        storage.DeleteRepositoryFileAsync(workspaceId, caller.OwnerId, path, cancellationToken);
+
+    public Task<SourceControlStatus?> GetSourceControlStatusAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.GetSourceControlStatusAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<SourceControlDiff?> GetSourceControlDiffAsync(ExtensionBuilderCaller caller, string workspaceId, string path, bool staged, CancellationToken cancellationToken = default) =>
+        storage.GetSourceControlDiffAsync(workspaceId, caller.OwnerId, path, staged, cancellationToken);
+
+    public Task<SourceControlStatus?> StageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default) =>
+        storage.StageRepositoryFileAsync(workspaceId, caller.OwnerId, request.Path, cancellationToken);
+
+    public Task<SourceControlStatus?> UnstageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default) =>
+        storage.UnstageRepositoryFileAsync(workspaceId, caller.OwnerId, request.Path, cancellationToken);
+
+    public Task<SourceControlStatus?> StageAllRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.StageAllRepositoryChangesAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default) =>
+        storage.CommitRepositoryChangesAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<RemoteSyncResult?> PushRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.PushRepositoryAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<RemoteSyncResult?> PullRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.PullRepositoryAsync(workspaceId, caller.OwnerId, cancellationToken);
+
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         var template = templates.Find(request.TemplateId) ?? throw new ArgumentException($"Template '{request.TemplateId}' was not found.", nameof(request));
+        if (template.Scope is not ExtensionTemplateScope.Project)
+            throw new ArgumentException($"Template '{request.TemplateId}' is not a project template.", nameof(request));
         return await storage.CreateProjectAsync(workspaceId, caller.OwnerId, template, request, cancellationToken);
     }
 
@@ -79,6 +167,18 @@ internal sealed class ExtensionBuilderService(
 
     public Task<bool> DeleteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default) =>
         storage.DeleteFileAsync(projectId, caller.OwnerId, path, cancellationToken);
+
+    public async Task<BuildResult?> SubmitRepositoryBuildAsync(ExtensionBuilderCaller caller, string workspaceId, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProjectId))
+            throw new ArgumentException("A project id is required for repository build history.", nameof(request));
+
+        var project = await storage.GetProjectAsync(request.ProjectId, caller.OwnerId, cancellationToken);
+        if (project is null || !string.Equals(project.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return await storage.SubmitRepositoryBuildAsync(workspaceId, caller.OwnerId, project, request, cancellationToken);
+    }
 
     public async Task<BuildResult?> SubmitBuildAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default)
     {
@@ -138,7 +238,13 @@ internal sealed class ExtensionBuilderService(
         return build?.Artifact is { } artifact && File.Exists(artifact.Path) ? artifact : null;
     }
 
-    public async Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default)
+    public Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default) =>
+        PromoteBuildArtifactCoreAsync(caller, buildId, null, cancellationToken);
+
+    public Task<PackagePromotionResult?> PromoteBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, string artifactId, CancellationToken cancellationToken = default) =>
+        PromoteBuildArtifactCoreAsync(caller, buildId, artifactId, cancellationToken);
+
+    private async Task<PackagePromotionResult?> PromoteBuildArtifactCoreAsync(ExtensionBuilderCaller caller, string buildId, string? artifactId, CancellationToken cancellationToken)
     {
         var build = await storage.GetBuildAsync(buildId, caller.OwnerId, cancellationToken);
         if (build is null)
@@ -146,13 +252,20 @@ internal sealed class ExtensionBuilderService(
         if (!await storage.ProjectExistsAsync(build.ProjectId, cancellationToken))
             return null;
 
-        var result = await promotionService.PromoteAsync(build, cancellationToken);
-        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null } && build.Artifact is not null)
+        var artifact = SelectArtifact(build, artifactId);
+        if (artifact is null || !File.Exists(artifact.Path))
+            return Rejected(PromotionRejectionReason.InvalidManifest);
+        if (artifact.SourceIsDirty || string.Equals(artifact.SourceRevisionId, "working-tree", StringComparison.OrdinalIgnoreCase))
+            return Rejected(PromotionRejectionReason.UncommittedSource);
+
+        var promotableBuild = build with { Artifact = artifact };
+        var result = await promotionService.PromoteAsync(promotableBuild, cancellationToken);
+        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null })
         {
             var recorded = await storage.AddPromotionAsync(build.ProjectId, new(
                 result.PublishedPackage.PackageId,
                 result.PublishedPackage.Version,
-                build.Artifact.Path,
+                artifact.Path,
                 result.PublishedPackage.Path,
                 DateTimeOffset.UtcNow,
                 result.ReconcileOutcome,
@@ -168,6 +281,14 @@ internal sealed class ExtensionBuilderService(
 
         return result;
     }
+
+    private static BuildArtifact? SelectArtifact(BuildResult build, string? artifactId) =>
+        string.IsNullOrWhiteSpace(artifactId)
+            ? build.Artifact
+            : (build.Artifacts ?? []).FirstOrDefault(artifact => string.Equals(artifact.Id, artifactId, StringComparison.OrdinalIgnoreCase));
+
+    private static PackagePromotionResult Rejected(PromotionRejectionReason reason) =>
+        new(PromotionStatus.Rejected, reason, null, null, false, false);
 
     public async Task<ExtensionRuntimeStatus?> GetRuntimeStatusAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default)
     {

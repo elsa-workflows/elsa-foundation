@@ -21,6 +21,47 @@ internal enum ProjectFileKind
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RepositoryFileKind
+{
+    Solution,
+    Project,
+    Folder,
+    File
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum ExtensionTemplateScope
+{
+    Repository,
+    Solution,
+    Project,
+    Item
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RemoteSyncOperation
+{
+    Push,
+    Pull
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RemoteSyncState
+{
+    Completed,
+    Blocked
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RepositoryBuildCommand
+{
+    Restore,
+    Build,
+    Test,
+    Pack
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -50,7 +91,8 @@ internal enum PromotionRejectionReason
     Duplicate,
     InvalidManifest,
     DependencyPolicy,
-    MalformedPackage
+    MalformedPackage,
+    UncommittedSource
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -60,6 +102,18 @@ internal enum ExtensionPackageRuntimeState
     PendingRestart,
     FailedReconciliation
 }
+
+internal sealed record ExtensionRepositorySummary(
+    string Id,
+    string Name,
+    string OwnerId,
+    string? ActiveBranch,
+    bool IsDirty,
+    string RemoteState,
+    BuildStatus? LatestBuildStatus,
+    int AttentionCount,
+    int ProjectCount,
+    DateTimeOffset UpdatedAt);
 
 internal sealed record ExtensionBuilderCaller(
     string OwnerId,
@@ -80,6 +134,27 @@ internal sealed record ExtensionBuilderCapabilities(
 
 internal sealed record CreateWorkspaceRequest(string DisplayName);
 
+internal sealed record AttachServerLocalRepositoryRequest(string Path, string? DisplayName);
+
+internal sealed record CloneRepositoryRequest(string RepositoryUrl, string? DisplayName);
+
+internal sealed record SelectWorkingCopyRequest(
+    string SessionId,
+    string? BranchName,
+    bool AllowProtectedBranchEdit);
+
+internal sealed record ExtensionWorkingCopySummary(
+    string Id,
+    string WorkspaceId,
+    string OwnerId,
+    string SessionId,
+    string BranchName,
+    bool IsActive,
+    bool IsProtectedBranch,
+    bool IsDirty,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
 internal sealed record CreateProjectRequest(
     string TemplateId,
     string PackageId,
@@ -89,6 +164,16 @@ internal sealed record CreateProjectRequest(
     string? Description);
 
 internal sealed record WriteProjectFileRequest(string Content);
+
+internal sealed record MoveRepositoryFileRequest(
+    string SourcePath,
+    string DestinationPath);
+
+internal sealed record ApplyRepositoryTemplateRequest(
+    string TemplateId,
+    ExtensionTemplateScope? Scope,
+    string? TargetPath,
+    IReadOnlyDictionary<string, string>? Parameters);
 
 internal sealed record RollbackPackageRequest(string Version);
 
@@ -133,11 +218,91 @@ internal sealed record ProjectFileSummary(
     long Size,
     DateTimeOffset UpdatedAt);
 
+internal sealed record RepositorySolutionSummary(
+    string Path,
+    string Name,
+    bool IsSelected);
+
+internal sealed record RepositoryFileSummary(
+    string Path,
+    RepositoryFileKind Kind,
+    long Size,
+    bool IsDirty,
+    DateTimeOffset UpdatedAt);
+
+internal sealed record RepositoryTree(
+    string WorkspaceId,
+    string? ActiveBranch,
+    bool IsDirty,
+    IReadOnlyList<RepositorySolutionSummary> Solutions,
+    IReadOnlyList<RepositoryFileSummary> Entries);
+
+internal sealed record RepositoryFile(
+    string Path,
+    string Content,
+    RepositoryFileKind Kind,
+    long Size,
+    bool IsDirty,
+    DateTimeOffset UpdatedAt);
+
+internal sealed record SourceControlFileStatus(
+    string Path,
+    string Status,
+    bool IsStaged,
+    bool IsUnstaged);
+
+internal sealed record SourceControlStatus(
+    string WorkspaceId,
+    string? ActiveBranch,
+    bool IsDirty,
+    IReadOnlyList<SourceControlFileStatus> ChangedFiles,
+    IReadOnlyList<SourceControlFileStatus> StagedFiles,
+    IReadOnlyList<SourceControlFileStatus> UnstagedFiles);
+
+internal sealed record SourceControlDiff(
+    string Path,
+    bool IsStaged,
+    string Patch);
+
+internal sealed record SourceControlPathRequest(string Path);
+
+internal sealed record SourceControlCommitRequest(string Message);
+
+internal sealed record SourceControlCommitResult(
+    string CommitId,
+    string Message,
+    SourceControlStatus Status);
+
+internal sealed record RemoteSyncResult(
+    RemoteSyncOperation Operation,
+    RemoteSyncState State,
+    string Message,
+    string? Remote,
+    string? Branch,
+    int Ahead,
+    int Behind,
+    SourceControlStatus Status);
+
+internal sealed record AppliedRepositoryTemplate(
+    string TemplateId,
+    ExtensionTemplateScope Scope,
+    IReadOnlyList<RepositoryFileSummary> Files,
+    RepositoryTree Tree);
+
+internal sealed record ExtensionTemplateParameter(
+    string Name,
+    string DisplayName,
+    bool Required,
+    string? DefaultValue);
+
 internal sealed record ExtensionTemplate(
     string Id,
     ExtensionTemplateKind Kind,
     string DisplayName,
     string Description,
+    ExtensionTemplateScope Scope,
+    IReadOnlyList<string> CompatibleFileExtensions,
+    IReadOnlyList<ExtensionTemplateParameter> Parameters,
     string DefaultPackageId,
     string DefaultPackageVersion,
     string DefaultTargetFramework,
@@ -151,6 +316,11 @@ internal sealed record BuildRequest(
     string SourceRevisionId,
     DateTimeOffset SubmittedAt);
 
+internal sealed record SubmitRepositoryBuildRequest(
+    string? ProjectId,
+    RepositoryBuildCommand? Command,
+    string? TargetPath);
+
 internal sealed record BuildResult(
     string Id,
     string ProjectId,
@@ -162,7 +332,8 @@ internal sealed record BuildResult(
     string LogPath,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    IReadOnlyList<BuildArtifact>? Artifacts = null);
 
 internal sealed record BuildDiagnostic(
     BuildDiagnosticSeverity Severity,
@@ -180,7 +351,11 @@ internal sealed record BuildArtifact(
     string FileName,
     string Path,
     long Size,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? WorkspaceId = null,
+    string? SourceRevisionId = null,
+    string? Branch = null,
+    bool SourceIsDirty = false);
 
 internal sealed record PackagePromotionRequest(string? TargetFeed);
 

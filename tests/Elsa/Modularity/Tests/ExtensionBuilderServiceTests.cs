@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using Elsa.Modularity.Core.Contracts;
@@ -42,6 +43,544 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.NotNull(await restarted.GetProjectAsync(_caller, project.Id));
         Assert.Contains(files!, x => x.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
         Assert.Null(otherOwnerProject);
+    }
+
+    [Fact]
+    public async Task RepositorySummariesAreOwnerScopedAndExposeWorkbenchHealth()
+    {
+        var service = CreateService(buildRunner: new FakeBuildRunner(BuildStatus.Failed));
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Team Extensions"));
+        await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.Repository", "1.0.0", "net10.0", null, null));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.Failed", "1.0.0", "net10.0", null, null));
+        await service.SubmitBuildAsync(_caller, project.Id);
+
+        var repositories = await service.ListRepositoriesAsync(_caller);
+        var otherOwnerRepositories = await service.ListRepositoriesAsync(_caller with { OwnerId = "other" });
+
+        var repository = Assert.Single(repositories);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("Team Extensions", repository.Name);
+        Assert.Equal(_caller.OwnerId, repository.OwnerId);
+        Assert.Equal(2, repository.ProjectCount);
+        Assert.Equal(BuildStatus.Failed, repository.LatestBuildStatus);
+        Assert.Equal(1, repository.AttentionCount);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+        Assert.Empty(otherOwnerRepositories);
+    }
+
+    [Fact]
+    public async Task ServerLocalRepositoryAttachRegistersAllowedGitRepository()
+    {
+        var allowedRoot = Path.Combine(_directory, "allowed");
+        var repositoryPath = await CreateSourceRepositoryAsync(allowedRoot, "server-repo");
+        var service = CreateService(storage: CreateStorage(options => options.ServerLocalRepositoryRoots = [allowedRoot]));
+
+        var workspace = await service.AttachServerLocalRepositoryAsync(_caller, new(repositoryPath, null));
+        var repository = Assert.Single(await service.ListRepositoriesAsync(_caller));
+
+        Assert.Equal("server-repo", workspace.DisplayName);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+    }
+
+    [Fact]
+    public async Task ServerLocalRepositoryAttachRejectsPathsOutsideAllowList()
+    {
+        var allowedRoot = Path.Combine(_directory, "allowed");
+        var repositoryPath = await CreateSourceRepositoryAsync(Path.Combine(_directory, "outside"), "server-repo");
+        var service = CreateService(storage: CreateStorage(options => options.ServerLocalRepositoryRoots = [allowedRoot]));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.AttachServerLocalRepositoryAsync(_caller, new(repositoryPath, "Outside Repository")));
+
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+    }
+
+    [Fact]
+    public async Task ServerLocalRepositoryAttachRejectsPathTraversalOutsideAllowList()
+    {
+        var allowedRoot = Path.Combine(_directory, "allowed");
+        var repositoryPath = await CreateSourceRepositoryAsync(Path.Combine(_directory, "outside"), "server-repo");
+        var traversalPath = Path.Combine(allowedRoot, "..", Path.GetFileName(Path.GetDirectoryName(repositoryPath))!, Path.GetFileName(repositoryPath));
+        var service = CreateService(storage: CreateStorage(options => options.ServerLocalRepositoryRoots = [allowedRoot]));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.AttachServerLocalRepositoryAsync(_caller, new(traversalPath, "Traversal Repository")));
+
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+    }
+
+    [Fact]
+    public async Task ServerLocalRepositoryAttachRejectsNonAdministrativeCaller()
+    {
+        var allowedRoot = Path.Combine(_directory, "allowed");
+        var repositoryPath = await CreateSourceRepositoryAsync(allowedRoot, "server-repo");
+        var service = CreateService(storage: CreateStorage(options => options.ServerLocalRepositoryRoots = [allowedRoot]));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.AttachServerLocalRepositoryAsync(_caller with { HasManagementAccess = false }, new(repositoryPath, "Server Repository")));
+
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+    }
+
+    [Fact]
+    public async Task ServerLocalRepositoryAttachRejectsInvalidGitRepository()
+    {
+        var allowedRoot = Path.Combine(_directory, "allowed");
+        var repositoryPath = Path.Combine(allowedRoot, "not-git");
+        Directory.CreateDirectory(repositoryPath);
+        var service = CreateService(storage: CreateStorage(options => options.ServerLocalRepositoryRoots = [allowedRoot]));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.AttachServerLocalRepositoryAsync(_caller, new(repositoryPath, "Invalid Repository")));
+
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryRegistersWorkspaceAndExposesGitState()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("source-repository");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, "Cloned Repository"));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+        var workspaces = await service.ListWorkspacesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("Cloned Repository", repository.Name);
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+        Assert.False(repository.IsDirty);
+        Assert.Contains(workspaces, x => x.Id == workspace.Id);
+        Assert.True(Directory.Exists(Path.Combine(_directory, "state", "workspaces", workspace.Id, ".git")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryRejectsEmbeddedCredentials()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CloneRepositoryAsync(_caller, new("https://token@example.com/elsa/repository.git", "Private Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryCleansFailedCloneDestination()
+    {
+        var service = CreateService();
+        var missingRepository = Path.Combine(_directory, "missing-repository");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CloneRepositoryAsync(_caller, new(missingRepository, "Missing Repository")));
+
+        Assert.Contains("Git command failed", exception.Message);
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryInfersDisplayNameForWorkbenchVisibility()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("visible-repository.git");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, null));
+        var visibleWorkspace = await service.GetWorkspaceAsync(_caller, workspace.Id);
+        var repository = Assert.Single(await service.ListRepositoriesAsync(_caller));
+
+        Assert.Equal("visible-repository", workspace.DisplayName);
+        Assert.Equal(workspace.Id, visibleWorkspace!.Id);
+        Assert.Equal(workspace.DisplayName, repository.Name);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceInitializesManagedRepositoryWithStarterCommit()
+    {
+        var service = CreateService();
+
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Managed Extensions"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.True(Directory.Exists(Path.Combine(repositoryPath, ".git")));
+        Assert.Contains("Managed Extensions", await File.ReadAllTextAsync(Path.Combine(repositoryPath, "README.md")));
+        Assert.Equal("1", await GitAsync(repositoryPath, "rev-list", "--count", "HEAD"));
+        Assert.Equal("Elsa Extension Builder|extension-builder@elsa.local|Initial managed repository", await GitAsync(repositoryPath, "log", "-1", "--pretty=%an|%ae|%s"));
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceCleansUpWhenManagedRepositoryInitializationFails()
+    {
+        var service = CreateService(options: new ExtensionBuilderOptions
+        {
+            StoragePath = Path.Combine(_directory, "state"),
+            GitExecutable = "missing-git-executable"
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateWorkspaceAsync(_caller, new("Broken Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        var workspacesPath = Path.Combine(_directory, "state", "workspaces");
+        Assert.True(!Directory.Exists(workspacesPath) || !Directory.EnumerateDirectories(workspacesPath).Any());
+    }
+
+    [Fact]
+    public async Task SelectWorkingCopyCreatesExplicitSessionBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+
+        var workingCopy = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", null, false));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.Equal("extension-builder/owner-1-session-1", workingCopy!.BranchName);
+        Assert.True(workingCopy.IsActive);
+        Assert.False(workingCopy.IsProtectedBranch);
+        Assert.Equal(workingCopy.BranchName, Assert.Single(repositories).ActiveBranch);
+        Assert.Equal(workingCopy.BranchName, await GitAsync(repositoryPath, "branch", "--show-current"));
+    }
+
+    [Fact]
+    public async Task WorkingCopiesAreScopedByOwnerSessionAndBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/one", false));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-2", "feature/two", false));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/three", false));
+
+        var sessionOneCopies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-1");
+        var sessionTwoCopies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-2");
+        var sessionOne = sessionOneCopies!;
+
+        Assert.Equal(new[] { "feature/three", "feature/one" }, sessionOne.Select(x => x.BranchName).ToArray());
+        Assert.True(sessionOne.Single(x => x.BranchName == "feature/three").IsActive);
+        Assert.False(sessionOne.Single(x => x.BranchName == "feature/one").IsActive);
+        Assert.Equal("feature/two", Assert.Single(sessionTwoCopies!).BranchName);
+        Assert.Null(await service.ListWorkingCopiesAsync(_caller with { OwnerId = "other" }, workspace.Id, null));
+    }
+
+    [Fact]
+    public async Task WorkingCopySelectionReportsDirtyStateForActiveBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var workingCopy = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/dirty", false));
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "src", "Dirty.cs"), "namespace Dirty;");
+
+        var copies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-1");
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.True(Assert.Single(copies!).IsDirty);
+        Assert.True(Assert.Single(repositories).IsDirty);
+        Assert.Equal(workingCopy!.BranchName, Assert.Single(repositories).ActiveBranch);
+    }
+
+    [Fact]
+    public async Task SelectWorkingCopyRequiresExplicitConfirmationForDefaultBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        var denied = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "main", false)));
+        var allowed = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "main", true));
+
+        Assert.Contains("requires explicit confirmation", denied.Message);
+        Assert.True(allowed!.IsProtectedBranch);
+        Assert.Equal("main", allowed.BranchName);
+    }
+
+    [Fact]
+    public async Task RepositoryTreeAutoSelectsSingleSolutionFromActiveWorkingCopy()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/files", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Hello/Hello.csproj", new("<Project />"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "Workspace.slnx", new("<Solution />"));
+
+        var tree = await service.GetRepositoryTreeAsync(_caller, workspace.Id, null);
+
+        var solution = Assert.Single(tree!.Solutions);
+        Assert.Equal("Workspace.slnx", solution.Path);
+        Assert.True(solution.IsSelected);
+        Assert.Contains(tree.Entries, entry => entry is { Path: "src/Hello/Hello.csproj", Kind: RepositoryFileKind.Project, IsDirty: true });
+        Assert.Contains(tree.Entries, entry => entry is { Path: "Workspace.slnx", Kind: RepositoryFileKind.Solution, IsDirty: true });
+        Assert.True(tree.IsDirty);
+        Assert.Equal("feature/files", tree.ActiveBranch);
+    }
+
+    [Fact]
+    public async Task RepositoryTreeLeavesMultipleSolutionsForExplicitSelection()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "A.sln", new(""));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "nested/B.slnx", new(""));
+
+        var unselected = await service.GetRepositoryTreeAsync(_caller, workspace.Id, null);
+        var selected = await service.GetRepositoryTreeAsync(_caller, workspace.Id, "nested/B.slnx");
+
+        Assert.Equal(new[] { "A.sln", "nested/B.slnx" }, unselected!.Solutions.Select(x => x.Path).ToArray());
+        Assert.All(unselected.Solutions, solution => Assert.False(solution.IsSelected));
+        Assert.False(selected!.Solutions.Single(x => x.Path == "A.sln").IsSelected);
+        Assert.True(selected.Solutions.Single(x => x.Path == "nested/B.slnx").IsSelected);
+    }
+
+    [Fact]
+    public async Task RepositoryFileMutationsUseNestedWorkingTreePaths()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        var created = await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs", new("namespace Before;"));
+        var read = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs");
+        var saved = await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs", new("namespace After;"));
+        var moved = await service.MoveRepositoryFileAsync(_caller, workspace.Id, new("src/Nested/Activity.cs", "src/Renamed/Activity.cs"));
+        var deleted = await service.DeleteRepositoryFileAsync(_caller, workspace.Id, "src/Renamed/Activity.cs");
+        var missing = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Renamed/Activity.cs");
+
+        Assert.Equal("src/Nested/Activity.cs", created!.Path);
+        Assert.Equal("namespace Before;", read!.Content);
+        Assert.Equal("namespace After;", saved!.Content);
+        Assert.Equal("src/Renamed/Activity.cs", moved!.Path);
+        Assert.Equal("namespace After;", moved.Content);
+        Assert.True(moved.IsDirty);
+        Assert.True(deleted);
+        Assert.Null(missing);
+    }
+
+    [Fact]
+    public async Task RepositoryFileAccessRejectsUnsafePathsAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Safe.cs", new("namespace Safe;"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadRepositoryFileAsync(_caller, workspace.Id, "../outside.cs"));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadRepositoryFileAsync(_caller, workspace.Id, ".git/config"));
+        Assert.Null(await service.ReadRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs"));
+        Assert.Null(await service.GetRepositoryTreeAsync(_caller with { OwnerId = "other" }, workspace.Id, null));
+        Assert.False(await service.DeleteRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs"));
+    }
+
+    [Fact]
+    public async Task SourceControlStagesUnstagesDiffsAndCommitsWorkingCopyChanges()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/source-control", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Status.cs", new("namespace Status;"));
+
+        var dirty = await service.GetSourceControlStatusAsync(_caller, workspace.Id);
+        var staged = await service.StageRepositoryFileAsync(_caller, workspace.Id, new("src/Status.cs"));
+        var stagedDiff = await service.GetSourceControlDiffAsync(_caller, workspace.Id, "src/Status.cs", staged: true);
+        var unstaged = await service.UnstageRepositoryFileAsync(_caller, workspace.Id, new("src/Status.cs"));
+        var stageAll = await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        var commit = await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add status source"));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.True(dirty!.IsDirty);
+        Assert.Contains(dirty.UnstagedFiles, x => x is { Path: "src/Status.cs", IsUnstaged: true });
+        Assert.Contains(staged!.StagedFiles, x => x is { Path: "src/Status.cs", IsStaged: true });
+        Assert.Contains("+namespace Status;", stagedDiff!.Patch);
+        Assert.Contains(unstaged!.UnstagedFiles, x => x.Path == "src/Status.cs");
+        Assert.Contains(stageAll!.StagedFiles, x => x.Path == "src/Status.cs");
+        Assert.False(commit!.Status.IsDirty);
+        Assert.NotEmpty(commit.CommitId);
+        Assert.Equal("Add status source", await GitAsync(repositoryPath, "log", "-1", "--pretty=%s"));
+        Assert.False(Assert.Single(repositories).IsDirty);
+    }
+
+    [Fact]
+    public async Task SourceControlRejectsEmptyCommitUnsafePathsAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Safe.cs", new("namespace Safe;"));
+
+        var emptyCommit = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("No staged changes")));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.StageRepositoryFileAsync(_caller, workspace.Id, new("../outside.cs")));
+        Assert.Contains("Stage at least one change", emptyCommit.Message);
+        Assert.Null(await service.GetSourceControlStatusAsync(_caller with { OwnerId = "other" }, workspace.Id));
+        Assert.Null(await service.GetSourceControlDiffAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs", staged: false));
+        Assert.Null(await service.StageRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, new("src/Safe.cs")));
+        Assert.Null(await service.CommitRepositoryChangesAsync(_caller with { OwnerId = "other" }, workspace.Id, new("No access")));
+    }
+
+    [Fact]
+    public async Task RemoteSyncPushesAndFastForwardPullsCommittedChanges()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var remotePath = Path.Combine(_directory, "remote.git");
+        await GitAsync(_directory, "init", "--bare", remotePath);
+        await GitAsync(repositoryPath, "remote", "add", "origin", remotePath);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/remote-sync", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Local.cs", new("namespace Local;"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add local source"));
+
+        var push = await service.PushRepositoryAsync(_caller, workspace.Id);
+        var clonePath = Path.Combine(_directory, "remote-clone");
+        await GitAsync(_directory, "clone", "--branch", "feature/remote-sync", remotePath, clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, "src"));
+        await File.WriteAllTextAsync(Path.Combine(clonePath, "src", "Remote.cs"), "namespace Remote;");
+        await GitAsync(clonePath, "add", "src/Remote.cs");
+        await GitAsync(clonePath, "-c", "user.name=Remote User", "-c", "user.email=remote@example.com", "commit", "-m", "Add remote source");
+        await GitAsync(clonePath, "push", "origin", "feature/remote-sync");
+        var pull = await service.PullRepositoryAsync(_caller, workspace.Id);
+        var pulledFile = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Remote.cs");
+
+        Assert.Equal(RemoteSyncState.Completed, push!.State);
+        Assert.Equal(RemoteSyncOperation.Push, push.Operation);
+        Assert.Equal("origin", push.Remote);
+        Assert.Equal("feature/remote-sync", push.Branch);
+        Assert.Equal(RemoteSyncState.Completed, pull!.State);
+        Assert.Equal(RemoteSyncOperation.Pull, pull.Operation);
+        Assert.False(pull.Status.IsDirty);
+        Assert.Equal("namespace Remote;", pulledFile!.Content);
+    }
+
+    [Fact]
+    public async Task RemoteSyncBlocksDirtyDivergedMissingRemoteAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var remotePath = Path.Combine(_directory, "remote.git");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PushRepositoryAsync(_caller, workspace.Id));
+        await GitAsync(_directory, "init", "--bare", remotePath);
+        await GitAsync(repositoryPath, "remote", "add", "origin", remotePath);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/diverge", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Base.cs", new("namespace Base;"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add base source"));
+        await service.PushRepositoryAsync(_caller, workspace.Id);
+
+        var clonePath = Path.Combine(_directory, "remote-clone");
+        await GitAsync(_directory, "clone", "--branch", "feature/diverge", remotePath, clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, "src"));
+        await File.WriteAllTextAsync(Path.Combine(clonePath, "src", "Remote.cs"), "namespace Remote;");
+        await GitAsync(clonePath, "add", "src/Remote.cs");
+        await GitAsync(clonePath, "-c", "user.name=Remote User", "-c", "user.email=remote@example.com", "commit", "-m", "Add remote source");
+        await GitAsync(clonePath, "push", "origin", "feature/diverge");
+
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Dirty.cs", new("namespace Dirty;"));
+        var dirtyPull = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PullRepositoryAsync(_caller, workspace.Id));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add local divergent source"));
+        var divergedPull = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PullRepositoryAsync(_caller, workspace.Id));
+        var divergedPush = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PushRepositoryAsync(_caller, workspace.Id));
+
+        Assert.Contains("uncommitted changes", dirtyPull.Message);
+        Assert.Contains("diverged", divergedPull.Message);
+        Assert.Contains("remote branch contains commits", divergedPush.Message);
+        Assert.Null(await service.PullRepositoryAsync(_caller with { OwnerId = "other" }, workspace.Id));
+        Assert.Null(await service.PushRepositoryAsync(_caller with { OwnerId = "other" }, workspace.Id));
+    }
+
+    [Fact]
+    public async Task TemplateDiscoveryExposesTrustedScopesParametersAndCompatibility()
+    {
+        var templates = await CreateService().ListTemplatesAsync();
+
+        Assert.Equal(
+            [ExtensionTemplateScope.Repository, ExtensionTemplateScope.Solution, ExtensionTemplateScope.Project, ExtensionTemplateScope.Item],
+            templates.Select(template => template.Scope).Distinct().OrderBy(scope => scope).ToArray());
+        Assert.DoesNotContain(templates, template => template.Id.Contains("archive", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(templates, template => template is { Id: "generic-dotnet", Scope: ExtensionTemplateScope.Project } && template.CompatibleFileExtensions.Contains(".slnx"));
+        Assert.Contains(templates.Single(template => template.Id == "csharp-class").Parameters, parameter => parameter is { Name: "namespace", Required: true });
+    }
+
+    [Fact]
+    public async Task RepositoryTemplateApplicationSupportsTrustedScopesAndDirtyTree()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/templates", false));
+
+        await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("repository-readme", ExtensionTemplateScope.Repository, "docs/templates", new Dictionary<string, string>
+        {
+            ["name"] = "ExtensionTemplates",
+            ["description"] = "Trusted generated repository content."
+        }));
+        await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("solution-slnx", ExtensionTemplateScope.Solution, "solutions", new Dictionary<string, string>
+        {
+            ["name"] = "GeneratedExtensions"
+        }));
+        var projectResult = await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("generic-dotnet", ExtensionTemplateScope.Project, "src/GeneratedProject", new Dictionary<string, string>
+        {
+            ["packageId"] = "Elsa.Generated.Project",
+            ["packageVersion"] = "2.1.0",
+            ["targetFramework"] = "net10.0"
+        }));
+        var itemResult = await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src/GeneratedProject/Generated", new Dictionary<string, string>
+        {
+            ["name"] = "CustomActivity",
+            ["namespace"] = "Elsa.Generated.Project"
+        }));
+        var generatedItem = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/GeneratedProject/Generated/CustomActivity.cs");
+        var generatedProject = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/GeneratedProject/GenericExtension.csproj");
+        var status = await service.GetSourceControlStatusAsync(_caller, workspace.Id);
+
+        Assert.Contains(projectResult!.Tree.Entries, entry => entry is { Path: "docs/templates/README.md", IsDirty: true });
+        Assert.Contains(projectResult.Tree.Entries, entry => entry is { Path: "solutions/GeneratedExtensions.slnx", Kind: RepositoryFileKind.Solution, IsDirty: true });
+        Assert.Contains(projectResult.Tree.Entries, entry => entry is { Path: "src/GeneratedProject/GenericExtension.csproj", Kind: RepositoryFileKind.Project, IsDirty: true });
+        Assert.Contains(itemResult!.Files, file => file is { Path: "src/GeneratedProject/Generated/CustomActivity.cs", IsDirty: true });
+        Assert.Contains("namespace Elsa.Generated.Project;", generatedItem!.Content);
+        Assert.Contains("public sealed class CustomActivity", generatedItem.Content);
+        Assert.Contains("<PackageId>Elsa.Generated.Project</PackageId>", generatedProject!.Content);
+        Assert.Contains(status!.ChangedFiles, file => file.Path == "src/GeneratedProject/Generated/CustomActivity.cs");
+        Assert.True(status.IsDirty);
+    }
+
+    [Fact]
+    public async Task RepositoryTemplateApplicationRejectsUntrustedUnsafeOverwriteAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("uploaded-archive", null, null, null)));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src", new Dictionary<string, string>
+        {
+            ["name"] = "../Bad",
+            ["namespace"] = "Elsa.Generated"
+        })));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, ".git/hooks", new Dictionary<string, string>
+        {
+            ["name"] = "SafeClass",
+            ["namespace"] = "Elsa.Generated"
+        })));
+        await Assert.ThrowsAsync<IOException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("repository-readme", ExtensionTemplateScope.Repository, null, new Dictionary<string, string>
+        {
+            ["name"] = "AlreadyExists"
+        })));
+        Assert.Null(await service.ApplyRepositoryTemplateAsync(_caller with { OwnerId = "other" }, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src", new Dictionary<string, string>
+        {
+            ["name"] = "NoAccess",
+            ["namespace"] = "Elsa.Generated"
+        })));
     }
 
     [Fact]
@@ -132,6 +671,189 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         Assert.NotNull(artifact);
         Assert.Contains("fake build", log);
         Assert.Equal(project.Id, buildRunner.LastProjectId);
+    }
+
+    [Fact]
+    public async Task RepositoryBuildRunsConfiguredWorkerCapturesLogsAndDiagnostics()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "worker build ok");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuild", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, null, "src/RepositoryBuild/RepositoryBuild.csproj"));
+        var log = await service.GetBuildLogAsync(_caller, build!.Id);
+        var persisted = await service.GetBuildAsync(_caller, build.Id);
+
+        Assert.Equal(BuildStatus.Succeeded, build.Status);
+        Assert.Equal(project.Id, build.ProjectId);
+        Assert.Equal(workspace.Id, build.WorkspaceId);
+        Assert.Contains("worker build ok", log);
+        Assert.Contains("build", log);
+        Assert.Equal(build.Id, persisted!.Id);
+    }
+
+    [Fact]
+    public async Task RepositoryBuildReportsFailuresAndRejectsUnsafeTargetsAndOtherOwners()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 1, "src/Broken.cs(4,5): error CS1001: Broken source");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuildFail", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Test, "src/RepositoryBuild/RepositoryBuild.csproj"));
+
+        Assert.Equal(BuildStatus.Failed, build!.Status);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error, Code: "CS1001", File: "src/Broken.cs", Line: 4, Column: 5 });
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "../outside.csproj")));
+        Assert.Null(await service.SubmitRepositoryBuildAsync(_caller with { OwnerId = "other" }, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "src/RepositoryBuild/RepositoryBuild.csproj")));
+    }
+
+    [Fact]
+    public async Task RepositoryBuildCancellationPersistsFailedJob()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "worker build ok", delaySeconds: 5);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuildCancel", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "src/RepositoryBuild/RepositoryBuild.csproj"), cancellation.Token);
+        var persisted = await service.GetBuildAsync(_caller, build!.Id);
+
+        Assert.Equal(BuildStatus.Failed, build.Status);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error } && diagnostic.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(BuildStatus.Failed, persisted!.Status);
+    }
+
+    [Fact]
+    public async Task RepositoryPackProjectCapturesArtifactMetadataAndDoesNotPromote()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "project pack ok", packageFiles: ["Elsa.Test.RepositoryPack.1.2.3.nupkg"]);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPack", "1.2.3", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryPack/RepositoryPack.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPack/RepositoryPack.csproj"));
+        var log = await service.GetBuildLogAsync(_caller, build!.Id);
+        var persisted = await service.GetBuildAsync(_caller, build.Id);
+        var runtime = await service.GetRuntimeStatusAsync(_caller, project.Id);
+
+        Assert.Equal(BuildStatus.Succeeded, build.Status);
+        var artifact = Assert.Single(build.Artifacts!);
+        Assert.Equal(build.Artifact!.Id, artifact.Id);
+        Assert.Equal("Elsa.Test.RepositoryPack", artifact.PackageId);
+        Assert.Equal("1.2.3", artifact.Version);
+        Assert.Equal(workspace.Id, artifact.WorkspaceId);
+        Assert.Equal(build.SourceRevisionId, artifact.SourceRevisionId);
+        Assert.Equal(build.Id, artifact.BuildId);
+        Assert.True(File.Exists(artifact.Path));
+        Assert.Contains("project pack ok", log);
+        Assert.Equal(artifact.Id, Assert.Single(persisted!.Artifacts!).Id);
+        Assert.Empty(runtime!.Packages);
+        Assert.Null(runtime.ActiveVersion);
+        Assert.Null(await service.SubmitRepositoryBuildAsync(_caller with { OwnerId = "other" }, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPack/RepositoryPack.csproj")));
+    }
+
+    [Fact]
+    public async Task RepositoryPackSolutionCapturesMultipleArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(
+            exitCode: 0,
+            "solution pack ok",
+            packageFiles: ["Elsa.Test.PackageA.1.0.0.nupkg", "Elsa.Test.PackageB.2.1.0.nupkg"]);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPackSolution", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "RepositoryPack.slnx", new("<Solution />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "RepositoryPack.slnx"));
+
+        Assert.Equal(BuildStatus.Succeeded, build!.Status);
+        Assert.Collection(
+            build.Artifacts!,
+            artifact =>
+            {
+                Assert.Equal("Elsa.Test.PackageA", artifact.PackageId);
+                Assert.Equal("1.0.0", artifact.Version);
+            },
+            artifact =>
+            {
+                Assert.Equal("Elsa.Test.PackageB", artifact.PackageId);
+                Assert.Equal("2.1.0", artifact.Version);
+            });
+    }
+
+    [Fact]
+    public async Task RepositoryPackFailureCapturesDiagnosticsAndNoArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 1, "src/Broken.cs(6,7): error CS1002: Pack failed");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPackFail", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryPackFail/RepositoryPackFail.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPackFail/RepositoryPackFail.csproj"));
+
+        Assert.Equal(BuildStatus.Failed, build!.Status);
+        Assert.Null(build.Artifact);
+        Assert.Empty(build.Artifacts!);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error, Code: "CS1002", File: "src/Broken.cs", Line: 6, Column: 7 });
+    }
+
+    [Fact]
+    public async Task PromoteRepositoryPackRejectsDirtySourceArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "project pack ok", packageFiles: ["Elsa.Test.RepositoryDirtyPack.1.0.0.nupkg"]);
+        var promotion = new FakePromotionService();
+        var service = CreateService(promotion: promotion, options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryDirtyPack", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj", new("<Project />"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add dirty pack project"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj", new("<Project><PropertyGroup /></Project>"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryDirtyPack/RepositoryDirtyPack.csproj"));
+        var result = await service.PromoteBuildAsync(_caller, build!.Id);
+
+        Assert.True(build.Artifact!.SourceIsDirty);
+        Assert.Equal(PromotionStatus.Rejected, result!.Status);
+        Assert.Equal(PromotionRejectionReason.UncommittedSource, result.RejectionReason);
+        Assert.Empty(promotion.PromotedArtifacts);
+    }
+
+    [Fact]
+    public async Task PromoteRepositoryPackArtifactRecordsSelectedSolutionPackage()
+    {
+        var dotnet = await CreateFakeDotNetAsync(
+            exitCode: 0,
+            "solution pack ok",
+            packageFiles: ["Elsa.Test.PromoteA.1.0.0.nupkg", "Elsa.Test.PromoteB.2.0.0.nupkg"]);
+        var promotion = new FakePromotionService();
+        var service = CreateService(promotion: promotion, options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPromotePack", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "RepositoryPromotePack.slnx", new("<Solution />"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add pack solution"));
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "RepositoryPromotePack.slnx"));
+        var selectedArtifact = build!.Artifacts!.Single(artifact => artifact.PackageId == "Elsa.Test.PromoteB");
+
+        var result = await service.PromoteBuildArtifactAsync(_caller, build.Id, selectedArtifact.Id);
+        var runtime = await service.GetRuntimeStatusAsync(_caller, project.Id);
+
+        Assert.False(selectedArtifact.SourceIsDirty);
+        Assert.Equal(PromotionStatus.Accepted, result!.Status);
+        Assert.Equal(selectedArtifact.Id, Assert.Single(promotion.PromotedArtifacts).Id);
+        var package = Assert.Single(runtime!.Packages);
+        Assert.Equal("Elsa.Test.PromoteB", package.PackageId);
+        Assert.Equal("2.0.0", package.Version);
+        Assert.Contains("2.0.0", runtime.AvailableRollbackVersions);
     }
 
     [Fact]
@@ -606,10 +1328,11 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         IExtensionBuilderPromotionService? promotion = null,
         FakeNuplaneAdmin? nuplane = null,
         IFeatureManagementService? featureManagement = null,
-        ExtensionBuilderStorage? storage = null)
+        ExtensionBuilderStorage? storage = null,
+        ExtensionBuilderOptions? options = null)
     {
         nuplane ??= new FakeNuplaneAdmin();
-        storage ??= CreateStorage();
+        storage ??= CreateStorageFromOptions(options);
         buildRunner ??= new FakeBuildRunner(BuildStatus.Succeeded);
         buildQueue ??= new ImmediateBuildQueue(new ExtensionBuilderBuildExecutor(storage, buildRunner, NullLogger<ExtensionBuilderBuildExecutor>.Instance));
         return new(
@@ -622,12 +1345,87 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             NullLogger<ExtensionBuilderService>.Instance);
     }
 
-    private ExtensionBuilderStorage CreateStorage() =>
+    private ExtensionBuilderStorage CreateStorage(Action<ExtensionBuilderOptions>? configure = null)
+    {
+        var options = new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") };
+        configure?.Invoke(options);
+        return new(new FakeEnvironment(_directory), Options.Create(options));
+    }
+
+    private ExtensionBuilderStorage CreateStorageFromOptions(ExtensionBuilderOptions? options) =>
         new(
             new FakeEnvironment(_directory),
-            Options.Create(new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+            Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+
+    private async Task<string> CreateFakeDotNetAsync(int exitCode, string output, int? delaySeconds = null, IReadOnlyList<string>? packageFiles = null)
+    {
+        var path = Path.Combine(_directory, $"fake-dotnet-{Guid.NewGuid():N}.sh");
+        var packageCreation = packageFiles is { Count: > 0 }
+            ? $"""
+            if [ "$1" = "pack" ]; then
+              output_dir=""
+              while [ "$#" -gt 0 ]; do
+                if [ "$1" = "--output" ]; then
+                  shift
+                  output_dir="$1"
+                fi
+                shift
+              done
+              mkdir -p "$output_dir"
+              {string.Join(Environment.NewLine, packageFiles.Select(fileName => $"touch \"$output_dir/{fileName}\""))}
+            fi
+            """
+            : "";
+        await File.WriteAllTextAsync(path, $"""
+            #!/bin/sh
+            {(delaySeconds is > 0 ? $"sleep {delaySeconds.Value}" : "")}
+            echo "{output}"
+            echo "$@"
+            {packageCreation}
+            exit {exitCode}
+            """);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return path;
+    }
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    private async Task<string> CreateSourceRepositoryAsync(string parentPath, string name)
+    {
+        var repositoryPath = Path.Combine(parentPath, name);
+        Directory.CreateDirectory(repositoryPath);
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), "# Test repository");
+        await GitAsync(repositoryPath, "init", "-b", "main");
+        await GitAsync(repositoryPath, "add", ".");
+        await GitAsync(repositoryPath, "-c", "user.name=Elsa Tests", "-c", "user.email=tests@elsa.local", "commit", "-m", "Initial commit");
+        return repositoryPath;
+    }
+
+    private async Task<string> CreateSourceRepositoryAsync(string name)
+        => await CreateSourceRepositoryAsync(_directory, name);
+
+    private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Git could not be started.");
+        var output = await process.StandardOutput.ReadToEndAsync();
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Git failed: {error}{output}");
+
+        return output.Trim();
+    }
 
     private static void CreatePackage(
         string path,
@@ -742,10 +1540,12 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         public CancellationTokenSource? CancelDuringPromote { get; set; }
         public CancellationTokenSource? CancelDuringRollback { get; set; }
         public CancellationTokenSource? CancelDuringRetry { get; set; }
+        public List<BuildArtifact> PromotedArtifacts { get; } = [];
 
         public Task<PackagePromotionResult> PromoteAsync(BuildResult build, CancellationToken cancellationToken = default)
         {
             var artifact = build.Artifact!;
+            PromotedArtifacts.Add(artifact);
             CancelDuringPromote?.Cancel();
             return Task.FromResult(new PackagePromotionResult(
                 PromotionStatus.Accepted,
