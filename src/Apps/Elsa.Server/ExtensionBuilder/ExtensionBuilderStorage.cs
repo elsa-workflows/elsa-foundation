@@ -13,6 +13,7 @@ internal interface IExtensionBuilderStorage
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkspace> AttachServerLocalRepositoryAsync(string ownerId, string trustContext, AttachServerLocalRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CloneRepositoryAsync(string ownerId, string trustContext, CloneRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
@@ -49,12 +50,19 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _gitExecutable;
+    private readonly string[] _serverLocalRepositoryRoots;
     private readonly string _statePath;
 
     public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options)
     {
         var extensionBuilderOptions = options.Value;
         var configuredPath = extensionBuilderOptions.StoragePath;
+        var contentRootPath = environment.ContentRootPath;
+        _serverLocalRepositoryRoots = extensionBuilderOptions.ServerLocalRepositoryRoots
+            .Where(root => !string.IsNullOrWhiteSpace(root))
+            .Select(root => ResolveConfiguredPath(contentRootPath, root))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         RootPath = Path.GetFullPath(Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(environment.ContentRootPath, configuredPath));
@@ -178,6 +186,35 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
+    public async Task<ExtensionWorkspace> AttachServerLocalRepositoryAsync(string ownerId, string trustContext, AttachServerLocalRepositoryRequest request, CancellationToken cancellationToken = default)
+    {
+        var repositoryPath = ResolveServerLocalRepositoryPath(request.Path);
+        if (!IsGitRepository(repositoryPath))
+            throw new InvalidOperationException("Server-local repository path must already be a valid Git repository.");
+
+        var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
+            ? Path.GetFileName(repositoryPath)
+            : request.DisplayName.Trim();
+        if (string.IsNullOrWhiteSpace(displayName))
+            throw new ArgumentException("Repository display name is required.", nameof(request));
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            var now = DateTimeOffset.UtcNow;
+            var workspace = new ExtensionWorkspace(CreateId("ws"), ownerId, trustContext, displayName, now, now, []);
+            state.Workspaces[workspace.Id] = workspace;
+            state.RepositoryPaths[workspace.Id] = repositoryPath;
+            await SaveStateAsync(state, cancellationToken);
+            return workspace;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
@@ -190,6 +227,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             foreach (var projectId in workspace.ProjectIds)
                 RemoveProjectAuthoringState(state, projectId);
             state.Workspaces.Remove(workspace.Id);
+            state.RepositoryPaths.Remove(workspace.Id);
             DeleteDirectoryIfExists(GetWorkspacePath(workspace.Id));
             await SaveStateAsync(state, cancellationToken);
             return true;
@@ -691,8 +729,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var failedPromotions = projectIds
             .Where(projectId => state.Promotions.TryGetValue(projectId, out _))
             .Sum(projectId => state.Promotions[projectId].Count(promotion => promotion.ReconcileOutcome.IsDegraded));
-        var repositoryState = GetRepositoryState(GetWorkspacePath(workspace.Id));
-
+        var repositoryPath = GetRepositoryPath(state, workspace);
+        var repositoryState = GetRepositoryState(repositoryPath);
         return new(
             workspace.Id,
             workspace.DisplayName,
@@ -892,6 +930,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     }
 
     private string GetWorkspacePath(string workspaceId) => Path.Combine(RootPath, "workspaces", workspaceId);
+    private string GetRepositoryPath(ExtensionBuilderState state, ExtensionWorkspace workspace) =>
+        state.RepositoryPaths.TryGetValue(workspace.Id, out var repositoryPath) && !string.IsNullOrWhiteSpace(repositoryPath)
+            ? repositoryPath
+            : GetWorkspacePath(workspace.Id);
     private string GetProjectPath(string projectId) => Path.Combine(RootPath, "projects", projectId);
     private string GetProjectFilesPath(string projectId) => Path.Combine(GetProjectPath(projectId), "files");
     private string GetSnapshotPath(string projectId, string snapshotId) => Path.Combine(GetProjectPath(projectId), "snapshots", snapshotId);
@@ -941,6 +983,24 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
     }
+
+    private string ResolveServerLocalRepositoryPath(string path)
+    {
+        if (_serverLocalRepositoryRoots.Length == 0)
+            throw new InvalidOperationException("Server-local repository roots are not configured.");
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Server-local repository path is required.", nameof(path));
+
+        var resolvedPath = Path.GetFullPath(path);
+        if (!Directory.Exists(resolvedPath))
+            throw new ArgumentException("Server-local repository path does not exist.", nameof(path));
+        if (!_serverLocalRepositoryRoots.Any(root => IsPathUnderRoot(resolvedPath, root)))
+            throw new ArgumentException("Server-local repository path is outside the configured allow-listed roots.", nameof(path));
+        return resolvedPath;
+    }
+
+    private bool IsGitRepository(string repositoryPath) =>
+        string.Equals(RunGitRead(repositoryPath, ["rev-parse", "--is-inside-work-tree"]), "true", StringComparison.OrdinalIgnoreCase);
 
     private async Task RunGitAsync(string workingDirectory, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
@@ -1069,6 +1129,16 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             : null;
     }
 
+    private static string ResolveConfiguredPath(string contentRootPath, string path) =>
+        Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(contentRootPath, path));
+
+    private static bool IsPathUnderRoot(string path, string root)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(path, root, comparison) ||
+            path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, comparison);
+    }
+
     private static string? FirstNonEmptyLine(params string[] values) =>
         values
             .SelectMany(value => value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -1100,5 +1170,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         public Dictionary<string, BuildResult> Builds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, PackagePromotionRecord[]> Promotions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> ActiveVersions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> RepositoryPaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }
