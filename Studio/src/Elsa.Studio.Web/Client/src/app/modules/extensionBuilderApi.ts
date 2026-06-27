@@ -158,6 +158,25 @@ export interface CreateWorkspaceRequest {
   name: string;
 }
 
+export interface SelectWorkingCopyRequest {
+  sessionId: string;
+  branchName?: string | null;
+  allowProtectedBranchEdit: boolean;
+}
+
+export interface ExtensionWorkingCopySummary {
+  id: string;
+  workspaceId: string;
+  owner?: string | null;
+  sessionId: string;
+  branchName: string;
+  isActive: boolean;
+  isProtectedBranch: boolean;
+  isDirty: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface CreateProjectRequest {
   templateId: string;
   name: string;
@@ -195,6 +214,17 @@ export async function getWorkspace(context: StudioEndpointContext, workspaceId: 
 
 export async function deleteWorkspace(context: StudioEndpointContext, workspaceId: string) {
   return requestJson(context, `${root}/workspaces/${segment(workspaceId)}`, { method: "DELETE" });
+}
+
+export async function listWorkingCopies(context: StudioEndpointContext, workspaceId: string, sessionId?: string | null) {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  const response = await context.http.getJson<RawExtensionWorkingCopySummary[] | { workingCopies: RawExtensionWorkingCopySummary[] }>(`${root}/workspaces/${segment(workspaceId)}/working-copies${query}`);
+  const workingCopies = Array.isArray(response) ? response : response.workingCopies;
+  return workingCopies.map(normalizeWorkingCopySummary);
+}
+
+export async function selectWorkingCopy(context: StudioEndpointContext, workspaceId: string, request: SelectWorkingCopyRequest) {
+  return normalizeWorkingCopySummary(await context.http.postJson<RawExtensionWorkingCopySummary>(`${root}/workspaces/${segment(workspaceId)}/working-copies/select`, request));
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -335,6 +365,21 @@ function normalizeRepositorySummary(repository: RawExtensionRepositorySummary): 
     attentionCount: repository.attentionCount ?? 0,
     projectCount: repository.projectCount ?? repository.projects ?? 0,
     updatedAt: repository.updatedAt
+  };
+}
+
+function normalizeWorkingCopySummary(workingCopy: RawExtensionWorkingCopySummary): ExtensionWorkingCopySummary {
+  return {
+    id: workingCopy.id,
+    workspaceId: workingCopy.workspaceId,
+    owner: workingCopy.owner ?? workingCopy.ownerId,
+    sessionId: workingCopy.sessionId,
+    branchName: workingCopy.branchName,
+    isActive: workingCopy.isActive ?? false,
+    isProtectedBranch: workingCopy.isProtectedBranch ?? false,
+    isDirty: workingCopy.isDirty ?? false,
+    createdAt: workingCopy.createdAt,
+    updatedAt: workingCopy.updatedAt
   };
 }
 
@@ -527,6 +572,20 @@ interface RawExtensionRepositorySummary {
   attentionCount?: number | null;
   projectCount?: number | null;
   projects?: number | null;
+  updatedAt?: string | null;
+}
+
+interface RawExtensionWorkingCopySummary {
+  id: string;
+  workspaceId: string;
+  owner?: string | null;
+  ownerId?: string | null;
+  sessionId: string;
+  branchName: string;
+  isActive?: boolean | null;
+  isProtectedBranch?: boolean | null;
+  isDirty?: boolean | null;
+  createdAt?: string | null;
   updatedAt?: string | null;
 }
 

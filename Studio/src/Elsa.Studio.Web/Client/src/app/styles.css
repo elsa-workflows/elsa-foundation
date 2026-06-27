@@ -1554,6 +1554,19 @@ textarea:focus {
   padding: 7px 8px;
 }
 
+.extension-builder-create .extension-builder-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extension-builder-create .extension-builder-checkbox input {
+  width: auto;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 .extension-builder-danger-actions {
   display: grid;
   gap: 7px;
