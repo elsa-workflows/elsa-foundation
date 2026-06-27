@@ -76,6 +76,39 @@ public sealed record WorkflowGraphOperationBatch(
     IReadOnlyCollection<WorkflowGraphOperation> Operations,
     IReadOnlyDictionary<string, string> Metadata);
 
+public enum WorkflowGraphOperationBatchRiskDecision
+{
+    DirectApply,
+    Clarification,
+    Proposal
+}
+
+public enum WorkflowGraphOperationBatchRiskReason
+{
+    LowRisk,
+    PermissionDenied,
+    StaleRevision,
+    InvalidBatch,
+    DestructiveOperation,
+    HighComplexity,
+    UnavailableActivity,
+    Uncertain
+}
+
+public sealed record WorkflowGraphOperationBatchRiskClassification(
+    WorkflowGraphOperationBatchRiskDecision Decision,
+    AgentRisk Risk,
+    AgentResultKind ResultKind,
+    IReadOnlyCollection<WorkflowGraphOperationBatchRiskReason> Reasons,
+    string Summary)
+{
+    public bool CanDirectApply => Decision == WorkflowGraphOperationBatchRiskDecision.DirectApply;
+}
+
+public sealed record WorkflowGraphOperationBatchRiskClassificationRequest(
+    WorkflowGraphOperationBatch Batch,
+    WorkflowAgentContext Context);
+
 public sealed record WorkflowGraphOperation(
     string Id,
     WorkflowGraphOperationKind Kind,

@@ -36,6 +36,92 @@ export function getDesignerPosition(activity, fallback) {
   return normalizeDesignerPosition(activity?.designer?.position, fallback);
 }
 
+export function classifyWorkflowGraphOperationBatchForDesigner(workflow, batch, options = {}) {
+  const reasons = [];
+  const operations = Array.isArray(batch?.operations) ? batch.operations : [];
+  const allowedActivityTypes = new Set((options.activityCatalog ?? ["Elsa.Email.SendEmail", "Elsa.Workflows.WriteLine", "Elsa.Workflows.Sequence"])
+    .map((item) => typeof item === "string" ? item : item?.type)
+    .filter(Boolean));
+  const knownActivityReferences = collectActivityIds(workflow?.state?.rootActivity);
+  const maxDirectApplyOperations = options.maxDirectApplyOperations ?? 12;
+
+  if (!options.canDirectApply)
+    reasons.push("permissionDenied");
+
+  if (batch?.schemaVersion !== "elsa.workflow-graph-operation-batch.v1")
+    reasons.push("invalidBatch");
+
+  if (batch?.baseRevision && batch.baseRevision !== options.liveRevision)
+    reasons.push("staleRevision");
+
+  if (operations.length === 0)
+    reasons.push("invalidBatch");
+
+  if (operations.length > maxDirectApplyOperations)
+    reasons.push("highComplexity");
+
+  for (const operation of operations) {
+    const parameters = operation.parameters ?? {};
+    const kind = operation.kind;
+
+    if (!operation.id)
+      reasons.push("invalidBatch");
+
+    if (kind === "RemoveActivity" || kind === "DisconnectActivities")
+      reasons.push("destructiveOperation");
+
+    if (!["AddActivity", "UpdateActivity", "ConnectActivities", "SetRoot", "SetDesignerPosition", "SetActivityProperty"].includes(kind))
+      reasons.push("uncertain");
+
+    if (kind === "AddActivity") {
+      const requestedId = parameters.activityId ?? operation.temporaryReferences?.[0];
+      const activityType = parameters.activityType ?? parameters.activityVersionId;
+      if (!requestedId || !activityType) {
+        reasons.push("invalidBatch");
+        continue;
+      }
+
+      if (!allowedActivityTypes.has(activityType))
+        reasons.push("unavailableActivity");
+
+      knownActivityReferences.add(String(requestedId));
+      for (const temporaryReference of operation.temporaryReferences ?? [])
+        knownActivityReferences.add(String(temporaryReference));
+      continue;
+    }
+
+    if (["SetRoot", "SetDesignerPosition", "SetActivityProperty", "UpdateActivity"].includes(kind)) {
+      const activityId = parameters.activityId;
+      if (!activityId || !knownActivityReferences.has(String(activityId)))
+        reasons.push("invalidBatch");
+      continue;
+    }
+
+    if (kind === "ConnectActivities") {
+      if (!knownActivityReferences.has(String(parameters.sourceActivityId)) || !knownActivityReferences.has(String(parameters.targetActivityId)))
+        reasons.push("invalidBatch");
+    }
+  }
+
+  const uniqueReasons = [...new Set(reasons)];
+  if (uniqueReasons.length === 0) {
+    return {
+      canDirectApply: true,
+      decision: "directApply",
+      resultKind: "workflowGraphOperationBatch",
+      reasons: ["lowRisk"]
+    };
+  }
+
+  const needsClarification = uniqueReasons.includes("unavailableActivity");
+  return {
+    canDirectApply: false,
+    decision: needsClarification ? "clarification" : "proposal",
+    resultKind: needsClarification ? "clarification" : "proposal",
+    reasons: uniqueReasons
+  };
+}
+
 function createLiteralInput(referenceKey, value) {
   return {
     referenceKey,
@@ -143,9 +229,13 @@ function replaceWorkflow(target, source) {
   Object.assign(target, source);
 }
 
-export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch) {
+export function applyWorkflowGraphOperationBatchToWorkflow(workflow, batch, options = {}) {
   if (!batch || !Array.isArray(batch.operations))
     throw new Error("Weaver batch does not contain operations.");
+
+  const classification = classifyWorkflowGraphOperationBatchForDesigner(workflow, batch, options);
+  if (!classification.canDirectApply)
+    throw new Error(`Weaver batch failed direct-apply recheck: ${classification.reasons.join(", ")}`);
 
   const working = cloneWorkflow(workflow);
   working.state ??= {};
@@ -240,6 +330,7 @@ export function createDemoWeaverGraphOperationBatch() {
   return {
     schemaVersion: "elsa.workflow-graph-operation-batch.v1",
     workflowDefinitionId: "active-draft",
+    baseRevision: "demo-revision",
     operations: [
       {
         id: "op-add-send-email",

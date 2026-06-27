@@ -1347,7 +1347,7 @@ export function App() {
     setExecutionId("");
   }
 
-  function applyWeaverGraphOperationBatch(batch) {
+  function applyWeaverGraphOperationBatch(batch, recheckOptions = {}) {
     const previous = {
       workflowJson,
       workflowVersionId,
@@ -1355,7 +1355,7 @@ export function App() {
       executionId
     };
     const workflow = JSON.parse(workflowJson);
-    const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch);
+    const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch, recheckOptions);
     const summary = {
       title: "Weaver batch applied",
       detail: `${result.appliedCount} operation${result.appliedCount === 1 ? "" : "s"} applied as one undoable designer transaction.`,
@@ -1376,7 +1376,10 @@ export function App() {
 
   function applyDemoWeaverBatch() {
     try {
-      applyWeaverGraphOperationBatch(createDemoWeaverGraphOperationBatch());
+      applyWeaverGraphOperationBatch(createDemoWeaverGraphOperationBatch(), {
+        canDirectApply: true,
+        liveRevision: "demo-revision"
+      });
     } catch (error) {
       setStatus(error.message);
       addConsoleLine("stderr", error.message);
