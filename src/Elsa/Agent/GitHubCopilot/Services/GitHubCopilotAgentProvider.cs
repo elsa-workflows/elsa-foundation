@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.GitHubCopilot.Options;
+using Elsa.Agent.Workflows.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -18,7 +20,10 @@ public sealed class GitHubCopilotAgentProvider(
 
     private const string MutationPolicyMessage = "GitHub Copilot SDK tool approval is not exposed directly. Elsa-owned proposal approval is required for workflow, file, package, runtime, and external-service mutations.";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     public string ProviderId => Id;
 
@@ -262,6 +267,14 @@ public sealed class GitHubCopilotAgentProvider(
         }
 
         builder.AppendLine();
+        if (message.Context.Any(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase)))
+        {
+            builder.AppendLine("Workflow authoring response contract:");
+            builder.AppendLine("Return ordinary explanations as text. For workflow authoring results, return one JSON object with resultKind set to message, clarification, workflowGraphOperationBatch, or error.");
+            builder.AppendLine("Use workflowGraphOperationBatch payloads that match the Elsa workflow graph operation batch contract and schema version.");
+            builder.AppendLine();
+        }
+
         builder.AppendLine("User request:");
         builder.Append(message.Content);
         return builder.ToString();
@@ -275,11 +288,59 @@ public sealed class GitHubCopilotAgentProvider(
         => item.Kind switch
         {
             GitHubCopilotStreamEventKind.Started => new(NewId(), AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow),
-            GitHubCopilotStreamEventKind.MessageDelta => new(NewId(), AgentStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
+            GitHubCopilotStreamEventKind.MessageDelta => TryMapStructuredResult(item.Content, out var result) ? result : new(NewId(), AgentStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
             GitHubCopilotStreamEventKind.Completed => new(NewId(), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow),
             GitHubCopilotStreamEventKind.Error => Error(item.ErrorCode ?? "agent.provider.github_copilot.sdk_error", NormalizeMessage(item.ErrorMessage), 502),
             _ => Error("agent.provider.github_copilot.unknown_event", "GitHub Copilot SDK returned an unknown stream event.", 502)
         };
+
+    private bool TryMapStructuredResult(string? content, out AgentStreamEvent result)
+    {
+        result = null!;
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+
+        var json = ExtractJsonObject(content);
+        if (json is null)
+            return false;
+
+        CopilotWorkflowAuthoringResult? envelope;
+        try
+        {
+            envelope = JsonSerializer.Deserialize<CopilotWorkflowAuthoringResult>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (envelope is null || string.IsNullOrWhiteSpace(envelope.ResultKind))
+            return false;
+
+        result = envelope.ResultKind switch
+        {
+            "message" => new(NewId(), AgentStreamEventKind.MessageDelta, envelope.Message, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
+            "clarification" when envelope.Clarification is not null => new(NewId(), AgentStreamEventKind.ClarificationRequested, envelope.Clarification.Question, null, null, DateTimeOffset.UtcNow, AgentResultKind.Clarification, envelope.Clarification),
+            "workflowGraphOperationBatch" when envelope.WorkflowGraphOperationBatch is not null => new(NewId(), AgentStreamEventKind.WorkflowGraphOperationBatchCreated, envelope.Message ?? "Prepared one workflow graph operation batch.", null, null, DateTimeOffset.UtcNow, AgentResultKind.WorkflowGraphOperationBatch, envelope.WorkflowGraphOperationBatch),
+            "error" => Error(envelope.ErrorCode ?? "agent.provider.github_copilot.result_error", NormalizeMessage(envelope.ErrorMessage), 502),
+            _ => Error("agent.provider.github_copilot.unsupported_result", "GitHub Copilot returned an unsupported workflow authoring result.", 502)
+        };
+        return true;
+    }
+
+    private static string? ExtractJsonObject(string content)
+    {
+        var trimmed = content.Trim();
+        if (trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLineEnd = trimmed.IndexOf('\n');
+            var fenceEnd = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+            if (firstLineEnd >= 0 && fenceEnd > firstLineEnd)
+                trimmed = trimmed[(firstLineEnd + 1)..fenceEnd].Trim();
+        }
+
+        return trimmed.StartsWith('{') && trimmed.EndsWith('}') ? trimmed : null;
+    }
 
     private static Dictionary<string, string> BuildMetadata(ProviderReadiness readiness, IReadOnlyCollection<string> models)
     {
@@ -332,4 +393,12 @@ public sealed class GitHubCopilotAgentProvider(
         string Status,
         string? GitHubToken,
         string AuthMode);
+
+    private sealed record CopilotWorkflowAuthoringResult(
+        string? ResultKind,
+        string? Message,
+        WorkflowClarificationResult? Clarification,
+        WorkflowGraphOperationBatch? WorkflowGraphOperationBatch,
+        string? ErrorCode,
+        string? ErrorMessage);
 }

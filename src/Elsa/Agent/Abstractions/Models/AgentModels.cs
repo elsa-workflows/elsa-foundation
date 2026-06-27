@@ -79,7 +79,8 @@ public enum AgentAuditEventKind
     ProposalExecuted,
     ProposalFailed,
     FeedbackReceived,
-    ProviderDiagnostic
+    ProviderDiagnostic,
+    WorkflowAuthoringInteraction
 }
 
 public enum AgentStreamEventKind

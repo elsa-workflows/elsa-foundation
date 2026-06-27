@@ -42,12 +42,15 @@ import {
 import {
   applyWorkflowGraphOperationBatchToWorkflow,
   collectActivityVersionIds,
+  createDemoWeaverClarificationResult,
   createDemoWeaverGraphOperationBatch,
   findActivityAvailabilityDiagnostic,
   getActivityAvailabilityStateName,
   getActivityChildSlots,
   getDesignerPosition,
-  getSlotActivities
+  getSlotActivities,
+  getWorkflowClarificationSummary,
+  summarizeWorkflowDesignerValidation
 } from "./workflowGraphOperations.js";
 
 const sampleWorkflows = {
@@ -969,6 +972,7 @@ export function App() {
   const [mainView, setMainView] = useState("workflow");
   const [selectedDesignerPath, setSelectedDesignerPath] = useState("root");
   const [weaverApplySummary, setWeaverApplySummary] = useState(null);
+  const [weaverClarification, setWeaverClarification] = useState(null);
   const [weaverUndoSnapshot, setWeaverUndoSnapshot] = useState(null);
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
@@ -1488,7 +1492,7 @@ export function App() {
     setExecutionId("");
   }
 
-  function applyWeaverGraphOperationBatch(batch) {
+  function applyWeaverGraphOperationBatch(batch, recheckOptions = {}) {
     const previous = {
       workflowJson,
       workflowVersionId,
@@ -1496,11 +1500,12 @@ export function App() {
       executionId
     };
     const workflow = JSON.parse(workflowJson);
-    const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch);
+    const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch, recheckOptions);
+    const validation = summarizeWorkflowDesignerValidation(workflow);
     const summary = {
       title: "Weaver batch applied",
       detail: `${result.appliedCount} operation${result.appliedCount === 1 ? "" : "s"} applied as one undoable designer transaction.`,
-      meta: result.finalActivityIds.length > 0 ? `Final ID: ${result.finalActivityIds.join(", ")}` : "Designer graph updated"
+      meta: `${validation.summary}; ${result.finalActivityIds.length > 0 ? `final ID: ${result.finalActivityIds.join(", ")}` : "designer graph updated"}`
     };
 
     setWorkflowJson(JSON.stringify(workflow, null, 2));
@@ -1509,6 +1514,7 @@ export function App() {
     setExecutionId("");
     setSelectedDesignerPath("root");
     setMainView("designer");
+    setWeaverClarification(null);
     setWeaverUndoSnapshot(previous);
     setWeaverApplySummary(summary);
     setStatus("Weaver batch applied to unsaved designer draft.");
@@ -1517,11 +1523,35 @@ export function App() {
 
   function applyDemoWeaverBatch() {
     try {
-      applyWeaverGraphOperationBatch(createDemoWeaverGraphOperationBatch());
+      applyWeaverGraphOperationBatch(createDemoWeaverGraphOperationBatch(), {
+        canDirectApply: true,
+        liveRevision: "demo-revision"
+      });
     } catch (error) {
       setStatus(error.message);
       addConsoleLine("stderr", error.message);
     }
+  }
+
+  function showDemoWeaverClarification() {
+    const clarification = createDemoWeaverClarificationResult();
+    const summary = getWorkflowClarificationSummary(clarification);
+    setWeaverClarification(clarification);
+    setWeaverApplySummary(summary);
+    setMainView("designer");
+    setStatus("Weaver clarification requested.");
+    addConsoleLine("stdout", `${summary.title}: ${summary.detail}`);
+  }
+
+  function selectWeaverClarificationOption(option) {
+    setWeaverClarification(null);
+    setWeaverApplySummary({
+      title: "Weaver clarification selected",
+      detail: option.label,
+      meta: option.value
+    });
+    setStatus(`Weaver clarification selected: ${option.label}.`);
+    addConsoleLine("stdout", `Weaver clarification selected: ${option.value}`);
   }
 
   function undoWeaverApply() {
@@ -1533,6 +1563,7 @@ export function App() {
     setArtifactId(weaverUndoSnapshot.artifactId);
     setExecutionId(weaverUndoSnapshot.executionId);
     setSelectedDesignerPath("root");
+    setWeaverClarification(null);
     setWeaverUndoSnapshot(null);
     setWeaverApplySummary({
       title: "Weaver batch undone",
@@ -2081,6 +2112,7 @@ export function App() {
             {mainView === "workflow" || mainView === "designer" ? (
               <>
                 <ActionButton icon={GitBranch} onClick={applyDemoWeaverBatch}>Apply Weaver</ActionButton>
+                <ActionButton icon={ChevronRight} onClick={showDemoWeaverClarification}>Clarify Weaver</ActionButton>
                 <ActionButton icon={Save} busy={busy === "save"} onClick={saveWorkflow}>Save</ActionButton>
                 <ActionButton icon={Rocket} busy={busy === "publish"} onClick={publishWorkflow} disabled={!workflowVersionId}>Publish</ActionButton>
                 <ActionButton icon={Play} busy={busy === "execute"} onClick={() => executeWorkflow("execute")} disabled={!artifactId}>Execute</ActionButton>
@@ -2135,6 +2167,8 @@ export function App() {
                 onSelectPath={setSelectedDesignerPath}
                 onUpdateActivity={applyDesignerActivityUpdate}
                 applySummary={weaverApplySummary}
+                clarification={weaverClarification}
+                onSelectClarificationOption={selectWeaverClarificationOption}
                 canUndoApply={Boolean(weaverUndoSnapshot)}
                 onUndoApply={undoWeaverApply}
               />
@@ -2318,6 +2352,8 @@ function WorkflowDesigner({
   onSelectPath,
   onUpdateActivity,
   applySummary,
+  clarification,
+  onSelectClarificationOption,
   canUndoApply,
   onUndoApply
 }) {
@@ -2348,6 +2384,15 @@ function WorkflowDesigner({
               <strong>{applySummary.title}</strong>
               <span>{applySummary.detail}</span>
               <code>{applySummary.meta}</code>
+              {clarification && (
+                <div className="designer-clarification-options">
+                  {clarification.options.map((option) => (
+                    <button type="button" key={option.id} onClick={() => onSelectClarificationOption(option)}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {canUndoApply && (
               <button type="button" className="small-button" onClick={onUndoApply}>

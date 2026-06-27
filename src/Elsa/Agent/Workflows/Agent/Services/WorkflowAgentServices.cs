@@ -79,6 +79,22 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
             yield break;
         }
 
+        if (ShouldReturnClarification(message.Content))
+        {
+            var clarification = CreateClarification(message);
+            yield return new AgentStreamEvent(
+                messageId,
+                AgentStreamEventKind.ClarificationRequested,
+                clarification.Question,
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                AgentResultKind.Clarification,
+                clarification);
+            yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+            yield break;
+        }
+
         if (ShouldReturnWorkflowBatch(message.Content))
         {
             yield return new AgentStreamEvent(
@@ -184,8 +200,35 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
             });
     }
 
+    private static WorkflowClarificationResult CreateClarification(AgentProviderMessage message)
+    {
+        var workflowContext = message.Context.FirstOrDefault(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase));
+        var workflowDefinitionId = GetReference(workflowContext, "workflowDefinitionId") ?? "workflow-draft";
+
+        return new(
+            "clarify-workflow-target",
+            "Which workflow branch should Weaver update?",
+            [
+                new("active-draft", "Active draft", "active-draft", "Apply the answer to the workflow currently open in the designer."),
+                new("selected-activity", "Selected activity", "selected-activity", "Scope the answer to the selected activity and nearby connections."),
+                new("new-workflow", "New workflow", "new-workflow", "Create a separate workflow graph instead of changing the current draft.")
+            ],
+            $"{message.SessionId}:clarification:workflow-target",
+            new Dictionary<string, string>
+            {
+                ["workflowDefinitionId"] = workflowDefinitionId,
+                ["surface"] = "designer"
+            });
+    }
+
     private static string? GetReference(AgentContextAttachment? attachment, string key)
         => attachment?.References.TryGetValue(key, out var value) == true && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static bool ShouldReturnClarification(string content)
+        => Contains(content, "clarify")
+            || Contains(content, "ambiguous")
+            || Contains(content, "which branch")
+            || Contains(content, "ask a question");
 
     private static bool ShouldReturnWorkflowBatch(string content)
         => Contains(content, "workflow graph operation")
@@ -367,6 +410,169 @@ public sealed class DenyAllWorkflowChangePermissionEvaluator : IWorkflowChangePe
 {
     public Task<bool> CanProposeChangeAsync(string actorId, string workflowDefinitionId, CancellationToken cancellationToken = default)
         => Task.FromResult(false);
+}
+
+public sealed class DefaultWorkflowGraphOperationBatchRiskClassifier : IWorkflowGraphOperationBatchRiskClassifier
+{
+    private const int MaxDirectApplyOperations = 12;
+
+    public WorkflowGraphOperationBatchRiskClassification Classify(WorkflowGraphOperationBatchRiskClassificationRequest request)
+    {
+        var reasons = new HashSet<WorkflowGraphOperationBatchRiskReason>();
+        var batch = request.Batch;
+        var context = request.Context;
+
+        if (!context.Permissions.CanDirectApply)
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.PermissionDenied);
+
+        if (!string.Equals(batch.SchemaVersion, WorkflowGraphOperationBatchSchema.CurrentVersion, StringComparison.Ordinal))
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.InvalidBatch);
+
+        if (!string.Equals(batch.WorkflowDefinitionId, context.WorkflowDefinitionId, StringComparison.Ordinal))
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.InvalidBatch);
+
+        if (string.IsNullOrWhiteSpace(batch.BaseRevision) || !string.Equals(batch.BaseRevision, context.Revision, StringComparison.Ordinal))
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.StaleRevision);
+
+        if (batch.Operations.Count == 0)
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.InvalidBatch);
+
+        if (batch.Operations.Count > MaxDirectApplyOperations)
+            reasons.Add(WorkflowGraphOperationBatchRiskReason.HighComplexity);
+
+        var knownActivityReferences = context.Activities
+            .Select(x => x.Id)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var availableActivityTypes = context.ActivityCatalog
+            .Where(x => x.IsAvailable)
+            .Select(x => x.Type)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var operation in batch.Operations)
+        {
+            if (string.IsNullOrWhiteSpace(operation.Id))
+                reasons.Add(WorkflowGraphOperationBatchRiskReason.InvalidBatch);
+
+            if (IsDestructive(operation.Kind))
+                reasons.Add(WorkflowGraphOperationBatchRiskReason.DestructiveOperation);
+
+            if (!IsSupportedForDirectApply(operation.Kind))
+                reasons.Add(WorkflowGraphOperationBatchRiskReason.Uncertain);
+
+            if (!HasRequiredParameters(operation, knownActivityReferences, availableActivityTypes, reasons))
+                reasons.Add(WorkflowGraphOperationBatchRiskReason.InvalidBatch);
+        }
+
+        if (reasons.Count == 0)
+            return new(
+                WorkflowGraphOperationBatchRiskDecision.DirectApply,
+                AgentRisk.ReadOnly,
+                AgentResultKind.WorkflowGraphOperationBatch,
+                [WorkflowGraphOperationBatchRiskReason.LowRisk],
+                "Batch is low risk and may be applied directly to the active designer working state.");
+
+        var decision = reasons.Contains(WorkflowGraphOperationBatchRiskReason.UnavailableActivity)
+            ? WorkflowGraphOperationBatchRiskDecision.Clarification
+            : WorkflowGraphOperationBatchRiskDecision.Proposal;
+
+        return new(
+            decision,
+            AgentRisk.ReviewRequired,
+            decision == WorkflowGraphOperationBatchRiskDecision.Clarification ? AgentResultKind.Clarification : AgentResultKind.Proposal,
+            reasons.ToList(),
+            decision == WorkflowGraphOperationBatchRiskDecision.Clarification
+                ? "Batch cannot be applied directly until missing activity capabilities are clarified."
+                : "Batch failed closed and must become a proposal instead of direct apply.");
+    }
+
+    private static bool HasRequiredParameters(
+        WorkflowGraphOperation operation,
+        ISet<string> knownActivityReferences,
+        ISet<string> availableActivityTypes,
+        ISet<WorkflowGraphOperationBatchRiskReason> reasons)
+    {
+        var parameters = operation.Parameters;
+        switch (operation.Kind)
+        {
+            case WorkflowGraphOperationKind.AddActivity:
+            {
+                var activityId = GetString(parameters, "activityId") ?? operation.TemporaryReferences.FirstOrDefault();
+                var activityType = GetString(parameters, "activityType") ?? GetString(parameters, "activityVersionId");
+                if (string.IsNullOrWhiteSpace(activityId) || string.IsNullOrWhiteSpace(activityType))
+                    return false;
+
+                if (!availableActivityTypes.Contains(activityType))
+                    reasons.Add(WorkflowGraphOperationBatchRiskReason.UnavailableActivity);
+
+                knownActivityReferences.Add(activityId);
+                foreach (var temporaryReference in operation.TemporaryReferences)
+                    knownActivityReferences.Add(temporaryReference);
+                return true;
+            }
+
+            case WorkflowGraphOperationKind.SetRoot:
+            case WorkflowGraphOperationKind.SetDesignerPosition:
+            case WorkflowGraphOperationKind.SetActivityProperty:
+                return IsKnownActivityReference(GetString(parameters, "activityId"), knownActivityReferences);
+
+            case WorkflowGraphOperationKind.ConnectActivities:
+                return IsKnownActivityReference(GetString(parameters, "sourceActivityId"), knownActivityReferences)
+                    && IsKnownActivityReference(GetString(parameters, "targetActivityId"), knownActivityReferences);
+
+            case WorkflowGraphOperationKind.UpdateActivity:
+                return IsKnownActivityReference(GetString(parameters, "activityId"), knownActivityReferences)
+                    && parameters.TryGetValue("patch", out var patch)
+                    && patch is not null;
+
+            default:
+                return true;
+        }
+    }
+
+    private static bool IsKnownActivityReference(string? value, ISet<string> knownActivityReferences)
+        => !string.IsNullOrWhiteSpace(value) && knownActivityReferences.Contains(value);
+
+    private static string? GetString(IReadOnlyDictionary<string, object?> parameters, string key)
+        => parameters.TryGetValue(key, out var value) ? Convert.ToString(value) : null;
+
+    private static bool IsSupportedForDirectApply(WorkflowGraphOperationKind kind)
+        => kind is WorkflowGraphOperationKind.AddActivity
+            or WorkflowGraphOperationKind.UpdateActivity
+            or WorkflowGraphOperationKind.ConnectActivities
+            or WorkflowGraphOperationKind.SetRoot
+            or WorkflowGraphOperationKind.SetDesignerPosition
+            or WorkflowGraphOperationKind.SetActivityProperty;
+
+    private static bool IsDestructive(WorkflowGraphOperationKind kind)
+        => kind is WorkflowGraphOperationKind.RemoveActivity or WorkflowGraphOperationKind.DisconnectActivities;
+}
+
+public sealed class DefaultWorkflowAuthoringAuditService(IAgentAuditSink auditSink) : IWorkflowAuthoringAuditService
+{
+    public Task EmitAsync(WorkflowAuthoringAuditRequest request, CancellationToken cancellationToken = default)
+    {
+        var metadata = new Dictionary<string, string>(request.Metadata, StringComparer.OrdinalIgnoreCase)
+        {
+            ["workflowDefinitionId"] = request.WorkflowDefinitionId,
+            ["capabilityId"] = request.CapabilityId,
+            ["providerId"] = request.ProviderId,
+            ["operationSummary"] = request.OperationSummary,
+            ["outcome"] = request.Outcome,
+            ["resultKind"] = request.ResultKind.ToString(),
+            ["modelId"] = request.ModelId ?? string.Empty,
+            ["runId"] = request.RunId ?? string.Empty
+        };
+
+        return auditSink.EmitAsync(new(
+            Guid.NewGuid().ToString("N"),
+            AgentAuditEventKind.WorkflowAuthoringInteraction,
+            request.SessionId,
+            request.ActorId,
+            $"Weaver workflow authoring interaction {request.Outcome}.",
+            DateTimeOffset.UtcNow,
+            metadata), cancellationToken);
+    }
 }
 
 public sealed class DefaultWorkflowChangeProposalService(
