@@ -51,6 +51,7 @@ export function AgentPanel({
   }), [bootstrap]);
   const capabilities = useMemo(() => getActiveAgentCapabilities(api, surface, contributionFilter), [api, surface, contributionFilter]);
   const promptStarters = useMemo(() => getActivePromptStarters(api, surface, capabilities, contributionFilter), [api, surface, capabilities, contributionFilter]);
+  const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
   const activeProvider = useMemo(() => bootstrap?.providers?.find(provider => provider.isAvailable) ?? bootstrap?.providers?.[0], [bootstrap]);
   const providerStatus = useMemo(() => getProviderStatus(bootstrap, capabilities, activeProvider), [activeProvider, bootstrap, capabilities]);
   const disabled = busy || !canUseWeaver(bootstrap) || capabilities.length === 0;
@@ -311,7 +312,7 @@ export function AgentPanel({
       <AgentPromptStarters prompts={promptStarters} disabled={disabled} onSelect={(prompt, capabilityId) => sendMessage(prompt, capabilityId)} />
       <AgentMessageList messages={messages} onFeedback={submitFeedback} />
       <AgentWorkflowBatchReview batches={workflowBatches} disabled={busy} onApply={applyWorkflowBatch} onUndo={undoWorkflowBatch} />
-      <AgentProposalReview proposals={proposals} disabled={busy} pendingProposalIds={pendingProposalIds} onApprove={approveProposal} onDeny={denyProposal} onExecute={executeProposal} />
+      <AgentProposalReview proposals={proposals} disabled={busy} pendingProposalIds={pendingProposalIds} resultRenderers={resultRenderers} onApprove={approveProposal} onDeny={denyProposal} onExecute={executeProposal} />
       <AgentComposer disabled={disabled} onSubmit={sendMessage} />
     </aside>
   );
@@ -389,6 +390,9 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
     isLoading: proposal?.isLoading,
     error: proposal?.error,
     audit: proposal?.audit,
+    resultRendererId: proposal?.resultRendererId,
+    resultType: proposal?.resultType,
+    result: proposal?.result,
     operations: proposal?.operations,
     risks: proposal?.risks,
     rollback: proposal?.rollback

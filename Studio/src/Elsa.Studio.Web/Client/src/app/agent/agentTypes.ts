@@ -89,6 +89,9 @@ export interface AgentActionProposal {
   isLoading?: boolean;
   error?: string;
   audit?: AgentProposalAuditState;
+  resultRendererId?: string;
+  resultType?: string;
+  result?: unknown;
   operations?: AgentProposalOperation[];
   risks?: string[];
   rollback?: string;
