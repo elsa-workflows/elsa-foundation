@@ -8,6 +8,8 @@
     "build:app": "vite build",
     "build:vendor": "vite build --config vite.vendor.config.ts",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-code-editor": "workspace:*"
   }
 }
-
