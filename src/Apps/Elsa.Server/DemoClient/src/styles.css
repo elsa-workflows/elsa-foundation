@@ -2429,6 +2429,10 @@ p {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow);
 }
 
+.designer-node.warning {
+  border-color: color-mix(in srgb, var(--amber) 58%, var(--line));
+}
+
 .designer-node-handle {
   width: 8px;
   height: 8px;
@@ -2447,10 +2451,17 @@ p {
   color: var(--accent-strong);
 }
 
+.designer-node.warning .designer-node-icon {
+  border-color: color-mix(in srgb, var(--amber) 44%, var(--line));
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+  color: var(--amber);
+}
+
 .designer-node span,
 .designer-node strong,
 .designer-node code,
-.designer-node p {
+.designer-node p,
+.designer-node em {
   display: block;
   min-width: 0;
 }
@@ -2490,6 +2501,22 @@ p {
   font-size: 11px;
 }
 
+.designer-node em {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 7px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--amber) 13%, var(--surface));
+  color: var(--amber);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 760;
+}
+
 .designer-properties {
   min-width: 0;
   overflow: auto;
@@ -2516,6 +2543,37 @@ p {
   white-space: nowrap;
   margin-top: 3px;
   font-size: 14px;
+}
+
+.designer-warning {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 9px;
+  align-items: flex-start;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 36%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--amber) 9%, var(--surface));
+  color: var(--amber);
+}
+
+.designer-warning strong,
+.designer-warning span {
+  display: block;
+  min-width: 0;
+}
+
+.designer-warning strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.designer-warning span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .designer-field {
