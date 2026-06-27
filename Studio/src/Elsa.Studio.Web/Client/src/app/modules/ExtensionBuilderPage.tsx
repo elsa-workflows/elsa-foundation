@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, FilePlus2, FolderGit2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Boxes, FilePlus2, FolderGit2, FolderPlus, GitBranch, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
@@ -24,6 +24,7 @@ import {
   readProjectFile,
   retryReconciliation,
   rollbackPackage,
+  selectWorkingCopy,
   submitBuild,
   writeProjectFile,
   type BuildArtifact,
@@ -83,12 +84,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [cloneRepositoryUrl, setCloneRepositoryUrl] = useState("");
   const [cloneRepositoryName, setCloneRepositoryName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
+  const [workingBranchName, setWorkingBranchName] = useState("");
+  const [allowProtectedBranchEdit, setAllowProtectedBranchEdit] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [operationBusy, setOperationBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollTimerId = useRef<number | null>(null);
   const mounted = useRef(true);
+  const sessionId = useRef(getExtensionBuilderSessionId()).current;
   const projectDetailsRequestId = useRef(0);
   const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
@@ -102,6 +106,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
   const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
+  const defaultWorkingBranchName = useMemo(() => `extension-builder/${sessionId}`, [sessionId]);
 
   function clearBuildPoll() {
     if (pollTimerId.current) {
@@ -142,6 +147,13 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setSelectedProjectId(nextProjectId);
     }
   }, [selectedWorkspace?.id, workspaces]);
+
+  useEffect(() => {
+    if (workingBranchName) return;
+    setWorkingBranchName(selectedRepository?.activeBranch && !isProtectedBranchName(selectedRepository.activeBranch)
+      ? selectedRepository.activeBranch
+      : defaultWorkingBranchName);
+  }, [selectedRepository?.id, selectedRepository?.activeBranch, defaultWorkingBranchName, workingBranchName]);
 
   useEffect(() => {
     if (!selectedWorkspace || !selectedProject) {
@@ -391,6 +403,25 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handleSelectWorkingCopy() {
+    const workspaceId = selectedWorkspace?.id ?? selectedRepository?.id;
+    const branchName = workingBranchName.trim();
+    if (!workspaceId) return;
+    if (!branchName) {
+      setError("Working branch is required.");
+      return;
+    }
+
+    const workingCopy = await runOperation(
+      () => selectWorkingCopy(context, workspaceId, { sessionId, branchName, allowProtectedBranchEdit }),
+      `Opened working branch ${branchName}.`
+    );
+    if (workingCopy) {
+      setWorkingBranchName(workingCopy.branchName);
+      await refreshWorkspacesSafely({ preserveSelection: true });
+    }
+  }
+
   async function handleSaveFile() {
     if (!selectedWorkspace || !selectedProject || !activeFilePath) return;
     const workspaceId = selectedWorkspace.id;
@@ -633,6 +664,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
+          workingBranchName={workingBranchName || defaultWorkingBranchName}
+          allowProtectedBranchEdit={allowProtectedBranchEdit}
           serverLocalPath={serverLocalPath}
           serverLocalName={serverLocalName}
           onServerLocalPathChange={setServerLocalPath}
@@ -645,8 +678,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
+          onWorkingBranchNameChange={setWorkingBranchName}
+          onAllowProtectedBranchEditChange={setAllowProtectedBranchEdit}
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
+          onSelectWorkingCopy={handleSelectWorkingCopy}
           onCloneRepository={handleCloneRepository}
           onCreateProject={handleCreateProject}
           onSelectWorkspace={workspaceId => {
@@ -720,21 +756,26 @@ function WorkspaceBrowser({
   selectedWorkspaceId,
   selectedProjectId,
   workspaceName,
+  workingBranchName,
+  allowProtectedBranchEdit,
   serverLocalPath,
   serverLocalName,
   cloneRepositoryUrl,
   cloneRepositoryName,
-  projectDraft,
-  busy,
-  onWorkspaceNameChange,
   onServerLocalPathChange,
   onServerLocalNameChange,
   onAttachServerLocalRepository,
   onCloneRepositoryUrlChange,
   onCloneRepositoryNameChange,
   onCloneRepository,
+  projectDraft,
+  busy,
+  onWorkspaceNameChange,
+  onWorkingBranchNameChange,
+  onAllowProtectedBranchEditChange,
   onProjectDraftChange,
   onCreateWorkspace,
+  onSelectWorkingCopy,
   onCreateProject,
   onSelectWorkspace,
   onSelectProject,
@@ -748,21 +789,26 @@ function WorkspaceBrowser({
   selectedWorkspaceId: string;
   selectedProjectId: string;
   workspaceName: string;
+  workingBranchName: string;
+  allowProtectedBranchEdit: boolean;
   serverLocalPath: string;
   serverLocalName: string;
   cloneRepositoryUrl: string;
   cloneRepositoryName: string;
-  projectDraft: ProjectDraft;
-  busy: boolean;
-  onWorkspaceNameChange(value: string): void;
   onServerLocalPathChange(value: string): void;
   onServerLocalNameChange(value: string): void;
   onAttachServerLocalRepository(): void;
   onCloneRepositoryUrlChange(value: string): void;
   onCloneRepositoryNameChange(value: string): void;
   onCloneRepository(): void;
+  projectDraft: ProjectDraft;
+  busy: boolean;
+  onWorkspaceNameChange(value: string): void;
+  onWorkingBranchNameChange(value: string): void;
+  onAllowProtectedBranchEditChange(value: boolean): void;
   onProjectDraftChange(value: ProjectDraft): void;
   onCreateWorkspace(): void;
+  onSelectWorkingCopy(): void;
   onCreateProject(): void;
   onSelectWorkspace(workspaceId: string): void;
   onSelectProject(projectId: string): void;
@@ -785,6 +831,7 @@ function WorkspaceBrowser({
       projectCount: workspace.projects.length,
       updatedAt: workspace.updatedAt
     } satisfies ExtensionRepositorySummary));
+  const selectedRepository = repositoryRows.find(repository => repository.id === selectedWorkspaceId) ?? null;
 
   return (
     <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder repositories">
@@ -837,6 +884,24 @@ function WorkspaceBrowser({
           <em>{repository.attentionCount}</em>
         </button>
       ))}
+
+      {selectedRepository ? (
+        <details className="extension-builder-create">
+          <summary>Working copy</summary>
+          <label>
+            <span>Working branch</span>
+            <input aria-label="Working branch" value={workingBranchName} disabled={busy || !capabilities.canEditFiles} onChange={event => onWorkingBranchNameChange(event.target.value)} />
+          </label>
+          <label className="extension-builder-checkbox">
+            <input type="checkbox" aria-label="Allow default branch editing" checked={allowProtectedBranchEdit} disabled={busy || !capabilities.canEditFiles} onChange={event => onAllowProtectedBranchEditChange(event.target.checked)} />
+            <span>Allow default branch editing</span>
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !capabilities.canEditFiles || !workingBranchName.trim()} title={capabilities.canEditFiles ? "Open working branch" : "Requires canEditFiles"} onClick={onSelectWorkingCopy}>
+            <GitBranch size={15} />
+            Open working branch
+          </button>
+        </details>
+      ) : null}
 
       <div className="modules-source-group">
         <span>Projects</span>
@@ -1396,6 +1461,23 @@ function isBuildForCurrentRevision(build: BuildResult | null, project: Extension
 
 function isBuildSucceeded(build: BuildResult | null) {
   return build?.status === "succeeded" || build?.status === "Succeeded";
+}
+
+function isProtectedBranchName(value: string) {
+  return value.toLowerCase() === "main" || value.toLowerCase() === "master";
+}
+
+function getExtensionBuilderSessionId() {
+  const key = "elsa-extension-builder-session-id";
+  try {
+    const existing = window.sessionStorage.getItem(key);
+    if (existing) return existing;
+    const created = `studio-${crypto.randomUUID()}`;
+    window.sessionStorage.setItem(key, created);
+    return created;
+  } catch {
+    return `studio-${Math.random().toString(36).slice(2)}`;
+  }
 }
 
 function formatRemoteState(value?: string | null) {

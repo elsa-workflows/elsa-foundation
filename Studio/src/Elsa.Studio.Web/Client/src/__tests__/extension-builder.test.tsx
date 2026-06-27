@@ -199,6 +199,44 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("opens an explicit working branch and refreshes active branch metadata", async () => {
+    let opened = false;
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/working-copies/select")) {
+        opened = true;
+        expect(url).toBe("/_elsa/extension-builder/workspaces/ws-1/working-copies/select");
+        expect(body).toEqual({
+          sessionId: expect.any(String),
+          branchName: "feature/session-work",
+          allowProtectedBranchEdit: false
+        });
+        return workingCopySummary();
+      }
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/capabilities")) return trustedCapabilities();
+      if (url.endsWith("/repositories")) return [opened ? repositorySummary({ activeBranch: "feature/session-work", isDirty: true }) : repositorySummary()];
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Team Extensions");
+
+    const branchInput = await waitForElement<HTMLInputElement>(container, "[aria-label='Working branch']");
+    await fill(branchInput, "feature/session-work");
+    await clickButton(container, "Open working branch");
+    await waitForText(container, "Opened working branch feature/session-work.");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/working-copies/select", expect.objectContaining({
+      branchName: "feature/session-work",
+      allowProtectedBranchEdit: false
+    }));
+    const activeRepository = container.querySelector(".modules-source-button.active");
+    expect(activeRepository?.textContent).toContain("feature/session-work · not connected · dirty");
+
+    await unmount();
+  });
+
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
@@ -572,6 +610,21 @@ function repositorySummary(overrides?: Partial<ExtensionRepositorySummary>) {
     projectCount: 1,
     updatedAt: new Date().toISOString(),
     ...overrides
+  };
+}
+
+function workingCopySummary() {
+  return {
+    id: "wc-1",
+    workspaceId: "ws-1",
+    ownerId: "alice",
+    sessionId: "studio-session",
+    branchName: "feature/session-work",
+    isActive: true,
+    isProtectedBranch: false,
+    isDirty: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
