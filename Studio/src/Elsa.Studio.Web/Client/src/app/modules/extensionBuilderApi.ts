@@ -9,6 +9,8 @@ export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manife
 export type RepositoryFileKind = "Solution" | "Project" | "Folder" | "File" | string;
 export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
 export type ExtensionTemplateScope = "Repository" | "Solution" | "Project" | "Item" | string;
+export type RemoteSyncOperation = "Push" | "Pull" | string;
+export type RemoteSyncState = "Completed" | "Blocked" | string;
 
 export interface ExtensionBuilderCapabilities {
   canCreateWorkspace: boolean;
@@ -148,6 +150,17 @@ export interface SourceControlDiff {
 export interface SourceControlCommitResult {
   commitId: string;
   message: string;
+  status: SourceControlStatus;
+}
+
+export interface RemoteSyncResult {
+  operation: RemoteSyncOperation;
+  state: RemoteSyncState;
+  message: string;
+  remote?: string | null;
+  branch?: string | null;
+  ahead: number;
+  behind: number;
   status: SourceControlStatus;
 }
 
@@ -384,6 +397,14 @@ export async function stageAllRepositoryChanges(context: StudioEndpointContext, 
 
 export async function commitRepositoryChanges(context: StudioEndpointContext, workspaceId: string, message: string) {
   return normalizeSourceControlCommitResult(await context.http.postJson<RawSourceControlCommitResult>(`${workspaceRoot(workspaceId)}/source-control/commit`, { message }));
+}
+
+export async function pushRepository(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/push`, {}));
+}
+
+export async function pullRepository(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/pull`, {}));
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -668,6 +689,19 @@ function normalizeSourceControlCommitResult(result: RawSourceControlCommitResult
   };
 }
 
+function normalizeRemoteSyncResult(result: RawRemoteSyncResult): RemoteSyncResult {
+  return {
+    operation: normalizeRemoteSyncOperation(result.operation),
+    state: normalizeRemoteSyncState(result.state),
+    message: result.message ?? "",
+    remote: result.remote,
+    branch: result.branch,
+    ahead: result.ahead ?? 0,
+    behind: result.behind ?? 0,
+    status: normalizeSourceControlStatus(result.status)
+  };
+}
+
 function normalizeBuild(build: RawBuildResult): BuildResult {
   return {
     id: build.id,
@@ -765,6 +799,14 @@ function normalizeRepositoryFileKind(value?: RepositoryFileKind | number | null)
 
 function normalizeTemplateScope(value?: ExtensionTemplateScope | number | null): ExtensionTemplateScope {
   return enumName(value, ["Repository", "Solution", "Project", "Item"]);
+}
+
+function normalizeRemoteSyncOperation(value?: RemoteSyncOperation | number | null): RemoteSyncOperation {
+  return enumName(value, ["Push", "Pull"]);
+}
+
+function normalizeRemoteSyncState(value?: RemoteSyncState | number | null): RemoteSyncState {
+  return enumName(value, ["Completed", "Blocked"]);
 }
 
 function normalizePromotionStatus(value?: string | number | null) {
@@ -947,6 +989,17 @@ interface RawSourceControlDiff {
 interface RawSourceControlCommitResult {
   commitId: string;
   message: string;
+  status: RawSourceControlStatus;
+}
+
+interface RawRemoteSyncResult {
+  operation?: RemoteSyncOperation | number | null;
+  state?: RemoteSyncState | number | null;
+  message?: string | null;
+  remote?: string | null;
+  branch?: string | null;
+  ahead?: number | null;
+  behind?: number | null;
   status: RawSourceControlStatus;
 }
 
