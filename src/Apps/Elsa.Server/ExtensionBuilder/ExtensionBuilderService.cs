@@ -15,6 +15,8 @@ internal interface IExtensionBuilderService
     Task<ExtensionWorkspace> CloneRepositoryAsync(ExtensionBuilderCaller caller, CloneRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(ExtensionBuilderCaller caller, string workspaceId, string? sessionId, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -72,6 +74,12 @@ internal sealed class ExtensionBuilderService(
 
     public Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
         storage.DeleteWorkspaceAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(ExtensionBuilderCaller caller, string workspaceId, string? sessionId, CancellationToken cancellationToken = default) =>
+        storage.ListWorkingCopiesAsync(workspaceId, caller.OwnerId, sessionId, cancellationToken);
+
+    public Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default) =>
+        storage.SelectWorkingCopyAsync(workspaceId, caller.OwnerId, request, cancellationToken);
 
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {

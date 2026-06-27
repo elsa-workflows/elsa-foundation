@@ -96,6 +96,23 @@ internal sealed record AttachServerLocalRepositoryRequest(string Path, string? D
 
 internal sealed record CloneRepositoryRequest(string RepositoryUrl, string? DisplayName);
 
+internal sealed record SelectWorkingCopyRequest(
+    string SessionId,
+    string? BranchName,
+    bool AllowProtectedBranchEdit);
+
+internal sealed record ExtensionWorkingCopySummary(
+    string Id,
+    string WorkspaceId,
+    string OwnerId,
+    string SessionId,
+    string BranchName,
+    bool IsActive,
+    bool IsProtectedBranch,
+    bool IsDirty,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
 internal sealed record CreateProjectRequest(
     string TemplateId,
     string PackageId,
