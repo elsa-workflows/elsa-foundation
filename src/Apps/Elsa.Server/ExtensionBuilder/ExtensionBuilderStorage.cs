@@ -770,7 +770,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var sourceIsDirty = GetRepositoryState(repositoryPath).IsDirty;
 
         var created = new BuildResult(buildId, project.Id, workspaceId, sourceRevisionId, BuildStatus.Pending, [], null, logPath, createdAt, null, null);
-        if (!await SaveBuildAsync(created, cancellationToken))
+        if (!await SaveBuildAsync(created, CancellationToken.None))
             return null;
 
         var startedAt = DateTimeOffset.UtcNow;
