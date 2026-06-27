@@ -1,45 +1,66 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, FilePlus2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Boxes, FilePlus2, FolderGit2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
 import { javaScriptLanguageAdapter, StudioCodeEditor, type StudioCodeDiagnostic, type StudioCodeDiagnosticSeverity, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
+  applyRepositoryTemplate,
+  attachServerLocalRepository,
   createProject,
   createWorkspace,
+  cloneRepository,
   deleteProject,
-  deleteProjectFile,
+  deleteRepositoryFile,
   deleteWorkspace,
   getBuild,
   getBuildLog,
   getCapabilities,
   getProject,
+  getRepositoryTree,
   getRuntimeStatus,
   isTrusted,
-  listProjectFiles,
+  listRepositories,
   listTemplates,
   listWorkspaces,
+  moveRepositoryFile,
+  pullRepository,
+  promoteBuildArtifact,
   promoteBuild,
-  readProjectFile,
+  pushRepository,
+  readRepositoryFile,
   retryReconciliation,
   rollbackPackage,
+  selectWorkingCopy,
   submitBuild,
-  writeProjectFile,
+  writeRepositoryFile,
   type BuildArtifact,
   type BuildDiagnostic,
   type BuildResult,
+  commitRepositoryChanges,
   type ExtensionBuilderCapabilities,
   type ExtensionProject,
+  type ExtensionRepositorySummary,
   type ExtensionRuntimeStatus,
   type ExtensionTemplate,
+  type ExtensionTemplateParameter,
   type ExtensionWorkspace,
+  getSourceControlDiff,
+  getSourceControlStatus,
   type PackagePromotionResult,
-  type ProjectFile,
-  type RuntimeVersion
+  type RepositoryFileSummary,
+  type RepositorySolutionSummary,
+  type RepositoryBuildCommand,
+  type RuntimeVersion,
+  type SourceControlDiff,
+  type SourceControlStatus,
+  stageAllRepositoryChanges,
+  stageRepositoryFile,
+  unstageRepositoryFile
 } from "./extensionBuilderApi";
 import { getErrorMessage } from "./moduleManagementApi";
 
 type BuilderState = "loading" | "ready" | "failed";
-type InspectorTab = "build" | "promote" | "runtime";
+type InspectorTab = "build" | "source" | "promote" | "runtime";
 
 interface ProjectDraft {
   name: string;
@@ -48,8 +69,21 @@ interface ProjectDraft {
   templateId: string;
 }
 
+interface TemplateApplicationDraft {
+  templateId: string;
+  targetPath: string;
+  parameters: Record<string, string>;
+}
+
+interface EditorTab {
+  path: string;
+  content: string;
+  savedContent: string;
+}
+
 const inspectorTabs = [
   { id: "build", label: "Build" },
+  { id: "source", label: "Source" },
   { id: "promote", label: "Promote" },
   { id: "runtime", label: "Runtime" }
 ];
@@ -58,11 +92,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const context = api.backend;
   const [state, setState] = useState<BuilderState>("loading");
   const [capabilities, setCapabilities] = useState<ExtensionBuilderCapabilities | null>(null);
+  const [repositories, setRepositories] = useState<ExtensionRepositorySummary[]>([]);
   const [workspaces, setWorkspaces] = useState<ExtensionWorkspace[]>([]);
   const [templates, setTemplates] = useState<ExtensionTemplate[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [files, setFiles] = useState<RepositoryFileSummary[]>([]);
+  const [solutions, setSolutions] = useState<RepositorySolutionSummary[]>([]);
+  const [selectedSolutionPath, setSelectedSolutionPath] = useState("");
+  const [editorTabs, setEditorTabs] = useState<EditorTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
@@ -72,26 +110,44 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [buildLog, setBuildLog] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState<ExtensionRuntimeStatus | null>(null);
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
+  const [sourceControlStatus, setSourceControlStatus] = useState<SourceControlStatus | null>(null);
+  const [sourceControlDiff, setSourceControlDiff] = useState<SourceControlDiff | null>(null);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [buildCommand, setBuildCommand] = useState<RepositoryBuildCommand>("Build");
+  const [buildTargetPath, setBuildTargetPath] = useState("");
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
+  const [serverLocalPath, setServerLocalPath] = useState("");
+  const [serverLocalName, setServerLocalName] = useState("");
+  const [cloneRepositoryUrl, setCloneRepositoryUrl] = useState("");
+  const [cloneRepositoryName, setCloneRepositoryName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
+  const [templateDraft, setTemplateDraft] = useState<TemplateApplicationDraft>({ templateId: "", targetPath: "", parameters: {} });
+  const [workingBranchName, setWorkingBranchName] = useState("");
+  const [allowProtectedBranchEdit, setAllowProtectedBranchEdit] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [operationBusy, setOperationBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollTimerId = useRef<number | null>(null);
   const mounted = useRef(true);
+  const sessionId = useRef(getExtensionBuilderSessionId()).current;
   const projectDetailsRequestId = useRef(0);
   const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
-  const editorDirty = editorText !== savedEditorText;
-  const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? workspaces[0] ?? null;
+  const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
+  const selectedRepository = repositories.find(repository => repository.id === selectedWorkspaceId) ?? repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
+  const projectTemplates = useMemo(() => templates.filter(template => template.scope === "Project"), [templates]);
+  const activeTab = editorTabs.find(tab => tab.path === activeFilePath) ?? null;
+  const editorDirty = activeTab ? activeTab.content !== activeTab.savedContent : editorText !== savedEditorText;
+  const hasRepositoryRows = repositories.length > 0 || workspaces.length > 0;
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
   const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
+  const defaultWorkingBranchName = useMemo(() => `extension-builder/${sessionId}`, [sessionId]);
 
   function clearBuildPoll() {
     if (pollTimerId.current) {
@@ -112,8 +168,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [api]);
 
   useEffect(() => {
-    if (templates.length === 0 || projectDraft.templateId) return;
-    const primary = templates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? templates[0];
+    if (projectTemplates.length === 0 || projectDraft.templateId) return;
+    const primary = projectTemplates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? projectTemplates[0];
     setProjectDraft(current => ({
       ...current,
       templateId: primary.id,
@@ -121,7 +177,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       packageId: current.packageId || defaultPackageId(primary),
       packageVersion: current.packageVersion || primary.defaultPackageVersion || "1.0.0"
     }));
-  }, [templates, projectDraft.templateId]);
+  }, [projectTemplates, projectDraft.templateId]);
+
+  useEffect(() => {
+    if (templates.length === 0) return;
+    if (templateDraft.templateId && templates.some(template => template.id === templateDraft.templateId)) return;
+    const initialTemplate = templates.find(template => template.scope === "Item") ?? templates.find(template => template.scope !== "Project") ?? templates[0];
+    setTemplateDraft(createTemplateApplicationDraft(initialTemplate));
+  }, [templates, templateDraft.templateId]);
 
   useEffect(() => {
     if (!selectedWorkspace) return;
@@ -134,9 +197,22 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [selectedWorkspace?.id, workspaces]);
 
   useEffect(() => {
-    if (!selectedWorkspace || !selectedProject) {
+    if (workingBranchName) return;
+    setWorkingBranchName(selectedRepository?.activeBranch && !isProtectedBranchName(selectedRepository.activeBranch)
+      ? selectedRepository.activeBranch
+      : defaultWorkingBranchName);
+  }, [selectedRepository?.id, selectedRepository?.activeBranch, defaultWorkingBranchName, workingBranchName]);
+
+  useEffect(() => {
+    if (!selectedWorkspace) {
       projectDetailsRequestId.current += 1;
       setFiles([]);
+      setSolutions([]);
+      setSelectedSolutionPath("");
+      setEditorTabs([]);
+      setSourceControlStatus(null);
+      setSourceControlDiff(null);
+      setCommitMessage("");
       setActiveFilePath("");
       setEditorText("");
       setSavedEditorText("");
@@ -148,8 +224,20 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       return;
     }
 
-    void loadProjectDetails(selectedWorkspace.id, selectedProject.id);
-  }, [selectedWorkspace?.id, selectedProject?.id]);
+    if (!selectedProject) {
+      projectDetailsRequestId.current += 1;
+      setActiveBuild(null);
+      setBuildHistory([]);
+      setBuildLog("");
+      runtimeStatusRequestId.current += 1;
+      setRuntimeStatus(null);
+      void loadRepositoryTree(selectedWorkspace.id, selectedSolutionPath || null);
+      void loadSourceControlStatus(selectedWorkspace.id);
+      return;
+    }
+
+    void loadProjectDetails(selectedWorkspace.id, selectedProject.id, selectedSolutionPath || null);
+  }, [selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
 
   useEffect(() => {
     clearBuildPoll();
@@ -176,13 +264,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         return;
       }
 
-      const [workspaceList, templateList] = await Promise.all([
+      const [repositoryList, workspaceList, templateList] = await Promise.all([
+        listRepositories(context).catch(() => []),
         listWorkspaces(context),
         listTemplates(context)
       ]);
+      setRepositories(repositoryList);
       setTemplates(templateList);
       setWorkspaces(workspaceList);
-      setSelectedWorkspaceId(current => (current || workspaceList[0]?.id) ?? "");
+      setSelectedWorkspaceId(current => (current || workspaceList[0]?.id || repositoryList[0]?.id) ?? "");
       setState("ready");
     } catch (e) {
       setError(getErrorMessage(e));
@@ -191,10 +281,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function refreshWorkspaces(options?: { preserveSelection?: boolean }) {
-    const workspaceList = await listWorkspaces(context);
+    const [repositoryList, workspaceList] = await Promise.all([
+      listRepositories(context).catch(() => []),
+      listWorkspaces(context)
+    ]);
+    setRepositories(repositoryList);
     setWorkspaces(workspaceList);
-    if (!options?.preserveSelection || !workspaceList.some(workspace => workspace.id === selectedWorkspaceId)) {
-      setSelectedWorkspaceId(workspaceList[0]?.id ?? "");
+    if (!options?.preserveSelection || !workspaceList.some(workspace => workspace.id === selectedWorkspaceId) && !repositoryList.some(repository => repository.id === selectedWorkspaceId)) {
+      setSelectedWorkspaceId(workspaceList[0]?.id ?? repositoryList[0]?.id ?? "");
     }
   }
 
@@ -208,44 +302,84 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
-  async function loadProjectDetails(workspaceId: string, projectId: string) {
+  async function loadRepositoryTree(workspaceId: string, solutionPath?: string | null) {
+    try {
+      const tree = await getRepositoryTree(context, workspaceId, solutionPath);
+      if (!mounted.current || selectedIds.current.workspaceId !== workspaceId) return;
+      setSolutions(tree.solutions);
+      setFiles(tree.entries);
+      const selected = tree.solutions.find(solution => solution.isSelected)?.path ?? "";
+      const nextSelectedSolutionPath = tree.solutions.length > 1 ? selected : "";
+      if (nextSelectedSolutionPath !== selectedSolutionPath) setSelectedSolutionPath(nextSelectedSolutionPath);
+      return tree;
+    } catch (e) {
+      if (selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      return null;
+    }
+  }
+
+  async function loadSourceControlStatus(workspaceId: string) {
+    try {
+      const gitStatus = await getSourceControlStatus(context, workspaceId);
+      if (!mounted.current || selectedIds.current.workspaceId !== workspaceId) return null;
+      setSourceControlStatus(gitStatus);
+      if (sourceControlDiff && !gitStatus.changedFiles.some(file => file.path === sourceControlDiff.path)) {
+        setSourceControlDiff(null);
+      }
+      return gitStatus;
+    } catch (e) {
+      if (selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      return null;
+    }
+  }
+
+  async function loadProjectDetails(workspaceId: string, projectId: string, solutionPath?: string | null) {
     const requestId = ++projectDetailsRequestId.current;
     const runtimeRequestId = ++runtimeStatusRequestId.current;
     setError(null);
     try {
-      const [project, projectFiles, runtime] = await Promise.all([
+      const [project, repositoryTree, gitStatus, runtime] = await Promise.all([
         getProject(context, workspaceId, projectId),
-        listProjectFiles(context, workspaceId, projectId),
+        getRepositoryTree(context, workspaceId, solutionPath),
+        getSourceControlStatus(context, workspaceId),
         getRuntimeStatus(context, workspaceId, projectId).catch(() => null)
       ]);
       if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
       setWorkspaces(current => patchProject(current, workspaceId, project));
-      setFiles(projectFiles);
+      setSolutions(repositoryTree.solutions);
+      setFiles(repositoryTree.entries);
+      setSourceControlStatus(gitStatus);
+      const selected = repositoryTree.solutions.find(solution => solution.isSelected)?.path ?? "";
+      const nextSelectedSolutionPath = repositoryTree.solutions.length > 1 ? selected : "";
+      if (nextSelectedSolutionPath !== selectedSolutionPath) setSelectedSolutionPath(nextSelectedSolutionPath);
       if (runtimeRequestId === runtimeStatusRequestId.current) {
         setRuntimeStatus(runtime);
       }
       setBuildHistory(project.builds ?? []);
       setActiveBuild(project.builds?.[0] ?? null);
-      const firstFile = projectFiles.find(file => file.type === "file");
+      const firstFile = repositoryTree.entries.find(file => file.type === "file");
       if (firstFile) {
-        const file = await readProjectFile(context, workspaceId, projectId, firstFile.path).catch(() => firstFile.content != null ? firstFile : null);
+        const file = await readRepositoryFile(context, workspaceId, firstFile.path).catch(() => firstFile.content != null ? firstFile : null);
         if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
         if (file) {
           const content = file.content ?? "";
           setActiveFilePath(file.path);
           setEditorText(content);
           setSavedEditorText(content);
+          setEditorTabs([{ path: file.path, content, savedContent: content }]);
           setLineHint(null);
         } else {
           setActiveFilePath("");
           setEditorText("");
           setSavedEditorText("");
+          setEditorTabs([]);
           setLineHint(null);
         }
       } else {
         setActiveFilePath("");
         setEditorText("");
         setSavedEditorText("");
+        setEditorTabs([]);
         setLineHint(null);
       }
     } catch (e) {
@@ -253,16 +387,17 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
-  async function openFile(workspaceId: string, projectId: string, path: string, options?: { force?: boolean }) {
+  async function openFile(workspaceId: string, path: string, options?: { force?: boolean }) {
     if (!options?.force && editorDirty && !window.confirm("Discard unsaved file changes?")) return false;
     setError(null);
     try {
-      const file = await readProjectFile(context, workspaceId, projectId, path);
-      if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return false;
+      const file = await readRepositoryFile(context, workspaceId, path);
+      if (selectedIds.current.workspaceId !== workspaceId) return false;
       const content = file.content ?? "";
       setActiveFilePath(file.path);
       setEditorText(content);
       setSavedEditorText(content);
+      setEditorTabs(current => upsertEditorTab(current, { path: file.path, content, savedContent: content }));
       setLineHint(null);
       return true;
     } catch (e) {
@@ -289,6 +424,42 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     setPromotionResult(null);
   }
 
+  function handleEditorTextChange(value: string) {
+    setEditorText(value);
+    if (activeFilePath) {
+      setEditorTabs(current => current.map(tab => tab.path === activeFilePath ? { ...tab, content: value } : tab));
+    }
+  }
+
+  function handleSelectEditorTab(path: string) {
+    const tab = editorTabs.find(item => item.path === path);
+    if (!tab) return;
+    if (editorDirty && activeFilePath !== path && !window.confirm("Discard unsaved file changes?")) return;
+    setActiveFilePath(tab.path);
+    setEditorText(tab.content);
+    setSavedEditorText(tab.savedContent);
+    setLineHint(null);
+  }
+
+  function handleCloseEditorTab(path: string) {
+    const tab = editorTabs.find(item => item.path === path);
+    if (!tab) return;
+    if (tab.content !== tab.savedContent && !window.confirm("Discard unsaved file changes?")) return;
+    const remaining = editorTabs.filter(item => item.path !== path);
+    setEditorTabs(remaining);
+    if (activeFilePath === path) {
+      const next = remaining[0] ?? null;
+      setActiveFilePath(next?.path ?? "");
+      setEditorText(next?.content ?? "");
+      setSavedEditorText(next?.savedContent ?? "");
+      setLineHint(null);
+    }
+  }
+
+  function handleSelectSolution(path: string) {
+    setSelectedSolutionPath(path);
+  }
+
   async function runOperation<T>(operation: () => Promise<T>, success: string) {
     setOperationBusy(true);
     setError(null);
@@ -307,12 +478,52 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleCreateWorkspace() {
     if (!workspaceName.trim()) {
-      setError("Workspace name is required.");
+      setError("Repository name is required.");
       return;
     }
 
-    const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created workspace ${workspaceName.trim()}.`);
+    const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created managed repository ${workspaceName.trim()}.`);
     if (workspace) {
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleAttachServerLocalRepository() {
+    if (!serverLocalPath.trim()) {
+      setError("Server-local repository path is required.");
+      return;
+    }
+
+    const displayName = serverLocalName.trim();
+    const workspace = await runOperation(
+      () => attachServerLocalRepository(context, { path: serverLocalPath.trim(), name: displayName || undefined }),
+      `Attached server-local repository ${displayName || serverLocalPath.trim()}.`
+    );
+    if (workspace) {
+      setServerLocalPath("");
+      setServerLocalName("");
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleCloneRepository() {
+    if (!cloneRepositoryUrl.trim()) {
+      setError("Repository URL is required.");
+      return;
+    }
+
+    const displayName = cloneRepositoryName.trim();
+    const workspace = await runOperation(
+      () => cloneRepository(context, { repositoryUrl: cloneRepositoryUrl.trim(), name: displayName || undefined }),
+      `Cloned repository ${displayName || cloneRepositoryUrl.trim()}.`
+    );
+    if (workspace) {
+      setCloneRepositoryUrl("");
+      setCloneRepositoryName("");
       if (await refreshWorkspacesSafely({ preserveSelection: true })) {
         setSelectedWorkspaceId(workspace.id);
       }
@@ -343,58 +554,220 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handleSelectWorkingCopy() {
+    const workspaceId = selectedWorkspace?.id ?? selectedRepository?.id;
+    const branchName = workingBranchName.trim();
+    if (!workspaceId) return;
+    if (!branchName) {
+      setError("Working branch is required.");
+      return;
+    }
+
+    const workingCopy = await runOperation(
+      () => selectWorkingCopy(context, workspaceId, { sessionId, branchName, allowProtectedBranchEdit }),
+      `Opened working branch ${branchName}.`
+    );
+    if (workingCopy) {
+      setWorkingBranchName(workingCopy.branchName);
+      await refreshWorkspacesSafely({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
+    }
+  }
+
   async function handleSaveFile() {
-    if (!selectedWorkspace || !selectedProject || !activeFilePath) return;
+    if (!selectedWorkspace || !activeFilePath) return;
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
     const path = activeFilePath;
     const content = editorText;
     const saved = await runOperation(
-      () => writeProjectFile(context, workspaceId, projectId, path, { content }),
+      () => writeRepositoryFile(context, workspaceId, path, { content }),
       `Saved ${path}.`
     );
-    if (saved && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+    if (saved && selectedIds.current.workspaceId === workspaceId) {
       setSavedEditorText(content);
       setFiles(current => upsertFile(current, saved));
+      setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content, savedContent: content }));
       clearSourceDependentState();
-      const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
+      const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     }
   }
 
   async function handleCreateFile() {
-    if (!selectedWorkspace || !selectedProject || !newFilePath.trim()) return;
+    if (!selectedWorkspace || !newFilePath.trim()) return;
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
     const path = newFilePath.trim();
     const saved = await runOperation(
-      () => writeProjectFile(context, workspaceId, projectId, path, { content: "" }),
+      () => writeRepositoryFile(context, workspaceId, path, { content: "" }),
       `Created ${path}.`
     );
-    if (saved && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+    if (saved && selectedIds.current.workspaceId === workspaceId) {
       setNewFilePath("");
       setFiles(current => upsertFile(current, saved));
+      setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content: "", savedContent: "" }));
       clearSourceDependentState();
-      const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
+      const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
-      await openFile(workspaceId, projectId, saved.path);
+      await openFile(workspaceId, saved.path);
     }
   }
 
-  async function handleDeleteFile(path: string) {
-    if (!selectedWorkspace || !selectedProject || !window.confirm(`Delete ${path}?`)) return;
+  async function handleApplyTemplate() {
+    if (!selectedWorkspace) return;
+    const template = templates.find(item => item.id === templateDraft.templateId);
+    if (!template) {
+      setError("Select a template to apply.");
+      return;
+    }
+    const parameters = collectTemplateParameters(template, templateDraft);
+    if (typeof parameters === "string") {
+      setError(parameters);
+      return;
+    }
+
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
-    const deleted = await runOperation(() => deleteProjectFile(context, workspaceId, projectId, path), `Deleted ${path}.`);
-    if (!deleted || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
-    setFiles(current => current.filter(file => file.path !== path));
+    const result = await runOperation(
+      () => applyRepositoryTemplate(context, workspaceId, {
+        templateId: template.id,
+        scope: template.scope,
+        targetPath: templateDraft.targetPath.trim() || null,
+        parameters
+      }),
+      `Applied ${template.name}.`
+    );
+    if (!result || selectedIds.current.workspaceId !== workspaceId) return;
+
+    setSolutions(result.tree.solutions);
+    setFiles(result.tree.entries);
+    const selected = result.tree.solutions.find(solution => solution.isSelected)?.path ?? "";
+    setSelectedSolutionPath(result.tree.solutions.length > 1 ? selected : "");
     clearSourceDependentState();
-    const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+    await loadSourceControlStatus(workspaceId);
+    const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
+    if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
+    const firstGeneratedFile = result.files.find(file => file.type === "file") ?? result.files[0];
+    if (firstGeneratedFile) await openFile(workspaceId, firstGeneratedFile.path);
+  }
+
+  async function handleDeleteFile(path: string) {
+    if (!selectedWorkspace || !window.confirm(`Delete ${path}?`)) return;
+    const workspaceId = selectedWorkspace.id;
+    const deleted = await runOperation(() => deleteRepositoryFile(context, workspaceId, path), `Deleted ${path}.`);
+    if (!deleted || selectedIds.current.workspaceId !== workspaceId) return;
+    setFiles(current => current.filter(file => file.path !== path));
+    setEditorTabs(current => current.filter(tab => tab.path !== path));
+    clearSourceDependentState();
+    await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    await loadSourceControlStatus(workspaceId);
+    const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
     if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     if (path === activeFilePath) {
-      setActiveFilePath("");
-      setEditorText("");
-      setSavedEditorText("");
+      const nextTab = editorTabs.find(tab => tab.path !== path);
+      setActiveFilePath(nextTab?.path ?? "");
+      setEditorText(nextTab?.content ?? "");
+      setSavedEditorText(nextTab?.savedContent ?? "");
+    }
+  }
+
+  async function handleRenameFile(path: string) {
+    if (!selectedWorkspace) return;
+    const destinationPath = window.prompt("Rename file", path)?.trim();
+    if (!destinationPath || destinationPath === path) return;
+    const workspaceId = selectedWorkspace.id;
+    const moved = await runOperation(() => moveRepositoryFile(context, workspaceId, path, destinationPath), `Renamed ${path} to ${destinationPath}.`);
+    if (!moved || selectedIds.current.workspaceId !== workspaceId) return;
+    setFiles(current => upsertFile(current.filter(file => file.path !== path), moved));
+    setEditorTabs(current => current.map(tab => tab.path === path ? { ...tab, path: moved.path, content: moved.content ?? tab.content, savedContent: moved.content ?? tab.savedContent } : tab));
+    if (activeFilePath === path) {
+      setActiveFilePath(moved.path);
+      setEditorText(moved.content ?? editorText);
+      setSavedEditorText(moved.content ?? savedEditorText);
+    }
+    clearSourceDependentState();
+    await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    await loadSourceControlStatus(workspaceId);
+  }
+
+  async function handleSelectSourceDiff(path: string, staged: boolean) {
+    if (!selectedWorkspace) return;
+    const diff = await runOperation(() => getSourceControlDiff(context, selectedWorkspace.id, path, staged), `Loaded diff for ${path}.`);
+    if (diff && selectedIds.current.workspaceId === selectedWorkspace.id) {
+      setSourceControlDiff(diff);
+      setActiveInspectorTab("source");
+    }
+  }
+
+  async function handleStageFile(path: string) {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => stageRepositoryFile(context, workspaceId, path), `Staged ${path}.`);
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleUnstageFile(path: string) {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => unstageRepositoryFile(context, workspaceId, path), `Unstaged ${path}.`);
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleStageAll() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => stageAllRepositoryChanges(context, workspaceId), "Staged all changes.");
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleCommitChanges() {
+    if (!selectedWorkspace || !commitMessage.trim()) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => commitRepositoryChanges(context, workspaceId, commitMessage.trim()), "Committed staged changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      setCommitMessage("");
+      await refreshWorkspaces({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    }
+  }
+
+  async function handlePushRepository() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => pushRepository(context, workspaceId), "Pushed committed changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handlePullRepository() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => pullRepository(context, workspaceId), "Pulled remote changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
     }
   }
 
@@ -406,9 +779,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
 
     const requestedRevision = selectedProject.currentRevision ?? null;
+    const command = buildCommand || "Build";
+    const targetPath = buildTargetPath.trim() || selectedSolutionPath || null;
     const build = await runOperation(
-      () => submitBuild(context, selectedWorkspace.id, selectedProject.id, { projectId: selectedProject.id, revision: requestedRevision }),
-      `Build submitted for ${selectedProject.name}.`
+      () => submitBuild(context, selectedWorkspace.id, selectedProject.id, { projectId: selectedProject.id, revision: requestedRevision, command, targetPath }),
+      `${command} submitted for ${selectedProject.name}.`
     );
     if (build) {
       const revisionedBuild = { ...build, revision: build.revision ?? requestedRevision };
@@ -463,6 +838,29 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handlePromoteArtifact(artifact: BuildArtifact) {
+    if (!selectedWorkspace || !selectedProject || !activeBuild) return;
+    if (artifact.sourceIsDirty) {
+      setError("Package artifact was built from uncommitted source. Commit and pack again before promoting.");
+      return;
+    }
+
+    const workspaceId = selectedWorkspace.id;
+    const projectId = selectedProject.id;
+    const result = await runOperation(
+      () => promoteBuildArtifact(context, workspaceId, projectId, activeBuild.id, artifact.id, { buildId: activeBuild.id }),
+      `Promotion response received for ${artifact.packageId} ${artifact.version}.`
+    );
+    if (result && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+      setPromotionResult(result);
+      if (result.accepted) {
+        await refreshRuntimeStatus(workspaceId, projectId);
+        if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      }
+      setActiveInspectorTab(result.accepted ? "runtime" : "promote");
+    }
+  }
+
   async function refreshRuntimeStatus(workspaceId = selectedWorkspace?.id, projectId = selectedProject?.id) {
     if (!workspaceId || !projectId) return;
     const requestId = ++runtimeStatusRequestId.current;
@@ -502,7 +900,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleDiagnosticSelect(diagnostic: BuildDiagnostic) {
     if (!selectedWorkspace || !selectedProject || !diagnostic.filePath) return;
-    const opened = await openFile(selectedWorkspace.id, selectedProject.id, diagnostic.filePath);
+    const opened = await openFile(selectedWorkspace.id, diagnostic.filePath);
     if (opened) {
       setLineHint(formatDiagnosticLocation(diagnostic));
     }
@@ -549,7 +947,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="section-header modules-header">
         <div>
           <h2>Extension Builder</h2>
-          <p>{selectedWorkspace ? `${selectedWorkspace.name}: ${selectedWorkspace.projects.length} project(s), owner ${selectedWorkspace.owner ?? "current user"}.` : "Create an owner-scoped workspace to start building extensions."}</p>
+          <p>{selectedRepository ? `${selectedRepository.name}: ${selectedRepository.projectCount} project(s), ${formatRemoteState(selectedRepository.remoteState)}${selectedRepository.activeBranch ? ` on ${selectedRepository.activeBranch}` : ""}.` : "Select, create, or clone a Git-backed repository to start building extensions."}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
@@ -565,30 +963,46 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
-        <SummaryItem label="Workspaces" value={workspaces.length} />
-        <SummaryItem label="Projects" value={workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
+        <SummaryItem label="Repositories" value={repositories.length || workspaces.length} />
+        <SummaryItem label="Projects" value={repositories.reduce((count, repository) => count + repository.projectCount, 0) || workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
         <SummaryItem label="Build" value={activeBuild?.status ?? selectedProject?.latestBuildStatus ?? "none"} />
-        <SummaryItem label="Runtime" value={runtimeStatus?.state ?? selectedProject?.runtimeStatus ?? "unknown"} />
-        <SummaryItem label="Capabilities" value={capabilityCount(capabilities)} />
+        <SummaryItem label="Remote" value={selectedRepository ? formatRemoteState(selectedRepository.remoteState) : "unknown"} />
+        <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} />
       </div>
 
-      {workspaces.length === 0 ? (
-        <EmptyState icon={<Boxes size={22} />}>No Extension Builder workspaces are available for this owner.</EmptyState>
+      {!hasRepositoryRows ? (
+        <EmptyState icon={<Boxes size={22} />}>No Extension Builder repositories are available for this owner.</EmptyState>
       ) : null}
 
       <div className="extension-builder-workbench">
         <WorkspaceBrowser
           capabilities={capabilities!}
-          templates={templates}
+          templates={projectTemplates}
+          repositories={repositories}
           workspaces={workspaces}
-          selectedWorkspaceId={selectedWorkspace?.id ?? ""}
+          selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
+          workingBranchName={workingBranchName || defaultWorkingBranchName}
+          allowProtectedBranchEdit={allowProtectedBranchEdit}
+          serverLocalPath={serverLocalPath}
+          serverLocalName={serverLocalName}
+          onServerLocalPathChange={setServerLocalPath}
+          onServerLocalNameChange={setServerLocalName}
+          onAttachServerLocalRepository={handleAttachServerLocalRepository}
+          cloneRepositoryUrl={cloneRepositoryUrl}
+          cloneRepositoryName={cloneRepositoryName}
+          onCloneRepositoryUrlChange={setCloneRepositoryUrl}
+          onCloneRepositoryNameChange={setCloneRepositoryName}
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
+          onWorkingBranchNameChange={setWorkingBranchName}
+          onAllowProtectedBranchEditChange={setAllowProtectedBranchEdit}
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
+          onSelectWorkingCopy={handleSelectWorkingCopy}
+          onCloneRepository={handleCloneRepository}
           onCreateProject={handleCreateProject}
           onSelectWorkspace={workspaceId => {
             if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
@@ -606,7 +1020,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           capabilities={capabilities!}
           workspace={selectedWorkspace}
           project={selectedProject}
+          templates={templates}
+          templateDraft={templateDraft}
           files={fileRows}
+          solutions={solutions}
+          selectedSolutionPath={selectedSolutionPath}
+          editorTabs={editorTabs}
           activeFilePath={activeFilePath}
           editorText={editorText}
           editorDirty={editorDirty}
@@ -614,11 +1033,17 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           newFilePath={newFilePath}
           busy={operationBusy}
           diagnostics={activeBuild?.diagnostics ?? []}
+          onTemplateDraftChange={setTemplateDraft}
+          onApplyTemplate={handleApplyTemplate}
+          onSelectSolution={handleSelectSolution}
           onNewFilePathChange={setNewFilePath}
           onCreateFile={handleCreateFile}
           onDeleteFile={handleDeleteFile}
-          onOpenFile={path => selectedWorkspace && selectedProject ? openFile(selectedWorkspace.id, selectedProject.id, path) : undefined}
-          onEditorTextChange={setEditorText}
+          onRenameFile={handleRenameFile}
+          onOpenFile={path => selectedWorkspace ? openFile(selectedWorkspace.id, path) : undefined}
+          onSelectEditorTab={handleSelectEditorTab}
+          onCloseEditorTab={handleCloseEditorTab}
+          onEditorTextChange={handleEditorTextChange}
           onSaveFile={handleSaveFile}
           onSubmitBuild={handleSubmitBuild}
           canBuild={canBuild}
@@ -632,16 +1057,34 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           activeBuild={activeBuild}
           buildHistory={buildHistory}
           buildLog={buildLog}
+          sourceControlStatus={sourceControlStatus}
+          sourceControlDiff={sourceControlDiff}
+          commitMessage={commitMessage}
+          buildCommand={buildCommand}
+          buildTargetPath={buildTargetPath}
           artifact={latestArtifact}
           promotionResult={promotionResult}
           runtimeStatus={runtimeStatus}
           busy={operationBusy}
+          canBuild={canBuild}
           canPromote={canPromote}
+          onBuildCommandChange={setBuildCommand}
+          onBuildTargetPathChange={setBuildTargetPath}
+          onSubmitBuild={handleSubmitBuild}
+          onPromoteArtifact={handlePromoteArtifact}
           onSelectBuild={build => {
             setActiveBuild(build);
             setActiveInspectorTab("build");
             if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id, build.revision);
           }}
+          onSelectSourceDiff={handleSelectSourceDiff}
+          onStageFile={handleStageFile}
+          onUnstageFile={handleUnstageFile}
+          onStageAll={handleStageAll}
+          onCommitMessageChange={setCommitMessage}
+          onCommit={handleCommitChanges}
+          onPush={handlePushRepository}
+          onPull={handlePullRepository}
           onPromote={handlePromote}
           onRefreshRuntime={() => refreshRuntimeStatus()}
           onRetryReconciliation={handleRetryReconciliation}
@@ -656,15 +1099,31 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 function WorkspaceBrowser({
   capabilities,
   templates,
+  repositories,
   workspaces,
   selectedWorkspaceId,
   selectedProjectId,
   workspaceName,
+  workingBranchName,
+  allowProtectedBranchEdit,
+  serverLocalPath,
+  serverLocalName,
+  cloneRepositoryUrl,
+  cloneRepositoryName,
+  onServerLocalPathChange,
+  onServerLocalNameChange,
+  onAttachServerLocalRepository,
+  onCloneRepositoryUrlChange,
+  onCloneRepositoryNameChange,
+  onCloneRepository,
   projectDraft,
   busy,
   onWorkspaceNameChange,
+  onWorkingBranchNameChange,
+  onAllowProtectedBranchEditChange,
   onProjectDraftChange,
   onCreateWorkspace,
+  onSelectWorkingCopy,
   onCreateProject,
   onSelectWorkspace,
   onSelectProject,
@@ -673,15 +1132,31 @@ function WorkspaceBrowser({
 }: {
   capabilities: ExtensionBuilderCapabilities;
   templates: ExtensionTemplate[];
+  repositories: ExtensionRepositorySummary[];
   workspaces: ExtensionWorkspace[];
   selectedWorkspaceId: string;
   selectedProjectId: string;
   workspaceName: string;
+  workingBranchName: string;
+  allowProtectedBranchEdit: boolean;
+  serverLocalPath: string;
+  serverLocalName: string;
+  cloneRepositoryUrl: string;
+  cloneRepositoryName: string;
+  onServerLocalPathChange(value: string): void;
+  onServerLocalNameChange(value: string): void;
+  onAttachServerLocalRepository(): void;
+  onCloneRepositoryUrlChange(value: string): void;
+  onCloneRepositoryNameChange(value: string): void;
+  onCloneRepository(): void;
   projectDraft: ProjectDraft;
   busy: boolean;
   onWorkspaceNameChange(value: string): void;
+  onWorkingBranchNameChange(value: string): void;
+  onAllowProtectedBranchEditChange(value: boolean): void;
   onProjectDraftChange(value: ProjectDraft): void;
   onCreateWorkspace(): void;
+  onSelectWorkingCopy(): void;
   onCreateProject(): void;
   onSelectWorkspace(workspaceId: string): void;
   onSelectProject(projectId: string): void;
@@ -690,32 +1165,91 @@ function WorkspaceBrowser({
 }) {
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? null;
   const canCreate = capabilities.canCreateWorkspace;
+  const repositoryRows = repositories.length > 0
+    ? repositories
+    : workspaces.map(workspace => ({
+      id: workspace.id,
+      name: workspace.name,
+      owner: workspace.owner,
+      activeBranch: null,
+      isDirty: false,
+      remoteState: "unknown",
+      latestBuildStatus: workspace.projects[0]?.latestBuildStatus ?? null,
+      attentionCount: 0,
+      projectCount: workspace.projects.length,
+      updatedAt: workspace.updatedAt
+    } satisfies ExtensionRepositorySummary));
+  const selectedRepository = repositoryRows.find(repository => repository.id === selectedWorkspaceId) ?? null;
 
   return (
-    <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder workspaces">
+    <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder repositories">
       <div className="modules-source-nav-heading">
-        <span>Workspaces</span>
-        <strong>{workspaces.length}</strong>
+        <span>Repositories</span>
+        <strong>{repositoryRows.length}</strong>
       </div>
-      <div className="extension-builder-create">
+      <details className="extension-builder-create">
+        <summary>New or Clone</summary>
         <label>
-          <span>Workspace name</span>
-          <input aria-label="Workspace name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
+          <span>Repository name</span>
+          <input aria-label="Repository name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
         </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create workspace" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
+        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
-          Create workspace
+          Create managed repo
         </button>
-      </div>
-      {workspaces.map(workspace => (
-        <button key={workspace.id} type="button" className={workspace.id === selectedWorkspaceId ? "modules-source-button active" : "modules-source-button"} onClick={() => onSelectWorkspace(workspace.id)}>
+        <label>
+          <span>Server path</span>
+          <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Server name</span>
+          <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
+          <FolderPlus size={15} />
+          Attach server-local
+        </button>
+        <label>
+          <span>Clone URL</span>
+          <input aria-label="Clone repository URL" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Clone name</span>
+          <input aria-label="Clone repository name" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>
+          <FolderGit2 size={15} />
+          Clone from Git
+        </button>
+      </details>
+      {repositoryRows.map(repository => (
+        <button key={repository.id} type="button" className={repository.id === selectedWorkspaceId ? "modules-source-button active" : "modules-source-button"} onClick={() => onSelectWorkspace(repository.id)}>
           <span>
-            <strong>{workspace.name}</strong>
-            <small>{workspace.owner ?? "current owner"} · {workspace.projects.length} project(s)</small>
+            <strong>{repository.name}</strong>
+            <small>{repository.owner ?? "current owner"} · {repository.projectCount} project(s)</small>
+            <small>{repository.activeBranch ?? "no branch"} · {formatRemoteState(repository.remoteState)}{repository.isDirty ? " · dirty" : ""}</small>
           </span>
-          <em>{workspace.projects.length}</em>
+          <em>{repository.attentionCount}</em>
         </button>
       ))}
+
+      {selectedRepository ? (
+        <details className="extension-builder-create">
+          <summary>Working copy</summary>
+          <label>
+            <span>Working branch</span>
+            <input aria-label="Working branch" value={workingBranchName} disabled={busy || !capabilities.canEditFiles} onChange={event => onWorkingBranchNameChange(event.target.value)} />
+          </label>
+          <label className="extension-builder-checkbox">
+            <input type="checkbox" aria-label="Allow default branch editing" checked={allowProtectedBranchEdit} disabled={busy || !capabilities.canEditFiles} onChange={event => onAllowProtectedBranchEditChange(event.target.checked)} />
+            <span>Allow default branch editing</span>
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !capabilities.canEditFiles || !workingBranchName.trim()} title={capabilities.canEditFiles ? "Open working branch" : "Requires canEditFiles"} onClick={onSelectWorkingCopy}>
+            <GitBranch size={15} />
+            Open working branch
+          </button>
+        </details>
+      ) : null}
 
       <div className="modules-source-group">
         <span>Projects</span>
@@ -729,7 +1263,8 @@ function WorkspaceBrowser({
       </div>
 
       {selectedWorkspace ? (
-        <div className="extension-builder-create">
+        <details className="extension-builder-create">
+          <summary>Add project</summary>
           <label>
             <span>Template</span>
             <select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
@@ -762,7 +1297,7 @@ function WorkspaceBrowser({
               Delete workspace
             </button>
           </div>
-        </div>
+        </details>
       ) : null}
     </aside>
   );
@@ -772,7 +1307,12 @@ function ProjectWorkspace({
   capabilities,
   workspace,
   project,
+  templates,
+  templateDraft,
   files,
+  solutions,
+  selectedSolutionPath,
+  editorTabs,
   activeFilePath,
   editorText,
   editorDirty,
@@ -781,10 +1321,16 @@ function ProjectWorkspace({
   busy,
   diagnostics,
   canBuild,
+  onTemplateDraftChange,
+  onApplyTemplate,
+  onSelectSolution,
   onNewFilePathChange,
   onCreateFile,
   onDeleteFile,
+  onRenameFile,
   onOpenFile,
+  onSelectEditorTab,
+  onCloseEditorTab,
   onEditorTextChange,
   onSaveFile,
   onSubmitBuild
@@ -792,7 +1338,12 @@ function ProjectWorkspace({
   capabilities: ExtensionBuilderCapabilities;
   workspace: ExtensionWorkspace | null;
   project: ExtensionProject | null;
-  files: ProjectFile[];
+  templates: ExtensionTemplate[];
+  templateDraft: TemplateApplicationDraft;
+  files: RepositoryFileSummary[];
+  solutions: RepositorySolutionSummary[];
+  selectedSolutionPath: string;
+  editorTabs: EditorTab[];
   activeFilePath: string;
   editorText: string;
   editorDirty: boolean;
@@ -801,20 +1352,27 @@ function ProjectWorkspace({
   busy: boolean;
   diagnostics: BuildDiagnostic[];
   canBuild: boolean;
+  onTemplateDraftChange(value: TemplateApplicationDraft): void;
+  onApplyTemplate(): void;
+  onSelectSolution(path: string): void;
   onNewFilePathChange(value: string): void;
   onCreateFile(): void;
   onDeleteFile(path: string): void;
+  onRenameFile(path: string): void;
   onOpenFile(path: string): void;
+  onSelectEditorTab(path: string): void;
+  onCloseEditorTab(path: string): void;
   onEditorTextChange(value: string): void;
   onSaveFile(): void;
   onSubmitBuild(): void;
 }) {
   const canEdit = capabilities.canEditFiles;
+  const selectedTemplate = templates.find(template => template.id === templateDraft.templateId) ?? templates[0] ?? null;
 
-  if (!workspace || !project) {
+  if (!workspace) {
     return (
       <div className="modules-grid-panel extension-builder-editor">
-        <EmptyState icon={<Boxes size={22} />}>Select or create a project to edit source files.</EmptyState>
+        <EmptyState icon={<Boxes size={22} />}>Select or create a repository to edit source files.</EmptyState>
       </div>
     );
   }
@@ -824,20 +1382,20 @@ function ProjectWorkspace({
     : null;
   const activeLanguageAdapter = activeDocument && isJavaScriptLikeDocument(activeDocument) ? javaScriptLanguageAdapter : undefined;
   const editorDiagnostics = createEditorDiagnostics(workspace, project, diagnostics);
-  const activeFileDiagnostics = diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath);
+  const activeFileDiagnostics = diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint);
 
   return (
     <div className="modules-grid-panel extension-builder-editor">
       <div className="modules-grid-heading">
         <div>
-          <h3>{project.name}</h3>
-          <p><code>{project.packageId}</code> {project.packageVersion} · revision {project.currentRevision ?? "draft"}</p>
+          <h3>{project?.name ?? workspace.name}</h3>
+          <p><code>{workspace.name}</code>{project ? ` · ${project.packageId} ${project.packageVersion}` : ""}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath || !editorDirty} title={!canEdit ? "Requires canEditFiles" : undefined} onClick={onSaveFile}>
+            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath} title={!canEdit ? "Requires canEditFiles" : undefined} onClick={onSaveFile}>
               <Save size={15} />
-              {editorDirty ? "Save" : "Saved"}
+              Save
             </button>
             <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
               <Play size={15} />
@@ -848,30 +1406,93 @@ function ProjectWorkspace({
       </div>
 
       <div className="extension-builder-editor-layout">
-        <aside className="extension-builder-file-tree" aria-label="Project files">
+        <aside className="extension-builder-file-tree" aria-label="Repository files">
+          {solutions.length > 1 ? (
+            <label className="extension-builder-solution-picker">
+              <span>Solution</span>
+              <select aria-label="Solution" value={selectedSolutionPath} disabled={busy} onChange={event => onSelectSolution(event.target.value)}>
+                <option value="">Select solution</option>
+                {solutions.map(solution => <option key={solution.path} value={solution.path}>{solution.name}</option>)}
+              </select>
+            </label>
+          ) : solutions.length === 1 ? (
+            <div className="extension-builder-selected-solution">
+              <span>Solution</span>
+              <code>{solutions[0].path}</code>
+            </div>
+          ) : null}
           <div className="extension-builder-file-create">
             <input aria-label="New file path" placeholder="src/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} />
             <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires canEditFiles"} aria-label="Create file" onClick={onCreateFile}>
               <FilePlus2 size={14} />
             </button>
           </div>
-          {files.length === 0 ? <p className="modules-muted">No files reported for this project.</p> : null}
+          {templates.length > 0 ? (
+            <details className="extension-builder-template-apply">
+              <summary>Apply template</summary>
+              <label>
+                <span>Template</span>
+                <select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
+                  const template = templates.find(item => item.id === event.target.value);
+                  if (template) onTemplateDraftChange(createTemplateApplicationDraft(template, templateDraft));
+                }}>
+                  {templates.map(template => <option key={template.id} value={template.id}>{template.name} · {template.scope}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Target path</span>
+                <input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} />
+              </label>
+              {selectedTemplate?.parameters.map(parameter => (
+                <label key={parameter.name}>
+                  <span>{parameter.displayName}</span>
+                  <input aria-label={`Template parameter ${parameter.displayName}`} value={templateDraft.parameters[parameter.name] ?? parameter.defaultValue ?? ""} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({
+                    ...templateDraft,
+                    parameters: { ...templateDraft.parameters, [parameter.name]: event.target.value }
+                  })} />
+                </label>
+              ))}
+              <button type="button" className="studio-button" disabled={busy || !canEdit || !selectedTemplate} title={canEdit ? "Apply template" : "Requires canEditFiles"} onClick={onApplyTemplate}>
+                <FilePlus2 size={15} />
+                Apply
+              </button>
+            </details>
+          ) : null}
+          {files.length === 0 ? <p className="modules-muted">No files reported for this repository.</p> : null}
           {files.map(file => (
             <div key={file.path} className={file.path === activeFilePath ? "extension-builder-file-row active" : "extension-builder-file-row"}>
               <button type="button" disabled={file.type !== "file"} onClick={() => onOpenFile(file.path)}>
-                <span>{file.type === "folder" ? "▸" : "•"}</span>
-                <code>{file.path}</code>
+                <span>{file.type === "folder" ? "▸" : file.kind === "Solution" ? "S" : file.kind === "Project" ? "P" : "•"}</span>
+                <code>{file.path}{file.isDirty ? " *" : ""}</code>
               </button>
               {file.type === "file" ? (
-                <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Delete ${file.path}`} aria-label={`Delete ${file.path}`} onClick={() => onDeleteFile(file.path)}>
-                  <Trash2 size={13} />
-                </button>
+                <>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Rename ${file.path}`} aria-label={`Rename ${file.path}`} onClick={() => onRenameFile(file.path)}>
+                    <Pencil size={13} />
+                  </button>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Delete ${file.path}`} aria-label={`Delete ${file.path}`} onClick={() => onDeleteFile(file.path)}>
+                    <Trash2 size={13} />
+                  </button>
+                </>
               ) : null}
             </div>
           ))}
         </aside>
 
         <div className="extension-builder-code-panel">
+          {editorTabs.length > 0 ? (
+            <div className="extension-builder-editor-tabs" role="tablist" aria-label="Open repository files">
+              {editorTabs.map(tab => (
+                <button key={tab.path} type="button" role="tab" aria-selected={tab.path === activeFilePath} className={tab.path === activeFilePath ? "active" : ""} onClick={() => onSelectEditorTab(tab.path)}>
+                  <span>{tab.path}{tab.content !== tab.savedContent ? " *" : ""}</span>
+                  <em aria-label={`Close ${tab.path}`} onClick={event => {
+                    event.stopPropagation();
+                    onCloseEditorTab(tab.path);
+                  }}>x</em>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="extension-builder-editor-status">
             <span>{activeFilePath ? <code>{activeFilePath}</code> : "No file selected"}</span>
             {editorDirty ? <StatusChip tone="warning">dirty</StatusChip> : <StatusChip tone="success">saved</StatusChip>}
@@ -915,12 +1536,30 @@ function BuildRuntimeInspector({
   activeBuild,
   buildHistory,
   buildLog,
+  sourceControlStatus,
+  sourceControlDiff,
+  commitMessage,
+  buildCommand,
+  buildTargetPath,
   artifact,
   promotionResult,
   runtimeStatus,
   busy,
+  canBuild,
   canPromote,
+  onBuildCommandChange,
+  onBuildTargetPathChange,
+  onSubmitBuild,
+  onPromoteArtifact,
   onSelectBuild,
+  onSelectSourceDiff,
+  onStageFile,
+  onUnstageFile,
+  onStageAll,
+  onCommitMessageChange,
+  onCommit,
+  onPush,
+  onPull,
   onPromote,
   onRefreshRuntime,
   onRetryReconciliation,
@@ -934,12 +1573,30 @@ function BuildRuntimeInspector({
   activeBuild: BuildResult | null;
   buildHistory: BuildResult[];
   buildLog: string;
+  sourceControlStatus: SourceControlStatus | null;
+  sourceControlDiff: SourceControlDiff | null;
+  commitMessage: string;
+  buildCommand: RepositoryBuildCommand;
+  buildTargetPath: string;
   artifact: BuildArtifact | null;
   promotionResult: PackagePromotionResult | null;
   runtimeStatus: ExtensionRuntimeStatus | null;
   busy: boolean;
+  canBuild: boolean;
   canPromote: boolean;
+  onBuildCommandChange(value: RepositoryBuildCommand): void;
+  onBuildTargetPathChange(value: string): void;
+  onSubmitBuild(): void;
+  onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
+  onSelectSourceDiff(path: string, staged: boolean): void;
+  onStageFile(path: string): void;
+  onUnstageFile(path: string): void;
+  onStageAll(): void;
+  onCommitMessageChange(value: string): void;
+  onCommit(): void;
+  onPush(): void;
+  onPull(): void;
   onPromote(): void;
   onRefreshRuntime(): void;
   onRetryReconciliation(): void;
@@ -962,8 +1619,34 @@ function BuildRuntimeInspector({
           activeBuild={activeBuild}
           buildHistory={buildHistory}
           buildLog={buildLog}
+          buildCommand={buildCommand}
+          buildTargetPath={buildTargetPath}
+          busy={busy}
+          canBuild={canBuild}
+          capabilities={capabilities}
+          onBuildCommandChange={onBuildCommandChange}
+          onBuildTargetPathChange={onBuildTargetPathChange}
+          onSubmitBuild={onSubmitBuild}
+          onPromoteArtifact={onPromoteArtifact}
           onSelectBuild={onSelectBuild}
           onDiagnosticSelect={onDiagnosticSelect}
+        />
+      ) : null}
+
+      {activeTab === "source" ? (
+        <SourceControlPanel
+          status={sourceControlStatus}
+          diff={sourceControlDiff}
+          commitMessage={commitMessage}
+          busy={busy}
+          onSelectDiff={onSelectSourceDiff}
+          onStageFile={onStageFile}
+          onUnstageFile={onUnstageFile}
+          onStageAll={onStageAll}
+          onCommitMessageChange={onCommitMessageChange}
+          onCommit={onCommit}
+          onPush={onPush}
+          onPull={onPull}
         />
       ) : null}
 
@@ -998,17 +1681,53 @@ function BuildPanel({
   activeBuild,
   buildHistory,
   buildLog,
+  buildCommand,
+  buildTargetPath,
+  busy,
+  canBuild,
+  capabilities,
+  onBuildCommandChange,
+  onBuildTargetPathChange,
+  onSubmitBuild,
+  onPromoteArtifact,
   onSelectBuild,
   onDiagnosticSelect
 }: {
   activeBuild: BuildResult | null;
   buildHistory: BuildResult[];
   buildLog: string;
+  buildCommand: RepositoryBuildCommand;
+  buildTargetPath: string;
+  busy: boolean;
+  canBuild: boolean;
+  capabilities: ExtensionBuilderCapabilities;
+  onBuildCommandChange(value: RepositoryBuildCommand): void;
+  onBuildTargetPathChange(value: string): void;
+  onSubmitBuild(): void;
+  onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
   onDiagnosticSelect(diagnostic: BuildDiagnostic): void;
 }) {
   return (
     <div className="modules-inspector-section">
+      <h4>Run</h4>
+      <label>
+        <span>Command</span>
+        <select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
+          <option value="Restore">Restore</option>
+          <option value="Build">Build</option>
+          <option value="Test">Test</option>
+          <option value="Pack">Pack</option>
+        </select>
+      </label>
+      <label>
+        <span>Target path</span>
+        <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
+      </label>
+      <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
+        <Play size={15} />
+        Run command
+      </button>
       <h4>Build status</h4>
       {activeBuild ? (
         <dl className="modules-metadata">
@@ -1018,6 +1737,23 @@ function BuildPanel({
           <div><dt>Finished</dt><dd>{formatDate(activeBuild.finishedAt)}</dd></div>
         </dl>
       ) : <p className="modules-muted">No build has been selected.</p>}
+      <h4>Package outputs</h4>
+      <div className="modules-list">
+        {(activeBuild?.artifacts ?? []).length === 0 ? <p className="modules-muted">No package artifacts reported.</p> : null}
+        {activeBuild?.artifacts.map(artifact => (
+          <div key={artifact.id} className="modules-list-row">
+            <span>
+              <strong>{artifact.packageId} {artifact.version}</strong>
+              <small>{artifact.fileName ?? artifact.id}{artifact.branch ? ` · ${artifact.branch}` : ""}{artifact.sourceRevisionId ? ` · ${artifact.sourceRevisionId.slice(0, 8)}` : ""}{artifact.sourceIsDirty ? " · uncommitted" : ""}</small>
+            </span>
+            <button type="button" className="studio-button" disabled={busy || artifact.sourceIsDirty} title={artifact.sourceIsDirty ? "Commit and pack again before promoting" : "Promote package artifact"} onClick={() => onPromoteArtifact(artifact)}>
+              <PackageCheck size={15} />
+              Promote package
+            </button>
+            <StatusChip tone="accent">{formatArtifactSize(artifact.size)}</StatusChip>
+          </div>
+        ))}
+      </div>
       <h4>Diagnostics</h4>
       <div className="modules-diagnostics-list">
         {(activeBuild?.diagnostics ?? []).length === 0 ? <p className="modules-muted">No diagnostics reported.</p> : null}
@@ -1043,6 +1779,143 @@ function BuildPanel({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SourceControlPanel({
+  status,
+  diff,
+  commitMessage,
+  busy,
+  onSelectDiff,
+  onStageFile,
+  onUnstageFile,
+  onStageAll,
+  onCommitMessageChange,
+  onCommit,
+  onPush,
+  onPull
+}: {
+  status: SourceControlStatus | null;
+  diff: SourceControlDiff | null;
+  commitMessage: string;
+  busy: boolean;
+  onSelectDiff(path: string, staged: boolean): void;
+  onStageFile(path: string): void;
+  onUnstageFile(path: string): void;
+  onStageAll(): void;
+  onCommitMessageChange(value: string): void;
+  onCommit(): void;
+  onPush(): void;
+  onPull(): void;
+}) {
+  const stagedFiles = status?.stagedFiles ?? [];
+  const unstagedFiles = status?.unstagedFiles ?? [];
+  const hasBranch = !!status?.activeBranch;
+  return (
+    <div className="extension-builder-source-control">
+      <div className="modules-inspector-section">
+        <h4>Working copy</h4>
+        <p><code>{status?.activeBranch ?? "No branch"}</code></p>
+        <StatusChip tone={status?.isDirty ? "warning" : "success"}>{status?.isDirty ? "dirty" : "clean"}</StatusChip>
+      </div>
+
+      <div className="extension-builder-source-actions">
+        <button type="button" className="studio-button" disabled={busy || unstagedFiles.length === 0} onClick={onStageAll}>
+          <Save size={14} />
+          Stage all
+        </button>
+        <button type="button" className="studio-button" disabled={busy || !hasBranch || !!status?.isDirty} title={status?.isDirty ? "Commit or discard changes before pushing" : undefined} onClick={onPush}>
+          <GitBranch size={14} />
+          Push
+        </button>
+        <button type="button" className="studio-button" disabled={busy || !hasBranch || !!status?.isDirty} title={status?.isDirty ? "Commit or discard changes before pulling" : undefined} onClick={onPull}>
+          <RefreshCcw size={14} />
+          Pull
+        </button>
+      </div>
+
+      <SourceControlFileList
+        title="Staged"
+        files={stagedFiles}
+        empty="No staged changes."
+        busy={busy}
+        actionLabel="Unstage"
+        onAction={onUnstageFile}
+        onDiff={path => onSelectDiff(path, true)}
+      />
+
+      <SourceControlFileList
+        title="Unstaged"
+        files={unstagedFiles}
+        empty="No unstaged changes."
+        busy={busy}
+        actionLabel="Stage"
+        onAction={onStageFile}
+        onDiff={path => onSelectDiff(path, false)}
+      />
+
+      <div className="modules-inspector-section">
+        <h4>Commit</h4>
+        <textarea
+          aria-label="Commit message"
+          className="extension-builder-commit-message"
+          value={commitMessage}
+          disabled={busy}
+          onChange={event => onCommitMessageChange(event.target.value)}
+        />
+        <button type="button" className="studio-button" disabled={busy || stagedFiles.length === 0 || !commitMessage.trim()} onClick={onCommit}>
+          <GitBranch size={14} />
+          Commit staged
+        </button>
+      </div>
+
+      <div className="modules-inspector-section">
+        <h4>Diff</h4>
+        {diff ? (
+          <>
+            <p><code>{diff.path}</code>{diff.isStaged ? " staged" : ""}</p>
+            <pre className="extension-builder-diff">{diff.patch || "No diff available."}</pre>
+          </>
+        ) : (
+          <p className="modules-muted">Select a changed file to inspect its diff.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SourceControlFileList({
+  title,
+  files,
+  empty,
+  busy,
+  actionLabel,
+  onAction,
+  onDiff
+}: {
+  title: string;
+  files: SourceControlStatus["changedFiles"];
+  empty: string;
+  busy: boolean;
+  actionLabel: string;
+  onAction(path: string): void;
+  onDiff(path: string): void;
+}) {
+  return (
+    <div className="modules-inspector-section extension-builder-source-list">
+      <h4>{title}</h4>
+      {files.length === 0 ? <p className="modules-muted">{empty}</p> : null}
+      {files.map(file => (
+        <div key={`${title}-${file.path}`} className="extension-builder-source-row">
+          <button type="button" onClick={() => onDiff(file.path)}>
+            <code>{file.path}</code>
+            <StatusChip tone="neutral">{file.status || "changed"}</StatusChip>
+          </button>
+          <button type="button" className="studio-button" disabled={busy} onClick={() => onAction(file.path)}>{actionLabel}</button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1237,8 +2110,12 @@ function canApplyProjectState(
   return mounted && requestId === currentRequestId && isCurrentSelection(selected, workspaceId, projectId);
 }
 
-function upsertFile(files: ProjectFile[], file: ProjectFile) {
+function upsertFile<T extends { path: string }>(files: T[], file: T) {
   return files.some(item => item.path === file.path) ? files.map(item => item.path === file.path ? file : item) : [...files, file];
+}
+
+function upsertEditorTab(tabs: EditorTab[], tab: EditorTab) {
+  return tabs.some(item => item.path === tab.path) ? tabs.map(item => item.path === tab.path ? tab : item) : [...tabs, tab];
 }
 
 function mergeBuildHistory(builds: BuildResult[], build: BuildResult) {
@@ -1263,6 +2140,43 @@ function applyTemplateDefaults(draft: ProjectDraft, template?: ExtensionTemplate
   };
 }
 
+function createTemplateApplicationDraft(template: ExtensionTemplate, current?: TemplateApplicationDraft): TemplateApplicationDraft {
+  return {
+    templateId: template.id,
+    targetPath: current?.targetPath ?? defaultTemplateTargetPath(template),
+    parameters: Object.fromEntries(template.parameters.map(parameter => [
+      parameter.name,
+      current?.parameters[parameter.name] ?? parameter.defaultValue ?? defaultTemplateParameterValue(parameter, template)
+    ]))
+  };
+}
+
+function collectTemplateParameters(template: ExtensionTemplate, draft: TemplateApplicationDraft) {
+  const parameters = Object.fromEntries(template.parameters.map(parameter => [
+    parameter.name,
+    (draft.parameters[parameter.name] ?? parameter.defaultValue ?? "").trim()
+  ]));
+  const missing = template.parameters.find(parameter => parameter.required && !parameters[parameter.name]);
+  if (missing) return `${missing.displayName} is required.`;
+  return parameters;
+}
+
+function defaultTemplateTargetPath(template: ExtensionTemplate | null) {
+  if (!template) return "";
+  if (template.scope === "Project") return `src/${defaultProjectName(template)}`;
+  if (template.scope === "Item") return "src";
+  if (template.scope === "Solution") return "solutions";
+  return "";
+}
+
+function defaultTemplateParameterValue(parameter: ExtensionTemplateParameter, template: ExtensionTemplate) {
+  if (parameter.name === "name") return template.scope === "Item" ? "NewClass" : defaultProjectName(template);
+  if (parameter.name === "packageId") return defaultPackageId(template);
+  if (parameter.name === "packageVersion") return template.defaultPackageVersion ?? "1.0.0";
+  if (parameter.name === "targetFramework") return template.defaultTargetFramework ?? "net10.0";
+  return "";
+}
+
 function defaultProjectName(template: ExtensionTemplate) {
   return /generic/i.test(`${template.name} ${template.id}`) ? "GenericExtension" : "ElsaActivityExtension";
 }
@@ -1272,7 +2186,7 @@ function defaultPackageId(template: ExtensionTemplate) {
   return /generic/i.test(`${template.name} ${template.id}`) ? "Company.Extensions.Generic" : "Company.Extensions.ElsaActivity";
 }
 
-function fileSortKey(file: ProjectFile) {
+function fileSortKey(file: RepositoryFileSummary) {
   return `${file.type === "folder" ? "0" : "1"}:${file.path}`;
 }
 
@@ -1289,9 +2203,30 @@ function isBuildSucceeded(build: BuildResult | null) {
   return build?.status === "succeeded" || build?.status === "Succeeded";
 }
 
-function capabilityCount(capabilities: ExtensionBuilderCapabilities | null) {
-  if (!capabilities) return 0;
-  return Object.values(capabilities).filter(Boolean).length;
+function isProtectedBranchName(value: string) {
+  return value.toLowerCase() === "main" || value.toLowerCase() === "master";
+}
+
+function getExtensionBuilderSessionId() {
+  const key = "elsa-extension-builder-session-id";
+  try {
+    const existing = window.sessionStorage.getItem(key);
+    if (existing) return existing;
+    const created = `studio-${crypto.randomUUID()}`;
+    window.sessionStorage.setItem(key, created);
+    return created;
+  } catch {
+    return `studio-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function formatRemoteState(value?: string | null) {
+  if (!value) return "unknown remote";
+  if (value.includes("://") || value.includes("/") || value.includes("@")) return value;
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .join(" ");
 }
 
 function buildTone(status?: string | null): StudioStatusTone {
@@ -1335,6 +2270,7 @@ function promotionMessage(result: PackagePromotionResult) {
   if (result.category === "InvalidManifest") return result.message ?? "Package manifest validation failed. Fix the manifest metadata and rebuild.";
   if (result.category === "DependencyPolicy") return result.message ?? "Package dependencies violate policy. Review the rejected dependency and rebuild with an allowed version.";
   if (result.category === "MalformedPackage") return result.message ?? "The package artifact is malformed or corrupt. Rebuild the project before promoting.";
+  if (result.category === "UncommittedSource") return result.message ?? "Package artifact was built from uncommitted source. Commit and pack again before promoting.";
   return result.message ?? "Promotion was rejected by server-side validation.";
 }
 
@@ -1345,17 +2281,17 @@ function formatDiagnosticLocation(diagnostic: BuildDiagnostic) {
   return `${path}${line}${column}`;
 }
 
-function createProjectFileDocument(workspace: ExtensionWorkspace, project: ExtensionProject, path: string, value: string): StudioCodeDocument {
+function createProjectFileDocument(workspace: ExtensionWorkspace, project: ExtensionProject | null, path: string, value: string): StudioCodeDocument {
   return {
-    uri: createProjectFileUri(workspace.id, project.id, path),
+    uri: createProjectFileUri(workspace.id, project?.id ?? null, path),
     language: getProjectFileLanguage(path),
     value
   };
 }
 
-function createEditorDiagnostics(workspace: ExtensionWorkspace, project: ExtensionProject, diagnostics: BuildDiagnostic[]): StudioCodeDiagnostic[] {
+function createEditorDiagnostics(workspace: ExtensionWorkspace, project: ExtensionProject | null, diagnostics: BuildDiagnostic[]): StudioCodeDiagnostic[] {
   return diagnostics.map(diagnostic => ({
-    uri: diagnostic.filePath ? createProjectFileUri(workspace.id, project.id, diagnostic.filePath) : undefined,
+    uri: diagnostic.filePath ? createProjectFileUri(workspace.id, project?.id ?? null, diagnostic.filePath) : undefined,
     severity: toStudioCodeDiagnosticSeverity(diagnostic.severity),
     code: extractDiagnosticCode(diagnostic.message),
     message: diagnostic.message,
@@ -1364,8 +2300,9 @@ function createEditorDiagnostics(workspace: ExtensionWorkspace, project: Extensi
   }));
 }
 
-function createProjectFileUri(workspaceId: string, projectId: string, path: string) {
-  return `elsa://extension-builder/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(path)}`;
+function createProjectFileUri(workspaceId: string, projectId: string | null, path: string) {
+  const projectSegment = projectId ? `/projects/${encodeURIComponent(projectId)}` : "";
+  return `elsa://extension-builder/workspaces/${encodeURIComponent(workspaceId)}${projectSegment}/files/${encodeURIComponent(path)}`;
 }
 
 function getProjectFileLanguage(path: string) {
@@ -1399,4 +2336,10 @@ function extractDiagnosticCode(message: string) {
 function formatDate(value?: string | null) {
   if (!value) return "n/a";
   return new Date(value).toLocaleString();
+}
+
+function formatArtifactSize(size?: number | null) {
+  if (!size) return "0 B";
+  if (size < 1024) return `${size} B`;
+  return `${Math.round(size / 1024)} KB`;
 }

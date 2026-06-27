@@ -1,13 +1,16 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
+import { AgentSessionIndicator, type AgentSessionIndicatorSession } from "./AgentSessionIndicator";
 
 export function AgentLauncher({
   open,
   disabled,
+  sessions = [],
   onClick
 }: {
   open: boolean;
   disabled?: boolean;
+  sessions?: AgentSessionIndicatorSession[];
   onClick(): void;
 }) {
   return (
@@ -21,6 +24,7 @@ export function AgentLauncher({
     >
       <Sparkles size={16} />
       Weaver
+      <AgentSessionIndicator sessions={sessions} />
     </button>
   );
 }

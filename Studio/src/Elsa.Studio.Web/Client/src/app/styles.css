@@ -511,7 +511,8 @@ textarea:focus {
   margin-inline: 0;
 }
 
-.dashboard-view {
+.dashboard-view,
+.diagnostics-view {
   display: grid;
   gap: 20px;
 }
@@ -663,7 +664,8 @@ textarea:focus {
   margin: 0 0 16px;
 }
 
-.dashboard-view .section-header {
+.dashboard-view .section-header,
+.diagnostics-view .section-header {
   margin: 0;
 }
 
@@ -1525,13 +1527,29 @@ textarea:focus {
   padding-top: 10px;
 }
 
+.extension-builder-create summary {
+  min-height: 30px;
+  color: var(--studio-text);
+  cursor: pointer;
+  font-size: var(--studio-body-size);
+  font-weight: 700;
+  list-style-position: inside;
+  padding: 4px 0;
+}
+
+.extension-builder-create summary:hover {
+  color: var(--studio-accent);
+}
+
 .extension-builder-create label,
-.extension-builder-file-create {
+.extension-builder-file-create,
+.extension-builder-template-apply label {
   display: grid;
   gap: 5px;
 }
 
-.extension-builder-create label span {
+.extension-builder-create label span,
+.extension-builder-template-apply label span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
@@ -1539,7 +1557,9 @@ textarea:focus {
 
 .extension-builder-create input,
 .extension-builder-create select,
-.extension-builder-file-create input {
+.extension-builder-file-create input,
+.extension-builder-template-apply input,
+.extension-builder-template-apply select {
   min-width: 0;
   width: 100%;
   border: 1px solid var(--studio-border);
@@ -1548,6 +1568,19 @@ textarea:focus {
   color: var(--studio-text);
   font-size: var(--studio-body-size);
   padding: 7px 8px;
+}
+
+.extension-builder-create .extension-builder-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extension-builder-create .extension-builder-checkbox input {
+  width: auto;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
 }
 
 .extension-builder-danger-actions {
@@ -1589,9 +1622,50 @@ textarea:focus {
   height: 30px;
 }
 
+.extension-builder-template-apply {
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid var(--studio-border);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.extension-builder-template-apply summary {
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  font-weight: 800;
+}
+
+.extension-builder-solution-picker,
+.extension-builder-selected-solution {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid var(--studio-border);
+  padding-bottom: 8px;
+}
+
+.extension-builder-solution-picker span,
+.extension-builder-selected-solution span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-solution-picker select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px;
+}
+
 .extension-builder-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -1654,10 +1728,48 @@ textarea:focus {
 
 .extension-builder-code-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
   min-width: 0;
   min-height: 0;
+}
+
+.extension-builder-editor-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.extension-builder-editor-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  min-height: 32px;
+  border: 0;
+  border-right: 1px solid var(--studio-border);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  padding: 0 8px;
+}
+
+.extension-builder-editor-tabs button.active {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.extension-builder-editor-tabs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-editor-tabs em {
+  color: var(--studio-text-muted);
+  font-style: normal;
 }
 
 .extension-builder-code-panel .studio-code-editor {
@@ -1781,6 +1893,77 @@ textarea:focus {
 
 .extension-builder-build-log {
   min-height: 180px;
+}
+
+.extension-builder-source-control {
+  display: grid;
+  gap: 14px;
+}
+
+.extension-builder-source-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.extension-builder-source-list {
+  display: grid;
+  gap: 8px;
+}
+
+.extension-builder-source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.extension-builder-source-row > button:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.extension-builder-source-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-commit-message {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font: inherit;
+  padding: 8px;
+}
+
+.extension-builder-diff {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 10px;
+  white-space: pre;
 }
 
 .extension-builder-diagnostic-button,

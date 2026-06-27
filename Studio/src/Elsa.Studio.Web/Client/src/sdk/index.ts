@@ -108,6 +108,29 @@ export interface StudioDashboardWidgetContribution {
   component: ComponentType;
 }
 
+export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
+export type StudioDiagnosticsWidgetStatus = "idle" | "loading" | "ready" | "streaming" | "error";
+
+export interface StudioDiagnosticsWidgetState<TSnapshot = unknown> {
+  status: StudioDiagnosticsWidgetStatus;
+  snapshot?: TSnapshot;
+  error?: string;
+}
+
+export interface StudioDiagnosticsWidgetProps<TSnapshot = unknown> {
+  state: StudioDiagnosticsWidgetState<TSnapshot>;
+}
+
+export interface StudioDiagnosticsWidgetContribution<TSnapshot = unknown> {
+  id: string;
+  title: string;
+  order?: number;
+  mode?: StudioDiagnosticsWidgetMode;
+  load?: () => Promise<TSnapshot>;
+  subscribe?: (publish: (snapshot: TSnapshot) => void) => void | (() => void);
+  component: ComponentType<StudioDiagnosticsWidgetProps<TSnapshot>>;
+}
+
 export interface StudioPanelContribution {
   id: string;
   title: string;
@@ -338,6 +361,8 @@ export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" |
 export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
 export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
 export type StudioAgentRisk = "read-only" | "review-required" | "destructive" | "admin";
+export type StudioAgentToolInvocationMode = "read-only" | "direct" | "proposal" | "privileged";
+export type StudioAgentToolAvailabilityStatus = "available" | "disabled" | "policy-denied" | "unavailable";
 
 export interface StudioAgentSurface {
   route: string;
@@ -404,11 +429,74 @@ export interface StudioAgentActionContribution {
   proposalSchema: unknown;
 }
 
+export interface StudioAgentToolAvailability {
+  status: StudioAgentToolAvailabilityStatus;
+  reason?: string;
+}
+
+export interface StudioAgentToolSlotContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  description?: string;
+  order?: number;
+  surfaces: string[];
+  invocationModes?: StudioAgentToolInvocationMode[];
+}
+
+export interface StudioAgentToolContractContribution {
+  id: string;
+  slotId: string;
+  moduleId?: string;
+  displayName: string;
+  description: string;
+  order?: number;
+  surfaces: string[];
+  inputSchema: unknown;
+  resourceTargetSchema: unknown;
+  resultSchema: unknown;
+  risk: StudioAgentRisk;
+  requiredPermissions?: string[];
+  availability?: StudioAgentToolAvailability;
+  invocationModes: StudioAgentToolInvocationMode[];
+  resultRendererIds?: string[];
+}
+
+export interface StudioAgentResourceTarget {
+  resourceType: string;
+  resourceId?: string;
+  displayName?: string;
+  moduleId?: string;
+  route?: string;
+  summary?: string;
+}
+
+export interface StudioAgentResultRendererProps {
+  proposal: unknown;
+  resourceTarget?: StudioAgentResourceTarget;
+  result: unknown;
+  resultType?: string;
+}
+
+export interface StudioAgentResultRendererContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  order?: number;
+  resourceTypes?: string[];
+  resultTypes?: string[];
+  component: ComponentType<StudioAgentResultRendererProps>;
+  supports?(props: StudioAgentResultRendererProps): boolean;
+}
+
 export interface StudioAgentRegistry {
   readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
   readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
   readonly capabilities: StudioContributionRegistry<StudioAgentCapabilityContribution>;
   readonly actions: StudioContributionRegistry<StudioAgentActionContribution>;
+  readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
+  readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
+  readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";
@@ -507,9 +595,132 @@ export interface StudioAiSurfaceContribution {
   order?: number;
 }
 
+export const studioSlotIds = {
+  featureAreas: "studio.feature-areas",
+  navigation: "studio.navigation",
+  routes: "studio.routes",
+  dashboardWidgets: "studio.dashboard.widgets",
+  panels: "studio.panels",
+  toolbarActions: "studio.toolbar.actions",
+  activityEditors: "workflow.activity.editors",
+  propertyEditors: "workflow.activity.property-editors",
+  expressionEditors: "workflow.expression-editors",
+  settingEditors: "studio.setting-editors",
+  agentContextProviders: "studio.weaver.context-providers",
+  agentPromptStarters: "studio.weaver.prompt-starters",
+  agentCapabilities: "studio.weaver.capabilities",
+  agentActions: "studio.weaver.actions",
+  agentToolSlots: "studio.weaver.tool-slots",
+  agentToolContracts: "studio.weaver.tool-contracts",
+  agentResultRenderers: "studio.weaver.result-renderers",
+  workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
+  workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
+  workflowDesignerPanels: "workflow.designer.panels",
+  aiContextProviders: "studio.ai.context-providers",
+  aiPromptActions: "studio.ai.prompt-actions",
+  aiTools: "studio.ai.tools",
+  aiProposalRenderers: "studio.ai.proposal-renderers",
+  aiSurfaces: "studio.ai.surfaces",
+  diagnostics: "studio.diagnostics",
+  diagnosticsWidgets: "studio.diagnostics.widgets"
+} as const;
+
+export type StudioSlotId = typeof studioSlotIds[keyof typeof studioSlotIds];
+export type StudioSlotOwnerKind = "host" | "module";
+
+export interface StudioSlotOwnerDescriptor {
+  kind: StudioSlotOwnerKind;
+  id: string;
+  moduleId?: string;
+}
+
+export interface StudioSlotDefinition {
+  id: StudioSlotId | string;
+  kind: string;
+  owner: StudioSlotOwnerDescriptor;
+  title?: string;
+  parentId?: StudioSlotId | string;
+}
+
+export type StudioContributionAvailabilityState = "available" | "hidden" | "unavailable";
+export type StudioContributionAvailabilitySource = "slot-owner" | "host-policy" | "module" | "feature" | "runtime";
+
+export interface StudioContributionAvailability {
+  state: StudioContributionAvailabilityState;
+  reason?: string;
+  source?: StudioContributionAvailabilitySource;
+}
+
+export interface StudioContributionComposition<T> {
+  contribution: T;
+  slot: StudioSlotDefinition;
+  availability: StudioContributionAvailability;
+  order: number;
+  stableKey: string;
+}
+
+export interface StudioContributionPolicyContext<T> {
+  contribution: T;
+  slot: StudioSlotDefinition;
+  context?: unknown;
+}
+
+export type StudioContributionDecision = boolean | StudioContributionAvailability | null | undefined;
+export type StudioSlotOwnerRule<T> = (context: StudioContributionPolicyContext<T>) => StudioContributionDecision;
+export type StudioHostContributionPolicy<T> = (context: StudioContributionPolicyContext<T>) => StudioContributionDecision;
+
+export interface StudioContributionListOptions<T> {
+  context?: unknown;
+  disabledModuleIds?: string[];
+  disabledFeatureIds?: string[];
+  hostPolicy?: StudioHostContributionPolicy<T>;
+  includeUnavailable?: boolean;
+  includeHidden?: boolean;
+}
+
+export interface CreateStudioContributionRegistryOptions<T> {
+  slot?: StudioSlotDefinition;
+  slotOwner?: StudioSlotOwnerRule<T>;
+  hostPolicy?: StudioHostContributionPolicy<T>;
+  getOrder?(contribution: T): number | undefined;
+  getStableKey?(contribution: T): string | undefined;
+}
+
+export const studioSlots = {
+  featureAreas: defineStudioSlot({ id: studioSlotIds.featureAreas, kind: "feature-area", title: "Feature areas", owner: hostSlotOwner() }),
+  navigation: defineStudioSlot({ id: studioSlotIds.navigation, kind: "navigation", title: "Navigation", owner: hostSlotOwner() }),
+  routes: defineStudioSlot({ id: studioSlotIds.routes, kind: "route", title: "Routes", owner: hostSlotOwner() }),
+  dashboardWidgets: defineStudioSlot({ id: studioSlotIds.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: hostSlotOwner() }),
+  panels: defineStudioSlot({ id: studioSlotIds.panels, kind: "panel", title: "Panels", owner: hostSlotOwner() }),
+  toolbarActions: defineStudioSlot({ id: studioSlotIds.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: hostSlotOwner() }),
+  activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
+  propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
+  expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
+  settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
+  agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
+  agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
+  agentCapabilities: defineStudioSlot({ id: studioSlotIds.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
+  agentActions: defineStudioSlot({ id: studioSlotIds.agentActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
+  agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
+  agentToolContracts: defineStudioSlot({ id: studioSlotIds.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
+  agentResultRenderers: defineStudioSlot({ id: studioSlotIds.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
+  workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
+  workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
+  workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
+  aiContextProviders: defineStudioSlot({ id: studioSlotIds.aiContextProviders, kind: "ai-context-provider", title: "AI context providers", owner: hostSlotOwner() }),
+  aiPromptActions: defineStudioSlot({ id: studioSlotIds.aiPromptActions, kind: "ai-prompt-action", title: "AI prompt actions", owner: hostSlotOwner() }),
+  aiTools: defineStudioSlot({ id: studioSlotIds.aiTools, kind: "ai-tool", title: "AI tools", owner: hostSlotOwner() }),
+  aiProposalRenderers: defineStudioSlot({ id: studioSlotIds.aiProposalRenderers, kind: "ai-proposal-renderer", title: "AI proposal renderers", owner: hostSlotOwner() }),
+  aiSurfaces: defineStudioSlot({ id: studioSlotIds.aiSurfaces, kind: "ai-surface", title: "AI surfaces", owner: hostSlotOwner() }),
+  diagnostics: defineStudioSlot({ id: studioSlotIds.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: hostSlotOwner() }),
+  diagnosticsWidgets: defineStudioSlot({ id: studioSlotIds.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: hostSlotOwner() })
+};
+
 export interface StudioContributionRegistry<T> {
+  readonly slot: StudioSlotDefinition;
   add(contribution: T): void;
-  list(): T[];
+  list(options?: StudioContributionListOptions<T>): T[];
+  compose(options?: StudioContributionListOptions<T>): StudioContributionComposition<T>[];
 }
 
 export interface StudioAiPromptDispatcher {
@@ -540,6 +751,7 @@ export interface ElsaStudioModuleApi {
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
+  readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;
@@ -560,15 +772,37 @@ export interface ElsaStudioModule {
   register(api: ElsaStudioModuleApi): void | Promise<void>;
 }
 
-export function createContributionRegistry<T>(): StudioContributionRegistry<T> {
+export function defineStudioSlot(definition: StudioSlotDefinition): StudioSlotDefinition {
+  return definition;
+}
+
+export function hostSlotOwner(id = "studio-host"): StudioSlotOwnerDescriptor {
+  return { kind: "host", id };
+}
+
+export function moduleSlotOwner(moduleId: string): StudioSlotOwnerDescriptor {
+  return { kind: "module", id: moduleId, moduleId };
+}
+
+export function createContributionRegistry<T>(options: CreateStudioContributionRegistryOptions<T> = {}): StudioContributionRegistry<T> {
   const contributions: T[] = [];
+  const slot = options.slot ?? defineStudioSlot({
+    id: "studio.unknown",
+    kind: "unknown",
+    owner: hostSlotOwner(),
+    title: "Unknown contributions"
+  });
 
   return {
+    slot,
     add(contribution) {
       contributions.push(contribution);
     },
-    list() {
-      return [...contributions];
+    list(listOptions) {
+      return composeContributions(contributions, slot, options, listOptions).map(item => item.contribution);
+    },
+    compose(listOptions) {
+      return composeContributions(contributions, slot, options, listOptions);
     }
   };
 }
@@ -577,11 +811,11 @@ export function createAiContributionApi(): StudioAiContributionApi {
   const listeners = new Set<(request: StudioAiPromptRequest) => void>();
 
   return {
-    contextProviders: createContributionRegistry(),
-    promptActions: createContributionRegistry(),
-    tools: createContributionRegistry(),
-    proposalRenderers: createContributionRegistry(),
-    surfaces: createContributionRegistry(),
+    contextProviders: createContributionRegistry({ slot: studioSlots.aiContextProviders }),
+    promptActions: createContributionRegistry({ slot: studioSlots.aiPromptActions }),
+    tools: createContributionRegistry({ slot: studioSlots.aiTools }),
+    proposalRenderers: createContributionRegistry({ slot: studioSlots.aiProposalRenderers }),
+    surfaces: createContributionRegistry({ slot: studioSlots.aiSurfaces }),
     dispatchPrompt(request) {
       for (const listener of listeners) {
         listener(request);
@@ -592,6 +826,150 @@ export function createAiContributionApi(): StudioAiContributionApi {
       return () => listeners.delete(listener);
     }
   };
+}
+
+function composeContributions<T>(
+  contributions: T[],
+  slot: StudioSlotDefinition,
+  registryOptions: CreateStudioContributionRegistryOptions<T>,
+  listOptions: StudioContributionListOptions<T> = {}
+) {
+  return contributions
+    .map((contribution, index) => ({
+      contribution,
+      slot,
+      availability: resolveContributionAvailability(contribution, slot, registryOptions, listOptions),
+      order: registryOptions.getOrder?.(contribution) ?? getContributionOrder(contribution),
+      stableKey: registryOptions.getStableKey?.(contribution) ?? getContributionStableKey(contribution, index),
+      index
+    }))
+    .filter(item => shouldIncludeContribution(item.availability, listOptions))
+    .sort((left, right) => left.order - right.order || left.stableKey.localeCompare(right.stableKey) || left.index - right.index)
+    .map(({ index: _index, ...item }) => item);
+}
+
+function resolveContributionAvailability<T>(
+  contribution: T,
+  slot: StudioSlotDefinition,
+  registryOptions: CreateStudioContributionRegistryOptions<T>,
+  listOptions: StudioContributionListOptions<T>
+): StudioContributionAvailability {
+  const policyContext = { contribution, slot, context: listOptions.context };
+  const slotDecision = normalizeContributionDecision(registryOptions.slotOwner?.(policyContext), "slot-owner");
+  if (slotDecision.state !== "available") {
+    return slotDecision;
+  }
+
+  const moduleId = getStringProperty(contribution, "moduleId");
+  if (moduleId && listOptions.disabledModuleIds?.includes(moduleId)) {
+    return { state: "hidden", reason: `Module ${moduleId} is disabled.`, source: "module" };
+  }
+
+  const featureId = getStringProperty(contribution, "featureId");
+  if (featureId && listOptions.disabledFeatureIds?.includes(featureId)) {
+    return { state: "hidden", reason: `Feature ${featureId} is disabled.`, source: "feature" };
+  }
+
+  const runtimeAvailability = normalizeContributionDecision(readContributionAvailability(contribution, listOptions.context), "runtime");
+  const registryPolicyDecision = normalizeContributionDecision(registryOptions.hostPolicy?.(policyContext), "host-policy");
+  if (registryPolicyDecision.state !== "available") {
+    return registryPolicyDecision;
+  }
+
+  const listPolicyDecision = normalizeContributionDecision(listOptions.hostPolicy?.(policyContext), "host-policy");
+  if (listPolicyDecision.state !== "available") {
+    return listPolicyDecision;
+  }
+
+  return runtimeAvailability;
+}
+
+function normalizeContributionDecision(
+  decision: StudioContributionDecision,
+  source: StudioContributionAvailabilitySource
+): StudioContributionAvailability {
+  if (decision === false) {
+    return { state: "hidden", source };
+  }
+
+  if (decision && typeof decision === "object") {
+    const record = decision as Record<string, unknown>;
+
+    if (!("state" in record) && typeof record.status === "string") {
+      return {
+        state: record.status === "available" ? "available" : "unavailable",
+        reason: typeof record.reason === "string" ? record.reason : undefined,
+        source
+      };
+    }
+
+    return { ...decision, source: decision.source ?? source };
+  }
+
+  return { state: "available" };
+}
+
+function readContributionAvailability(contribution: unknown, context: unknown): StudioContributionDecision {
+  if (!isRecord(contribution) || !("availability" in contribution)) {
+    return true;
+  }
+
+  const availability = contribution.availability;
+  return typeof availability === "function" ? availability(context) : availability as StudioContributionDecision;
+}
+
+function shouldIncludeContribution(availability: StudioContributionAvailability, options: { includeHidden?: boolean; includeUnavailable?: boolean }) {
+  if (availability.state === "available") {
+    return true;
+  }
+
+  if (availability.state === "hidden") {
+    return options.includeHidden === true;
+  }
+
+  return options.includeUnavailable === true;
+}
+
+function getContributionOrder(contribution: unknown) {
+  const order = getNumberProperty(contribution, "order");
+  return order ?? 500;
+}
+
+function getContributionStableKey(contribution: unknown, index: number) {
+  if (!isRecord(contribution)) {
+    return `_${index.toString().padStart(4, "0")}`;
+  }
+
+  for (const key of ["id", "name", "label", "title", "path"]) {
+    const value = contribution[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+
+  return `_${index.toString().padStart(4, "0")}`;
+}
+
+function getStringProperty(value: unknown, key: string) {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const property = value[key];
+  return typeof property === "string" ? property : undefined;
+}
+
+function getNumberProperty(value: unknown, key: string) {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const property = value[key];
+  return typeof property === "number" ? property : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 export function createEndpointContext(baseUrl: string, options: { headers?: HeadersInit } = {}): StudioEndpointContext {

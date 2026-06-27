@@ -18,6 +18,33 @@ describe("AgentLauncher", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     unmount();
   });
+
+  it("shows persistent session state while keeping the launcher as the details action", () => {
+    const onClick = vi.fn();
+    const { container, unmount } = render(
+      <AgentLauncher
+        open={false}
+        sessions={[{
+          id: "agt_parent",
+          title: "Build extension",
+          status: "background",
+          pendingProposals: 1,
+          childSessions: [{ id: "agt_child", title: "Repair workflow", status: "waiting", pendingPrompts: 1 }]
+        }]}
+        onClick={onClick}
+      />
+    );
+    const button = container.querySelector("button")!;
+
+    expect(button.textContent).toContain("Weaver");
+    expect(button.textContent).toContain("1 proposal");
+    expect(button.textContent).toContain("1 child");
+
+    button.click();
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    unmount();
+  });
 });
 
 function render(element: React.ReactElement) {

@@ -30,6 +30,44 @@
   flex: 0 0 auto;
 }
 
+.agent-session-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  margin-left: 0.15rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.agent-session-indicator > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.1rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0 0.35rem;
+  white-space: nowrap;
+}
+
+.agent-session-indicator > span:first-child {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.agent-session-indicator > span[data-state="blocked"],
+.agent-session-indicator > span[data-state="failed"] {
+  border-color: var(--studio-danger);
+  color: var(--studio-danger);
+}
+
+.agent-session-indicator > span[data-state="waiting"] {
+  border-color: var(--studio-warning);
+  color: var(--studio-warning);
+}
+
 .agent-launcher:hover:not(:disabled),
 .agent-launcher:focus-visible {
   border-color: var(--studio-accent);
@@ -269,9 +307,81 @@
   gap: 0.4rem;
 }
 
+.agent-proposal-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
 .agent-proposal p {
   color: var(--studio-text-muted);
   font-size: 0.8125rem;
+}
+
+.agent-proposal-details {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-details div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.agent-proposal-details dt {
+  color: var(--studio-text-muted);
+}
+
+.agent-proposal-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-proposal-error,
+.agent-proposal-disabled,
+.agent-proposal-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agent-proposal-error {
+  color: #dc2626;
+}
+
+.agent-proposal-disabled {
+  color: var(--studio-text-muted);
+}
+
+.agent-proposal-result {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-result > span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-proposal-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--studio-text);
+  font: inherit;
 }
 
 .agent-proposal footer,

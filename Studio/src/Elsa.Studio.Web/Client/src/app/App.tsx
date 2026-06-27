@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
+  StudioDiagnosticsWidgetContribution,
+  StudioDiagnosticsWidgetProps,
+  StudioDiagnosticsWidgetState,
   StudioModulesResponse,
   StudioNavigationContribution,
   StudioPanelContribution
@@ -35,7 +38,7 @@ import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
+import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import "./styles.css";
 import "./agent/agent.css";
 
@@ -43,6 +46,13 @@ type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = "workspace" | "settings";
 type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
 type HostHealthStatus = "checking" | "ok" | "attention" | "unavailable";
+type DiagnosticsWidgetBoundaryProps = {
+  children: React.ReactNode;
+  title: string;
+};
+type DiagnosticsWidgetBoundaryState = {
+  error: string | null;
+};
 
 interface HostHealthRegistry {
   modules: Array<{ status?: string; diagnostics?: Array<{ status?: string }> }>;
@@ -60,7 +70,7 @@ const builtInNavigation: StudioNavigationContribution[] = [
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
   { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules", order: 900, iconColor: "#10b981" }
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: "#10b981" }
 ];
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
@@ -80,6 +90,7 @@ function AppContent() {
   const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -189,15 +200,16 @@ function AppContent() {
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
-        assistantAction={<AgentLauncher open={assistantOpen} onClick={() => setAssistantOpen(current => !current)} />}
+        assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
       >
         {dashboardPath ? <Dashboard api={api!} /> : null}
         {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
         {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
-        {path === "/diagnostics/modules" ? <Diagnostics api={api!} /> : null}
+        {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
+        {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {ActiveComponent ? <ActiveComponent /> : null}
-        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -206,7 +218,7 @@ function AppContent() {
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} />
+        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} />
       ) : null}
     </>
   );
@@ -562,7 +574,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
 }
 
 export function Dashboard({ api }: { api: ElsaStudioModuleApi }) {
-  const widgets = api.dashboardWidgets.list().sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
+  const widgets = api.dashboardWidgets.list().sort(compareOrderedContributions);
 
   return (
     <section className="dashboard-view">
@@ -727,13 +739,117 @@ function labelForHostStatus(status: HostHealthStatus) {
   return "Checking";
 }
 
-function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
+export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
+  const widgets = api.diagnosticsWidgets.list().sort(compareOrderedContributions);
+
+  return (
+    <section className="diagnostics-view">
+      <div className="section-header">
+        <div>
+          <h2>Diagnostics</h2>
+          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
+        </div>
+      </div>
+
+      <div className="widget-grid">
+        {widgets.length === 0 ? (
+          <div className="empty-state">
+            <FileText size={22} />
+            <span>No diagnostics widgets are registered.</span>
+          </div>
+        ) : null}
+        {widgets.map(widget => (
+          <DiagnosticsWidgetHost widget={widget} key={widget.id} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DiagnosticsWidgetHost({ widget }: { widget: StudioDiagnosticsWidgetContribution }) {
+  const [state, setState] = useState<StudioDiagnosticsWidgetState>({ status: widget.load || widget.subscribe ? "loading" : "idle" });
+  const Widget = widget.component as React.ComponentType<StudioDiagnosticsWidgetProps>;
+
+  useEffect(() => {
+    let disposed = false;
+    let cleanup: void | (() => void);
+
+    async function loadSnapshot() {
+      if (!widget.load) {
+        return;
+      }
+
+      try {
+        setState(current => ({ ...current, status: "loading", error: undefined }));
+        const snapshot = await widget.load();
+        if (!disposed) {
+          setState({ status: "ready", snapshot });
+        }
+      } catch (e) {
+        if (!disposed) {
+          setState({ status: "error", error: getHealthErrorMessage(e) });
+        }
+      }
+    }
+
+    void loadSnapshot();
+
+    if (widget.subscribe) {
+      try {
+        setState(current => ({ ...current, status: "streaming", error: undefined }));
+        cleanup = widget.subscribe(snapshot => {
+          if (!disposed) {
+            setState({ status: "streaming", snapshot });
+          }
+        });
+      } catch (e) {
+        setState({ status: "error", error: getHealthErrorMessage(e) });
+      }
+    }
+
+    return () => {
+      disposed = true;
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    };
+  }, [widget]);
+
+  return (
+    <DiagnosticsWidgetBoundary title={widget.title}>
+      <Widget state={state} />
+    </DiagnosticsWidgetBoundary>
+  );
+}
+
+class DiagnosticsWidgetBoundary extends React.Component<DiagnosticsWidgetBoundaryProps, DiagnosticsWidgetBoundaryState> {
+  state: DiagnosticsWidgetBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown): DiagnosticsWidgetBoundaryState {
+    return { error: getHealthErrorMessage(error) };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="error-state">
+          <strong>{this.props.title}</strong>
+          <span>{this.state.error}</span>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function ModuleDiagnostics({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section>
       <div className="section-header">
         <div>
-          <h2>Module diagnostics</h2>
-          <p>Load status for server-discovered Studio modules.</p>
+          <h2>Module load status</h2>
+          <p>Server-discovered module activation diagnostics for administration.</p>
         </div>
       </div>
       <div className="diagnostics-list">
@@ -747,6 +863,15 @@ function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
       </div>
     </section>
   );
+}
+
+function compareOrderedContributions(a: { id: string; title?: string; order?: number }, b: { id: string; title?: string; order?: number }) {
+  const orderComparison = (a.order ?? 500) - (b.order ?? 500);
+  if (orderComparison !== 0) {
+    return orderComparison;
+  }
+
+  return (a.title ?? a.id).localeCompare(b.title ?? b.id) || a.id.localeCompare(b.id);
 }
 
 function NavIcon({ id }: { id: string }) {
@@ -828,8 +953,8 @@ function isNavigationItemActive(item: StudioNavigationContribution, path: string
   return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
 }
 
-function isDashboardPath(path: string) {
-  return path === "/" || path === "/dashboard";
+export function isDashboardPath(path: string) {
+  return path === "/" || path === "/dashboard" || path === "/overview";
 }
 
 export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[]) {

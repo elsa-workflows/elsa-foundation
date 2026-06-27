@@ -2,7 +2,9 @@ import type {
   ElsaStudioModuleApi,
   StudioAgentCapabilityContribution,
   StudioAgentPromptStarterContribution,
-  StudioAgentSurface
+  StudioAgentSurface,
+  StudioAgentToolContractContribution,
+  StudioAgentToolSlotContribution
 } from "../../sdk";
 
 export interface AgentContributionFilterOptions {
@@ -20,6 +22,8 @@ export interface AgentContributionModuleState {
 export interface AgentContributionPolicy {
   readonly allowedCapabilityIds?: readonly string[];
   readonly deniedCapabilityIds?: readonly string[];
+  readonly allowedToolIds?: readonly string[];
+  readonly deniedToolIds?: readonly string[];
   readonly disabledModuleIds?: readonly string[];
 }
 
@@ -51,12 +55,58 @@ export function getActivePromptStarters(
     .sort(byOrderThenLabel);
 }
 
+export function getActiveAgentToolSlots(
+  api: ElsaStudioModuleApi,
+  surface: StudioAgentSurface,
+  options: AgentContributionFilterOptions = {}
+) {
+  return api.agent.toolSlots
+    .list()
+    .filter(slot => matchesSurface(slot.surfaces, surface.route))
+    .filter(slot => isModuleEnabled(slot.moduleId, options))
+    .sort(byOrderThenDisplayName);
+}
+
+export function getActiveAgentToolContracts(
+  api: ElsaStudioModuleApi,
+  surface: StudioAgentSurface,
+  options: AgentContributionFilterOptions = {}
+) {
+  const slots = getActiveAgentToolSlots(api, surface, options);
+  const slotIds = new Set(slots.map(slot => slot.id));
+  const slotRank = new Map(slots.map((slot, index) => [slot.id, index]));
+
+  return api.agent.toolContracts
+    .list()
+    .filter(contract => slotIds.has(contract.slotId))
+    .filter(contract => matchesSurface(contract.surfaces, surface.route))
+    .filter(contract => isModuleEnabled(contract.moduleId, options))
+    .filter(contract => hasRequiredPermissions(contract.requiredPermissions, options.permissions))
+    .filter(isToolAvailable)
+    .filter(contract => isToolAllowed(contract.id, options.policy))
+    .sort((left, right) => bySlotThenOrderThenDisplayName(left, right, slotRank));
+}
+
 export function matchesSurface(surfaces: readonly string[], route: string) {
   return surfaces.includes("*") || surfaces.some(surface => route === surface || route.startsWith(`${surface}/`));
 }
 
 function byOrderThenLabel(left: StudioAgentPromptStarterContribution, right: StudioAgentPromptStarterContribution) {
   return (left.order ?? 500) - (right.order ?? 500) || left.label.localeCompare(right.label);
+}
+
+function byOrderThenDisplayName(left: StudioAgentToolSlotContribution, right: StudioAgentToolSlotContribution) {
+  return (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName);
+}
+
+function bySlotThenOrderThenDisplayName(
+  left: StudioAgentToolContractContribution,
+  right: StudioAgentToolContractContribution,
+  slotRank: ReadonlyMap<string, number>
+) {
+  return (slotRank.get(left.slotId) ?? 500) - (slotRank.get(right.slotId) ?? 500)
+    || (left.order ?? 500) - (right.order ?? 500)
+    || left.displayName.localeCompare(right.displayName);
 }
 
 function isModuleEnabled(moduleId: string | undefined, options: AgentContributionFilterOptions) {
@@ -96,4 +146,20 @@ function isCapabilityAllowed(capabilityId: string, policy: AgentContributionPoli
   }
 
   return !policy.allowedCapabilityIds || policy.allowedCapabilityIds.includes(capabilityId);
+}
+
+function isToolAvailable(contract: StudioAgentToolContractContribution) {
+  return !contract.availability || contract.availability.status === "available";
+}
+
+function isToolAllowed(toolId: string, policy: AgentContributionPolicy | undefined) {
+  if (!policy) {
+    return true;
+  }
+
+  if (policy.deniedToolIds?.includes(toolId)) {
+    return false;
+  }
+
+  return !policy.allowedToolIds || policy.allowedToolIds.includes(toolId);
 }

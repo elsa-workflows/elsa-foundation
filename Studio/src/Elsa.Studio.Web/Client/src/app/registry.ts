@@ -2,6 +2,7 @@ import {
   createEndpointContext,
   createAiContributionApi,
   createContributionRegistry,
+  studioSlots,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
   type StudioContributionRegistry,
@@ -9,6 +10,7 @@ import {
   type StudioFeatureAreaContribution,
   type StudioFeatureAreaNavContribution,
   type StudioFeatureAreaNavParent,
+  type StudioDiagnosticsWidgetContribution,
   type StudioModuleDiagnostic,
   type StudioNavigationContribution,
   type StudioRouteContribution
@@ -31,8 +33,8 @@ export function createStudioRegistry(
     : backendBaseUrlOrOptions ?? {};
   const hostContext = options.hostHttp ? { ...host, http: options.hostHttp } : host;
   const backend = createBackendContext(hostContext, options);
-  const navigation = createContributionRegistry<StudioNavigationContribution>();
-  const routes = createContributionRegistry<StudioRouteContribution>();
+  const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
+  const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
 
   return {
@@ -41,26 +43,30 @@ export function createStudioRegistry(
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createContributionRegistry(),
-    panels: createContributionRegistry(),
-    toolbarActions: createContributionRegistry(),
-    activityEditors: createContributionRegistry(),
-    propertyEditors: createContributionRegistry(),
-    expressionEditors: createContributionRegistry(),
-    settingEditors: createContributionRegistry(),
+    dashboardWidgets: createContributionRegistry({ slot: studioSlots.dashboardWidgets }),
+    diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
+    panels: createContributionRegistry({ slot: studioSlots.panels }),
+    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
+    activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
+    propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
+    expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
     agent: {
-      contextProviders: createContributionRegistry(),
-      promptStarters: createContributionRegistry(),
-      capabilities: createContributionRegistry(),
-      actions: createContributionRegistry()
+      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
+      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
+      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
+      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
+      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
+      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
+      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
     },
     workflowDesigner: {
-      nodeRenderers: createContributionRegistry(),
-      toolboxItems: createContributionRegistry(),
-      panels: createContributionRegistry()
+      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
+      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
     ai: createAiContributionApi(),
-    diagnostics: createContributionRegistry<StudioModuleDiagnostic>()
+    diagnostics: createContributionRegistry<StudioModuleDiagnostic>({ slot: studioSlots.diagnostics })
   };
 }
 
@@ -73,9 +79,10 @@ function createFeatureAreaRegistry(
   navigation: StudioContributionRegistry<StudioNavigationContribution>,
   routes: StudioContributionRegistry<StudioRouteContribution>
 ): StudioContributionRegistry<StudioFeatureAreaContribution> {
-  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>();
+  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>({ slot: studioSlots.featureAreas });
 
   return {
+    slot: featureAreas.slot,
     add(featureArea) {
       featureAreas.add(featureArea);
       for (const item of createNavigationContributions(featureArea)) {
@@ -85,7 +92,8 @@ function createFeatureAreaRegistry(
         routes.add(route);
       }
     },
-    list: featureAreas.list
+    list: featureAreas.list,
+    compose: featureAreas.compose
   };
 }
 
