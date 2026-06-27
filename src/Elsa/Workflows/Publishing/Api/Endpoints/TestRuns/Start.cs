@@ -12,7 +12,7 @@ internal sealed class Start(IRequestSender requestSender, ILogger<Start> logger)
 {
     public override void Configure()
     {
-        Post(RouteConstants.GetRoute("workflows/{versionId}/test-runs"));
+        Post(RouteConstants.VersionedWorkflowTestRuns);
         ConfigurePermissions();
     }
 }
