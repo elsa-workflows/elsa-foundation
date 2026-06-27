@@ -35,6 +35,11 @@ public static class ActivitiesDesignStorageManifest
     /// <summary>Constant partition value stamped on every activity-definition-version document (see <see cref="ByCollectionIndex"/>).</summary>
     public const string ActivityDefinitionVersionCollection = "activityDefinitionVersion";
 
+    public const string ActivityAvailabilitySettingsDocumentKind = "activityAvailabilitySettings";
+
+    /// <summary>Constant partition value stamped on every activity-availability-settings document (see <see cref="ByCollectionIndex"/>).</summary>
+    public const string ActivityAvailabilitySettingsCollection = "activityAvailabilitySettings";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-activities-design"),
         new StorageManifestOwner("elsa.activities.design"),
@@ -48,6 +53,11 @@ public static class ActivitiesDesignStorageManifest
             Unit(
                 ActivityDefinitionVersionDocumentKind,
                 "Activity definition version",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                ActivityAvailabilitySettingsDocumentKind,
+                "Activity availability settings",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)])
         ],

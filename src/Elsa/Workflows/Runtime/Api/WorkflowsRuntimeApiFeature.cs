@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<IWorkflowExecutionAmbientServicesAccessor, AsyncLocalWorkflowExecutionAmbientServicesAccessor>();
+        services.TryAddSingleton<WorkflowExecutionDrainCoordinatorOptions>();
+        services.TryAddSingleton<IWorkflowExecutionDrainCoordinator, WorkflowExecutionDrainCoordinator>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>
             new WorkflowSchedulerDrainer(

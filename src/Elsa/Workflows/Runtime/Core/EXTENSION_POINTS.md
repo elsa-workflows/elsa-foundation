@@ -142,7 +142,13 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Kind:** Replacement (one processor decides what an accepted workflow-execution command does inside the active agent mailbox).
 - **Signature:** `ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)`.
 - **Usage:** invoked by the in-process agent after dispatch metadata has been accepted and before the idempotency key is marked processed. The processor runs under the agent mailbox's single-writer boundary.
-- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work, then applies the scheduler drain policy; activity execution remains handler/provider behavior, not command acceptance behavior)*.
+- **Default implementation:** `WorkflowSchedulerCommandProcessor` *(records accepted commands as scheduler work, applies the scheduler drain policy, then delegates command-triggered draining to `IWorkflowExecutionDrainCoordinator`; activity execution remains handler/provider behavior, not command acceptance behavior)*.
+
+### `IWorkflowExecutionDrainCoordinator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one coordinator owns command-triggered workflow execution drain orchestration for a runtime composition).
+- **Signature:** `DrainAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** bridges the accepted command boundary to scheduler draining after scheduler work is recorded and the drain policy requests immediate advancement. The default coordinator drains scheduler work, processes deliverable `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` outbox items for the same workflow execution, and repeats scheduler draining until scheduler-intent delivery quiesces, a pause/fault stops scheduler draining, or the bounded cycle guard is reached. Checkpoint commit remains the durability boundary: commits record post-commit work, and the coordinator only delivers it after the commit path succeeds. `WorkflowExecutionDrainCoordinatorOptions` names the cycle and outbox batch limits; cycle-cap exhaustion throws `WorkflowExecutionDrainCycleLimitExceededException`.
+- **Default implementation:** `WorkflowExecutionDrainCoordinator`.
 
 ### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one queue owns recorded scheduler work for a runtime composition).
@@ -225,9 +231,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Default implementation:** `ImmediateWorkflowSchedulerDrainPolicy`.
 
 ### `IWorkflowSchedulerDrainObserver` *(Core — `Elsa.Workflows.Runtime.Core`)*
-- **Kind:** Contributor (observers consume drain results produced by command processing).
+- **Kind:** Contributor (observers consume coordinated drain results produced by workflow execution draining).
 - **Signature:** `OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)`.
-- **Usage:** modules can project drain outcomes into diagnostics or future checkpoint/outbox behavior without making history continuation state.
+- **Usage:** modules can project one command-triggered coordinated drain outcome into diagnostics or future checkpoint/outbox behavior without making history continuation state. Coordinated results aggregate scheduler work item results across scheduler drain passes, include post-commit outbox delivery counts/results, and expose a stop reason such as quiesced, paused, faulted, or outbox delivery failed.
 - **Default implementation:** `NoopWorkflowSchedulerDrainObserver`.
 
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*

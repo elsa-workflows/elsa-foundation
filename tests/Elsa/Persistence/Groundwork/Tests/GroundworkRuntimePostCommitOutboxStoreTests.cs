@@ -110,6 +110,21 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         Assert.Equal(new[] { "item-1" }, forWf1.Select(x => x.OutboxItemId));
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task GetDeliverable_Filters_By_Intent_Kind(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+
+        await store.SavePendingAsync(Pending("item-1", "wf-1", kind: "scheduler"));
+        await store.SavePendingAsync(Pending("item-2", "wf-1", kind: "signal"));
+
+        var schedulerItems = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10, intentKind: "scheduler"));
+        Assert.Equal(new[] { "item-1" }, schedulerItems.Select(x => x.OutboxItemId));
+    }
+
     [Fact]
     public async Task Pending_Item_Survives_Restart()
     {

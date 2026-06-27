@@ -76,12 +76,71 @@ public sealed record WorkflowGraphOperationBatch(
     IReadOnlyCollection<WorkflowGraphOperation> Operations,
     IReadOnlyDictionary<string, string> Metadata);
 
+public enum WorkflowGraphOperationBatchRiskDecision
+{
+    DirectApply,
+    Clarification,
+    Proposal
+}
+
+public enum WorkflowGraphOperationBatchRiskReason
+{
+    LowRisk,
+    PermissionDenied,
+    StaleRevision,
+    InvalidBatch,
+    DestructiveOperation,
+    HighComplexity,
+    UnavailableActivity,
+    Uncertain
+}
+
+public sealed record WorkflowGraphOperationBatchRiskClassification(
+    WorkflowGraphOperationBatchRiskDecision Decision,
+    AgentRisk Risk,
+    AgentResultKind ResultKind,
+    IReadOnlyCollection<WorkflowGraphOperationBatchRiskReason> Reasons,
+    string Summary)
+{
+    public bool CanDirectApply => Decision == WorkflowGraphOperationBatchRiskDecision.DirectApply;
+}
+
+public sealed record WorkflowGraphOperationBatchRiskClassificationRequest(
+    WorkflowGraphOperationBatch Batch,
+    WorkflowAgentContext Context);
+
 public sealed record WorkflowGraphOperation(
     string Id,
     WorkflowGraphOperationKind Kind,
     IReadOnlyDictionary<string, object?> Parameters,
     IReadOnlyCollection<string> TemporaryReferences,
     string? Summary);
+
+public sealed record WorkflowClarificationResult(
+    string Id,
+    string Question,
+    IReadOnlyCollection<WorkflowClarificationOption> Options,
+    string? ContinuationToken,
+    IReadOnlyDictionary<string, string> Metadata);
+
+public sealed record WorkflowClarificationOption(
+    string Id,
+    string Label,
+    string Value,
+    string? Description);
+
+public sealed record WorkflowAuthoringAuditRequest(
+    string SessionId,
+    string ActorId,
+    string WorkflowDefinitionId,
+    string CapabilityId,
+    string ProviderId,
+    string OperationSummary,
+    string Outcome,
+    AgentResultKind ResultKind,
+    string? ModelId,
+    string? RunId,
+    IReadOnlyDictionary<string, string> Metadata);
 
 public sealed record WorkflowChangeProposalRequest(
     string SessionId,

@@ -75,5 +75,5 @@ Kind: Bridge/adapter (provider facade for external agent-provider SDK sessions, 
 
 Known implementations:
 
-- `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — registers the GitHub Copilot provider seam and reports unavailable diagnostics until the SDK binding is configured.
+- `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — binds Elsa's provider-neutral agent facade to the GitHub Copilot SDK when explicitly enabled and authenticated, while keeping SDK tool mutation behind Elsa-owned proposal policy.
 - `DeterministicAgentProvider` (`Elsa.Agent.Core`) *(intra-domain — test/default seam)* — deterministic provider implementation for backend contract validation without an external SDK.

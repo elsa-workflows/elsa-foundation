@@ -1,0 +1,3 @@
+# Copilot provider keeps tool mutation Elsa-owned
+
+The GitHub Copilot SDK can run built-in and custom tools behind its own permission flow, but Elsa's first Copilot provider binding keeps mutating workflow, file, package, runtime, and external-service actions outside that direct SDK tool surface. Copilot may stream assistant output and provider-neutral proposal intent through Elsa's agent facade, while Elsa-owned proposal classification, approval, execution, and designer-state validation remain the authority for mutations so Studio and workflow authoring code do not depend on Copilot SDK semantics.

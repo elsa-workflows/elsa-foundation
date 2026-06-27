@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Services;
@@ -38,6 +39,9 @@ public static class GroundworkActivitiesDesignStoreRegistration
 
         services.RemoveAll<IActivityDefinitionLookup>();
         services.AddScoped<IActivityDefinitionLookup, ActivityDefinitionLookup>();
+
+        services.RemoveAll<IActivityAvailabilitySettingsStore>();
+        services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
 
         services.TryAddScoped<IIdentityGenerator, GroundworkIdentityGenerator>();
         services.TryAddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();

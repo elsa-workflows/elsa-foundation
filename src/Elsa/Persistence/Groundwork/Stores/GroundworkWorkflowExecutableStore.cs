@@ -20,16 +20,27 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentException.ThrowIfNullOrWhiteSpace(executable.Identity.ArtifactId);
 
-        var document = new ExecutableDocument(ElsaRuntimeStorageManifest.WorkflowExecutableCollection, executable);
-        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+        await SaveCoreAsync(executable, cancellationToken);
+    }
 
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
-                executable.Identity.ArtifactId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
-                content),
-            cancellationToken);
+    public async ValueTask<bool> SoftDeleteAsync(string artifactId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var executable = await FindAsync(artifactId, cancellationToken, includeDeleted: true);
+        if (executable is null)
+            return false;
+
+        await SaveCoreAsync(executable.WithDeleted(deletedAt, reason), cancellationToken);
+        return true;
+    }
+
+    public async ValueTask<bool> RestoreAsync(string artifactId, CancellationToken cancellationToken = default)
+    {
+        var executable = await FindAsync(artifactId, cancellationToken, includeDeleted: true);
+        if (executable is null)
+            return false;
+
+        await SaveCoreAsync(executable.WithRestored(), cancellationToken);
+        return true;
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -45,7 +56,7 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
         return result.Status == DocumentStoreWriteStatus.Deleted;
     }
 
-    public async ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default, bool includeDeleted = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
@@ -54,12 +65,14 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
             artifactId,
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        var executable = envelope is null ? null : Map(envelope);
+        return executable?.DeletedAt is null || includeDeleted ? executable : null;
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(
         bool includeTransient = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeDeleted = false)
     {
         var envelopes = await store.QueryAsync(
             new DocumentStoreQuery(
@@ -70,7 +83,22 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
 
         return envelopes.Select(Map)
             .Where(executable => includeTransient || executable.Scope == WorkflowExecutableScope.Published)
+            .Where(executable => includeDeleted || executable.DeletedAt is null)
             .ToArray();
+    }
+
+    private async ValueTask SaveCoreAsync(WorkflowExecutable executable, CancellationToken cancellationToken)
+    {
+        var document = new ExecutableDocument(ElsaRuntimeStorageManifest.WorkflowExecutableCollection, executable);
+        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+
+        await store.SaveAsync(
+            new SaveDocumentRequest(
+                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+                executable.Identity.ArtifactId,
+                ElsaRuntimeStorageManifest.SchemaVersion,
+                content),
+            cancellationToken);
     }
 
     private static WorkflowExecutable Map(DocumentEnvelope envelope) =>

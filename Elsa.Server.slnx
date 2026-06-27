@@ -3,6 +3,7 @@
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
   </Folder>
   <Folder Name="/solution/">
+    <File Path=".gitignore" />
     <File Path="Directory.Packages.props" />
     <File Path="NuGet.config" />
   </Folder>
@@ -149,6 +150,7 @@
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Secrets/Persistence/" />
   <Folder Name="/src/elsa/Secrets/Persistence/Groundwork/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>

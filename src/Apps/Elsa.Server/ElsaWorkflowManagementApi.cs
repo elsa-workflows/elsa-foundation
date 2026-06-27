@@ -18,6 +18,8 @@ using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Server;
 
@@ -41,6 +43,10 @@ internal static class ElsaWorkflowManagementApi
         group.MapDelete("/drafts/{draftId}", DiscardDraftAsync);
         group.MapGet("/versions/{versionId}", GetVersionAsync);
         group.MapPost("/versions/{versionId}/publish", PublishVersionAsync);
+        group.MapGet("/executables", ListExecutablesAsync);
+        group.MapDelete("/executables/{artifactId}", DeleteExecutableAsync);
+        group.MapPost("/executables/{artifactId}/restore", RestoreExecutableAsync);
+        group.MapDelete("/executables/{artifactId}/permanent", DeleteExecutablePermanentlyAsync);
         group.MapPost("/executables/{artifactId}/run", RunExecutableAsync);
         group.MapGet("/activities", ListActivitiesAsync);
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
@@ -195,6 +201,54 @@ internal static class ElsaWorkflowManagementApi
             var sender = services.GetRequiredService<IRequestSender>();
             var published = await sender.Send(new PublishWorkflow(versionId), cancellationToken);
             return Results.Ok(published);
+        }, cancellationToken);
+
+    private static Task<IResult> ListExecutablesAsync(IShellRegistry shellRegistry, string? state, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var store = services.GetRequiredService<IWorkflowExecutableStore>();
+            var listState = NormalizeDefinitionListState(state);
+            var executables = await store.ListAsync(includeDeleted: listState != WorkflowDefinitionListStates.Active, cancellationToken: cancellationToken);
+            var response = executables
+                .Where(executable => listState switch
+                {
+                    WorkflowDefinitionListStates.Deleted => executable.DeletedAt is not null,
+                    WorkflowDefinitionListStates.All => true,
+                    _ => executable.DeletedAt is null
+                })
+                .Select(WorkflowExecutableSummaryResponse.FromExecutable)
+                .OrderByDescending(x => listState == WorkflowDefinitionListStates.Deleted ? x.DeletedAt : (x.PublishedAt ?? x.CreatedAt))
+                .ThenBy(x => x.ArtifactId)
+                .ToArray();
+
+            return Results.Ok(new WorkflowExecutablesResponse(response));
+        }, cancellationToken);
+
+    private static Task<IResult> DeleteExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var store = services.GetRequiredService<IWorkflowExecutableStore>();
+            return await store.SoftDeleteAsync(artifactId, DateTimeOffset.UtcNow, cancellationToken: cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+        }, cancellationToken);
+
+    private static Task<IResult> RestoreExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var store = services.GetRequiredService<IWorkflowExecutableStore>();
+            return await store.RestoreAsync(artifactId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+        }, cancellationToken);
+
+    private static Task<IResult> DeleteExecutablePermanentlyAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var store = services.GetRequiredService<IWorkflowExecutableStore>();
+            return await store.DeleteAsync(artifactId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
         }, cancellationToken);
 
     private static Task<IResult> RunExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
@@ -599,6 +653,44 @@ internal static class WorkflowDefinitionListStates
 }
 
 internal sealed record WorkflowDefinitionsResponse(IReadOnlyList<WorkflowDefinitionSummaryResponse> Definitions);
+
+internal sealed record WorkflowExecutablesResponse(IReadOnlyList<WorkflowExecutableSummaryResponse> Executables);
+
+internal sealed record WorkflowExecutableSummaryResponse(
+    string ArtifactId,
+    string ArtifactVersion,
+    string ArtifactHash,
+    string DefinitionId,
+    string DefinitionVersionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? PublishedAt,
+    DateTimeOffset? DeletedAt,
+    string? SourceKind,
+    string? SourceId,
+    string? SourceVersion,
+    string RootActivityType,
+    string RootActivityVersion,
+    int NodeCount,
+    int ResumeTargetCount)
+{
+    public static WorkflowExecutableSummaryResponse FromExecutable(WorkflowExecutable executable) =>
+        new(
+            executable.Identity.ArtifactId,
+            executable.Identity.ArtifactVersion,
+            executable.Identity.ArtifactHash,
+            executable.Identity.DefinitionId,
+            executable.Identity.DefinitionVersionId,
+            executable.CreatedAt,
+            executable.PublishedAt,
+            executable.DeletedAt,
+            executable.Identity.Source?.SourceKind,
+            executable.Identity.Source?.SourceId,
+            executable.Identity.Source?.SourceVersion,
+            executable.RootActivity.ActivityType,
+            executable.RootActivity.ActivityTypeVersion,
+            executable.Nodes.Count,
+            executable.ResumeTargets.Count);
+}
 
 internal sealed record WorkflowDefinitionSummaryResponse(
     string Id,

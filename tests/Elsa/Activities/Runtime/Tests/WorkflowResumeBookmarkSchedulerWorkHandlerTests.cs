@@ -311,16 +311,26 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new FixedTimeProvider(_now));
 
-    private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
+    private Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
-        var completionWork = Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var completionWork = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, completionWork.CommandKind);
         Assert.Equal("resume-work:complete:actexec-1", completionWork.WorkItemId);
         Assert.Equal("command-1:complete:actexec-1", completionWork.CommandId);
         Assert.Equal("wfexec-1:resume:bookmark-1:complete:actexec-1", completionWork.IdempotencyKey);
         Assert.Equal(41, completionWork.Sequence);
         Assert.NotNull(completionWork.Payload);
-        return completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        return Task.FromResult(completionWork.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!);
+    }
+
+    private RuntimeSchedulerWorkItem AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind commandKind)
+    {
+        var intent = Assert.Single(_checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents));
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, intent.Kind);
+        Assert.NotNull(intent.Payload);
+        var workItem = intent.Payload.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(commandKind, workItem.CommandKind);
+        return workItem;
     }
 
     private ServiceProvider NewProvider(IActivityFactory factory)
