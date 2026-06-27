@@ -98,6 +98,34 @@ export interface RepositoryFile extends RepositoryFileSummary {
   content?: string | null;
 }
 
+export interface SourceControlFileStatus {
+  path: string;
+  status: string;
+  isStaged: boolean;
+  isUnstaged: boolean;
+}
+
+export interface SourceControlStatus {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  changedFiles: SourceControlFileStatus[];
+  stagedFiles: SourceControlFileStatus[];
+  unstagedFiles: SourceControlFileStatus[];
+}
+
+export interface SourceControlDiff {
+  path: string;
+  isStaged: boolean;
+  patch: string;
+}
+
+export interface SourceControlCommitResult {
+  commitId: string;
+  message: string;
+  status: SourceControlStatus;
+}
+
 export interface BuildRequest {
   projectId?: string;
   revision?: string | null;
@@ -302,6 +330,31 @@ export async function moveRepositoryFile(context: StudioEndpointContext, workspa
 
 export async function deleteRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
   return requestJson(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, { method: "DELETE" });
+}
+
+export async function getSourceControlStatus(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeSourceControlStatus(await context.http.getJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/status`));
+}
+
+export async function getSourceControlDiff(context: StudioEndpointContext, workspaceId: string, path: string, staged = false) {
+  const query = staged ? "?staged=true" : "";
+  return normalizeSourceControlDiff(await context.http.getJson<RawSourceControlDiff>(`${workspaceRoot(workspaceId)}/source-control/diff/${filePath(path)}${query}`));
+}
+
+export async function stageRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/stage`, { path }));
+}
+
+export async function unstageRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/unstage`, { path }));
+}
+
+export async function stageAllRepositoryChanges(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/stage-all`, {}));
+}
+
+export async function commitRepositoryChanges(context: StudioEndpointContext, workspaceId: string, message: string) {
+  return normalizeSourceControlCommitResult(await context.http.postJson<RawSourceControlCommitResult>(`${workspaceRoot(workspaceId)}/source-control/commit`, { message }));
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -525,6 +578,42 @@ function normalizeRepositoryFile(file: RawRepositoryFile): RepositoryFile {
   return {
     ...normalizeRepositoryFileSummary(file),
     content: file.content
+  };
+}
+
+function normalizeSourceControlStatus(status: RawSourceControlStatus): SourceControlStatus {
+  return {
+    workspaceId: status.workspaceId,
+    activeBranch: status.activeBranch,
+    isDirty: status.isDirty ?? false,
+    changedFiles: (status.changedFiles ?? []).map(normalizeSourceControlFileStatus),
+    stagedFiles: (status.stagedFiles ?? []).map(normalizeSourceControlFileStatus),
+    unstagedFiles: (status.unstagedFiles ?? []).map(normalizeSourceControlFileStatus)
+  };
+}
+
+function normalizeSourceControlFileStatus(status: RawSourceControlFileStatus): SourceControlFileStatus {
+  return {
+    path: status.path,
+    status: status.status ?? "",
+    isStaged: status.isStaged ?? false,
+    isUnstaged: status.isUnstaged ?? false
+  };
+}
+
+function normalizeSourceControlDiff(diff: RawSourceControlDiff): SourceControlDiff {
+  return {
+    path: diff.path,
+    isStaged: diff.isStaged ?? false,
+    patch: diff.patch ?? ""
+  };
+}
+
+function normalizeSourceControlCommitResult(result: RawSourceControlCommitResult): SourceControlCommitResult {
+  return {
+    commitId: result.commitId,
+    message: result.message,
+    status: normalizeSourceControlStatus(result.status)
   };
 }
 
@@ -759,6 +848,34 @@ interface RawRepositoryFileSummary {
 
 interface RawRepositoryFile extends RawRepositoryFileSummary {
   content?: string | null;
+}
+
+interface RawSourceControlFileStatus {
+  path: string;
+  status?: string | null;
+  isStaged?: boolean | null;
+  isUnstaged?: boolean | null;
+}
+
+interface RawSourceControlStatus {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  changedFiles?: RawSourceControlFileStatus[];
+  stagedFiles?: RawSourceControlFileStatus[];
+  unstagedFiles?: RawSourceControlFileStatus[];
+}
+
+interface RawSourceControlDiff {
+  path: string;
+  isStaged?: boolean | null;
+  patch?: string | null;
+}
+
+interface RawSourceControlCommitResult {
+  commitId: string;
+  message: string;
+  status: RawSourceControlStatus;
 }
 
 interface RawBuildResult {

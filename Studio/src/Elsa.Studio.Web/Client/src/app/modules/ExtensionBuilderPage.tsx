@@ -31,21 +31,29 @@ import {
   type BuildArtifact,
   type BuildDiagnostic,
   type BuildResult,
+  commitRepositoryChanges,
   type ExtensionBuilderCapabilities,
   type ExtensionProject,
   type ExtensionRepositorySummary,
   type ExtensionRuntimeStatus,
   type ExtensionTemplate,
   type ExtensionWorkspace,
+  getSourceControlDiff,
+  getSourceControlStatus,
   type PackagePromotionResult,
   type RepositoryFileSummary,
   type RepositorySolutionSummary,
-  type RuntimeVersion
+  type RuntimeVersion,
+  type SourceControlDiff,
+  type SourceControlStatus,
+  stageAllRepositoryChanges,
+  stageRepositoryFile,
+  unstageRepositoryFile
 } from "./extensionBuilderApi";
 import { getErrorMessage } from "./moduleManagementApi";
 
 type BuilderState = "loading" | "ready" | "failed";
-type InspectorTab = "build" | "promote" | "runtime";
+type InspectorTab = "build" | "source" | "promote" | "runtime";
 
 interface ProjectDraft {
   name: string;
@@ -62,6 +70,7 @@ interface EditorTab {
 
 const inspectorTabs = [
   { id: "build", label: "Build" },
+  { id: "source", label: "Source" },
   { id: "promote", label: "Promote" },
   { id: "runtime", label: "Runtime" }
 ];
@@ -88,6 +97,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [buildLog, setBuildLog] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState<ExtensionRuntimeStatus | null>(null);
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
+  const [sourceControlStatus, setSourceControlStatus] = useState<SourceControlStatus | null>(null);
+  const [sourceControlDiff, setSourceControlDiff] = useState<SourceControlDiff | null>(null);
+  const [commitMessage, setCommitMessage] = useState("");
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
   const [serverLocalPath, setServerLocalPath] = useState("");
@@ -174,6 +186,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setSolutions([]);
       setSelectedSolutionPath("");
       setEditorTabs([]);
+      setSourceControlStatus(null);
+      setSourceControlDiff(null);
+      setCommitMessage("");
       setActiveFilePath("");
       setEditorText("");
       setSavedEditorText("");
@@ -193,6 +208,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       runtimeStatusRequestId.current += 1;
       setRuntimeStatus(null);
       void loadRepositoryTree(selectedWorkspace.id, selectedSolutionPath || null);
+      void loadSourceControlStatus(selectedWorkspace.id);
       return;
     }
 
@@ -278,20 +294,37 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function loadSourceControlStatus(workspaceId: string) {
+    try {
+      const gitStatus = await getSourceControlStatus(context, workspaceId);
+      if (!mounted.current || selectedIds.current.workspaceId !== workspaceId) return null;
+      setSourceControlStatus(gitStatus);
+      if (sourceControlDiff && !gitStatus.changedFiles.some(file => file.path === sourceControlDiff.path)) {
+        setSourceControlDiff(null);
+      }
+      return gitStatus;
+    } catch (e) {
+      if (selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      return null;
+    }
+  }
+
   async function loadProjectDetails(workspaceId: string, projectId: string, solutionPath?: string | null) {
     const requestId = ++projectDetailsRequestId.current;
     const runtimeRequestId = ++runtimeStatusRequestId.current;
     setError(null);
     try {
-      const [project, repositoryTree, runtime] = await Promise.all([
+      const [project, repositoryTree, gitStatus, runtime] = await Promise.all([
         getProject(context, workspaceId, projectId),
         getRepositoryTree(context, workspaceId, solutionPath),
+        getSourceControlStatus(context, workspaceId),
         getRuntimeStatus(context, workspaceId, projectId).catch(() => null)
       ]);
       if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
       setWorkspaces(current => patchProject(current, workspaceId, project));
       setSolutions(repositoryTree.solutions);
       setFiles(repositoryTree.entries);
+      setSourceControlStatus(gitStatus);
       const selected = repositoryTree.solutions.find(solution => solution.isSelected)?.path ?? "";
       const nextSelectedSolutionPath = repositoryTree.solutions.length > 1 ? selected : "";
       if (nextSelectedSolutionPath !== selectedSolutionPath) setSelectedSolutionPath(nextSelectedSolutionPath);
@@ -504,6 +537,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (workingCopy) {
       setWorkingBranchName(workingCopy.branchName);
       await refreshWorkspacesSafely({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
     }
   }
 
@@ -522,6 +557,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content, savedContent: content }));
       clearSourceDependentState();
       await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
       const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     }
@@ -541,6 +577,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content: "", savedContent: "" }));
       clearSourceDependentState();
       await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      await loadSourceControlStatus(workspaceId);
       const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
       await openFile(workspaceId, saved.path);
@@ -556,6 +593,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     setEditorTabs(current => current.filter(tab => tab.path !== path));
     clearSourceDependentState();
     await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    await loadSourceControlStatus(workspaceId);
     const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
     if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     if (path === activeFilePath) {
@@ -582,6 +620,62 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
     clearSourceDependentState();
     await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    await loadSourceControlStatus(workspaceId);
+  }
+
+  async function handleSelectSourceDiff(path: string, staged: boolean) {
+    if (!selectedWorkspace) return;
+    const diff = await runOperation(() => getSourceControlDiff(context, selectedWorkspace.id, path, staged), `Loaded diff for ${path}.`);
+    if (diff && selectedIds.current.workspaceId === selectedWorkspace.id) {
+      setSourceControlDiff(diff);
+      setActiveInspectorTab("source");
+    }
+  }
+
+  async function handleStageFile(path: string) {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => stageRepositoryFile(context, workspaceId, path), `Staged ${path}.`);
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleUnstageFile(path: string) {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => unstageRepositoryFile(context, workspaceId, path), `Unstaged ${path}.`);
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleStageAll() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const gitStatus = await runOperation(() => stageAllRepositoryChanges(context, workspaceId), "Staged all changes.");
+    if (gitStatus && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(gitStatus);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handleCommitChanges() {
+    if (!selectedWorkspace || !commitMessage.trim()) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => commitRepositoryChanges(context, workspaceId, commitMessage.trim()), "Committed staged changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      setCommitMessage("");
+      await refreshWorkspaces({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    }
   }
 
   async function handleSubmitBuild() {
@@ -841,6 +935,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           activeBuild={activeBuild}
           buildHistory={buildHistory}
           buildLog={buildLog}
+          sourceControlStatus={sourceControlStatus}
+          sourceControlDiff={sourceControlDiff}
+          commitMessage={commitMessage}
           artifact={latestArtifact}
           promotionResult={promotionResult}
           runtimeStatus={runtimeStatus}
@@ -851,6 +948,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
             setActiveInspectorTab("build");
             if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id, build.revision);
           }}
+          onSelectSourceDiff={handleSelectSourceDiff}
+          onStageFile={handleStageFile}
+          onUnstageFile={handleUnstageFile}
+          onStageAll={handleStageAll}
+          onCommitMessageChange={setCommitMessage}
+          onCommit={handleCommitChanges}
           onPromote={handlePromote}
           onRefreshRuntime={() => refreshRuntimeStatus()}
           onRetryReconciliation={handleRetryReconciliation}
@@ -1249,12 +1352,21 @@ function BuildRuntimeInspector({
   activeBuild,
   buildHistory,
   buildLog,
+  sourceControlStatus,
+  sourceControlDiff,
+  commitMessage,
   artifact,
   promotionResult,
   runtimeStatus,
   busy,
   canPromote,
   onSelectBuild,
+  onSelectSourceDiff,
+  onStageFile,
+  onUnstageFile,
+  onStageAll,
+  onCommitMessageChange,
+  onCommit,
   onPromote,
   onRefreshRuntime,
   onRetryReconciliation,
@@ -1268,12 +1380,21 @@ function BuildRuntimeInspector({
   activeBuild: BuildResult | null;
   buildHistory: BuildResult[];
   buildLog: string;
+  sourceControlStatus: SourceControlStatus | null;
+  sourceControlDiff: SourceControlDiff | null;
+  commitMessage: string;
   artifact: BuildArtifact | null;
   promotionResult: PackagePromotionResult | null;
   runtimeStatus: ExtensionRuntimeStatus | null;
   busy: boolean;
   canPromote: boolean;
   onSelectBuild(build: BuildResult): void;
+  onSelectSourceDiff(path: string, staged: boolean): void;
+  onStageFile(path: string): void;
+  onUnstageFile(path: string): void;
+  onStageAll(): void;
+  onCommitMessageChange(value: string): void;
+  onCommit(): void;
   onPromote(): void;
   onRefreshRuntime(): void;
   onRetryReconciliation(): void;
@@ -1298,6 +1419,21 @@ function BuildRuntimeInspector({
           buildLog={buildLog}
           onSelectBuild={onSelectBuild}
           onDiagnosticSelect={onDiagnosticSelect}
+        />
+      ) : null}
+
+      {activeTab === "source" ? (
+        <SourceControlPanel
+          status={sourceControlStatus}
+          diff={sourceControlDiff}
+          commitMessage={commitMessage}
+          busy={busy}
+          onSelectDiff={onSelectSourceDiff}
+          onStageFile={onStageFile}
+          onUnstageFile={onUnstageFile}
+          onStageAll={onStageAll}
+          onCommitMessageChange={onCommitMessageChange}
+          onCommit={onCommit}
         />
       ) : null}
 
@@ -1377,6 +1513,130 @@ function BuildPanel({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SourceControlPanel({
+  status,
+  diff,
+  commitMessage,
+  busy,
+  onSelectDiff,
+  onStageFile,
+  onUnstageFile,
+  onStageAll,
+  onCommitMessageChange,
+  onCommit
+}: {
+  status: SourceControlStatus | null;
+  diff: SourceControlDiff | null;
+  commitMessage: string;
+  busy: boolean;
+  onSelectDiff(path: string, staged: boolean): void;
+  onStageFile(path: string): void;
+  onUnstageFile(path: string): void;
+  onStageAll(): void;
+  onCommitMessageChange(value: string): void;
+  onCommit(): void;
+}) {
+  const stagedFiles = status?.stagedFiles ?? [];
+  const unstagedFiles = status?.unstagedFiles ?? [];
+  return (
+    <div className="extension-builder-source-control">
+      <div className="modules-inspector-section">
+        <h4>Working copy</h4>
+        <p><code>{status?.activeBranch ?? "No branch"}</code></p>
+        <StatusChip tone={status?.isDirty ? "warning" : "success"}>{status?.isDirty ? "dirty" : "clean"}</StatusChip>
+      </div>
+
+      <div className="extension-builder-source-actions">
+        <button type="button" className="studio-button" disabled={busy || unstagedFiles.length === 0} onClick={onStageAll}>
+          <Save size={14} />
+          Stage all
+        </button>
+      </div>
+
+      <SourceControlFileList
+        title="Staged"
+        files={stagedFiles}
+        empty="No staged changes."
+        busy={busy}
+        actionLabel="Unstage"
+        onAction={onUnstageFile}
+        onDiff={path => onSelectDiff(path, true)}
+      />
+
+      <SourceControlFileList
+        title="Unstaged"
+        files={unstagedFiles}
+        empty="No unstaged changes."
+        busy={busy}
+        actionLabel="Stage"
+        onAction={onStageFile}
+        onDiff={path => onSelectDiff(path, false)}
+      />
+
+      <div className="modules-inspector-section">
+        <h4>Commit</h4>
+        <textarea
+          aria-label="Commit message"
+          className="extension-builder-commit-message"
+          value={commitMessage}
+          disabled={busy}
+          onChange={event => onCommitMessageChange(event.target.value)}
+        />
+        <button type="button" className="studio-button" disabled={busy || stagedFiles.length === 0 || !commitMessage.trim()} onClick={onCommit}>
+          <GitBranch size={14} />
+          Commit staged
+        </button>
+      </div>
+
+      <div className="modules-inspector-section">
+        <h4>Diff</h4>
+        {diff ? (
+          <>
+            <p><code>{diff.path}</code>{diff.isStaged ? " staged" : ""}</p>
+            <pre className="extension-builder-diff">{diff.patch || "No diff available."}</pre>
+          </>
+        ) : (
+          <p className="modules-muted">Select a changed file to inspect its diff.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SourceControlFileList({
+  title,
+  files,
+  empty,
+  busy,
+  actionLabel,
+  onAction,
+  onDiff
+}: {
+  title: string;
+  files: SourceControlStatus["changedFiles"];
+  empty: string;
+  busy: boolean;
+  actionLabel: string;
+  onAction(path: string): void;
+  onDiff(path: string): void;
+}) {
+  return (
+    <div className="modules-inspector-section extension-builder-source-list">
+      <h4>{title}</h4>
+      {files.length === 0 ? <p className="modules-muted">{empty}</p> : null}
+      {files.map(file => (
+        <div key={`${title}-${file.path}`} className="extension-builder-source-row">
+          <button type="button" onClick={() => onDiff(file.path)}>
+            <code>{file.path}</code>
+            <StatusChip tone="neutral">{file.status || "changed"}</StatusChip>
+          </button>
+          <button type="button" className="studio-button" disabled={busy} onClick={() => onAction(file.path)}>{actionLabel}</button>
+        </div>
+      ))}
     </div>
   );
 }
