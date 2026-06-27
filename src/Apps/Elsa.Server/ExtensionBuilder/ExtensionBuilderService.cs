@@ -15,6 +15,11 @@ internal interface IExtensionBuilderService
     Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(ExtensionBuilderCaller caller, string workspaceId, string? sessionId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default);
+    Task<RepositoryTree?> GetRepositoryTreeAsync(ExtensionBuilderCaller caller, string workspaceId, string? selectedSolutionPath, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> ReadRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
+    Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -67,6 +72,21 @@ internal sealed class ExtensionBuilderService(
 
     public Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(ExtensionBuilderCaller caller, string workspaceId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default) =>
         storage.SelectWorkingCopyAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<RepositoryTree?> GetRepositoryTreeAsync(ExtensionBuilderCaller caller, string workspaceId, string? selectedSolutionPath, CancellationToken cancellationToken = default) =>
+        storage.GetRepositoryTreeAsync(workspaceId, caller.OwnerId, selectedSolutionPath, cancellationToken);
+
+    public Task<RepositoryFile?> ReadRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default) =>
+        storage.ReadRepositoryFileAsync(workspaceId, caller.OwnerId, path, cancellationToken);
+
+    public Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default) =>
+        storage.WriteRepositoryFileAsync(workspaceId, caller.OwnerId, path, request.Content, cancellationToken);
+
+    public Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default) =>
+        storage.MoveRepositoryFileAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default) =>
+        storage.DeleteRepositoryFileAsync(workspaceId, caller.OwnerId, path, cancellationToken);
 
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
