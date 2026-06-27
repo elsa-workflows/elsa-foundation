@@ -14,6 +14,8 @@ internal interface IExtensionBuilderStorage
     Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(string workspaceId, string ownerId, string? sessionId, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(string workspaceId, string ownerId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default);
@@ -155,9 +157,89 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             foreach (var projectId in workspace.ProjectIds)
                 RemoveProjectAuthoringState(state, projectId);
             state.Workspaces.Remove(workspace.Id);
+            foreach (var workingCopyId in state.WorkingCopies.Values
+                         .Where(x => string.Equals(x.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase))
+                         .Select(x => x.Id)
+                         .ToArray())
+            {
+                state.WorkingCopies.Remove(workingCopyId);
+            }
             DeleteDirectoryIfExists(GetWorkspacePath(workspace.Id));
             await SaveStateAsync(state, cancellationToken);
             return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(string workspaceId, string ownerId, string? sessionId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out _))
+                return null;
+
+            var repositoryState = GetRepositoryState(GetWorkspacePath(workspaceId));
+            return state.WorkingCopies.Values
+                .Where(x => string.Equals(x.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal) &&
+                            (string.IsNullOrWhiteSpace(sessionId) || string.Equals(x.SessionId, sessionId, StringComparison.Ordinal)))
+                .Select(x => ToWorkingCopySummary(x, repositoryState))
+                .OrderByDescending(x => x.IsActive)
+                .ThenBy(x => x.BranchName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(string workspaceId, string ownerId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default)
+    {
+        var sessionId = NormalizeSessionId(request.SessionId);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var branchName = NormalizeBranchName(request.BranchName, ownerId, sessionId);
+            var protectedBranch = IsProtectedBranch(branchName);
+            if (protectedBranch && !request.AllowProtectedBranchEdit)
+                throw new InvalidOperationException($"Editing '{branchName}' requires explicit confirmation because it is a protected or common default branch.");
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            await SwitchRepositoryBranchAsync(repositoryPath, branchName, cancellationToken);
+
+            var now = DateTimeOffset.UtcNow;
+            var existing = state.WorkingCopies.Values.FirstOrDefault(x =>
+                string.Equals(x.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal) &&
+                string.Equals(x.SessionId, sessionId, StringComparison.Ordinal) &&
+                string.Equals(x.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+            var activeIds = state.WorkingCopies.Values
+                .Where(x => string.Equals(x.WorkspaceId, workspace.Id, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal) &&
+                            string.Equals(x.SessionId, sessionId, StringComparison.Ordinal))
+                .Select(x => x.Id)
+                .ToArray();
+            foreach (var id in activeIds)
+                state.WorkingCopies[id] = state.WorkingCopies[id] with { IsActive = false };
+
+            var workingCopy = existing is null
+                ? new WorkingCopyState(CreateId("wc"), workspace.Id, ownerId, sessionId, branchName, true, protectedBranch, now, now)
+                : existing with { IsActive = true, IsProtectedBranch = protectedBranch, UpdatedAt = now };
+            state.WorkingCopies[workingCopy.Id] = workingCopy;
+            state.Workspaces[workspace.Id] = workspace with { UpdatedAt = now };
+            await SaveStateAsync(state, cancellationToken);
+            return ToWorkingCopySummary(workingCopy, GetRepositoryState(repositoryPath));
         }
         finally
         {
@@ -671,6 +753,19 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             workspace.UpdatedAt);
     }
 
+    private static ExtensionWorkingCopySummary ToWorkingCopySummary(WorkingCopyState workingCopy, RepositoryState repositoryState) =>
+        new(
+            workingCopy.Id,
+            workingCopy.WorkspaceId,
+            workingCopy.OwnerId,
+            workingCopy.SessionId,
+            workingCopy.BranchName,
+            workingCopy.IsActive,
+            workingCopy.IsProtectedBranch,
+            string.Equals(repositoryState.ActiveBranch, workingCopy.BranchName, StringComparison.OrdinalIgnoreCase) && repositoryState.IsDirty,
+            workingCopy.CreatedAt,
+            workingCopy.UpdatedAt);
+
     private async Task InitializeManagedRepositoryAsync(string repositoryPath, string displayName, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(repositoryPath);
@@ -706,6 +801,57 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             !string.IsNullOrWhiteSpace(status),
             string.IsNullOrWhiteSpace(remotes) ? "not-connected" : "connected");
     }
+
+    private async Task SwitchRepositoryBranchAsync(string repositoryPath, string branchName, CancellationToken cancellationToken)
+    {
+        var existingBranches = RunGitOrDefault(repositoryPath, "branch", "--list", branchName);
+        if (string.IsNullOrWhiteSpace(existingBranches))
+            await RunGitAsync(repositoryPath, cancellationToken, "switch", "-c", branchName);
+        else
+            await RunGitAsync(repositoryPath, cancellationToken, "switch", branchName);
+    }
+
+    private static string NormalizeSessionId(string sessionId)
+    {
+        var normalized = NormalizeToken(sessionId, "session id");
+        return normalized.Length > 80 ? normalized[..80] : normalized;
+    }
+
+    private static string NormalizeBranchName(string? branchName, string ownerId, string sessionId)
+    {
+        var normalized = string.IsNullOrWhiteSpace(branchName)
+            ? $"extension-builder/{NormalizeToken(ownerId, "owner id")}-{sessionId}"
+            : branchName.Trim();
+        if (normalized.Length > 120 ||
+            normalized.StartsWith("-", StringComparison.Ordinal) ||
+            normalized.StartsWith("/", StringComparison.Ordinal) ||
+            normalized.EndsWith("/", StringComparison.Ordinal) ||
+            normalized.Contains("..", StringComparison.Ordinal) ||
+            normalized.Any(char.IsWhiteSpace) ||
+            normalized.Any(c => char.IsControl(c) || c is '~' or '^' or ':' or '?' or '*' or '[' or '\\'))
+            throw new ArgumentException("A safe Git branch name is required.", nameof(branchName));
+
+        return normalized;
+    }
+
+    private static string NormalizeToken(string value, string name)
+    {
+        var normalized = (value ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException($"A {name} is required.", name);
+
+        var safe = new string(normalized
+            .Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-')
+            .ToArray()).Trim('-', '.');
+        if (string.IsNullOrWhiteSpace(safe))
+            throw new ArgumentException($"A safe {name} is required.", name);
+
+        return safe;
+    }
+
+    private static bool IsProtectedBranch(string branchName) =>
+        branchName.Equals("main", StringComparison.OrdinalIgnoreCase) ||
+        branchName.Equals("master", StringComparison.OrdinalIgnoreCase);
 
     private async Task RunGitAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
     {
@@ -907,6 +1053,17 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
     private sealed record RepositoryState(string? ActiveBranch, bool IsDirty, string RemoteState);
 
+    private sealed record WorkingCopyState(
+        string Id,
+        string WorkspaceId,
+        string OwnerId,
+        string SessionId,
+        string BranchName,
+        bool IsActive,
+        bool IsProtectedBranch,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt);
+
     private sealed record ProcessResult(int ExitCode, string Output, string Error);
 
     private sealed class ExtensionBuilderState
@@ -916,5 +1073,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         public Dictionary<string, BuildResult> Builds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, PackagePromotionRecord[]> Promotions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> ActiveVersions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, WorkingCopyState> WorkingCopies { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 }

@@ -29,6 +29,8 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapGet("/workspaces", ListWorkspacesAsync);
         trusted.MapGet("/workspaces/{workspaceId}", GetWorkspaceAsync);
         trusted.MapDelete("/workspaces/{workspaceId}", DeleteWorkspaceAsync);
+        trusted.MapGet("/workspaces/{workspaceId}/working-copies", ListWorkingCopiesAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/working-copies/select", SelectWorkingCopyAsync);
         trusted.MapPost("/workspaces/{workspaceId}/projects", CreateProjectAsync);
         trusted.MapGet("/projects/{projectId}", GetProjectAsync);
         trusted.MapDelete("/projects/{projectId}", DeleteProjectAsync);
@@ -83,6 +85,35 @@ internal static class ElsaExtensionBuilderApi
         await service.DeleteWorkspaceAsync(GetCaller(httpContext), workspaceId, cancellationToken)
             ? Results.Ok(new ExtensionBuilderDeleteResponse(true, "Workspace authoring state deleted. Promoted packages are unchanged."))
             : Results.NotFound(new ExtensionBuilderErrorResponse($"Workspace '{workspaceId}' was not found."));
+
+    private static async Task<IResult> ListWorkingCopiesAsync(
+        string workspaceId,
+        [FromQuery] string? sessionId,
+        HttpContext httpContext,
+        [FromServices] IExtensionBuilderService service,
+        CancellationToken cancellationToken) =>
+        ToFoundResult(await service.ListWorkingCopiesAsync(GetCaller(httpContext), workspaceId, sessionId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+
+    private static async Task<IResult> SelectWorkingCopyAsync(
+        string workspaceId,
+        HttpContext httpContext,
+        SelectWorkingCopyRequest request,
+        [FromServices] IExtensionBuilderService service,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.SelectWorkingCopyAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
 
     private static async Task<IResult> CreateProjectAsync(
         string workspaceId,

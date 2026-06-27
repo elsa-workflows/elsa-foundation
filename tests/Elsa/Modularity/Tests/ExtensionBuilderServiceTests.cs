@@ -105,6 +105,75 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SelectWorkingCopyCreatesExplicitSessionBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+
+        var workingCopy = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", null, false));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.Equal("extension-builder/owner-1-session-1", workingCopy!.BranchName);
+        Assert.True(workingCopy.IsActive);
+        Assert.False(workingCopy.IsProtectedBranch);
+        Assert.Equal(workingCopy.BranchName, Assert.Single(repositories).ActiveBranch);
+        Assert.Equal(workingCopy.BranchName, await GitAsync(repositoryPath, "branch", "--show-current"));
+    }
+
+    [Fact]
+    public async Task WorkingCopiesAreScopedByOwnerSessionAndBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/one", false));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-2", "feature/two", false));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/three", false));
+
+        var sessionOneCopies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-1");
+        var sessionTwoCopies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-2");
+        var sessionOne = sessionOneCopies!;
+
+        Assert.Equal(new[] { "feature/three", "feature/one" }, sessionOne.Select(x => x.BranchName).ToArray());
+        Assert.True(sessionOne.Single(x => x.BranchName == "feature/three").IsActive);
+        Assert.False(sessionOne.Single(x => x.BranchName == "feature/one").IsActive);
+        Assert.Equal("feature/two", Assert.Single(sessionTwoCopies!).BranchName);
+        Assert.Null(await service.ListWorkingCopiesAsync(_caller with { OwnerId = "other" }, workspace.Id, null));
+    }
+
+    [Fact]
+    public async Task WorkingCopySelectionReportsDirtyStateForActiveBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var workingCopy = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/dirty", false));
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "src", "Dirty.cs"), "namespace Dirty;");
+
+        var copies = await service.ListWorkingCopiesAsync(_caller, workspace.Id, "session-1");
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.True(Assert.Single(copies!).IsDirty);
+        Assert.True(Assert.Single(repositories).IsDirty);
+        Assert.Equal(workingCopy!.BranchName, Assert.Single(repositories).ActiveBranch);
+    }
+
+    [Fact]
+    public async Task SelectWorkingCopyRequiresExplicitConfirmationForDefaultBranch()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        var denied = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "main", false)));
+        var allowed = await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "main", true));
+
+        Assert.Contains("requires explicit confirmation", denied.Message);
+        Assert.True(allowed!.IsProtectedBranch);
+        Assert.Equal("main", allowed.BranchName);
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();
