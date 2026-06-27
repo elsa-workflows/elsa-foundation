@@ -1,5 +1,11 @@
-import type { ChangeEvent } from "react";
+import { lazy, Suspense } from "react";
 import type { StudioCodeDiagnostic, StudioCodeEditorProps } from "./types";
+import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
+import { getBuiltInLanguageAdapter } from "./languages/builtInLanguageAdapters";
+
+const RichCodeEditor = lazy(() => import("./engines/CodeMirrorStudioCodeEditor").then(module => ({
+  default: module.CodeMirrorStudioCodeEditor
+})));
 
 export function StudioCodeEditor({
   document,
@@ -12,12 +18,9 @@ export function StudioCodeEditor({
   onChange
 }: StudioCodeEditorProps) {
   const visibleDiagnostics = diagnostics.filter(diagnostic => !diagnostic.uri || diagnostic.uri === document.uri);
-  const languageLabel = languageAdapter?.displayName ?? document.language;
-
-  const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    if (readOnly) return;
-    onChange({ ...document, value: event.target.value });
-  };
+  const resolvedLanguageAdapter = languageAdapter ?? getBuiltInLanguageAdapter(document.language);
+  const languageLabel = resolvedLanguageAdapter?.displayName ?? document.language;
+  const useRichEditor = supportsRichEditor(document.language);
 
   return (
     <section
@@ -30,21 +33,42 @@ export function StudioCodeEditor({
         <span>{languageLabel}</span>
         <code>{document.uri}</code>
       </div>
-      <textarea
-        aria-label={ariaLabel}
-        aria-readonly={readOnly}
-        className="studio-code-editor-input"
-        readOnly={readOnly}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        value={document.value}
-        style={{ minHeight }}
-        onChange={handleChange}
-      />
+      {useRichEditor ? (
+        <Suspense fallback={
+          <FallbackCodeEditor
+            document={document}
+            readOnly={readOnly}
+            minHeight={minHeight}
+            ariaLabel={ariaLabel}
+            onChange={onChange}
+          />
+        }>
+          <RichCodeEditor
+            document={document}
+            readOnly={readOnly}
+            theme={theme}
+            minHeight={minHeight}
+            ariaLabel={ariaLabel}
+            onChange={onChange}
+          />
+        </Suspense>
+      ) : (
+        <FallbackCodeEditor
+          document={document}
+          readOnly={readOnly}
+          minHeight={minHeight}
+          ariaLabel={ariaLabel}
+          onChange={onChange}
+        />
+      )}
       <StudioCodeDiagnostics diagnostics={visibleDiagnostics} />
     </section>
   );
+}
+
+function supportsRichEditor(language: string) {
+  const normalized = language.trim().toLowerCase();
+  return normalized === "javascript" || normalized === "typescript";
 }
 
 function StudioCodeDiagnostics({ diagnostics }: { diagnostics: StudioCodeDiagnostic[] }) {

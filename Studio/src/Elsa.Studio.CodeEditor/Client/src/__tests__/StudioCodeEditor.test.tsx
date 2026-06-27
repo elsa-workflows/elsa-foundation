@@ -5,25 +5,26 @@ import { StudioCodeEditor } from "../StudioCodeEditor";
 import type { StudioCodeDocument, StudioCodeEditorProps } from "../types";
 
 describe("StudioCodeEditor", () => {
-  it("renders a single document and emits document changes", () => {
-    const document = codeDocument({ value: "return 1;" });
+  it("renders the fallback editor for unsupported languages and emits document changes", () => {
+    const document = codeDocument({ language: "liquid", value: "{{ total }}" });
     const onChange = vi.fn();
     const { container, unmount } = renderEditor({ document, onChange });
 
     const textarea = editorInput(container);
-    expect(textarea.value).toBe("return 1;");
+    expect(textarea.value).toBe("{{ total }}");
     expect(textarea.getAttribute("aria-label")).toBe("Global JavaScript function");
-    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-language")).toBe("javascript");
+    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-language")).toBe("liquid");
 
-    fill(textarea, "return 2;");
+    fill(textarea, "{{ subtotal }}");
 
-    expect(onChange).toHaveBeenCalledWith({ ...document, value: "return 2;" });
+    expect(onChange).toHaveBeenCalledWith({ ...document, value: "{{ subtotal }}" });
+    expect(container.querySelector(".studio-code-editor-rich")).toBeNull();
     unmount();
   });
 
   it("keeps readonly documents selectable without emitting changes", () => {
     const onChange = vi.fn();
-    const { container, unmount } = renderEditor({ readOnly: true, onChange });
+    const { container, unmount } = renderEditor({ document: codeDocument({ language: "liquid" }), readOnly: true, onChange });
     const textarea = editorInput(container);
 
     expect(textarea.readOnly).toBe(true);
@@ -37,15 +38,15 @@ describe("StudioCodeEditor", () => {
 
   it("renders only diagnostics for the active document", () => {
     const { container, unmount } = renderEditor({
-      document: codeDocument({ uri: "elsa://functions/tax.js" }),
+      document: codeDocument({ uri: "elsa://functions/tax.liquid", language: "liquid" }),
       diagnostics: [
-        { uri: "elsa://functions/tax.js", severity: "warning", code: "JS001", message: "Check this expression.", startLineNumber: 2, startColumn: 4 },
-        { uri: "elsa://functions/other.js", severity: "error", code: "JS999", message: "Wrong document." },
+        { uri: "elsa://functions/tax.liquid", severity: "warning", code: "LQ001", message: "Check this expression.", startLineNumber: 2, startColumn: 4 },
+        { uri: "elsa://functions/other.liquid", severity: "error", code: "LQ999", message: "Wrong document." },
         { severity: "info", message: "General editor hint." }
       ]
     });
 
-    expect(container.textContent).toContain("JS001");
+    expect(container.textContent).toContain("LQ001");
     expect(container.textContent).toContain("2:4");
     expect(container.textContent).toContain("Check this expression.");
     expect(container.textContent).toContain("General editor hint.");
@@ -65,6 +66,22 @@ describe("StudioCodeEditor", () => {
 
     expect(container.querySelector(".studio-code-editor-header")?.textContent).toContain("Liquid");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-language")).toBe("liquid");
+    unmount();
+  });
+
+  it("lazy-loads the rich editor for JavaScript documents", async () => {
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ language: "javascript", value: "return total;" }),
+      theme: "dark"
+    });
+
+    expect(editorInput(container).value).toBe("return total;");
+    await waitFor(() => !!container.querySelector(".studio-code-editor-rich"));
+
+    expect(container.querySelector(".studio-code-editor-rich")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Global JavaScript function']")).toBeTruthy();
+    expect(container.querySelector(".studio-code-editor-header")?.textContent).toContain("JavaScript");
+    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-theme")).toBe("dark");
     unmount();
   });
 });
@@ -109,4 +126,13 @@ function codeDocument(overrides: Partial<StudioCodeDocument> = {}): StudioCodeDo
     value: "return total;",
     ...overrides
   };
+}
+
+async function waitFor(predicate: () => boolean) {
+  for (let i = 0; i < 200; i++) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+    flushSync(() => {});
+  }
+  throw new Error("Timed out waiting for predicate.");
 }
