@@ -111,6 +111,26 @@ public sealed class WorkflowAgentTests
     }
 
     [Fact]
+    public async Task Deterministic_workflow_provider_can_return_structured_clarification_results()
+    {
+        var provider = new DeterministicWorkflowAgentProvider();
+
+        var events = await CollectAsync(provider.SendMessageAsync(new(
+            "session-1",
+            "This workflow request is ambiguous; ask a question.",
+            [CreateWorkflowContext()])));
+
+        var clarificationEvent = Assert.Single(events, x => x.ResultKind == AgentResultKind.Clarification);
+        Assert.Equal(AgentStreamEventKind.ClarificationRequested, clarificationEvent.Kind);
+        var clarification = Assert.IsType<WorkflowClarificationResult>(clarificationEvent.Payload);
+        Assert.Equal("Which workflow branch should Weaver update?", clarification.Question);
+        Assert.Equal("session-1:clarification:workflow-target", clarification.ContinuationToken);
+        Assert.Equal("wf-1", clarification.Metadata["workflowDefinitionId"]);
+        Assert.Contains(clarification.Options, x => x.Id == "active-draft" && x.Value == "active-draft");
+        Assert.Equal(AgentStreamEventKind.Completed, events.Last().Kind);
+    }
+
+    [Fact]
     public async Task Streaming_service_preserves_deterministic_workflow_graph_operation_batch_payload()
     {
         using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
@@ -141,6 +161,46 @@ public sealed class WorkflowAgentTests
         Assert.Equal("wf-1", batch.WorkflowDefinitionId);
         Assert.Equal("rev-1", batch.BaseRevision);
         Assert.Single(events.Where(x => x.Kind == AgentStreamEventKind.WorkflowGraphOperationBatchCreated));
+    }
+
+    [Fact]
+    public async Task Streaming_service_continues_same_session_after_structured_clarification()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var sessions = provider.GetRequiredService<IAgentSessionService>();
+        var streaming = provider.GetRequiredService<IAgentStreamingService>();
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            DeterministicWorkflowAgentProvider.Id,
+            "workflow-authoring",
+            "Workflow authoring",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Ambiguous workflow request; clarify first.",
+            AgentMessageStatus.Pending,
+            "workflow.propose-change",
+            ["ctx-1"],
+            [CreateWorkflowContext()]));
+
+        var clarificationEvents = await CollectAsync(streaming.StreamAsync(session.Id));
+        var clarification = Assert.IsType<WorkflowClarificationResult>(Assert.Single(clarificationEvents, x => x.ResultKind == AgentResultKind.Clarification).Payload);
+        Assert.StartsWith(session.Id, clarification.ContinuationToken, StringComparison.Ordinal);
+
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Use the active draft and create workflow graph operation batch.",
+            AgentMessageStatus.Pending,
+            "workflow.propose-change",
+            ["ctx-1"],
+            [CreateWorkflowContext()]));
+
+        var followUpEvents = await CollectAsync(streaming.StreamAsync(session.Id));
+
+        Assert.Contains(followUpEvents, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
     }
 
     [Fact]

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   applyWorkflowGraphOperationBatchToWorkflow,
   classifyWorkflowGraphOperationBatchForDesigner,
+  createDemoWeaverClarificationResult,
   createDemoWeaverGraphOperationBatch,
-  getDesignerPosition
+  getDesignerPosition,
+  getWorkflowClarificationSummary
 } from "./workflowGraphOperations.js";
 
 test("applies a workflow graph operation batch as one draft mutation", () => {
@@ -110,6 +112,17 @@ test("classifies low-risk batches for direct apply", () => {
   assert.equal(result.decision, "directApply");
   assert.equal(result.resultKind, "workflowGraphOperationBatch");
   assert.deepEqual(result.reasons, ["lowRisk"]);
+});
+
+test("summarizes structured clarification results for Studio rendering", () => {
+  const clarification = createDemoWeaverClarificationResult();
+
+  const summary = getWorkflowClarificationSummary(clarification);
+
+  assert.equal(summary.title, "Weaver clarification");
+  assert.equal(summary.detail, "Which workflow branch should Weaver update?");
+  assert.equal(summary.meta, "3 options available");
+  assert.deepEqual(clarification.options.map((option) => option.value), ["active-draft", "selected-activity", "new-workflow"]);
 });
 
 test("fails closed for stale or destructive direct apply batches", () => {

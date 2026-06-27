@@ -2074,6 +2074,29 @@ p {
   white-space: nowrap;
 }
 
+.designer-clarification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.designer-clarification-options button {
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.designer-clarification-options button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
 .designer-surface-label {
   position: absolute;
   z-index: 5;

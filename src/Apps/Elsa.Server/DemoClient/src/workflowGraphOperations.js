@@ -36,6 +36,47 @@ export function getDesignerPosition(activity, fallback) {
   return normalizeDesignerPosition(activity?.designer?.position, fallback);
 }
 
+export function createDemoWeaverClarificationResult() {
+  return {
+    id: "clarify-workflow-target",
+    question: "Which workflow branch should Weaver update?",
+    continuationToken: "demo-session:clarification:workflow-target",
+    options: [
+      {
+        id: "active-draft",
+        label: "Active draft",
+        value: "active-draft",
+        description: "Apply the answer to the workflow currently open in the designer."
+      },
+      {
+        id: "selected-activity",
+        label: "Selected activity",
+        value: "selected-activity",
+        description: "Scope the answer to the selected activity and nearby connections."
+      },
+      {
+        id: "new-workflow",
+        label: "New workflow",
+        value: "new-workflow",
+        description: "Create a separate workflow graph instead of changing the current draft."
+      }
+    ],
+    metadata: {
+      workflowDefinitionId: "active-draft",
+      surface: "designer"
+    }
+  };
+}
+
+export function getWorkflowClarificationSummary(clarification) {
+  const options = Array.isArray(clarification?.options) ? clarification.options : [];
+  return {
+    title: "Weaver clarification",
+    detail: clarification?.question ?? "Weaver needs a workflow authoring choice.",
+    meta: `${options.length} option${options.length === 1 ? "" : "s"} available`
+  };
+}
+
 export function classifyWorkflowGraphOperationBatchForDesigner(workflow, batch, options = {}) {
   const reasons = [];
   const operations = Array.isArray(batch?.operations) ? batch.operations : [];

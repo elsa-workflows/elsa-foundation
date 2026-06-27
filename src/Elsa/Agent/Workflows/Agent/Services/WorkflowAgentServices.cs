@@ -79,6 +79,22 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
             yield break;
         }
 
+        if (ShouldReturnClarification(message.Content))
+        {
+            var clarification = CreateClarification(message);
+            yield return new AgentStreamEvent(
+                messageId,
+                AgentStreamEventKind.ClarificationRequested,
+                clarification.Question,
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                AgentResultKind.Clarification,
+                clarification);
+            yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
+            yield break;
+        }
+
         if (ShouldReturnWorkflowBatch(message.Content))
         {
             yield return new AgentStreamEvent(
@@ -184,8 +200,35 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
             });
     }
 
+    private static WorkflowClarificationResult CreateClarification(AgentProviderMessage message)
+    {
+        var workflowContext = message.Context.FirstOrDefault(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase));
+        var workflowDefinitionId = GetReference(workflowContext, "workflowDefinitionId") ?? "workflow-draft";
+
+        return new(
+            "clarify-workflow-target",
+            "Which workflow branch should Weaver update?",
+            [
+                new("active-draft", "Active draft", "active-draft", "Apply the answer to the workflow currently open in the designer."),
+                new("selected-activity", "Selected activity", "selected-activity", "Scope the answer to the selected activity and nearby connections."),
+                new("new-workflow", "New workflow", "new-workflow", "Create a separate workflow graph instead of changing the current draft.")
+            ],
+            $"{message.SessionId}:clarification:workflow-target",
+            new Dictionary<string, string>
+            {
+                ["workflowDefinitionId"] = workflowDefinitionId,
+                ["surface"] = "designer"
+            });
+    }
+
     private static string? GetReference(AgentContextAttachment? attachment, string key)
         => attachment?.References.TryGetValue(key, out var value) == true && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static bool ShouldReturnClarification(string content)
+        => Contains(content, "clarify")
+            || Contains(content, "ambiguous")
+            || Contains(content, "which branch")
+            || Contains(content, "ask a question");
 
     private static bool ShouldReturnWorkflowBatch(string content)
         => Contains(content, "workflow graph operation")
