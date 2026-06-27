@@ -9,8 +9,8 @@ public sealed class DefaultActivityAvailabilityEvaluator(ActivityAvailabilityOpt
     public IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities, ActivityAvailabilitySettings? managementSettings = null)
     {
         var activityList = activities.ToArray();
-        var includeKeys = Expand(options.Include);
-        var excludeKeys = Expand(options.Exclude);
+        var includeKeys = ActivityAvailabilityRuleExpander.Expand(options.Include, options.Sets).ActivityTypeKeys;
+        var excludeKeys = ActivityAvailabilityRuleExpander.Expand(options.Exclude, options.Sets).ActivityTypeKeys;
         var hasIncludeRules = includeKeys.Count > 0;
 
         var baselineActivities = activityList
@@ -21,39 +21,24 @@ public sealed class DefaultActivityAvailabilityEvaluator(ActivityAvailabilityOpt
         if (managementSettings is null)
             return baselineActivities;
 
-        var managementKeys = Expand(managementSettings.Rules);
+        var management = ActivityAvailabilityRuleExpander.Expand(managementSettings.Rules, options.Sets);
+        var managementKeys = management.ActivityTypeKeys;
+        var onlyUnresolvedSetRules = HasOnlyUnresolvedSetRules(managementSettings.Rules, management);
 
         return managementSettings.Mode switch
         {
             ActivityAvailabilityManagementMode.AllExcept => baselineActivities
                 .Where(activity => !managementKeys.Contains(activity.ActivityTypeKey))
                 .ToArray(),
-            ActivityAvailabilityManagementMode.Only => baselineActivities
+            ActivityAvailabilityManagementMode.Only when !onlyUnresolvedSetRules => baselineActivities
                 .Where(activity => managementKeys.Contains(activity.ActivityTypeKey))
                 .ToArray(),
             _ => baselineActivities
         };
     }
 
-    private HashSet<string> Expand(ActivityAvailabilityRuleSet? rules)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-
-        if (rules is null)
-            return result;
-
-        foreach (var activityType in (rules.ActivityTypes ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
-            result.Add(activityType);
-
-        foreach (var setName in (rules.Sets ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
-        {
-            if (options.Sets is null || !options.Sets.TryGetValue(setName, out var activityTypes))
-                continue;
-
-            foreach (var activityType in (activityTypes ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
-                result.Add(activityType);
-        }
-
-        return result;
-    }
+    private static bool HasOnlyUnresolvedSetRules(ActivityAvailabilityRuleSet? rules, ActivityAvailabilityRuleExpansion expansion) =>
+        expansion.ActivityTypeKeys.Count == 0
+        && expansion.UnresolvedSets.Count > 0
+        && (rules?.ActivityTypes ?? []).All(string.IsNullOrWhiteSpace);
 }

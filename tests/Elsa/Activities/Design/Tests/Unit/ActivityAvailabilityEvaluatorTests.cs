@@ -208,7 +208,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
     {
         var settings = new ActivityAvailabilitySettings
         {
-            Mode = ActivityAvailabilityManagementMode.AllExcept,
+            Mode = ActivityAvailabilityManagementMode.Only,
             Rules = new ActivityAvailabilityRuleSet
             {
                 Sets = ["Missing"]

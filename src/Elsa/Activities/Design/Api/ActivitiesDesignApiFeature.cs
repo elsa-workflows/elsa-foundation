@@ -30,6 +30,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
             new DefaultActivityAvailabilityEvaluator(sp.GetRequiredService<IOptions<ActivityAvailabilityOptions>>().Value));
+        services.TryAddSingleton<IActivityAvailabilityDiagnosticsProjector, DefaultActivityAvailabilityDiagnosticsProjector>();
         services.TryAddSingleton<IActivityAvailabilitySettingsStore, InMemoryActivityAvailabilitySettingsStore>();
 
         services.AddEventHandlersFrom(assembly);
