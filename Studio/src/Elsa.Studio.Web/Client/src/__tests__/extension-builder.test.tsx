@@ -22,6 +22,7 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("You do not have Extension Builder capabilities");
     expect(container.textContent).toContain("GetCapabilities");
     expect(container.textContent).not.toContain("Create workspace");
+    expect(container.textContent).not.toContain("Attach server-local");
 
     await unmount();
   });
@@ -65,6 +66,54 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("Repositories");
     expect(container.textContent).toContain("not connected");
     expect(container.textContent).not.toContain("No Extension Builder repositories are available");
+
+    await unmount();
+  });
+
+  it("attaches a server-local repository, refreshes the rail, and selects it", async () => {
+    let attached = false;
+    const serverPath = "/srv/elsa/extensions/server-repo";
+    const remoteState = "https://github.com/acme/server-extension.git";
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/repositories/server-local")) {
+        attached = true;
+        return { id: "ws-server", displayName: "Server Extensions", ownerId: "alice", projectIds: [] };
+      }
+
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/capabilities")) return trustedCapabilities();
+      if (url.endsWith("/repositories")) {
+        return attached ? [repositorySummary({
+          id: "ws-server",
+          name: "Server Extensions",
+          activeBranch: "release",
+          remoteState,
+          projectCount: 0
+        })] : [repositorySummary()];
+      }
+      if (url.endsWith("/workspaces")) {
+        return attached ? [{ id: "ws-server", displayName: "Server Extensions", ownerId: "alice", projectIds: [] }] : [workspaceWithProject()];
+      }
+      if (url.endsWith("/templates")) return templates();
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Team Extensions");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Server-local repository path']"), serverPath);
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Server-local repository name']"), "Server Extensions");
+    await clickButton(container, "Attach server-local");
+    await waitForText(container, "Server Extensions");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/repositories/server-local", {
+      path: serverPath,
+      displayName: "Server Extensions"
+    });
+    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain("Server Extensions");
+    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain(`release · ${remoteState}`);
+    expect(container.textContent).toContain("Attached server-local repository Server Extensions.");
 
     await unmount();
   });

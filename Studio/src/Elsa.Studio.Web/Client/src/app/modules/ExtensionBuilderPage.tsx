@@ -3,6 +3,7 @@ import { Boxes, FilePlus2, FolderGit2, FolderPlus, Hammer, PackageCheck, Play, R
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
+  attachServerLocalRepository,
   createProject,
   createWorkspace,
   cloneRepository,
@@ -77,6 +78,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
+  const [serverLocalPath, setServerLocalPath] = useState("");
+  const [serverLocalName, setServerLocalName] = useState("");
   const [cloneRepositoryUrl, setCloneRepositoryUrl] = useState("");
   const [cloneRepositoryName, setCloneRepositoryName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
@@ -318,6 +321,26 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
     const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created managed repository ${workspaceName.trim()}.`);
     if (workspace) {
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleAttachServerLocalRepository() {
+    if (!serverLocalPath.trim()) {
+      setError("Server-local repository path is required.");
+      return;
+    }
+
+    const displayName = serverLocalName.trim();
+    const workspace = await runOperation(
+      () => attachServerLocalRepository(context, { path: serverLocalPath.trim(), name: displayName || undefined }),
+      `Attached server-local repository ${displayName || serverLocalPath.trim()}.`
+    );
+    if (workspace) {
+      setServerLocalPath("");
+      setServerLocalName("");
       if (await refreshWorkspacesSafely({ preserveSelection: true })) {
         setSelectedWorkspaceId(workspace.id);
       }
@@ -610,13 +633,18 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
+          serverLocalPath={serverLocalPath}
+          serverLocalName={serverLocalName}
+          onServerLocalPathChange={setServerLocalPath}
+          onServerLocalNameChange={setServerLocalName}
+          onAttachServerLocalRepository={handleAttachServerLocalRepository}
           cloneRepositoryUrl={cloneRepositoryUrl}
           cloneRepositoryName={cloneRepositoryName}
+          onCloneRepositoryUrlChange={setCloneRepositoryUrl}
+          onCloneRepositoryNameChange={setCloneRepositoryName}
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
-          onCloneRepositoryUrlChange={setCloneRepositoryUrl}
-          onCloneRepositoryNameChange={setCloneRepositoryName}
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
           onCloneRepository={handleCloneRepository}
@@ -692,16 +720,21 @@ function WorkspaceBrowser({
   selectedWorkspaceId,
   selectedProjectId,
   workspaceName,
+  serverLocalPath,
+  serverLocalName,
   cloneRepositoryUrl,
   cloneRepositoryName,
   projectDraft,
   busy,
   onWorkspaceNameChange,
+  onServerLocalPathChange,
+  onServerLocalNameChange,
+  onAttachServerLocalRepository,
   onCloneRepositoryUrlChange,
   onCloneRepositoryNameChange,
+  onCloneRepository,
   onProjectDraftChange,
   onCreateWorkspace,
-  onCloneRepository,
   onCreateProject,
   onSelectWorkspace,
   onSelectProject,
@@ -715,16 +748,21 @@ function WorkspaceBrowser({
   selectedWorkspaceId: string;
   selectedProjectId: string;
   workspaceName: string;
+  serverLocalPath: string;
+  serverLocalName: string;
   cloneRepositoryUrl: string;
   cloneRepositoryName: string;
   projectDraft: ProjectDraft;
   busy: boolean;
   onWorkspaceNameChange(value: string): void;
+  onServerLocalPathChange(value: string): void;
+  onServerLocalNameChange(value: string): void;
+  onAttachServerLocalRepository(): void;
   onCloneRepositoryUrlChange(value: string): void;
   onCloneRepositoryNameChange(value: string): void;
+  onCloneRepository(): void;
   onProjectDraftChange(value: ProjectDraft): void;
   onCreateWorkspace(): void;
-  onCloneRepository(): void;
   onCreateProject(): void;
   onSelectWorkspace(workspaceId: string): void;
   onSelectProject(projectId: string): void;
@@ -763,6 +801,18 @@ function WorkspaceBrowser({
         <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
           Create managed repo
+        </button>
+        <label>
+          <span>Server path</span>
+          <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Server name</span>
+          <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
+          <FolderPlus size={15} />
+          Attach server-local
         </button>
         <label>
           <span>Clone URL</span>
