@@ -29,6 +29,27 @@ internal static class ActivityAvailabilityRuleExpander
 
         return new ActivityAvailabilityRuleExpansion(activityTypeKeys, unresolvedSets.ToArray());
     }
+
+    public static HashSet<string> ResolveCatalogKeys(ActivityAvailabilityRuleExpansion expansion, HashSet<string> catalogKeys) =>
+        expansion.ActivityTypeKeys
+            .Where(catalogKeys.Contains)
+            .ToHashSet(StringComparer.Ordinal);
+
+    public static bool HasOnlyUnresolvedRules(
+        ActivityAvailabilityRuleSet? rules,
+        HashSet<string> resolvedKeys,
+        IDictionary<string, string[]>? sets)
+    {
+        if (resolvedKeys.Count > 0)
+            return false;
+
+        var activityTypeRules = (rules?.ActivityTypes ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        var setRules = (rules?.Sets ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        if (activityTypeRules.Length == 0 && setRules.Length == 0)
+            return false;
+
+        return !setRules.Any(setName => sets?.ContainsKey(setName) == true);
+    }
 }
 
 internal sealed record ActivityAvailabilityRuleExpansion(
