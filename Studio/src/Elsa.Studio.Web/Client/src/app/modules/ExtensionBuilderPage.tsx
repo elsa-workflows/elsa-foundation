@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, FilePlus2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Boxes, FilePlus2, FolderGit2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
   createProject,
   createWorkspace,
+  cloneRepository,
   deleteProject,
   deleteProjectFile,
   deleteWorkspace,
@@ -76,6 +77,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
+  const [cloneRepositoryUrl, setCloneRepositoryUrl] = useState("");
+  const [cloneRepositoryName, setCloneRepositoryName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
   const [newFilePath, setNewFilePath] = useState("");
   const [operationBusy, setOperationBusy] = useState(false);
@@ -315,6 +318,26 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
     const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created workspace ${workspaceName.trim()}.`);
     if (workspace) {
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleCloneRepository() {
+    if (!cloneRepositoryUrl.trim()) {
+      setError("Repository URL is required.");
+      return;
+    }
+
+    const displayName = cloneRepositoryName.trim();
+    const workspace = await runOperation(
+      () => cloneRepository(context, { repositoryUrl: cloneRepositoryUrl.trim(), name: displayName || undefined }),
+      `Cloned repository ${displayName || cloneRepositoryUrl.trim()}.`
+    );
+    if (workspace) {
+      setCloneRepositoryUrl("");
+      setCloneRepositoryName("");
       if (await refreshWorkspacesSafely({ preserveSelection: true })) {
         setSelectedWorkspaceId(workspace.id);
       }
@@ -587,11 +610,16 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
+          cloneRepositoryUrl={cloneRepositoryUrl}
+          cloneRepositoryName={cloneRepositoryName}
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
+          onCloneRepositoryUrlChange={setCloneRepositoryUrl}
+          onCloneRepositoryNameChange={setCloneRepositoryName}
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
+          onCloneRepository={handleCloneRepository}
           onCreateProject={handleCreateProject}
           onSelectWorkspace={workspaceId => {
             if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
@@ -664,11 +692,16 @@ function WorkspaceBrowser({
   selectedWorkspaceId,
   selectedProjectId,
   workspaceName,
+  cloneRepositoryUrl,
+  cloneRepositoryName,
   projectDraft,
   busy,
   onWorkspaceNameChange,
+  onCloneRepositoryUrlChange,
+  onCloneRepositoryNameChange,
   onProjectDraftChange,
   onCreateWorkspace,
+  onCloneRepository,
   onCreateProject,
   onSelectWorkspace,
   onSelectProject,
@@ -682,11 +715,16 @@ function WorkspaceBrowser({
   selectedWorkspaceId: string;
   selectedProjectId: string;
   workspaceName: string;
+  cloneRepositoryUrl: string;
+  cloneRepositoryName: string;
   projectDraft: ProjectDraft;
   busy: boolean;
   onWorkspaceNameChange(value: string): void;
+  onCloneRepositoryUrlChange(value: string): void;
+  onCloneRepositoryNameChange(value: string): void;
   onProjectDraftChange(value: ProjectDraft): void;
   onCreateWorkspace(): void;
+  onCloneRepository(): void;
   onCreateProject(): void;
   onSelectWorkspace(workspaceId: string): void;
   onSelectProject(projectId: string): void;
@@ -725,6 +763,18 @@ function WorkspaceBrowser({
         <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
           Create managed repo
+        </button>
+        <label>
+          <span>Clone URL</span>
+          <input aria-label="Clone repository URL" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Clone name</span>
+          <input aria-label="Clone repository name" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>
+          <FolderGit2 size={15} />
+          Clone from Git
         </button>
       </details>
       {repositoryRows.map(repository => (
@@ -1300,6 +1350,7 @@ function isBuildSucceeded(build: BuildResult | null) {
 
 function formatRemoteState(value?: string | null) {
   if (!value) return "unknown remote";
+  if (value.includes("://") || value.includes("/") || value.includes("@")) return value;
   return value
     .split(/[-_\s]+/)
     .filter(Boolean)
