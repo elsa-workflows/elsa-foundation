@@ -1564,6 +1564,7 @@ function BuildPanel({
           <option value="Restore">Restore</option>
           <option value="Build">Build</option>
           <option value="Test">Test</option>
+          <option value="Pack">Pack</option>
         </select>
       </label>
       <label>
@@ -1583,6 +1584,19 @@ function BuildPanel({
           <div><dt>Finished</dt><dd>{formatDate(activeBuild.finishedAt)}</dd></div>
         </dl>
       ) : <p className="modules-muted">No build has been selected.</p>}
+      <h4>Package outputs</h4>
+      <div className="modules-list">
+        {(activeBuild?.artifacts ?? []).length === 0 ? <p className="modules-muted">No package artifacts reported.</p> : null}
+        {activeBuild?.artifacts.map(artifact => (
+          <div key={artifact.id} className="modules-list-row">
+            <span>
+              <strong>{artifact.packageId} {artifact.version}</strong>
+              <small>{artifact.fileName ?? artifact.id}{artifact.branch ? ` · ${artifact.branch}` : ""}{artifact.sourceRevisionId ? ` · ${artifact.sourceRevisionId.slice(0, 8)}` : ""}</small>
+            </span>
+            <StatusChip tone="accent">{formatArtifactSize(artifact.size)}</StatusChip>
+          </div>
+        ))}
+      </div>
       <h4>Diagnostics</h4>
       <div className="modules-diagnostics-list">
         {(activeBuild?.diagnostics ?? []).length === 0 ? <p className="modules-muted">No diagnostics reported.</p> : null}
@@ -2111,4 +2125,10 @@ function formatDiagnosticLocation(diagnostic: BuildDiagnostic) {
 function formatDate(value?: string | null) {
   if (!value) return "n/a";
   return new Date(value).toLocaleString();
+}
+
+function formatArtifactSize(size?: number | null) {
+  if (!size) return "0 B";
+  if (size < 1024) return `${size} B`;
+  return `${Math.round(size / 1024)} KB`;
 }

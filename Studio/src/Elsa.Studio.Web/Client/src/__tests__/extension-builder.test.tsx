@@ -341,6 +341,41 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("packs repository targets and shows package artifact outputs", async () => {
+    const artifacts = [
+      artifact({ id: "artifact-a", packageId: "Company.Extensions.One", version: "1.0.0", fileName: "Company.Extensions.One.1.0.0.nupkg", size: 4096, branch: "feature/pack", sourceRevisionId: "abcdef123456" }),
+      artifact({ id: "artifact-b", packageId: "Company.Extensions.Two", version: "2.1.0", fileName: "Company.Extensions.Two.2.1.0.nupkg", size: 2048, branch: "feature/pack", sourceRevisionId: "abcdef123456" })
+    ];
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: "abcdef123456", artifact: artifacts[0], artifacts });
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-1")) return succeededBuild({ sourceRevisionId: "abcdef123456", artifact: artifacts[0], artifacts });
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await selectValue(await waitForElement<HTMLSelectElement>(container, "[aria-label='Build command']"), "Pack");
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Build target path']"), "Hello.slnx");
+    await clickButton(container, "Run command");
+    await flushPromises();
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+      projectId: "proj-1",
+      command: "Pack",
+      targetPath: "Hello.slnx"
+    });
+    expect(container.textContent).toContain("Package outputs");
+    expect(container.textContent).toContain("Company.Extensions.One 1.0.0");
+    expect(container.textContent).toContain("Company.Extensions.Two 2.1.0");
+    expect(container.textContent).toContain("feature/pack");
+    expect(container.textContent).toContain("abcdef12");
+
+    await unmount();
+  });
+
   it("shows diagnostics and opens the referenced source location", async () => {
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
       getJson: async url => {
@@ -867,18 +902,29 @@ function sourceControlStatus(options?: { staged?: string[]; unstaged?: string[] 
   };
 }
 
-function artifact() {
+function artifact(overrides?: Partial<ReturnType<typeof artifactShape>>) {
+  return {
+    ...artifactShape(),
+    ...overrides
+  };
+}
+
+function artifactShape() {
   return {
     id: "artifact-1",
     buildId: "build-1",
     packageId: "Company.Extensions.Hello",
     version: "1.0.0",
     fileName: "Company.Extensions.Hello.1.0.0.nupkg",
-    size: 4096
+    size: 4096,
+    workspaceId: "ws-1",
+    sourceRevisionId: "rev-1",
+    branch: "main"
   };
 }
 
-function succeededBuild(overrides?: { id?: string; sourceRevisionId?: string | null; status?: string | number; artifact?: ReturnType<typeof artifact> | null }) {
+function succeededBuild(overrides?: { id?: string; sourceRevisionId?: string | null; status?: string | number; artifact?: ReturnType<typeof artifact> | null; artifacts?: ReturnType<typeof artifact>[] }) {
+  const buildArtifact = artifact();
   return {
     id: "build-1",
     projectId: "proj-1",
@@ -887,7 +933,8 @@ function succeededBuild(overrides?: { id?: string; sourceRevisionId?: string | n
     startedAt: new Date().toISOString(),
     completedAt: new Date().toISOString(),
     diagnostics: [],
-    artifact: artifact(),
+    artifact: buildArtifact,
+    artifacts: [buildArtifact],
     ...overrides
   };
 }
