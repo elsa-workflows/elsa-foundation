@@ -105,6 +105,24 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
     }
 
     [Fact]
+    public void Project_ReportsHostDefinedSets()
+    {
+        var options = new ActivityAvailabilityOptions
+        {
+            Sets =
+            {
+                ["Core"] = [WriteLineTypeKey, SendHttpTypeKey]
+            }
+        };
+
+        var result = Project(options);
+
+        var set = Assert.Single(result.Sets);
+        Assert.Equal("Core", set.Name);
+        Assert.Equal(new[] { WriteLineTypeKey, SendHttpTypeKey }, set.ActivityTypeKeys);
+    }
+
+    [Fact]
     public async Task Handler_LoadsSettingsAndDoesNotMutateStoredRules()
     {
         var store = new InMemoryActivityAvailabilitySettingsStore();
