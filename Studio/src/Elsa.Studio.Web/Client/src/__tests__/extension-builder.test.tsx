@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
-import type { ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
+import type { ExtensionRepositorySummary, ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
 import type { ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
@@ -65,6 +65,53 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("Repositories");
     expect(container.textContent).toContain("not connected");
     expect(container.textContent).not.toContain("No Extension Builder repositories are available");
+
+    await unmount();
+  });
+
+  it("clones a Git repository, refreshes the rail, and selects the clone", async () => {
+    let cloneCreated = false;
+    const repositoryUrl = "https://github.com/acme/extension-pack.git";
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/repositories/clone")) {
+        cloneCreated = true;
+        return { id: "ws-clone", displayName: "Cloned Extensions", ownerId: "alice", projectIds: [] };
+      }
+
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/capabilities")) return trustedCapabilities();
+      if (url.endsWith("/repositories")) {
+        return cloneCreated ? [repositorySummary({
+          id: "ws-clone",
+          name: "Cloned Extensions",
+          activeBranch: "main",
+          remoteState: repositoryUrl,
+          projectCount: 0
+        })] : [repositorySummary()];
+      }
+      if (url.endsWith("/workspaces")) {
+        return cloneCreated ? [{ id: "ws-clone", displayName: "Cloned Extensions", ownerId: "alice", projectIds: [] }] : [workspaceWithProject()];
+      }
+      if (url.endsWith("/templates")) return templates();
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Team Extensions");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Clone repository URL']"), repositoryUrl);
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Clone repository name']"), "Cloned Extensions");
+    await clickButton(container, "Clone from Git");
+    await waitForText(container, "Cloned Extensions");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/repositories/clone", {
+      repositoryUrl,
+      displayName: "Cloned Extensions"
+    });
+    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain("Cloned Extensions");
+    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain(`main · ${repositoryUrl}`);
+    expect(container.textContent).toContain("Cloned repository Cloned Extensions.");
 
     await unmount();
   });
@@ -463,7 +510,7 @@ function workspaceWithProject(options?: { project?: ReturnType<typeof project> }
   };
 }
 
-function repositorySummary() {
+function repositorySummary(overrides?: Partial<ExtensionRepositorySummary>) {
   return {
     id: "ws-1",
     name: "Team Extensions",
@@ -474,7 +521,8 @@ function repositorySummary() {
     latestBuildStatus: "Succeeded",
     attentionCount: 0,
     projectCount: 1,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    ...overrides
   };
 }
 
