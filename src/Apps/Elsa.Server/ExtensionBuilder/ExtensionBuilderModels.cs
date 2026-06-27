@@ -30,6 +30,15 @@ internal enum RepositoryFileKind
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum ExtensionTemplateScope
+{
+    Repository,
+    Solution,
+    Project,
+    Item
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -136,6 +145,12 @@ internal sealed record MoveRepositoryFileRequest(
     string SourcePath,
     string DestinationPath);
 
+internal sealed record ApplyRepositoryTemplateRequest(
+    string TemplateId,
+    ExtensionTemplateScope? Scope,
+    string? TargetPath,
+    IReadOnlyDictionary<string, string>? Parameters);
+
 internal sealed record RollbackPackageRequest(string Version);
 
 internal sealed record ExtensionWorkspace(
@@ -234,11 +249,26 @@ internal sealed record SourceControlCommitResult(
     string Message,
     SourceControlStatus Status);
 
+internal sealed record AppliedRepositoryTemplate(
+    string TemplateId,
+    ExtensionTemplateScope Scope,
+    IReadOnlyList<RepositoryFileSummary> Files,
+    RepositoryTree Tree);
+
+internal sealed record ExtensionTemplateParameter(
+    string Name,
+    string DisplayName,
+    bool Required,
+    string? DefaultValue);
+
 internal sealed record ExtensionTemplate(
     string Id,
     ExtensionTemplateKind Kind,
     string DisplayName,
     string Description,
+    ExtensionTemplateScope Scope,
+    IReadOnlyList<string> CompatibleFileExtensions,
+    IReadOnlyList<ExtensionTemplateParameter> Parameters,
     string DefaultPackageId,
     string DefaultPackageVersion,
     string DefaultTargetFramework,

@@ -20,6 +20,7 @@ internal interface IExtensionBuilderService
     Task<RepositoryTree?> GetRepositoryTreeAsync(ExtensionBuilderCaller caller, string workspaceId, string? selectedSolutionPath, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> ReadRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
+    Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(ExtensionBuilderCaller caller, string workspaceId, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
     Task<SourceControlStatus?> GetSourceControlStatusAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
@@ -101,6 +102,12 @@ internal sealed class ExtensionBuilderService(
     public Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default) =>
         storage.WriteRepositoryFileAsync(workspaceId, caller.OwnerId, path, request.Content, cancellationToken);
 
+    public Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(ExtensionBuilderCaller caller, string workspaceId, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default)
+    {
+        var template = templates.Find(request.TemplateId) ?? throw new ArgumentException($"Trusted template '{request.TemplateId}' was not found.", nameof(request));
+        return storage.ApplyRepositoryTemplateAsync(workspaceId, caller.OwnerId, template, request, cancellationToken);
+    }
+
     public Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default) =>
         storage.MoveRepositoryFileAsync(workspaceId, caller.OwnerId, request, cancellationToken);
 
@@ -128,6 +135,8 @@ internal sealed class ExtensionBuilderService(
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         var template = templates.Find(request.TemplateId) ?? throw new ArgumentException($"Template '{request.TemplateId}' was not found.", nameof(request));
+        if (template.Scope is not ExtensionTemplateScope.Project)
+            throw new ArgumentException($"Template '{request.TemplateId}' is not a project template.", nameof(request));
         return await storage.CreateProjectAsync(workspaceId, caller.OwnerId, template, request, cancellationToken);
     }
 

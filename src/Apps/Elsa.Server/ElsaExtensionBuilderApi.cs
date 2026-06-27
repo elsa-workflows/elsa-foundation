@@ -36,6 +36,7 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapGet("/workspaces/{workspaceId}/repository-tree", GetRepositoryTreeAsync);
         trusted.MapGet("/workspaces/{workspaceId}/files/{*path}", ReadRepositoryFileAsync);
         trusted.MapPut("/workspaces/{workspaceId}/files/{*path}", WriteRepositoryFileAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/templates/apply", ApplyRepositoryTemplateAsync);
         trusted.MapPost("/workspaces/{workspaceId}/files/move", MoveRepositoryFileAsync);
         trusted.MapDelete("/workspaces/{workspaceId}/files/{*path}", DeleteRepositoryFileAsync);
         trusted.MapGet("/workspaces/{workspaceId}/source-control/status", GetSourceControlStatusAsync);
@@ -210,6 +211,26 @@ internal static class ElsaExtensionBuilderApi
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> ApplyRepositoryTemplateAsync(string workspaceId, HttpContext httpContext, ApplyRepositoryTemplateRequest request, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.ApplyRepositoryTemplateAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (IOException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
         }
     }
 

@@ -17,8 +17,11 @@ internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplat
     {
         _templates =
         [
+            CreateRepositoryReadmeTemplate(),
+            CreateSolutionTemplate(),
             CreateElsaActivityTemplate(),
-            CreateGenericDotNetTemplate()
+            CreateGenericDotNetTemplate(),
+            CreateCSharpClassTemplate()
         ];
     }
 
@@ -59,6 +62,9 @@ internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplat
             ExtensionTemplateKind.ElsaActivityModule,
             "Elsa activity/module",
             "A buildable NuGet package with an Elsa package manifest and starter activity source.",
+            ExtensionTemplateScope.Project,
+            [".sln", ".slnx", ".csproj"],
+            ProjectParameters(packageId, "ExtensionBuilderActivity", "0.1.0", "net10.0"),
             packageId,
             "0.1.0",
             "net10.0",
@@ -99,6 +105,9 @@ internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplat
             ExtensionTemplateKind.GenericDotNet,
             "Generic .NET class library",
             "A buildable generic .NET class library package with no Elsa-specific feature contribution.",
+            ExtensionTemplateScope.Project,
+            [".sln", ".slnx", ".csproj"],
+            ProjectParameters(packageId, "GenericExtension", "0.1.0", "net10.0"),
             packageId,
             "0.1.0",
             "net10.0",
@@ -116,6 +125,134 @@ internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplat
                     """, ProjectFileKind.Source)
             ]);
     }
+
+    private static ExtensionTemplate CreateRepositoryReadmeTemplate()
+    {
+        var manifest = Manifest(
+            "Repository starter",
+            "Repository-level metadata for an Extension Builder working copy.",
+            ["Repository", "Extension Builder"],
+            """
+            {
+              "package": {
+                "id": "Elsa.ExtensionBuilder.Repository",
+                "version": "0.1.0"
+              },
+              "features": []
+            }
+            """);
+
+        return new(
+            "repository-readme",
+            ExtensionTemplateKind.GenericDotNet,
+            "Repository README",
+            "A trusted repository-level README starter for Extension Builder working copies.",
+            ExtensionTemplateScope.Repository,
+            ["*"],
+            [
+                new("name", "Repository name", true, "Extension Repository"),
+                new("description", "Description", false, "Extension Builder repository")
+            ],
+            "Elsa.ExtensionBuilder.Repository",
+            "0.1.0",
+            "net10.0",
+            manifest,
+            [
+                new("README.md", """
+                    # {{name}}
+
+                    {{description}}
+                    """, ProjectFileKind.Other)
+            ]);
+    }
+
+    private static ExtensionTemplate CreateSolutionTemplate()
+    {
+        var manifest = Manifest(
+            "Solution starter",
+            "Solution-level starter for an Extension Builder working copy.",
+            ["Solution", "Extension Builder"],
+            """
+            {
+              "package": {
+                "id": "Elsa.ExtensionBuilder.Solution",
+                "version": "0.1.0"
+              },
+              "features": []
+            }
+            """);
+
+        return new(
+            "solution-slnx",
+            ExtensionTemplateKind.GenericDotNet,
+            "Solution file",
+            "A trusted solution-level .slnx starter.",
+            ExtensionTemplateScope.Solution,
+            [".sln", ".slnx"],
+            [
+                new("name", "Solution name", true, "Extensions")
+            ],
+            "Elsa.ExtensionBuilder.Solution",
+            "0.1.0",
+            "net10.0",
+            manifest,
+            [
+                new("{{name}}.slnx", """
+                    <Solution>
+                    </Solution>
+                    """, ProjectFileKind.Configuration)
+            ]);
+    }
+
+    private static ExtensionTemplate CreateCSharpClassTemplate()
+    {
+        var manifest = Manifest(
+            "C# item",
+            "Item-level C# source starter.",
+            ["Item", "Source"],
+            """
+            {
+              "package": {
+                "id": "Elsa.ExtensionBuilder.Item",
+                "version": "0.1.0"
+              },
+              "features": []
+            }
+            """);
+
+        return new(
+            "csharp-class",
+            ExtensionTemplateKind.GenericDotNet,
+            "C# class",
+            "A trusted item-level C# class file.",
+            ExtensionTemplateScope.Item,
+            [".csproj", ".cs"],
+            [
+                new("name", "Class name", true, "NewClass"),
+                new("namespace", "Namespace", true, "Elsa.ExtensionBuilder.Generated")
+            ],
+            "Elsa.ExtensionBuilder.Item",
+            "0.1.0",
+            "net10.0",
+            manifest,
+            [
+                new("{{name}}.cs", """
+                    namespace {{namespace}};
+
+                    public sealed class {{name}}
+                    {
+                    }
+                    """, ProjectFileKind.Source)
+            ]);
+    }
+
+    private static ExtensionTemplateParameter[] ProjectParameters(string packageId, string name, string version, string targetFramework) =>
+    [
+        new("name", "Project name", true, name),
+        new("packageId", "Package id", true, packageId),
+        new("packageVersion", "Package version", true, version),
+        new("targetFramework", "Target framework", true, targetFramework)
+    ];
 
     internal static string ProjectFile(string packageId, string version, string targetFramework) =>
         $$"""

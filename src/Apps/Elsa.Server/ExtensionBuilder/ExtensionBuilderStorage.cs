@@ -21,6 +21,7 @@ internal interface IExtensionBuilderStorage
     Task<RepositoryTree?> GetRepositoryTreeAsync(string workspaceId, string ownerId, string? selectedSolutionPath, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> ReadRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> WriteRepositoryFileAsync(string workspaceId, string ownerId, string path, string content, CancellationToken cancellationToken = default);
+    Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(string workspaceId, string ownerId, ExtensionTemplate template, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> MoveRepositoryFileAsync(string workspaceId, string ownerId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
     Task<SourceControlStatus?> GetSourceControlStatusAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
@@ -52,6 +53,7 @@ internal interface IExtensionBuilderStorage
 }
 
 internal sealed record SourceSnapshot(string Id, string ProjectId, string Path, DateTimeOffset CreatedAt);
+internal sealed record RenderedTemplateFile(string RelativePath, string PhysicalPath, string Content);
 
 internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 {
@@ -341,19 +343,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var repositoryState = GetRepositoryState(repositoryPath);
-            var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
-            var solutionPaths = EnumerateRepositoryFiles(repositoryPath, "*.sln*")
-                .Select(path => Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/'))
-                .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
-                .Order(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            var selectedSolution = SelectSolution(solutionPaths, selectedSolutionPath);
-            var solutions = solutionPaths
-                .Select(path => new RepositorySolutionSummary(path, Path.GetFileNameWithoutExtension(path), string.Equals(path, selectedSolution, StringComparison.OrdinalIgnoreCase)))
-                .ToArray();
-            var entries = EnumerateRepositoryEntries(repositoryPath, dirtyPaths);
-            return new(workspace.Id, repositoryState.ActiveBranch, repositoryState.IsDirty, solutions, entries);
+            return BuildRepositoryTree(workspace.Id, repositoryPath, selectedSolutionPath);
         }
         finally
         {
@@ -377,6 +367,66 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return null;
 
             return await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(string workspaceId, string ownerId, ExtensionTemplate template, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default)
+    {
+        var scope = request.Scope ?? template.Scope;
+        if (scope != template.Scope)
+            throw new ArgumentException($"Template '{template.Id}' supports {template.Scope} scope, not {scope}.", nameof(request));
+
+        var values = BuildTemplateParameterValues(template, request);
+        var targetPath = NormalizeTemplateTargetPath(request.TargetPath, scope, values);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            var renderedFiles = template.Files
+                .Select(file =>
+                {
+                    var renderedPath = RenderTemplateText(file.Path, values);
+                    var relativePath = NormalizeRepositoryRelativePath(CombineTemplatePath(targetPath, renderedPath));
+                    var physicalPath = ResolveRepositoryFilePath(repositoryPath, relativePath);
+                    var content = RenderTemplateContent(template, file, relativePath, values);
+                    return new RenderedTemplateFile(relativePath, physicalPath, content);
+                })
+                .ToArray();
+
+            foreach (var file in renderedFiles)
+            {
+                if (File.Exists(file.PhysicalPath))
+                    throw new IOException($"Repository file '{file.RelativePath}' already exists.");
+            }
+
+            foreach (var file in renderedFiles)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file.PhysicalPath)!);
+                await File.WriteAllTextAsync(file.PhysicalPath, file.Content, cancellationToken);
+            }
+
+            state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
+            await SaveStateAsync(state, cancellationToken);
+
+            var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
+            var summaries = renderedFiles
+                .Select(file =>
+                {
+                    var info = new FileInfo(file.PhysicalPath);
+                    return new RepositoryFileSummary(file.RelativePath, GetRepositoryFileKind(file.RelativePath), info.Length, IsPathDirty(file.RelativePath, dirtyPaths), info.LastWriteTimeUtc);
+                })
+                .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return new(template.Id, scope, summaries, BuildRepositoryTree(workspace.Id, repositoryPath, null));
         }
         finally
         {
@@ -1155,6 +1205,23 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             origin ?? "not-connected");
     }
 
+    private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
+    {
+        var repositoryState = GetRepositoryState(repositoryPath);
+        var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
+        var solutionPaths = EnumerateRepositoryFiles(repositoryPath, "*.sln*")
+            .Select(path => Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var selectedSolution = SelectSolution(solutionPaths, selectedSolutionPath);
+        var solutions = solutionPaths
+            .Select(path => new RepositorySolutionSummary(path, Path.GetFileNameWithoutExtension(path), string.Equals(path, selectedSolution, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var entries = EnumerateRepositoryEntries(repositoryPath, dirtyPaths);
+        return new(workspaceId, repositoryState.ActiveBranch, repositoryState.IsDirty, solutions, entries);
+    }
+
     private RepositoryFileSummary[] EnumerateRepositoryEntries(string repositoryPath, ISet<string> dirtyPaths)
     {
         if (!Directory.Exists(repositoryPath))
@@ -1292,6 +1359,84 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             normalized.Split('/').Any(segment => segment is "" or "." or ".." || segment.Equals(".git", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("A safe relative repository file path is required.", nameof(path));
         return normalized;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildTemplateParameterValues(ExtensionTemplate template, ApplyRepositoryTemplateRequest request)
+    {
+        var provided = request.Parameters is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(request.Parameters, StringComparer.OrdinalIgnoreCase);
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["packageId"] = template.DefaultPackageId,
+            ["packageVersion"] = template.DefaultPackageVersion,
+            ["targetFramework"] = template.DefaultTargetFramework
+        };
+
+        foreach (var parameter in template.Parameters)
+        {
+            provided.TryGetValue(parameter.Name, out var providedValue);
+            var value = string.IsNullOrWhiteSpace(providedValue) ? parameter.DefaultValue : providedValue.Trim();
+            if (parameter.Required && string.IsNullOrWhiteSpace(value))
+                throw new ArgumentException($"Template parameter '{parameter.Name}' is required.", nameof(request));
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                ValidateTemplateParameter(parameter.Name, value);
+                values[parameter.Name] = value;
+            }
+        }
+
+        return values;
+    }
+
+    private static void ValidateTemplateParameter(string name, string value)
+    {
+        if (name.Equals("name", StringComparison.OrdinalIgnoreCase) && !IsSafeTemplateIdentifier(value))
+            throw new ArgumentException("Template parameter 'name' must start with a letter and contain only letters, numbers, dots, underscores, or hyphens.", nameof(value));
+        if ((name.Equals("namespace", StringComparison.OrdinalIgnoreCase) || name.Equals("packageId", StringComparison.OrdinalIgnoreCase)) && !IsSafeTemplateIdentifier(value))
+            throw new ArgumentException($"Template parameter '{name}' must start with a letter and contain only letters, numbers, dots, underscores, or hyphens.", nameof(value));
+    }
+
+    private static bool IsSafeTemplateIdentifier(string value) =>
+        value.Length > 0 && char.IsLetter(value[0]) && value.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
+
+    private static string NormalizeTemplateTargetPath(string? targetPath, ExtensionTemplateScope scope, IReadOnlyDictionary<string, string> values)
+    {
+        if (!string.IsNullOrWhiteSpace(targetPath))
+            return NormalizeRepositoryRelativePath(targetPath);
+
+        return scope switch
+        {
+            ExtensionTemplateScope.Project => values.TryGetValue("name", out var name) ? NormalizeRepositoryRelativePath(name) : "",
+            ExtensionTemplateScope.Item => "src",
+            _ => ""
+        };
+    }
+
+    private static string CombineTemplatePath(string targetPath, string templatePath) =>
+        string.IsNullOrWhiteSpace(targetPath)
+            ? templatePath
+            : $"{targetPath.TrimEnd('/')}/{templatePath.TrimStart('/')}";
+
+    private static string RenderTemplateContent(ExtensionTemplate template, ProjectTemplateFile file, string renderedPath, IReadOnlyDictionary<string, string> values)
+    {
+        var packageId = values.TryGetValue("packageId", out var configuredPackageId) ? configuredPackageId : template.DefaultPackageId;
+        var packageVersion = values.TryGetValue("packageVersion", out var configuredPackageVersion) ? configuredPackageVersion : template.DefaultPackageVersion;
+        var targetFramework = values.TryGetValue("targetFramework", out var configuredTargetFramework) ? configuredTargetFramework : template.DefaultTargetFramework;
+        if (renderedPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            return ExtensionBuilderTemplateCatalog.ProjectFile(packageId, packageVersion, targetFramework);
+        if (Path.GetFileName(renderedPath).Equals("elsa-package.json", StringComparison.OrdinalIgnoreCase))
+            return ExtensionBuilderTemplateCatalog.RewriteManifest(template.DefaultManifest.Content, packageId, packageVersion).GetRawText();
+        return RenderTemplateText(file.Content, values);
+    }
+
+    private static string RenderTemplateText(string text, IReadOnlyDictionary<string, string> values)
+    {
+        var rendered = text;
+        foreach (var (key, value) in values)
+            rendered = rendered.Replace("{{" + key + "}}", value, StringComparison.OrdinalIgnoreCase);
+        return rendered;
     }
 
     private static string NormalizeCommitMessage(string message)
