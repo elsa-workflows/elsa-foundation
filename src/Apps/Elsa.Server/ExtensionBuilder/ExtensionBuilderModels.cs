@@ -21,6 +21,15 @@ internal enum ProjectFileKind
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RepositoryFileKind
+{
+    Solution,
+    Project,
+    Folder,
+    File
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -123,6 +132,10 @@ internal sealed record CreateProjectRequest(
 
 internal sealed record WriteProjectFileRequest(string Content);
 
+internal sealed record MoveRepositoryFileRequest(
+    string SourcePath,
+    string DestinationPath);
+
 internal sealed record RollbackPackageRequest(string Version);
 
 internal sealed record ExtensionWorkspace(
@@ -164,6 +177,33 @@ internal sealed record ProjectFileSummary(
     string Path,
     ProjectFileKind Kind,
     long Size,
+    DateTimeOffset UpdatedAt);
+
+internal sealed record RepositorySolutionSummary(
+    string Path,
+    string Name,
+    bool IsSelected);
+
+internal sealed record RepositoryFileSummary(
+    string Path,
+    RepositoryFileKind Kind,
+    long Size,
+    bool IsDirty,
+    DateTimeOffset UpdatedAt);
+
+internal sealed record RepositoryTree(
+    string WorkspaceId,
+    string? ActiveBranch,
+    bool IsDirty,
+    IReadOnlyList<RepositorySolutionSummary> Solutions,
+    IReadOnlyList<RepositoryFileSummary> Entries);
+
+internal sealed record RepositoryFile(
+    string Path,
+    string Content,
+    RepositoryFileKind Kind,
+    long Size,
+    bool IsDirty,
     DateTimeOffset UpdatedAt);
 
 internal sealed record ExtensionTemplate(

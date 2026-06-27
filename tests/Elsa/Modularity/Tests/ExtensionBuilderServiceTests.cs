@@ -307,6 +307,80 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RepositoryTreeAutoSelectsSingleSolutionFromActiveWorkingCopy()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/files", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Hello/Hello.csproj", new("<Project />"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "Workspace.slnx", new("<Solution />"));
+
+        var tree = await service.GetRepositoryTreeAsync(_caller, workspace.Id, null);
+
+        var solution = Assert.Single(tree!.Solutions);
+        Assert.Equal("Workspace.slnx", solution.Path);
+        Assert.True(solution.IsSelected);
+        Assert.Contains(tree.Entries, entry => entry is { Path: "src/Hello/Hello.csproj", Kind: RepositoryFileKind.Project, IsDirty: true });
+        Assert.Contains(tree.Entries, entry => entry is { Path: "Workspace.slnx", Kind: RepositoryFileKind.Solution, IsDirty: true });
+        Assert.True(tree.IsDirty);
+        Assert.Equal("feature/files", tree.ActiveBranch);
+    }
+
+    [Fact]
+    public async Task RepositoryTreeLeavesMultipleSolutionsForExplicitSelection()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "A.sln", new(""));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "nested/B.slnx", new(""));
+
+        var unselected = await service.GetRepositoryTreeAsync(_caller, workspace.Id, null);
+        var selected = await service.GetRepositoryTreeAsync(_caller, workspace.Id, "nested/B.slnx");
+
+        Assert.Equal(new[] { "A.sln", "nested/B.slnx" }, unselected!.Solutions.Select(x => x.Path).ToArray());
+        Assert.All(unselected.Solutions, solution => Assert.False(solution.IsSelected));
+        Assert.False(selected!.Solutions.Single(x => x.Path == "A.sln").IsSelected);
+        Assert.True(selected.Solutions.Single(x => x.Path == "nested/B.slnx").IsSelected);
+    }
+
+    [Fact]
+    public async Task RepositoryFileMutationsUseNestedWorkingTreePaths()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        var created = await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs", new("namespace Before;"));
+        var read = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs");
+        var saved = await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Nested/Activity.cs", new("namespace After;"));
+        var moved = await service.MoveRepositoryFileAsync(_caller, workspace.Id, new("src/Nested/Activity.cs", "src/Renamed/Activity.cs"));
+        var deleted = await service.DeleteRepositoryFileAsync(_caller, workspace.Id, "src/Renamed/Activity.cs");
+        var missing = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Renamed/Activity.cs");
+
+        Assert.Equal("src/Nested/Activity.cs", created!.Path);
+        Assert.Equal("namespace Before;", read!.Content);
+        Assert.Equal("namespace After;", saved!.Content);
+        Assert.Equal("src/Renamed/Activity.cs", moved!.Path);
+        Assert.Equal("namespace After;", moved.Content);
+        Assert.True(moved.IsDirty);
+        Assert.True(deleted);
+        Assert.Null(missing);
+    }
+
+    [Fact]
+    public async Task RepositoryFileAccessRejectsUnsafePathsAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Safe.cs", new("namespace Safe;"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadRepositoryFileAsync(_caller, workspace.Id, "../outside.cs"));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadRepositoryFileAsync(_caller, workspace.Id, ".git/config"));
+        Assert.Null(await service.ReadRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs"));
+        Assert.Null(await service.GetRepositoryTreeAsync(_caller with { OwnerId = "other" }, workspace.Id, null));
+        Assert.False(await service.DeleteRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs"));
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();
