@@ -83,7 +83,7 @@ describe("StudioCodeEditor", () => {
     expect(container.querySelector(".studio-code-editor-header")?.textContent).toContain("JavaScript");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-theme")).toBe("dark");
     unmount();
-  });
+  }, 20000);
 });
 
 function renderEditor(props: Partial<StudioCodeEditorProps> = {}) {

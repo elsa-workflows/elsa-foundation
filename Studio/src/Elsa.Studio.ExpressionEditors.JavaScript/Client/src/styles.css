@@ -44,32 +44,44 @@
   font-weight: 700;
 }
 
-.js-expression-code {
+.js-expression-expanded .studio-code-editor {
   overflow: hidden;
   border: 1px solid var(--wf-border, #2f3946);
   border-radius: 0 0 6px 6px;
 }
 
-.js-expression-code .cm-editor {
+.js-expression-expanded .studio-code-editor-header {
+  display: none;
+}
+
+.js-expression-expanded .studio-code-editor-input,
+.js-expression-expanded .studio-code-editor .cm-editor {
   background: #111820;
   color: #d8e2ee;
   font-size: 12px;
   letter-spacing: 0;
 }
 
-.js-expression-code .cm-scroller {
+.js-expression-expanded .studio-code-editor-input {
+  width: 100%;
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  padding: 12px;
+}
+
+.js-expression-expanded .studio-code-editor .cm-scroller {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-.js-expression-code .cm-focused {
+.js-expression-expanded .studio-code-editor .cm-focused {
   outline: none;
 }
 
-.js-expression-code:focus-within {
+.js-expression-expanded .studio-code-editor:focus-within {
   border-color: #38bdf8;
   box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
 }
 
-.js-expression-code .cm-content {
+.js-expression-expanded .studio-code-editor .cm-content {
   padding: 12px;
 }

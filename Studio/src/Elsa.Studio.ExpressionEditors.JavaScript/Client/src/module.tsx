@@ -1,11 +1,9 @@
 import React from "react";
-import CodeMirror from "@uiw/react-codemirror";
-import { javascript } from "@codemirror/lang-javascript";
+import { javaScriptLanguageAdapter, StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import type { ElsaStudioModuleApi, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
 const javaScriptSyntax = "JavaScript";
-const javaScriptExtensions = [javascript({ jsx: true, typescript: true })];
 
 export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add({
@@ -35,29 +33,26 @@ export function JavaScriptInlineEditor({ value, disabled, onChange }: StudioExpr
   );
 }
 
-export function JavaScriptExpandedEditor({ value, disabled, onChange }: StudioExpressionEditorProps) {
+export function JavaScriptExpandedEditor({ descriptor, value, disabled, onChange }: StudioExpressionEditorProps) {
+  const document = {
+    uri: `elsa://expressions/javascript/${encodeURIComponent(descriptor.name || "expression")}`,
+    language: "javascript",
+    value: formatValue(value)
+  };
+
   return (
     <div className="js-expression-expanded">
       <div className="js-expression-toolbar" aria-hidden="true">
         <span>JavaScript</span>
       </div>
-      <CodeMirror
-        aria-label="JavaScript expanded expression"
-        className="js-expression-code"
-        value={formatValue(value)}
+      <StudioCodeEditor
+        ariaLabel="JavaScript expanded expression"
+        document={document}
+        languageAdapter={javaScriptLanguageAdapter}
         minHeight="260px"
-        basicSetup={{
-          lineNumbers: true,
-          foldGutter: true,
-          highlightActiveLine: true,
-          bracketMatching: true,
-          autocompletion: true
-        }}
-        editable={!disabled}
         readOnly={disabled}
         theme="dark"
-        extensions={javaScriptExtensions}
-        onChange={nextValue => onChange(nextValue)}
+        onChange={nextDocument => onChange(nextDocument.value)}
       />
     </div>
   );

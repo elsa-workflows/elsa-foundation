@@ -1,5 +1,6 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
+import { StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor, register } from "../module";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 
@@ -34,16 +35,23 @@ describe("JavaScript expression editor module", () => {
       context: context("JavaScript"),
       onChange: onExpandedChange
     }) as React.ReactElement<{ children: React.ReactNode }>;
-    const expandedTextarea = React.Children
+    const expandedEditor = React.Children
       .toArray(expanded.props.children)
-      .find(child => React.isValidElement<CodeMirrorElementProps>(child) && child.props["aria-label"] === "JavaScript expanded expression") as React.ReactElement<CodeMirrorElementProps>;
+      .find(child => React.isValidElement<StudioCodeEditorElementProps>(child) && child.type === StudioCodeEditor) as React.ReactElement<StudioCodeEditorElementProps>;
 
     expect(inline.props["aria-label"]).toBe("JavaScript expression");
     expect(inline.props.value).toBe("return 1;");
-    expect(expandedTextarea.props.value).toBe("return 2;");
+    expect(expandedEditor.props.ariaLabel).toBe("JavaScript expanded expression");
+    expect(expandedEditor.props.document).toEqual({
+      uri: "elsa://expressions/javascript/Text",
+      language: "javascript",
+      value: "return 2;"
+    });
+    expect(expandedEditor.props.readOnly).toBeUndefined();
+    expect(expandedEditor.props.theme).toBe("dark");
 
     inline.props.onChange(changeEvent("return 3;"));
-    expandedTextarea.props.onChange("return 4;");
+    expandedEditor.props.onChange({ ...expandedEditor.props.document, value: "return 4;" });
 
     expect(onInlineChange).toHaveBeenCalledWith("return 3;");
     expect(onExpandedChange).toHaveBeenCalledWith("return 4;");
@@ -56,10 +64,16 @@ interface EditorElementProps {
   onChange(event: React.ChangeEvent<HTMLTextAreaElement>): void;
 }
 
-interface CodeMirrorElementProps {
-  "aria-label": string;
-  value: string;
-  onChange(value: string): void;
+interface StudioCodeEditorElementProps {
+  ariaLabel: string;
+  document: {
+    uri: string;
+    language: string;
+    value: string;
+  };
+  readOnly?: boolean;
+  theme?: string;
+  onChange(document: { value: string }): void;
 }
 
 function testApi(): ElsaStudioModuleApi {
