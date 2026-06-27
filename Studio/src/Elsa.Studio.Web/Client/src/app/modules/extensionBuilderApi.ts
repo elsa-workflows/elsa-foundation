@@ -4,9 +4,14 @@ const root = "/_elsa/extension-builder";
 
 export type BuildStatus = "Pending" | "Running" | "Succeeded" | "Failed" | "queued" | "running" | "succeeded" | "failed" | string;
 export type RuntimeState = "Loaded" | "PendingRestart" | "FailedReconciliation" | string;
-export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | string;
+export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | "UncommittedSource" | string;
 export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manifest" | "Configuration" | "Other" | string;
+export type RepositoryFileKind = "Solution" | "Project" | "Folder" | "File" | string;
 export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
+export type ExtensionTemplateScope = "Repository" | "Solution" | "Project" | "Item" | string;
+export type RemoteSyncOperation = "Push" | "Pull" | string;
+export type RemoteSyncState = "Completed" | "Blocked" | string;
+export type RepositoryBuildCommand = "Restore" | "Build" | "Test" | "Pack" | string;
 
 export interface ExtensionBuilderCapabilities {
   canCreateWorkspace: boolean;
@@ -23,6 +28,19 @@ export interface ExtensionWorkspace {
   createdAt?: string | null;
   updatedAt?: string | null;
   projects: ExtensionProject[];
+}
+
+export interface ExtensionRepositorySummary {
+  id: string;
+  name: string;
+  owner?: string | null;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  remoteState: string;
+  latestBuildStatus?: BuildStatus | null;
+  attentionCount: number;
+  projectCount: number;
+  updatedAt?: string | null;
 }
 
 export interface ExtensionProject {
@@ -42,11 +60,35 @@ export interface ExtensionTemplate {
   id: string;
   name: string;
   description?: string | null;
+  scope: ExtensionTemplateScope;
+  compatibleFileExtensions: string[];
+  parameters: ExtensionTemplateParameter[];
   tags?: string[];
   primary?: boolean;
   defaultPackageId?: string | null;
   defaultPackageVersion?: string | null;
   defaultTargetFramework?: string | null;
+}
+
+export interface ExtensionTemplateParameter {
+  name: string;
+  displayName: string;
+  required: boolean;
+  defaultValue?: string | null;
+}
+
+export interface ApplyRepositoryTemplateRequest {
+  templateId: string;
+  scope?: ExtensionTemplateScope | null;
+  targetPath?: string | null;
+  parameters?: Record<string, string>;
+}
+
+export interface AppliedRepositoryTemplate {
+  templateId: string;
+  scope: ExtensionTemplateScope;
+  files: RepositoryFileSummary[];
+  tree: RepositoryTree;
 }
 
 export interface ProjectFile {
@@ -57,9 +99,77 @@ export interface ProjectFile {
   content?: string | null;
 }
 
+export interface RepositorySolutionSummary {
+  path: string;
+  name: string;
+  isSelected: boolean;
+}
+
+export interface RepositoryFileSummary {
+  path: string;
+  type: ProjectFileType;
+  kind: RepositoryFileKind;
+  size?: number | null;
+  isDirty: boolean;
+  updatedAt?: string | null;
+}
+
+export interface RepositoryTree {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  solutions: RepositorySolutionSummary[];
+  entries: RepositoryFileSummary[];
+}
+
+export interface RepositoryFile extends RepositoryFileSummary {
+  content?: string | null;
+}
+
+export interface SourceControlFileStatus {
+  path: string;
+  status: string;
+  isStaged: boolean;
+  isUnstaged: boolean;
+}
+
+export interface SourceControlStatus {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  changedFiles: SourceControlFileStatus[];
+  stagedFiles: SourceControlFileStatus[];
+  unstagedFiles: SourceControlFileStatus[];
+}
+
+export interface SourceControlDiff {
+  path: string;
+  isStaged: boolean;
+  patch: string;
+}
+
+export interface SourceControlCommitResult {
+  commitId: string;
+  message: string;
+  status: SourceControlStatus;
+}
+
+export interface RemoteSyncResult {
+  operation: RemoteSyncOperation;
+  state: RemoteSyncState;
+  message: string;
+  remote?: string | null;
+  branch?: string | null;
+  ahead: number;
+  behind: number;
+  status: SourceControlStatus;
+}
+
 export interface BuildRequest {
   projectId?: string;
   revision?: string | null;
+  command?: RepositoryBuildCommand;
+  targetPath?: string | null;
 }
 
 export interface BuildResult {
@@ -71,6 +181,7 @@ export interface BuildResult {
   finishedAt?: string | null;
   diagnostics: BuildDiagnostic[];
   artifact?: BuildArtifact | null;
+  artifacts: BuildArtifact[];
 }
 
 export interface BuildDiagnostic {
@@ -88,6 +199,10 @@ export interface BuildArtifact {
   version: string;
   fileName?: string | null;
   size?: number | null;
+  workspaceId?: string | null;
+  sourceRevisionId?: string | null;
+  branch?: string | null;
+  sourceIsDirty?: boolean;
 }
 
 export interface PackagePromotionRequest {
@@ -145,6 +260,35 @@ export interface CreateWorkspaceRequest {
   name: string;
 }
 
+export interface AttachServerLocalRepositoryRequest {
+  path: string;
+  name?: string;
+}
+
+export interface CloneRepositoryRequest {
+  repositoryUrl: string;
+  name?: string;
+}
+
+export interface SelectWorkingCopyRequest {
+  sessionId: string;
+  branchName?: string | null;
+  allowProtectedBranchEdit: boolean;
+}
+
+export interface ExtensionWorkingCopySummary {
+  id: string;
+  workspaceId: string;
+  owner?: string | null;
+  sessionId: string;
+  branchName: string;
+  isActive: boolean;
+  isProtectedBranch: boolean;
+  isDirty: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface CreateProjectRequest {
   templateId: string;
   name: string;
@@ -166,8 +310,28 @@ export async function listWorkspaces(context: StudioEndpointContext) {
   return Promise.all(workspaces.map(workspace => hydrateWorkspace(context, workspace)));
 }
 
+export async function listRepositories(context: StudioEndpointContext) {
+  const response = await context.http.getJson<RawExtensionRepositorySummary[] | { repositories: RawExtensionRepositorySummary[] }>(`${root}/repositories`);
+  const repositories = Array.isArray(response) ? response : response.repositories;
+  return repositories.map(normalizeRepositorySummary);
+}
+
 export async function createWorkspace(context: StudioEndpointContext, request: CreateWorkspaceRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/workspaces`, { displayName: request.name }), []);
+}
+
+export async function attachServerLocalRepository(context: StudioEndpointContext, request: AttachServerLocalRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/server-local`, {
+    path: request.path,
+    displayName: request.name || null
+  }), []);
+}
+
+export async function cloneRepository(context: StudioEndpointContext, request: CloneRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/clone`, {
+    repositoryUrl: request.repositoryUrl,
+    displayName: request.name || null
+  }), []);
 }
 
 export async function getWorkspace(context: StudioEndpointContext, workspaceId: string) {
@@ -176,6 +340,79 @@ export async function getWorkspace(context: StudioEndpointContext, workspaceId: 
 
 export async function deleteWorkspace(context: StudioEndpointContext, workspaceId: string) {
   return requestJson(context, `${root}/workspaces/${segment(workspaceId)}`, { method: "DELETE" });
+}
+
+export async function listWorkingCopies(context: StudioEndpointContext, workspaceId: string, sessionId?: string | null) {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  const response = await context.http.getJson<RawExtensionWorkingCopySummary[] | { workingCopies: RawExtensionWorkingCopySummary[] }>(`${root}/workspaces/${segment(workspaceId)}/working-copies${query}`);
+  const workingCopies = Array.isArray(response) ? response : response.workingCopies;
+  return workingCopies.map(normalizeWorkingCopySummary);
+}
+
+export async function selectWorkingCopy(context: StudioEndpointContext, workspaceId: string, request: SelectWorkingCopyRequest) {
+  return normalizeWorkingCopySummary(await context.http.postJson<RawExtensionWorkingCopySummary>(`${root}/workspaces/${segment(workspaceId)}/working-copies/select`, request));
+}
+
+export async function getRepositoryTree(context: StudioEndpointContext, workspaceId: string, solutionPath?: string | null) {
+  const query = solutionPath ? `?solutionPath=${encodeURIComponent(solutionPath)}` : "";
+  return normalizeRepositoryTree(await context.http.getJson<RawRepositoryTree>(`${root}/workspaces/${segment(workspaceId)}/repository-tree${query}`));
+}
+
+export async function readRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeRepositoryFile(await context.http.getJson<RawRepositoryFile>(`${workspaceRoot(workspaceId)}/files/${filePath(path)}`));
+}
+
+export async function writeRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string, request: WriteProjectFileRequest) {
+  return normalizeRepositoryFile(await requestJson<RawRepositoryFile>(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(request)
+  }));
+}
+
+export async function moveRepositoryFile(context: StudioEndpointContext, workspaceId: string, sourcePath: string, destinationPath: string) {
+  return normalizeRepositoryFile(await context.http.postJson<RawRepositoryFile>(`${workspaceRoot(workspaceId)}/files/move`, { sourcePath, destinationPath }));
+}
+
+export async function deleteRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return requestJson(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, { method: "DELETE" });
+}
+
+export async function applyRepositoryTemplate(context: StudioEndpointContext, workspaceId: string, request: ApplyRepositoryTemplateRequest) {
+  return normalizeAppliedRepositoryTemplate(await context.http.postJson<RawAppliedRepositoryTemplate>(`${workspaceRoot(workspaceId)}/templates/apply`, request));
+}
+
+export async function getSourceControlStatus(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeSourceControlStatus(await context.http.getJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/status`));
+}
+
+export async function getSourceControlDiff(context: StudioEndpointContext, workspaceId: string, path: string, staged = false) {
+  const query = staged ? "?staged=true" : "";
+  return normalizeSourceControlDiff(await context.http.getJson<RawSourceControlDiff>(`${workspaceRoot(workspaceId)}/source-control/diff/${filePath(path)}${query}`));
+}
+
+export async function stageRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/stage`, { path }));
+}
+
+export async function unstageRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/unstage`, { path }));
+}
+
+export async function stageAllRepositoryChanges(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeSourceControlStatus(await context.http.postJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/stage-all`, {}));
+}
+
+export async function commitRepositoryChanges(context: StudioEndpointContext, workspaceId: string, message: string) {
+  return normalizeSourceControlCommitResult(await context.http.postJson<RawSourceControlCommitResult>(`${workspaceRoot(workspaceId)}/source-control/commit`, { message }));
+}
+
+export async function pushRepository(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/push`, {}));
+}
+
+export async function pullRepository(context: StudioEndpointContext, workspaceId: string) {
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/pull`, {}));
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -223,8 +460,12 @@ export async function deleteProjectFile(context: StudioEndpointContext, _workspa
   return requestJson(context, `${projectRoot(projectId)}/files/${filePath(path)}`, { method: "DELETE" });
 }
 
-export async function submitBuild(context: StudioEndpointContext, _workspaceId: string, projectId: string, _request: BuildRequest = {}) {
-  return normalizeBuild(await context.http.postJson<RawBuildResult>(`${projectRoot(projectId)}/builds`, {}));
+export async function submitBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, request: BuildRequest = {}) {
+  return normalizeBuild(await context.http.postJson<RawBuildResult>(`${workspaceRoot(workspaceId)}/builds`, {
+    projectId: request.projectId ?? projectId,
+    command: request.command ?? "Build",
+    targetPath: request.targetPath ?? null
+  }));
 }
 
 export async function getBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string) {
@@ -247,6 +488,10 @@ export async function getBuildLog(context: StudioEndpointContext, _workspaceId: 
 
 export async function promoteBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, request: PackagePromotionRequest) {
   return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
+}
+
+export async function promoteBuildArtifact(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, artifactId: string, request: PackagePromotionRequest) {
+  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/artifacts/${segment(artifactId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
 }
 
 export async function getRuntimeStatus(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
@@ -304,6 +549,36 @@ function normalizeWorkspace(workspace: RawExtensionWorkspace, projects: Extensio
   };
 }
 
+function normalizeRepositorySummary(repository: RawExtensionRepositorySummary): ExtensionRepositorySummary {
+  return {
+    id: repository.id,
+    name: repository.name ?? repository.displayName,
+    owner: repository.owner ?? repository.ownerId,
+    activeBranch: repository.activeBranch,
+    isDirty: repository.isDirty ?? false,
+    remoteState: repository.remoteState ?? "unknown",
+    latestBuildStatus: repository.latestBuildStatus == null ? repository.latestBuildStatus : normalizeBuildStatus(repository.latestBuildStatus),
+    attentionCount: repository.attentionCount ?? 0,
+    projectCount: repository.projectCount ?? repository.projects ?? 0,
+    updatedAt: repository.updatedAt
+  };
+}
+
+function normalizeWorkingCopySummary(workingCopy: RawExtensionWorkingCopySummary): ExtensionWorkingCopySummary {
+  return {
+    id: workingCopy.id,
+    workspaceId: workingCopy.workspaceId,
+    owner: workingCopy.owner ?? workingCopy.ownerId,
+    sessionId: workingCopy.sessionId,
+    branchName: workingCopy.branchName,
+    isActive: workingCopy.isActive ?? false,
+    isProtectedBranch: workingCopy.isProtectedBranch ?? false,
+    isDirty: workingCopy.isDirty ?? false,
+    createdAt: workingCopy.createdAt,
+    updatedAt: workingCopy.updatedAt
+  };
+}
+
 function normalizeProject(project: RawExtensionProject): ExtensionProject {
   return {
     id: project.id,
@@ -321,15 +596,37 @@ function normalizeProject(project: RawExtensionProject): ExtensionProject {
 
 function normalizeTemplate(template: RawExtensionTemplate): ExtensionTemplate {
   const kind = normalizeTemplateKind(template.kind);
+  const scope = normalizeTemplateScope(template.scope ?? "Project");
   return {
     id: template.id,
     name: template.name ?? template.displayName,
     description: template.description,
-    tags: template.tags ?? [kind],
+    scope,
+    compatibleFileExtensions: template.compatibleFileExtensions ?? [],
+    parameters: (template.parameters ?? []).map(normalizeTemplateParameter),
+    tags: template.tags ?? [scope, kind],
     primary: template.primary ?? kind === "ElsaActivityModule",
     defaultPackageId: template.defaultPackageId,
     defaultPackageVersion: template.defaultPackageVersion,
     defaultTargetFramework: template.defaultTargetFramework
+  };
+}
+
+function normalizeTemplateParameter(parameter: RawExtensionTemplateParameter): ExtensionTemplateParameter {
+  return {
+    name: parameter.name,
+    displayName: parameter.displayName ?? parameter.name,
+    required: parameter.required ?? false,
+    defaultValue: parameter.defaultValue
+  };
+}
+
+function normalizeAppliedRepositoryTemplate(result: RawAppliedRepositoryTemplate): AppliedRepositoryTemplate {
+  return {
+    templateId: result.templateId,
+    scope: normalizeTemplateScope(result.scope),
+    files: (result.files ?? []).map(normalizeRepositoryFileSummary),
+    tree: normalizeRepositoryTree(result.tree)
   };
 }
 
@@ -343,7 +640,87 @@ function normalizeProjectFile(file: RawProjectFile): ProjectFile {
   };
 }
 
+function normalizeRepositoryTree(tree: RawRepositoryTree): RepositoryTree {
+  return {
+    workspaceId: tree.workspaceId,
+    activeBranch: tree.activeBranch,
+    isDirty: tree.isDirty ?? false,
+    solutions: tree.solutions ?? [],
+    entries: (tree.entries ?? []).map(normalizeRepositoryFileSummary)
+  };
+}
+
+function normalizeRepositoryFileSummary(file: RawRepositoryFileSummary): RepositoryFileSummary {
+  const kind = normalizeRepositoryFileKind(file.kind);
+  return {
+    path: file.path,
+    type: kind === "Folder" ? "folder" : "file",
+    kind,
+    size: file.size,
+    isDirty: file.isDirty ?? false,
+    updatedAt: file.updatedAt
+  };
+}
+
+function normalizeRepositoryFile(file: RawRepositoryFile): RepositoryFile {
+  return {
+    ...normalizeRepositoryFileSummary(file),
+    content: file.content
+  };
+}
+
+function normalizeSourceControlStatus(status: RawSourceControlStatus): SourceControlStatus {
+  return {
+    workspaceId: status.workspaceId,
+    activeBranch: status.activeBranch,
+    isDirty: status.isDirty ?? false,
+    changedFiles: (status.changedFiles ?? []).map(normalizeSourceControlFileStatus),
+    stagedFiles: (status.stagedFiles ?? []).map(normalizeSourceControlFileStatus),
+    unstagedFiles: (status.unstagedFiles ?? []).map(normalizeSourceControlFileStatus)
+  };
+}
+
+function normalizeSourceControlFileStatus(status: RawSourceControlFileStatus): SourceControlFileStatus {
+  return {
+    path: status.path,
+    status: status.status ?? "",
+    isStaged: status.isStaged ?? false,
+    isUnstaged: status.isUnstaged ?? false
+  };
+}
+
+function normalizeSourceControlDiff(diff: RawSourceControlDiff): SourceControlDiff {
+  return {
+    path: diff.path,
+    isStaged: diff.isStaged ?? false,
+    patch: diff.patch ?? ""
+  };
+}
+
+function normalizeSourceControlCommitResult(result: RawSourceControlCommitResult): SourceControlCommitResult {
+  return {
+    commitId: result.commitId,
+    message: result.message,
+    status: normalizeSourceControlStatus(result.status)
+  };
+}
+
+function normalizeRemoteSyncResult(result: RawRemoteSyncResult): RemoteSyncResult {
+  return {
+    operation: normalizeRemoteSyncOperation(result.operation),
+    state: normalizeRemoteSyncState(result.state),
+    message: result.message ?? "",
+    remote: result.remote,
+    branch: result.branch,
+    ahead: result.ahead ?? 0,
+    behind: result.behind ?? 0,
+    status: normalizeSourceControlStatus(result.status)
+  };
+}
+
 function normalizeBuild(build: RawBuildResult): BuildResult {
+  const artifact = normalizeArtifact(build.artifact);
+  const artifacts = (build.artifacts ?? (artifact ? [artifact] : [])).map(normalizeArtifact).filter(artifact => artifact !== null);
   return {
     id: build.id,
     projectId: build.projectId,
@@ -358,8 +735,24 @@ function normalizeBuild(build: RawBuildResult): BuildResult {
       line: diagnostic.line,
       column: diagnostic.column
     })),
-    artifact: build.artifact
+    artifact,
+    artifacts
   };
+}
+
+function normalizeArtifact(artifact?: RawBuildArtifact | null): BuildArtifact | null {
+  return artifact ? {
+    id: artifact.id,
+    buildId: artifact.buildId,
+    packageId: artifact.packageId,
+    version: artifact.version,
+    fileName: artifact.fileName,
+    size: artifact.size,
+    workspaceId: artifact.workspaceId,
+    sourceRevisionId: artifact.sourceRevisionId,
+    branch: artifact.branch,
+    sourceIsDirty: artifact.sourceIsDirty ?? false
+  } : null;
 }
 
 function normalizePromotionResult(result: RawPackagePromotionResult): PackagePromotionResult {
@@ -434,6 +827,22 @@ function normalizeProjectFileType(value?: ProjectFileType | number | null): Proj
   return "file";
 }
 
+function normalizeRepositoryFileKind(value?: RepositoryFileKind | number | null): RepositoryFileKind {
+  return enumName(value, ["Solution", "Project", "Folder", "File"]);
+}
+
+function normalizeTemplateScope(value?: ExtensionTemplateScope | number | null): ExtensionTemplateScope {
+  return enumName(value, ["Repository", "Solution", "Project", "Item"]);
+}
+
+function normalizeRemoteSyncOperation(value?: RemoteSyncOperation | number | null): RemoteSyncOperation {
+  return enumName(value, ["Push", "Pull"]);
+}
+
+function normalizeRemoteSyncState(value?: RemoteSyncState | number | null): RemoteSyncState {
+  return enumName(value, ["Completed", "Blocked"]);
+}
+
 function normalizePromotionStatus(value?: string | number | null) {
   return enumName(value, ["Accepted", "Rejected"]);
 }
@@ -459,6 +868,10 @@ function projectRoot(projectId: string) {
   return `${root}/projects/${segment(projectId)}`;
 }
 
+function workspaceRoot(workspaceId: string) {
+  return `${root}/workspaces/${segment(workspaceId)}`;
+}
+
 function segment(value: string) {
   return encodeURIComponent(value);
 }
@@ -478,6 +891,36 @@ interface RawExtensionWorkspace {
   updatedAt?: string | null;
   projectIds?: string[];
   projects?: RawExtensionProject[];
+}
+
+interface RawExtensionRepositorySummary {
+  id: string;
+  name?: string;
+  displayName?: string;
+  owner?: string | null;
+  ownerId?: string | null;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  remoteState?: string | null;
+  latestBuildStatus?: BuildStatus | number | null;
+  attentionCount?: number | null;
+  projectCount?: number | null;
+  projects?: number | null;
+  updatedAt?: string | null;
+}
+
+interface RawExtensionWorkingCopySummary {
+  id: string;
+  workspaceId: string;
+  owner?: string | null;
+  ownerId?: string | null;
+  sessionId: string;
+  branchName: string;
+  isActive?: boolean | null;
+  isProtectedBranch?: boolean | null;
+  isDirty?: boolean | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 interface RawExtensionProject {
@@ -502,11 +945,28 @@ interface RawExtensionTemplate {
   name?: string;
   displayName: string;
   description?: string | null;
+  scope?: ExtensionTemplateScope | number | null;
+  compatibleFileExtensions?: string[];
+  parameters?: RawExtensionTemplateParameter[];
   defaultPackageId?: string | null;
   defaultPackageVersion?: string | null;
   defaultTargetFramework?: string | null;
   tags?: string[];
   primary?: boolean;
+}
+
+interface RawExtensionTemplateParameter {
+  name: string;
+  displayName?: string | null;
+  required?: boolean | null;
+  defaultValue?: string | null;
+}
+
+interface RawAppliedRepositoryTemplate {
+  templateId: string;
+  scope?: ExtensionTemplateScope | number | null;
+  files?: RawRepositoryFileSummary[];
+  tree: RawRepositoryTree;
 }
 
 interface RawProjectFile {
@@ -516,6 +976,65 @@ interface RawProjectFile {
   size?: number | null;
   updatedAt?: string | null;
   content?: string | null;
+}
+
+interface RawRepositoryTree {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  solutions?: RepositorySolutionSummary[];
+  entries?: RawRepositoryFileSummary[];
+}
+
+interface RawRepositoryFileSummary {
+  path: string;
+  kind?: RepositoryFileKind | number;
+  size?: number | null;
+  isDirty?: boolean | null;
+  updatedAt?: string | null;
+}
+
+interface RawRepositoryFile extends RawRepositoryFileSummary {
+  content?: string | null;
+}
+
+interface RawSourceControlFileStatus {
+  path: string;
+  status?: string | null;
+  isStaged?: boolean | null;
+  isUnstaged?: boolean | null;
+}
+
+interface RawSourceControlStatus {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  changedFiles?: RawSourceControlFileStatus[];
+  stagedFiles?: RawSourceControlFileStatus[];
+  unstagedFiles?: RawSourceControlFileStatus[];
+}
+
+interface RawSourceControlDiff {
+  path: string;
+  isStaged?: boolean | null;
+  patch?: string | null;
+}
+
+interface RawSourceControlCommitResult {
+  commitId: string;
+  message: string;
+  status: RawSourceControlStatus;
+}
+
+interface RawRemoteSyncResult {
+  operation?: RemoteSyncOperation | number | null;
+  state?: RemoteSyncState | number | null;
+  message?: string | null;
+  remote?: string | null;
+  branch?: string | null;
+  ahead?: number | null;
+  behind?: number | null;
+  status: RawSourceControlStatus;
 }
 
 interface RawBuildResult {
@@ -529,7 +1048,21 @@ interface RawBuildResult {
   createdAt?: string | null;
   completedAt?: string | null;
   diagnostics?: RawBuildDiagnostic[];
-  artifact?: BuildArtifact | null;
+  artifact?: RawBuildArtifact | null;
+  artifacts?: RawBuildArtifact[] | null;
+}
+
+interface RawBuildArtifact {
+  id: string;
+  buildId?: string | null;
+  packageId: string;
+  version: string;
+  fileName?: string | null;
+  size?: number | null;
+  workspaceId?: string | null;
+  sourceRevisionId?: string | null;
+  branch?: string | null;
+  sourceIsDirty?: boolean | null;
 }
 
 interface RawPackagePromotionResult {
