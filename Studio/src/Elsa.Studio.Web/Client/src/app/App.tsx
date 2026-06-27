@@ -35,7 +35,7 @@ import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
+import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import "./styles.css";
 import "./agent/agent.css";
 
@@ -80,6 +80,7 @@ function AppContent() {
   const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -189,7 +190,7 @@ function AppContent() {
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
-        assistantAction={<AgentLauncher open={assistantOpen} onClick={() => setAssistantOpen(current => !current)} />}
+        assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
       >
         {dashboardPath ? <Dashboard api={api!} /> : null}
         {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
@@ -206,7 +207,7 @@ function AppContent() {
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} />
+        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} />
       ) : null}
     </>
   );

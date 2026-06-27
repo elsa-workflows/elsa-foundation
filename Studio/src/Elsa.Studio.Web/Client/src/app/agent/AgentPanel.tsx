@@ -11,6 +11,7 @@ import { AgentContextChips } from "./AgentContextChips";
 import { AgentMessageList } from "./AgentMessageList";
 import { AgentPromptStarters } from "./AgentPromptStarters";
 import { AgentProposalReview } from "./AgentProposalReview";
+import type { AgentSessionIndicatorSession } from "./AgentSessionIndicator";
 import { AgentWorkflowBatchReview, type WorkflowBatchReviewModel } from "./AgentWorkflowBatchReview";
 import type { AgentActionProposal, AgentActionProposalPayload, AgentBootstrapResponse, AgentMessageViewModel, AgentProviderDiagnostics, AgentStreamEvent, WorkflowGraphOperationBatch } from "./agentTypes";
 import { createToolInvocationAudit, evaluateToolInvocationPolicy, type AgentToolInvocationPolicyContext, type AgentToolInvocationRequest } from "./agentToolPolicy";
@@ -21,13 +22,15 @@ export function AgentPanel({
   surface,
   onClose,
   client,
-  subscribeStream = subscribeAgentSessionStream
+  subscribeStream = subscribeAgentSessionStream,
+  onSessionIndicatorChange
 }: {
   api: ElsaStudioModuleApi;
   surface: StudioAgentSurface;
   onClose(): void;
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
+  onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
 }) {
   const [bootstrap, setBootstrap] = useState<AgentBootstrapResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -90,6 +93,10 @@ export function AgentPanel({
       disposed = true;
     };
   }, [agentClient]);
+
+  useEffect(() => {
+    onSessionIndicatorChange?.(createSessionIndicatorSessions(sessionId, busy, error, proposals, workflowBatches));
+  }, [busy, error, onSessionIndicatorChange, proposals, sessionId, workflowBatches]);
 
   async function sendMessage(message: string, capabilityId = capabilities[0]?.id) {
     if (busy || !canUseWeaver(bootstrap) || !capabilityId) {
@@ -398,6 +405,36 @@ function createWorkflowBatchReviewModel(batch: WorkflowGraphOperationBatch, prov
     canApply,
     disabledReason: canApply ? undefined : "Provider requires review before direct apply."
   };
+}
+
+function createSessionIndicatorSessions(
+  sessionId: string | null,
+  busy: boolean,
+  error: string | null,
+  proposals: AgentActionProposal[],
+  workflowBatches: WorkflowBatchReviewModel[]
+): AgentSessionIndicatorSession[] {
+  if (!sessionId) {
+    return [];
+  }
+
+  const pendingProposals = proposals.filter(proposal => proposal.status === "awaiting-approval" || proposal.status === "approved").length;
+  const pendingArtifacts = workflowBatches.filter(batch => batch.status === "ready" || batch.status === "applying").length;
+  const status: AgentSessionIndicatorSession["status"] = error
+    ? "failed"
+    : pendingProposals > 0
+      ? "waiting"
+      : busy
+        ? "active"
+        : "background";
+
+  return [{
+    id: sessionId,
+    title: "Current Weaver session",
+    status,
+    pendingProposals,
+    pendingArtifacts
+  }];
 }
 
 function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPayload): AgentActionProposal {

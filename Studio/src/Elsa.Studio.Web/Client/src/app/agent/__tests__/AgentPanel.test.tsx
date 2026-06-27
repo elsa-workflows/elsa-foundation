@@ -298,6 +298,58 @@ describe("AgentPanel", () => {
     unmount();
   });
 
+  it("publishes session indicator state for pending proposals", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/");
+    registerProposalPrompt(api);
+    const client = stubClient(policyBootstrap({ actorId: "studio-user" }));
+    const onSessionIndicatorChange = vi.fn();
+    const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
+      onEvent({
+        type: "proposal-created",
+        proposalId: "prop_01",
+        messageId: "msg_01",
+        proposal: {
+          title: "Rename workflow",
+          summary: "Renames the workflow.",
+          status: "awaiting-approval",
+          baseRevision: "rev_01",
+          toolId: "workflow.rename",
+          invocationMode: "proposal",
+          resourceTarget: { resourceType: "workflow-definition", resourceId: "wf_01" }
+        }
+      });
+      onEvent({ type: "message-completed", messageId: "msg_01" });
+      return { close() {} };
+    });
+    const { container, unmount } = render(
+      <AgentPanel
+        api={api}
+        surface={{ route: "/" }}
+        client={client}
+        subscribeStream={subscribeStream}
+        onClose={() => {}}
+        onSessionIndicatorChange={onSessionIndicatorChange}
+      />
+    );
+
+    await flushPromises();
+    clickButton(container, "Create proposal");
+    await flushPromises();
+    await flushPromises();
+
+    expect(onSessionIndicatorChange).toHaveBeenCalledWith([expect.objectContaining({
+      id: "agt_01",
+      status: "waiting",
+      pendingProposals: 1
+    })]);
+
+    unmount();
+  });
+
   it("blocks proposal execution when Host Policy denies the tool", async () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",
