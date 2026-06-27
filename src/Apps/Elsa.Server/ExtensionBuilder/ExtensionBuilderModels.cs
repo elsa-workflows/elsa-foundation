@@ -202,6 +202,34 @@ internal sealed record RepositoryFile(
     bool IsDirty,
     DateTimeOffset UpdatedAt);
 
+internal sealed record SourceControlFileStatus(
+    string Path,
+    string Status,
+    bool IsStaged,
+    bool IsUnstaged);
+
+internal sealed record SourceControlStatus(
+    string WorkspaceId,
+    string? ActiveBranch,
+    bool IsDirty,
+    IReadOnlyList<SourceControlFileStatus> ChangedFiles,
+    IReadOnlyList<SourceControlFileStatus> StagedFiles,
+    IReadOnlyList<SourceControlFileStatus> UnstagedFiles);
+
+internal sealed record SourceControlDiff(
+    string Path,
+    bool IsStaged,
+    string Patch);
+
+internal sealed record SourceControlPathRequest(string Path);
+
+internal sealed record SourceControlCommitRequest(string Message);
+
+internal sealed record SourceControlCommitResult(
+    string CommitId,
+    string Message,
+    SourceControlStatus Status);
+
 internal sealed record ExtensionTemplate(
     string Id,
     ExtensionTemplateKind Kind,

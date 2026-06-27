@@ -248,6 +248,52 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SourceControlStagesUnstagesDiffsAndCommitsWorkingCopyChanges()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/source-control", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Status.cs", new("namespace Status;"));
+
+        var dirty = await service.GetSourceControlStatusAsync(_caller, workspace.Id);
+        var staged = await service.StageRepositoryFileAsync(_caller, workspace.Id, new("src/Status.cs"));
+        var stagedDiff = await service.GetSourceControlDiffAsync(_caller, workspace.Id, "src/Status.cs", staged: true);
+        var unstaged = await service.UnstageRepositoryFileAsync(_caller, workspace.Id, new("src/Status.cs"));
+        var stageAll = await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        var commit = await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add status source"));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        Assert.True(dirty!.IsDirty);
+        Assert.Contains(dirty.UnstagedFiles, x => x is { Path: "src/Status.cs", IsUnstaged: true });
+        Assert.Contains(staged!.StagedFiles, x => x is { Path: "src/Status.cs", IsStaged: true });
+        Assert.Contains("+namespace Status;", stagedDiff!.Patch);
+        Assert.Contains(unstaged!.UnstagedFiles, x => x.Path == "src/Status.cs");
+        Assert.Contains(stageAll!.StagedFiles, x => x.Path == "src/Status.cs");
+        Assert.False(commit!.Status.IsDirty);
+        Assert.NotEmpty(commit.CommitId);
+        Assert.Equal("Add status source", await GitAsync(repositoryPath, "log", "-1", "--pretty=%s"));
+        Assert.False(Assert.Single(repositories).IsDirty);
+    }
+
+    [Fact]
+    public async Task SourceControlRejectsEmptyCommitUnsafePathsAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Safe.cs", new("namespace Safe;"));
+
+        var emptyCommit = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("No staged changes")));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.StageRepositoryFileAsync(_caller, workspace.Id, new("../outside.cs")));
+        Assert.Contains("Stage at least one change", emptyCommit.Message);
+        Assert.Null(await service.GetSourceControlStatusAsync(_caller with { OwnerId = "other" }, workspace.Id));
+        Assert.Null(await service.GetSourceControlDiffAsync(_caller with { OwnerId = "other" }, workspace.Id, "src/Safe.cs", staged: false));
+        Assert.Null(await service.StageRepositoryFileAsync(_caller with { OwnerId = "other" }, workspace.Id, new("src/Safe.cs")));
+        Assert.Null(await service.CommitRepositoryChangesAsync(_caller with { OwnerId = "other" }, workspace.Id, new("No access")));
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();
