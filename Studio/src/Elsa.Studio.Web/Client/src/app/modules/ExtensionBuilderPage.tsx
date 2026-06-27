@@ -3,6 +3,7 @@ import { Boxes, FilePlus2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, R
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
+  attachServerLocalRepository,
   createProject,
   createWorkspace,
   deleteProject,
@@ -76,6 +77,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
+  const [serverLocalPath, setServerLocalPath] = useState("");
+  const [serverLocalName, setServerLocalName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
   const [newFilePath, setNewFilePath] = useState("");
   const [operationBusy, setOperationBusy] = useState(false);
@@ -315,6 +318,26 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
     const workspace = await runOperation(() => createWorkspace(context, { name: workspaceName.trim() }), `Created workspace ${workspaceName.trim()}.`);
     if (workspace) {
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleAttachServerLocalRepository() {
+    if (!serverLocalPath.trim()) {
+      setError("Server-local repository path is required.");
+      return;
+    }
+
+    const displayName = serverLocalName.trim();
+    const workspace = await runOperation(
+      () => attachServerLocalRepository(context, { path: serverLocalPath.trim(), name: displayName || undefined }),
+      `Attached server-local repository ${displayName || serverLocalPath.trim()}.`
+    );
+    if (workspace) {
+      setServerLocalPath("");
+      setServerLocalName("");
       if (await refreshWorkspacesSafely({ preserveSelection: true })) {
         setSelectedWorkspaceId(workspace.id);
       }
@@ -587,11 +610,16 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
           selectedProjectId={selectedProject?.id ?? ""}
           workspaceName={workspaceName}
+          serverLocalPath={serverLocalPath}
+          serverLocalName={serverLocalName}
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
+          onServerLocalPathChange={setServerLocalPath}
+          onServerLocalNameChange={setServerLocalName}
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
+          onAttachServerLocalRepository={handleAttachServerLocalRepository}
           onCreateProject={handleCreateProject}
           onSelectWorkspace={workspaceId => {
             if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
@@ -664,11 +692,16 @@ function WorkspaceBrowser({
   selectedWorkspaceId,
   selectedProjectId,
   workspaceName,
+  serverLocalPath,
+  serverLocalName,
   projectDraft,
   busy,
   onWorkspaceNameChange,
+  onServerLocalPathChange,
+  onServerLocalNameChange,
   onProjectDraftChange,
   onCreateWorkspace,
+  onAttachServerLocalRepository,
   onCreateProject,
   onSelectWorkspace,
   onSelectProject,
@@ -682,11 +715,16 @@ function WorkspaceBrowser({
   selectedWorkspaceId: string;
   selectedProjectId: string;
   workspaceName: string;
+  serverLocalPath: string;
+  serverLocalName: string;
   projectDraft: ProjectDraft;
   busy: boolean;
   onWorkspaceNameChange(value: string): void;
+  onServerLocalPathChange(value: string): void;
+  onServerLocalNameChange(value: string): void;
   onProjectDraftChange(value: ProjectDraft): void;
   onCreateWorkspace(): void;
+  onAttachServerLocalRepository(): void;
   onCreateProject(): void;
   onSelectWorkspace(workspaceId: string): void;
   onSelectProject(projectId: string): void;
@@ -725,6 +763,18 @@ function WorkspaceBrowser({
         <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
           Create managed repo
+        </button>
+        <label>
+          <span>Server path</span>
+          <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Server name</span>
+          <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
+          <FolderPlus size={15} />
+          Attach server-local
         </button>
       </details>
       {repositoryRows.map(repository => (
@@ -1300,6 +1350,7 @@ function isBuildSucceeded(build: BuildResult | null) {
 
 function formatRemoteState(value?: string | null) {
   if (!value) return "unknown remote";
+  if (value.includes("://") || value.includes("/") || value.includes("@")) return value;
   return value
     .split(/[-_\s]+/)
     .filter(Boolean)

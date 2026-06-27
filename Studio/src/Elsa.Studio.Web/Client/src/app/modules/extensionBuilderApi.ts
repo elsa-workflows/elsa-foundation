@@ -158,6 +158,11 @@ export interface CreateWorkspaceRequest {
   name: string;
 }
 
+export interface AttachServerLocalRepositoryRequest {
+  path: string;
+  name?: string;
+}
+
 export interface CreateProjectRequest {
   templateId: string;
   name: string;
@@ -187,6 +192,13 @@ export async function listRepositories(context: StudioEndpointContext) {
 
 export async function createWorkspace(context: StudioEndpointContext, request: CreateWorkspaceRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/workspaces`, { displayName: request.name }), []);
+}
+
+export async function attachServerLocalRepository(context: StudioEndpointContext, request: AttachServerLocalRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/server-local`, {
+    path: request.path,
+    displayName: request.name || null
+  }), []);
 }
 
 export async function getWorkspace(context: StudioEndpointContext, workspaceId: string) {
