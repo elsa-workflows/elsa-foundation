@@ -47,6 +47,7 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapPost("/workspaces/{workspaceId}/source-control/commit", CommitRepositoryChangesAsync);
         trusted.MapPost("/workspaces/{workspaceId}/source-control/push", PushRepositoryAsync);
         trusted.MapPost("/workspaces/{workspaceId}/source-control/pull", PullRepositoryAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/builds", SubmitRepositoryBuildAsync);
         trusted.MapPost("/workspaces/{workspaceId}/projects", CreateProjectAsync);
         trusted.MapGet("/projects/{projectId}", GetProjectAsync);
         trusted.MapDelete("/projects/{projectId}", DeleteProjectAsync);
@@ -364,6 +365,22 @@ internal static class ElsaExtensionBuilderApi
         try
         {
             return ToFoundResult(await service.PullRepositoryAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> SubmitRepositoryBuildAsync(string workspaceId, HttpContext httpContext, SubmitRepositoryBuildRequest request, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.SubmitRepositoryBuildAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' or project '{request.ProjectId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
         }
         catch (InvalidOperationException ex)
         {

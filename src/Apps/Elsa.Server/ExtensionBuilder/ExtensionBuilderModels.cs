@@ -53,6 +53,14 @@ internal enum RemoteSyncState
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RepositoryBuildCommand
+{
+    Restore,
+    Build,
+    Test
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -305,6 +313,11 @@ internal sealed record BuildRequest(
     string ProjectId,
     string SourceRevisionId,
     DateTimeOffset SubmittedAt);
+
+internal sealed record SubmitRepositoryBuildRequest(
+    string? ProjectId,
+    RepositoryBuildCommand? Command,
+    string? TargetPath);
 
 internal sealed record BuildResult(
     string Id,

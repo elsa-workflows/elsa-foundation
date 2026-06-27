@@ -674,6 +674,62 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RepositoryBuildRunsConfiguredWorkerCapturesLogsAndDiagnostics()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "worker build ok");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuild", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, null, "src/RepositoryBuild/RepositoryBuild.csproj"));
+        var log = await service.GetBuildLogAsync(_caller, build!.Id);
+        var persisted = await service.GetBuildAsync(_caller, build.Id);
+
+        Assert.Equal(BuildStatus.Succeeded, build.Status);
+        Assert.Equal(project.Id, build.ProjectId);
+        Assert.Equal(workspace.Id, build.WorkspaceId);
+        Assert.Contains("worker build ok", log);
+        Assert.Contains("build", log);
+        Assert.Equal(build.Id, persisted!.Id);
+    }
+
+    [Fact]
+    public async Task RepositoryBuildReportsFailuresAndRejectsUnsafeTargetsAndOtherOwners()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 1, "src/Broken.cs(4,5): error CS1001: Broken source");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuildFail", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Test, "src/RepositoryBuild/RepositoryBuild.csproj"));
+
+        Assert.Equal(BuildStatus.Failed, build!.Status);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error, Code: "CS1001", File: "src/Broken.cs", Line: 4, Column: 5 });
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "../outside.csproj")));
+        Assert.Null(await service.SubmitRepositoryBuildAsync(_caller with { OwnerId = "other" }, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "src/RepositoryBuild/RepositoryBuild.csproj")));
+    }
+
+    [Fact]
+    public async Task RepositoryBuildCancellationPersistsFailedJob()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "worker build ok", delaySeconds: 5);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryBuildCancel", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryBuild/RepositoryBuild.csproj", new("<Project />"));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Build, "src/RepositoryBuild/RepositoryBuild.csproj"), cancellation.Token);
+        var persisted = await service.GetBuildAsync(_caller, build!.Id);
+
+        Assert.Equal(BuildStatus.Failed, build.Status);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error } && diagnostic.Message.Contains("canceled", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(BuildStatus.Failed, persisted!.Status);
+    }
+
+    [Fact]
     public async Task SubmitBuildReturnsPollableRunningBuildWhenQueued()
     {
         var queue = new CapturingBuildQueue();
@@ -1173,6 +1229,21 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         new(
             new FakeEnvironment(_directory),
             Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+
+    private async Task<string> CreateFakeDotNetAsync(int exitCode, string output, int? delaySeconds = null)
+    {
+        var path = Path.Combine(_directory, $"fake-dotnet-{Guid.NewGuid():N}.sh");
+        await File.WriteAllTextAsync(path, $"""
+            #!/bin/sh
+            {(delaySeconds is > 0 ? $"sleep {delaySeconds.Value}" : "")}
+            echo "{output}"
+            echo "$@"
+            exit {exitCode}
+            """);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return path;
+    }
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
