@@ -6,7 +6,8 @@ import {
   createDemoWeaverClarificationResult,
   createDemoWeaverGraphOperationBatch,
   getDesignerPosition,
-  getWorkflowClarificationSummary
+  getWorkflowClarificationSummary,
+  summarizeWorkflowDesignerValidation
 } from "./workflowGraphOperations.js";
 
 test("applies a workflow graph operation batch as one draft mutation", () => {
@@ -156,6 +157,70 @@ test("fails closed for stale or destructive direct apply batches", () => {
   assert.equal(JSON.stringify(workflow, null, 2), previousJson);
 });
 
+test("validates the final Weaver workflow authoring MVP path without save or publish", () => {
+  const studio = createStudioValidationHarness();
+  const providerResult = {
+    providerId: "github-copilot",
+    resultKind: "workflowGraphOperationBatch",
+    payload: createDemoWeaverGraphOperationBatch()
+  };
+
+  const applyResult = studio.applyProviderResult(providerResult);
+
+  assert.equal(applyResult.summary.title, "Weaver batch applied");
+  assert.match(applyResult.summary.detail, /4 operations applied/);
+  assert.match(applyResult.summary.meta, /Validation passed for 1 designer activity/);
+  assert.equal(studio.state.dirty, true);
+  assert.equal(studio.state.workflowVersionId, "");
+  assert.equal(studio.state.artifactId, "");
+  assert.equal(studio.state.publishedWorkflowJson, studio.originalPublishedWorkflowJson);
+  assert.equal(studio.state.savedWorkflowJson, studio.originalSavedWorkflowJson);
+  assert.equal(studio.state.workflow.state.rootActivity.activityVersionId, "Elsa.Email.SendEmail");
+  assert.equal(studio.state.workflow.state.rootActivity.inputs[0].value.value, "Hello from Weaver");
+  assert.deepEqual(applyResult.validation, {
+    valid: true,
+    errorCount: 0,
+    activityCount: 1,
+    errors: [],
+    summary: "Validation passed for 1 designer activity"
+  });
+
+  const rejectedBatch = createDemoWeaverGraphOperationBatch();
+  rejectedBatch.operations = [
+    {
+      id: "op-remove-root",
+      kind: "RemoveActivity",
+      parameters: { activityId: "write-hello-world" },
+      temporaryReferences: [],
+      summary: "Remove root activity."
+    }
+  ];
+
+  assert.throws(
+    () => studio.applyProviderResult({
+      providerId: "github-copilot",
+      resultKind: "workflowGraphOperationBatch",
+      payload: rejectedBatch
+    }, { liveRevision: "stale-revision" }),
+    /failed direct-apply recheck/
+  );
+  assert.equal(studio.auditLog.at(-1).outcome, "direct-apply-rejected");
+  assert.equal(studio.auditLog.at(-1).resultKind, "proposal");
+  assert.equal(studio.state.workflow.state.rootActivity.activityVersionId, "Elsa.Email.SendEmail");
+  assert.equal(studio.state.publishedWorkflowJson, studio.originalPublishedWorkflowJson);
+
+  studio.undoLastApply();
+
+  assert.equal(studio.state.dirty, false);
+  assert.equal(studio.state.workflowVersionId, "saved-version-1");
+  assert.equal(studio.state.artifactId, "published-artifact-1");
+  assert.equal(studio.state.workflow.state.rootActivity.activityVersionId, "Elsa.Workflows.WriteLine");
+  assert.equal(studio.auditLog.at(0).outcome, "direct-apply-succeeded");
+  assert.equal(studio.auditLog.at(0).providerId, "github-copilot");
+  assert.equal(studio.auditLog.at(0).persistedWorkflowRevisionChanged, false);
+  assert.equal(studio.auditLog.at(1).outcome, "direct-apply-rejected");
+});
+
 function createWorkflow() {
   return {
     name: "Hello World",
@@ -185,5 +250,85 @@ function createWorkflow() {
       workflowActivityOptions: null,
       strategyOptions: null
     }
+  };
+}
+
+function createStudioValidationHarness() {
+  const workflow = createWorkflow();
+  const savedWorkflowJson = JSON.stringify(workflow, null, 2);
+  const state = {
+    workflow,
+    workflowVersionId: "saved-version-1",
+    artifactId: "published-artifact-1",
+    publishedWorkflowJson: savedWorkflowJson,
+    savedWorkflowJson,
+    dirty: false
+  };
+  const auditLog = [];
+  let undoSnapshot = null;
+
+  return {
+    state,
+    auditLog,
+    originalSavedWorkflowJson: savedWorkflowJson,
+    originalPublishedWorkflowJson: savedWorkflowJson,
+    applyProviderResult(providerResult, options = {}) {
+      const batch = providerResult.payload;
+      const classification = classifyWorkflowGraphOperationBatchForDesigner(state.workflow, batch, {
+        canDirectApply: true,
+        liveRevision: "demo-revision",
+        ...options
+      });
+
+      try {
+        const previousSnapshot = {
+          workflow: JSON.parse(JSON.stringify(state.workflow)),
+          workflowVersionId: state.workflowVersionId,
+          artifactId: state.artifactId,
+          dirty: state.dirty
+        };
+        const result = applyWorkflowGraphOperationBatchToWorkflow(state.workflow, batch, {
+          canDirectApply: true,
+          liveRevision: "demo-revision",
+          ...options
+        });
+        const validation = summarizeWorkflowDesignerValidation(state.workflow);
+        state.workflowVersionId = "";
+        state.artifactId = "";
+        state.dirty = true;
+        undoSnapshot = previousSnapshot;
+        const summary = {
+          title: "Weaver batch applied",
+          detail: `${result.appliedCount} operations applied as one undoable designer transaction.`,
+          meta: `${validation.summary}; final ID: ${result.finalActivityIds.join(", ")}`
+        };
+
+        auditLog.push(createAuditRecord(providerResult, "direct-apply-succeeded", "workflowGraphOperationBatch"));
+        return { result, validation, summary };
+      } catch (error) {
+        auditLog.push(createAuditRecord(providerResult, "direct-apply-rejected", classification.resultKind));
+        throw error;
+      }
+    },
+    undoLastApply() {
+      if (!undoSnapshot)
+        throw new Error("No Weaver apply snapshot is available.");
+
+      state.workflow = JSON.parse(JSON.stringify(undoSnapshot.workflow));
+      state.workflowVersionId = undoSnapshot.workflowVersionId;
+      state.artifactId = undoSnapshot.artifactId;
+      state.dirty = undoSnapshot.dirty;
+      undoSnapshot = null;
+    }
+  };
+}
+
+function createAuditRecord(providerResult, outcome, resultKind) {
+  return {
+    outcome,
+    providerId: providerResult.providerId,
+    resultKind,
+    persistedWorkflowRevisionChanged: false,
+    operationIds: (providerResult.payload?.operations ?? []).map((operation) => operation.id)
   };
 }

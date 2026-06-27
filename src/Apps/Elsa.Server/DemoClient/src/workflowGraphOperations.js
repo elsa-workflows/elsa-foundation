@@ -77,6 +77,33 @@ export function getWorkflowClarificationSummary(clarification) {
   };
 }
 
+export function summarizeWorkflowDesignerValidation(workflow) {
+  const errors = [];
+  const rootActivity = workflow?.state?.rootActivity;
+  const activityIds = collectActivityIds(rootActivity);
+
+  if (!rootActivity)
+    errors.push("state.rootActivity is required");
+
+  for (const activity of collectActivities(rootActivity)) {
+    if (!activity.nodeId)
+      errors.push("Activity nodeId is required");
+
+    if (!activity.activityVersionId)
+      errors.push(`Activity '${activity.nodeId || "unknown"}' requires an activityVersionId`);
+  }
+
+  return {
+    valid: errors.length === 0,
+    errorCount: errors.length,
+    activityCount: activityIds.size,
+    errors,
+    summary: errors.length === 0
+      ? `Validation passed for ${activityIds.size} designer activit${activityIds.size === 1 ? "y" : "ies"}`
+      : `Validation found ${errors.length} issue${errors.length === 1 ? "" : "s"}`
+  };
+}
+
 export function classifyWorkflowGraphOperationBatchForDesigner(workflow, batch, options = {}) {
   const reasons = [];
   const operations = Array.isArray(batch?.operations) ? batch.operations : [];
@@ -207,6 +234,19 @@ function collectActivityIds(activity, ids = new Set()) {
   }
 
   return ids;
+}
+
+function collectActivities(activity, activities = []) {
+  if (!activity)
+    return activities;
+
+  activities.push(activity);
+  for (const slot of getActivityChildSlots(activity)) {
+    for (const child of getSlotActivities(slot))
+      collectActivities(child, activities);
+  }
+
+  return activities;
 }
 
 function findActivityByNodeId(activity, nodeId) {
