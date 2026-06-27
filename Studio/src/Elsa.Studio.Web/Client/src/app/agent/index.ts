@@ -13,3 +13,4 @@ export * from "./AgentMessageList";
 export * from "./AgentPanel";
 export * from "./AgentPromptStarters";
 export * from "./AgentProposalReview";
+export * from "./AgentSessionIndicator";
