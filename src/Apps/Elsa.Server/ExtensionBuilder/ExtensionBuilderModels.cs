@@ -57,7 +57,8 @@ internal enum RepositoryBuildCommand
 {
     Restore,
     Build,
-    Test
+    Test,
+    Pack
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -326,7 +327,8 @@ internal sealed record BuildResult(
     string LogPath,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    IReadOnlyList<BuildArtifact>? Artifacts = null);
 
 internal sealed record BuildDiagnostic(
     BuildDiagnosticSeverity Severity,
@@ -344,7 +346,10 @@ internal sealed record BuildArtifact(
     string FileName,
     string Path,
     long Size,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? WorkspaceId = null,
+    string? SourceRevisionId = null,
+    string? Branch = null);
 
 internal sealed record PackagePromotionRequest(string? TargetFeed);
 

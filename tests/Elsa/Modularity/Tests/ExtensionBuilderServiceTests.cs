@@ -597,6 +597,82 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RepositoryPackProjectCapturesArtifactMetadataAndDoesNotPromote()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 0, "project pack ok", packageFiles: ["Elsa.Test.RepositoryPack.1.2.3.nupkg"]);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPack", "1.2.3", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryPack/RepositoryPack.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPack/RepositoryPack.csproj"));
+        var log = await service.GetBuildLogAsync(_caller, build!.Id);
+        var persisted = await service.GetBuildAsync(_caller, build.Id);
+        var runtime = await service.GetRuntimeStatusAsync(_caller, project.Id);
+
+        Assert.Equal(BuildStatus.Succeeded, build.Status);
+        var artifact = Assert.Single(build.Artifacts!);
+        Assert.Equal(build.Artifact!.Id, artifact.Id);
+        Assert.Equal("Elsa.Test.RepositoryPack", artifact.PackageId);
+        Assert.Equal("1.2.3", artifact.Version);
+        Assert.Equal(workspace.Id, artifact.WorkspaceId);
+        Assert.Equal(build.SourceRevisionId, artifact.SourceRevisionId);
+        Assert.Equal(build.Id, artifact.BuildId);
+        Assert.True(File.Exists(artifact.Path));
+        Assert.Contains("project pack ok", log);
+        Assert.Equal(artifact.Id, Assert.Single(persisted!.Artifacts!).Id);
+        Assert.Empty(runtime!.Packages);
+        Assert.Null(runtime.ActiveVersion);
+        Assert.Null(await service.SubmitRepositoryBuildAsync(_caller with { OwnerId = "other" }, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPack/RepositoryPack.csproj")));
+    }
+
+    [Fact]
+    public async Task RepositoryPackSolutionCapturesMultipleArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(
+            exitCode: 0,
+            "solution pack ok",
+            packageFiles: ["Elsa.Test.PackageA.1.0.0.nupkg", "Elsa.Test.PackageB.2.1.0.nupkg"]);
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPackSolution", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "RepositoryPack.slnx", new("<Solution />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "RepositoryPack.slnx"));
+
+        Assert.Equal(BuildStatus.Succeeded, build!.Status);
+        Assert.Collection(
+            build.Artifacts!,
+            artifact =>
+            {
+                Assert.Equal("Elsa.Test.PackageA", artifact.PackageId);
+                Assert.Equal("1.0.0", artifact.Version);
+            },
+            artifact =>
+            {
+                Assert.Equal("Elsa.Test.PackageB", artifact.PackageId);
+                Assert.Equal("2.1.0", artifact.Version);
+            });
+    }
+
+    [Fact]
+    public async Task RepositoryPackFailureCapturesDiagnosticsAndNoArtifacts()
+    {
+        var dotnet = await CreateFakeDotNetAsync(exitCode: 1, "src/Broken.cs(6,7): error CS1002: Pack failed");
+        var service = CreateService(options: new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state"), DotNetExecutable = dotnet });
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.RepositoryPackFail", "1.0.0", "net10.0", null, null));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/RepositoryPackFail/RepositoryPackFail.csproj", new("<Project />"));
+
+        var build = await service.SubmitRepositoryBuildAsync(_caller, workspace.Id, new(project.Id, RepositoryBuildCommand.Pack, "src/RepositoryPackFail/RepositoryPackFail.csproj"));
+
+        Assert.Equal(BuildStatus.Failed, build!.Status);
+        Assert.Null(build.Artifact);
+        Assert.Empty(build.Artifacts!);
+        Assert.Contains(build.Diagnostics, diagnostic => diagnostic is { Severity: BuildDiagnosticSeverity.Error, Code: "CS1002", File: "src/Broken.cs", Line: 6, Column: 7 });
+    }
+
+    [Fact]
     public async Task SubmitBuildReturnsPollableRunningBuildWhenQueued()
     {
         var queue = new CapturingBuildQueue();
@@ -1090,14 +1166,31 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
             new FakeEnvironment(_directory),
             Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
 
-    private async Task<string> CreateFakeDotNetAsync(int exitCode, string output, int? delaySeconds = null)
+    private async Task<string> CreateFakeDotNetAsync(int exitCode, string output, int? delaySeconds = null, IReadOnlyList<string>? packageFiles = null)
     {
         var path = Path.Combine(_directory, $"fake-dotnet-{Guid.NewGuid():N}.sh");
+        var packageCreation = packageFiles is { Count: > 0 }
+            ? $"""
+            if [ "$1" = "pack" ]; then
+              output_dir=""
+              while [ "$#" -gt 0 ]; do
+                if [ "$1" = "--output" ]; then
+                  shift
+                  output_dir="$1"
+                fi
+                shift
+              done
+              mkdir -p "$output_dir"
+              {string.Join(Environment.NewLine, packageFiles.Select(fileName => $"touch \"$output_dir/{fileName}\""))}
+            fi
+            """
+            : "";
         await File.WriteAllTextAsync(path, $"""
             #!/bin/sh
             {(delaySeconds is > 0 ? $"sleep {delaySeconds.Value}" : "")}
             echo "{output}"
             echo "$@"
+            {packageCreation}
             exit {exitCode}
             """);
         if (!OperatingSystem.IsWindows())

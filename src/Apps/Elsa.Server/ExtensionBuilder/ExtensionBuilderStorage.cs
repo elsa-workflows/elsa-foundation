@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 
@@ -690,6 +691,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var sourceRevisionId = RunGitOrDefault(repositoryPath, "rev-parse", "HEAD");
         if (string.IsNullOrWhiteSpace(sourceRevisionId))
             sourceRevisionId = "working-tree";
+        var sourceBranch = RunGitOrDefault(repositoryPath, "branch", "--show-current");
+        if (string.IsNullOrWhiteSpace(sourceBranch))
+            sourceBranch = null;
 
         var created = new BuildResult(buildId, project.Id, workspaceId, sourceRevisionId, BuildStatus.Pending, [], null, logPath, createdAt, null, null);
         if (!await SaveBuildAsync(created, cancellationToken))
@@ -713,7 +717,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             return failed;
         }
 
-        var arguments = new[] { command, targetPath };
+        var artifactsPath = commandName is RepositoryBuildCommand.Pack ? GetBuildArtifactsPath(buildId) : null;
+        var arguments = artifactsPath is null
+            ? [command, targetPath]
+            : new[] { command, targetPath, "--output", artifactsPath };
         ProcessResult process;
         try
         {
@@ -735,13 +742,22 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             .ToArray();
         await File.WriteAllLinesAsync(logPath, log, cancellationToken);
         diagnostics.AddRange(ExtensionBuilderBuildRunner.ParseDiagnostics(log));
+        IReadOnlyList<BuildArtifact> artifacts = artifactsPath is null
+            ? []
+            : ReadRepositoryPackArtifacts(buildId, artifactsPath, project, workspaceId, sourceRevisionId, sourceBranch);
         if (process.ExitCode != 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error))
             diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} failed.", null, null, null, null));
+        if (commandName is RepositoryBuildCommand.Pack && process.ExitCode == 0 && artifacts.Count == 0)
+            diagnostics.Add(new(BuildDiagnosticSeverity.Error, "Pack completed without producing package artifacts.", null, null, null, null));
 
         var completed = running with
         {
-            Status = process.ExitCode == 0 ? BuildStatus.Succeeded : BuildStatus.Failed,
+            Status = process.ExitCode == 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error)
+                ? BuildStatus.Succeeded
+                : BuildStatus.Failed,
             Diagnostics = diagnostics,
+            Artifact = artifacts.FirstOrDefault(),
+            Artifacts = artifacts,
             CompletedAt = DateTimeOffset.UtcNow
         };
         await SaveBuildAsync(completed, CancellationToken.None);
@@ -1332,6 +1348,33 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             .Order(StringComparer.OrdinalIgnoreCase)
             .Concat(EnumerateRepositoryFiles(repositoryPath, "*.*proj").Order(StringComparer.OrdinalIgnoreCase))
             .FirstOrDefault();
+    }
+
+    private static IReadOnlyList<BuildArtifact> ReadRepositoryPackArtifacts(string buildId, string artifactsPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch) =>
+        Directory.EnumerateFiles(artifactsPath, "*.nupkg", SearchOption.TopDirectoryOnly)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Select(path => ReadRepositoryPackArtifact(buildId, path, project, workspaceId, sourceRevisionId, sourceBranch))
+            .ToArray();
+
+    private static BuildArtifact ReadRepositoryPackArtifact(string buildId, string artifactPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch)
+    {
+        var (packageId, version) = TryReadPackageIdentity(artifactPath) ?? (project.PackageId, project.PackageVersion);
+        var file = new FileInfo(artifactPath);
+        return new($"artifact_{Guid.NewGuid():N}", buildId, packageId, version, file.Name, file.FullName, file.Length, DateTimeOffset.UtcNow, workspaceId, sourceRevisionId, sourceBranch);
+    }
+
+    private static (string PackageId, string Version)? TryReadPackageIdentity(string artifactPath)
+    {
+        try
+        {
+            return ExtensionBuilderBuildRunner.TryReadNuspecIdentity(artifactPath);
+        }
+        catch (InvalidDataException)
+        {
+        }
+
+        var match = Regex.Match(Path.GetFileNameWithoutExtension(artifactPath), @"^(?<id>.+)\.(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$");
+        return match.Success ? (match.Groups["id"].Value, match.Groups["version"].Value) : null;
     }
 
     private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
