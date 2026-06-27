@@ -39,6 +39,20 @@ internal enum ExtensionTemplateScope
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RemoteSyncOperation
+{
+    Push,
+    Pull
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum RemoteSyncState
+{
+    Completed,
+    Blocked
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum BuildStatus
 {
     Pending,
@@ -247,6 +261,16 @@ internal sealed record SourceControlCommitRequest(string Message);
 internal sealed record SourceControlCommitResult(
     string CommitId,
     string Message,
+    SourceControlStatus Status);
+
+internal sealed record RemoteSyncResult(
+    RemoteSyncOperation Operation,
+    RemoteSyncState State,
+    string Message,
+    string? Remote,
+    string? Branch,
+    int Ahead,
+    int Behind,
     SourceControlStatus Status);
 
 internal sealed record AppliedRepositoryTemplate(

@@ -30,6 +30,8 @@ internal interface IExtensionBuilderStorage
     Task<SourceControlStatus?> UnstageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
     Task<SourceControlStatus?> StageAllRepositoryChangesAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PushRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PullRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default);
@@ -54,6 +56,7 @@ internal interface IExtensionBuilderStorage
 
 internal sealed record SourceSnapshot(string Id, string ProjectId, string Path, DateTimeOffset CreatedAt);
 internal sealed record RenderedTemplateFile(string RelativePath, string PhysicalPath, string Content);
+internal sealed record RemoteDivergence(bool RemoteBranchExists, int Ahead, int Behind);
 
 internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 {
@@ -674,6 +677,66 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
+    public async Task<RemoteSyncResult?> PushRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            var remote = GetPrimaryRemote(repositoryPath);
+            var branch = GetRequiredActiveBranch(repositoryPath);
+            EnsureCleanWorkingCopy(workspace.Id, "Commit or discard working-copy changes before pushing.");
+            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, cancellationToken);
+            if (divergence.Behind > 0)
+                throw new InvalidOperationException("Push blocked because the remote branch contains commits that are not in the active working copy. Pull or resolve divergence outside Extension Builder first.");
+
+            await RunGitAsync(repositoryPath, cancellationToken, "push", "-u", remote, branch);
+            state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
+            await SaveStateAsync(state, cancellationToken);
+            return new(RemoteSyncOperation.Push, RemoteSyncState.Completed, $"Pushed {branch} to {remote}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<RemoteSyncResult?> PullRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            var remote = GetPrimaryRemote(repositoryPath);
+            var branch = GetRequiredActiveBranch(repositoryPath);
+            EnsureCleanWorkingCopy(workspace.Id, "Pull blocked because the working copy has uncommitted changes. Commit or discard changes before pulling.");
+            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, cancellationToken);
+            if (!divergence.RemoteBranchExists)
+                throw new InvalidOperationException($"Pull blocked because remote branch '{remote}/{branch}' does not exist.");
+            if (divergence.Ahead > 0 && divergence.Behind > 0)
+                throw new InvalidOperationException("Pull blocked because the active branch has diverged from the remote branch. Resolve divergence outside Extension Builder before continuing.");
+            if (divergence.Behind == 0)
+                return new(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Branch {branch} is already up to date with {remote}.", remote, branch, divergence.Ahead, divergence.Behind, GetSourceControlStatus(workspace.Id));
+
+            await RunGitAsync(repositoryPath, cancellationToken, "pull", "--ff-only", remote, branch);
+            state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
+            await SaveStateAsync(state, cancellationToken);
+            return new(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Pulled {remote}/{branch}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.PackageId))
@@ -1204,6 +1267,47 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             !string.IsNullOrWhiteSpace(status),
             origin ?? "not-connected");
     }
+
+    private string GetPrimaryRemote(string repositoryPath)
+    {
+        var remote = RunGitOrDefault(repositoryPath, "remote")
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(remote))
+            throw new InvalidOperationException("Remote sync requires a configured Git remote.");
+        return remote;
+    }
+
+    private string GetRequiredActiveBranch(string repositoryPath)
+    {
+        var branch = RunGitOrDefault(repositoryPath, "branch", "--show-current");
+        if (string.IsNullOrWhiteSpace(branch))
+            throw new InvalidOperationException("Remote sync requires an active named branch.");
+        return branch;
+    }
+
+    private void EnsureCleanWorkingCopy(string workspaceId, string message)
+    {
+        if (GetSourceControlStatus(workspaceId).IsDirty)
+            throw new InvalidOperationException(message);
+    }
+
+    private async Task<RemoteDivergence> FetchAndMeasureRemoteDivergenceAsync(string repositoryPath, string remote, string branch, CancellationToken cancellationToken)
+    {
+        if (!RemoteBranchExists(repositoryPath, remote, branch))
+            return new(false, 0, 0);
+
+        var remoteRef = $"refs/remotes/{remote}/{branch}";
+        await RunGitAsync(repositoryPath, cancellationToken, "fetch", remote, $"{branch}:{remoteRef}");
+        var counts = RunGitOrDefault(repositoryPath, "rev-list", "--left-right", "--count", $"HEAD...{remoteRef}")
+            .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        return counts.Length == 2 && int.TryParse(counts[0], out var ahead) && int.TryParse(counts[1], out var behind)
+            ? new(true, ahead, behind)
+            : new(true, 0, 0);
+    }
+
+    private bool RemoteBranchExists(string repositoryPath, string remote, string branch) =>
+        !string.IsNullOrWhiteSpace(RunGitOrDefault(repositoryPath, "ls-remote", "--heads", remote, branch));
 
     private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
     {
