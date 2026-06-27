@@ -11,7 +11,7 @@ export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warni
 export type ExtensionTemplateScope = "Repository" | "Solution" | "Project" | "Item" | string;
 export type RemoteSyncOperation = "Push" | "Pull" | string;
 export type RemoteSyncState = "Completed" | "Blocked" | string;
-export type RepositoryBuildCommand = "Restore" | "Build" | "Test" | string;
+export type RepositoryBuildCommand = "Restore" | "Build" | "Test" | "Pack" | string;
 
 export interface ExtensionBuilderCapabilities {
   canCreateWorkspace: boolean;
@@ -181,6 +181,7 @@ export interface BuildResult {
   finishedAt?: string | null;
   diagnostics: BuildDiagnostic[];
   artifact?: BuildArtifact | null;
+  artifacts: BuildArtifact[];
 }
 
 export interface BuildDiagnostic {
@@ -198,6 +199,9 @@ export interface BuildArtifact {
   version: string;
   fileName?: string | null;
   size?: number | null;
+  workspaceId?: string | null;
+  sourceRevisionId?: string | null;
+  branch?: string | null;
 }
 
 export interface PackagePromotionRequest {
@@ -710,6 +714,8 @@ function normalizeRemoteSyncResult(result: RawRemoteSyncResult): RemoteSyncResul
 }
 
 function normalizeBuild(build: RawBuildResult): BuildResult {
+  const artifact = normalizeArtifact(build.artifact);
+  const artifacts = (build.artifacts ?? (artifact ? [artifact] : [])).map(normalizeArtifact).filter(artifact => artifact !== null);
   return {
     id: build.id,
     projectId: build.projectId,
@@ -724,8 +730,23 @@ function normalizeBuild(build: RawBuildResult): BuildResult {
       line: diagnostic.line,
       column: diagnostic.column
     })),
-    artifact: build.artifact
+    artifact,
+    artifacts
   };
+}
+
+function normalizeArtifact(artifact?: RawBuildArtifact | null): BuildArtifact | null {
+  return artifact ? {
+    id: artifact.id,
+    buildId: artifact.buildId,
+    packageId: artifact.packageId,
+    version: artifact.version,
+    fileName: artifact.fileName,
+    size: artifact.size,
+    workspaceId: artifact.workspaceId,
+    sourceRevisionId: artifact.sourceRevisionId,
+    branch: artifact.branch
+  } : null;
 }
 
 function normalizePromotionResult(result: RawPackagePromotionResult): PackagePromotionResult {
@@ -1021,7 +1042,20 @@ interface RawBuildResult {
   createdAt?: string | null;
   completedAt?: string | null;
   diagnostics?: RawBuildDiagnostic[];
-  artifact?: BuildArtifact | null;
+  artifact?: RawBuildArtifact | null;
+  artifacts?: RawBuildArtifact[] | null;
+}
+
+interface RawBuildArtifact {
+  id: string;
+  buildId?: string | null;
+  packageId: string;
+  version: string;
+  fileName?: string | null;
+  size?: number | null;
+  workspaceId?: string | null;
+  sourceRevisionId?: string | null;
+  branch?: string | null;
 }
 
 interface RawPackagePromotionResult {
