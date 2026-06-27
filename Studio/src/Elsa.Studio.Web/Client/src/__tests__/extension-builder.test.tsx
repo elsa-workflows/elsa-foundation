@@ -444,6 +444,7 @@ describe("extension builder page", () => {
     ];
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: "abcdef123456", artifact: artifacts[0], artifacts });
+      if (url.includes("/artifacts/artifact-a/promote")) return acceptedPromotion({ packageId: "Company.Extensions.One", version: "1.0.0" });
       return defaultPostJson(url);
     });
     const getJson = vi.fn(async (url: string) => {
@@ -468,6 +469,11 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("Company.Extensions.Two 2.1.0");
     expect(container.textContent).toContain("feature/pack");
     expect(container.textContent).toContain("abcdef12");
+
+    await clickButton(container, "Promote package");
+    await flushPromises();
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/artifacts/artifact-a/promote", {});
 
     await unmount();
   });
@@ -1009,7 +1015,8 @@ function artifactShape() {
     size: 4096,
     workspaceId: "ws-1",
     sourceRevisionId: "rev-1",
-    branch: "main"
+    branch: "main",
+    sourceIsDirty: false
   };
 }
 
@@ -1065,11 +1072,13 @@ function failedRuntime(overrides?: Partial<ExtensionRuntimeStatus>): ExtensionRu
   };
 }
 
-function acceptedPromotion() {
+function acceptedPromotion(overrides?: { packageId?: string; version?: string }) {
+  const packageId = overrides?.packageId ?? "Company.Extensions.Hello";
+  const version = overrides?.version ?? "1.0.0";
   return {
     status: "Accepted",
     reconcileOutcome: { outcome: "Succeeded", correlationId: "corr-1", reason: "Package validation passed.", isDegraded: false, failedPackages: [] },
-    publishedPackage: { packageId: "Company.Extensions.Hello", version: "1.0.0", feedName: "Nuplane", path: "/packages/Company.Extensions.Hello.1.0.0.nupkg" },
+    publishedPackage: { packageId, version, feedName: "Nuplane", path: `/packages/${packageId}.${version}.nupkg` },
     requiresReload: false,
     requiresRestart: false
   };

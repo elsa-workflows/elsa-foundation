@@ -23,6 +23,7 @@ import {
   listWorkspaces,
   moveRepositoryFile,
   pullRepository,
+  promoteBuildArtifact,
   promoteBuild,
   pushRepository,
   readRepositoryFile,
@@ -827,6 +828,29 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handlePromoteArtifact(artifact: BuildArtifact) {
+    if (!selectedWorkspace || !selectedProject || !activeBuild) return;
+    if (artifact.sourceIsDirty) {
+      setError("Package artifact was built from uncommitted source. Commit and pack again before promoting.");
+      return;
+    }
+
+    const workspaceId = selectedWorkspace.id;
+    const projectId = selectedProject.id;
+    const result = await runOperation(
+      () => promoteBuildArtifact(context, workspaceId, projectId, activeBuild.id, artifact.id, { buildId: activeBuild.id }),
+      `Promotion response received for ${artifact.packageId} ${artifact.version}.`
+    );
+    if (result && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+      setPromotionResult(result);
+      if (result.accepted) {
+        await refreshRuntimeStatus(workspaceId, projectId);
+        if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+      }
+      setActiveInspectorTab(result.accepted ? "runtime" : "promote");
+    }
+  }
+
   async function refreshRuntimeStatus(workspaceId = selectedWorkspace?.id, projectId = selectedProject?.id) {
     if (!workspaceId || !projectId) return;
     const requestId = ++runtimeStatusRequestId.current;
@@ -1037,6 +1061,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           onBuildCommandChange={setBuildCommand}
           onBuildTargetPathChange={setBuildTargetPath}
           onSubmitBuild={handleSubmitBuild}
+          onPromoteArtifact={handlePromoteArtifact}
           onSelectBuild={build => {
             setActiveBuild(build);
             setActiveInspectorTab("build");
@@ -1502,6 +1527,7 @@ function BuildRuntimeInspector({
   onBuildCommandChange,
   onBuildTargetPathChange,
   onSubmitBuild,
+  onPromoteArtifact,
   onSelectBuild,
   onSelectSourceDiff,
   onStageFile,
@@ -1538,6 +1564,7 @@ function BuildRuntimeInspector({
   onBuildCommandChange(value: RepositoryBuildCommand): void;
   onBuildTargetPathChange(value: string): void;
   onSubmitBuild(): void;
+  onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
   onSelectSourceDiff(path: string, staged: boolean): void;
   onStageFile(path: string): void;
@@ -1577,6 +1604,7 @@ function BuildRuntimeInspector({
           onBuildCommandChange={onBuildCommandChange}
           onBuildTargetPathChange={onBuildTargetPathChange}
           onSubmitBuild={onSubmitBuild}
+          onPromoteArtifact={onPromoteArtifact}
           onSelectBuild={onSelectBuild}
           onDiagnosticSelect={onDiagnosticSelect}
         />
@@ -1638,6 +1666,7 @@ function BuildPanel({
   onBuildCommandChange,
   onBuildTargetPathChange,
   onSubmitBuild,
+  onPromoteArtifact,
   onSelectBuild,
   onDiagnosticSelect
 }: {
@@ -1652,6 +1681,7 @@ function BuildPanel({
   onBuildCommandChange(value: RepositoryBuildCommand): void;
   onBuildTargetPathChange(value: string): void;
   onSubmitBuild(): void;
+  onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
   onDiagnosticSelect(diagnostic: BuildDiagnostic): void;
 }) {
@@ -1691,8 +1721,12 @@ function BuildPanel({
           <div key={artifact.id} className="modules-list-row">
             <span>
               <strong>{artifact.packageId} {artifact.version}</strong>
-              <small>{artifact.fileName ?? artifact.id}{artifact.branch ? ` · ${artifact.branch}` : ""}{artifact.sourceRevisionId ? ` · ${artifact.sourceRevisionId.slice(0, 8)}` : ""}</small>
+              <small>{artifact.fileName ?? artifact.id}{artifact.branch ? ` · ${artifact.branch}` : ""}{artifact.sourceRevisionId ? ` · ${artifact.sourceRevisionId.slice(0, 8)}` : ""}{artifact.sourceIsDirty ? " · uncommitted" : ""}</small>
             </span>
+            <button type="button" className="studio-button" disabled={busy || artifact.sourceIsDirty} title={artifact.sourceIsDirty ? "Commit and pack again before promoting" : "Promote package artifact"} onClick={() => onPromoteArtifact(artifact)}>
+              <PackageCheck size={15} />
+              Promote package
+            </button>
             <StatusChip tone="accent">{formatArtifactSize(artifact.size)}</StatusChip>
           </div>
         ))}
@@ -2213,6 +2247,7 @@ function promotionMessage(result: PackagePromotionResult) {
   if (result.category === "InvalidManifest") return result.message ?? "Package manifest validation failed. Fix the manifest metadata and rebuild.";
   if (result.category === "DependencyPolicy") return result.message ?? "Package dependencies violate policy. Review the rejected dependency and rebuild with an allowed version.";
   if (result.category === "MalformedPackage") return result.message ?? "The package artifact is malformed or corrupt. Rebuild the project before promoting.";
+  if (result.category === "UncommittedSource") return result.message ?? "Package artifact was built from uncommitted source. Commit and pack again before promoting.";
   return result.message ?? "Promotion was rejected by server-side validation.";
 }
 
