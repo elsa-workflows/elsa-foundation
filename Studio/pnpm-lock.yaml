@@ -84,7 +84,11 @@ importers:
 
   src/Elsa.Studio.Weaver.Workflows/Client: {}
 
-  src/Elsa.Studio.Web/Client: {}
+  src/Elsa.Studio.Web/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.CodeEditor/Client
 
   src/Elsa.Studio.Workflows/Client:
     dependencies:
