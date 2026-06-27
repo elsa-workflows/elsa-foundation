@@ -694,6 +694,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var sourceBranch = RunGitOrDefault(repositoryPath, "branch", "--show-current");
         if (string.IsNullOrWhiteSpace(sourceBranch))
             sourceBranch = null;
+        var sourceIsDirty = GetRepositoryState(repositoryPath).IsDirty;
 
         var created = new BuildResult(buildId, project.Id, workspaceId, sourceRevisionId, BuildStatus.Pending, [], null, logPath, createdAt, null, null);
         if (!await SaveBuildAsync(created, cancellationToken))
@@ -744,7 +745,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         diagnostics.AddRange(ExtensionBuilderBuildRunner.ParseDiagnostics(log));
         IReadOnlyList<BuildArtifact> artifacts = artifactsPath is null
             ? []
-            : ReadRepositoryPackArtifacts(buildId, artifactsPath, project, workspaceId, sourceRevisionId, sourceBranch);
+            : ReadRepositoryPackArtifacts(buildId, artifactsPath, project, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty);
         if (process.ExitCode != 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error))
             diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} failed.", null, null, null, null));
         if (commandName is RepositoryBuildCommand.Pack && process.ExitCode == 0 && artifacts.Count == 0)
@@ -1350,17 +1351,17 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             .FirstOrDefault();
     }
 
-    private static IReadOnlyList<BuildArtifact> ReadRepositoryPackArtifacts(string buildId, string artifactsPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch) =>
+    private static IReadOnlyList<BuildArtifact> ReadRepositoryPackArtifacts(string buildId, string artifactsPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch, bool sourceIsDirty) =>
         Directory.EnumerateFiles(artifactsPath, "*.nupkg", SearchOption.TopDirectoryOnly)
             .Order(StringComparer.OrdinalIgnoreCase)
-            .Select(path => ReadRepositoryPackArtifact(buildId, path, project, workspaceId, sourceRevisionId, sourceBranch))
+            .Select(path => ReadRepositoryPackArtifact(buildId, path, project, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty))
             .ToArray();
 
-    private static BuildArtifact ReadRepositoryPackArtifact(string buildId, string artifactPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch)
+    private static BuildArtifact ReadRepositoryPackArtifact(string buildId, string artifactPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch, bool sourceIsDirty)
     {
         var (packageId, version) = TryReadPackageIdentity(artifactPath) ?? (project.PackageId, project.PackageVersion);
         var file = new FileInfo(artifactPath);
-        return new($"artifact_{Guid.NewGuid():N}", buildId, packageId, version, file.Name, file.FullName, file.Length, DateTimeOffset.UtcNow, workspaceId, sourceRevisionId, sourceBranch);
+        return new($"artifact_{Guid.NewGuid():N}", buildId, packageId, version, file.Name, file.FullName, file.Length, DateTimeOffset.UtcNow, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty);
     }
 
     private static (string PackageId, string Version)? TryReadPackageIdentity(string artifactPath)

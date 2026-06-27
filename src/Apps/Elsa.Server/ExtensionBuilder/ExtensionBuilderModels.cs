@@ -91,7 +91,8 @@ internal enum PromotionRejectionReason
     Duplicate,
     InvalidManifest,
     DependencyPolicy,
-    MalformedPackage
+    MalformedPackage,
+    UncommittedSource
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -349,7 +350,8 @@ internal sealed record BuildArtifact(
     DateTimeOffset CreatedAt,
     string? WorkspaceId = null,
     string? SourceRevisionId = null,
-    string? Branch = null);
+    string? Branch = null,
+    bool SourceIsDirty = false);
 
 internal sealed record PackagePromotionRequest(string? TargetFeed);
 

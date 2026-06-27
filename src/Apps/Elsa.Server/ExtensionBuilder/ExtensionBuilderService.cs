@@ -42,6 +42,7 @@ internal interface IExtensionBuilderService
     Task<string?> GetBuildLogAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<BuildArtifact?> GetBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
+    Task<PackagePromotionResult?> PromoteBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, string artifactId, CancellationToken cancellationToken = default);
     Task<ExtensionRuntimeStatus?> GetRuntimeStatusAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<PackagePromotionResult?> RollbackPackageAsync(ExtensionBuilderCaller caller, string projectId, RollbackPackageRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionBuilderOperationResponse?> RetryReconciliationAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -224,7 +225,13 @@ internal sealed class ExtensionBuilderService(
         return build?.Artifact is { } artifact && File.Exists(artifact.Path) ? artifact : null;
     }
 
-    public async Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default)
+    public Task<PackagePromotionResult?> PromoteBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default) =>
+        PromoteBuildArtifactCoreAsync(caller, buildId, null, cancellationToken);
+
+    public Task<PackagePromotionResult?> PromoteBuildArtifactAsync(ExtensionBuilderCaller caller, string buildId, string artifactId, CancellationToken cancellationToken = default) =>
+        PromoteBuildArtifactCoreAsync(caller, buildId, artifactId, cancellationToken);
+
+    private async Task<PackagePromotionResult?> PromoteBuildArtifactCoreAsync(ExtensionBuilderCaller caller, string buildId, string? artifactId, CancellationToken cancellationToken)
     {
         var build = await storage.GetBuildAsync(buildId, caller.OwnerId, cancellationToken);
         if (build is null)
@@ -232,13 +239,20 @@ internal sealed class ExtensionBuilderService(
         if (!await storage.ProjectExistsAsync(build.ProjectId, cancellationToken))
             return null;
 
-        var result = await promotionService.PromoteAsync(build, cancellationToken);
-        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null } && build.Artifact is not null)
+        var artifact = SelectArtifact(build, artifactId);
+        if (artifact is null || !File.Exists(artifact.Path))
+            return Rejected(PromotionRejectionReason.InvalidManifest);
+        if (artifact.SourceIsDirty || string.Equals(artifact.SourceRevisionId, "working-tree", StringComparison.OrdinalIgnoreCase))
+            return Rejected(PromotionRejectionReason.UncommittedSource);
+
+        var promotableBuild = build with { Artifact = artifact };
+        var result = await promotionService.PromoteAsync(promotableBuild, cancellationToken);
+        if (result is { Status: PromotionStatus.Accepted, PublishedPackage: not null, ReconcileOutcome: not null })
         {
             var recorded = await storage.AddPromotionAsync(build.ProjectId, new(
                 result.PublishedPackage.PackageId,
                 result.PublishedPackage.Version,
-                build.Artifact.Path,
+                artifact.Path,
                 result.PublishedPackage.Path,
                 DateTimeOffset.UtcNow,
                 result.ReconcileOutcome,
@@ -254,6 +268,14 @@ internal sealed class ExtensionBuilderService(
 
         return result;
     }
+
+    private static BuildArtifact? SelectArtifact(BuildResult build, string? artifactId) =>
+        string.IsNullOrWhiteSpace(artifactId)
+            ? build.Artifact
+            : (build.Artifacts ?? []).FirstOrDefault(artifact => string.Equals(artifact.Id, artifactId, StringComparison.OrdinalIgnoreCase));
+
+    private static PackagePromotionResult Rejected(PromotionRejectionReason reason) =>
+        new(PromotionStatus.Rejected, reason, null, null, false, false);
 
     public async Task<ExtensionRuntimeStatus?> GetRuntimeStatusAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default)
     {

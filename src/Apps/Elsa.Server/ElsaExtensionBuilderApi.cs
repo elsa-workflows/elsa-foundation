@@ -58,6 +58,7 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapGet("/builds/{buildId}/log", GetBuildLogAsync);
         trusted.MapGet("/builds/{buildId}/artifact", GetBuildArtifactAsync);
         trusted.MapPost("/builds/{buildId}/promote", PromoteBuildAsync);
+        trusted.MapPost("/builds/{buildId}/artifacts/{artifactId}/promote", PromoteBuildArtifactAsync);
         trusted.MapGet("/projects/{projectId}/runtime-status", GetRuntimeStatusAsync);
         trusted.MapPost("/projects/{projectId}/rollback", RollbackPackageAsync);
         trusted.MapPost("/projects/{projectId}/retry-reconcile", RetryReconciliationAsync);
@@ -436,6 +437,9 @@ internal static class ElsaExtensionBuilderApi
 
     private static async Task<IResult> PromoteBuildAsync(string buildId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.PromoteBuildAsync(GetCaller(httpContext), buildId, cancellationToken), $"Build '{buildId}' was not found.");
+
+    private static async Task<IResult> PromoteBuildArtifactAsync(string buildId, string artifactId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
+        ToFoundResult(await service.PromoteBuildArtifactAsync(GetCaller(httpContext), buildId, artifactId, cancellationToken), $"Build '{buildId}' or artifact '{artifactId}' was not found.");
 
     private static async Task<IResult> GetRuntimeStatusAsync(string projectId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
         ToFoundResult(await service.GetRuntimeStatusAsync(GetCaller(httpContext), projectId, cancellationToken), $"Project '{projectId}' was not found.");
