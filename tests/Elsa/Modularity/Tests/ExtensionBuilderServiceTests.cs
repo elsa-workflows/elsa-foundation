@@ -141,6 +141,103 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CloneRepositoryRegistersWorkspaceAndExposesGitState()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("source-repository");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, "Cloned Repository"));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+        var workspaces = await service.ListWorkspacesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("Cloned Repository", repository.Name);
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+        Assert.False(repository.IsDirty);
+        Assert.Contains(workspaces, x => x.Id == workspace.Id);
+        Assert.True(Directory.Exists(Path.Combine(_directory, "state", "workspaces", workspace.Id, ".git")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryRejectsEmbeddedCredentials()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CloneRepositoryAsync(_caller, new("https://token@example.com/elsa/repository.git", "Private Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryCleansFailedCloneDestination()
+    {
+        var service = CreateService();
+        var missingRepository = Path.Combine(_directory, "missing-repository");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CloneRepositoryAsync(_caller, new(missingRepository, "Missing Repository")));
+
+        Assert.Contains("Git command failed", exception.Message);
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryInfersDisplayNameForWorkbenchVisibility()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("visible-repository.git");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, null));
+        var visibleWorkspace = await service.GetWorkspaceAsync(_caller, workspace.Id);
+        var repository = Assert.Single(await service.ListRepositoriesAsync(_caller));
+
+        Assert.Equal("visible-repository", workspace.DisplayName);
+        Assert.Equal(workspace.Id, visibleWorkspace!.Id);
+        Assert.Equal(workspace.DisplayName, repository.Name);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceInitializesManagedRepositoryWithStarterCommit()
+    {
+        var service = CreateService();
+
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Managed Extensions"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var repositories = await service.ListRepositoriesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.True(Directory.Exists(Path.Combine(repositoryPath, ".git")));
+        Assert.Contains("Managed Extensions", await File.ReadAllTextAsync(Path.Combine(repositoryPath, "README.md")));
+        Assert.Equal("1", await GitAsync(repositoryPath, "rev-list", "--count", "HEAD"));
+        Assert.Equal("Elsa Extension Builder|extension-builder@elsa.local|Initial managed repository", await GitAsync(repositoryPath, "log", "-1", "--pretty=%an|%ae|%s"));
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal("not-connected", repository.RemoteState);
+        Assert.False(repository.IsDirty);
+    }
+
+    [Fact]
+    public async Task CreateWorkspaceCleansUpWhenManagedRepositoryInitializationFails()
+    {
+        var service = CreateService(options: new ExtensionBuilderOptions
+        {
+            StoragePath = Path.Combine(_directory, "state"),
+            GitExecutable = "missing-git-executable"
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateWorkspaceAsync(_caller, new("Broken Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        var workspacesPath = Path.Combine(_directory, "state", "workspaces");
+        Assert.True(!Directory.Exists(workspacesPath) || !Directory.EnumerateDirectories(workspacesPath).Any());
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();
@@ -702,10 +799,11 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         IExtensionBuilderPromotionService? promotion = null,
         FakeNuplaneAdmin? nuplane = null,
         IFeatureManagementService? featureManagement = null,
-        ExtensionBuilderStorage? storage = null)
+        ExtensionBuilderStorage? storage = null,
+        ExtensionBuilderOptions? options = null)
     {
         nuplane ??= new FakeNuplaneAdmin();
-        storage ??= CreateStorage();
+        storage ??= CreateStorageFromOptions(options);
         buildRunner ??= new FakeBuildRunner(BuildStatus.Succeeded);
         buildQueue ??= new ImmediateBuildQueue(new ExtensionBuilderBuildExecutor(storage, buildRunner, NullLogger<ExtensionBuilderBuildExecutor>.Instance));
         return new(
@@ -725,6 +823,11 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         return new(new FakeEnvironment(_directory), Options.Create(options));
     }
 
+    private ExtensionBuilderStorage CreateStorageFromOptions(ExtensionBuilderOptions? options) =>
+        new(
+            new FakeEnvironment(_directory),
+            Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
     private async Task<string> CreateSourceRepositoryAsync(string parentPath, string name)
@@ -732,13 +835,16 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         var repositoryPath = Path.Combine(parentPath, name);
         Directory.CreateDirectory(repositoryPath);
         await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), "# Test repository");
-        await RunGitAsync(repositoryPath, "init", "-b", "main");
-        await RunGitAsync(repositoryPath, "add", ".");
-        await RunGitAsync(repositoryPath, "-c", "user.name=Elsa Tests", "-c", "user.email=tests@elsa.local", "commit", "-m", "Initial commit");
+        await GitAsync(repositoryPath, "init", "-b", "main");
+        await GitAsync(repositoryPath, "add", ".");
+        await GitAsync(repositoryPath, "-c", "user.name=Elsa Tests", "-c", "user.email=tests@elsa.local", "commit", "-m", "Initial commit");
         return repositoryPath;
     }
 
-    private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
+    private async Task<string> CreateSourceRepositoryAsync(string name)
+        => await CreateSourceRepositoryAsync(_directory, name);
+
+    private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)
     {
         var startInfo = new ProcessStartInfo("git")
         {
@@ -756,6 +862,8 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         await process.WaitForExitAsync();
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"Git failed: {error}{output}");
+
+        return output.Trim();
     }
 
     private static void CreatePackage(

@@ -12,6 +12,7 @@ internal interface IExtensionBuilderService
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(ExtensionBuilderCaller caller, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(ExtensionBuilderCaller caller, CreateWorkspaceRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> AttachServerLocalRepositoryAsync(ExtensionBuilderCaller caller, AttachServerLocalRepositoryRequest request, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkspace> CloneRepositoryAsync(ExtensionBuilderCaller caller, CloneRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
@@ -62,6 +63,9 @@ internal sealed class ExtensionBuilderService(
 
         return storage.AttachServerLocalRepositoryAsync(caller.OwnerId, caller.DisplayName, request, cancellationToken);
     }
+
+    public Task<ExtensionWorkspace> CloneRepositoryAsync(ExtensionBuilderCaller caller, CloneRepositoryRequest request, CancellationToken cancellationToken = default) =>
+        storage.CloneRepositoryAsync(caller.OwnerId, caller.DisplayName, request, cancellationToken);
 
     public Task<ExtensionWorkspace?> GetWorkspaceAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
         storage.GetWorkspaceAsync(workspaceId, caller.OwnerId, cancellationToken);

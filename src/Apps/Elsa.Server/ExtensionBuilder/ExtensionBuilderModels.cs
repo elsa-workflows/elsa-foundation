@@ -94,6 +94,8 @@ internal sealed record CreateWorkspaceRequest(string DisplayName);
 
 internal sealed record AttachServerLocalRepositoryRequest(string Path, string? DisplayName);
 
+internal sealed record CloneRepositoryRequest(string RepositoryUrl, string? DisplayName);
+
 internal sealed record CreateProjectRequest(
     string TemplateId,
     string PackageId,
