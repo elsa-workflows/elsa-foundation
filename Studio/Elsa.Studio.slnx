@@ -13,6 +13,7 @@
     <Project Path="src/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
     <Project Path="src/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
     <Project Path="src/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
+    <Project Path="src/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" />
     <Project Path="src/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" />
     <Project Path="src/Elsa.Studio.Samples.Dashboard/Elsa.Studio.Samples.Dashboard.csproj" />
     <Project Path="src/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, FilePlus2, FolderGit2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { javaScriptLanguageAdapter, StudioCodeEditor, type StudioCodeDiagnostic, type StudioCodeDiagnosticSeverity, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
@@ -1376,6 +1377,13 @@ function ProjectWorkspace({
     );
   }
 
+  const activeDocument = activeFilePath
+    ? createProjectFileDocument(workspace, project, activeFilePath, editorText)
+    : null;
+  const activeLanguageAdapter = activeDocument && isJavaScriptLikeDocument(activeDocument) ? javaScriptLanguageAdapter : undefined;
+  const editorDiagnostics = createEditorDiagnostics(workspace, project, diagnostics);
+  const activeFileDiagnostics = diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint);
+
   return (
     <div className="modules-grid-panel extension-builder-editor">
       <div className="modules-grid-heading">
@@ -1490,17 +1498,23 @@ function ProjectWorkspace({
             {editorDirty ? <StatusChip tone="warning">dirty</StatusChip> : <StatusChip tone="success">saved</StatusChip>}
             {lineHint ? <StatusChip tone="accent">{lineHint}</StatusChip> : null}
           </div>
-          <textarea
-            aria-label="Project file editor"
-            className="extension-builder-code-editor extension-builder-monaco-shell"
-            spellCheck={false}
-            value={editorText}
-            disabled={!canEdit || !activeFilePath}
-            onChange={event => onEditorTextChange(event.target.value)}
-          />
-          {diagnostics.some(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint) ? (
+          {activeDocument ? (
+            <StudioCodeEditor
+              ariaLabel="Project file editor"
+              document={activeDocument}
+              diagnostics={editorDiagnostics}
+              languageAdapter={activeLanguageAdapter}
+              minHeight="360px"
+              readOnly={!canEdit}
+              theme="studio"
+              onChange={nextDocument => onEditorTextChange(nextDocument.value)}
+            />
+          ) : (
+            <EmptyState icon={<FilePlus2 size={22} />}>Select or create a project file to edit source.</EmptyState>
+          )}
+          {activeFileDiagnostics.length > 0 ? (
             <div className="extension-builder-inline-diagnostics" aria-label="Inline diagnostics">
-              {diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint).map((diagnostic, index) => (
+              {activeFileDiagnostics.map((diagnostic, index) => (
                 <span key={`${diagnostic.message}-${index}`}>
                   <StatusChip tone={diagnosticTone(diagnostic.severity)}>{diagnostic.severity}</StatusChip>
                   {formatDiagnosticLocation(diagnostic)} {diagnostic.message}
@@ -2265,6 +2279,58 @@ function formatDiagnosticLocation(diagnostic: BuildDiagnostic) {
   const line = diagnostic.line ? `:${diagnostic.line}` : "";
   const column = diagnostic.column ? `:${diagnostic.column}` : "";
   return `${path}${line}${column}`;
+}
+
+function createProjectFileDocument(workspace: ExtensionWorkspace, project: ExtensionProject | null, path: string, value: string): StudioCodeDocument {
+  return {
+    uri: createProjectFileUri(workspace.id, project?.id ?? null, path),
+    language: getProjectFileLanguage(path),
+    value
+  };
+}
+
+function createEditorDiagnostics(workspace: ExtensionWorkspace, project: ExtensionProject | null, diagnostics: BuildDiagnostic[]): StudioCodeDiagnostic[] {
+  return diagnostics.map(diagnostic => ({
+    uri: diagnostic.filePath ? createProjectFileUri(workspace.id, project?.id ?? null, diagnostic.filePath) : undefined,
+    severity: toStudioCodeDiagnosticSeverity(diagnostic.severity),
+    code: extractDiagnosticCode(diagnostic.message),
+    message: diagnostic.message,
+    startLineNumber: diagnostic.line ?? undefined,
+    startColumn: diagnostic.column ?? undefined
+  }));
+}
+
+function createProjectFileUri(workspaceId: string, projectId: string | null, path: string) {
+  const projectSegment = projectId ? `/projects/${encodeURIComponent(projectId)}` : "";
+  return `elsa://extension-builder/workspaces/${encodeURIComponent(workspaceId)}${projectSegment}/files/${encodeURIComponent(path)}`;
+}
+
+function getProjectFileLanguage(path: string) {
+  const extension = path.toLowerCase().split(".").pop();
+  if (extension === "cs") return "csharp";
+  if (extension === "csproj" || extension === "props" || extension === "targets" || extension === "xml") return "xml";
+  if (extension === "json") return "json";
+  if (extension === "js" || extension === "mjs" || extension === "cjs") return "javascript";
+  if (extension === "ts" || extension === "tsx") return "typescript";
+  if (extension === "razor" || extension === "cshtml") return "razor";
+  if (extension === "md") return "markdown";
+  return "text";
+}
+
+function isJavaScriptLikeDocument(document: StudioCodeDocument) {
+  const normalized = document.language.trim().toLowerCase();
+  return normalized === "javascript" || normalized === "typescript";
+}
+
+function toStudioCodeDiagnosticSeverity(severity: string): StudioCodeDiagnosticSeverity {
+  const normalized = severity.toLowerCase();
+  if (normalized === "error") return "error";
+  if (normalized === "warning") return "warning";
+  return "info";
+}
+
+function extractDiagnosticCode(message: string) {
+  return /^[A-Z]{1,10}\d{2,6}\b/.exec(message)?.[0];
 }
 
 function formatDate(value?: string | null) {

@@ -1772,6 +1772,82 @@ textarea:focus {
   font-style: normal;
 }
 
+.extension-builder-code-panel .studio-code-editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+}
+
+.extension-builder-code-panel .studio-code-editor-header {
+  display: none;
+}
+
+.extension-builder-code-panel .studio-code-editor-input,
+.extension-builder-code-panel .studio-code-editor .cm-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+.extension-builder-code-panel .studio-code-editor-input {
+  resize: none;
+  padding: 12px;
+  tab-size: 2;
+}
+
+.extension-builder-code-panel .studio-code-editor .cm-scroller {
+  font-family: var(--studio-font-mono);
+}
+
+.extension-builder-code-panel .studio-code-editor:focus-within {
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--studio-accent) 35%, transparent);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostics {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--studio-border);
+  padding: 8px;
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic span {
+  font-family: var(--studio-font-mono);
+  font-weight: 700;
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic small {
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic.error {
+  color: var(--studio-danger);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic.warning {
+  color: var(--studio-warning);
+}
+
 .extension-builder-editor-status,
 .extension-builder-runtime-heading {
   display: flex;
@@ -1792,22 +1868,6 @@ textarea:focus {
 .extension-builder-editor-status code {
   font-family: var(--studio-font-mono);
   font-size: 12px;
-}
-
-.extension-builder-code-editor {
-  width: 100%;
-  min-height: 0;
-  height: 100%;
-  resize: none;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  background: var(--studio-bg);
-  color: var(--studio-text);
-  font-family: var(--studio-font-mono);
-  font-size: 12px;
-  line-height: 1.55;
-  padding: 12px;
-  tab-size: 2;
 }
 
 .extension-builder-inline-diagnostics {

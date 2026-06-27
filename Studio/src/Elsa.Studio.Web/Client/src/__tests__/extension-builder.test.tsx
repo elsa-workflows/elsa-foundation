@@ -43,6 +43,8 @@ describe("extension builder page", () => {
     expect(container.querySelector<HTMLInputElement>("[aria-label='Project name']")?.value).toBe("ElsaActivityExtension");
     expect(container.textContent).toContain("Activities/HelloActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("HelloActivity");
+    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-language")).toBe("csharp");
+    expect(container.querySelector(".studio-code-editor-header code")?.textContent).toBe("elsa://extension-builder/workspaces/ws-1/projects/proj-1/files/Activities%2FHelloActivity.cs");
     expect(container.textContent).toContain("Loaded");
     await clickTab(container, "Runtime");
     expect(container.textContent).toContain("Hello activity");
@@ -504,6 +506,8 @@ describe("extension builder page", () => {
   });
 
   it("shows diagnostics and opens the referenced source location", async () => {
+    const activeFileDiagnostic = { severity: "Error", message: "CS1002 Expected ;", file: "Activities/HelloActivity.cs", line: 7, column: 18 };
+    const otherFileDiagnostic = { severity: "Warning", message: "CS0168 Unused variable", file: "Activities/OtherActivity.cs", line: 3, column: 12 };
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
       getJson: async url => {
         if (url.endsWith("/capabilities")) return trustedCapabilities();
@@ -513,9 +517,9 @@ describe("extension builder page", () => {
         if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
-        if (url.includes("/builds/build-failed")) return failedBuild();
+        if (url.includes("/builds/build-failed")) return failedBuild([activeFileDiagnostic, otherFileDiagnostic]);
         if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
-        if (url.includes("/projects/proj-1")) return { ...project(), builds: [failedBuild()] };
+        if (url.includes("/projects/proj-1")) return { ...project(), builds: [failedBuild([activeFileDiagnostic, otherFileDiagnostic])] };
         return {};
       }
     }));
@@ -527,6 +531,8 @@ describe("extension builder page", () => {
 
     expect(container.textContent).toContain("Activities/HelloActivity.cs:7:18");
     expect(container.querySelector("[aria-label='Inline diagnostics']")?.textContent).toContain("Expected ;");
+    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("CS1002");
+    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).not.toContain("CS0168");
 
     await unmount();
   });
@@ -1061,7 +1067,7 @@ function succeededBuild(overrides?: { id?: string; sourceRevisionId?: string | n
   };
 }
 
-function failedBuild() {
+function failedBuild(diagnostics = [{ severity: "Error", message: "CS1002 Expected ;", file: "Activities/HelloActivity.cs", line: 7, column: 18 }]) {
   return {
     id: "build-failed",
     projectId: "proj-1",
@@ -1069,7 +1075,7 @@ function failedBuild() {
     status: "Failed",
     startedAt: new Date().toISOString(),
     completedAt: new Date().toISOString(),
-    diagnostics: [{ severity: "Error", message: "CS1002 Expected ;", file: "Activities/HelloActivity.cs", line: 7, column: 18 }],
+    diagnostics,
     artifact: null
   };
 }
