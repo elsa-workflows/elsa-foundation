@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, FilePlus2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Boxes, FilePlus2, FolderGit2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
+  attachServerLocalRepository,
   createProject,
   createWorkspace,
+  cloneRepository,
   deleteProject,
   deleteRepositoryFile,
   deleteWorkspace,
@@ -88,6 +90,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [promotionResult, setPromotionResult] = useState<PackagePromotionResult | null>(null);
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
+  const [serverLocalPath, setServerLocalPath] = useState("");
+  const [serverLocalName, setServerLocalName] = useState("");
+  const [cloneRepositoryUrl, setCloneRepositoryUrl] = useState("");
+  const [cloneRepositoryName, setCloneRepositoryName] = useState("");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
   const [workingBranchName, setWorkingBranchName] = useState("");
   const [allowProtectedBranchEdit, setAllowProtectedBranchEdit] = useState(false);
@@ -418,6 +424,46 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handleAttachServerLocalRepository() {
+    if (!serverLocalPath.trim()) {
+      setError("Server-local repository path is required.");
+      return;
+    }
+
+    const displayName = serverLocalName.trim();
+    const workspace = await runOperation(
+      () => attachServerLocalRepository(context, { path: serverLocalPath.trim(), name: displayName || undefined }),
+      `Attached server-local repository ${displayName || serverLocalPath.trim()}.`
+    );
+    if (workspace) {
+      setServerLocalPath("");
+      setServerLocalName("");
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
+  async function handleCloneRepository() {
+    if (!cloneRepositoryUrl.trim()) {
+      setError("Repository URL is required.");
+      return;
+    }
+
+    const displayName = cloneRepositoryName.trim();
+    const workspace = await runOperation(
+      () => cloneRepository(context, { repositoryUrl: cloneRepositoryUrl.trim(), name: displayName || undefined }),
+      `Cloned repository ${displayName || cloneRepositoryUrl.trim()}.`
+    );
+    if (workspace) {
+      setCloneRepositoryUrl("");
+      setCloneRepositoryName("");
+      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+        setSelectedWorkspaceId(workspace.id);
+      }
+    }
+  }
+
   async function handleCreateProject() {
     if (!selectedWorkspace) return;
     const validation = validateProjectDraft(projectDraft);
@@ -727,6 +773,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           workspaceName={workspaceName}
           workingBranchName={workingBranchName || defaultWorkingBranchName}
           allowProtectedBranchEdit={allowProtectedBranchEdit}
+          serverLocalPath={serverLocalPath}
+          serverLocalName={serverLocalName}
+          onServerLocalPathChange={setServerLocalPath}
+          onServerLocalNameChange={setServerLocalName}
+          onAttachServerLocalRepository={handleAttachServerLocalRepository}
+          cloneRepositoryUrl={cloneRepositoryUrl}
+          cloneRepositoryName={cloneRepositoryName}
+          onCloneRepositoryUrlChange={setCloneRepositoryUrl}
+          onCloneRepositoryNameChange={setCloneRepositoryName}
           projectDraft={projectDraft}
           busy={operationBusy}
           onWorkspaceNameChange={setWorkspaceName}
@@ -735,6 +790,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           onProjectDraftChange={setProjectDraft}
           onCreateWorkspace={handleCreateWorkspace}
           onSelectWorkingCopy={handleSelectWorkingCopy}
+          onCloneRepository={handleCloneRepository}
           onCreateProject={handleCreateProject}
           onSelectWorkspace={workspaceId => {
             if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
@@ -816,6 +872,16 @@ function WorkspaceBrowser({
   workspaceName,
   workingBranchName,
   allowProtectedBranchEdit,
+  serverLocalPath,
+  serverLocalName,
+  cloneRepositoryUrl,
+  cloneRepositoryName,
+  onServerLocalPathChange,
+  onServerLocalNameChange,
+  onAttachServerLocalRepository,
+  onCloneRepositoryUrlChange,
+  onCloneRepositoryNameChange,
+  onCloneRepository,
   projectDraft,
   busy,
   onWorkspaceNameChange,
@@ -839,6 +905,16 @@ function WorkspaceBrowser({
   workspaceName: string;
   workingBranchName: string;
   allowProtectedBranchEdit: boolean;
+  serverLocalPath: string;
+  serverLocalName: string;
+  cloneRepositoryUrl: string;
+  cloneRepositoryName: string;
+  onServerLocalPathChange(value: string): void;
+  onServerLocalNameChange(value: string): void;
+  onAttachServerLocalRepository(): void;
+  onCloneRepositoryUrlChange(value: string): void;
+  onCloneRepositoryNameChange(value: string): void;
+  onCloneRepository(): void;
   projectDraft: ProjectDraft;
   busy: boolean;
   onWorkspaceNameChange(value: string): void;
@@ -886,6 +962,30 @@ function WorkspaceBrowser({
         <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
           <FolderPlus size={15} />
           Create managed repo
+        </button>
+        <label>
+          <span>Server path</span>
+          <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Server name</span>
+          <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
+          <FolderPlus size={15} />
+          Attach server-local
+        </button>
+        <label>
+          <span>Clone URL</span>
+          <input aria-label="Clone repository URL" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Clone name</span>
+          <input aria-label="Clone repository name" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
+        </label>
+        <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>
+          <FolderGit2 size={15} />
+          Clone from Git
         </button>
       </details>
       {repositoryRows.map(repository => (
@@ -1546,6 +1646,7 @@ function getExtensionBuilderSessionId() {
 
 function formatRemoteState(value?: string | null) {
   if (!value) return "unknown remote";
+  if (value.includes("://") || value.includes("/") || value.includes("@")) return value;
   return value
     .split(/[-_\s]+/)
     .filter(Boolean)

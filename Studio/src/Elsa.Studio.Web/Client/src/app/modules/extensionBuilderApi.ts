@@ -186,6 +186,16 @@ export interface CreateWorkspaceRequest {
   name: string;
 }
 
+export interface AttachServerLocalRepositoryRequest {
+  path: string;
+  name?: string;
+}
+
+export interface CloneRepositoryRequest {
+  repositoryUrl: string;
+  name?: string;
+}
+
 export interface SelectWorkingCopyRequest {
   sessionId: string;
   branchName?: string | null;
@@ -234,6 +244,20 @@ export async function listRepositories(context: StudioEndpointContext) {
 
 export async function createWorkspace(context: StudioEndpointContext, request: CreateWorkspaceRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/workspaces`, { displayName: request.name }), []);
+}
+
+export async function attachServerLocalRepository(context: StudioEndpointContext, request: AttachServerLocalRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/server-local`, {
+    path: request.path,
+    displayName: request.name || null
+  }), []);
+}
+
+export async function cloneRepository(context: StudioEndpointContext, request: CloneRepositoryRequest) {
+  return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/clone`, {
+    repositoryUrl: request.repositoryUrl,
+    displayName: request.name || null
+  }), []);
 }
 
 export async function getWorkspace(context: StudioEndpointContext, workspaceId: string) {
