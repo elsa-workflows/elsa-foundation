@@ -30,6 +30,7 @@ internal interface IExtensionBuilderStorage
     Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
     Task<RemoteSyncResult?> PushRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<RemoteSyncResult?> PullRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
+    Task<BuildResult?> SubmitRepositoryBuildAsync(string workspaceId, string ownerId, ExtensionProject project, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default);
@@ -65,6 +66,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string _dotNetExecutable;
     private readonly string _gitExecutable;
     private readonly string _statePath;
 
@@ -75,6 +77,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         RootPath = Path.GetFullPath(Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(environment.ContentRootPath, configuredPath));
+        _dotNetExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.DotNetExecutable) ? "dotnet" : extensionBuilderOptions.DotNetExecutable;
         _gitExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.GitExecutable) ? "git" : extensionBuilderOptions.GitExecutable;
         _statePath = Path.Combine(RootPath, "state.json");
     }
@@ -664,6 +667,87 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
+    public async Task<BuildResult?> SubmitRepositoryBuildAsync(string workspaceId, string ownerId, ExtensionProject project, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default)
+    {
+        string repositoryPath;
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace) || !TryGetOwnedProject(state, project.Id, ownerId, out _))
+                return null;
+
+            repositoryPath = GetWorkspacePath(workspace.Id);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        var buildId = $"build_{Guid.NewGuid():N}";
+        var logPath = GetBuildLogPath(buildId);
+        var createdAt = DateTimeOffset.UtcNow;
+        var sourceRevisionId = RunGitOrDefault(repositoryPath, "rev-parse", "HEAD");
+        if (string.IsNullOrWhiteSpace(sourceRevisionId))
+            sourceRevisionId = "working-tree";
+
+        var created = new BuildResult(buildId, project.Id, workspaceId, sourceRevisionId, BuildStatus.Pending, [], null, logPath, createdAt, null, null);
+        if (!await SaveBuildAsync(created, cancellationToken))
+            return null;
+
+        var startedAt = DateTimeOffset.UtcNow;
+        var running = created with { Status = BuildStatus.Running, StartedAt = startedAt };
+        if (!await SaveBuildAsync(running, CancellationToken.None))
+            return null;
+
+        var commandName = request.Command ?? RepositoryBuildCommand.Build;
+        var command = commandName.ToString().ToLowerInvariant();
+        var diagnostics = new List<BuildDiagnostic>();
+        var targetPath = ResolveRepositoryBuildTarget(repositoryPath, request.TargetPath);
+        if (targetPath is null)
+        {
+            diagnostics.Add(new(BuildDiagnosticSeverity.Error, "No solution or project file was found for the repository build.", null, null, null, null));
+            await File.WriteAllLinesAsync(logPath, diagnostics.Select(diagnostic => diagnostic.Message), cancellationToken);
+            var failed = running with { Status = BuildStatus.Failed, Diagnostics = diagnostics, CompletedAt = DateTimeOffset.UtcNow };
+            await SaveBuildAsync(failed, CancellationToken.None);
+            return failed;
+        }
+
+        var arguments = new[] { command, targetPath };
+        ProcessResult process;
+        try
+        {
+            process = await RunProcessAsync(_dotNetExecutable, repositoryPath, cancellationToken, arguments);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} was canceled.", null, null, null, null));
+            await File.WriteAllLinesAsync(logPath, diagnostics.Select(diagnostic => diagnostic.Message), CancellationToken.None);
+            var canceled = running with { Status = BuildStatus.Failed, Diagnostics = diagnostics, CompletedAt = DateTimeOffset.UtcNow };
+            await SaveBuildAsync(canceled, CancellationToken.None);
+            return canceled;
+        }
+
+        var log = new[] { process.Output, process.Error }
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .SelectMany(text => text.Split(Environment.NewLine))
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+        await File.WriteAllLinesAsync(logPath, log, cancellationToken);
+        diagnostics.AddRange(ExtensionBuilderBuildRunner.ParseDiagnostics(log));
+        if (process.ExitCode != 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error))
+            diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} failed.", null, null, null, null));
+
+        var completed = running with
+        {
+            Status = process.ExitCode == 0 ? BuildStatus.Succeeded : BuildStatus.Failed,
+            Diagnostics = diagnostics,
+            CompletedAt = DateTimeOffset.UtcNow
+        };
+        await SaveBuildAsync(completed, CancellationToken.None);
+        return completed;
+    }
+
     public async Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.PackageId))
@@ -1231,6 +1315,24 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
     private bool RemoteBranchExists(string repositoryPath, string remote, string branch) =>
         !string.IsNullOrWhiteSpace(RunGitOrDefault(repositoryPath, "ls-remote", "--heads", remote, branch));
+
+    private string? ResolveRepositoryBuildTarget(string repositoryPath, string? targetPath)
+    {
+        if (!string.IsNullOrWhiteSpace(targetPath))
+        {
+            var normalized = NormalizeRepositoryRelativePath(targetPath);
+            var filePath = ResolveRepositoryFilePath(repositoryPath, normalized);
+            if (!File.Exists(filePath))
+                throw new ArgumentException($"Build target '{normalized}' was not found.", nameof(targetPath));
+            return filePath;
+        }
+
+        return EnumerateRepositoryFiles(repositoryPath, "*.sln*")
+            .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Concat(EnumerateRepositoryFiles(repositoryPath, "*.*proj").Order(StringComparer.OrdinalIgnoreCase))
+            .FirstOrDefault();
+    }
 
     private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
     {

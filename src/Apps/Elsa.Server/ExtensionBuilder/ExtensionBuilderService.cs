@@ -36,6 +36,7 @@ internal interface IExtensionBuilderService
     Task<ProjectFile?> ReadProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default);
     Task<ProjectFile?> WriteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default);
+    Task<BuildResult?> SubmitRepositoryBuildAsync(ExtensionBuilderCaller caller, string workspaceId, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default);
     Task<BuildResult?> SubmitBuildAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<BuildResult?> GetBuildAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
     Task<string?> GetBuildLogAsync(ExtensionBuilderCaller caller, string buildId, CancellationToken cancellationToken = default);
@@ -152,6 +153,18 @@ internal sealed class ExtensionBuilderService(
 
     public Task<bool> DeleteProjectFileAsync(ExtensionBuilderCaller caller, string projectId, string path, CancellationToken cancellationToken = default) =>
         storage.DeleteFileAsync(projectId, caller.OwnerId, path, cancellationToken);
+
+    public async Task<BuildResult?> SubmitRepositoryBuildAsync(ExtensionBuilderCaller caller, string workspaceId, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProjectId))
+            throw new ArgumentException("A project id is required for repository build history.", nameof(request));
+
+        var project = await storage.GetProjectAsync(request.ProjectId, caller.OwnerId, cancellationToken);
+        if (project is null || !string.Equals(project.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return await storage.SubmitRepositoryBuildAsync(workspaceId, caller.OwnerId, project, request, cancellationToken);
+    }
 
     public async Task<BuildResult?> SubmitBuildAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default)
     {
