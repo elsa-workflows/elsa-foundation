@@ -2035,7 +2035,7 @@ p {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  max-width: min(420px, calc(100% - 220px));
+  width: min(360px, calc(100% - 24px));
   padding: 9px 10px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   border-radius: 6px;
@@ -2046,6 +2046,7 @@ p {
 .designer-apply-summary > div {
   display: grid;
   gap: 3px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -2067,11 +2068,11 @@ p {
 }
 
 .designer-apply-summary code {
-  overflow: hidden;
   color: var(--text);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .designer-clarification-options {

@@ -42,7 +42,8 @@ import {
   getActivityChildSlots,
   getDesignerPosition,
   getSlotActivities,
-  getWorkflowClarificationSummary
+  getWorkflowClarificationSummary,
+  summarizeWorkflowDesignerValidation
 } from "./workflowGraphOperations.js";
 
 const sampleWorkflows = {
@@ -1359,10 +1360,11 @@ export function App() {
     };
     const workflow = JSON.parse(workflowJson);
     const result = applyWorkflowGraphOperationBatchToWorkflow(workflow, batch, recheckOptions);
+    const validation = summarizeWorkflowDesignerValidation(workflow);
     const summary = {
       title: "Weaver batch applied",
       detail: `${result.appliedCount} operation${result.appliedCount === 1 ? "" : "s"} applied as one undoable designer transaction.`,
-      meta: result.finalActivityIds.length > 0 ? `Final ID: ${result.finalActivityIds.join(", ")}` : "Designer graph updated"
+      meta: `${validation.summary}; ${result.finalActivityIds.length > 0 ? `final ID: ${result.finalActivityIds.join(", ")}` : "designer graph updated"}`
     };
 
     setWorkflowJson(JSON.stringify(workflow, null, 2));
