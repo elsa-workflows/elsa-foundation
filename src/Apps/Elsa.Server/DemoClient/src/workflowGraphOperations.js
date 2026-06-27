@@ -36,6 +36,65 @@ export function getDesignerPosition(activity, fallback) {
   return normalizeDesignerPosition(activity?.designer?.position, fallback);
 }
 
+export function getActivityAvailabilityStateName(value) {
+  if (typeof value === "string")
+    return value;
+
+  return [
+    "Available",
+    "BlockedByHostBaseline",
+    "HiddenByManagementSettings",
+    "RemovedFromCatalog",
+    "UnresolvedReference"
+  ][value] ?? "Available";
+}
+
+export function collectActivityVersionIds(activity, ids = new Set()) {
+  if (!activity)
+    return ids;
+
+  if (activity.activityVersionId && !isTemplateToken(activity.activityVersionId))
+    ids.add(activity.activityVersionId);
+
+  for (const slot of getActivityChildSlots(activity)) {
+    for (const child of getSlotActivities(slot))
+      collectActivityVersionIds(child, ids);
+  }
+
+  return ids;
+}
+
+function isTemplateToken(value) {
+  const text = String(value).trim();
+  return text.startsWith("{{") && text.endsWith("}}");
+}
+
+export function findActivityAvailabilityDiagnostic(activity, diagnostics, versionDefinitions = {}) {
+  const candidates = new Set([
+    activity?.activityVersionId,
+    activity?.activityTypeKey,
+    activity?.type,
+    activity?.typeName
+  ].filter(Boolean));
+
+  const versionDefinition = versionDefinitions[activity?.activityVersionId];
+  if (versionDefinition) {
+    candidates.add(versionDefinition.id);
+    candidates.add(versionDefinition.activityTypeKey);
+  }
+
+  return (diagnostics?.items ?? []).find((item) => {
+    if (getActivityAvailabilityStateName(item.state) === "Available")
+      return false;
+
+    return [
+      item.activityDefinitionId,
+      item.activityTypeKey,
+      item.referenceName
+    ].some((value) => value && candidates.has(value));
+  }) ?? null;
+}
+
 export function createDemoWeaverClarificationResult() {
   return {
     id: "clarify-workflow-target",

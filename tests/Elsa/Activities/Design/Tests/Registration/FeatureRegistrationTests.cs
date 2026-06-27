@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.EFCore.Sqlite;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
@@ -95,6 +96,30 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilitySettingsStore()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<IActivityAvailabilitySettingsStore>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilityDiagnosticsProjector()
+    {
+        var services = MinimalServices();
+
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.NotNull(provider.GetService<IActivityAvailabilityDiagnosticsProjector>());
     }
 
     [Fact]

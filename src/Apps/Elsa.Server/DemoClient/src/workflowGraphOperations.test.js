@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   applyWorkflowGraphOperationBatchToWorkflow,
   classifyWorkflowGraphOperationBatchForDesigner,
+  collectActivityVersionIds,
   createDemoWeaverClarificationResult,
   createDemoWeaverGraphOperationBatch,
+  findActivityAvailabilityDiagnostic,
   getDesignerPosition,
   getWorkflowClarificationSummary,
   summarizeWorkflowDesignerValidation
@@ -41,6 +43,76 @@ test("normalizes invalid designer positions before rendering", () => {
   };
 
   assert.deepEqual(getDesignerPosition(activity, { x: 280, y: 160 }), { x: 40, y: 40 });
+});
+
+test("collects authored activity version ids without consulting picker addability", () => {
+  const workflow = createWorkflow();
+  workflow.state.rootActivity.structure = {
+    kind: "elsa.sequence.structure",
+    payload: {
+      activities: [
+        { nodeId: "child-one", activityVersionId: "version-hidden" },
+        { nodeId: "child-two", activityVersionId: "version-available" }
+      ]
+    }
+  };
+
+  assert.deepEqual(
+    [...collectActivityVersionIds(workflow.state.rootActivity)],
+    ["Elsa.Workflows.WriteLine", "version-hidden", "version-available"]
+  );
+});
+
+test("skips unresolved activity version template tokens", () => {
+  const workflow = createWorkflow();
+  workflow.state.rootActivity.activityVersionId = "{{writeLineActivityVersionId}}";
+
+  assert.deepEqual([...collectActivityVersionIds(workflow.state.rootActivity)], []);
+});
+
+test("matches non-addable diagnostics through authored version definitions", () => {
+  const activity = { activityVersionId: "version-hidden" };
+  const diagnostics = {
+    items: [
+      {
+        activityDefinitionId: "definition-hidden",
+        activityTypeKey: "Elsa.Hidden",
+        state: "HiddenByManagementSettings"
+      }
+    ]
+  };
+  const versionDefinitions = {
+    "version-hidden": {
+      id: "definition-hidden",
+      activityTypeKey: "Elsa.Hidden"
+    }
+  };
+
+  assert.equal(
+    findActivityAvailabilityDiagnostic(activity, diagnostics, versionDefinitions),
+    diagnostics.items[0]
+  );
+});
+
+test("does not warn for addable authored activity diagnostics", () => {
+  const activity = { activityVersionId: "version-available" };
+  const diagnostics = {
+    items: [
+      {
+        activityDefinitionId: "definition-available",
+        activityTypeKey: "Elsa.Available",
+        state: "Available"
+      }
+    ]
+  };
+  const versionDefinitions = {
+    "version-available": {
+      id: "definition-available",
+      activityTypeKey: "Elsa.Available"
+    }
+  };
+
+  assert.equal(findActivityAvailabilityDiagnostic(activity, diagnostics, versionDefinitions), null);
 });
 
 test("supports whole-batch undo by restoring the previous working-state snapshot", () => {

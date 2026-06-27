@@ -1,42 +1,41 @@
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Options;
 
 namespace Elsa.Activities.Design.Core.Services;
 
 public sealed class DefaultActivityAvailabilityEvaluator(ActivityAvailabilityOptions options) : IActivityAvailabilityEvaluator
 {
-    public IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities)
+    public IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities, ActivityAvailabilitySettings? managementSettings = null)
     {
         var activityList = activities.ToArray();
-        var includeKeys = Expand(options.Include);
-        var excludeKeys = Expand(options.Exclude);
+        var catalogKeys = activityList.Select(activity => activity.ActivityTypeKey).ToHashSet(StringComparer.Ordinal);
+        var includeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(ActivityAvailabilityRuleExpander.Expand(options.Include, options.Sets), catalogKeys);
+        var excludeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(ActivityAvailabilityRuleExpander.Expand(options.Exclude, options.Sets), catalogKeys);
         var hasIncludeRules = includeKeys.Count > 0;
 
-        return activityList
+        var baselineActivities = activityList
             .Where(activity => (!hasIncludeRules || includeKeys.Contains(activity.ActivityTypeKey))
                 && !excludeKeys.Contains(activity.ActivityTypeKey))
             .ToArray();
-    }
 
-    private HashSet<string> Expand(ActivityAvailabilityRuleSet? rules)
-    {
-        var result = new HashSet<string>(StringComparer.Ordinal);
+        if (managementSettings is null)
+            return baselineActivities;
 
-        if (rules is null)
-            return result;
+        var management = ActivityAvailabilityRuleExpander.Expand(managementSettings.Rules, options.Sets);
+        var managementKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(management, catalogKeys);
+        var onlyUnresolvedRules = ActivityAvailabilityRuleExpander.HasOnlyUnresolvedRules(managementSettings.Rules, managementKeys, options.Sets);
 
-        foreach (var activityType in (rules.ActivityTypes ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
-            result.Add(activityType);
-
-        foreach (var setName in (rules.Sets ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
+        return managementSettings.Mode switch
         {
-            if (options.Sets is null || !options.Sets.TryGetValue(setName, out var activityTypes))
-                continue;
-
-            foreach (var activityType in (activityTypes ?? []).Where(x => !string.IsNullOrWhiteSpace(x)))
-                result.Add(activityType);
-        }
-
-        return result;
+            ActivityAvailabilityManagementMode.AllExcept => baselineActivities
+                .Where(activity => !managementKeys.Contains(activity.ActivityTypeKey))
+                .ToArray(),
+            ActivityAvailabilityManagementMode.Only when !onlyUnresolvedRules => baselineActivities
+                .Where(activity => managementKeys.Contains(activity.ActivityTypeKey))
+                .ToArray(),
+            _ => baselineActivities
+        };
     }
+
 }

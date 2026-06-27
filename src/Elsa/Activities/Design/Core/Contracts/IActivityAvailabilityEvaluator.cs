@@ -1,3 +1,5 @@
+using Elsa.Activities.Design.Core.Models;
+
 namespace Elsa.Activities.Design.Core.Contracts;
 
 /// <summary>
@@ -5,5 +7,5 @@ namespace Elsa.Activities.Design.Core.Contracts;
 /// </summary>
 public interface IActivityAvailabilityEvaluator
 {
-    IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities);
+    IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities, ActivityAvailabilitySettings? managementSettings = null);
 }
