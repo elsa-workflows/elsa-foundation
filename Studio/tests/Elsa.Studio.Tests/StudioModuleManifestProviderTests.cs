@@ -7,6 +7,7 @@ using Elsa.Studio.Core.Models;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.ExpressionEditors.JavaScript;
+using Elsa.Studio.ExpressionEditors.Liquid;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
@@ -33,6 +34,7 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.OpenTelemetry");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Diagnostics.StructuredLogs");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.JavaScript");
+        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.Liquid");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
@@ -114,6 +116,22 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.ExpressionEditors.JavaScript/studio/modules/expression-editors/javascript/module.css", StringComparison.Ordinal));
         Assert.Contains("expression-editors", module.Capabilities);
         Assert.Contains("javascript", module.Capabilities);
+    }
+
+    [Fact]
+    public async Task GetModules_ReturnsLiquidExpressionEditorManifestAssetsAndCapabilities()
+    {
+        var provider = CreateProvider();
+
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
+
+        var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.ExpressionEditors.Liquid");
+        Assert.Equal("Liquid expression editor", module.DisplayName);
+        Assert.Equal("LiquidExpressionEditorStudio", module.ShellFeatureName);
+        Assert.StartsWith("/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/module.css", StringComparison.Ordinal));
+        Assert.Contains("expression-editors", module.Capabilities);
+        Assert.Contains("liquid", module.Capabilities);
     }
 
     [Fact]
@@ -286,6 +304,7 @@ public sealed class StudioModuleManifestProviderTests
         services.AddDiagnosticsOpenTelemetryStudio();
         services.AddDiagnosticsStructuredLogsStudio();
         services.AddJavaScriptExpressionEditorStudio();
+        services.AddLiquidExpressionEditorStudio();
         services.AddFeatureManagementStudio();
         services.AddWeaverChatStudio();
         services.AddWeaverWorkflowsStudio();

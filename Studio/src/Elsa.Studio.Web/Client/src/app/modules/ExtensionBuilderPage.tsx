@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, FilePlus2, FolderPlus, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
-import { StudioCodeEditor, type StudioCodeDiagnostic, type StudioCodeDiagnosticSeverity, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
+import { javaScriptLanguageAdapter, StudioCodeEditor, type StudioCodeDiagnostic, type StudioCodeDiagnosticSeverity, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
@@ -822,6 +822,7 @@ function ProjectWorkspace({
   const activeDocument = activeFilePath
     ? createProjectFileDocument(workspace, project, activeFilePath, editorText)
     : null;
+  const activeLanguageAdapter = activeDocument && isJavaScriptLikeDocument(activeDocument) ? javaScriptLanguageAdapter : undefined;
   const editorDiagnostics = createEditorDiagnostics(workspace, project, diagnostics);
   const activeFileDiagnostics = diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath);
 
@@ -881,6 +882,7 @@ function ProjectWorkspace({
               ariaLabel="Project file editor"
               document={activeDocument}
               diagnostics={editorDiagnostics}
+              languageAdapter={activeLanguageAdapter}
               minHeight="360px"
               readOnly={!canEdit}
               theme="studio"
@@ -1376,6 +1378,11 @@ function getProjectFileLanguage(path: string) {
   if (extension === "razor" || extension === "cshtml") return "razor";
   if (extension === "md") return "markdown";
   return "text";
+}
+
+function isJavaScriptLikeDocument(document: StudioCodeDocument) {
+  const normalized = document.language.trim().toLowerCase();
+  return normalized === "javascript" || normalized === "typescript";
 }
 
 function toStudioCodeDiagnosticSeverity(severity: string): StudioCodeDiagnosticSeverity {

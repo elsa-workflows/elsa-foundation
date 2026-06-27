@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
+import { javaScriptLanguageAdapter } from "../languages/javascript";
 import type { StudioCodeDocument, StudioCodeEditorProps } from "../types";
 
 describe("StudioCodeEditor", () => {
@@ -72,6 +73,7 @@ describe("StudioCodeEditor", () => {
   it("lazy-loads the rich editor for JavaScript documents", async () => {
     const { container, unmount } = renderEditor({
       document: codeDocument({ language: "javascript", value: "return total;" }),
+      languageAdapter: javaScriptLanguageAdapter,
       theme: "dark"
     });
 

@@ -1,11 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import type { StudioCodeDiagnostic, StudioCodeEditorProps } from "./types";
 import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
-import { getBuiltInLanguageAdapter } from "./languages/builtInLanguageAdapters";
-
-const RichCodeEditor = lazy(() => import("./engines/CodeMirrorStudioCodeEditor").then(module => ({
-  default: module.CodeMirrorStudioCodeEditor
-})));
 
 export function StudioCodeEditor({
   document,
@@ -18,9 +13,12 @@ export function StudioCodeEditor({
   onChange
 }: StudioCodeEditorProps) {
   const visibleDiagnostics = diagnostics.filter(diagnostic => !diagnostic.uri || diagnostic.uri === document.uri);
-  const resolvedLanguageAdapter = languageAdapter ?? getBuiltInLanguageAdapter(document.language);
-  const languageLabel = resolvedLanguageAdapter?.displayName ?? document.language;
-  const useRichEditor = supportsRichEditor(document.language);
+  const languageLabel = languageAdapter?.displayName ?? document.language;
+  const loadEditor = languageAdapter?.loadEditor;
+  const RichCodeEditor = useMemo(
+    () => loadEditor ? lazy(loadEditor) : null,
+    [loadEditor]
+  );
 
   return (
     <section
@@ -33,7 +31,7 @@ export function StudioCodeEditor({
         <span>{languageLabel}</span>
         <code>{document.uri}</code>
       </div>
-      {useRichEditor ? (
+      {RichCodeEditor ? (
         <Suspense fallback={
           <FallbackCodeEditor
             document={document}
@@ -64,11 +62,6 @@ export function StudioCodeEditor({
       <StudioCodeDiagnostics diagnostics={visibleDiagnostics} />
     </section>
   );
-}
-
-function supportsRichEditor(language: string) {
-  const normalized = language.trim().toLowerCase();
-  return normalized === "javascript" || normalized === "typescript";
 }
 
 function StudioCodeDiagnostics({ diagnostics }: { diagnostics: StudioCodeDiagnostic[] }) {

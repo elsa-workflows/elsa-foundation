@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 export interface StudioCodeDocument {
   uri: string;
   language: string;
@@ -21,10 +23,22 @@ export interface StudioCodeLanguageSupport {
   readonly language: string;
 }
 
+export interface StudioCodeEditorEngineProps {
+  document: StudioCodeDocument;
+  readOnly: boolean;
+  theme: "studio" | "light" | "dark";
+  minHeight: string;
+  ariaLabel: string;
+  onChange(document: StudioCodeDocument): void;
+}
+
+export type StudioCodeEditorLoader = () => Promise<{ default: ComponentType<StudioCodeEditorEngineProps> }>;
+
 export interface StudioCodeLanguageAdapter {
   language: string;
   displayName: string;
   loadSupport?(): Promise<StudioCodeLanguageSupport>;
+  loadEditor?: StudioCodeEditorLoader;
 }
 
 export type StudioCodeEditorAction = "save" | "format" | string;
