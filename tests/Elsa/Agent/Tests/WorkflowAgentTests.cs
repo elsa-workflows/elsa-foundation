@@ -111,6 +111,26 @@ public sealed class WorkflowAgentTests
     }
 
     [Fact]
+    public async Task Deterministic_workflow_provider_can_return_structured_clarification_results()
+    {
+        var provider = new DeterministicWorkflowAgentProvider();
+
+        var events = await CollectAsync(provider.SendMessageAsync(new(
+            "session-1",
+            "This workflow request is ambiguous; ask a question.",
+            [CreateWorkflowContext()])));
+
+        var clarificationEvent = Assert.Single(events, x => x.ResultKind == AgentResultKind.Clarification);
+        Assert.Equal(AgentStreamEventKind.ClarificationRequested, clarificationEvent.Kind);
+        var clarification = Assert.IsType<WorkflowClarificationResult>(clarificationEvent.Payload);
+        Assert.Equal("Which workflow branch should Weaver update?", clarification.Question);
+        Assert.Equal("session-1:clarification:workflow-target", clarification.ContinuationToken);
+        Assert.Equal("wf-1", clarification.Metadata["workflowDefinitionId"]);
+        Assert.Contains(clarification.Options, x => x.Id == "active-draft" && x.Value == "active-draft");
+        Assert.Equal(AgentStreamEventKind.Completed, events.Last().Kind);
+    }
+
+    [Fact]
     public async Task Streaming_service_preserves_deterministic_workflow_graph_operation_batch_payload()
     {
         using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
@@ -141,6 +161,46 @@ public sealed class WorkflowAgentTests
         Assert.Equal("wf-1", batch.WorkflowDefinitionId);
         Assert.Equal("rev-1", batch.BaseRevision);
         Assert.Single(events.Where(x => x.Kind == AgentStreamEventKind.WorkflowGraphOperationBatchCreated));
+    }
+
+    [Fact]
+    public async Task Streaming_service_continues_same_session_after_structured_clarification()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var sessions = provider.GetRequiredService<IAgentSessionService>();
+        var streaming = provider.GetRequiredService<IAgentStreamingService>();
+        var session = await sessions.CreateAsync(new(
+            "tenant-1",
+            "actor-1",
+            "conversation-1",
+            DeterministicWorkflowAgentProvider.Id,
+            "workflow-authoring",
+            "Workflow authoring",
+            AgentPolicy.Default,
+            new Dictionary<string, string>()));
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Ambiguous workflow request; clarify first.",
+            AgentMessageStatus.Pending,
+            "workflow.propose-change",
+            ["ctx-1"],
+            [CreateWorkflowContext()]));
+
+        var clarificationEvents = await CollectAsync(streaming.StreamAsync(session.Id));
+        var clarification = Assert.IsType<WorkflowClarificationResult>(Assert.Single(clarificationEvents, x => x.ResultKind == AgentResultKind.Clarification).Payload);
+        Assert.StartsWith(session.Id, clarification.ContinuationToken, StringComparison.Ordinal);
+
+        await sessions.AddMessageAsync(session.Id, new(
+            AgentRole.User,
+            "Use the active draft and create workflow graph operation batch.",
+            AgentMessageStatus.Pending,
+            "workflow.propose-change",
+            ["ctx-1"],
+            [CreateWorkflowContext()]));
+
+        var followUpEvents = await CollectAsync(streaming.StreamAsync(session.Id));
+
+        Assert.Contains(followUpEvents, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
     }
 
     [Fact]
@@ -274,6 +334,104 @@ public sealed class WorkflowAgentTests
         Assert.Equal("wf-1", result.Value?.ResourceId);
     }
 
+    [Fact]
+    public void Workflow_batch_risk_classifier_allows_low_risk_direct_apply()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-1");
+
+        var result = classifier.Classify(new(CreateGraphOperationBatch(), context));
+
+        Assert.True(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.DirectApply, result.Decision);
+        Assert.Equal(AgentRisk.ReadOnly, result.Risk);
+        Assert.Equal(AgentResultKind.WorkflowGraphOperationBatch, result.ResultKind);
+        Assert.Equal([WorkflowGraphOperationBatchRiskReason.LowRisk], result.Reasons);
+    }
+
+    [Fact]
+    public void Workflow_batch_risk_classifier_fails_closed_for_stale_destructive_or_invalid_batches()
+    {
+        using var provider = BuildWorkflowProvider("rev-2", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-2");
+        var batch = CreateGraphOperationBatch(
+            [
+                new(
+                    "",
+                    WorkflowGraphOperationKind.RemoveActivity,
+                    new Dictionary<string, object?> { ["activityId"] = "root" },
+                    [],
+                    "Remove an existing activity.")
+            ]);
+
+        var result = classifier.Classify(new(batch, context));
+
+        Assert.False(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.Proposal, result.Decision);
+        Assert.Equal(AgentRisk.ReviewRequired, result.Risk);
+        Assert.Equal(AgentResultKind.Proposal, result.ResultKind);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.StaleRevision, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.DestructiveOperation, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.InvalidBatch, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.Uncertain, result.Reasons);
+    }
+
+    [Fact]
+    public void Workflow_batch_risk_classifier_asks_for_clarification_when_activity_is_unavailable()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-1");
+        var batch = CreateGraphOperationBatch(
+            [
+                new(
+                    "op-add-missing",
+                    WorkflowGraphOperationKind.AddActivity,
+                    new Dictionary<string, object?>
+                    {
+                        ["activityId"] = "temp:activity:missing",
+                        ["activityType"] = "Elsa.Missing.Activity"
+                    },
+                    ["temp:activity:missing"],
+                    "Add an activity that is not available.")
+            ]);
+
+        var result = classifier.Classify(new(batch, context));
+
+        Assert.False(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.Clarification, result.Decision);
+        Assert.Equal(AgentResultKind.Clarification, result.ResultKind);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.UnavailableActivity, result.Reasons);
+    }
+
+    [Theory]
+    [InlineData("direct-apply-succeeded", AgentResultKind.WorkflowGraphOperationBatch)]
+    [InlineData("direct-apply-rejected", AgentResultKind.Proposal)]
+    [InlineData("provider-error", AgentResultKind.Error)]
+    public async Task Workflow_authoring_audit_records_interaction_outcomes_with_attribution(string outcome, AgentResultKind resultKind)
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var audit = provider.GetRequiredService<IWorkflowAuthoringAuditService>();
+        var auditReader = provider.GetRequiredService<IAgentAuditReader>();
+
+        await audit.EmitAsync(CreateAuditRequest(outcome, resultKind));
+
+        var auditEvent = Assert.Single(await auditReader.ListAsync("session-1"), x => x.Kind == AgentAuditEventKind.WorkflowAuthoringInteraction);
+        Assert.Equal("actor-1", auditEvent.ActorId);
+        Assert.Equal("wf-1", auditEvent.Metadata["workflowDefinitionId"]);
+        Assert.Equal("workflow.propose-change", auditEvent.Metadata["capabilityId"]);
+        Assert.Equal(DeterministicWorkflowAgentProvider.Id, auditEvent.Metadata["providerId"]);
+        Assert.Equal("Prepared one workflow graph operation batch.", auditEvent.Metadata["operationSummary"]);
+        Assert.Equal(outcome, auditEvent.Metadata["outcome"]);
+        Assert.Equal(resultKind.ToString(), auditEvent.Metadata["resultKind"]);
+        Assert.Equal("deterministic-model", auditEvent.Metadata["modelId"]);
+        Assert.Equal("run-1", auditEvent.Metadata["runId"]);
+        Assert.Equal("false", auditEvent.Metadata["persistedWorkflowRevisionChanged"]);
+        Assert.Equal(string.Empty, auditEvent.Metadata["workflowProvenanceState"]);
+    }
+
     private static ServiceProvider BuildWorkflowProvider(string revision, bool allowChanges)
     {
         var services = new ServiceCollection();
@@ -313,6 +471,41 @@ public sealed class WorkflowAgentTests
                 ["revision"] = "rev-1"
             });
 
+    private static WorkflowAgentContext CreateWorkflowAgentContext(bool canDirectApply, string revision)
+        => new(
+            "wf-1",
+            "draft",
+            revision,
+            "Draft workflow wf-1",
+            [new("root", "Elsa.Workflows.WriteLine", "Write line")],
+            [],
+            [],
+            new(null, null, "studio-hint"),
+            new(12, Enum.GetValues<WorkflowGraphOperationKind>()),
+            new(canDirectApply, true, ["workflow.propose-change"]),
+            [
+                new("Elsa.Email.SendEmail", "Send email", true, ["email"]),
+                new("Elsa.Workflows.WriteLine", "Write line", true, ["write"])
+            ]);
+
+    private static WorkflowAuthoringAuditRequest CreateAuditRequest(string outcome, AgentResultKind resultKind)
+        => new(
+            "session-1",
+            "actor-1",
+            "wf-1",
+            "workflow.propose-change",
+            DeterministicWorkflowAgentProvider.Id,
+            "Prepared one workflow graph operation batch.",
+            outcome,
+            resultKind,
+            "deterministic-model",
+            "run-1",
+            new Dictionary<string, string>
+            {
+                ["persistedWorkflowRevisionChanged"] = "false",
+                ["workflowProvenanceState"] = string.Empty
+            });
+
     private static async Task<List<AgentStreamEvent>> CollectAsync(IAsyncEnumerable<AgentStreamEvent> events)
     {
         var result = new List<AgentStreamEvent>();
@@ -322,11 +515,12 @@ public sealed class WorkflowAgentTests
         return result;
     }
 
-    private static WorkflowGraphOperationBatch CreateGraphOperationBatch()
+    private static WorkflowGraphOperationBatch CreateGraphOperationBatch(IReadOnlyCollection<WorkflowGraphOperation>? operations = null)
         => new(
             WorkflowGraphOperationBatchSchema.CurrentVersion,
             "wf-1",
             "rev-1",
+            operations ??
             [
                 new(
                     "op-add-email",

@@ -20,6 +20,8 @@ public static class WorkflowAgentServiceCollectionExtensions
         services.TryAddScoped<IWorkflowRevisionProvider, DefaultWorkflowRevisionProvider>();
         services.TryAddScoped<IWorkflowChangePermissionEvaluator, DenyAllWorkflowChangePermissionEvaluator>();
         services.TryAddScoped<IWorkflowChangeProposalService, DefaultWorkflowChangeProposalService>();
+        services.TryAddScoped<IWorkflowGraphOperationBatchRiskClassifier, DefaultWorkflowGraphOperationBatchRiskClassifier>();
+        services.TryAddScoped<IWorkflowAuthoringAuditService, DefaultWorkflowAuthoringAuditService>();
 
         return services;
     }

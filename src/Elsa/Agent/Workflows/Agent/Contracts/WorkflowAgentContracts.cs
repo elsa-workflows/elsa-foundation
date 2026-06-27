@@ -27,3 +27,13 @@ public interface IWorkflowChangeProposalService
 {
     Task<AgentResult<AgentActionProposal>> ProposeAsync(WorkflowChangeProposalRequest request, CancellationToken cancellationToken = default);
 }
+
+public interface IWorkflowGraphOperationBatchRiskClassifier
+{
+    WorkflowGraphOperationBatchRiskClassification Classify(WorkflowGraphOperationBatchRiskClassificationRequest request);
+}
+
+public interface IWorkflowAuthoringAuditService
+{
+    Task EmitAsync(WorkflowAuthoringAuditRequest request, CancellationToken cancellationToken = default);
+}

@@ -76,11 +76,21 @@ The provider maps SDK session events to provider-neutral stream events:
 
 - session start -> `Started`
 - assistant message delta -> `MessageDelta`
+- workflow-authoring JSON envelope with `resultKind=clarification` ->
+  `ClarificationRequested`
+- workflow-authoring JSON envelope with `resultKind=workflowGraphOperationBatch` ->
+  `WorkflowGraphOperationBatchCreated`
+- workflow-authoring JSON envelope with `resultKind=error` -> `Error`
 - session idle -> `Completed`
 - SDK exceptions or session errors -> `Error`
 
 Cancellation is passed through to the SDK session stream. The SDK adapter aborts
 the active Copilot session when the stream cancellation token is cancelled.
+
+For workflow authoring, Copilot is prompted to return provider-neutral Weaver
+result envelopes rather than SDK-specific schemas. Studio still receives only
+the common agent stream contract; workflow graph operation batches use the same
+Elsa-owned contract as deterministic provider tests.
 
 ## Tool and proposal policy
 
