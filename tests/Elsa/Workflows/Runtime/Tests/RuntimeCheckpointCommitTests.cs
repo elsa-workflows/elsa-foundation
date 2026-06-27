@@ -197,7 +197,12 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, result.PersistenceDecision.Mode);
         Assert.Equal(["commit-1:intent-1", "commit-1:intent-2"], result.PendingPostCommitWorkIds);
         Assert.Equal(["commit:commit-1"], events);
-        Assert.Equal([commit], commitStore.Commits.Select(commitRecord => commitRecord.Commit));
+        // The committer folds the post-commit intents into the applied change set before handing the commit to the store.
+        var persisted = Assert.Single(commitStore.Commits).Commit;
+        Assert.Equal(commit.CommitId, persisted.CommitId);
+        Assert.Equal(
+            ["commit-1:intent-1", "commit-1:intent-2"],
+            persisted.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId));
     }
 
     [Fact]

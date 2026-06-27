@@ -39,7 +39,22 @@ public sealed class RuntimeCheckpointCommitter
             return RuntimeCheckpointCommitResult.Success(commit, decision, []);
         }
 
-        var storeResult = await _checkpointCommitStore.CommitAsync(commit, decision, cancellationToken);
+        // Fold post-commit intents into the applied change set so the provider persists them atomically with
+        // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit);
+        var commitToPersist = postCommitOutbox.Count == 0
+            ? commit
+            : commit with { StateChanges = commit.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
+
+        var storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
+
+        if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
+            throw new InvalidOperationException(
+                $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
+                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
+                "post-commit outbox item it is handed.");
+
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
 }

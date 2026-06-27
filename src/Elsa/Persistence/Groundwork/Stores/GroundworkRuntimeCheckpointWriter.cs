@@ -84,7 +84,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         try
         {
             if (await IsCommittedAsync(commit, cancellationToken))
-                return new RuntimeCheckpointCommitStoreResult([]);
+                return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
 
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateSchedulerStateChange(commit);
@@ -97,13 +97,16 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
             await ApplyAtomicallyAsync(commit, cancellationToken);
 
-            return new RuntimeCheckpointCommitStoreResult([]);
+            return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
         }
         finally
         {
             _writeGate.Release();
         }
     }
+
+    private static IReadOnlyCollection<string> OutboxIds(RuntimeCheckpointCommit commit) =>
+        commit.StateChanges.PostCommitOutbox.Select(change => change.State.OutboxItemId).ToArray();
 
     private async ValueTask<bool> IsCommittedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
@@ -139,6 +142,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
             await ApplyOperationalStateChangesAsync(stores.OperationalStateStore, commit.StateChanges.Operational, cancellationToken);
+            await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
             await MarkCommittedAsync(transactionalStore, commit, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
         }
@@ -158,6 +162,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
             ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
+            ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
 
     private static async ValueTask MarkCommittedAsync(IDocumentStore store, RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
@@ -188,6 +193,17 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         if (stateChange is null)
             return;
         await store.SaveAsync(stateChange.State, cancellationToken);
+    }
+
+    private static async ValueTask ApplyPostCommitOutboxAsync(
+        GroundworkRuntimePostCommitOutboxStore store,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> stateChanges,
+        CancellationToken cancellationToken)
+    {
+        // Persisted in the same unit-of-work as the rest of the checkpoint: the continuation work is durable
+        // atomically with the state that produced it, so it can never be silently lost on this path.
+        foreach (var stateChange in stateChanges)
+            await store.SavePendingAsync(stateChange.State, cancellationToken);
     }
 
     private static async ValueTask ApplySchedulerStateChangeAsync(
@@ -392,7 +408,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore BookmarkStateStore,
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
-        IOperationalStateStore OperationalStateStore)
+        IOperationalStateStore OperationalStateStore,
+        GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore)
     {
         public static GroundworkApplyStores Create(IDocumentStore store) =>
             new(
@@ -403,7 +420,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkBookmarkStateStore(store),
                 new GroundworkDurableValueStateStore(store),
                 new GroundworkIncidentStateStore(store),
-                new GroundworkOperationalStateStore(store));
+                new GroundworkOperationalStateStore(store),
+                new GroundworkRuntimePostCommitOutboxStore(store));
     }
 
     private sealed class DocumentUnitOfWorkStore(
