@@ -38,6 +38,12 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapPut("/workspaces/{workspaceId}/files/{*path}", WriteRepositoryFileAsync);
         trusted.MapPost("/workspaces/{workspaceId}/files/move", MoveRepositoryFileAsync);
         trusted.MapDelete("/workspaces/{workspaceId}/files/{*path}", DeleteRepositoryFileAsync);
+        trusted.MapGet("/workspaces/{workspaceId}/source-control/status", GetSourceControlStatusAsync);
+        trusted.MapGet("/workspaces/{workspaceId}/source-control/diff/{*path}", GetSourceControlDiffAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/stage", StageRepositoryFileAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/unstage", UnstageRepositoryFileAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/stage-all", StageAllRepositoryChangesAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/commit", CommitRepositoryChangesAsync);
         trusted.MapPost("/workspaces/{workspaceId}/projects", CreateProjectAsync);
         trusted.MapGet("/projects/{projectId}", GetProjectAsync);
         trusted.MapDelete("/projects/{projectId}", DeleteProjectAsync);
@@ -234,6 +240,87 @@ internal static class ElsaExtensionBuilderApi
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> GetSourceControlStatusAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken) =>
+        ToFoundResult(await service.GetSourceControlStatusAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+
+    private static async Task<IResult> GetSourceControlDiffAsync(
+        string workspaceId,
+        string path,
+        [FromQuery] bool staged,
+        HttpContext httpContext,
+        [FromServices] IExtensionBuilderService service,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.GetSourceControlDiffAsync(GetCaller(httpContext), workspaceId, path, staged, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> StageRepositoryFileAsync(string workspaceId, HttpContext httpContext, SourceControlPathRequest request, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.StageRepositoryFileAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> UnstageRepositoryFileAsync(string workspaceId, HttpContext httpContext, SourceControlPathRequest request, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.UnstageRepositoryFileAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> StageAllRepositoryChangesAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.StageAllRepositoryChangesAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> CommitRepositoryChangesAsync(string workspaceId, HttpContext httpContext, SourceControlCommitRequest request, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.CommitRepositoryChangesAsync(GetCaller(httpContext), workspaceId, request, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
         }
     }
 

@@ -22,6 +22,12 @@ internal interface IExtensionBuilderService
     Task<RepositoryFile?> WriteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, WriteProjectFileRequest request, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> MoveRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> GetSourceControlStatusAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<SourceControlDiff?> GetSourceControlDiffAsync(ExtensionBuilderCaller caller, string workspaceId, string path, bool staged, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> UnstageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageAllRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -100,6 +106,24 @@ internal sealed class ExtensionBuilderService(
 
     public Task<bool> DeleteRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, string path, CancellationToken cancellationToken = default) =>
         storage.DeleteRepositoryFileAsync(workspaceId, caller.OwnerId, path, cancellationToken);
+
+    public Task<SourceControlStatus?> GetSourceControlStatusAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.GetSourceControlStatusAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<SourceControlDiff?> GetSourceControlDiffAsync(ExtensionBuilderCaller caller, string workspaceId, string path, bool staged, CancellationToken cancellationToken = default) =>
+        storage.GetSourceControlDiffAsync(workspaceId, caller.OwnerId, path, staged, cancellationToken);
+
+    public Task<SourceControlStatus?> StageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default) =>
+        storage.StageRepositoryFileAsync(workspaceId, caller.OwnerId, request.Path, cancellationToken);
+
+    public Task<SourceControlStatus?> UnstageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default) =>
+        storage.UnstageRepositoryFileAsync(workspaceId, caller.OwnerId, request.Path, cancellationToken);
+
+    public Task<SourceControlStatus?> StageAllRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.StageAllRepositoryChangesAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default) =>
+        storage.CommitRepositoryChangesAsync(workspaceId, caller.OwnerId, request, cancellationToken);
 
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {

@@ -23,6 +23,12 @@ internal interface IExtensionBuilderStorage
     Task<RepositoryFile?> WriteRepositoryFileAsync(string workspaceId, string ownerId, string path, string content, CancellationToken cancellationToken = default);
     Task<RepositoryFile?> MoveRepositoryFileAsync(string workspaceId, string ownerId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> GetSourceControlStatusAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
+    Task<SourceControlDiff?> GetSourceControlDiffAsync(string workspaceId, string ownerId, string path, bool staged, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> UnstageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default);
+    Task<SourceControlStatus?> StageAllRepositoryChangesAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
+    Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(string workspaceId, string ownerId, ExtensionTemplate template, CreateProjectRequest request, CancellationToken cancellationToken = default);
@@ -452,6 +458,137 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
             await SaveStateAsync(state, cancellationToken);
             return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlStatus?> GetSourceControlStatusAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            return TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace)
+                ? GetSourceControlStatus(workspace.Id)
+                : null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlDiff?> GetSourceControlDiffAsync(string workspaceId, string ownerId, string path, bool staged, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var normalizedPath = NormalizeRepositoryRelativePath(path);
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            var arguments = staged
+                ? new[] { "diff", "--cached", "--", normalizedPath }
+                : ["diff", "--", normalizedPath];
+            return new(normalizedPath, staged, RunGitOrDefault(repositoryPath, arguments));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlStatus?> StageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            await RunGitAsync(repositoryPath, cancellationToken, "add", "--", NormalizeRepositoryRelativePath(path));
+            return GetSourceControlStatus(workspace.Id);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlStatus?> UnstageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            await RunGitAsync(repositoryPath, cancellationToken, "restore", "--staged", "--", NormalizeRepositoryRelativePath(path));
+            return GetSourceControlStatus(workspace.Id);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlStatus?> StageAllRepositoryChangesAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            await RunGitAsync(repositoryPath, cancellationToken, "add", "--all");
+            return GetSourceControlStatus(workspace.Id);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
+                return null;
+
+            var message = NormalizeCommitMessage(request.Message);
+            var repositoryPath = GetWorkspacePath(workspace.Id);
+            var status = GetSourceControlStatus(workspace.Id);
+            if (status.StagedFiles.Count == 0)
+                throw new InvalidOperationException("Stage at least one change before committing.");
+
+            await RunGitAsync(
+                repositoryPath,
+                cancellationToken,
+                "-c",
+                "user.name=Elsa Extension Builder",
+                "-c",
+                "user.email=extension-builder@elsa.local",
+                "commit",
+                "-m",
+                message);
+            state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
+            await SaveStateAsync(state, cancellationToken);
+            var commitId = RunGitOrDefault(repositoryPath, "rev-parse", "HEAD");
+            return new(commitId, message, GetSourceControlStatus(workspace.Id));
         }
         finally
         {
@@ -1050,6 +1187,40 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         return new(relativePath, content, GetRepositoryFileKind(relativePath), info.Length, IsPathDirty(relativePath, GetDirtyRepositoryPaths(repositoryPath)), info.LastWriteTimeUtc);
     }
 
+    private SourceControlStatus GetSourceControlStatus(string workspaceId)
+    {
+        var repositoryPath = GetWorkspacePath(workspaceId);
+        var repositoryState = GetRepositoryState(repositoryPath);
+        var changedFiles = RunGitOrDefault(repositoryPath, "status", "--porcelain", "--untracked-files=all")
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .Select(ParseSourceControlStatus)
+            .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return new(
+            workspaceId,
+            repositoryState.ActiveBranch,
+            changedFiles.Length > 0,
+            changedFiles,
+            changedFiles.Where(x => x.IsStaged).ToArray(),
+            changedFiles.Where(x => x.IsUnstaged).ToArray());
+    }
+
+    private static SourceControlFileStatus ParseSourceControlStatus(string line)
+    {
+        var indexStatus = line.Length > 0 ? line[0] : ' ';
+        var workTreeStatus = line.Length > 1 ? line[1] : ' ';
+        var path = line.Length > 3 ? line[3..].Trim().Trim('"').Replace('\\', '/') : "";
+        var renameSeparator = path.IndexOf(" -> ", StringComparison.Ordinal);
+        if (renameSeparator >= 0)
+            path = path[(renameSeparator + 4)..];
+
+        return new(
+            path,
+            $"{indexStatus}{workTreeStatus}".Trim(),
+            indexStatus is not ' ' and not '?',
+            workTreeStatus is not ' ' || indexStatus is '?');
+    }
+
     private ISet<string> GetDirtyRepositoryPaths(string repositoryPath)
     {
         var status = RunGitOrDefault(repositoryPath, "status", "--porcelain", "--untracked-files=all");
@@ -1120,6 +1291,14 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             Path.IsPathRooted(normalized) ||
             normalized.Split('/').Any(segment => segment is "" or "." or ".." || segment.Equals(".git", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("A safe relative repository file path is required.", nameof(path));
+        return normalized;
+    }
+
+    private static string NormalizeCommitMessage(string message)
+    {
+        var normalized = (message ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("A commit message is required.", nameof(message));
         return normalized;
     }
 
