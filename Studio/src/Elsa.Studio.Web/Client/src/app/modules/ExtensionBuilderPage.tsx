@@ -1,30 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, FilePlus2, FolderPlus, GitBranch, Hammer, PackageCheck, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Boxes, FilePlus2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, Play, RefreshCcw, RotateCcw, Save, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
   createProject,
   createWorkspace,
   deleteProject,
-  deleteProjectFile,
+  deleteRepositoryFile,
   deleteWorkspace,
   getBuild,
   getBuildLog,
   getCapabilities,
   getProject,
+  getRepositoryTree,
   getRuntimeStatus,
   isTrusted,
-  listProjectFiles,
   listRepositories,
   listTemplates,
   listWorkspaces,
+  moveRepositoryFile,
   promoteBuild,
-  readProjectFile,
+  readRepositoryFile,
   retryReconciliation,
   rollbackPackage,
   selectWorkingCopy,
   submitBuild,
-  writeProjectFile,
+  writeRepositoryFile,
   type BuildArtifact,
   type BuildDiagnostic,
   type BuildResult,
@@ -35,7 +36,8 @@ import {
   type ExtensionTemplate,
   type ExtensionWorkspace,
   type PackagePromotionResult,
-  type ProjectFile,
+  type RepositoryFileSummary,
+  type RepositorySolutionSummary,
   type RuntimeVersion
 } from "./extensionBuilderApi";
 import { getErrorMessage } from "./moduleManagementApi";
@@ -48,6 +50,12 @@ interface ProjectDraft {
   packageId: string;
   packageVersion: string;
   templateId: string;
+}
+
+interface EditorTab {
+  path: string;
+  content: string;
+  savedContent: string;
 }
 
 const inspectorTabs = [
@@ -65,7 +73,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [templates, setTemplates] = useState<ExtensionTemplate[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [files, setFiles] = useState<RepositoryFileSummary[]>([]);
+  const [solutions, setSolutions] = useState<RepositorySolutionSummary[]>([]);
+  const [selectedSolutionPath, setSelectedSolutionPath] = useState("");
+  const [editorTabs, setEditorTabs] = useState<EditorTab[]>([]);
   const [activeFilePath, setActiveFilePath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [savedEditorText, setSavedEditorText] = useState("");
@@ -90,12 +101,13 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const projectDetailsRequestId = useRef(0);
   const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
-  const editorDirty = editorText !== savedEditorText;
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
   const selectedRepository = repositories.find(repository => repository.id === selectedWorkspaceId) ?? repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
+  const activeTab = editorTabs.find(tab => tab.path === activeFilePath) ?? null;
+  const editorDirty = activeTab ? activeTab.content !== activeTab.savedContent : editorText !== savedEditorText;
   const hasRepositoryRows = repositories.length > 0 || workspaces.length > 0;
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
@@ -150,9 +162,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [selectedRepository?.id, selectedRepository?.activeBranch, defaultWorkingBranchName, workingBranchName]);
 
   useEffect(() => {
-    if (!selectedWorkspace || !selectedProject) {
+    if (!selectedWorkspace) {
       projectDetailsRequestId.current += 1;
       setFiles([]);
+      setSolutions([]);
+      setSelectedSolutionPath("");
+      setEditorTabs([]);
       setActiveFilePath("");
       setEditorText("");
       setSavedEditorText("");
@@ -164,8 +179,19 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       return;
     }
 
-    void loadProjectDetails(selectedWorkspace.id, selectedProject.id);
-  }, [selectedWorkspace?.id, selectedProject?.id]);
+    if (!selectedProject) {
+      projectDetailsRequestId.current += 1;
+      setActiveBuild(null);
+      setBuildHistory([]);
+      setBuildLog("");
+      runtimeStatusRequestId.current += 1;
+      setRuntimeStatus(null);
+      void loadRepositoryTree(selectedWorkspace.id, selectedSolutionPath || null);
+      return;
+    }
+
+    void loadProjectDetails(selectedWorkspace.id, selectedProject.id, selectedSolutionPath || null);
+  }, [selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
 
   useEffect(() => {
     clearBuildPoll();
@@ -230,53 +256,76 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
-  async function loadProjectDetails(workspaceId: string, projectId: string) {
+  async function loadRepositoryTree(workspaceId: string, solutionPath?: string | null) {
+    try {
+      const tree = await getRepositoryTree(context, workspaceId, solutionPath);
+      if (!mounted.current || selectedIds.current.workspaceId !== workspaceId) return;
+      setSolutions(tree.solutions);
+      setFiles(tree.entries);
+      const selected = tree.solutions.find(solution => solution.isSelected)?.path ?? "";
+      const nextSelectedSolutionPath = tree.solutions.length > 1 ? selected : "";
+      if (nextSelectedSolutionPath !== selectedSolutionPath) setSelectedSolutionPath(nextSelectedSolutionPath);
+      return tree;
+    } catch (e) {
+      if (selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      return null;
+    }
+  }
+
+  async function loadProjectDetails(workspaceId: string, projectId: string, solutionPath?: string | null) {
     const requestId = ++projectDetailsRequestId.current;
     const runtimeRequestId = ++runtimeStatusRequestId.current;
     setError(null);
     try {
-      const [project, projectFiles, runtime] = await Promise.all([
+      const [project, repositoryTree, runtime] = await Promise.all([
         getProject(context, workspaceId, projectId),
-        listProjectFiles(context, workspaceId, projectId),
+        getRepositoryTree(context, workspaceId, solutionPath),
         getRuntimeStatus(context, workspaceId, projectId).catch(() => null)
       ]);
       if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
       setWorkspaces(current => patchProject(current, workspaceId, project));
-      setFiles(projectFiles);
+      setSolutions(repositoryTree.solutions);
+      setFiles(repositoryTree.entries);
+      const selected = repositoryTree.solutions.find(solution => solution.isSelected)?.path ?? "";
+      const nextSelectedSolutionPath = repositoryTree.solutions.length > 1 ? selected : "";
+      if (nextSelectedSolutionPath !== selectedSolutionPath) setSelectedSolutionPath(nextSelectedSolutionPath);
       if (runtimeRequestId === runtimeStatusRequestId.current) {
         setRuntimeStatus(runtime);
       }
       setBuildHistory(project.builds ?? []);
       setActiveBuild(project.builds?.[0] ?? null);
-      const firstFile = projectFiles.find(file => file.type === "file");
+      const firstFile = repositoryTree.entries.find(file => file.type === "file");
       if (firstFile) {
-        const file = await readProjectFile(context, workspaceId, projectId, firstFile.path);
+        const file = await readRepositoryFile(context, workspaceId, firstFile.path);
         if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
         const content = file.content ?? "";
         setActiveFilePath(file.path);
         setEditorText(content);
         setSavedEditorText(content);
+        setEditorTabs([{ path: file.path, content, savedContent: content }]);
         setLineHint(null);
       } else {
         setActiveFilePath("");
         setEditorText("");
         setSavedEditorText("");
+        setEditorTabs([]);
       }
     } catch (e) {
       setError(getErrorMessage(e));
     }
   }
 
-  async function openFile(workspaceId: string, projectId: string, path: string, options?: { force?: boolean }) {
+  async function openFile(workspaceId: string, path: string, options?: { force?: boolean }) {
     if (!options?.force && editorDirty && !window.confirm("Discard unsaved file changes?")) return false;
     setError(null);
     try {
-      const file = await readProjectFile(context, workspaceId, projectId, path);
-      if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return false;
+      const file = await readRepositoryFile(context, workspaceId, path);
+      if (selectedIds.current.workspaceId !== workspaceId) return false;
       const content = file.content ?? "";
       setActiveFilePath(file.path);
       setEditorText(content);
       setSavedEditorText(content);
+      setEditorTabs(current => upsertEditorTab(current, { path: file.path, content, savedContent: content }));
       setLineHint(null);
       return true;
     } catch (e) {
@@ -301,6 +350,42 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     setActiveBuild(null);
     setBuildLog("");
     setPromotionResult(null);
+  }
+
+  function handleEditorTextChange(value: string) {
+    setEditorText(value);
+    if (activeFilePath) {
+      setEditorTabs(current => current.map(tab => tab.path === activeFilePath ? { ...tab, content: value } : tab));
+    }
+  }
+
+  function handleSelectEditorTab(path: string) {
+    const tab = editorTabs.find(item => item.path === path);
+    if (!tab) return;
+    if (editorDirty && activeFilePath !== path && !window.confirm("Discard unsaved file changes?")) return;
+    setActiveFilePath(tab.path);
+    setEditorText(tab.content);
+    setSavedEditorText(tab.savedContent);
+    setLineHint(null);
+  }
+
+  function handleCloseEditorTab(path: string) {
+    const tab = editorTabs.find(item => item.path === path);
+    if (!tab) return;
+    if (tab.content !== tab.savedContent && !window.confirm("Discard unsaved file changes?")) return;
+    const remaining = editorTabs.filter(item => item.path !== path);
+    setEditorTabs(remaining);
+    if (activeFilePath === path) {
+      const next = remaining[0] ?? null;
+      setActiveFilePath(next?.path ?? "");
+      setEditorText(next?.content ?? "");
+      setSavedEditorText(next?.savedContent ?? "");
+      setLineHint(null);
+    }
+  }
+
+  function handleSelectSolution(path: string) {
+    setSelectedSolutionPath(path);
   }
 
   async function runOperation<T>(operation: () => Promise<T>, success: string) {
@@ -377,58 +462,80 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function handleSaveFile() {
-    if (!selectedWorkspace || !selectedProject || !activeFilePath) return;
+    if (!selectedWorkspace || !activeFilePath) return;
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
     const path = activeFilePath;
     const content = editorText;
     const saved = await runOperation(
-      () => writeProjectFile(context, workspaceId, projectId, path, { content }),
+      () => writeRepositoryFile(context, workspaceId, path, { content }),
       `Saved ${path}.`
     );
-    if (saved && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+    if (saved && selectedIds.current.workspaceId === workspaceId) {
       setSavedEditorText(content);
       setFiles(current => upsertFile(current, saved));
+      setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content, savedContent: content }));
       clearSourceDependentState();
-      const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     }
   }
 
   async function handleCreateFile() {
-    if (!selectedWorkspace || !selectedProject || !newFilePath.trim()) return;
+    if (!selectedWorkspace || !newFilePath.trim()) return;
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
     const path = newFilePath.trim();
     const saved = await runOperation(
-      () => writeProjectFile(context, workspaceId, projectId, path, { content: "" }),
+      () => writeRepositoryFile(context, workspaceId, path, { content: "" }),
       `Created ${path}.`
     );
-    if (saved && isCurrentSelection(selectedIds.current, workspaceId, projectId)) {
+    if (saved && selectedIds.current.workspaceId === workspaceId) {
       setNewFilePath("");
       setFiles(current => upsertFile(current, saved));
+      setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content: "", savedContent: "" }));
       clearSourceDependentState();
-      const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+      const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
       if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
-      await openFile(workspaceId, projectId, saved.path);
+      await openFile(workspaceId, saved.path);
     }
   }
 
   async function handleDeleteFile(path: string) {
-    if (!selectedWorkspace || !selectedProject || !window.confirm(`Delete ${path}?`)) return;
+    if (!selectedWorkspace || !window.confirm(`Delete ${path}?`)) return;
     const workspaceId = selectedWorkspace.id;
-    const projectId = selectedProject.id;
-    const deleted = await runOperation(() => deleteProjectFile(context, workspaceId, projectId, path), `Deleted ${path}.`);
-    if (!deleted || !isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
+    const deleted = await runOperation(() => deleteRepositoryFile(context, workspaceId, path), `Deleted ${path}.`);
+    if (!deleted || selectedIds.current.workspaceId !== workspaceId) return;
     setFiles(current => current.filter(file => file.path !== path));
+    setEditorTabs(current => current.filter(tab => tab.path !== path));
     clearSourceDependentState();
-    const refreshedProject = await refreshProjectMetadata(workspaceId, projectId);
+    await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
     if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
     if (path === activeFilePath) {
-      setActiveFilePath("");
-      setEditorText("");
-      setSavedEditorText("");
+      const nextTab = editorTabs.find(tab => tab.path !== path);
+      setActiveFilePath(nextTab?.path ?? "");
+      setEditorText(nextTab?.content ?? "");
+      setSavedEditorText(nextTab?.savedContent ?? "");
     }
+  }
+
+  async function handleRenameFile(path: string) {
+    if (!selectedWorkspace) return;
+    const destinationPath = window.prompt("Rename file", path)?.trim();
+    if (!destinationPath || destinationPath === path) return;
+    const workspaceId = selectedWorkspace.id;
+    const moved = await runOperation(() => moveRepositoryFile(context, workspaceId, path, destinationPath), `Renamed ${path} to ${destinationPath}.`);
+    if (!moved || selectedIds.current.workspaceId !== workspaceId) return;
+    setFiles(current => upsertFile(current.filter(file => file.path !== path), moved));
+    setEditorTabs(current => current.map(tab => tab.path === path ? { ...tab, path: moved.path, content: moved.content ?? tab.content, savedContent: moved.content ?? tab.savedContent } : tab));
+    if (activeFilePath === path) {
+      setActiveFilePath(moved.path);
+      setEditorText(moved.content ?? editorText);
+      setSavedEditorText(moved.content ?? savedEditorText);
+    }
+    clearSourceDependentState();
+    await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
   }
 
   async function handleSubmitBuild() {
@@ -535,7 +642,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleDiagnosticSelect(diagnostic: BuildDiagnostic) {
     if (!selectedWorkspace || !selectedProject || !diagnostic.filePath) return;
-    const opened = await openFile(selectedWorkspace.id, selectedProject.id, diagnostic.filePath);
+    const opened = await openFile(selectedWorkspace.id, diagnostic.filePath);
     if (opened) {
       setLineHint(formatDiagnosticLocation(diagnostic));
     }
@@ -646,6 +753,9 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           workspace={selectedWorkspace}
           project={selectedProject}
           files={fileRows}
+          solutions={solutions}
+          selectedSolutionPath={selectedSolutionPath}
+          editorTabs={editorTabs}
           activeFilePath={activeFilePath}
           editorText={editorText}
           editorDirty={editorDirty}
@@ -653,11 +763,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           newFilePath={newFilePath}
           busy={operationBusy}
           diagnostics={activeBuild?.diagnostics ?? []}
+          onSelectSolution={handleSelectSolution}
           onNewFilePathChange={setNewFilePath}
           onCreateFile={handleCreateFile}
           onDeleteFile={handleDeleteFile}
-          onOpenFile={path => selectedWorkspace && selectedProject ? openFile(selectedWorkspace.id, selectedProject.id, path) : undefined}
-          onEditorTextChange={setEditorText}
+          onRenameFile={handleRenameFile}
+          onOpenFile={path => selectedWorkspace ? openFile(selectedWorkspace.id, path) : undefined}
+          onSelectEditorTab={handleSelectEditorTab}
+          onCloseEditorTab={handleCloseEditorTab}
+          onEditorTextChange={handleEditorTextChange}
           onSaveFile={handleSaveFile}
           onSubmitBuild={handleSubmitBuild}
           canBuild={canBuild}
@@ -860,6 +974,9 @@ function ProjectWorkspace({
   workspace,
   project,
   files,
+  solutions,
+  selectedSolutionPath,
+  editorTabs,
   activeFilePath,
   editorText,
   editorDirty,
@@ -868,10 +985,14 @@ function ProjectWorkspace({
   busy,
   diagnostics,
   canBuild,
+  onSelectSolution,
   onNewFilePathChange,
   onCreateFile,
   onDeleteFile,
+  onRenameFile,
   onOpenFile,
+  onSelectEditorTab,
+  onCloseEditorTab,
   onEditorTextChange,
   onSaveFile,
   onSubmitBuild
@@ -879,7 +1000,10 @@ function ProjectWorkspace({
   capabilities: ExtensionBuilderCapabilities;
   workspace: ExtensionWorkspace | null;
   project: ExtensionProject | null;
-  files: ProjectFile[];
+  files: RepositoryFileSummary[];
+  solutions: RepositorySolutionSummary[];
+  selectedSolutionPath: string;
+  editorTabs: EditorTab[];
   activeFilePath: string;
   editorText: string;
   editorDirty: boolean;
@@ -888,20 +1012,24 @@ function ProjectWorkspace({
   busy: boolean;
   diagnostics: BuildDiagnostic[];
   canBuild: boolean;
+  onSelectSolution(path: string): void;
   onNewFilePathChange(value: string): void;
   onCreateFile(): void;
   onDeleteFile(path: string): void;
+  onRenameFile(path: string): void;
   onOpenFile(path: string): void;
+  onSelectEditorTab(path: string): void;
+  onCloseEditorTab(path: string): void;
   onEditorTextChange(value: string): void;
   onSaveFile(): void;
   onSubmitBuild(): void;
 }) {
   const canEdit = capabilities.canEditFiles;
 
-  if (!workspace || !project) {
+  if (!workspace) {
     return (
       <div className="modules-grid-panel extension-builder-editor">
-        <EmptyState icon={<Boxes size={22} />}>Select or create a project to edit source files.</EmptyState>
+        <EmptyState icon={<Boxes size={22} />}>Select or create a repository to edit source files.</EmptyState>
       </div>
     );
   }
@@ -910,14 +1038,14 @@ function ProjectWorkspace({
     <div className="modules-grid-panel extension-builder-editor">
       <div className="modules-grid-heading">
         <div>
-          <h3>{project.name}</h3>
-          <p><code>{project.packageId}</code> {project.packageVersion} · revision {project.currentRevision ?? "draft"}</p>
+          <h3>{project?.name ?? workspace.name}</h3>
+          <p><code>{workspace.name}</code>{project ? ` · ${project.packageId} ${project.packageVersion}` : ""}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath || !editorDirty} title={!canEdit ? "Requires canEditFiles" : undefined} onClick={onSaveFile}>
+            <button type="button" className="studio-button" disabled={busy || !canEdit || !activeFilePath} title={!canEdit ? "Requires canEditFiles" : undefined} onClick={onSaveFile}>
               <Save size={15} />
-              {editorDirty ? "Save" : "Saved"}
+              Save
             </button>
             <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
               <Play size={15} />
@@ -928,30 +1056,62 @@ function ProjectWorkspace({
       </div>
 
       <div className="extension-builder-editor-layout">
-        <aside className="extension-builder-file-tree" aria-label="Project files">
+        <aside className="extension-builder-file-tree" aria-label="Repository files">
+          {solutions.length > 1 ? (
+            <label className="extension-builder-solution-picker">
+              <span>Solution</span>
+              <select aria-label="Solution" value={selectedSolutionPath} disabled={busy} onChange={event => onSelectSolution(event.target.value)}>
+                <option value="">Select solution</option>
+                {solutions.map(solution => <option key={solution.path} value={solution.path}>{solution.name}</option>)}
+              </select>
+            </label>
+          ) : solutions.length === 1 ? (
+            <div className="extension-builder-selected-solution">
+              <span>Solution</span>
+              <code>{solutions[0].path}</code>
+            </div>
+          ) : null}
           <div className="extension-builder-file-create">
             <input aria-label="New file path" placeholder="src/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} />
             <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires canEditFiles"} aria-label="Create file" onClick={onCreateFile}>
               <FilePlus2 size={14} />
             </button>
           </div>
-          {files.length === 0 ? <p className="modules-muted">No files reported for this project.</p> : null}
+          {files.length === 0 ? <p className="modules-muted">No files reported for this repository.</p> : null}
           {files.map(file => (
             <div key={file.path} className={file.path === activeFilePath ? "extension-builder-file-row active" : "extension-builder-file-row"}>
               <button type="button" disabled={file.type !== "file"} onClick={() => onOpenFile(file.path)}>
-                <span>{file.type === "folder" ? "▸" : "•"}</span>
-                <code>{file.path}</code>
+                <span>{file.type === "folder" ? "▸" : file.kind === "Solution" ? "S" : file.kind === "Project" ? "P" : "•"}</span>
+                <code>{file.path}{file.isDirty ? " *" : ""}</code>
               </button>
               {file.type === "file" ? (
-                <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Delete ${file.path}`} aria-label={`Delete ${file.path}`} onClick={() => onDeleteFile(file.path)}>
-                  <Trash2 size={13} />
-                </button>
+                <>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Rename ${file.path}`} aria-label={`Rename ${file.path}`} onClick={() => onRenameFile(file.path)}>
+                    <Pencil size={13} />
+                  </button>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canEdit} title={`Delete ${file.path}`} aria-label={`Delete ${file.path}`} onClick={() => onDeleteFile(file.path)}>
+                    <Trash2 size={13} />
+                  </button>
+                </>
               ) : null}
             </div>
           ))}
         </aside>
 
         <div className="extension-builder-code-panel">
+          {editorTabs.length > 0 ? (
+            <div className="extension-builder-editor-tabs" role="tablist" aria-label="Open repository files">
+              {editorTabs.map(tab => (
+                <button key={tab.path} type="button" role="tab" aria-selected={tab.path === activeFilePath} className={tab.path === activeFilePath ? "active" : ""} onClick={() => onSelectEditorTab(tab.path)}>
+                  <span>{tab.path}{tab.content !== tab.savedContent ? " *" : ""}</span>
+                  <em aria-label={`Close ${tab.path}`} onClick={event => {
+                    event.stopPropagation();
+                    onCloseEditorTab(tab.path);
+                  }}>x</em>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="extension-builder-editor-status">
             <span>{activeFilePath ? <code>{activeFilePath}</code> : "No file selected"}</span>
             {editorDirty ? <StatusChip tone="warning">dirty</StatusChip> : <StatusChip tone="success">saved</StatusChip>}
@@ -959,15 +1119,15 @@ function ProjectWorkspace({
           </div>
           <textarea
             aria-label="Project file editor"
-            className="extension-builder-code-editor"
+            className="extension-builder-code-editor extension-builder-monaco-shell"
             spellCheck={false}
             value={editorText}
             disabled={!canEdit || !activeFilePath}
             onChange={event => onEditorTextChange(event.target.value)}
           />
-          {diagnostics.some(diagnostic => diagnostic.filePath === activeFilePath) ? (
+          {diagnostics.some(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint) ? (
             <div className="extension-builder-inline-diagnostics" aria-label="Inline diagnostics">
-              {diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath).map((diagnostic, index) => (
+              {diagnostics.filter(diagnostic => diagnostic.filePath === activeFilePath || formatDiagnosticLocation(diagnostic) === lineHint).map((diagnostic, index) => (
                 <span key={`${diagnostic.message}-${index}`}>
                   <StatusChip tone={diagnosticTone(diagnostic.severity)}>{diagnostic.severity}</StatusChip>
                   {formatDiagnosticLocation(diagnostic)} {diagnostic.message}
@@ -1311,8 +1471,12 @@ function canApplyProjectState(
   return mounted && requestId === currentRequestId && isCurrentSelection(selected, workspaceId, projectId);
 }
 
-function upsertFile(files: ProjectFile[], file: ProjectFile) {
+function upsertFile<T extends { path: string }>(files: T[], file: T) {
   return files.some(item => item.path === file.path) ? files.map(item => item.path === file.path ? file : item) : [...files, file];
+}
+
+function upsertEditorTab(tabs: EditorTab[], tab: EditorTab) {
+  return tabs.some(item => item.path === tab.path) ? tabs.map(item => item.path === tab.path ? tab : item) : [...tabs, tab];
 }
 
 function mergeBuildHistory(builds: BuildResult[], build: BuildResult) {
@@ -1346,7 +1510,7 @@ function defaultPackageId(template: ExtensionTemplate) {
   return /generic/i.test(`${template.name} ${template.id}`) ? "Company.Extensions.Generic" : "Company.Extensions.ElsaActivity";
 }
 
-function fileSortKey(file: ProjectFile) {
+function fileSortKey(file: RepositoryFileSummary) {
   return `${file.type === "folder" ? "0" : "1"}:${file.path}`;
 }
 
