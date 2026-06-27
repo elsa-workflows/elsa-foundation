@@ -19,6 +19,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Abstractions\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
 	</ItemGroup>
 
 </Project>
