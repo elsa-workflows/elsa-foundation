@@ -10,6 +10,7 @@ import {
   type StudioFeatureAreaContribution,
   type StudioFeatureAreaNavContribution,
   type StudioFeatureAreaNavParent,
+  type StudioDiagnosticsWidgetContribution,
   type StudioModuleDiagnostic,
   type StudioNavigationContribution,
   type StudioRouteContribution
@@ -32,8 +33,8 @@ export function createStudioRegistry(
     : backendBaseUrlOrOptions ?? {};
   const hostContext = options.hostHttp ? { ...host, http: options.hostHttp } : host;
   const backend = createBackendContext(hostContext, options);
-  const navigation = createContributionRegistry<StudioNavigationContribution>(studioSlots.navigation);
-  const routes = createContributionRegistry<StudioRouteContribution>(studioSlots.routes);
+  const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
+  const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
 
   return {
@@ -42,29 +43,30 @@ export function createStudioRegistry(
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createContributionRegistry(studioSlots.dashboardWidgets),
-    panels: createContributionRegistry(studioSlots.panels),
-    toolbarActions: createContributionRegistry(studioSlots.toolbarActions),
-    activityEditors: createContributionRegistry(studioSlots.activityEditors),
-    propertyEditors: createContributionRegistry(studioSlots.propertyEditors),
-    expressionEditors: createContributionRegistry(studioSlots.expressionEditors),
-    settingEditors: createContributionRegistry(studioSlots.settingEditors),
+    dashboardWidgets: createContributionRegistry({ slot: studioSlots.dashboardWidgets }),
+    diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
+    panels: createContributionRegistry({ slot: studioSlots.panels }),
+    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
+    activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
+    propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
+    expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
     agent: {
-      contextProviders: createContributionRegistry(studioSlots.agentContextProviders),
-      promptStarters: createContributionRegistry(studioSlots.agentPromptStarters),
-      capabilities: createContributionRegistry(studioSlots.agentCapabilities),
-      actions: createContributionRegistry(studioSlots.agentActions),
-      toolSlots: createContributionRegistry(studioSlots.agentToolSlots),
-      toolContracts: createContributionRegistry(studioSlots.agentToolContracts),
-      resultRenderers: createContributionRegistry(studioSlots.agentResultRenderers)
+      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
+      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
+      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
+      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
+      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
+      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
+      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
     },
     workflowDesigner: {
-      nodeRenderers: createContributionRegistry(studioSlots.workflowDesignerNodeRenderers),
-      toolboxItems: createContributionRegistry(studioSlots.workflowDesignerToolboxItems),
-      panels: createContributionRegistry(studioSlots.workflowDesignerPanels)
+      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
+      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
     ai: createAiContributionApi(),
-    diagnostics: createContributionRegistry<StudioModuleDiagnostic>(studioSlots.diagnostics)
+    diagnostics: createContributionRegistry<StudioModuleDiagnostic>({ slot: studioSlots.diagnostics })
   };
 }
 
@@ -77,7 +79,7 @@ function createFeatureAreaRegistry(
   navigation: StudioContributionRegistry<StudioNavigationContribution>,
   routes: StudioContributionRegistry<StudioRouteContribution>
 ): StudioContributionRegistry<StudioFeatureAreaContribution> {
-  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>(studioSlots.featureAreas);
+  const featureAreas = createContributionRegistry<StudioFeatureAreaContribution>({ slot: studioSlots.featureAreas });
 
   return {
     slot: featureAreas.slot,
@@ -90,7 +92,8 @@ function createFeatureAreaRegistry(
         routes.add(route);
       }
     },
-    list: featureAreas.list
+    list: featureAreas.list,
+    compose: featureAreas.compose
   };
 }
 

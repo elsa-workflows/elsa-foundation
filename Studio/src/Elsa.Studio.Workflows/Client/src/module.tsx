@@ -50,7 +50,7 @@ import {
   startWorkflowDraftTestRun,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -124,6 +124,11 @@ interface WorkflowTestRunState {
   view: WorkflowTestRunView;
 }
 
+interface ExecutableRunState {
+  artifactId: string;
+  workflowExecutionId: string | null;
+}
+
 export type WorkflowConnectSource = { nodeId: string; handleId: string | null };
 
 type ConnectMenuState =
@@ -160,7 +165,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
-    description: "Design, publish and run workflow definitions and inspect instances.",
+    description: "Design, publish and run workflow definitions and inspect runs.",
     navGroup: "Workspace",
     ownedPaths: ["/workflows"],
     required: true,
@@ -173,7 +178,7 @@ export function register(api: ElsaStudioModuleApi) {
       items: [
         { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
         { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
-        { title: "Instances", path: "/workflows/instances", iconColor: "#0ea5e9" }
+        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" }
       ]
     },
     routes: [
@@ -192,13 +197,13 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-instances",
         path: "/workflows/instances",
-        label: "Workflow instances",
+        label: "Workflow runs",
         component: () => <WorkflowInstancesPage context={api.backend} ai={api.ai} />
       },
       {
         id: "workflows-instance-detail",
         path: "/workflows/instances/:workflowExecutionId",
-        label: "Workflow instance",
+        label: "Workflow run",
         component: () => <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} />
       }
     ]
@@ -273,7 +278,7 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
 
 function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   return (
-    <WorkflowsPageFrame title="Instances">
+    <WorkflowsPageFrame title="Runs">
       <WorkflowInstances context={context} ai={ai} />
     </WorkflowsPageFrame>
   );
@@ -283,7 +288,7 @@ function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointC
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
-    <WorkflowsPageFrame title="Instance">
+    <WorkflowsPageFrame title="Run">
       <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
     </WorkflowsPageFrame>
   );
@@ -731,6 +736,7 @@ function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilter
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [executables, setExecutables] = useState<WorkflowExecutableSummary[]>([]);
   const normalizedDefinitionFilter = definitionFilter?.trim().toLowerCase() ?? "";
   const visibleExecutables = useMemo(
@@ -767,9 +773,12 @@ function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilter
 
   const run = async (executable: WorkflowExecutableSummary) => {
     setStatus("");
+    setLastRun(null);
     setError("");
     try {
-      await runExecutable(context, executable.artifactId);
+      const result = await runExecutable(context, executable.artifactId);
+      const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
+      setLastRun({ artifactId: executable.artifactId, workflowExecutionId });
       setStatus(`Started ${executable.artifactId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -781,17 +790,20 @@ function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilter
 
     if (dispatchAiAction(ai, explainExecutableAction, executable)) {
       setError("");
+      setLastRun(null);
       setStatus(`Sent ${executable.artifactId} to Weaver`);
     }
   };
 
   const markCopied = (label: string) => {
     setError("");
+    setLastRun(null);
     setStatus(`Copied ${label}`);
   };
 
   const markCopyFailed = (label: string) => {
     setStatus("");
+    setLastRun(null);
     setError(`Could not copy ${label}.`);
   };
 
@@ -817,7 +829,7 @@ function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilter
         ) : null}
       </div>
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
+      {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow executables...</div> : null}
       {state === "ready" && visibleExecutables.length === 0 ? <div className="wf-empty">{definitionFilter ? "No workflow executables match this definition filter." : "No workflow executables found. Publish a workflow definition to create one."}</div> : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
@@ -881,6 +893,24 @@ function WorkflowExecutableSourceCell({ executable, onCopied, onCopyFailed }: { 
   );
 }
 
+function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
+  const openRun = () => {
+    if (!run?.workflowExecutionId) return;
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  return (
+    <div className={`wf-status-line${compact ? " compact" : ""}`}>
+      <Check size={compact ? 13 : 14} />
+      <span>{status}</span>
+      {run?.workflowExecutionId ? (
+        <button type="button" onClick={openRun}>Open Run {run.workflowExecutionId}</button>
+      ) : null}
+    </div>
+  );
+}
+
 function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
   if (!value) return null;
 
@@ -906,6 +936,7 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [artifacts, setArtifacts] = useState<WorkflowExecutableSummary[]>([]);
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
@@ -929,9 +960,11 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
 
   const run = async (artifact: WorkflowExecutableSummary) => {
     setStatus("");
+    setLastRun(null);
     setError("");
     try {
-      await runExecutable(context, artifact.artifactId);
+      const result = await runExecutable(context, artifact.artifactId);
+      setLastRun({ artifactId: artifact.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
       setStatus(`Started ${artifact.artifactId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -943,6 +976,7 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
 
     if (dispatchAiAction(ai, explainExecutableAction, artifact)) {
       setError("");
+      setLastRun(null);
       setStatus(`Sent ${artifact.artifactId} to Weaver`);
     }
   };
@@ -954,11 +988,13 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
 
   const markCopied = (label: string) => {
     setError("");
+    setLastRun(null);
     setStatus(`Copied ${label}`);
   };
 
   const markCopyFailed = (label: string) => {
     setStatus("");
+    setLastRun(null);
     setError(`Could not copy ${label}.`);
   };
 
@@ -970,7 +1006,7 @@ function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId
         <button type="button" onClick={openExecutablePage}>Open list</button>
       </div>
       {state === "failed" ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
-      {status ? <div className="wf-status-line compact"><Check size={13} /> {status}</div> : null}
+      {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
       {state === "loading" ? <p className="wf-muted">Loading artifacts...</p> : null}
       {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
       {state === "ready" && artifacts.length > 0 ? (
@@ -1014,13 +1050,18 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [runKindFilter, setRunKindFilter] = useState("");
   const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
 
   const load = useCallback(async () => {
     setState("loading");
     setError("");
     try {
-      const nextInstances = await listWorkflowInstances(context, { status: statusFilter || undefined, take: 100 });
+      const nextInstances = await listWorkflowInstances(context, {
+        status: statusFilter || undefined,
+        runKind: runKindFilter || undefined,
+        take: 100
+      });
       setInstances(nextInstances);
       setState("ready");
     } catch (e) {
@@ -1028,7 +1069,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
       setInstances([]);
       setState("failed");
     }
-  }, [context, statusFilter]);
+  }, [context, runKindFilter, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -1045,7 +1086,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
         <button type="button" onClick={() => void load()}>Refresh</button>
         <label className="wf-toolbar-field">
           <span>Status</span>
-          <select aria-label="Workflow instance status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+          <select aria-label="Workflow run status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
             <option value="Pending">Pending</option>
             <option value="Running">Running</option>
@@ -1055,14 +1096,25 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
             <option value="Cancelled">Cancelled</option>
           </select>
         </label>
+        <label className="wf-toolbar-field">
+          <span>Kind</span>
+          <select aria-label="Run Kind" value={runKindFilter} onChange={event => setRunKindFilter(event.target.value)}>
+            <option value="">All kinds</option>
+            <option value="TestRun">Test Run</option>
+            <option value="PublishedRun">Published Run</option>
+            <option value="BackgroundWeaverRun">Background Weaver Run</option>
+            <option value="Unknown">Unknown / legacy</option>
+          </select>
+        </label>
       </div>
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {state === "loading" ? <div className="wf-empty">Loading workflow instances...</div> : null}
-      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow instances found. Run a published workflow executable to create instance history.</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow runs...</div> : null}
+      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow runs found. Run a published workflow executable to create history.</div> : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow instances">
+        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
-            <span>Instance</span>
+            <span>Run</span>
+            <span>Kind</span>
             <span>Status</span>
             <span>Definition</span>
             <span>Activity</span>
@@ -1074,7 +1126,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
               type="button"
               className="wf-grid-row"
               role="row"
-              aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
+              aria-label={`Inspect workflow run ${instance.workflowExecutionId}`}
               key={instance.workflowExecutionId}
               onClick={() => openInstance(instance.workflowExecutionId)}
             >
@@ -1082,6 +1134,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
                 <strong>{instance.workflowExecutionId}</strong>
                 <small>{instance.artifactId}</small>
               </span>
+              <span>{formatRunKind(instance.runKind)}</span>
               <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span>
                 <strong>{instance.definitionId}</strong>
@@ -1147,7 +1200,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
       setState("ready");
     } catch (e) {
       setData(null);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
   }, [context, workflowExecutionId]);
@@ -1164,7 +1217,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
   return (
     <>
       <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Instances</button>
+        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data && instanceAction ? (
           <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
@@ -1172,7 +1225,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
           </button>
         ) : null}
       </div>
-      {state === "loading" ? <div className="wf-empty">Loading workflow instance...</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {state === "ready" && data ? (
         <div className="wf-instance-detail-workbench">
@@ -1237,7 +1290,7 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
   }, [activityCatalog, definitionVersion, details, selectedEvidenceId]);
 
   return (
-    <section className="wf-instance-canvas-shell" aria-label="Workflow instance canvas">
+    <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
       <header>
         <div>
           <span>Definition version</span>
@@ -1256,7 +1309,7 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
           <div className="wf-empty">
-            The workflow instance loaded, but its definition graph could not be resolved for this version.
+            The workflow run loaded, but its definition graph could not be resolved for this version.
             {definitionVersionError ? <small>{formatWorkflowVersionLoadError(definitionVersionError)}</small> : null}
           </div>
         ) : null}
@@ -1296,14 +1349,14 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   graphNodeIds?: Set<string>;
 }) {
   if (!summary) {
-    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow instance to inspect activity history.</div></aside>;
+    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect activity history.</div></aside>;
   }
 
   return (
-    <aside className="wf-instance-inspector" aria-label="Workflow instance details">
+    <aside className="wf-instance-inspector" aria-label="Workflow run details">
       <header>
         <div>
-          <span>Workflow instance</span>
+          <span>Workflow Instance ID</span>
           <h3>{summary.workflowExecutionId}</h3>
         </div>
         {action ? (
@@ -1315,6 +1368,8 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
       <dl className="wf-instance-meta">
         <dt>Status</dt>
         <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+        <dt>Run Kind</dt>
+        <dd>{formatRunKind(summary.runKind)}</dd>
         <dt>Artifact</dt>
         <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
         <dt>Definition</dt>
@@ -1328,7 +1383,7 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
         <dt>Correlation</dt>
         <dd>{summary.correlationId || "None"}</dd>
       </dl>
-      {state === "loading" ? <div className="wf-empty">Loading instance details...</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {state === "ready" && details ? (
         <>
@@ -1435,6 +1490,23 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds }: { details: Workflo
 
 function WorkflowStatusBadge({ status, subStatus }: { status: string; subStatus?: string | null }) {
   return <span className="wf-status-badge" data-status={status.toLowerCase()}>{subStatus ? `${status} · ${subStatus}` : status}</span>;
+}
+
+function formatRunKind(runKind?: string | null) {
+  switch (normalizeRunKind(runKind)) {
+    case "testrun":
+      return "Test Run";
+    case "publishedrun":
+      return "Published Run";
+    case "backgroundweaverrun":
+      return "Background Weaver Run";
+    default:
+      return "Unknown / legacy";
+  }
+}
+
+function normalizeRunKind(runKind?: string | null) {
+  return (runKind ?? "").replace(/[\s_-]+/g, "").toLowerCase();
 }
 
 function getVisibleWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
@@ -1641,6 +1713,11 @@ function formatExecutableSourceKind(sourceKind?: string | null) {
     .replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function readExecutableRunWorkflowExecutionId(response: WorkflowExecutableRunResponse | null | undefined) {
+  const workflowExecutionId = response?.workflowExecutionId ?? response?.runId ?? response?.executionId;
+  return typeof workflowExecutionId === "string" && workflowExecutionId.trim() ? workflowExecutionId : null;
+}
+
 async function copyTextToClipboard(value: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -1817,7 +1894,6 @@ function WorkflowEditor({
   const [status, setStatus] = useState("");
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [testRun, setTestRun] = useState<WorkflowTestRunState | null>(null);
-  const [testRunDetailsOpen, setTestRunDetailsOpen] = useState(false);
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
@@ -1889,11 +1965,6 @@ function WorkflowEditor({
       }
     };
   }, [catalogByVersion, details, draft, selectedDescriptor, selectedNode, selectedNodeId]);
-
-  useEffect(() => {
-    if (!draft || !testRun) return;
-    if (testRun.draftSignature !== getDraftSignature(draft)) setTestRunDetailsOpen(false);
-  }, [draft, testRun]);
 
   useEffect(() => {
     const handleApply = (event: Event) => {
@@ -2475,7 +2546,6 @@ function WorkflowEditor({
     const draftSnapshot = draft;
     const draftSignature = getDraftSignature(draftSnapshot);
     setTestRun(null);
-    setTestRunDetailsOpen(false);
     setStatus("Preparing test run...");
     try {
       setOperation("testRunPreparing");
@@ -2490,6 +2560,8 @@ function WorkflowEditor({
         state: draftSnapshot.state
       });
       setTestRun({ draftSignature, view: nextTestRun });
+      setActiveRightPanelId("runtime");
+      setInspectorCollapsed(false);
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
@@ -2785,6 +2857,10 @@ function WorkflowEditor({
     ? testRun.view
     : null;
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
+  const openWorkflowRun = (workflowExecutionId: string) => {
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
   const panelContext: WorkflowDesignerPanelContext = {
     definition: details.definition,
     draft,
@@ -2824,6 +2900,13 @@ function WorkflowEditor({
       order: 0,
       icon: <ListTree size={15} />,
       render: renderInspectorPanel
+    },
+    {
+      id: "runtime",
+      title: "Runtime",
+      order: 5,
+      icon: <Play size={15} />,
+      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} onOpenRun={openWorkflowRun} />
     },
     {
       id: "artifacts",
@@ -2962,8 +3045,10 @@ function WorkflowEditor({
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
-              open={testRunDetailsOpen}
-              onToggle={() => setTestRunDetailsOpen(open => !open)}
+              onOpenDetails={() => {
+                setActiveRightPanelId("runtime");
+                setInspectorCollapsed(false);
+              }}
             />
           ) : null}
           <button
@@ -3425,12 +3510,10 @@ function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
 
 function TestRunStatus({
   testRun,
-  open,
-  onToggle
+  onOpenDetails
 }: {
   testRun: WorkflowTestRunView;
-  open: boolean;
-  onToggle(): void;
+  onOpenDetails(): void;
 }) {
   const rejected = isRejectedTestRun(testRun);
   return (
@@ -3438,33 +3521,65 @@ function TestRunStatus({
       <button
         type="button"
         className="wf-test-run-trigger"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={onToggle}
+        onClick={onOpenDetails}
       >
         {rejected ? <AlertCircle size={16} /> : <Check size={16} />}
         {rejected ? "Test run rejected" : "Test run dispatched"}
-        <ChevronDown size={14} />
       </button>
-      {open ? (
-        <section className="wf-test-run-popover" role="dialog" aria-label="Test run details">
-          <div className="wf-test-run-popover-heading">
-            <strong>{rejected ? "Rejected by the server" : "Transient run accepted"}</strong>
-            <span>Ephemeral - not promoted</span>
-          </div>
-          {rejected && testRun.reason ? <p>{testRun.reason}</p> : null}
-          <dl>
-            <div><dt>Status</dt><dd title={testRun.status}>{testRun.status}</dd></div>
-            {testRun.commandDispatchStatus ? <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus}>{testRun.commandDispatchStatus}</dd></div> : null}
-            <div><dt>Test run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
-            {testRun.artifactId ? <div><dt>Artifact</dt><dd title={testRun.artifactId}>{testRun.artifactId}</dd></div> : null}
-            {testRun.workflowExecutionId ? <div><dt>Execution</dt><dd title={testRun.workflowExecutionId}>{testRun.workflowExecutionId}</dd></div> : null}
-            {testRun.expiresAt ? <div><dt>Expires</dt><dd title={formatDate(testRun.expiresAt)}>{formatDate(testRun.expiresAt)}</dd></div> : null}
-          </dl>
-        </section>
-      ) : null}
     </div>
   );
+}
+
+function WorkflowRuntimePanel({ testRun, onOpenRun }: {
+  testRun: WorkflowTestRunView | null;
+  onOpenRun(workflowExecutionId: string): void;
+}) {
+  if (!testRun) {
+    return (
+      <div className="wf-runtime-panel">
+        <div className="wf-empty">Run the draft to see Runtime Evidence.</div>
+      </div>
+    );
+  }
+
+  const rejected = isRejectedTestRun(testRun);
+  const workflowExecutionId = testRun.workflowExecutionId;
+  return (
+    <div className="wf-runtime-panel">
+      <section className="wf-runtime-card" data-state={rejected ? "rejected" : "accepted"}>
+        <header>
+          <div>
+            <span>Latest Test Run</span>
+            <h3>{rejected ? "Rejected by the server" : "Transient run accepted"}</h3>
+          </div>
+          <WorkflowStatusBadge status={testRun.status} subStatus={testRun.commandDispatchStatus ?? undefined} />
+        </header>
+        <p>Ephemeral - not saved, promoted, or published.</p>
+        {rejected && testRun.reason ? <div className="wf-runtime-reason"><AlertCircle size={14} /> {testRun.reason}</div> : null}
+        <dl className="wf-runtime-meta">
+          <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus ?? testRun.status}>{testRun.commandDispatchStatus ?? testRun.status}</dd></div>
+          <div><dt>Test Run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
+          <div><dt>Artifact</dt><dd title={testRun.artifactId ?? "None"}>{testRun.artifactId ?? "None"}</dd></div>
+          <div>
+            <dt>Run / Instance</dt>
+            <dd title={workflowExecutionId ?? "None"}>
+              {workflowExecutionId ? (
+                <button type="button" onClick={() => onOpenRun(workflowExecutionId)}>{workflowExecutionId}</button>
+              ) : "None"}
+            </dd>
+          </div>
+          <div><dt>Activities</dt><dd>{formatEvidenceCount(testRun.activityCount, "activity")}</dd></div>
+          <div><dt>Incidents</dt><dd>{formatEvidenceCount(testRun.incidentCount, "incident")}</dd></div>
+          <div><dt>Expires</dt><dd title={testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}>{testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}</dd></div>
+        </dl>
+      </section>
+    </div>
+  );
+}
+
+function formatEvidenceCount(count: number | null | undefined, label: string) {
+  if (typeof count !== "number") return "Available on linked Run";
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
 
 function createNodeId(activity: ActivityCatalogItem) {
@@ -3571,6 +3686,28 @@ function formatWorkflowVersionLoadError(error: string) {
   }
 
   return error;
+}
+
+function formatWorkflowRunLoadError(error: unknown, workflowExecutionId: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isNotFoundError(error, message)) return `Run ${workflowExecutionId} was not found.`;
+  return message;
+}
+
+function isNotFoundError(error: unknown, message: string) {
+  const responseStatus = typeof error === "object" && error
+    ? (error as { response?: { status?: unknown }; status?: unknown }).response?.status
+      ?? (error as { response?: { status?: unknown }; status?: unknown }).status
+    : undefined;
+  if (responseStatus === 404 || /\b404\b/.test(message)) return true;
+
+  try {
+    const payload = JSON.parse(message) as { error?: unknown; title?: unknown; detail?: unknown };
+    return [payload.error, payload.title, payload.detail]
+      .some(value => typeof value === "string" && /not found/i.test(value));
+  } catch {
+    return /not found/i.test(message);
+  }
 }
 
 function formatDuration(start?: string | null, end?: string | null) {

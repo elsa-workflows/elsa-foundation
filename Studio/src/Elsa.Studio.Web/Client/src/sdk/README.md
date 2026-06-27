@@ -1,26 +1,59 @@
 # Studio SDK Slots and Contributions
 
-Studio extensibility is described with Slots and Contributions.
+Studio extensibility uses Slots and Contributions as its shared public model.
+A Slot is a stable contribution target owned by the host or by a module. A
+Contribution is a module-provided item registered into a Slot. Slot Kind
+describes the shape accepted by the Slot, and Slot ID identifies the concrete
+target, such as `studio.dashboard.widgets` or `workflow.designer.panels`.
 
-- A `StudioSlotDefinition` names a stable Slot ID, Slot Kind, Slot Owner, accepted Contribution type, and unavailable-state behavior.
-- A `StudioContribution` is a module-provided item registered into a Slot. UI Contributions add a `StudioComponent` that renders the visible surface.
-- A Slot Owner defines the local contribution shape and admission rules. Host Policy can still hide, disable, or veto any Contribution through `StudioContributionAvailability`.
-- Module Policy describes module-owned rules, but it does not bypass Host Policy.
-- An unavailable Contribution can be represented with `StudioUnavailableContribution` when a surface should show a disabled reason instead of hiding the item.
+Slot Owners define local admission rules for their surface. Host Policy runs
+after Slot Owner rules and can still veto any Contribution. Disabled
+modules/features hide their Contributions by default, while runtime-unavailable
+Contributions can be composed with disabled reasons for active contexts.
+Contribution Availability is separate from Module Load Status: module status
+controls whether Contributions are registered or hidden, while availability
+describes whether a registered Contribution can currently be used.
 
-The public registries on `ElsaStudioModuleApi` map to Slot definitions through
-their optional `slot` metadata. For example, `api.routes.slot.id` is
-`studio.routes`, `api.dashboardWidgets.slot.id` is `studio.dashboard.widgets`,
-`api.panels.slot.id` is `studio.shell.panels`, and workflow property/expression
-editor registries map to `workflow.activity.property-editors` and
-`workflow.expression.editors`.
+UI Contributions are registered metadata plus behavior. Components are render
+implementations used by UI Contributions; they are not the Contribution as a
+whole. Registries expose `slot`, `list()`, and `compose()`: use `list()` for
+available Contributions, and `compose({ includeUnavailable: true })` when the
+UI needs disabled entries with reasons.
 
-Modules should register Contributions through the existing typed registries.
-The Slot metadata is descriptive and additive, so module code that calls
-`api.routes.add(...)`, `api.dashboardWidgets.add(...)`, or
-`api.expressionEditors.add(...)` continues to work unchanged.
+Known host-owned Slot IDs:
 
-## Weaver contributions
+- `studio.feature-areas`
+- `studio.navigation`
+- `studio.routes`
+- `studio.dashboard.widgets`
+- `studio.panels`
+- `studio.toolbar.actions`
+- `workflow.activity.editors`
+- `workflow.activity.property-editors`
+- `workflow.expression-editors`
+- `workflow.designer.node-renderers`
+- `workflow.designer.toolbox-items`
+- `workflow.designer.panels`
+- `studio.setting-editors`
+- `studio.diagnostics`
+- `studio.diagnostics.widgets`
+- `studio.weaver.context-providers`
+- `studio.weaver.prompt-starters`
+- `studio.weaver.capabilities`
+- `studio.weaver.actions`
+- `studio.weaver.tool-slots`
+- `studio.weaver.tool-contracts`
+- `studio.weaver.result-renderers`
+- `studio.ai.context-providers`
+- `studio.ai.prompt-actions`
+- `studio.ai.tools`
+- `studio.ai.proposal-renderers`
+- `studio.ai.surfaces`
+
+Module-owned Slots may use their own stable IDs and point at a parent Slot ID
+when they expose nested extension targets.
+
+## Weaver Contributions
 
 Studio modules can enrich Weaver through `api.agent` without calling an external
 agent provider from the browser. Weaver is the visible assistant name; `agent`
@@ -35,6 +68,11 @@ Register only declarative, scoped contributions:
 - `capabilities` describe what the module can help with, including risk and
   permission metadata.
 - `actions` describe reviewable proposal shapes for mutating work.
+- `toolSlots` group resource-aware Weaver tools by surface and invocation mode.
+- `toolContracts` declare input, target, result, risk, permissions,
+  availability, invocation modes, and renderer expectations.
+- `resultRenderers` render module-specific tool results inside the host-owned
+  Review Shell, with structured fallback when no renderer matches.
 
 Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available

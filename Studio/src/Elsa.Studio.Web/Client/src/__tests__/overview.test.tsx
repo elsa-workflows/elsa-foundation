@@ -2,8 +2,8 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Dashboard, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems } from "../app/App";
-import type { ElsaStudioModuleApi } from "../sdk";
+import { Dashboard, Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
+import type { ElsaStudioModuleApi, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -66,17 +66,148 @@ describe("dashboard", () => {
 
     await unmount();
   });
+
+  it("renders dashboard widgets in deterministic order", async () => {
+    stubBackendFetch();
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      widgets: [
+        { id: "beta", title: "Beta", component: () => <div>Beta widget</div> },
+        { id: "alpha", title: "Alpha", component: () => <div>Alpha widget</div> },
+        { id: "first", title: "First", order: 10, component: () => <div>First widget</div> }
+      ]
+    }));
+
+    await flushPromises();
+
+    expect(visibleText(container)).toMatch(/First widget.*Alpha widget.*Beta widget/s);
+
+    await unmount();
+  });
+
+  it("shows a useful Dashboard empty state when no widgets are registered", async () => {
+    stubBackendFetch();
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry()
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("No dashboard widgets are registered.");
+
+    await unmount();
+  });
+});
+
+describe("diagnostics", () => {
+  it("renders diagnostics widgets in deterministic order", async () => {
+    const { container, unmount } = await renderDiagnostics(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      diagnosticsWidgets: [
+        diagnosticsWidget("beta", "Beta", () => <div>Beta widget</div>),
+        diagnosticsWidget("alpha", "Alpha", () => <div>Alpha widget</div>),
+        diagnosticsWidget("first", "First", () => <div>First widget</div>, 10)
+      ]
+    }));
+
+    expect(visibleText(container)).toMatch(/First widget.*Alpha widget.*Beta widget/s);
+
+    await unmount();
+  });
+
+  it("shows a useful empty state when no diagnostics widgets are registered", async () => {
+    const { container, unmount } = await renderDiagnostics(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      diagnostics: [{ moduleId: "Elsa.Studio.FeatureManagement", status: "available", reason: "Module manifest accepted." }]
+    }));
+
+    expect(container.textContent).toContain("No diagnostics widgets are registered.");
+    expect(container.textContent).not.toContain("Module diagnostics");
+    expect(container.textContent).not.toContain("Module manifest accepted.");
+
+    await unmount();
+  });
+
+  it("isolates failed snapshot widgets from healthy widgets", async () => {
+    function SnapshotWidget({ state }: StudioDiagnosticsWidgetProps) {
+      return <div>Snapshot status: {state.status} {String(state.snapshot ?? state.error ?? "")}</div>;
+    }
+
+    const { container, unmount } = await renderDiagnostics(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      diagnosticsWidgets: [
+        {
+          id: "healthy",
+          title: "Healthy",
+          load: async () => "ready",
+          component: SnapshotWidget
+        },
+        {
+          id: "failed",
+          title: "Failed",
+          load: async () => {
+            throw new Error("stream unavailable");
+          },
+          component: SnapshotWidget
+        }
+      ]
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Snapshot status: ready ready");
+    expect(container.textContent).toContain("Snapshot status: error stream unavailable");
+
+    await unmount();
+  });
+
+  it("cleans up live diagnostics subscriptions on unmount", async () => {
+    const cleanup = vi.fn();
+    function LiveWidget({ state }: StudioDiagnosticsWidgetProps) {
+      return <div>Live status: {state.status} {String(state.snapshot ?? "")}</div>;
+    }
+
+    const { container, unmount } = await renderDiagnostics(stubApi({
+      backendGetJson: async () => healthyRegistry(),
+      diagnosticsWidgets: [
+        {
+          id: "live",
+          title: "Live",
+          mode: "live",
+          subscribe: publish => {
+            publish("connected");
+            return cleanup;
+          },
+          component: LiveWidget
+        }
+      ]
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Live status: streaming connected");
+
+    await unmount();
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("navigation sections", () => {
   it("keeps Dashboard owned by the host shell", () => {
     const navigation = getStudioNavigation([
       { id: "dashboard-sample", label: "Dashboard", path: "/dashboard", order: 100 },
+      { id: "overview", label: "Overview", path: "/overview", order: 10 },
       { id: "weather", label: "Weather", path: "/weather", order: 20 }
     ]);
 
     expect(navigation.filter(item => item.path === "/dashboard").map(item => item.id)).toEqual(["dashboard"]);
+    expect(navigation.map(item => item.id)).not.toContain("overview");
     expect(navigation.map(item => item.id)).toContain("weather");
+  });
+
+  it("resolves the legacy Overview path as Dashboard", () => {
+    expect(isDashboardPath("/overview")).toBe(true);
   });
 
   it("groups module and feature management under Settings", () => {
@@ -90,7 +221,7 @@ describe("navigation sections", () => {
 
   it("keeps child navigation items out of top-level sections", () => {
     const navigation = [
-      { id: "diagnostics", label: "Diagnostics", path: "/diagnostics/modules" },
+      { id: "diagnostics", label: "Diagnostics", path: "/diagnostics" },
       { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics" },
       { id: "orphan", label: "Orphan", path: "/orphan", parentId: "missing" }
     ];
@@ -102,6 +233,8 @@ describe("navigation sections", () => {
 function stubApi(options: {
   backendGetJson: (url: string) => Promise<unknown>;
   widgets?: Array<{ id: string; title: string; order?: number; component: React.ComponentType }>;
+  diagnosticsWidgets?: StudioDiagnosticsWidgetContribution[];
+  diagnostics?: Array<{ moduleId: string; status: string; reason: string }>;
 }): ElsaStudioModuleApi {
   return {
     host: {
@@ -123,6 +256,14 @@ function stubApi(options: {
     dashboardWidgets: {
       add() {},
       list: () => options.widgets ?? []
+    },
+    diagnosticsWidgets: {
+      add() {},
+      list: () => options.diagnosticsWidgets ?? []
+    },
+    diagnostics: {
+      add() {},
+      list: () => options.diagnostics ?? []
     }
   } as ElsaStudioModuleApi;
 }
@@ -137,12 +278,20 @@ function healthyRegistry() {
 }
 
 async function renderDashboard(api: ElsaStudioModuleApi) {
+  return renderComponent(<Dashboard api={api} />);
+}
+
+async function renderDiagnostics(api: ElsaStudioModuleApi) {
+  return renderComponent(<Diagnostics api={api} />);
+}
+
+async function renderComponent(component: React.ReactNode) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(<Dashboard api={api} />);
+    root.render(component);
   });
 
   return {
@@ -152,6 +301,14 @@ async function renderDashboard(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+function diagnosticsWidget(id: string, title: string, component: React.ComponentType<StudioDiagnosticsWidgetProps>, order?: number): StudioDiagnosticsWidgetContribution {
+  return { id, title, order, component };
+}
+
+function visibleText(container: HTMLElement) {
+  return container.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 async function flushPromises() {

@@ -36,7 +36,7 @@ describe("workflows module", () => {
     })).toEqual({ nodeId: "write-line-1", handleId: "Done" });
   });
 
-  it("registers navigation and definitions route", () => {
+  it("registers Runs navigation while preserving instance routes", () => {
     const api = testApi();
 
     register(api);
@@ -48,13 +48,13 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances" }),
-      expect.objectContaining({ id: "workflows-instance-detail", path: "/workflows/instances/:workflowExecutionId" })
+      expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
+      expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" })
     ]);
   });
 
@@ -752,7 +752,23 @@ describe("workflows module", () => {
   it("renders workflow executables and runs an artifact", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return response(null, 204);
+      if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1" })
+        }));
+      }
+      if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
+        return response(workflowDefinitionVersionDetails());
+      }
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
       expect(url).toBe("https://server.example/_demo/workflows/executables");
       return response([executable({
         rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
@@ -772,11 +788,14 @@ describe("workflows module", () => {
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Open Run wfexec-published-1");
+    await click(buttonByText(container, "Open Run wfexec-published-1"));
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/_elsa/workflow-management/executables/artifact-1/run",
       expect.objectContaining({ method: "POST" })
     );
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
 
     await unmount();
   });
@@ -872,17 +891,31 @@ describe("workflows module", () => {
     const requestBody = JSON.parse(testRunCall?.body ?? "{}");
     expect(requestBody.definitionId).toBe("definition-1");
     expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
-    expect(JSON.stringify(requestBody.state)).toContain("write-line-v1");
+    expect(requestBody.state.rootActivity).toMatchObject({
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      structure: {
+        kind: "elsa.flowchart.structure",
+        payload: {
+          activities: [expect.objectContaining({ activityVersionId: "write-line-v1" })]
+        }
+      }
+    });
+    expect(calls.some(call => call.method === "POST" && urlPath(call.url) === "/_elsa/publishing/workflows/drafts/test-runs")).toBe(false);
     expect(calls.some(call => call.url.includes("/drafts/draft-1/promote") && call.method === "POST")).toBe(false);
     expect(calls.some(call => call.url.includes("/versions/") && call.method === "POST")).toBe(false);
     expect(calls.some(call => call.url.includes("/executables/") && call.method === "POST")).toBe(false);
     expect(container.querySelector(".wf-test-run-capsule")).toBeNull();
     expect(container.querySelector(".wf-test-run-popover")).toBeNull();
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await click(buttonByText(container, "Test run dispatched"));
     await waitForText(container, "test-run-1");
-    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(container.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
+    expect(container.textContent).toContain("1 activity");
+    expect(container.textContent).toContain("0 incidents");
 
     await unmount();
   });
@@ -936,13 +969,12 @@ describe("workflows module", () => {
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
     await waitForText(container, "Test run dispatched");
-    expect(container.textContent).not.toContain("artifact-transient-1");
-    expect(container.textContent).not.toContain("wfexec-1");
-    await click(buttonByText(container, "Test run dispatched"));
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
 
+    await click(buttonByText(container, "Inspector"));
     await click(container.querySelector(".wf-canvas .react-flow__node"));
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
@@ -988,11 +1020,11 @@ describe("workflows module", () => {
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
     await waitForText(container, "Test run rejected");
-    await click(buttonByText(container, "Test run rejected"));
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
 
     expect(container.textContent).toContain("Test run rejected");
-    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
@@ -1022,11 +1054,20 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("navigates from workflow instances to the wider instance detail route", async () => {
+  it("navigates from workflow runs to the compatible instance detail route", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances")) {
-        return response([workflowInstance()]);
+        if (url.includes("runKind=TestRun")) {
+          return response([workflowInstance({
+            workflowExecutionId: "wfexec-test",
+            artifactId: "artifact-test",
+            runKind: "TestRun",
+            activityCount: 2,
+            incidentCount: 1
+          })]);
+        }
+        return response([workflowInstance({ runKind: "PublishedRun" })]);
       }
 
       throw new Error(`Unexpected request ${url}`);
@@ -1035,13 +1076,23 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    expect(container.textContent).toContain("Instances");
+    expect(container.textContent).toContain("Runs");
+    expect(container.textContent).toContain("Published Run");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
-    await click(rowByLabel(container, "Inspect workflow instance wfexec-1"));
+    await select(selectByLabel(container, "Run Kind"), "TestRun");
+    await waitForText(container, "wfexec-test");
+    expect(container.textContent).toContain("Test Run");
+    expect(container.textContent).toContain("2 activities");
+    expect(container.textContent).toContain("1 incidents");
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test"));
 
-    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/instances?take=100",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?runKind=TestRun&take=100",
       expect.any(Object)
     );
 
@@ -1079,6 +1130,9 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Definition version");
+    expect(container.textContent).toContain("Run");
+    expect(container.textContent).toContain("Workflow Instance ID");
+    expect(container.textContent).toContain("Published Run");
     expect(container.textContent).toContain("Activity history");
     expect(container.textContent).toContain("WriteLine");
     expect(container.textContent).toContain("No incidents recorded.");
@@ -1090,6 +1144,24 @@ describe("workflows module", () => {
       "https://server.example/_elsa/workflow-management/versions/version-1",
       expect.any(Object)
     );
+
+    await unmount();
+  });
+
+  it("shows a not-found state only when the run record is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-missing")) {
+        return response({ error: "Workflow run was not found." }, 404);
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-missing");
+
+    await waitForText(container, "Run wfexec-missing was not found.");
+    expect(container.textContent).not.toContain("Definition graph unavailable");
 
     await unmount();
   });
@@ -1323,6 +1395,8 @@ function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
     workflowExecutionId: "wfexec-1",
     status: "DispatchAccepted",
     commandDispatchStatus: "Accepted",
+    activityCount: 1,
+    incidentCount: 0,
     reason: null,
     expiresAt: "2026-06-24T12:00:00Z",
     ...overrides
@@ -1336,6 +1410,7 @@ function workflowInstance(overrides: Partial<Record<string, unknown>> = {}) {
     artifactVersion: "1.0.0",
     definitionId: "definition-1",
     definitionVersionId: "version-1",
+    runKind: "PublishedRun",
     status: "Completed",
     subStatus: null,
     correlationId: "correlation-1",

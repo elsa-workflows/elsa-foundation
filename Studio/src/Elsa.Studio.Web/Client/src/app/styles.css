@@ -511,7 +511,8 @@ textarea:focus {
   margin-inline: 0;
 }
 
-.dashboard-view {
+.dashboard-view,
+.diagnostics-view {
   display: grid;
   gap: 20px;
 }
@@ -663,7 +664,8 @@ textarea:focus {
   margin: 0 0 16px;
 }
 
-.dashboard-view .section-header {
+.dashboard-view .section-header,
+.diagnostics-view .section-header {
   margin: 0;
 }
 
