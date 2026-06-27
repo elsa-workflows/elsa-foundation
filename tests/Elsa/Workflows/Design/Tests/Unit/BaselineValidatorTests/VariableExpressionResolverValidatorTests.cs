@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Validations.Validators;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTestHelpers;
@@ -27,6 +29,43 @@ public sealed class VariableExpressionResolverValidatorTests
     {
         var state = State(
             activities: [Node("n1", inputs: [VariableInput("body", "var-1")])],
+            variables: [Variable("var-1", "MyVar")]
+        );
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public async Task Variable_expression_with_structured_workflow_reference_resolving_known_referenceKey_emits_no_error()
+    {
+        var state = State(
+            activities: [Node("n1", inputs: [VariableInput("body", new VariableReference("var-1"))])],
+            variables: [Variable("var-1", "MyVar")]
+        );
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public async Task Variable_expression_with_structured_workflow_reference_lookup_is_by_ReferenceKey_not_Name()
+    {
+        var state = State(
+            activities: [Node("n1", inputs: [VariableInput("body", new VariableReference("var-1", VariableReference.WorkflowScopeId))])],
+            variables: [Variable("var-1", "DifferentName")]
+        );
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public async Task Variable_expression_with_json_workflow_reference_resolving_known_referenceKey_emits_no_error()
+    {
+        var reference = JsonSerializer.SerializeToElement(new { referenceKey = "var-1", declaringScopeId = VariableReference.WorkflowScopeId });
+        var state = State(
+            activities: [Node("n1", inputs: [VariableInput("body", reference)])],
             variables: [Variable("var-1", "MyVar")]
         );
         var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker()), state);

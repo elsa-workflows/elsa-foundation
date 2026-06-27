@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Models;
 using Elsa.Expressions.Options;
 using Elsa.Expressions.Services;
@@ -20,6 +22,33 @@ public sealed class VariableExpressionEvaluatorTests
         var context = new TestExpressionContext(variable);
 
         var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, "Counter"), context);
+
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_ResolvesStructuredWorkflowVariableReferenceThroughDefaultDescriptor()
+    {
+        var registry = new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]);
+        var evaluator = new ExpressionEvaluator(registry, new ServiceCollection().BuildServiceProvider(), Options.Create(ExpressionEvaluatorOptions.Empty));
+        var variable = new Variable("Counter", 42);
+        var context = new TestExpressionContext(variable);
+
+        var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, new VariableReference("Counter")), context);
+
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_ResolvesJsonWorkflowVariableReferenceThroughDefaultDescriptor()
+    {
+        var registry = new ExpressionDescriptorRegistry([new DefaultExpressionDescriptorProvider()]);
+        var evaluator = new ExpressionEvaluator(registry, new ServiceCollection().BuildServiceProvider(), Options.Create(ExpressionEvaluatorOptions.Empty));
+        var variable = new Variable("Counter", 42);
+        var context = new TestExpressionContext(variable);
+        var reference = JsonSerializer.SerializeToElement(new { referenceKey = "Counter", declaringScopeId = VariableReference.WorkflowScopeId });
+
+        var result = await evaluator.EvaluateAsync<int>(new TestExpression(WellKnownExpressionDescriptorTypes.Variable, reference), context);
 
         Assert.Equal(42, result);
     }

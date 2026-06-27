@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -92,6 +93,13 @@ public sealed class RequiredInputOutputValidator(
         if (state.Value is null)
             return false;
 
-        return !string.IsNullOrEmpty(state.Value.Value);
+        return state.Value.Value switch
+        {
+            null => false,
+            string value => !string.IsNullOrEmpty(value),
+            JsonElement { ValueKind: JsonValueKind.Null } => false,
+            JsonElement { ValueKind: JsonValueKind.String } value => !string.IsNullOrEmpty(value.GetString()),
+            _ => true
+        };
     }
 }

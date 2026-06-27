@@ -1,6 +1,6 @@
 ﻿namespace Elsa.Expressions.Core.Models;
 
 public sealed record ArgumentValue(
-    string? Value,
+    object? Value,
     string? ExpressionType = null
 );
