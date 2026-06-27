@@ -6,7 +6,7 @@ import { createStudioRegistry } from "../../registry";
 import { createEndpointContext } from "../../../sdk";
 import { AgentPanel } from "../AgentPanel";
 import type { AgentClient } from "../agentClient";
-import type { AgentStreamEvent } from "../agentTypes";
+import type { AgentBootstrapResponse, AgentStreamEvent } from "../agentTypes";
 
 describe("AgentPanel", () => {
   it("disables input until backend policy bootstrap completes", () => {
@@ -297,6 +297,97 @@ describe("AgentPanel", () => {
 
     unmount();
   });
+
+  it("blocks proposal execution when Host Policy denies the tool", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/");
+    registerProposalPrompt(api);
+    const client = stubClient(policyBootstrap({ actorId: "studio-user", deniedToolIds: ["workflow.rename"] }));
+    const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
+      onEvent({
+        type: "proposal-created",
+        proposalId: "prop_01",
+        messageId: "msg_01",
+        proposal: {
+          title: "Rename workflow",
+          summary: "Renames the workflow.",
+          status: "approved",
+          baseRevision: "rev_01",
+          toolId: "workflow.rename",
+          invocationMode: "proposal",
+          resourceTarget: { resourceType: "workflow-definition", resourceId: "wf_01", displayName: "Order workflow" }
+        }
+      });
+      onEvent({ type: "message-completed", messageId: "msg_01" });
+      return { close() {} };
+    });
+    const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
+
+    await flushPromises();
+    clickButton(container, "Create proposal");
+    await flushPromises();
+    await flushPromises();
+    clickButton(container, "Apply");
+    await flushPromises();
+
+    expect(client.executeProposal).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Host Policy denied tool workflow.rename.");
+    expect(container.textContent).toContain("denied");
+    expect(container.textContent).toContain("studio-user");
+
+    unmount();
+  });
+
+  it("records failed audit outcome when proposal execution fails", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/");
+    registerProposalPrompt(api);
+    const client = stubClient(policyBootstrap({ actorId: "studio-user" }));
+    client.executeProposal = vi.fn(async () => {
+      throw new Error("Backend failed.");
+    });
+    const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
+      onEvent({
+        type: "proposal-created",
+        proposalId: "prop_01",
+        messageId: "msg_01",
+        proposal: {
+          title: "Rename workflow",
+          summary: "Renames the workflow.",
+          status: "approved",
+          baseRevision: "rev_01",
+          toolId: "workflow.rename",
+          invocationMode: "proposal",
+          resourceTarget: { resourceType: "workflow-definition", resourceId: "wf_01", displayName: "Order workflow" }
+        }
+      });
+      onEvent({ type: "message-completed", messageId: "msg_01" });
+      return { close() {} };
+    });
+    const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={client} subscribeStream={subscribeStream} onClose={() => {}} />);
+
+    await flushPromises();
+    clickButton(container, "Create proposal");
+    await flushPromises();
+    await flushPromises();
+    clickButton(container, "Apply");
+    await flushPromises();
+    await flushPromises();
+
+    expect(client.executeProposal).toHaveBeenCalledWith("prop_01", { revision: "rev_01" });
+    expect(container.textContent).toContain("Backend failed.");
+    expect(container.textContent).toContain("failed");
+    expect(container.textContent).toContain("workflow.rename");
+    expect(container.textContent).toContain("allowed");
+
+    unmount();
+  });
 });
 
 function stubClient(bootstrap = {
@@ -347,6 +438,45 @@ function stubClient(bootstrap = {
     denyProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "denied" })),
     executeProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "executed" })),
     submitFeedback: vi.fn()
+  };
+}
+
+function registerProposalPrompt(api: ReturnType<typeof createStudioRegistry>) {
+  api.agent.promptStarters.add({
+    id: "workflow.prompt",
+    label: "Create proposal",
+    prompt: "Create a proposal.",
+    surfaces: ["*"],
+    requiredCapabilities: ["workflow.propose-change"]
+  });
+  api.agent.capabilities.add({
+    id: "workflow.propose-change",
+    displayName: "Propose change",
+    description: "Create workflow proposal.",
+    kind: "proposal",
+    risk: "review-required",
+    surfaces: ["*"]
+  });
+}
+
+function policyBootstrap(policy: Partial<AgentBootstrapResponse["policy"]>) {
+  return {
+    enabled: true,
+    providerStatus: "available" as const,
+    modes: ["explain" as const],
+    capabilities: [{
+      id: "workflow.propose-change",
+      displayName: "Propose change",
+      description: "Create workflow proposal.",
+      kind: "proposal" as const,
+      risk: "review-required" as const,
+      surfaces: ["*"]
+    }],
+    policy: {
+      contextVisibility: true,
+      requiresApprovalForMutations: true,
+      ...policy
+    }
   };
 }
 

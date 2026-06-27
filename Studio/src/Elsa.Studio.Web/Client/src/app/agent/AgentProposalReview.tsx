@@ -172,10 +172,34 @@ function AuditDetails({ proposal }: { proposal: AgentActionProposal }) {
           <dd>{audit.outcome}</dd>
         </div>
       ) : null}
+      {audit.toolId ? (
+        <div>
+          <dt>Tool</dt>
+          <dd>{audit.toolId}</dd>
+        </div>
+      ) : null}
+      {audit.invocationMode ? (
+        <div>
+          <dt>Mode</dt>
+          <dd>{formatStatus(audit.invocationMode)}</dd>
+        </div>
+      ) : null}
+      {audit.policyResult ? (
+        <div>
+          <dt>Policy</dt>
+          <dd>{formatStatus(audit.policyResult)}</dd>
+        </div>
+      ) : null}
       {audit.actor ? (
         <div>
           <dt>Actor</dt>
           <dd>{audit.actor}</dd>
+        </div>
+      ) : null}
+      {audit.sessionId ? (
+        <div>
+          <dt>Session</dt>
+          <dd>{audit.sessionId}</dd>
         </div>
       ) : null}
       {audit.recordedAt ? (

@@ -13,6 +13,7 @@ import { AgentPromptStarters } from "./AgentPromptStarters";
 import { AgentProposalReview } from "./AgentProposalReview";
 import { AgentWorkflowBatchReview, type WorkflowBatchReviewModel } from "./AgentWorkflowBatchReview";
 import type { AgentActionProposal, AgentActionProposalPayload, AgentBootstrapResponse, AgentMessageViewModel, AgentProviderDiagnostics, AgentStreamEvent, WorkflowGraphOperationBatch } from "./agentTypes";
+import { createToolInvocationAudit, evaluateToolInvocationPolicy, type AgentToolInvocationPolicyContext, type AgentToolInvocationRequest } from "./agentToolPolicy";
 import { canDirectApplyWorkflowBatch, requestWorkflowBatchApply, requestWorkflowBatchUndo } from "./workflowGraphOperations";
 
 export function AgentPanel({
@@ -183,9 +184,36 @@ export function AgentPanel({
   }
 
   async function executeProposal(proposal: AgentActionProposal) {
+    const request = createToolInvocationRequest(proposal, sessionId);
+    const policyContext = createToolInvocationPolicyContext(bootstrap, proposal, sessionId);
+    const policyDecision = evaluateToolInvocationPolicy(request, policyContext);
+    if (!policyDecision.allowed) {
+      updateProposalPolicyOutcome(proposal.id, {
+        status: policyDecision.outcome === "proposal-created" ? "awaiting-approval" : "failed",
+        audit: policyDecision.audit,
+        disabledReason: policyDecision.reason
+      });
+      setError(policyDecision.reason ?? "Tool invocation was denied by policy.");
+      return;
+    }
+
     await withProposalDecision(proposal.id, async () => {
-      const response = await agentClient.executeProposal(proposal.id, { revision: proposal.revision });
-      updateProposalStatus(proposal.id, response.approvalStatus);
+      updateProposalPolicyOutcome(proposal.id, { audit: policyDecision.audit, disabledReason: undefined, error: undefined });
+      try {
+        const response = await agentClient.executeProposal(proposal.id, { revision: proposal.revision });
+        updateProposalPolicyOutcome(proposal.id, {
+          status: response.approvalStatus,
+          audit: createToolInvocationAudit(request, policyContext, policyDecision.policyResult, "executed")
+        });
+      } catch (e) {
+        const message = getAgentErrorMessage(e);
+        updateProposalPolicyOutcome(proposal.id, {
+          status: "failed",
+          audit: createToolInvocationAudit(request, policyContext, policyDecision.policyResult, "failed", message),
+          error: message
+        });
+        throw e;
+      }
     });
   }
 
@@ -209,6 +237,10 @@ export function AgentPanel({
 
   function updateProposalStatus(proposalId: string, status: AgentActionProposal["status"]) {
     setProposals(current => current.map(proposal => proposal.id === proposalId ? { ...proposal, status } : proposal));
+  }
+
+  function updateProposalPolicyOutcome(proposalId: string, changes: Partial<AgentActionProposal>) {
+    setProposals(current => current.map(proposal => proposal.id === proposalId ? { ...proposal, ...changes } : proposal));
   }
 
   function handleStreamEvent(event: AgentStreamEvent) {
@@ -385,6 +417,11 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
     status: proposal?.status ?? (reviewReady ? "awaiting-approval" : "draft"),
     revision,
     reviewReady,
+    toolId: proposal?.toolId,
+    moduleId: proposal?.moduleId,
+    invocationMode: proposal?.invocationMode,
+    requiredPermissions: proposal?.requiredPermissions,
+    policy: proposal?.policy,
     resourceTarget: proposal?.resourceTarget,
     disabledReason: proposal?.disabledReason,
     isLoading: proposal?.isLoading,
@@ -396,6 +433,33 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
     operations: proposal?.operations,
     risks: proposal?.risks,
     rollback: proposal?.rollback
+  };
+}
+
+function createToolInvocationRequest(proposal: AgentActionProposal, sessionId: string | null): AgentToolInvocationRequest {
+  return {
+    toolId: proposal.toolId ?? proposal.id,
+    moduleId: proposal.moduleId,
+    sessionId: sessionId ?? undefined,
+    invocationMode: proposal.invocationMode ?? "proposal",
+    risk: proposal.risk,
+    resourceTarget: proposal.resourceTarget,
+    requiredPermissions: proposal.requiredPermissions
+  };
+}
+
+function createToolInvocationPolicyContext(
+  bootstrap: AgentBootstrapResponse | null,
+  proposal: AgentActionProposal,
+  sessionId: string | null
+): AgentToolInvocationPolicyContext {
+  const hostPolicy = bootstrap?.policy ?? { contextVisibility: true, requiresApprovalForMutations: true };
+  return {
+    actor: hostPolicy.actorId ?? "studio",
+    sessionId,
+    permissions: hostPolicy.permissions,
+    hostPolicy,
+    modulePolicy: proposal.policy
   };
 }
 
