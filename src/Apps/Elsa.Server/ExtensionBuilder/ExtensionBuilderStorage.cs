@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Hosting;
@@ -12,6 +13,7 @@ internal interface IExtensionBuilderStorage
     Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default);
+    Task<ExtensionWorkspace> CloneRepositoryAsync(string ownerId, string trustContext, CloneRepositoryRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default);
     Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default);
@@ -46,11 +48,13 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string _gitExecutable;
     private readonly string _statePath;
 
     public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options)
     {
         var configuredPath = options.Value.StoragePath;
+        _gitExecutable = string.IsNullOrWhiteSpace(options.Value.GitExecutable) ? "git" : options.Value.GitExecutable;
         RootPath = Path.GetFullPath(Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(environment.ContentRootPath, configuredPath));
@@ -121,6 +125,40 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var workspace = new ExtensionWorkspace(CreateId("ws"), ownerId, trustContext, displayName.Trim(), now, now, []);
             state.Workspaces[workspace.Id] = workspace;
             Directory.CreateDirectory(GetWorkspacePath(workspace.Id));
+            await SaveStateAsync(state, cancellationToken);
+            return workspace;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<ExtensionWorkspace> CloneRepositoryAsync(string ownerId, string trustContext, CloneRepositoryRequest request, CancellationToken cancellationToken = default)
+    {
+        var repositoryUrl = ValidateCloneUrl(request.RepositoryUrl);
+        var displayName = GetCloneDisplayName(request);
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            var now = DateTimeOffset.UtcNow;
+            var workspace = new ExtensionWorkspace(CreateId("ws"), ownerId, trustContext, displayName, now, now, []);
+            var workspacePath = GetWorkspacePath(workspace.Id);
+            Directory.CreateDirectory(RootPath);
+
+            try
+            {
+                await RunGitAsync(RootPath, ["clone", repositoryUrl, workspacePath], cancellationToken);
+            }
+            catch
+            {
+                DeleteDirectoryIfExists(workspacePath);
+                throw;
+            }
+
+            state.Workspaces[workspace.Id] = workspace;
             await SaveStateAsync(state, cancellationToken);
             return workspace;
         }
@@ -632,7 +670,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         return false;
     }
 
-    private static ExtensionRepositorySummary ToRepositorySummary(ExtensionBuilderState state, ExtensionWorkspace workspace)
+    private ExtensionRepositorySummary ToRepositorySummary(ExtensionBuilderState state, ExtensionWorkspace workspace)
     {
         var projectIds = workspace.ProjectIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var latestBuild = state.Builds.Values
@@ -648,9 +686,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             workspace.Id,
             workspace.DisplayName,
             workspace.OwnerId,
-            null,
-            false,
-            "not-connected",
+            GetActiveBranch(GetWorkspacePath(workspace.Id)),
+            IsRepositoryDirty(GetWorkspacePath(workspace.Id)),
+            GetRemoteState(GetWorkspacePath(workspace.Id)),
             latestBuild?.Status,
             failedBuilds + failedPromotions,
             workspace.ProjectIds.Count,
@@ -767,6 +805,151 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     {
         if (Directory.Exists(path))
             Directory.Delete(path, recursive: true);
+    }
+
+    private async Task RunGitAsync(string workingDirectory, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        var startInfo = CreateGitStartInfo(workingDirectory, arguments);
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Git could not be started.");
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            throw;
+        }
+
+        var output = await outputTask;
+        var error = await errorTask;
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Git command failed: {FirstNonEmptyLine(error, output) ?? $"exit code {process.ExitCode}"}");
+    }
+
+    private string? GetActiveBranch(string repositoryPath) =>
+        RunGitRead(repositoryPath, ["branch", "--show-current"]);
+
+    private bool IsRepositoryDirty(string repositoryPath) =>
+        !string.IsNullOrWhiteSpace(RunGitRead(repositoryPath, ["status", "--porcelain"]));
+
+    private string GetRemoteState(string repositoryPath)
+    {
+        var remotes = RunGitReadLines(repositoryPath, ["remote", "-v"]);
+        var origin = remotes
+            .Select(ParseRemoteUrl)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+        return origin ?? "not-connected";
+    }
+
+    private string? RunGitRead(string workingDirectory, IReadOnlyList<string> arguments)
+    {
+        var lines = RunGitReadLines(workingDirectory, arguments);
+        return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
+
+    private string[] RunGitReadLines(string workingDirectory, IReadOnlyList<string> arguments)
+    {
+        if (!Directory.Exists(workingDirectory))
+            return [];
+
+        try
+        {
+            var startInfo = CreateGitStartInfo(workingDirectory, arguments);
+            using var process = Process.Start(startInfo);
+            if (process is null)
+                return [];
+
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            if (!process.WaitForExit(milliseconds: 2000) || process.ExitCode != 0)
+            {
+                TryKill(process);
+                return [];
+            }
+
+            return output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private ProcessStartInfo CreateGitStartInfo(string workingDirectory, IReadOnlyList<string> arguments)
+    {
+        var startInfo = new ProcessStartInfo(_gitExecutable)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+        return startInfo;
+    }
+
+    private static string ValidateCloneUrl(string repositoryUrl)
+    {
+        var trimmed = (repositoryUrl ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            throw new ArgumentException("Repository URL is required.", nameof(repositoryUrl));
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) &&
+            !string.IsNullOrWhiteSpace(uri.UserInfo) &&
+            (uri.Scheme is "http" or "https" || uri.UserInfo.Contains(':')))
+            throw new ArgumentException("Repository URL must not include embedded credentials.", nameof(repositoryUrl));
+
+        return trimmed;
+    }
+
+    private static string GetCloneDisplayName(CloneRepositoryRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.DisplayName))
+            return request.DisplayName.Trim();
+
+        var source = request.RepositoryUrl.Trim().TrimEnd('/', '\\');
+        if (Uri.TryCreate(source, UriKind.Absolute, out var uri))
+            source = uri.IsFile ? uri.LocalPath : uri.AbsolutePath.TrimEnd('/');
+        else if (source.LastIndexOf(':') is var colonIndex && colonIndex >= 0 && colonIndex > source.LastIndexOf('/'))
+            source = source[(colonIndex + 1)..];
+
+        var name = Path.GetFileName(source);
+        if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            name = name[..^4];
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Repository display name is required when it cannot be inferred from the URL.", nameof(request));
+        return name;
+    }
+
+    private static string? ParseRemoteUrl(string remoteLine)
+    {
+        var parts = remoteLine.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length >= 2 && parts[0].Equals("origin", StringComparison.OrdinalIgnoreCase)
+            ? parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
+            : null;
+    }
+
+    private static string? FirstNonEmptyLine(params string[] values) =>
+        values
+            .SelectMany(value => value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .FirstOrDefault();
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort cleanup after cancellation or timed Git inspection.
+        }
     }
 
     private static string CreateId(string prefix) => $"{prefix}_{Guid.NewGuid():N}";
