@@ -2,6 +2,8 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Projections;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Stores;
 using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Handlers;
@@ -13,7 +15,8 @@ namespace Elsa.Activities.Design.Api.Handlers;
 /// </summary>
 public sealed class ListDefinitionsRequestHandler(
     IActivityDefinitionLookup lookup,
-    IActivityAvailabilityEvaluator availabilityEvaluator)
+    IActivityAvailabilityEvaluator availabilityEvaluator,
+    IActivityAvailabilitySettingsStore settingsStore)
     : IRequestHandler<ListDefinitions, IEnumerable<ActivityDefinitionView>>
 {
     public async Task<IEnumerable<ActivityDefinitionView>> Handle(ListDefinitions request, CancellationToken cancellationToken)
@@ -26,8 +29,10 @@ public sealed class ListDefinitionsRequestHandler(
             description: request.Description,
             cancellationToken: cancellationToken);
 
+        var settings = await settingsStore.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope, cancellationToken);
+
         return availabilityEvaluator
-            .FilterAddable(activities)
+            .FilterAddable(activities, settings)
             .Select(a => a.ToView())
             .ToArray();
     }

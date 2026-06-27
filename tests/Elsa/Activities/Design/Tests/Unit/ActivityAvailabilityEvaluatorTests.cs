@@ -139,11 +139,94 @@ public sealed class ActivityAvailabilityEvaluatorTests
             result);
     }
 
-    private IReadOnlyList<string> Evaluate(ActivityAvailabilityOptions options)
+    [Fact]
+    public void Evaluate_ManagementAllExcept_HidesConfiguredActivityTypes()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.AllExcept,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [SendHttpTypeKey]
+            }
+        };
+
+        var result = Evaluate(new ActivityAvailabilityOptions(), settings);
+
+        Assert.Equal([WriteLineTypeKey, RunJavaScriptTypeKey], result);
+    }
+
+    [Fact]
+    public void Evaluate_ManagementOnly_ReturnsConfiguredBaselineActivities()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                Sets = ["Script"]
+            }
+        };
+
+        var result = Evaluate(new ActivityAvailabilityOptions
+        {
+            Sets =
+            {
+                ["Script"] = [RunJavaScriptTypeKey]
+            }
+        }, settings);
+
+        Assert.Equal([RunJavaScriptTypeKey], result);
+    }
+
+    [Fact]
+    public void Evaluate_ManagementCannotReAddHostBlockedActivity()
+    {
+        var options = new ActivityAvailabilityOptions
+        {
+            Exclude = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [RunJavaScriptTypeKey]
+            }
+        };
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [RunJavaScriptTypeKey]
+            }
+        };
+
+        var result = Evaluate(options, settings);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void Evaluate_ManagementUnknownSet_DoesNotRemoveUnrelatedActivities()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.AllExcept,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                Sets = ["Missing"]
+            }
+        };
+
+        var result = Evaluate(new ActivityAvailabilityOptions(), settings);
+
+        Assert.Equal(
+            [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
+            result);
+    }
+
+    private IReadOnlyList<string> Evaluate(ActivityAvailabilityOptions options, ActivityAvailabilitySettings? settings = null)
     {
         var evaluator = new DefaultActivityAvailabilityEvaluator(options);
         return evaluator
-            .FilterAddable([_writeLine, _sendHttp, _runJavaScript])
+            .FilterAddable([_writeLine, _sendHttp, _runJavaScript], settings)
             .Select(x => x.ActivityTypeKey)
             .ToArray();
     }
