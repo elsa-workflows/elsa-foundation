@@ -8,6 +8,7 @@ export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "Depe
 export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manifest" | "Configuration" | "Other" | string;
 export type RepositoryFileKind = "Solution" | "Project" | "Folder" | "File" | string;
 export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
+export type ExtensionTemplateScope = "Repository" | "Solution" | "Project" | "Item" | string;
 
 export interface ExtensionBuilderCapabilities {
   canCreateWorkspace: boolean;
@@ -56,11 +57,35 @@ export interface ExtensionTemplate {
   id: string;
   name: string;
   description?: string | null;
+  scope: ExtensionTemplateScope;
+  compatibleFileExtensions: string[];
+  parameters: ExtensionTemplateParameter[];
   tags?: string[];
   primary?: boolean;
   defaultPackageId?: string | null;
   defaultPackageVersion?: string | null;
   defaultTargetFramework?: string | null;
+}
+
+export interface ExtensionTemplateParameter {
+  name: string;
+  displayName: string;
+  required: boolean;
+  defaultValue?: string | null;
+}
+
+export interface ApplyRepositoryTemplateRequest {
+  templateId: string;
+  scope?: ExtensionTemplateScope | null;
+  targetPath?: string | null;
+  parameters?: Record<string, string>;
+}
+
+export interface AppliedRepositoryTemplate {
+  templateId: string;
+  scope: ExtensionTemplateScope;
+  files: RepositoryFileSummary[];
+  tree: RepositoryTree;
 }
 
 export interface ProjectFile {
@@ -332,6 +357,10 @@ export async function deleteRepositoryFile(context: StudioEndpointContext, works
   return requestJson(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, { method: "DELETE" });
 }
 
+export async function applyRepositoryTemplate(context: StudioEndpointContext, workspaceId: string, request: ApplyRepositoryTemplateRequest) {
+  return normalizeAppliedRepositoryTemplate(await context.http.postJson<RawAppliedRepositoryTemplate>(`${workspaceRoot(workspaceId)}/templates/apply`, request));
+}
+
 export async function getSourceControlStatus(context: StudioEndpointContext, workspaceId: string) {
   return normalizeSourceControlStatus(await context.http.getJson<RawSourceControlStatus>(`${workspaceRoot(workspaceId)}/source-control/status`));
 }
@@ -530,15 +559,37 @@ function normalizeProject(project: RawExtensionProject): ExtensionProject {
 
 function normalizeTemplate(template: RawExtensionTemplate): ExtensionTemplate {
   const kind = normalizeTemplateKind(template.kind);
+  const scope = normalizeTemplateScope(template.scope ?? "Project");
   return {
     id: template.id,
     name: template.name ?? template.displayName,
     description: template.description,
-    tags: template.tags ?? [kind],
+    scope,
+    compatibleFileExtensions: template.compatibleFileExtensions ?? [],
+    parameters: (template.parameters ?? []).map(normalizeTemplateParameter),
+    tags: template.tags ?? [scope, kind],
     primary: template.primary ?? kind === "ElsaActivityModule",
     defaultPackageId: template.defaultPackageId,
     defaultPackageVersion: template.defaultPackageVersion,
     defaultTargetFramework: template.defaultTargetFramework
+  };
+}
+
+function normalizeTemplateParameter(parameter: RawExtensionTemplateParameter): ExtensionTemplateParameter {
+  return {
+    name: parameter.name,
+    displayName: parameter.displayName ?? parameter.name,
+    required: parameter.required ?? false,
+    defaultValue: parameter.defaultValue
+  };
+}
+
+function normalizeAppliedRepositoryTemplate(result: RawAppliedRepositoryTemplate): AppliedRepositoryTemplate {
+  return {
+    templateId: result.templateId,
+    scope: normalizeTemplateScope(result.scope),
+    files: (result.files ?? []).map(normalizeRepositoryFileSummary),
+    tree: normalizeRepositoryTree(result.tree)
   };
 }
 
@@ -712,6 +763,10 @@ function normalizeRepositoryFileKind(value?: RepositoryFileKind | number | null)
   return enumName(value, ["Solution", "Project", "Folder", "File"]);
 }
 
+function normalizeTemplateScope(value?: ExtensionTemplateScope | number | null): ExtensionTemplateScope {
+  return enumName(value, ["Repository", "Solution", "Project", "Item"]);
+}
+
 function normalizePromotionStatus(value?: string | number | null) {
   return enumName(value, ["Accepted", "Rejected"]);
 }
@@ -814,11 +869,28 @@ interface RawExtensionTemplate {
   name?: string;
   displayName: string;
   description?: string | null;
+  scope?: ExtensionTemplateScope | number | null;
+  compatibleFileExtensions?: string[];
+  parameters?: RawExtensionTemplateParameter[];
   defaultPackageId?: string | null;
   defaultPackageVersion?: string | null;
   defaultTargetFramework?: string | null;
   tags?: string[];
   primary?: boolean;
+}
+
+interface RawExtensionTemplateParameter {
+  name: string;
+  displayName?: string | null;
+  required?: boolean | null;
+  defaultValue?: string | null;
+}
+
+interface RawAppliedRepositoryTemplate {
+  templateId: string;
+  scope?: ExtensionTemplateScope | number | null;
+  files?: RawRepositoryFileSummary[];
+  tree: RawRepositoryTree;
 }
 
 interface RawProjectFile {
