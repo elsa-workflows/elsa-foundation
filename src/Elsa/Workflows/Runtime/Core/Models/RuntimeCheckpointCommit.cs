@@ -26,14 +26,17 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
         IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational,
-        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null)
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null)
     {
         activityExecutionInspections ??= [];
+        postCommitOutbox ??= [];
         ValidateBookmarks(bookmarks, nameof(bookmarks));
         ValidateActivityExecutionInspections(activityExecutionInspections, nameof(activityExecutionInspections));
         ValidateDurableValues(durableValues, nameof(durableValues));
         ValidateIncidents(incidents, nameof(incidents));
         ValidateOperational(operational, nameof(operational));
+        ValidatePostCommitOutbox(postCommitOutbox, nameof(postCommitOutbox));
 
         WorkflowExecution = workflowExecution;
         Scheduler = scheduler;
@@ -43,6 +46,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         DurableValues = durableValues;
         Incidents = incidents;
         Operational = operational;
+        PostCommitOutbox = postCommitOutbox;
     }
 
     public RuntimeStateChange<WorkflowExecutionState>? WorkflowExecution { get; }
@@ -54,12 +58,42 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
     public IReadOnlyCollection<RuntimeStateChange<OperationalState>> Operational { get; }
 
+    /// <summary>
+    /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the
+    /// checkpoint committer from <see cref="RuntimeCheckpointCommit.PostCommitIntents"/>; folding them into the
+    /// applied set means every persistence provider durably records them through the same path it uses for all
+    /// other state — a provider cannot persist the checkpoint while silently dropping its continuation work.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> PostCommitOutbox { get; }
+
+    /// <summary>Returns a copy of this change set with the supplied post-commit outbox items.</summary>
+    public RuntimeCheckpointStateChangeSet WithPostCommitOutbox(
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> postCommitOutbox) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            ActivityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            ActivityExecutionInspections,
+            postCommitOutbox);
+
     private static void ValidateBookmarks(
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         string parameterName)
     {
         if (bookmarks.Any(change => change.StateId != change.State.BookmarkId))
             throw new ArgumentException("Bookmark state change StateId must match BookmarkState.BookmarkId.", parameterName);
+    }
+
+    private static void ValidatePostCommitOutbox(
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> postCommitOutbox,
+        string parameterName)
+    {
+        if (postCommitOutbox.Any(change => change.StateId != change.State.OutboxItemId))
+            throw new ArgumentException("Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", parameterName);
     }
 
     private static void ValidateActivityExecutionInspections(

@@ -104,7 +104,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     return new RuntimeCheckpointCommitStoreResult(existing.PendingPostCommitWorkIds);
             }
 
-            var pendingOutboxItems = NewPendingOutboxItems(commit);
+            var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
             ValidatePendingOutboxItems(pendingOutboxItems);
             ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
             ValidateSchedulerStateChange(commit);
@@ -236,18 +236,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
-    private static IReadOnlyCollection<RuntimePostCommitOutboxItem> NewPendingOutboxItems(RuntimeCheckpointCommit commit) =>
-        commit.PostCommitIntents
-            .Select(intent => new RuntimePostCommitOutboxItem(
-                outboxItemId: NewOutboxItemId(commit, intent),
-                intent: intent,
-                status: RuntimePostCommitOutboxStatus.Pending,
-                recordedAt: intent.RecordedAt,
-                availableAt: commit.Checkpoint.OccurredAt,
-                retryPolicy: RuntimePostCommitRetryPolicy.None,
-                metadata: commit.Metadata))
-            .ToArray();
-
     private void ValidatePendingOutboxItems(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
     {
         lock (_syncRoot)
@@ -275,9 +263,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
         _outboxItems.Add(item.OutboxItemId, item);
     }
-
-    private static string NewOutboxItemId(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>
-        $"{commit.CommitId}:{intent.IntentId}";
 
     private async ValueTask ApplySchedulerStateChangeAsync(
         RuntimeStateChange<SchedulerState>? stateChange,
