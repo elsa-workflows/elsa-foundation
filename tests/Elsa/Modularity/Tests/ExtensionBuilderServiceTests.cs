@@ -294,6 +294,80 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task RemoteSyncPushesAndFastForwardPullsCommittedChanges()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var remotePath = Path.Combine(_directory, "remote.git");
+        await GitAsync(_directory, "init", "--bare", remotePath);
+        await GitAsync(repositoryPath, "remote", "add", "origin", remotePath);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/remote-sync", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Local.cs", new("namespace Local;"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add local source"));
+
+        var push = await service.PushRepositoryAsync(_caller, workspace.Id);
+        var clonePath = Path.Combine(_directory, "remote-clone");
+        await GitAsync(_directory, "clone", "--branch", "feature/remote-sync", remotePath, clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, "src"));
+        await File.WriteAllTextAsync(Path.Combine(clonePath, "src", "Remote.cs"), "namespace Remote;");
+        await GitAsync(clonePath, "add", "src/Remote.cs");
+        await GitAsync(clonePath, "-c", "user.name=Remote User", "-c", "user.email=remote@example.com", "commit", "-m", "Add remote source");
+        await GitAsync(clonePath, "push", "origin", "feature/remote-sync");
+        var pull = await service.PullRepositoryAsync(_caller, workspace.Id);
+        var pulledFile = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/Remote.cs");
+
+        Assert.Equal(RemoteSyncState.Completed, push!.State);
+        Assert.Equal(RemoteSyncOperation.Push, push.Operation);
+        Assert.Equal("origin", push.Remote);
+        Assert.Equal("feature/remote-sync", push.Branch);
+        Assert.Equal(RemoteSyncState.Completed, pull!.State);
+        Assert.Equal(RemoteSyncOperation.Pull, pull.Operation);
+        Assert.False(pull.Status.IsDirty);
+        Assert.Equal("namespace Remote;", pulledFile!.Content);
+    }
+
+    [Fact]
+    public async Task RemoteSyncBlocksDirtyDivergedMissingRemoteAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        var repositoryPath = Path.Combine(_directory, "state", "workspaces", workspace.Id);
+        var remotePath = Path.Combine(_directory, "remote.git");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PushRepositoryAsync(_caller, workspace.Id));
+        await GitAsync(_directory, "init", "--bare", remotePath);
+        await GitAsync(repositoryPath, "remote", "add", "origin", remotePath);
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/diverge", false));
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Base.cs", new("namespace Base;"));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add base source"));
+        await service.PushRepositoryAsync(_caller, workspace.Id);
+
+        var clonePath = Path.Combine(_directory, "remote-clone");
+        await GitAsync(_directory, "clone", "--branch", "feature/diverge", remotePath, clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, "src"));
+        await File.WriteAllTextAsync(Path.Combine(clonePath, "src", "Remote.cs"), "namespace Remote;");
+        await GitAsync(clonePath, "add", "src/Remote.cs");
+        await GitAsync(clonePath, "-c", "user.name=Remote User", "-c", "user.email=remote@example.com", "commit", "-m", "Add remote source");
+        await GitAsync(clonePath, "push", "origin", "feature/diverge");
+
+        await service.WriteRepositoryFileAsync(_caller, workspace.Id, "src/Dirty.cs", new("namespace Dirty;"));
+        var dirtyPull = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PullRepositoryAsync(_caller, workspace.Id));
+        await service.StageAllRepositoryChangesAsync(_caller, workspace.Id);
+        await service.CommitRepositoryChangesAsync(_caller, workspace.Id, new("Add local divergent source"));
+        var divergedPull = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PullRepositoryAsync(_caller, workspace.Id));
+        var divergedPush = await Assert.ThrowsAsync<InvalidOperationException>(() => service.PushRepositoryAsync(_caller, workspace.Id));
+
+        Assert.Contains("uncommitted changes", dirtyPull.Message);
+        Assert.Contains("diverged", divergedPull.Message);
+        Assert.Contains("remote branch contains commits", divergedPush.Message);
+        Assert.Null(await service.PullRepositoryAsync(_caller with { OwnerId = "other" }, workspace.Id));
+        Assert.Null(await service.PushRepositoryAsync(_caller with { OwnerId = "other" }, workspace.Id));
+    }
+
+    [Fact]
     public async Task TemplateDiscoveryExposesTrustedScopesParametersAndCompatibility()
     {
         var templates = await CreateService().ListTemplatesAsync();

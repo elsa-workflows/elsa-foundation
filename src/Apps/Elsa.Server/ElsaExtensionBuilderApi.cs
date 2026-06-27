@@ -43,6 +43,8 @@ internal static class ElsaExtensionBuilderApi
         trusted.MapPost("/workspaces/{workspaceId}/source-control/unstage", UnstageRepositoryFileAsync);
         trusted.MapPost("/workspaces/{workspaceId}/source-control/stage-all", StageAllRepositoryChangesAsync);
         trusted.MapPost("/workspaces/{workspaceId}/source-control/commit", CommitRepositoryChangesAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/push", PushRepositoryAsync);
+        trusted.MapPost("/workspaces/{workspaceId}/source-control/pull", PullRepositoryAsync);
         trusted.MapPost("/workspaces/{workspaceId}/projects", CreateProjectAsync);
         trusted.MapGet("/projects/{projectId}", GetProjectAsync);
         trusted.MapDelete("/projects/{projectId}", DeleteProjectAsync);
@@ -292,6 +294,30 @@ internal static class ElsaExtensionBuilderApi
         catch (ArgumentException ex)
         {
             return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> PushRepositoryAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.PushRepositoryAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.Conflict(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> PullRepositoryAsync(string workspaceId, HttpContext httpContext, [FromServices] IExtensionBuilderService service, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return ToFoundResult(await service.PullRepositoryAsync(GetCaller(httpContext), workspaceId, cancellationToken), $"Workspace '{workspaceId}' was not found.");
         }
         catch (InvalidOperationException ex)
         {

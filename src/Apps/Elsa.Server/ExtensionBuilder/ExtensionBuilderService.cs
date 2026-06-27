@@ -27,6 +27,8 @@ internal interface IExtensionBuilderService
     Task<SourceControlStatus?> UnstageRepositoryFileAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlPathRequest request, CancellationToken cancellationToken = default);
     Task<SourceControlStatus?> StageAllRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PushRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
+    Task<RemoteSyncResult?> PullRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default);
     Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default);
     Task<ExtensionProject?> GetProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
     Task<bool> DeleteProjectAsync(ExtensionBuilderCaller caller, string projectId, CancellationToken cancellationToken = default);
@@ -118,6 +120,12 @@ internal sealed class ExtensionBuilderService(
 
     public Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(ExtensionBuilderCaller caller, string workspaceId, SourceControlCommitRequest request, CancellationToken cancellationToken = default) =>
         storage.CommitRepositoryChangesAsync(workspaceId, caller.OwnerId, request, cancellationToken);
+
+    public Task<RemoteSyncResult?> PushRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.PushRepositoryAsync(workspaceId, caller.OwnerId, cancellationToken);
+
+    public Task<RemoteSyncResult?> PullRepositoryAsync(ExtensionBuilderCaller caller, string workspaceId, CancellationToken cancellationToken = default) =>
+        storage.PullRepositoryAsync(workspaceId, caller.OwnerId, cancellationToken);
 
     public async Task<ExtensionProject> CreateProjectAsync(ExtensionBuilderCaller caller, string workspaceId, CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
