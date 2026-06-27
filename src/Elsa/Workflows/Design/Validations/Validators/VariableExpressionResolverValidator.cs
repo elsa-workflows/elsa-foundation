@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Constants;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -63,15 +64,16 @@ public sealed class VariableExpressionResolverValidator(
         if (!string.Equals(argument.Value.ExpressionType, WellKnownExpressionDescriptorTypes.Variable, StringComparison.Ordinal))
             return;
 
-        var variableReferenceKey = argument.Value.Value;
+        var hasVariableReference = VariableReference.TryParse(argument.Value.Value, out var variableReference);
+        var variableReferenceKey = variableReference?.ReferenceKey;
 
-        if (!string.IsNullOrEmpty(variableReferenceKey) && knownReferenceKeys.Contains(variableReferenceKey))
+        if (hasVariableReference && variableReference!.IsWorkflowScope && knownReferenceKeys.Contains(variableReferenceKey!))
             return;
 
         errors.Add(new ValidationError(
             Path: $"{nodeId}/{argumentBag}/{argument.ReferenceKey}",
             Type: "Expressions/UnresolvedVariable",
-            Message: string.IsNullOrEmpty(variableReferenceKey)
+            Message: !hasVariableReference
                 ? $"Variable expression on '{nodeId}/{argumentBag}/{argument.ReferenceKey}' has no variable reference."
                 : $"Variable expression on '{nodeId}/{argumentBag}/{argument.ReferenceKey}' references unknown variable '{variableReferenceKey}'."
         ));
