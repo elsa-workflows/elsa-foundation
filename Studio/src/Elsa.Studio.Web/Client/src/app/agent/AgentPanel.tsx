@@ -373,7 +373,7 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
     proposal?.title?.trim()
     && proposal?.summary?.trim()
     && revision
-    && (proposal.operations?.length ?? 0) > 0
+    && ((proposal.operations?.length ?? 0) > 0 || proposal.resourceTarget)
   );
 
   return {
@@ -384,6 +384,11 @@ function normalizeProposal(proposalId: string, proposal?: AgentActionProposalPay
     status: proposal?.status ?? (reviewReady ? "awaiting-approval" : "draft"),
     revision,
     reviewReady,
+    resourceTarget: proposal?.resourceTarget,
+    disabledReason: proposal?.disabledReason,
+    isLoading: proposal?.isLoading,
+    error: proposal?.error,
+    audit: proposal?.audit,
     operations: proposal?.operations,
     risks: proposal?.risks,
     rollback: proposal?.rollback

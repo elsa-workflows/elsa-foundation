@@ -269,9 +269,56 @@
   gap: 0.4rem;
 }
 
+.agent-proposal-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
 .agent-proposal p {
   color: var(--studio-text-muted);
   font-size: 0.8125rem;
+}
+
+.agent-proposal-details {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-details div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.agent-proposal-details dt {
+  color: var(--studio-text-muted);
+}
+
+.agent-proposal-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-proposal-error,
+.agent-proposal-disabled,
+.agent-proposal-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agent-proposal-error {
+  color: #dc2626;
+}
+
+.agent-proposal-disabled {
+  color: var(--studio-text-muted);
 }
 
 .agent-proposal footer,
