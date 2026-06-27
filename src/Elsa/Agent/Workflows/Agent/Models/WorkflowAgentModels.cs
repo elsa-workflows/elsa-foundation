@@ -129,6 +129,19 @@ public sealed record WorkflowClarificationOption(
     string Value,
     string? Description);
 
+public sealed record WorkflowAuthoringAuditRequest(
+    string SessionId,
+    string ActorId,
+    string WorkflowDefinitionId,
+    string CapabilityId,
+    string ProviderId,
+    string OperationSummary,
+    string Outcome,
+    AgentResultKind ResultKind,
+    string? ModelId,
+    string? RunId,
+    IReadOnlyDictionary<string, string> Metadata);
+
 public sealed record WorkflowChangeProposalRequest(
     string SessionId,
     string ActorId,
