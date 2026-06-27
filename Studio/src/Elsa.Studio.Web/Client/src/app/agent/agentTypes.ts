@@ -84,9 +84,30 @@ export interface AgentActionProposal {
   status: AgentProposalStatus;
   revision?: string;
   reviewReady?: boolean;
+  resourceTarget?: AgentResourceTarget;
+  disabledReason?: string;
+  isLoading?: boolean;
+  error?: string;
+  audit?: AgentProposalAuditState;
   operations?: AgentProposalOperation[];
   risks?: string[];
   rollback?: string;
+}
+
+export interface AgentResourceTarget {
+  resourceType: string;
+  resourceId?: string;
+  displayName?: string;
+  moduleId?: string;
+  route?: string;
+  summary?: string;
+}
+
+export interface AgentProposalAuditState {
+  state: string;
+  outcome?: string;
+  actor?: string;
+  recordedAt?: string;
 }
 
 export interface AgentProposalOperation {
