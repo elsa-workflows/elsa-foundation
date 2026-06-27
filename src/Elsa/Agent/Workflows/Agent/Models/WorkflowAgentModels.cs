@@ -116,6 +116,19 @@ public sealed record WorkflowGraphOperation(
     IReadOnlyCollection<string> TemporaryReferences,
     string? Summary);
 
+public sealed record WorkflowClarificationResult(
+    string Id,
+    string Question,
+    IReadOnlyCollection<WorkflowClarificationOption> Options,
+    string? ContinuationToken,
+    IReadOnlyDictionary<string, string> Metadata);
+
+public sealed record WorkflowClarificationOption(
+    string Id,
+    string Label,
+    string Value,
+    string? Description);
+
 public sealed record WorkflowChangeProposalRequest(
     string SessionId,
     string ActorId,
