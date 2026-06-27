@@ -159,6 +159,23 @@ describe("studio registry", () => {
     ]);
   });
 
+  it("tracks diagnostics widget contributions through the public SDK registry", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const widget = {
+      id: "runtime-health",
+      title: "Runtime health",
+      component: () => null
+    };
+
+    api.diagnosticsWidgets.add(widget);
+
+    expect(api.diagnosticsWidgets.list()).toEqual([widget]);
+  });
+
   it("registers descriptor-driven property editors with fallback and order-based overrides", () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",

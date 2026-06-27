@@ -108,6 +108,29 @@ export interface StudioDashboardWidgetContribution {
   component: ComponentType;
 }
 
+export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
+export type StudioDiagnosticsWidgetStatus = "idle" | "loading" | "ready" | "streaming" | "error";
+
+export interface StudioDiagnosticsWidgetState<TSnapshot = unknown> {
+  status: StudioDiagnosticsWidgetStatus;
+  snapshot?: TSnapshot;
+  error?: string;
+}
+
+export interface StudioDiagnosticsWidgetProps<TSnapshot = unknown> {
+  state: StudioDiagnosticsWidgetState<TSnapshot>;
+}
+
+export interface StudioDiagnosticsWidgetContribution<TSnapshot = unknown> {
+  id: string;
+  title: string;
+  order?: number;
+  mode?: StudioDiagnosticsWidgetMode;
+  load?: () => Promise<TSnapshot>;
+  subscribe?: (publish: (snapshot: TSnapshot) => void) => void | (() => void);
+  component: ComponentType<StudioDiagnosticsWidgetProps<TSnapshot>>;
+}
+
 export interface StudioPanelContribution {
   id: string;
   title: string;
@@ -657,6 +680,7 @@ export interface ElsaStudioModuleApi {
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioContributionRegistry<StudioDashboardWidgetContribution>;
+  readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;
   readonly activityEditors: StudioContributionRegistry<unknown>;

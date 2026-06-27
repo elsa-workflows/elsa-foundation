@@ -110,6 +110,26 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("shows module load status and reasons under module management diagnostics", async () => {
+    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    await clickRowContaining(activeGridPanel(container), "Elsa.Studio.FeatureManagement");
+
+    const diagnosticsTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Diagnostics");
+    expect(diagnosticsTab).toBeTruthy();
+
+    flushSync(() => {
+      diagnosticsTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    const inspector = container.querySelector(".modules-inspector");
+    expect(inspector?.textContent).toContain("Diagnostics");
+    expect(inspector?.textContent).toContain("available");
+    expect(inspector?.textContent).toContain("Module manifest accepted.");
+
+    await unmount();
+  });
+
   it("shows package dependencies in the package inspector tab", async () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");

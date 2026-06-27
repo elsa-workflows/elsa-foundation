@@ -69,6 +69,30 @@ describe("studio module loader", () => {
     expect(api.diagnostics.list()[0].status).toBe("incompatible");
   });
 
+  it("does not register dashboard widgets for skipped modules", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    await loadStudioModules(
+      [manifest("future", "/future.js", "^2.0.0")],
+      api,
+      {
+        hostVersion: "1.0.0",
+        sdkVersion: "1.0.0",
+        importModule: async () => ({
+          register(moduleApi) {
+            moduleApi.dashboardWidgets.add({ id: "future-widget", title: "Future", component: () => null });
+          }
+        })
+      }
+    );
+
+    expect(api.dashboardWidgets.list()).toEqual([]);
+  });
+
   it("adds module versions to imported scripts and styles", async () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",

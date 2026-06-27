@@ -10,6 +10,7 @@ import {
   type StudioFeatureAreaContribution,
   type StudioFeatureAreaNavContribution,
   type StudioFeatureAreaNavParent,
+  type StudioDiagnosticsWidgetContribution,
   type StudioModuleDiagnostic,
   type StudioNavigationContribution,
   type StudioRouteContribution
@@ -43,6 +44,7 @@ export function createStudioRegistry(
     navigation,
     routes,
     dashboardWidgets: createContributionRegistry({ slot: studioSlots.dashboardWidgets }),
+    diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
     activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
