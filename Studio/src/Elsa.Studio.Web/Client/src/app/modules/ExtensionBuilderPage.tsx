@@ -3,6 +3,7 @@ import { Boxes, FilePlus2, FolderPlus, GitBranch, Hammer, PackageCheck, Pencil, 
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup, type StudioStatusTone } from "../ui";
 import {
+  applyRepositoryTemplate,
   createProject,
   createWorkspace,
   deleteProject,
@@ -35,6 +36,7 @@ import {
   type ExtensionRepositorySummary,
   type ExtensionRuntimeStatus,
   type ExtensionTemplate,
+  type ExtensionTemplateParameter,
   type ExtensionWorkspace,
   getSourceControlDiff,
   getSourceControlStatus,
@@ -58,6 +60,12 @@ interface ProjectDraft {
   packageId: string;
   packageVersion: string;
   templateId: string;
+}
+
+interface TemplateApplicationDraft {
+  templateId: string;
+  targetPath: string;
+  parameters: Record<string, string>;
 }
 
 interface EditorTab {
@@ -101,6 +109,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
   const [projectDraft, setProjectDraft] = useState<ProjectDraft>({ name: "", packageId: "", packageVersion: "", templateId: "" });
+  const [templateDraft, setTemplateDraft] = useState<TemplateApplicationDraft>({ templateId: "", targetPath: "", parameters: {} });
   const [workingBranchName, setWorkingBranchName] = useState("");
   const [allowProtectedBranchEdit, setAllowProtectedBranchEdit] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
@@ -118,6 +127,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
   selectedIds.current = { workspaceId: selectedWorkspace?.id ?? "", projectId: selectedProject?.id ?? "" };
   const fileRows = useMemo(() => [...files].sort((a, b) => fileSortKey(a).localeCompare(fileSortKey(b))), [files]);
+  const projectTemplates = useMemo(() => templates.filter(template => template.scope === "Project"), [templates]);
   const activeTab = editorTabs.find(tab => tab.path === activeFilePath) ?? null;
   const editorDirty = activeTab ? activeTab.content !== activeTab.savedContent : editorText !== savedEditorText;
   const hasRepositoryRows = repositories.length > 0 || workspaces.length > 0;
@@ -145,8 +155,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [api]);
 
   useEffect(() => {
-    if (templates.length === 0 || projectDraft.templateId) return;
-    const primary = templates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? templates[0];
+    if (projectTemplates.length === 0 || projectDraft.templateId) return;
+    const primary = projectTemplates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? projectTemplates[0];
     setProjectDraft(current => ({
       ...current,
       templateId: primary.id,
@@ -154,7 +164,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       packageId: current.packageId || defaultPackageId(primary),
       packageVersion: current.packageVersion || primary.defaultPackageVersion || "1.0.0"
     }));
-  }, [templates, projectDraft.templateId]);
+  }, [projectTemplates, projectDraft.templateId]);
+
+  useEffect(() => {
+    if (templates.length === 0) return;
+    if (templateDraft.templateId && templates.some(template => template.id === templateDraft.templateId)) return;
+    const initialTemplate = templates.find(template => template.scope === "Item") ?? templates.find(template => template.scope !== "Project") ?? templates[0];
+    setTemplateDraft(createTemplateApplicationDraft(initialTemplate));
+  }, [templates, templateDraft.templateId]);
 
   useEffect(() => {
     if (!selectedWorkspace) return;
@@ -538,6 +555,43 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handleApplyTemplate() {
+    if (!selectedWorkspace) return;
+    const template = templates.find(item => item.id === templateDraft.templateId);
+    if (!template) {
+      setError("Select a template to apply.");
+      return;
+    }
+    const parameters = collectTemplateParameters(template, templateDraft);
+    if (typeof parameters === "string") {
+      setError(parameters);
+      return;
+    }
+
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(
+      () => applyRepositoryTemplate(context, workspaceId, {
+        templateId: template.id,
+        scope: template.scope,
+        targetPath: templateDraft.targetPath.trim() || null,
+        parameters
+      }),
+      `Applied ${template.name}.`
+    );
+    if (!result || selectedIds.current.workspaceId !== workspaceId) return;
+
+    setSolutions(result.tree.solutions);
+    setFiles(result.tree.entries);
+    const selected = result.tree.solutions.find(solution => solution.isSelected)?.path ?? "";
+    setSelectedSolutionPath(result.tree.solutions.length > 1 ? selected : "");
+    clearSourceDependentState();
+    await loadSourceControlStatus(workspaceId);
+    const refreshedProject = selectedProject ? await refreshProjectMetadata(workspaceId, selectedProject.id) : null;
+    if (refreshedProject) setBuildHistory(refreshedProject.builds ?? []);
+    const firstGeneratedFile = result.files.find(file => file.type === "file") ?? result.files[0];
+    if (firstGeneratedFile) await openFile(workspaceId, firstGeneratedFile.path);
+  }
+
   async function handleDeleteFile(path: string) {
     if (!selectedWorkspace || !window.confirm(`Delete ${path}?`)) return;
     const workspaceId = selectedWorkspace.id;
@@ -813,7 +867,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="extension-builder-workbench">
         <WorkspaceBrowser
           capabilities={capabilities!}
-          templates={templates}
+          templates={projectTemplates}
           repositories={repositories}
           workspaces={workspaces}
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
@@ -846,6 +900,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           capabilities={capabilities!}
           workspace={selectedWorkspace}
           project={selectedProject}
+          templates={templates}
+          templateDraft={templateDraft}
           files={fileRows}
           solutions={solutions}
           selectedSolutionPath={selectedSolutionPath}
@@ -857,6 +913,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           newFilePath={newFilePath}
           busy={operationBusy}
           diagnostics={activeBuild?.diagnostics ?? []}
+          onTemplateDraftChange={setTemplateDraft}
+          onApplyTemplate={handleApplyTemplate}
           onSelectSolution={handleSelectSolution}
           onNewFilePathChange={setNewFilePath}
           onCreateFile={handleCreateFile}
@@ -1076,6 +1134,8 @@ function ProjectWorkspace({
   capabilities,
   workspace,
   project,
+  templates,
+  templateDraft,
   files,
   solutions,
   selectedSolutionPath,
@@ -1088,6 +1148,8 @@ function ProjectWorkspace({
   busy,
   diagnostics,
   canBuild,
+  onTemplateDraftChange,
+  onApplyTemplate,
   onSelectSolution,
   onNewFilePathChange,
   onCreateFile,
@@ -1103,6 +1165,8 @@ function ProjectWorkspace({
   capabilities: ExtensionBuilderCapabilities;
   workspace: ExtensionWorkspace | null;
   project: ExtensionProject | null;
+  templates: ExtensionTemplate[];
+  templateDraft: TemplateApplicationDraft;
   files: RepositoryFileSummary[];
   solutions: RepositorySolutionSummary[];
   selectedSolutionPath: string;
@@ -1115,6 +1179,8 @@ function ProjectWorkspace({
   busy: boolean;
   diagnostics: BuildDiagnostic[];
   canBuild: boolean;
+  onTemplateDraftChange(value: TemplateApplicationDraft): void;
+  onApplyTemplate(): void;
   onSelectSolution(path: string): void;
   onNewFilePathChange(value: string): void;
   onCreateFile(): void;
@@ -1128,6 +1194,7 @@ function ProjectWorkspace({
   onSubmitBuild(): void;
 }) {
   const canEdit = capabilities.canEditFiles;
+  const selectedTemplate = templates.find(template => template.id === templateDraft.templateId) ?? templates[0] ?? null;
 
   if (!workspace) {
     return (
@@ -1180,6 +1247,37 @@ function ProjectWorkspace({
               <FilePlus2 size={14} />
             </button>
           </div>
+          {templates.length > 0 ? (
+            <details className="extension-builder-template-apply">
+              <summary>Apply template</summary>
+              <label>
+                <span>Template</span>
+                <select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
+                  const template = templates.find(item => item.id === event.target.value);
+                  if (template) onTemplateDraftChange(createTemplateApplicationDraft(template, templateDraft));
+                }}>
+                  {templates.map(template => <option key={template.id} value={template.id}>{template.name} · {template.scope}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Target path</span>
+                <input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} />
+              </label>
+              {selectedTemplate?.parameters.map(parameter => (
+                <label key={parameter.name}>
+                  <span>{parameter.displayName}</span>
+                  <input aria-label={`Template parameter ${parameter.displayName}`} value={templateDraft.parameters[parameter.name] ?? parameter.defaultValue ?? ""} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({
+                    ...templateDraft,
+                    parameters: { ...templateDraft.parameters, [parameter.name]: event.target.value }
+                  })} />
+                </label>
+              ))}
+              <button type="button" className="studio-button" disabled={busy || !canEdit || !selectedTemplate} title={canEdit ? "Apply template" : "Requires canEditFiles"} onClick={onApplyTemplate}>
+                <FilePlus2 size={15} />
+                Apply
+              </button>
+            </details>
+          ) : null}
           {files.length === 0 ? <p className="modules-muted">No files reported for this repository.</p> : null}
           {files.map(file => (
             <div key={file.path} className={file.path === activeFilePath ? "extension-builder-file-row active" : "extension-builder-file-row"}>
@@ -1759,6 +1857,43 @@ function applyTemplateDefaults(draft: ProjectDraft, template?: ExtensionTemplate
     packageId: draft.packageId || defaultPackageId(template),
     packageVersion: draft.packageVersion || template.defaultPackageVersion || "1.0.0"
   };
+}
+
+function createTemplateApplicationDraft(template: ExtensionTemplate, current?: TemplateApplicationDraft): TemplateApplicationDraft {
+  return {
+    templateId: template.id,
+    targetPath: current?.targetPath ?? defaultTemplateTargetPath(template),
+    parameters: Object.fromEntries(template.parameters.map(parameter => [
+      parameter.name,
+      current?.parameters[parameter.name] ?? parameter.defaultValue ?? defaultTemplateParameterValue(parameter, template)
+    ]))
+  };
+}
+
+function collectTemplateParameters(template: ExtensionTemplate, draft: TemplateApplicationDraft) {
+  const parameters = Object.fromEntries(template.parameters.map(parameter => [
+    parameter.name,
+    (draft.parameters[parameter.name] ?? parameter.defaultValue ?? "").trim()
+  ]));
+  const missing = template.parameters.find(parameter => parameter.required && !parameters[parameter.name]);
+  if (missing) return `${missing.displayName} is required.`;
+  return parameters;
+}
+
+function defaultTemplateTargetPath(template: ExtensionTemplate | null) {
+  if (!template) return "";
+  if (template.scope === "Project") return `src/${defaultProjectName(template)}`;
+  if (template.scope === "Item") return "src";
+  if (template.scope === "Solution") return "solutions";
+  return "";
+}
+
+function defaultTemplateParameterValue(parameter: ExtensionTemplateParameter, template: ExtensionTemplate) {
+  if (parameter.name === "name") return template.scope === "Item" ? "NewClass" : defaultProjectName(template);
+  if (parameter.name === "packageId") return defaultPackageId(template);
+  if (parameter.name === "packageVersion") return template.defaultPackageVersion ?? "1.0.0";
+  if (parameter.name === "targetFramework") return template.defaultTargetFramework ?? "net10.0";
+  return "";
 }
 
 function defaultProjectName(template: ExtensionTemplate) {

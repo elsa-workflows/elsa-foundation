@@ -1530,12 +1530,14 @@ textarea:focus {
 }
 
 .extension-builder-create label,
-.extension-builder-file-create {
+.extension-builder-file-create,
+.extension-builder-template-apply label {
   display: grid;
   gap: 5px;
 }
 
-.extension-builder-create label span {
+.extension-builder-create label span,
+.extension-builder-template-apply label span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
@@ -1543,7 +1545,9 @@ textarea:focus {
 
 .extension-builder-create input,
 .extension-builder-create select,
-.extension-builder-file-create input {
+.extension-builder-file-create input,
+.extension-builder-template-apply input,
+.extension-builder-template-apply select {
   min-width: 0;
   width: 100%;
   border: 1px solid var(--studio-border);
@@ -1604,6 +1608,21 @@ textarea:focus {
 
 .extension-builder-file-create input {
   height: 30px;
+}
+
+.extension-builder-template-apply {
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid var(--studio-border);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.extension-builder-template-apply summary {
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  font-weight: 800;
 }
 
 .extension-builder-solution-picker,

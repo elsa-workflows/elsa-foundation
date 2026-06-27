@@ -141,6 +141,62 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("applies a trusted repository template and refreshes generated files and source status", async () => {
+    let applied = false;
+    const generatedFile = {
+      path: "src/Generated/GeneratedActivity.cs",
+      kind: "File",
+      size: 72,
+      isDirty: true,
+      updatedAt: new Date().toISOString()
+    };
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/templates/apply")) {
+        applied = true;
+        expect(body).toEqual({
+          templateId: "csharp-class",
+          scope: "Item",
+          targetPath: "src/Generated",
+          parameters: {
+            name: "GeneratedActivity",
+            namespace: "Company.Extensions.Generated"
+          }
+        });
+        return {
+          templateId: "csharp-class",
+          scope: "Item",
+          files: [generatedFile],
+          tree: { ...repositoryTree(), isDirty: true, entries: [...repositoryTree().entries, generatedFile] }
+        };
+      }
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/source-control/status")) return applied ? sourceControlStatus({ unstaged: [generatedFile.path] }) : sourceControlStatus();
+      if (url.endsWith("src%2FGenerated%2FGeneratedActivity.cs")) return {
+        ...generatedFile,
+        content: "namespace Company.Extensions.Generated;\n\npublic sealed class GeneratedActivity\n{\n}"
+      };
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template target path']"), "src/Generated");
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template parameter Class name']"), "GeneratedActivity");
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template parameter Namespace']"), "Company.Extensions.Generated");
+    await clickExactButton(container, "Apply");
+    await waitForText(container, "Applied C# class.");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
+    expect(container.textContent).toContain("src/Generated/GeneratedActivity.cs *");
+    expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("GeneratedActivity");
+    await clickTab(container, "Source");
+    expect(container.textContent).toContain("src/Generated/GeneratedActivity.cs");
+
+    await unmount();
+  });
+
   it("stages, unstages, stages all, inspects diffs, and commits from the source inspector", async () => {
     let gitStatus = sourceControlStatus({ unstaged: ["src/Status.cs"] });
     const postJson = vi.fn(async (url: string, body: unknown) => {
@@ -673,8 +729,45 @@ function genericProject() {
 
 function templates() {
   return [
-    { id: "elsa-activity", name: "Elsa activity/module", description: "Creates an Elsa activity extension.", primary: true, tags: ["elsa"] },
-    { id: "generic-dotnet", name: "Generic .NET class library", description: "Creates a generic .NET package.", primary: false, tags: ["dotnet"] }
+    {
+      id: "elsa-activity",
+      name: "Elsa activity/module",
+      description: "Creates an Elsa activity extension.",
+      scope: "Project",
+      compatibleFileExtensions: [".slnx", ".csproj"],
+      parameters: [
+        { name: "packageId", displayName: "Package id", required: true, defaultValue: "Company.Extensions.ElsaActivity" },
+        { name: "packageVersion", displayName: "Package version", required: true, defaultValue: "1.0.0" }
+      ],
+      primary: true,
+      tags: ["elsa"]
+    },
+    {
+      id: "generic-dotnet",
+      name: "Generic .NET class library",
+      description: "Creates a generic .NET package.",
+      scope: "Project",
+      compatibleFileExtensions: [".slnx", ".csproj"],
+      parameters: [
+        { name: "packageId", displayName: "Package id", required: true, defaultValue: "Company.Extensions.Generic" },
+        { name: "packageVersion", displayName: "Package version", required: true, defaultValue: "1.0.0" }
+      ],
+      primary: false,
+      tags: ["dotnet"]
+    },
+    {
+      id: "csharp-class",
+      name: "C# class",
+      description: "Creates a C# source file.",
+      scope: "Item",
+      compatibleFileExtensions: [".csproj", ".cs"],
+      parameters: [
+        { name: "name", displayName: "Class name", required: true, defaultValue: "NewClass" },
+        { name: "namespace", displayName: "Namespace", required: true, defaultValue: "Company.Extensions" }
+      ],
+      primary: false,
+      tags: ["source"]
+    }
   ];
 }
 
