@@ -361,6 +361,8 @@ export type StudioAgentMode = "explain" | "build" | "troubleshoot" | "operate" |
 export type StudioAgentSensitivity = "public" | "internal" | "sensitive" | "secret-redacted";
 export type StudioAgentCapabilityKind = "answer" | "context" | "prompt-starter" | "proposal" | "action";
 export type StudioAgentRisk = "read-only" | "review-required" | "destructive" | "admin";
+export type StudioAgentToolInvocationMode = "read-only" | "direct" | "proposal" | "privileged";
+export type StudioAgentToolAvailabilityStatus = "available" | "disabled" | "policy-denied" | "unavailable";
 
 export interface StudioAgentSurface {
   route: string;
@@ -427,11 +429,74 @@ export interface StudioAgentActionContribution {
   proposalSchema: unknown;
 }
 
+export interface StudioAgentToolAvailability {
+  status: StudioAgentToolAvailabilityStatus;
+  reason?: string;
+}
+
+export interface StudioAgentToolSlotContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  description?: string;
+  order?: number;
+  surfaces: string[];
+  invocationModes?: StudioAgentToolInvocationMode[];
+}
+
+export interface StudioAgentToolContractContribution {
+  id: string;
+  slotId: string;
+  moduleId?: string;
+  displayName: string;
+  description: string;
+  order?: number;
+  surfaces: string[];
+  inputSchema: unknown;
+  resourceTargetSchema: unknown;
+  resultSchema: unknown;
+  risk: StudioAgentRisk;
+  requiredPermissions?: string[];
+  availability?: StudioAgentToolAvailability;
+  invocationModes: StudioAgentToolInvocationMode[];
+  resultRendererIds?: string[];
+}
+
+export interface StudioAgentResourceTarget {
+  resourceType: string;
+  resourceId?: string;
+  displayName?: string;
+  moduleId?: string;
+  route?: string;
+  summary?: string;
+}
+
+export interface StudioAgentResultRendererProps {
+  proposal: unknown;
+  resourceTarget?: StudioAgentResourceTarget;
+  result: unknown;
+  resultType?: string;
+}
+
+export interface StudioAgentResultRendererContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  order?: number;
+  resourceTypes?: string[];
+  resultTypes?: string[];
+  component: ComponentType<StudioAgentResultRendererProps>;
+  supports?(props: StudioAgentResultRendererProps): boolean;
+}
+
 export interface StudioAgentRegistry {
   readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
   readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
   readonly capabilities: StudioContributionRegistry<StudioAgentCapabilityContribution>;
   readonly actions: StudioContributionRegistry<StudioAgentActionContribution>;
+  readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
+  readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
+  readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";
@@ -545,6 +610,9 @@ export const studioSlotIds = {
   agentPromptStarters: "studio.weaver.prompt-starters",
   agentCapabilities: "studio.weaver.capabilities",
   agentActions: "studio.weaver.actions",
+  agentToolSlots: "studio.weaver.tool-slots",
+  agentToolContracts: "studio.weaver.tool-contracts",
+  agentResultRenderers: "studio.weaver.result-renderers",
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
@@ -633,6 +701,9 @@ export const studioSlots = {
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
   agentCapabilities: defineStudioSlot({ id: studioSlotIds.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
   agentActions: defineStudioSlot({ id: studioSlotIds.agentActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
+  agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
+  agentToolContracts: defineStudioSlot({ id: studioSlotIds.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: hostSlotOwner() }),
+  agentResultRenderers: defineStudioSlot({ id: studioSlotIds.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: hostSlotOwner() }),
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
@@ -822,6 +893,16 @@ function normalizeContributionDecision(
   }
 
   if (decision && typeof decision === "object") {
+    const record = decision as Record<string, unknown>;
+
+    if (!("state" in record) && typeof record.status === "string") {
+      return {
+        state: record.status === "available" ? "available" : "unavailable",
+        reason: typeof record.reason === "string" ? record.reason : undefined,
+        source
+      };
+    }
+
     return { ...decision, source: decision.source ?? source };
   }
 

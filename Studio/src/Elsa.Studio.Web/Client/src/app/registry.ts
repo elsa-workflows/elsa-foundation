@@ -55,7 +55,10 @@ export function createStudioRegistry(
       contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
       promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
       capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
-      actions: createContributionRegistry({ slot: studioSlots.agentActions })
+      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
+      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
+      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
+      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
     },
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),

@@ -3,7 +3,8 @@ import type {
   StudioAgentContextAttachment,
   StudioAgentMode,
   StudioAgentRisk,
-  StudioAgentSurface
+  StudioAgentSurface,
+  StudioAgentToolInvocationMode
 } from "../../sdk";
 
 export type AgentProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
@@ -26,6 +27,12 @@ export interface AgentBootstrapResponse {
     contextVisibility: boolean;
     requiresApprovalForMutations: boolean;
     retentionLabel?: string;
+    actorId?: string;
+    permissions?: string[];
+    allowedToolIds?: string[];
+    deniedToolIds?: string[];
+    allowDirectToolInvocations?: boolean;
+    allowPrivilegedToolInvocations?: boolean;
   };
 }
 
@@ -84,9 +91,54 @@ export interface AgentActionProposal {
   status: AgentProposalStatus;
   revision?: string;
   reviewReady?: boolean;
+  toolId?: string;
+  moduleId?: string;
+  invocationMode?: StudioAgentToolInvocationMode;
+  requiredPermissions?: string[];
+  policy?: AgentToolInvocationPolicy;
+  resourceTarget?: AgentResourceTarget;
+  disabledReason?: string;
+  isLoading?: boolean;
+  error?: string;
+  audit?: AgentProposalAuditState;
+  resultRendererId?: string;
+  resultType?: string;
+  result?: unknown;
   operations?: AgentProposalOperation[];
   risks?: string[];
   rollback?: string;
+}
+
+export interface AgentResourceTarget {
+  resourceType: string;
+  resourceId?: string;
+  displayName?: string;
+  moduleId?: string;
+  route?: string;
+  summary?: string;
+}
+
+export interface AgentProposalAuditState {
+  state: string;
+  outcome?: string;
+  actor?: string;
+  sessionId?: string;
+  toolId?: string;
+  target?: AgentResourceTarget;
+  risk?: StudioAgentRisk;
+  invocationMode?: StudioAgentToolInvocationMode;
+  policyResult?: AgentToolPolicyResult;
+  recordedAt?: string;
+}
+
+export type AgentToolPolicyResult = "allowed" | "denied" | "proposal-required";
+export type AgentToolInvocationOutcome = "allowed" | "denied" | "failed" | "proposal-created" | "executed";
+
+export interface AgentToolInvocationPolicy {
+  allowedToolIds?: string[];
+  deniedToolIds?: string[];
+  allowedInvocationModes?: StudioAgentToolInvocationMode[];
+  deniedInvocationModes?: StudioAgentToolInvocationMode[];
 }
 
 export interface AgentProposalOperation {

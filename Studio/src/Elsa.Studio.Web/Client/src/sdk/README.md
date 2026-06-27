@@ -41,6 +41,9 @@ Known host-owned Slot IDs:
 - `studio.weaver.prompt-starters`
 - `studio.weaver.capabilities`
 - `studio.weaver.actions`
+- `studio.weaver.tool-slots`
+- `studio.weaver.tool-contracts`
+- `studio.weaver.result-renderers`
 - `studio.ai.context-providers`
 - `studio.ai.prompt-actions`
 - `studio.ai.tools`
@@ -65,6 +68,11 @@ Register only declarative, scoped contributions:
 - `capabilities` describe what the module can help with, including risk and
   permission metadata.
 - `actions` describe reviewable proposal shapes for mutating work.
+- `toolSlots` group resource-aware Weaver tools by surface and invocation mode.
+- `toolContracts` declare input, target, result, risk, permissions,
+  availability, invocation modes, and renderer expectations.
+- `resultRenderers` render module-specific tool results inside the host-owned
+  Review Shell, with structured fallback when no renderer matches.
 
 Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available

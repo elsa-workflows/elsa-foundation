@@ -67,7 +67,7 @@ class ne {
   async resolveActiveAdapter() {
     if (this.activeAdapter)
       return this.activeAdapter;
-    const t = await this.options.bootstrap(), r = t.providers.find((i) => i.enabled && i.isDefault) ?? t.providers.find((i) => i.enabled);
+    const t = await this.options.bootstrap(), r = t.providers.find((o) => o.enabled && o.isDefault) ?? t.providers.find((o) => o.enabled);
     if (!r)
       throw new C("No enabled authentication provider was returned by /_elsa/identity/bootstrap.");
     const n = this.resolveProviderAdapter(r);
@@ -77,10 +77,10 @@ class ne {
     const r = this.adapters.get(t);
     if (r)
       return r;
-    const i = (await this.options.bootstrap()).providers.find((s) => s.enabled && s.id === t);
-    if (!i)
+    const o = (await this.options.bootstrap()).providers.find((s) => s.enabled && s.id === t);
+    if (!o)
       throw new C(`No auth provider adapter is registered for '${t}'.`);
-    return this.resolveProviderAdapter(i);
+    return this.resolveProviderAdapter(o);
   }
   resolveProviderAdapter(t) {
     const r = this.adapters.get(t.id);
@@ -111,52 +111,52 @@ function _(e) {
     id: e.id,
     kind: e.kind,
     initialize: () => x(t, r, e),
-    login: (i) => {
+    login: (o) => {
       const s = e.challenge;
       if (!s || s.type === "none")
         throw new b(`Provider '${e.id}' does not expose a redirect challenge.`);
-      const o = "method" in s ? s.method.toUpperCase() : "GET";
-      if (o !== "GET")
-        throw new b(`Provider '${e.id}' exposes an unsupported ${o} challenge.`);
-      const c = new URL(oe(s), L(e)), a = i?.returnUrl ?? e.location?.href ?? window.location.href;
-      return c.searchParams.set("returnUrl", ae(a, i?.providerId ?? e.id, e)), (e.location ?? window.location).assign(c.toString()), Promise.resolve();
+      const i = "method" in s ? s.method.toUpperCase() : "GET";
+      if (i !== "GET")
+        throw new b(`Provider '${e.id}' exposes an unsupported ${i} challenge.`);
+      const u = new URL(ie(s), L(e)), c = o?.returnUrl ?? e.location?.href ?? window.location.href;
+      return u.searchParams.set("returnUrl", ae(c, o?.providerId ?? e.id, e)), (e.location ?? window.location).assign(u.toString()), Promise.resolve();
     },
     handleCallback: () => x(t, r, e),
     logout: async () => {
-      const i = await t(I(n, e), { method: "POST", credentials: "include" });
-      if (!i.ok)
-        throw new b(`Sign-out failed with ${i.status}.`);
+      const o = await t(I(n, e), { method: "POST", credentials: "include" });
+      if (!o.ok)
+        throw new b(`Sign-out failed with ${o.status}.`);
     },
     getAccessToken: async () => {
       if (!e.tokenEndpoint)
         return null;
-      const i = await t(I(e.tokenEndpoint, e), { credentials: "include", cache: "no-store" });
-      if (i.status === 401)
+      const o = await t(I(e.tokenEndpoint, e), { credentials: "include", cache: "no-store" });
+      if (o.status === 401)
         return null;
-      if (!i.ok)
-        throw new b(`Access-token request failed with ${i.status}.`);
-      const s = await i.json();
+      if (!o.ok)
+        throw new b(`Access-token request failed with ${o.status}.`);
+      const s = await o.json();
       return typeof s.accessToken == "string" ? s.accessToken : null;
     },
     refresh: async () => {
-      const i = await e.getRefreshToken?.(), s = e.refreshEndpoint;
-      if (!s || !i)
+      const o = await e.getRefreshToken?.(), s = e.refreshEndpoint;
+      if (!s || !o)
         return x(t, r, e);
-      const o = await t(I(s, e), {
+      const i = await t(I(s, e), {
         method: "POST",
         credentials: "include",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ refreshToken: i })
+        body: JSON.stringify({ refreshToken: o })
       });
-      if (o.status === 401)
+      if (i.status === 401)
         return $;
-      if (!o.ok)
-        throw new b(`Session refresh failed with ${o.status}.`);
-      const c = await o.json();
-      return c.status ? G(c) : x(t, r, e);
+      if (!i.ok)
+        throw new b(`Session refresh failed with ${i.status}.`);
+      const u = await i.json();
+      return u.status ? G(u) : x(t, r, e);
     }
   };
 }
@@ -166,9 +166,9 @@ async function x(e, t, r) {
     return $;
   if (!n.ok)
     throw new b(`Session request failed with ${n.status}.`);
-  return ie(n);
+  return oe(n);
 }
-async function ie(e) {
+async function oe(e) {
   const t = await e.json();
   return G(t);
 }
@@ -187,7 +187,7 @@ function O(e) {
 function se(e) {
   return e === "unknown" || e === "anonymous" || e === "authenticated";
 }
-function oe(e) {
+function ie(e) {
   return "loginPath" in e ? e.loginPath : e.url;
 }
 function I(e, t) {
@@ -249,24 +249,24 @@ function D() {
   return e;
 }
 function De({ manager: e, children: t }) {
-  const [r, n] = f.useState(() => e.getSession() ?? K), [i, s] = f.useState(null), o = f.useRef(!1), c = f.useRef(0), a = f.useCallback((l) => o.current && c.current === l, []), h = f.useCallback(async (l) => {
-    if (a(l)) {
+  const [r, n] = f.useState(() => e.getSession() ?? K), [o, s] = f.useState(null), i = f.useRef(!1), u = f.useRef(0), c = f.useCallback((l) => i.current && u.current === l, []), h = f.useCallback(async (l) => {
+    if (c(l)) {
       s(null);
       try {
         const p = await e.getCapabilities();
-        a(l) && s(p);
+        c(l) && s(p);
       } catch (p) {
-        a(l) && (console.error("Auth capabilities request failed.", p), s(null));
+        c(l) && (console.error("Auth capabilities request failed.", p), s(null));
       }
     }
-  }, [e, a]);
+  }, [e, c]);
   f.useLayoutEffect(() => {
-    o.current = !0;
-    const l = ++c.current;
+    i.current = !0;
+    const l = ++u.current;
     async function p() {
       try {
         const g = await e.initialize();
-        if (!a(l))
+        if (!c(l))
           return;
         if (n(g), g.status !== "authenticated") {
           s(null);
@@ -274,32 +274,32 @@ function De({ manager: e, children: t }) {
         }
         await h(l);
       } catch (g) {
-        a(l) && (console.error("Auth initialization failed.", g), n($), s(null));
+        c(l) && (console.error("Auth initialization failed.", g), n($), s(null));
       }
     }
     return p(), () => {
-      o.current = !1, c.current += 1;
+      i.current = !1, u.current += 1;
     };
-  }, [h, e, a]);
+  }, [h, e, c]);
   const k = f.useCallback(async (l) => {
-    const p = ++c.current;
-    if (await e.login(l), !a(p))
+    const p = ++u.current;
+    if (await e.login(l), !c(p))
       return;
     const g = e.getSession();
     n(g), g.status === "authenticated" ? await h(p) : s(null);
-  }, [h, e, a]), U = f.useCallback(async () => {
-    const l = ++c.current;
-    await e.logout(), a(l) && (n(e.getSession()), s(null));
-  }, [e, a]), F = f.useCallback(async () => {
-    const l = ++c.current, p = await e.refresh();
-    return a(l) && (n(p), p.status === "authenticated" ? await h(l) : s(null)), p;
-  }, [h, e, a]), te = f.useMemo(() => ({
+  }, [h, e, c]), U = f.useCallback(async () => {
+    const l = ++u.current;
+    await e.logout(), c(l) && (n(e.getSession()), s(null));
+  }, [e, c]), F = f.useCallback(async () => {
+    const l = ++u.current, p = await e.refresh();
+    return c(l) && (n(p), p.status === "authenticated" ? await h(l) : s(null)), p;
+  }, [h, e, c]), te = f.useMemo(() => ({
     session: r,
-    capabilities: i,
+    capabilities: o,
     login: k,
     logout: U,
     refresh: F
-  }), [i, k, U, F, r]);
+  }), [o, k, U, F, r]);
   return /* @__PURE__ */ w.jsx(V.Provider, { value: te, children: t });
 }
 function ue() {
@@ -320,23 +320,23 @@ function Ue() {
   return D().capabilities;
 }
 function Fe({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
-  const i = le(), s = typeof e == "string" ? [e] : e ?? [];
-  return s.length === 0 || (t ? i.hasAll(s) : i.hasAny(s)) ? /* @__PURE__ */ w.jsx(w.Fragment, { children: n }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: r });
+  const o = le(), s = typeof e == "string" ? [e] : e ?? [];
+  return s.length === 0 || (t ? o.hasAll(s) : o.hasAny(s)) ? /* @__PURE__ */ w.jsx(w.Fragment, { children: n }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: r });
 }
 function Oe({ children: e, fallback: t = null, loginOptions: r }) {
-  const { session: n, login: i } = D(), s = f.useRef(null);
+  const { session: n, login: o } = D(), s = f.useRef(null);
   return f.useEffect(() => {
     if (n.status === "anonymous") {
-      const o = fe(r), c = s.current;
-      if (c?.key === o && c.login === i)
+      const i = fe(r), u = s.current;
+      if (u?.key === i && u.login === o)
         return;
-      const a = { key: o, login: i };
-      s.current = a, i(r).catch((h) => {
-        s.current === a && (s.current = null), console.error("Auth login failed.", h);
+      const c = { key: i, login: o };
+      s.current = c, o(r).catch((h) => {
+        s.current === c && (s.current = null), console.error("Auth login failed.", h);
       });
     } else
       s.current = null;
-  }, [i, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ w.jsx(w.Fragment, { children: t }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: e });
+  }, [o, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ w.jsx(w.Fragment, { children: t }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: e });
 }
 function fe(e) {
   return `${e?.providerId ?? ""}
@@ -350,55 +350,55 @@ function Ne(e) {
 }
 function qe(e, t, r = {}) {
   return {
-    requestJson(n, i) {
-      return v(e, n, t, r, E(i));
+    requestJson(n, o) {
+      return v(e, n, t, r, E(o));
     },
-    getJson(n, i) {
-      return v(e, n, t, r, E(i));
+    getJson(n, o) {
+      return v(e, n, t, r, E(o));
     },
-    postJson(n, i, s) {
+    postJson(n, o, s) {
       return v(e, n, t, r, {
         ...s,
         method: "POST",
         headers: q(s?.headers),
-        body: JSON.stringify(i)
+        body: JSON.stringify(o)
       });
     },
-    putJson(n, i, s) {
+    putJson(n, o, s) {
       return v(e, n, t, r, {
         ...s,
         method: "PUT",
         headers: q(s?.headers),
-        body: JSON.stringify(i)
+        body: JSON.stringify(o)
       });
     },
-    deleteJson(n, i) {
+    deleteJson(n, o) {
       return v(e, n, t, r, E({
-        ...i,
+        ...o,
         method: "DELETE"
       }));
     },
-    postForm(n, i, s) {
+    postForm(n, o, s) {
       return v(e, n, t, r, E({
         ...s,
         method: "POST",
-        body: i
+        body: o
       }));
     }
   };
 }
 const J = /* @__PURE__ */ new Map();
-async function v(e, t, r, n, i) {
-  const s = n.fetch ?? fetch, o = new URL(t, e).toString(), c = await s(o, await Q(r, M(n, i))), a = c.status === 401 && n.refreshOnUnauthorized !== !1 ? await he(s, o, r, M(n, i)) : c;
-  if (!a.ok)
-    throw await X(a);
-  const h = await a.text();
+async function v(e, t, r, n, o) {
+  const s = n.fetch ?? fetch, i = new URL(t, e).toString(), u = await s(i, await Q(r, W(n, o))), c = u.status === 401 && n.refreshOnUnauthorized !== !1 ? await he(s, i, r, W(n, o)) : u;
+  if (!c.ok)
+    throw await X(c);
+  const h = await c.text();
   if (!h.trim())
     return {};
   try {
     return JSON.parse(h);
   } catch {
-    throw new P(a.status, `Expected JSON from ${o}.`);
+    throw new P(c.status, `Expected JSON from ${i}.`);
   }
 }
 async function he(e, t, r, n) {
@@ -408,8 +408,8 @@ async function pe(e, t) {
   const r = new URL(e).origin, n = J.get(r);
   if (n)
     return n;
-  const i = t.refresh().then((s) => s.status === "authenticated").finally(() => J.delete(r));
-  return J.set(r, i), i;
+  const o = t.refresh().then((s) => s.status === "authenticated").finally(() => J.delete(r));
+  return J.set(r, o), o;
 }
 async function Q(e, t) {
   const r = new Headers(t?.headers), n = await e.getAccessToken();
@@ -431,13 +431,13 @@ function q(e) {
   const t = new Headers(e);
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
-function M(e, t) {
+function W(e, t) {
   return y(e.defaultHeaders ?? e.headers, t);
 }
 function we(e, t = {}) {
   return async () => await e.getAccessToken() ?? await t.fallbackAccessTokenFactory?.() ?? t.anonymousToken ?? "";
 }
-function Me(e, t) {
+function We(e, t) {
   const r = ge(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
   return {
     ...e,
@@ -447,7 +447,7 @@ function Me(e, t) {
 function ge(e) {
   return typeof e == "function";
 }
-const z = 1e4, u = {
+const M = 1e4, d = {
   featureAreas: "studio.feature-areas",
   navigation: "studio.navigation",
   routes: "studio.routes",
@@ -462,6 +462,9 @@ const z = 1e4, u = {
   agentPromptStarters: "studio.weaver.prompt-starters",
   agentCapabilities: "studio.weaver.capabilities",
   agentActions: "studio.weaver.actions",
+  agentToolSlots: "studio.weaver.tool-slots",
+  agentToolContracts: "studio.weaver.tool-contracts",
+  agentResultRenderers: "studio.weaver.result-renderers",
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
@@ -473,45 +476,48 @@ const z = 1e4, u = {
   diagnostics: "studio.diagnostics",
   diagnosticsWidgets: "studio.diagnostics.widgets"
 }, m = {
-  featureAreas: { id: u.featureAreas, kind: "feature-area", title: "Feature areas", owner: d() },
-  navigation: { id: u.navigation, kind: "navigation", title: "Navigation", owner: d() },
-  routes: { id: u.routes, kind: "route", title: "Routes", owner: d() },
-  dashboardWidgets: { id: u.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: d() },
-  panels: { id: u.panels, kind: "panel", title: "Panels", owner: d() },
-  toolbarActions: { id: u.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: d() },
-  activityEditors: { id: u.activityEditors, kind: "activity-editor", title: "Activity editors", owner: d() },
-  propertyEditors: { id: u.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: d() },
-  expressionEditors: { id: u.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: d() },
-  settingEditors: { id: u.settingEditors, kind: "setting-editor", title: "Setting editors", owner: d() },
-  agentContextProviders: { id: u.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: d() },
-  agentPromptStarters: { id: u.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: d() },
-  agentCapabilities: { id: u.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: d() },
-  agentActions: { id: u.agentActions, kind: "weaver-action", title: "Weaver actions", owner: d() },
-  workflowDesignerNodeRenderers: { id: u.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: d() },
-  workflowDesignerToolboxItems: { id: u.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: d() },
-  workflowDesignerPanels: { id: u.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: d() },
-  aiContextProviders: { id: u.aiContextProviders, kind: "ai-context-provider", title: "AI context providers", owner: d() },
-  aiPromptActions: { id: u.aiPromptActions, kind: "ai-prompt-action", title: "AI prompt actions", owner: d() },
-  aiTools: { id: u.aiTools, kind: "ai-tool", title: "AI tools", owner: d() },
-  aiProposalRenderers: { id: u.aiProposalRenderers, kind: "ai-proposal-renderer", title: "AI proposal renderers", owner: d() },
-  aiSurfaces: { id: u.aiSurfaces, kind: "ai-surface", title: "AI surfaces", owner: d() },
-  diagnostics: { id: u.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: d() },
-  diagnosticsWidgets: { id: u.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: d() }
+  featureAreas: { id: d.featureAreas, kind: "feature-area", title: "Feature areas", owner: a() },
+  navigation: { id: d.navigation, kind: "navigation", title: "Navigation", owner: a() },
+  routes: { id: d.routes, kind: "route", title: "Routes", owner: a() },
+  dashboardWidgets: { id: d.dashboardWidgets, kind: "dashboard-widget", title: "Dashboard widgets", owner: a() },
+  panels: { id: d.panels, kind: "panel", title: "Panels", owner: a() },
+  toolbarActions: { id: d.toolbarActions, kind: "toolbar-action", title: "Toolbar actions", owner: a() },
+  activityEditors: { id: d.activityEditors, kind: "activity-editor", title: "Activity editors", owner: a() },
+  propertyEditors: { id: d.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: a() },
+  expressionEditors: { id: d.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: a() },
+  settingEditors: { id: d.settingEditors, kind: "setting-editor", title: "Setting editors", owner: a() },
+  agentContextProviders: { id: d.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: a() },
+  agentPromptStarters: { id: d.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: a() },
+  agentCapabilities: { id: d.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: a() },
+  agentActions: { id: d.agentActions, kind: "weaver-action", title: "Weaver actions", owner: a() },
+  agentToolSlots: { id: d.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: a() },
+  agentToolContracts: { id: d.agentToolContracts, kind: "weaver-tool-contract", title: "Weaver tool contracts", owner: a() },
+  agentResultRenderers: { id: d.agentResultRenderers, kind: "weaver-result-renderer", title: "Weaver result renderers", owner: a() },
+  workflowDesignerNodeRenderers: { id: d.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: a() },
+  workflowDesignerToolboxItems: { id: d.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: a() },
+  workflowDesignerPanels: { id: d.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: a() },
+  aiContextProviders: { id: d.aiContextProviders, kind: "ai-context-provider", title: "AI context providers", owner: a() },
+  aiPromptActions: { id: d.aiPromptActions, kind: "ai-prompt-action", title: "AI prompt actions", owner: a() },
+  aiTools: { id: d.aiTools, kind: "ai-tool", title: "AI tools", owner: a() },
+  aiProposalRenderers: { id: d.aiProposalRenderers, kind: "ai-proposal-renderer", title: "AI proposal renderers", owner: a() },
+  aiSurfaces: { id: d.aiSurfaces, kind: "ai-surface", title: "AI surfaces", owner: a() },
+  diagnostics: { id: d.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: a() },
+  diagnosticsWidgets: { id: d.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: a() }
 };
-function ze(e) {
+function Me(e) {
   return e;
 }
-function d(e = "studio-host") {
+function a(e = "studio-host") {
   return { kind: "host", id: e };
 }
-function He(e) {
+function ze(e) {
   return { kind: "module", id: e, moduleId: e };
 }
 function S(e = {}) {
   const t = [], r = e.slot ?? {
     id: "studio.unknown",
     kind: "unknown",
-    owner: d(),
+    owner: a(),
     title: "Unknown contributions"
   };
   return {
@@ -520,14 +526,14 @@ function S(e = {}) {
       t.push(n);
     },
     list(n) {
-      return H(t, r, e, n).map((i) => i.contribution);
+      return z(t, r, e, n).map((o) => o.contribution);
     },
     compose(n) {
-      return H(t, r, e, n);
+      return z(t, r, e, n);
     }
   };
 }
-function We() {
+function He() {
   const e = /* @__PURE__ */ new Set();
   return {
     contextProviders: S({ slot: m.aiContextProviders }),
@@ -544,34 +550,44 @@ function We() {
     }
   };
 }
-function H(e, t, r, n = {}) {
-  return e.map((i, s) => ({
-    contribution: i,
+function z(e, t, r, n = {}) {
+  return e.map((o, s) => ({
+    contribution: o,
     slot: t,
-    availability: ye(i, t, r, n),
-    order: r.getOrder?.(i) ?? be(i),
-    stableKey: r.getStableKey?.(i) ?? ke(i, s),
+    availability: ye(o, t, r, n),
+    order: r.getOrder?.(o) ?? be(o),
+    stableKey: r.getStableKey?.(o) ?? ke(o, s),
     index: s
-  })).filter((i) => Ae(i.availability, n)).sort((i, s) => i.order - s.order || i.stableKey.localeCompare(s.stableKey) || i.index - s.index).map(({ index: i, ...s }) => s);
+  })).filter((o) => Ae(o.availability, n)).sort((o, s) => o.order - s.order || o.stableKey.localeCompare(s.stableKey) || o.index - s.index).map(({ index: o, ...s }) => s);
 }
 function ye(e, t, r, n) {
-  const i = { contribution: e, slot: t, context: n.context }, s = T(r.slotOwner?.(i), "slot-owner");
+  const o = { contribution: e, slot: t, context: n.context }, s = T(r.slotOwner?.(o), "slot-owner");
   if (s.state !== "available")
     return s;
-  const o = W(e, "moduleId");
-  if (o && n.disabledModuleIds?.includes(o))
-    return { state: "hidden", reason: `Module ${o} is disabled.`, source: "module" };
-  const c = W(e, "featureId");
-  if (c && n.disabledFeatureIds?.includes(c))
-    return { state: "hidden", reason: `Feature ${c} is disabled.`, source: "feature" };
-  const a = T(ve(e, n.context), "runtime"), h = T(r.hostPolicy?.(i), "host-policy");
+  const i = H(e, "moduleId");
+  if (i && n.disabledModuleIds?.includes(i))
+    return { state: "hidden", reason: `Module ${i} is disabled.`, source: "module" };
+  const u = H(e, "featureId");
+  if (u && n.disabledFeatureIds?.includes(u))
+    return { state: "hidden", reason: `Feature ${u} is disabled.`, source: "feature" };
+  const c = T(ve(e, n.context), "runtime"), h = T(r.hostPolicy?.(o), "host-policy");
   if (h.state !== "available")
     return h;
-  const k = T(n.hostPolicy?.(i), "host-policy");
-  return k.state !== "available" ? k : a;
+  const k = T(n.hostPolicy?.(o), "host-policy");
+  return k.state !== "available" ? k : c;
 }
 function T(e, t) {
-  return e === !1 ? { state: "hidden", source: t } : e && typeof e == "object" ? { ...e, source: e.source ?? t } : { state: "available" };
+  if (e === !1)
+    return { state: "hidden", source: t };
+  if (e && typeof e == "object") {
+    const r = e;
+    return !("state" in r) && typeof r.status == "string" ? {
+      state: r.status === "available" ? "available" : "unavailable",
+      reason: typeof r.reason == "string" ? r.reason : void 0,
+      source: t
+    } : { ...e, source: e.source ?? t };
+  }
+  return { state: "available" };
 }
 function ve(e, t) {
   if (!j(e) || !("availability" in e))
@@ -595,7 +611,7 @@ function ke(e, t) {
   }
   return `_${t.toString().padStart(4, "0")}`;
 }
-function W(e, t) {
+function H(e, t) {
   if (!j(e))
     return;
   const r = e[t];
@@ -625,19 +641,19 @@ function Se(e, t) {
     async getJson(r, n) {
       return A(e, r, y(t, R(n)));
     },
-    async postJson(r, n, i) {
+    async postJson(r, n, o) {
       return A(e, r, y(t, {
-        ...i,
+        ...o,
         method: "POST",
-        headers: B(i?.headers),
+        headers: B(o?.headers),
         body: JSON.stringify(n)
       }));
     },
-    async putJson(r, n, i) {
+    async putJson(r, n, o) {
       return A(e, r, y(t, {
-        ...i,
+        ...o,
         method: "PUT",
-        headers: B(i?.headers),
+        headers: B(o?.headers),
         body: JSON.stringify(n)
       }));
     },
@@ -647,9 +663,9 @@ function Se(e, t) {
         method: "DELETE"
       })));
     },
-    async postForm(r, n, i) {
+    async postForm(r, n, o) {
       return A(e, r, y(t, R({
-        ...i,
+        ...o,
         method: "POST",
         body: n
       })));
@@ -664,32 +680,32 @@ function y(e, t = {}) {
 }
 function Pe(e, t) {
   const r = new Headers(e);
-  return new Headers(t).forEach((n, i) => r.set(i, n)), r;
+  return new Headers(t).forEach((n, o) => r.set(o, n)), r;
 }
 async function A(e, t, r) {
-  const n = Ie(e, t), i = new AbortController(), s = globalThis.setTimeout(() => i.abort(), z);
-  let o;
+  const n = Ie(e, t), o = new AbortController(), s = globalThis.setTimeout(() => o.abort(), M);
+  let i;
   try {
-    o = await fetch(n, {
+    i = await fetch(n, {
       ...r,
-      signal: Ce(r?.signal, i.signal)
+      signal: Ce(r?.signal, o.signal)
     });
-  } catch (a) {
-    throw i.signal.aborted && !r?.signal?.aborted ? new Error(`Request to ${n} timed out after ${z / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : a;
+  } catch (c) {
+    throw o.signal.aborted && !r?.signal?.aborted ? new Error(`Request to ${n} timed out after ${M / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : c;
   } finally {
     globalThis.clearTimeout(s);
   }
-  if (!o.ok)
-    throw await X(o);
-  const c = await o.text();
-  if (!c.trim())
+  if (!i.ok)
+    throw await X(i);
+  const u = await i.text();
+  if (!u.trim())
     return {};
   try {
-    return JSON.parse(c);
+    return JSON.parse(u);
   } catch {
     throw new P(
-      o.status,
-      `Expected JSON from ${n}, but received ${$e(o, c)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+      i.status,
+      `Expected JSON from ${n}, but received ${$e(i, u)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
@@ -712,10 +728,10 @@ async function Y(e) {
   const t = e.headers.get("content-type") ?? "";
   if (Ee(t))
     try {
-      const n = await e.json(), i = Z(n);
+      const n = await e.json(), o = Z(n);
       return {
-        message: Te(n) ?? Re(i) ?? `Request failed with ${e.status}.`,
-        validationErrors: i,
+        message: Te(n) ?? Re(o) ?? `Request failed with ${e.status}.`,
+        validationErrors: o,
         payload: n
       };
     } catch {
@@ -765,8 +781,8 @@ function Z(e) {
   if (!t || typeof t != "object" || Array.isArray(t))
     return null;
   const r = {};
-  for (const [n, i] of Object.entries(t)) {
-    const s = Array.isArray(i) ? i.map(String) : [String(i)];
+  for (const [n, o] of Object.entries(t)) {
+    const s = Array.isArray(o) ? o.map(String) : [String(o)];
     s.length > 0 && (r[n] = s);
   }
   return Object.keys(r).length > 0 ? r : null;
@@ -793,12 +809,12 @@ function B(e) {
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
 function $e(e, t) {
-  const r = e.headers.get("content-type") ?? "an unknown content type", n = t.trim(), i = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
-  return `${r}${i}`;
+  const r = e.headers.get("content-type") ?? "an unknown content type", n = t.trim(), o = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
+  return `${r}${o}`;
 }
 class P extends Error {
-  constructor(t, r, n = null, i = null) {
-    super(r), this.status = t, this.validationErrors = n, this.payload = i, this.name = "StudioHttpError";
+  constructor(t, r, n = null, o = null) {
+    super(r), this.status = t, this.validationErrors = n, this.payload = o, this.name = "StudioHttpError";
   }
   status;
   validationErrors;
@@ -811,7 +827,7 @@ export {
   De as AuthProvider,
   Oe as RequireAuth,
   P as StudioHttpError,
-  We as createAiContributionApi,
+  He as createAiContributionApi,
   re as createAuthProviderManager,
   qe as createAuthenticatedHttpClient,
   Le as createBackendAuthProviderManager,
@@ -822,18 +838,18 @@ export {
   _ as createRedirectAuthAdapter,
   we as createSignalRAccessTokenFactory,
   X as createStudioHttpError,
-  ze as defineStudioSlot,
+  Me as defineStudioSlot,
   Ke as describeApiError,
-  d as hostSlotOwner,
-  He as moduleSlotOwner,
+  a as hostSlotOwner,
+  ze as moduleSlotOwner,
   xe as readStudioHttpErrorMessage,
-  u as studioSlotIds,
+  d as studioSlotIds,
   m as studioSlots,
   _e as tryExtractValidationErrors,
   Ue as useAuthCapabilities,
   D as useAuthContext,
   ue as useAuthSession,
   le as usePermissions,
-  Me as withAuthenticatedSignalROptions,
+  We as withAuthenticatedSignalROptions,
   y as withDefaultHeaders
 };

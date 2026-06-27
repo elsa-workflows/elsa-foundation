@@ -42,10 +42,42 @@ describe("agent registry", () => {
       surfaces: ["/workflows"],
       proposalSchema: {}
     });
+    api.agent.toolSlots.add({
+      id: "workflow.tools",
+      displayName: "Workflow tools",
+      description: "Tools that inspect or mutate workflow resources.",
+      surfaces: ["/workflows"],
+      invocationModes: ["read-only", "proposal"],
+      order: 20
+    });
+    api.agent.toolContracts.add({
+      id: "workflow.explain.tool",
+      slotId: "workflow.tools",
+      displayName: "Explain workflow",
+      description: "Explain a workflow resource.",
+      surfaces: ["/workflows"],
+      inputSchema: { type: "object" },
+      resourceTargetSchema: { type: "object", required: ["resourceType", "resourceId"] },
+      resultSchema: { type: "object" },
+      risk: "read-only",
+      requiredPermissions: ["workflows.read"],
+      availability: { status: "available" },
+      invocationModes: ["read-only"],
+      resultRendererIds: ["workflow.summary"]
+    });
+    api.agent.resultRenderers.add({
+      id: "workflow.summary",
+      displayName: "Workflow summary",
+      resourceTypes: ["workflow-definition"],
+      component: ({ result }) => String(result)
+    });
 
     expect(api.agent.contextProviders.list()).toHaveLength(1);
     expect(api.agent.promptStarters.list()).toHaveLength(1);
     expect(api.agent.capabilities.list()).toHaveLength(1);
     expect(api.agent.actions.list()).toHaveLength(1);
+    expect(api.agent.toolSlots.list()).toHaveLength(1);
+    expect(api.agent.toolContracts.list()).toHaveLength(1);
+    expect(api.agent.resultRenderers.list()).toHaveLength(1);
   });
 });
