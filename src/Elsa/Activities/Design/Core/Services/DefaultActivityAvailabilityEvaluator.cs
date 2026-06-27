@@ -9,8 +9,9 @@ public sealed class DefaultActivityAvailabilityEvaluator(ActivityAvailabilityOpt
     public IReadOnlyCollection<IActivityDefinition> FilterAddable(IEnumerable<IActivityDefinition> activities, ActivityAvailabilitySettings? managementSettings = null)
     {
         var activityList = activities.ToArray();
-        var includeKeys = ActivityAvailabilityRuleExpander.Expand(options.Include, options.Sets).ActivityTypeKeys;
-        var excludeKeys = ActivityAvailabilityRuleExpander.Expand(options.Exclude, options.Sets).ActivityTypeKeys;
+        var catalogKeys = activityList.Select(activity => activity.ActivityTypeKey).ToHashSet(StringComparer.Ordinal);
+        var includeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(ActivityAvailabilityRuleExpander.Expand(options.Include, options.Sets), catalogKeys);
+        var excludeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(ActivityAvailabilityRuleExpander.Expand(options.Exclude, options.Sets), catalogKeys);
         var hasIncludeRules = includeKeys.Count > 0;
 
         var baselineActivities = activityList
@@ -22,23 +23,19 @@ public sealed class DefaultActivityAvailabilityEvaluator(ActivityAvailabilityOpt
             return baselineActivities;
 
         var management = ActivityAvailabilityRuleExpander.Expand(managementSettings.Rules, options.Sets);
-        var managementKeys = management.ActivityTypeKeys;
-        var onlyUnresolvedSetRules = HasOnlyUnresolvedSetRules(managementSettings.Rules, management);
+        var managementKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(management, catalogKeys);
+        var onlyUnresolvedRules = ActivityAvailabilityRuleExpander.HasOnlyUnresolvedRules(managementSettings.Rules, managementKeys, options.Sets);
 
         return managementSettings.Mode switch
         {
             ActivityAvailabilityManagementMode.AllExcept => baselineActivities
                 .Where(activity => !managementKeys.Contains(activity.ActivityTypeKey))
                 .ToArray(),
-            ActivityAvailabilityManagementMode.Only when !onlyUnresolvedSetRules => baselineActivities
+            ActivityAvailabilityManagementMode.Only when !onlyUnresolvedRules => baselineActivities
                 .Where(activity => managementKeys.Contains(activity.ActivityTypeKey))
                 .ToArray(),
             _ => baselineActivities
         };
     }
 
-    private static bool HasOnlyUnresolvedSetRules(ActivityAvailabilityRuleSet? rules, ActivityAvailabilityRuleExpansion expansion) =>
-        expansion.ActivityTypeKeys.Count == 0
-        && expansion.UnresolvedSets.Count > 0
-        && (rules?.ActivityTypes ?? []).All(string.IsNullOrWhiteSpace);
 }

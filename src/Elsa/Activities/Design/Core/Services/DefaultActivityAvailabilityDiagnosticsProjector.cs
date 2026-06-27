@@ -16,12 +16,15 @@ public sealed class DefaultActivityAvailabilityDiagnosticsProjector : IActivityA
         var hostInclude = ActivityAvailabilityRuleExpander.Expand(options.Include, options.Sets);
         var hostExclude = ActivityAvailabilityRuleExpander.Expand(options.Exclude, options.Sets);
         var management = ActivityAvailabilityRuleExpander.Expand(managementSettings?.Rules, options.Sets);
-        var hasHostIncludeRules = hostInclude.ActivityTypeKeys.Count > 0;
-        var managementHasOnlyUnresolvedSetRules = HasOnlyUnresolvedSetRules(managementSettings?.Rules, management);
+        var hostIncludeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(hostInclude, activityKeys);
+        var hostExcludeKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(hostExclude, activityKeys);
+        var managementKeys = ActivityAvailabilityRuleExpander.ResolveCatalogKeys(management, activityKeys);
+        var hasHostIncludeRules = hostIncludeKeys.Count > 0;
+        var managementHasOnlyUnresolvedRules = ActivityAvailabilityRuleExpander.HasOnlyUnresolvedRules(managementSettings?.Rules, managementKeys, options.Sets);
         var entries = new List<ActivityAvailabilityDiagnosticEntry>();
 
         foreach (var activity in activityList)
-            entries.Add(ProjectActivity(activity, hostInclude.ActivityTypeKeys, hostExclude.ActivityTypeKeys, hasHostIncludeRules, managementSettings, management.ActivityTypeKeys, managementHasOnlyUnresolvedSetRules));
+            entries.Add(ProjectActivity(activity, hostIncludeKeys, hostExcludeKeys, hasHostIncludeRules, managementSettings, managementKeys, managementHasOnlyUnresolvedRules));
 
         AddMissingActivityTypeReferences(entries, options.Include, activityKeys, ActivityAvailabilityPolicyLayer.HostBaseline);
         AddMissingActivityTypeReferences(entries, options.Exclude, activityKeys, ActivityAvailabilityPolicyLayer.HostBaseline);
@@ -64,11 +67,6 @@ public sealed class DefaultActivityAvailabilityDiagnosticsProjector : IActivityA
             _ => false
         };
 
-    private static bool HasOnlyUnresolvedSetRules(ActivityAvailabilityRuleSet? rules, ActivityAvailabilityRuleExpansion expansion) =>
-        expansion.ActivityTypeKeys.Count == 0
-        && expansion.UnresolvedSets.Count > 0
-        && (rules?.ActivityTypes ?? []).All(string.IsNullOrWhiteSpace);
-
     private static ActivityAvailabilityDiagnosticEntry Entry(
         IActivityDefinition activity,
         ActivityAvailabilityDiagnosticState state,
@@ -92,7 +90,7 @@ public sealed class DefaultActivityAvailabilityDiagnosticsProjector : IActivityA
                 activityTypeKey,
                 null,
                 null,
-                ActivityAvailabilityDiagnosticState.RemovedFromCatalog,
+                ActivityAvailabilityDiagnosticState.UnresolvedReference,
                 layer,
                 ActivityAvailabilityReferenceKind.ActivityType,
                 activityTypeKey,

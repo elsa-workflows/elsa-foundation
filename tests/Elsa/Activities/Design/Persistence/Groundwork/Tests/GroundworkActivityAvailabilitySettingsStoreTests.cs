@@ -26,8 +26,8 @@ public sealed class GroundworkActivityAvailabilitySettingsStoreTests
             Mode = ActivityAvailabilityManagementMode.Only,
             Rules = new ActivityAvailabilityRuleSet
             {
-                ActivityTypes = ["Elsa.Test.Activity"],
-                Sets = ["Core"]
+                ActivityTypes = ["Elsa.Test.Activity", "Elsa.Missing.Activity"],
+                Sets = ["Core", "MissingSet"]
             }
         });
 
@@ -36,7 +36,7 @@ public sealed class GroundworkActivityAvailabilitySettingsStoreTests
         Assert.NotNull(settings);
         Assert.Equal(ActivityAvailabilitySettings.HostDefaultScope, settings.Scope);
         Assert.Equal(ActivityAvailabilityManagementMode.Only, settings.Mode);
-        Assert.Equal(new[] { "Elsa.Test.Activity" }, settings.Rules.ActivityTypes);
-        Assert.Equal(new[] { "Core" }, settings.Rules.Sets);
+        Assert.Equal(new[] { "Elsa.Test.Activity", "Elsa.Missing.Activity" }, settings.Rules.ActivityTypes);
+        Assert.Equal(new[] { "Core", "MissingSet" }, settings.Rules.Sets);
     }
 }

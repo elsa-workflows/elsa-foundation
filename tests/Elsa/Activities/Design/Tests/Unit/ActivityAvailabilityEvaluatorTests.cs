@@ -10,10 +10,12 @@ public sealed class ActivityAvailabilityEvaluatorTests
     private const string WriteLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
     private const string SendHttpTypeKey = "Elsa.Activities.Http.Activities.SendHttpRequest";
     private const string RunJavaScriptTypeKey = "Elsa.Activities.Scripting.Activities.RunJavaScript";
+    private const string MissingActivityTypeKey = "Elsa.Activities.Missing.Activities.LaterInstalled";
 
     private readonly ActivityDefinitionModel _writeLine = Activity("write-line", WriteLineTypeKey);
     private readonly ActivityDefinitionModel _sendHttp = Activity("send-http", SendHttpTypeKey);
     private readonly ActivityDefinitionModel _runJavaScript = Activity("run-js", RunJavaScriptTypeKey);
+    private readonly ActivityDefinitionModel _laterInstalled = Activity("later-installed", MissingActivityTypeKey);
 
     [Fact]
     public void Evaluate_NoRules_ReturnsAllActivities()
@@ -84,7 +86,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
         {
             Sets =
             {
-                ["Http"] = ["Elsa.Activities.Http"]
+                ["Http"] = [SendHttpTypeKey, "Elsa.Activities.Http"]
             },
             Include = new ActivityAvailabilityRuleSet
             {
@@ -94,7 +96,7 @@ public sealed class ActivityAvailabilityEvaluatorTests
 
         var result = Evaluate(options);
 
-        Assert.Empty(result);
+        Assert.Equal([SendHttpTypeKey], result);
     }
 
     [Fact]
@@ -137,6 +139,40 @@ public sealed class ActivityAvailabilityEvaluatorTests
         Assert.Equal(
             [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
             result);
+    }
+
+    [Fact]
+    public void Evaluate_UnknownHostIncludeActivityType_DoesNotRemoveUnrelatedActivities()
+    {
+        var options = new ActivityAvailabilityOptions
+        {
+            Include = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Evaluate(options);
+
+        Assert.Equal(
+            [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
+            result);
+    }
+
+    [Fact]
+    public void Evaluate_ResolvedHostIncludeActivityType_AppliesRetainedReference()
+    {
+        var options = new ActivityAvailabilityOptions
+        {
+            Include = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Evaluate(options, activities: [_writeLine, _sendHttp, _runJavaScript, _laterInstalled]);
+
+        Assert.Equal([MissingActivityTypeKey], result);
     }
 
     [Fact]
@@ -222,11 +258,50 @@ public sealed class ActivityAvailabilityEvaluatorTests
             result);
     }
 
-    private IReadOnlyList<string> Evaluate(ActivityAvailabilityOptions options, ActivityAvailabilitySettings? settings = null)
+    [Fact]
+    public void Evaluate_ManagementUnknownActivityType_DoesNotRemoveUnrelatedActivities()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Evaluate(new ActivityAvailabilityOptions(), settings);
+
+        Assert.Equal(
+            [WriteLineTypeKey, SendHttpTypeKey, RunJavaScriptTypeKey],
+            result);
+    }
+
+    [Fact]
+    public void Evaluate_ManagementUnknownActivityType_AppliesWhenCatalogActivityAppears()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Evaluate(new ActivityAvailabilityOptions(), settings, [_writeLine, _sendHttp, _runJavaScript, _laterInstalled]);
+
+        Assert.Equal([MissingActivityTypeKey], result);
+    }
+
+    private IReadOnlyList<string> Evaluate(
+        ActivityAvailabilityOptions options,
+        ActivityAvailabilitySettings? settings = null,
+        IReadOnlyCollection<ActivityDefinitionModel>? activities = null)
     {
         var evaluator = new DefaultActivityAvailabilityEvaluator(options);
         return evaluator
-            .FilterAddable([_writeLine, _sendHttp, _runJavaScript], settings)
+            .FilterAddable(activities ?? [_writeLine, _sendHttp, _runJavaScript], settings)
             .Select(x => x.ActivityTypeKey)
             .ToArray();
     }

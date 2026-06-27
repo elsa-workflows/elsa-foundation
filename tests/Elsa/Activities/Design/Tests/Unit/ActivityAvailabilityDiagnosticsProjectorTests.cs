@@ -17,6 +17,7 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
     private const string WriteLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
     private const string SendHttpTypeKey = "Elsa.Activities.Http.Activities.SendHttpRequest";
     private const string RunJavaScriptTypeKey = "Elsa.Activities.Scripting.Activities.RunJavaScript";
+    private const string MissingActivityTypeKey = "Elsa.Activities.Missing.Activities.LaterInstalled";
 
     private readonly ActivityDefinition[] _activities =
     [
@@ -52,7 +53,7 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
     }
 
     [Fact]
-    public void Project_ReportsRemovedCatalogActivityTypeReferences()
+    public void Project_ReportsUnresolvedActivityTypeReferences()
     {
         const string missingHostActivity = "Elsa.Missing.HostActivity";
         const string missingManagementActivity = "Elsa.Missing.ManagementActivity";
@@ -74,8 +75,8 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
 
         var result = Project(options, settings);
 
-        AssertReference(result, missingHostActivity, ActivityAvailabilityDiagnosticState.RemovedFromCatalog, ActivityAvailabilityPolicyLayer.HostBaseline, ActivityAvailabilityReferenceKind.ActivityType);
-        AssertReference(result, missingManagementActivity, ActivityAvailabilityDiagnosticState.RemovedFromCatalog, ActivityAvailabilityPolicyLayer.ManagementSettings, ActivityAvailabilityReferenceKind.ActivityType);
+        AssertReference(result, missingHostActivity, ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.HostBaseline, ActivityAvailabilityReferenceKind.ActivityType);
+        AssertReference(result, missingManagementActivity, ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.ManagementSettings, ActivityAvailabilityReferenceKind.ActivityType);
     }
 
     [Fact]
@@ -101,6 +102,41 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
 
         AssertReference(result, "MissingHostSet", ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.HostBaseline, ActivityAvailabilityReferenceKind.ActivitySet);
         AssertReference(result, "MissingManagementSet", ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.ManagementSettings, ActivityAvailabilityReferenceKind.ActivitySet);
+        Assert.Equal(3, result.Items.Count(x => x.State == ActivityAvailabilityDiagnosticState.Available));
+    }
+
+    [Fact]
+    public void Project_UnknownHostIncludeActivityType_DoesNotBlockCatalogActivities()
+    {
+        var options = new ActivityAvailabilityOptions
+        {
+            Include = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Project(options);
+
+        AssertReference(result, MissingActivityTypeKey, ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.HostBaseline, ActivityAvailabilityReferenceKind.ActivityType);
+        Assert.Equal(3, result.Items.Count(x => x.State == ActivityAvailabilityDiagnosticState.Available));
+    }
+
+    [Fact]
+    public void Project_ManagementOnlyUnknownActivityType_DoesNotHideCatalogActivities()
+    {
+        var settings = new ActivityAvailabilitySettings
+        {
+            Mode = ActivityAvailabilityManagementMode.Only,
+            Rules = new ActivityAvailabilityRuleSet
+            {
+                ActivityTypes = [MissingActivityTypeKey]
+            }
+        };
+
+        var result = Project(new ActivityAvailabilityOptions(), settings);
+
+        AssertReference(result, MissingActivityTypeKey, ActivityAvailabilityDiagnosticState.UnresolvedReference, ActivityAvailabilityPolicyLayer.ManagementSettings, ActivityAvailabilityReferenceKind.ActivityType);
         Assert.Equal(3, result.Items.Count(x => x.State == ActivityAvailabilityDiagnosticState.Available));
     }
 
