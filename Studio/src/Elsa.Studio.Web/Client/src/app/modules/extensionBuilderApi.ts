@@ -4,7 +4,7 @@ const root = "/_elsa/extension-builder";
 
 export type BuildStatus = "Pending" | "Running" | "Succeeded" | "Failed" | "queued" | "running" | "succeeded" | "failed" | string;
 export type RuntimeState = "Loaded" | "PendingRestart" | "FailedReconciliation" | string;
-export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | string;
+export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | "UncommittedSource" | string;
 export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manifest" | "Configuration" | "Other" | string;
 export type RepositoryFileKind = "Solution" | "Project" | "Folder" | "File" | string;
 export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
@@ -202,6 +202,7 @@ export interface BuildArtifact {
   workspaceId?: string | null;
   sourceRevisionId?: string | null;
   branch?: string | null;
+  sourceIsDirty?: boolean;
 }
 
 export interface PackagePromotionRequest {
@@ -465,6 +466,10 @@ export async function promoteBuild(context: StudioEndpointContext, _workspaceId:
   return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
 }
 
+export async function promoteBuildArtifact(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, artifactId: string, request: PackagePromotionRequest) {
+  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/artifacts/${segment(artifactId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
+}
+
 export async function getRuntimeStatus(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
   return normalizeRuntimeStatus(await context.http.getJson<RawExtensionRuntimeStatus>(`${projectRoot(projectId)}/runtime-status`));
 }
@@ -721,7 +726,8 @@ function normalizeArtifact(artifact?: RawBuildArtifact | null): BuildArtifact | 
     size: artifact.size,
     workspaceId: artifact.workspaceId,
     sourceRevisionId: artifact.sourceRevisionId,
-    branch: artifact.branch
+    branch: artifact.branch,
+    sourceIsDirty: artifact.sourceIsDirty ?? false
   } : null;
 }
 
@@ -1032,6 +1038,7 @@ interface RawBuildArtifact {
   workspaceId?: string | null;
   sourceRevisionId?: string | null;
   branch?: string | null;
+  sourceIsDirty?: boolean | null;
 }
 
 interface RawPackagePromotionResult {
