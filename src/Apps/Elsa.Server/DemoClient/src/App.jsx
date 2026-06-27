@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Circle,
   CloudUpload,
+  EyeOff,
   ExternalLink,
   FileJson,
   GitBranch,
@@ -31,9 +32,12 @@ import {
   Save,
   Search,
   Server,
+  Shield,
+  SlidersHorizontal,
   Sun,
   Terminal,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import {
   applyWorkflowGraphOperationBatchToWorkflow,
@@ -669,6 +673,81 @@ function getActivityCatalogDisplayName(activity) {
   return humanizeIdentifier(typeName) || activity?.activityTypeKey || activity?.id || "Activity";
 }
 
+function normalizeAvailabilityMode(value) {
+  if (value === "Only" || value === 1)
+    return "Only";
+
+  return "AllExcept";
+}
+
+function getAvailabilityModePayload(mode) {
+  return mode === "Only" ? 1 : 0;
+}
+
+function readAvailabilityRules(settings) {
+  return settings?.rules ?? { activityTypes: [], sets: [] };
+}
+
+function createAvailabilityDraft(settings) {
+  const rules = readAvailabilityRules(settings);
+  return {
+    mode: normalizeAvailabilityMode(settings?.mode),
+    activityTypes: rules.activityTypes ?? [],
+    sets: rules.sets ?? []
+  };
+}
+
+function getAvailabilityStateName(value) {
+  if (typeof value === "string")
+    return value;
+
+  return [
+    "Available",
+    "BlockedByHostBaseline",
+    "HiddenByManagementSettings",
+    "RemovedFromCatalog",
+    "UnresolvedReference"
+  ][value] ?? "Available";
+}
+
+function getAvailabilityStateLabel(value) {
+  const state = getAvailabilityStateName(value);
+  return {
+    Available: "Available",
+    BlockedByHostBaseline: "Host blocked",
+    HiddenByManagementSettings: "Management hidden",
+    RemovedFromCatalog: "Removed",
+    UnresolvedReference: "Unresolved"
+  }[state] ?? state;
+}
+
+function getAvailabilityStateClass(value) {
+  return getAvailabilityStateName(value).replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+function getAvailabilityActivityEntries(diagnostics) {
+  return [...(diagnostics?.items ?? [])]
+    .filter((item) => item.referenceKind === 0 || item.referenceKind === "ActivityType")
+    .filter((item) => item.activityTypeKey && item.activityDefinitionId)
+    .sort((left, right) =>
+      getActivityCatalogDisplayName(left).localeCompare(getActivityCatalogDisplayName(right)));
+}
+
+function getUnresolvedAvailabilityEntries(diagnostics) {
+  return [...(diagnostics?.items ?? [])]
+    .filter((item) => {
+      const state = getAvailabilityStateName(item.state);
+      return state === "RemovedFromCatalog" || state === "UnresolvedReference";
+    })
+    .sort((left, right) => (left.referenceName ?? "").localeCompare(right.referenceName ?? ""));
+}
+
+function toggleListValue(values, value) {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value].sort((left, right) => left.localeCompare(right));
+}
+
 function humanizeIdentifier(value) {
   return value
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
@@ -898,6 +977,10 @@ export function App() {
   const [activities, setActivities] = useState([]);
   const [activitySearch, setActivitySearch] = useState("");
   const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [availabilityDiagnostics, setAvailabilityDiagnostics] = useState({ items: [], sets: [] });
+  const [availabilitySettings, setAvailabilitySettings] = useState(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [featureCatalogItems, setFeatureCatalogItems] = useState([]);
   const [featureSearch, setFeatureSearch] = useState("");
   const [featuresLoading, setFeaturesLoading] = useState(false);
@@ -1142,6 +1225,27 @@ export function App() {
     refreshActivities().catch((error) => addConsoleLine("stderr", `Activity catalog refresh failed: ${error.message}`));
   }, [addConsoleLine, refreshActivities]);
 
+  const refreshActivityAvailability = useCallback(async () => {
+    setAvailabilityLoading(true);
+    try {
+      const [diagnostics, settings] = await Promise.all([
+        request("/default/design/activities/availability/diagnostics"),
+        request("/default/design/activities/availability/settings")
+      ]);
+      setAvailabilityDiagnostics({
+        items: diagnostics?.items ?? [],
+        sets: diagnostics?.sets ?? []
+      });
+      setAvailabilitySettings(settings ?? null);
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  }, [request]);
+
+  useEffect(() => {
+    refreshActivityAvailability().catch((error) => addConsoleLine("stderr", `Activity availability refresh failed: ${error.message}`));
+  }, [addConsoleLine, refreshActivityAvailability]);
+
   const refreshFeatures = useCallback(async () => {
     setFeaturesLoading(true);
     try {
@@ -1314,6 +1418,13 @@ export function App() {
     }
 
     throw new Error(`Activity '${searchTerm}' is not available in the catalog.`);
+  }
+
+  async function refreshActivitySurface() {
+    await Promise.all([
+      refreshActivities(),
+      refreshActivityAvailability()
+    ]);
   }
 
   async function materializeWorkflowJson() {
@@ -1527,6 +1638,7 @@ export function App() {
       }
       await refreshState();
       await refreshActivities();
+      await refreshActivityAvailability();
       await refreshFeatures();
       await refreshExecutables();
     });
@@ -1625,6 +1737,27 @@ export function App() {
         next.delete(feature.id);
         return next;
       });
+    }
+  }
+
+  async function saveActivityAvailabilitySettings(settings) {
+    setAvailabilitySaving(true);
+    setStatus("Saving activity availability settings...");
+    addConsoleLine("stdout", "Saving activity availability settings...");
+
+    try {
+      await request("/default/design/activities/availability/settings", {
+        method: "PUT",
+        body: JSON.stringify(settings)
+      });
+      await refreshActivitySurface();
+      setStatus("Ready");
+      addConsoleLine("stdout", "Activity availability settings saved.");
+    } catch (error) {
+      setStatus(error.message);
+      addConsoleLine("stderr", error.message);
+    } finally {
+      setAvailabilitySaving(false);
     }
   }
 
@@ -1869,8 +2002,8 @@ export function App() {
                 ))}
               </select>
             ) : mainView === "activities" ? (
-              <button type="button" className="small-button" onClick={refreshActivities} disabled={activitiesLoading}>
-                {activitiesLoading ? "Refreshing" : "Refresh"}
+              <button type="button" className="small-button" onClick={refreshActivitySurface} disabled={activitiesLoading || availabilityLoading}>
+                {activitiesLoading || availabilityLoading ? "Refreshing" : "Refresh"}
               </button>
             ) : mainView === "features" ? (
               <button type="button" className="small-button" onClick={refreshFeatures} disabled={featuresLoading}>
@@ -1982,7 +2115,16 @@ export function App() {
               />
             </>
           ) : mainView === "activities" ? (
-            <ActivityCatalog activities={filteredActivities} totalCount={activities.length} loading={activitiesLoading} />
+            <ActivityCatalog
+              activities={filteredActivities}
+              totalCount={activities.length}
+              loading={activitiesLoading}
+              availabilityDiagnostics={availabilityDiagnostics}
+              availabilitySettings={availabilitySettings}
+              availabilityLoading={availabilityLoading}
+              availabilitySaving={availabilitySaving}
+              onSaveAvailability={saveActivityAvailabilitySettings}
+            />
           ) : mainView === "features" ? (
             <FeatureCatalog
               features={filteredFeatureCatalogItems}
@@ -2280,32 +2422,172 @@ const designerNodeTypes = {
   activity: ActivityDesignerNode
 };
 
-function ActivityCatalog({ activities, totalCount, loading }) {
+function ActivityCatalog({
+  activities,
+  totalCount,
+  loading,
+  availabilityDiagnostics,
+  availabilitySettings,
+  availabilityLoading,
+  availabilitySaving,
+  onSaveAvailability
+}) {
   return (
     <div className="activity-catalog">
       <div className="activity-summary">
         <strong>{activities.length}</strong>
         <span>{activities.length === totalCount ? "shown" : `shown of ${totalCount}`}</span>
       </div>
-      <div className="activity-list">
-        {loading && activities.length === 0 && <p className="muted">Loading activity catalog...</p>}
-        {!loading && activities.length === 0 && <p className="muted">No activities match the current filter.</p>}
-        {activities.map((activity) => (
-          <div className="activity-row" key={activity.id}>
-            <div className="activity-row-icon"><Activity size={15} /></div>
-            <div className="activity-row-main">
-              <strong>{getActivityCatalogDisplayName(activity)}</strong>
-              <span>{activity.activityTypeKey}</span>
-              {activity.description && <p>{activity.description}</p>}
+      <div className="activity-catalog-body">
+        <div className="activity-list">
+          {loading && activities.length === 0 && <p className="muted">Loading activity catalog...</p>}
+          {!loading && activities.length === 0 && <p className="muted">No activities match the current filter.</p>}
+          {activities.map((activity) => (
+            <div className="activity-row" key={activity.id}>
+              <div className="activity-row-icon"><Activity size={15} /></div>
+              <div className="activity-row-main">
+                <strong>{getActivityCatalogDisplayName(activity)}</strong>
+                <span>{activity.activityTypeKey}</span>
+                {activity.description && <p>{activity.description}</p>}
+              </div>
+              <div className="activity-row-meta">
+                <span>{activity.category || "Uncategorized"}</span>
+                <code>{activity.id}</code>
+              </div>
             </div>
-            <div className="activity-row-meta">
-              <span>{activity.category || "Uncategorized"}</span>
-              <code>{activity.id}</code>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <ActivityAvailabilityPanel
+          diagnostics={availabilityDiagnostics}
+          settings={availabilitySettings}
+          loading={availabilityLoading}
+          saving={availabilitySaving}
+          onSave={onSaveAvailability}
+        />
       </div>
     </div>
+  );
+}
+
+function ActivityAvailabilityPanel({ diagnostics, settings, loading, saving, onSave }) {
+  const activityEntries = useMemo(() => getAvailabilityActivityEntries(diagnostics), [diagnostics]);
+  const unresolvedEntries = useMemo(() => getUnresolvedAvailabilityEntries(diagnostics), [diagnostics]);
+  const hostSets = diagnostics?.sets ?? [];
+  const [draft, setDraft] = useState(() => createAvailabilityDraft(settings));
+
+  useEffect(() => {
+    setDraft(createAvailabilityDraft(settings));
+  }, [settings]);
+
+  const selectedActivityTypes = new Set(draft.activityTypes);
+  const selectedSets = new Set(draft.sets);
+  const hostBlockedCount = activityEntries.filter((entry) => getAvailabilityStateName(entry.state) === "BlockedByHostBaseline").length;
+  const hiddenCount = activityEntries.filter((entry) => getAvailabilityStateName(entry.state) === "HiddenByManagementSettings").length;
+
+  const updateMode = (mode) => setDraft((current) => ({ ...current, mode }));
+  const toggleActivityType = (activityTypeKey) => setDraft((current) => ({
+    ...current,
+    activityTypes: toggleListValue(current.activityTypes, activityTypeKey)
+  }));
+  const toggleSet = (setName) => setDraft((current) => ({
+    ...current,
+    sets: toggleListValue(current.sets, setName)
+  }));
+  const save = () => onSave({
+    scope: settings?.scope ?? "host-default",
+    mode: getAvailabilityModePayload(draft.mode),
+    rules: {
+      activityTypes: draft.activityTypes,
+      sets: draft.sets
+    }
+  });
+
+  return (
+    <aside className="availability-panel">
+      <div className="availability-heading">
+        <div>
+          <span>Availability</span>
+          <strong>{activityEntries.length} catalog item{activityEntries.length === 1 ? "" : "s"}</strong>
+        </div>
+        <button type="button" className="small-button" onClick={save} disabled={loading || saving}>
+          {saving ? "Saving" : "Save"}
+        </button>
+      </div>
+      <div className="availability-mode" role="group" aria-label="Activity availability mode">
+        <button type="button" className={draft.mode === "AllExcept" ? "active" : ""} onClick={() => updateMode("AllExcept")}>
+          <EyeOff size={14} />
+          All except
+        </button>
+        <button type="button" className={draft.mode === "Only" ? "active" : ""} onClick={() => updateMode("Only")}>
+          <Shield size={14} />
+          Only
+        </button>
+      </div>
+      <div className="availability-counts">
+        <span><Shield size={13} /> {hostBlockedCount} host</span>
+        <span><EyeOff size={13} /> {hiddenCount} hidden</span>
+        <span><TriangleAlert size={13} /> {unresolvedEntries.length} unresolved</span>
+      </div>
+      {hostSets.length > 0 && (
+        <div className="availability-section">
+          <h3><SlidersHorizontal size={14} /> Sets</h3>
+          <div className="availability-set-list">
+            {hostSets.map((set) => (
+              <label className="availability-set-option" key={set.name}>
+                <input
+                  type="checkbox"
+                  checked={selectedSets.has(set.name)}
+                  disabled={loading || saving}
+                  onChange={() => toggleSet(set.name)}
+                />
+                <span>{set.name}</span>
+                <code>{(set.activityTypeKeys ?? []).length}</code>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="availability-section">
+        <h3><Activity size={14} /> Activities</h3>
+        <div className="availability-activity-list">
+          {loading && activityEntries.length === 0 && <p className="muted">Loading availability...</p>}
+          {!loading && activityEntries.length === 0 && <p className="muted">No availability diagnostics reported.</p>}
+          {activityEntries.map((entry) => {
+            const state = getAvailabilityStateName(entry.state);
+            const hostBlocked = state === "BlockedByHostBaseline";
+            const selected = selectedActivityTypes.has(entry.activityTypeKey);
+            return (
+              <label className={`availability-activity-option ${hostBlocked ? "disabled" : ""}`} key={entry.activityTypeKey}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  disabled={loading || saving || hostBlocked}
+                  onChange={() => toggleActivityType(entry.activityTypeKey)}
+                />
+                <span>
+                  <strong>{getActivityCatalogDisplayName(entry)}</strong>
+                  <code>{entry.activityTypeKey}</code>
+                </span>
+                <em className={`availability-state ${getAvailabilityStateClass(entry.state)}`}>{getAvailabilityStateLabel(entry.state)}</em>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      {unresolvedEntries.length > 0 && (
+        <div className="availability-section">
+          <h3><TriangleAlert size={14} /> Unresolved</h3>
+          <div className="availability-unresolved-list">
+            {unresolvedEntries.map((entry) => (
+              <span key={`${entry.layer}-${entry.referenceKind}-${entry.referenceName}`}>
+                <strong>{entry.referenceName}</strong>
+                <em>{getAvailabilityStateLabel(entry.state)}</em>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
   );
 }
 

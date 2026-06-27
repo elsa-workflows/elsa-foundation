@@ -30,7 +30,12 @@ public sealed class DefaultActivityAvailabilityDiagnosticsProjector : IActivityA
         AddUnresolvedSetReferences(entries, hostExclude.UnresolvedSets, ActivityAvailabilityPolicyLayer.HostBaseline);
         AddUnresolvedSetReferences(entries, management.UnresolvedSets, ActivityAvailabilityPolicyLayer.ManagementSettings);
 
-        return new ActivityAvailabilityDiagnostics(entries);
+        var sets = (options.Sets ?? new Dictionary<string, string[]>(StringComparer.Ordinal))
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Select(x => new ActivityAvailabilitySetDiagnostic(x.Key, x.Value ?? []))
+            .ToArray();
+
+        return new ActivityAvailabilityDiagnostics(entries, sets);
     }
 
     private static ActivityAvailabilityDiagnosticEntry ProjectActivity(
