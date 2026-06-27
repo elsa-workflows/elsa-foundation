@@ -274,6 +274,78 @@ public sealed class WorkflowAgentTests
         Assert.Equal("wf-1", result.Value?.ResourceId);
     }
 
+    [Fact]
+    public void Workflow_batch_risk_classifier_allows_low_risk_direct_apply()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-1");
+
+        var result = classifier.Classify(new(CreateGraphOperationBatch(), context));
+
+        Assert.True(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.DirectApply, result.Decision);
+        Assert.Equal(AgentRisk.ReadOnly, result.Risk);
+        Assert.Equal(AgentResultKind.WorkflowGraphOperationBatch, result.ResultKind);
+        Assert.Equal([WorkflowGraphOperationBatchRiskReason.LowRisk], result.Reasons);
+    }
+
+    [Fact]
+    public void Workflow_batch_risk_classifier_fails_closed_for_stale_destructive_or_invalid_batches()
+    {
+        using var provider = BuildWorkflowProvider("rev-2", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-2");
+        var batch = CreateGraphOperationBatch(
+            [
+                new(
+                    "",
+                    WorkflowGraphOperationKind.RemoveActivity,
+                    new Dictionary<string, object?> { ["activityId"] = "root" },
+                    [],
+                    "Remove an existing activity.")
+            ]);
+
+        var result = classifier.Classify(new(batch, context));
+
+        Assert.False(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.Proposal, result.Decision);
+        Assert.Equal(AgentRisk.ReviewRequired, result.Risk);
+        Assert.Equal(AgentResultKind.Proposal, result.ResultKind);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.StaleRevision, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.DestructiveOperation, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.InvalidBatch, result.Reasons);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.Uncertain, result.Reasons);
+    }
+
+    [Fact]
+    public void Workflow_batch_risk_classifier_asks_for_clarification_when_activity_is_unavailable()
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var classifier = provider.GetRequiredService<IWorkflowGraphOperationBatchRiskClassifier>();
+        var context = CreateWorkflowAgentContext(canDirectApply: true, revision: "rev-1");
+        var batch = CreateGraphOperationBatch(
+            [
+                new(
+                    "op-add-missing",
+                    WorkflowGraphOperationKind.AddActivity,
+                    new Dictionary<string, object?>
+                    {
+                        ["activityId"] = "temp:activity:missing",
+                        ["activityType"] = "Elsa.Missing.Activity"
+                    },
+                    ["temp:activity:missing"],
+                    "Add an activity that is not available.")
+            ]);
+
+        var result = classifier.Classify(new(batch, context));
+
+        Assert.False(result.CanDirectApply);
+        Assert.Equal(WorkflowGraphOperationBatchRiskDecision.Clarification, result.Decision);
+        Assert.Equal(AgentResultKind.Clarification, result.ResultKind);
+        Assert.Contains(WorkflowGraphOperationBatchRiskReason.UnavailableActivity, result.Reasons);
+    }
+
     private static ServiceProvider BuildWorkflowProvider(string revision, bool allowChanges)
     {
         var services = new ServiceCollection();
@@ -313,6 +385,23 @@ public sealed class WorkflowAgentTests
                 ["revision"] = "rev-1"
             });
 
+    private static WorkflowAgentContext CreateWorkflowAgentContext(bool canDirectApply, string revision)
+        => new(
+            "wf-1",
+            "draft",
+            revision,
+            "Draft workflow wf-1",
+            [new("root", "Elsa.Workflows.WriteLine", "Write line")],
+            [],
+            [],
+            new(null, null, "studio-hint"),
+            new(12, Enum.GetValues<WorkflowGraphOperationKind>()),
+            new(canDirectApply, true, ["workflow.propose-change"]),
+            [
+                new("Elsa.Email.SendEmail", "Send email", true, ["email"]),
+                new("Elsa.Workflows.WriteLine", "Write line", true, ["write"])
+            ]);
+
     private static async Task<List<AgentStreamEvent>> CollectAsync(IAsyncEnumerable<AgentStreamEvent> events)
     {
         var result = new List<AgentStreamEvent>();
@@ -322,11 +411,12 @@ public sealed class WorkflowAgentTests
         return result;
     }
 
-    private static WorkflowGraphOperationBatch CreateGraphOperationBatch()
+    private static WorkflowGraphOperationBatch CreateGraphOperationBatch(IReadOnlyCollection<WorkflowGraphOperation>? operations = null)
         => new(
             WorkflowGraphOperationBatchSchema.CurrentVersion,
             "wf-1",
             "rev-1",
+            operations ??
             [
                 new(
                     "op-add-email",
