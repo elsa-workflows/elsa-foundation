@@ -70,6 +70,68 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CloneRepositoryRegistersWorkspaceAndExposesGitState()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("source-repository");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, "Cloned Repository"));
+        var repositories = await service.ListRepositoriesAsync(_caller);
+        var workspaces = await service.ListWorkspacesAsync(_caller);
+
+        var repository = Assert.Single(repositories);
+        Assert.Equal(workspace.Id, repository.Id);
+        Assert.Equal("Cloned Repository", repository.Name);
+        Assert.Equal("main", repository.ActiveBranch);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+        Assert.False(repository.IsDirty);
+        Assert.Contains(workspaces, x => x.Id == workspace.Id);
+        Assert.True(Directory.Exists(Path.Combine(_directory, "state", "workspaces", workspace.Id, ".git")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryRejectsEmbeddedCredentials()
+    {
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.CloneRepositoryAsync(_caller, new("https://token@example.com/elsa/repository.git", "Private Repository")));
+
+        Assert.Empty(await service.ListWorkspacesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryCleansFailedCloneDestination()
+    {
+        var service = CreateService();
+        var missingRepository = Path.Combine(_directory, "missing-repository");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CloneRepositoryAsync(_caller, new(missingRepository, "Missing Repository")));
+
+        Assert.Contains("Git command failed", exception.Message);
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+        Assert.False(Directory.Exists(Path.Combine(_directory, "state", "workspaces")));
+    }
+
+    [Fact]
+    public async Task CloneRepositoryInfersDisplayNameForWorkbenchVisibility()
+    {
+        var sourceRepository = await CreateSourceRepositoryAsync("visible-repository.git");
+        var service = CreateService();
+
+        var workspace = await service.CloneRepositoryAsync(_caller, new(sourceRepository, null));
+        var visibleWorkspace = await service.GetWorkspaceAsync(_caller, workspace.Id);
+        var repository = Assert.Single(await service.ListRepositoriesAsync(_caller));
+
+        Assert.Equal("visible-repository", workspace.DisplayName);
+        Assert.Equal(workspace.Id, visibleWorkspace!.Id);
+        Assert.Equal(workspace.DisplayName, repository.Name);
+        Assert.Equal(sourceRepository, repository.RemoteState);
+    }
+
+    [Fact]
     public async Task CreateWorkspaceInitializesManagedRepositoryWithStarterCommit()
     {
         var service = CreateService();
@@ -690,6 +752,17 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
+    private async Task<string> CreateSourceRepositoryAsync(string name)
+    {
+        var repositoryPath = Path.Combine(_directory, name);
+        Directory.CreateDirectory(repositoryPath);
+        await File.WriteAllTextAsync(Path.Combine(repositoryPath, "README.md"), "# Test repository");
+        await GitAsync(repositoryPath, "init", "-b", "main");
+        await GitAsync(repositoryPath, "add", ".");
+        await GitAsync(repositoryPath, "-c", "user.name=Elsa Tests", "-c", "user.email=tests@elsa.local", "commit", "-m", "Initial commit");
+        return repositoryPath;
+    }
+
     private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)
     {
         var startInfo = new ProcessStartInfo("git")
@@ -702,12 +775,12 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
-        using var process = Process.Start(startInfo)!;
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Git could not be started.");
         var output = await process.StandardOutput.ReadToEndAsync();
         var error = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
         if (process.ExitCode != 0)
-            throw new InvalidOperationException(error);
+            throw new InvalidOperationException($"Git failed: {error}{output}");
 
         return output.Trim();
     }

@@ -25,6 +25,7 @@ internal static class ElsaExtensionBuilderApi
         trusted.AddEndpointFilter(RequireTrustedCallerAsync);
         trusted.MapGet("/templates", ListTemplatesAsync);
         trusted.MapGet("/repositories", ListRepositoriesAsync);
+        trusted.MapPost("/repositories/clone", CloneRepositoryAsync);
         trusted.MapPost("/workspaces", CreateWorkspaceAsync);
         trusted.MapGet("/workspaces", ListWorkspacesAsync);
         trusted.MapGet("/workspaces/{workspaceId}", GetWorkspaceAsync);
@@ -68,6 +69,26 @@ internal static class ElsaExtensionBuilderApi
             return Results.Ok(await service.CreateWorkspaceAsync(GetCaller(httpContext), request, cancellationToken));
         }
         catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+    }
+
+    private static async Task<IResult> CloneRepositoryAsync(
+        HttpContext httpContext,
+        CloneRepositoryRequest request,
+        [FromServices] IExtensionBuilderService service,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Results.Ok(await service.CloneRepositoryAsync(GetCaller(httpContext), request, cancellationToken));
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
+        }
+        catch (InvalidOperationException ex)
         {
             return Results.BadRequest(new ExtensionBuilderErrorResponse(ex.Message));
         }
