@@ -47,6 +47,7 @@ import {
   type PackagePromotionResult,
   type RepositoryFileSummary,
   type RepositorySolutionSummary,
+  type RepositoryBuildCommand,
   type RuntimeVersion,
   type SourceControlDiff,
   type SourceControlStatus,
@@ -110,6 +111,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [sourceControlStatus, setSourceControlStatus] = useState<SourceControlStatus | null>(null);
   const [sourceControlDiff, setSourceControlDiff] = useState<SourceControlDiff | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
+  const [buildCommand, setBuildCommand] = useState<RepositoryBuildCommand>("Build");
+  const [buildTargetPath, setBuildTargetPath] = useState("");
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
   const [serverLocalPath, setServerLocalPath] = useState("");
@@ -765,9 +768,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
 
     const requestedRevision = selectedProject.currentRevision ?? null;
+    const command = buildCommand || "Build";
+    const targetPath = buildTargetPath.trim() || selectedSolutionPath || null;
     const build = await runOperation(
-      () => submitBuild(context, selectedWorkspace.id, selectedProject.id, { projectId: selectedProject.id, revision: requestedRevision }),
-      `Build submitted for ${selectedProject.name}.`
+      () => submitBuild(context, selectedWorkspace.id, selectedProject.id, { projectId: selectedProject.id, revision: requestedRevision, command, targetPath }),
+      `${command} submitted for ${selectedProject.name}.`
     );
     if (build) {
       const revisionedBuild = { ...build, revision: build.revision ?? requestedRevision };
@@ -1021,11 +1026,17 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           sourceControlStatus={sourceControlStatus}
           sourceControlDiff={sourceControlDiff}
           commitMessage={commitMessage}
+          buildCommand={buildCommand}
+          buildTargetPath={buildTargetPath}
           artifact={latestArtifact}
           promotionResult={promotionResult}
           runtimeStatus={runtimeStatus}
           busy={operationBusy}
+          canBuild={canBuild}
           canPromote={canPromote}
+          onBuildCommandChange={setBuildCommand}
+          onBuildTargetPathChange={setBuildTargetPath}
+          onSubmitBuild={handleSubmitBuild}
           onSelectBuild={build => {
             setActiveBuild(build);
             setActiveInspectorTab("build");
@@ -1480,11 +1491,17 @@ function BuildRuntimeInspector({
   sourceControlStatus,
   sourceControlDiff,
   commitMessage,
+  buildCommand,
+  buildTargetPath,
   artifact,
   promotionResult,
   runtimeStatus,
   busy,
+  canBuild,
   canPromote,
+  onBuildCommandChange,
+  onBuildTargetPathChange,
+  onSubmitBuild,
   onSelectBuild,
   onSelectSourceDiff,
   onStageFile,
@@ -1510,11 +1527,17 @@ function BuildRuntimeInspector({
   sourceControlStatus: SourceControlStatus | null;
   sourceControlDiff: SourceControlDiff | null;
   commitMessage: string;
+  buildCommand: RepositoryBuildCommand;
+  buildTargetPath: string;
   artifact: BuildArtifact | null;
   promotionResult: PackagePromotionResult | null;
   runtimeStatus: ExtensionRuntimeStatus | null;
   busy: boolean;
+  canBuild: boolean;
   canPromote: boolean;
+  onBuildCommandChange(value: RepositoryBuildCommand): void;
+  onBuildTargetPathChange(value: string): void;
+  onSubmitBuild(): void;
   onSelectBuild(build: BuildResult): void;
   onSelectSourceDiff(path: string, staged: boolean): void;
   onStageFile(path: string): void;
@@ -1546,6 +1569,14 @@ function BuildRuntimeInspector({
           activeBuild={activeBuild}
           buildHistory={buildHistory}
           buildLog={buildLog}
+          buildCommand={buildCommand}
+          buildTargetPath={buildTargetPath}
+          busy={busy}
+          canBuild={canBuild}
+          capabilities={capabilities}
+          onBuildCommandChange={onBuildCommandChange}
+          onBuildTargetPathChange={onBuildTargetPathChange}
+          onSubmitBuild={onSubmitBuild}
           onSelectBuild={onSelectBuild}
           onDiagnosticSelect={onDiagnosticSelect}
         />
@@ -1599,17 +1630,50 @@ function BuildPanel({
   activeBuild,
   buildHistory,
   buildLog,
+  buildCommand,
+  buildTargetPath,
+  busy,
+  canBuild,
+  capabilities,
+  onBuildCommandChange,
+  onBuildTargetPathChange,
+  onSubmitBuild,
   onSelectBuild,
   onDiagnosticSelect
 }: {
   activeBuild: BuildResult | null;
   buildHistory: BuildResult[];
   buildLog: string;
+  buildCommand: RepositoryBuildCommand;
+  buildTargetPath: string;
+  busy: boolean;
+  canBuild: boolean;
+  capabilities: ExtensionBuilderCapabilities;
+  onBuildCommandChange(value: RepositoryBuildCommand): void;
+  onBuildTargetPathChange(value: string): void;
+  onSubmitBuild(): void;
   onSelectBuild(build: BuildResult): void;
   onDiagnosticSelect(diagnostic: BuildDiagnostic): void;
 }) {
   return (
     <div className="modules-inspector-section">
+      <h4>Run</h4>
+      <label>
+        <span>Command</span>
+        <select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
+          <option value="Restore">Restore</option>
+          <option value="Build">Build</option>
+          <option value="Test">Test</option>
+        </select>
+      </label>
+      <label>
+        <span>Target path</span>
+        <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
+      </label>
+      <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
+        <Play size={15} />
+        Run command
+      </button>
       <h4>Build status</h4>
       {activeBuild ? (
         <dl className="modules-metadata">
