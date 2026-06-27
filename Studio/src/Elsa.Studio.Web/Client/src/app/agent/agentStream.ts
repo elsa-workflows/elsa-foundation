@@ -1,5 +1,5 @@
 import { withDefaultHeaders, type StudioEndpointContext } from "../../sdk";
-import type { AgentActionProposalPayload, AgentStreamEvent } from "./agentTypes";
+import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent, WorkflowGraphOperationBatch } from "./agentTypes";
 
 export interface AgentStreamSubscription {
   close(): void;
@@ -172,9 +172,21 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
 
   const event = value as Record<string, unknown>;
   const messageId = readString(event, "messageId") ?? defaultMessageId ?? readString(event, "id") ?? `agent-${Date.now()}`;
-  const type = normalizeEventName(event.type ?? event.kind);
-  const data = event.data && typeof event.data === "object" ? event.data as Record<string, unknown> : undefined;
+  const type = normalizeEventName(readField(event, "type") ?? readField(event, "kind"), agentStreamEventNames);
+  const resultKind = normalizeEventName(readField(event, "resultKind"), agentResultKindNames);
+  const data = readObject<Record<string, unknown>>(event, "data");
+  const payload = readObject<Record<string, unknown>>(event, "payload") ?? readObject<Record<string, unknown>>(data, "payload");
   const content = readString(event, "content") ?? readString(data, "content") ?? "";
+
+  if (resultKind === "workflow-graph-operation-batch" || type === "workflow-graph-operation-batch-created" || type === "workflow-graph-operation-batch") {
+    const batch = normalizeWorkflowBatch(payload ?? readObject<Record<string, unknown>>(event, "workflowGraphOperationBatch") ?? readObject<Record<string, unknown>>(data, "workflowGraphOperationBatch"));
+    return batch ? { type: "workflow-batch-created", messageId, batch } : null;
+  }
+
+  if (resultKind === "clarification" || type === "clarification-requested" || type === "clarification") {
+    const clarification = normalizeClarification(payload ?? data ?? event, messageId);
+    return { type: "clarification-requested", messageId, clarification };
+  }
 
   switch (type) {
     case "message-started":
@@ -183,6 +195,9 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
       return { type: "message-started", messageId, role: "assistant" };
     case "message-delta":
     case "assistant.delta":
+      if (resultKind === "error") {
+        return { type: "error", message: content || "Weaver could not complete the turn." };
+      }
       return { type: "message-delta", messageId, content };
     case "proposal-created":
     case "proposal.created":
@@ -198,8 +213,8 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
     case "conversation.completed":
       return { type: "message-completed", messageId };
     case "error": {
-      const error = event.error && typeof event.error === "object" ? event.error as Record<string, unknown> : undefined;
-      return { type: "error", message: String(error?.message ?? content ?? "Agent stream failed.") };
+      const error = readObject<Record<string, unknown>>(event, "error") ?? readObject<Record<string, unknown>>(data, "error");
+      return { type: "error", message: readString(error, "message") ?? (content || "Agent stream failed.") };
     }
     case "conversation.error":
     case "conversation.failed":
@@ -214,20 +229,106 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   }
 }
 
-function normalizeEventName(value: unknown) {
+const agentStreamEventNames = [
+  "started",
+  "message-delta",
+  "tool-approval-requested",
+  "proposal-created",
+  "completed",
+  "error",
+  "clarification-requested",
+  "workflow-graph-operation-batch-created"
+];
+
+const agentResultKindNames = [
+  "message",
+  "clarification",
+  "workflow-graph-operation-batch",
+  "proposal",
+  "error"
+];
+
+const workflowOperationKindNames = [
+  "add-activity",
+  "update-activity",
+  "remove-activity",
+  "connect-activities",
+  "disconnect-activities",
+  "set-root",
+  "set-designer-position",
+  "set-activity-property"
+];
+
+function normalizeEventName(value: unknown, numericNames?: string[]) {
   if (typeof value === "number") {
-    return ["started", "message-delta", "tool-approval-requested", "proposal-created", "completed", "error"][value] ?? "";
+    return numericNames?.[value] ?? "";
   }
 
   return String(value ?? "").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 function readString(source: Record<string, unknown> | undefined, key: string) {
-  const value = source?.[key];
+  const value = readField(source, key);
   return typeof value === "string" ? value : undefined;
 }
 
 function readObject<T extends object>(source: Record<string, unknown> | undefined, key: string) {
-  const value = source?.[key];
+  const value = readField(source, key);
   return value && typeof value === "object" ? value as T : undefined;
+}
+
+function readArray(source: Record<string, unknown> | undefined, key: string) {
+  const value = readField(source, key);
+  return Array.isArray(value) ? value : undefined;
+}
+
+function readField(source: Record<string, unknown> | undefined, key: string) {
+  if (!source) return undefined;
+  if (key in source) return source[key];
+  const lowered = key.toLowerCase();
+  const match = Object.keys(source).find(candidate => candidate.toLowerCase() === lowered);
+  return match ? source[match] : undefined;
+}
+
+function normalizeWorkflowBatch(value: Record<string, unknown> | undefined): WorkflowGraphOperationBatch | null {
+  if (!value) return null;
+
+  const operations = (readArray(value, "operations") ?? [])
+    .filter((operation): operation is Record<string, unknown> => !!operation && typeof operation === "object")
+    .map(normalizeWorkflowOperation);
+
+  return {
+    schemaVersion: readString(value, "schemaVersion") ?? "unknown",
+    workflowDefinitionId: readString(value, "workflowDefinitionId") ?? readString(value, "workflowId") ?? "active-draft",
+    baseRevision: readString(value, "baseRevision") ?? null,
+    operations,
+    metadata: readObject<Record<string, unknown>>(value, "metadata") ?? {}
+  };
+}
+
+function normalizeWorkflowOperation(value: Record<string, unknown>) {
+  return {
+    id: readString(value, "id") ?? `operation-${Date.now()}`,
+    kind: normalizeEventName(readField(value, "kind"), workflowOperationKindNames),
+    parameters: readObject<Record<string, unknown>>(value, "parameters") ?? {},
+    temporaryReferences: (readArray(value, "temporaryReferences") ?? []).filter((item): item is string => typeof item === "string"),
+    summary: readString(value, "summary") ?? null
+  };
+}
+
+function normalizeClarification(value: Record<string, unknown>, messageId: string): AgentClarificationRequest {
+  const choices = (readArray(value, "choices") ?? readArray(value, "options") ?? [])
+    .map(choice => typeof choice === "string" ? choice : isRecord(choice) ? readString(choice, "label") ?? readString(choice, "value") : undefined)
+    .filter((choice): choice is string => !!choice);
+
+  return {
+    id: readString(value, "id") ?? `clarification-${messageId}`,
+    prompt: readString(value, "prompt") ?? readString(value, "question") ?? readString(value, "content") ?? "Weaver needs clarification before continuing.",
+    choices,
+    metadata: readObject<Record<string, unknown>>(value, "metadata")
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

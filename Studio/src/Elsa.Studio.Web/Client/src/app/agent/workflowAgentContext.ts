@@ -2,7 +2,13 @@ import type { StudioAgentContextProviderContribution, StudioAgentSurface } from 
 
 export interface WorkflowAgentContextSnapshot {
   workflowId: string;
+  workflowDefinitionId?: string;
+  workflowVersionId?: string | null;
+  draftId?: string | null;
+  revision?: string | null;
   version?: string;
+  selectedNodeId?: string | null;
+  selectedActivityType?: string | null;
   selectedActivityId?: string;
   summary?: string;
   activities?: Array<{ id: string; type: string; displayName?: string }>;

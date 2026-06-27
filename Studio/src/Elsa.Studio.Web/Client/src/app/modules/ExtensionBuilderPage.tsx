@@ -358,19 +358,28 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       setActiveBuild(project.builds?.[0] ?? null);
       const firstFile = repositoryTree.entries.find(file => file.type === "file");
       if (firstFile) {
-        const file = await readRepositoryFile(context, workspaceId, firstFile.path);
+        const file = await readRepositoryFile(context, workspaceId, firstFile.path).catch(() => firstFile.content != null ? firstFile : null);
         if (!canApplyProjectState(mounted.current, requestId, projectDetailsRequestId.current, selectedIds.current, workspaceId, projectId)) return;
-        const content = file.content ?? "";
-        setActiveFilePath(file.path);
-        setEditorText(content);
-        setSavedEditorText(content);
-        setEditorTabs([{ path: file.path, content, savedContent: content }]);
-        setLineHint(null);
+        if (file) {
+          const content = file.content ?? "";
+          setActiveFilePath(file.path);
+          setEditorText(content);
+          setSavedEditorText(content);
+          setEditorTabs([{ path: file.path, content, savedContent: content }]);
+          setLineHint(null);
+        } else {
+          setActiveFilePath("");
+          setEditorText("");
+          setSavedEditorText("");
+          setEditorTabs([]);
+          setLineHint(null);
+        }
       } else {
         setActiveFilePath("");
         setEditorText("");
         setSavedEditorText("");
         setEditorTabs([]);
+        setLineHint(null);
       }
     } catch (e) {
       setError(getErrorMessage(e));

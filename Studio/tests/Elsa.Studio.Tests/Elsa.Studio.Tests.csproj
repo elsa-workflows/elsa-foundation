@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Weaver.Chat\Elsa.Studio.Weaver.Chat.csproj" />

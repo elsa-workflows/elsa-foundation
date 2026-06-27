@@ -27,8 +27,8 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, Zap } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Package, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, X, Zap } from "lucide-react";
+import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -50,7 +50,7 @@ import {
   startWorkflowDraftTestRun,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -76,6 +76,12 @@ import {
   type WorkflowNodeData
 } from "./workflowAdapter";
 import { ActivityPropertiesPanel } from "./ActivityPropertiesPanel";
+import {
+  applyWorkflowGraphOperationBatch,
+  workflowGraphOperationApplyEvent,
+  workflowGraphOperationUndoEvent,
+  type WorkflowGraphOperationBatch
+} from "./workflowGraphOperationBatch";
 import "./styles.css";
 
 const nodeTypes = { workflowActivity: WorkflowActivityNode };
@@ -118,6 +124,13 @@ interface WorkflowTestRunState {
   view: WorkflowTestRunView;
 }
 
+interface ExecutableRunState {
+  artifactId: string;
+  workflowExecutionId: string | null;
+}
+
+export type WorkflowConnectSource = { nodeId: string; handleId: string | null };
+
 type ConnectMenuState =
   | { kind: "fromEmpty"; clientX: number; clientY: number }
   | { kind: "fromPort"; sourceNodeId: string; sourceHandleId: string | null; clientX: number; clientY: number }
@@ -131,11 +144,28 @@ interface WorkflowEdgeActions {
 
 const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
 
+declare global {
+  interface Window {
+    __ELSA_STUDIO_WORKFLOW_CONTEXT__?: {
+      workflowId: string;
+      workflowDefinitionId?: string;
+      workflowVersionId?: string | null;
+      draftId?: string | null;
+      revision?: string | null;
+      selectedNodeId?: string | null;
+      selectedActivityType?: string | null;
+      summary?: string;
+      activities?: Array<{ id: string; type: string; displayName?: string }>;
+      diagnostics?: Array<{ severity: string; message: string }>;
+    };
+  }
+}
+
 export function register(api: ElsaStudioModuleApi) {
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
-    description: "Design, publish and run workflow definitions and inspect instances.",
+    description: "Design, publish and run workflow definitions and inspect runs.",
     navGroup: "Workspace",
     ownedPaths: ["/workflows"],
     required: true,
@@ -148,7 +178,7 @@ export function register(api: ElsaStudioModuleApi) {
       items: [
         { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
         { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
-        { title: "Instances", path: "/workflows/instances", iconColor: "#0ea5e9" }
+        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" }
       ]
     },
     routes: [
@@ -156,7 +186,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} workflowDesignerPanels={api.workflowDesigner.panels.list()} />
+        component: () => <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} />
       },
       {
         id: "workflows-executables",
@@ -167,13 +197,13 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-instances",
         path: "/workflows/instances",
-        label: "Workflow instances",
+        label: "Workflow runs",
         component: () => <WorkflowInstancesPage context={api.backend} ai={api.ai} />
       },
       {
         id: "workflows-instance-detail",
         path: "/workflows/instances/:workflowExecutionId",
-        label: "Workflow instance",
+        label: "Workflow run",
         component: () => <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} />
       }
     ]
@@ -184,11 +214,13 @@ function WorkflowManagementPage({
   context,
   ai,
   propertyEditors,
+  expressionEditors,
   workflowDesignerPanels
 }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
@@ -206,7 +238,7 @@ function WorkflowManagementPage({
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
@@ -223,16 +255,30 @@ function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpointConte
     return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
 
+  const updateDefinitionFilter = useCallback((filter: string | null) => {
+    const normalizedFilter = filter?.trim() ?? "";
+    const url = new URL(window.location.href);
+
+    if (normalizedFilter) {
+      url.searchParams.set("definition", normalizedFilter);
+    } else {
+      url.searchParams.delete("definition");
+    }
+
+    setDefinitionFilter(normalizedFilter || null);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+
   return (
     <WorkflowsPageFrame title="Executables">
-      <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} />
+      <WorkflowExecutables context={context} ai={ai} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
     </WorkflowsPageFrame>
   );
 }
 
 function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   return (
-    <WorkflowsPageFrame title="Instances">
+    <WorkflowsPageFrame title="Runs">
       <WorkflowInstances context={context} ai={ai} />
     </WorkflowsPageFrame>
   );
@@ -242,7 +288,7 @@ function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointC
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
-    <WorkflowsPageFrame title="Instance">
+    <WorkflowsPageFrame title="Run">
       <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
     </WorkflowsPageFrame>
   );
@@ -686,16 +732,26 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
   );
 }
 
-function WorkflowExecutables({ context, ai, definitionFilter }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null }) {
+function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [executables, setExecutables] = useState<WorkflowExecutableSummary[]>([]);
+  const normalizedDefinitionFilter = definitionFilter?.trim().toLowerCase() ?? "";
   const visibleExecutables = useMemo(
-    () => definitionFilter
-      ? executables.filter(executable => executable.definitionId === definitionFilter || executable.sourceId === definitionFilter)
+    () => normalizedDefinitionFilter
+      ? executables.filter(executable => executableMatchesDefinitionFilter(executable, normalizedDefinitionFilter))
       : executables,
-    [definitionFilter, executables]
+    [normalizedDefinitionFilter, executables]
+  );
+  const definitionOptions = useMemo(
+    () => Array.from(new Set(executables.flatMap(executable => [
+      executable.definitionId,
+      executable.definitionVersionId,
+      executable.sourceId
+    ]).filter((value): value is string => Boolean(value)))).sort((left, right) => left.localeCompare(right)),
+    [executables]
   );
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
@@ -717,25 +773,65 @@ function WorkflowExecutables({ context, ai, definitionFilter }: { context: Studi
 
   const run = async (executable: WorkflowExecutableSummary) => {
     setStatus("");
+    setLastRun(null);
     setError("");
     try {
-      await runExecutable(context, executable.artifactId);
+      const result = await runExecutable(context, executable.artifactId);
+      const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
+      setLastRun({ artifactId: executable.artifactId, workflowExecutionId });
       setStatus(`Started ${executable.artifactId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
+  const explain = (executable: WorkflowExecutableSummary) => {
+    if (!explainExecutableAction) return;
+
+    if (dispatchAiAction(ai, explainExecutableAction, executable)) {
+      setError("");
+      setLastRun(null);
+      setStatus(`Sent ${executable.artifactId} to Weaver`);
+    }
+  };
+
+  const markCopied = (label: string) => {
+    setError("");
+    setLastRun(null);
+    setStatus(`Copied ${label}`);
+  };
+
+  const markCopyFailed = (label: string) => {
+    setStatus("");
+    setLastRun(null);
+    setError(`Could not copy ${label}.`);
+  };
+
   return (
     <>
       <div className="wf-toolbar">
         <button type="button" onClick={() => void load()}>Refresh</button>
-        {definitionFilter ? <span className="wf-filter-chip">Definition {definitionFilter}</span> : null}
+        <label className="wf-search wf-executable-definition-filter">
+          <Search size={14} />
+          <input
+            aria-label="Filter executables by workflow definition"
+            list="wf-executable-definition-options"
+            placeholder="Filter by definition ID"
+            value={definitionFilter ?? ""}
+            onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
+          />
+        </label>
+        <datalist id="wf-executable-definition-options">
+          {definitionOptions.map(option => <option key={option} value={option} />)}
+        </datalist>
+        {definitionFilter ? (
+          <button type="button" onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</button>
+        ) : null}
       </div>
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
+      {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow executables...</div> : null}
-      {state === "ready" && visibleExecutables.length === 0 ? <div className="wf-empty">{definitionFilter ? "No workflow executables found for this definition." : "No workflow executables found. Publish a workflow definition to create one."}</div> : null}
+      {state === "ready" && visibleExecutables.length === 0 ? <div className="wf-empty">{definitionFilter ? "No workflow executables match this definition filter." : "No workflow executables found. Publish a workflow definition to create one."}</div> : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
         <div className="wf-grid wf-executable-grid" role="table" aria-label="Workflow executables">
           <div className="wf-grid-head" role="row">
@@ -748,18 +844,27 @@ function WorkflowExecutables({ context, ai, definitionFilter }: { context: Studi
           </div>
           {visibleExecutables.map(executable => (
             <div className="wf-grid-row" role="row" key={executable.artifactId}>
-              <span>
-                <strong>{executable.artifactId}</strong>
-                <small>{executable.artifactHash}</small>
+              <span className="wf-artifact-cell">
+                <span className="wf-cell-line">
+                  <strong title={executable.artifactId}>{executable.artifactId}</strong>
+                  <CopyValueButton value={executable.artifactId} ariaLabel={`Copy artifact ID ${executable.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                </span>
+                <span className="wf-cell-line wf-cell-line-muted">
+                  <small title={executable.artifactHash}>{executable.artifactHash}</small>
+                  <CopyValueButton value={executable.artifactHash} ariaLabel={`Copy artifact hash ${executable.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                </span>
               </span>
-              <span>{executable.artifactVersion}</span>
-              <span>{formatExecutableSource(executable)}</span>
+              <span className="wf-cell-line wf-version-cell">
+                <span>{executable.artifactVersion}</span>
+                <CopyValueButton value={executable.artifactVersion} ariaLabel={`Copy artifact version ${executable.artifactVersion}`} copiedLabel="artifact version" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+              </span>
+              <WorkflowExecutableSourceCell executable={executable} onCopied={markCopied} onCopyFailed={markCopyFailed} />
               <span>{formatExecutableRoot(executable)}</span>
               <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
               <span className="wf-row-actions">
                 <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
                 {explainExecutableAction ? (
-                  <button type="button" onClick={() => dispatchAiAction(ai, explainExecutableAction, executable)}><Sparkles size={13} /> Explain</button>
+                  <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
                 ) : null}
               </span>
             </div>
@@ -770,17 +875,193 @@ function WorkflowExecutables({ context, ai, definitionFilter }: { context: Studi
   );
 }
 
+function WorkflowExecutableSourceCell({ executable, onCopied, onCopyFailed }: { executable: WorkflowExecutableSummary; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+  const sourceId = executable.sourceId || executable.definitionVersionId || executable.definitionId;
+  const sourceVersion = executable.sourceVersion;
+
+  return (
+    <span className="wf-source-cell">
+      <span className="wf-source-kind">{formatExecutableSourceKind(executable.sourceKind)}</span>
+      {sourceId ? (
+        <span className="wf-cell-line">
+          <code title={sourceId}>{sourceId}</code>
+          <CopyValueButton value={sourceId} ariaLabel={`Copy source ID ${sourceId}`} copiedLabel="source ID" onCopied={onCopied} onCopyFailed={onCopyFailed} />
+        </span>
+      ) : null}
+      {sourceVersion ? <small>Version {sourceVersion}</small> : null}
+    </span>
+  );
+}
+
+function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
+  const openRun = () => {
+    if (!run?.workflowExecutionId) return;
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  return (
+    <div className={`wf-status-line${compact ? " compact" : ""}`}>
+      <Check size={compact ? 13 : 14} />
+      <span>{status}</span>
+      {run?.workflowExecutionId ? (
+        <button type="button" onClick={openRun}>Open Run {run.workflowExecutionId}</button>
+      ) : null}
+    </div>
+  );
+}
+
+function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+  if (!value) return null;
+
+  const copy = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await copyTextToClipboard(value);
+      onCopied(copiedLabel);
+    } catch {
+      onCopyFailed(copiedLabel);
+    }
+  };
+
+  return (
+    <button type="button" className="wf-copy-button" aria-label={ariaLabel} title={ariaLabel} onClick={event => void copy(event)}>
+      <Copy size={12} />
+    </button>
+  );
+}
+
+function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionId: string; publishedArtifactId: string | null }) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
+  const [artifacts, setArtifacts] = useState<WorkflowExecutableSummary[]>([]);
+  const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setError("");
+    try {
+      const executables = await listExecutables(context);
+      setArtifacts(executables.filter(executable => executableBelongsToDefinition(executable, definitionId)).sort(compareExecutablesByPublishedDate));
+      setState("ready");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setArtifacts([]);
+      setState("failed");
+    }
+  }, [context, definitionId]);
+
+  useEffect(() => {
+    void load();
+  }, [load, publishedArtifactId]);
+
+  const run = async (artifact: WorkflowExecutableSummary) => {
+    setStatus("");
+    setLastRun(null);
+    setError("");
+    try {
+      const result = await runExecutable(context, artifact.artifactId);
+      setLastRun({ artifactId: artifact.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
+      setStatus(`Started ${artifact.artifactId}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const explain = (artifact: WorkflowExecutableSummary) => {
+    if (!explainExecutableAction) return;
+
+    if (dispatchAiAction(ai, explainExecutableAction, artifact)) {
+      setError("");
+      setLastRun(null);
+      setStatus(`Sent ${artifact.artifactId} to Weaver`);
+    }
+  };
+
+  const openExecutablePage = () => {
+    window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const markCopied = (label: string) => {
+    setError("");
+    setLastRun(null);
+    setStatus(`Copied ${label}`);
+  };
+
+  const markCopyFailed = (label: string) => {
+    setStatus("");
+    setLastRun(null);
+    setError(`Could not copy ${label}.`);
+  };
+
+  return (
+    <div className="wf-artifacts-panel">
+      <div className="wf-artifacts-toolbar">
+        <span>{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span>
+        <button type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</button>
+        <button type="button" onClick={openExecutablePage}>Open list</button>
+      </div>
+      {state === "failed" ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
+      {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
+      {state === "loading" ? <p className="wf-muted">Loading artifacts...</p> : null}
+      {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
+      {state === "ready" && artifacts.length > 0 ? (
+        <div className="wf-artifact-list" role="list" aria-label="Workflow artifacts">
+          {artifacts.map(artifact => (
+            <article className="wf-artifact-card" role="listitem" key={artifact.artifactId} data-active={artifact.artifactId === publishedArtifactId ? "true" : undefined}>
+              <div className="wf-artifact-card-heading">
+                <div>
+                  <span className="wf-artifact-version">Version {artifact.artifactVersion}</span>
+                  {artifact.artifactId === publishedArtifactId ? <span className="wf-chip">Latest publish</span> : null}
+                </div>
+                <span>{formatDate(artifact.publishedAt ?? artifact.createdAt)}</span>
+              </div>
+              <div className="wf-artifact-card-values">
+                <span className="wf-cell-line">
+                  <code title={artifact.artifactId}>{artifact.artifactId}</code>
+                  <CopyValueButton value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                </span>
+                <span className="wf-cell-line wf-cell-line-muted">
+                  <code title={artifact.artifactHash}>{artifact.artifactHash}</code>
+                  <CopyValueButton value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                </span>
+              </div>
+              <dl>
+                <div><dt>Source</dt><dd>{formatExecutableSourceKind(artifact.sourceKind)} {artifact.sourceVersion ? `v${artifact.sourceVersion}` : ""}</dd></div>
+                <div><dt>Root</dt><dd>{formatExecutableRoot(artifact)}</dd></div>
+              </dl>
+              <div className="wf-row-actions">
+                <button type="button" onClick={() => void run(artifact)}><Play size={13} /> Run</button>
+                {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [runKindFilter, setRunKindFilter] = useState("");
   const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
 
   const load = useCallback(async () => {
     setState("loading");
     setError("");
     try {
-      const nextInstances = await listWorkflowInstances(context, { status: statusFilter || undefined, take: 100 });
+      const nextInstances = await listWorkflowInstances(context, {
+        status: statusFilter || undefined,
+        runKind: runKindFilter || undefined,
+        take: 100
+      });
       setInstances(nextInstances);
       setState("ready");
     } catch (e) {
@@ -788,7 +1069,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
       setInstances([]);
       setState("failed");
     }
-  }, [context, statusFilter]);
+  }, [context, runKindFilter, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -805,7 +1086,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
         <button type="button" onClick={() => void load()}>Refresh</button>
         <label className="wf-toolbar-field">
           <span>Status</span>
-          <select aria-label="Workflow instance status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+          <select aria-label="Workflow run status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
             <option value="Pending">Pending</option>
             <option value="Running">Running</option>
@@ -815,14 +1096,25 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
             <option value="Cancelled">Cancelled</option>
           </select>
         </label>
+        <label className="wf-toolbar-field">
+          <span>Kind</span>
+          <select aria-label="Run Kind" value={runKindFilter} onChange={event => setRunKindFilter(event.target.value)}>
+            <option value="">All kinds</option>
+            <option value="TestRun">Test Run</option>
+            <option value="PublishedRun">Published Run</option>
+            <option value="BackgroundWeaverRun">Background Weaver Run</option>
+            <option value="Unknown">Unknown / legacy</option>
+          </select>
+        </label>
       </div>
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {state === "loading" ? <div className="wf-empty">Loading workflow instances...</div> : null}
-      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow instances found. Run a published workflow executable to create instance history.</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow runs...</div> : null}
+      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow runs found. Run a published workflow executable to create history.</div> : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow instances">
+        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
-            <span>Instance</span>
+            <span>Run</span>
+            <span>Kind</span>
             <span>Status</span>
             <span>Definition</span>
             <span>Activity</span>
@@ -834,7 +1126,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
               type="button"
               className="wf-grid-row"
               role="row"
-              aria-label={`Inspect workflow instance ${instance.workflowExecutionId}`}
+              aria-label={`Inspect workflow run ${instance.workflowExecutionId}`}
               key={instance.workflowExecutionId}
               onClick={() => openInstance(instance.workflowExecutionId)}
             >
@@ -842,6 +1134,7 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
                 <strong>{instance.workflowExecutionId}</strong>
                 <small>{instance.artifactId}</small>
               </span>
+              <span>{formatRunKind(instance.runKind)}</span>
               <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span>
                 <strong>{instance.definitionId}</strong>
@@ -863,7 +1156,8 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
 
 interface WorkflowInstanceInspectionData {
   details: WorkflowInstanceDetails;
-  definitionVersion: WorkflowDefinitionVersionDetails;
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+  definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
 }
 
@@ -889,16 +1183,24 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
     setError("");
     try {
       const details = await getWorkflowInstance(context, workflowExecutionId);
-      const [definitionVersion, activityCatalog] = await Promise.all([
-        getWorkflowDefinitionVersion(context, details.instance.definitionVersionId),
+      const [definitionVersionResult, activityCatalog] = await Promise.all([
+        getWorkflowDefinitionVersion(context, details.instance.definitionVersionId).then(
+          definitionVersion => ({ definitionVersion, error: "" }),
+          error => ({ definitionVersion: null, error: error instanceof Error ? error.message : String(error) })
+        ),
         listActivities(context)
       ]);
-      setData({ details, definitionVersion, activityCatalog: activityCatalog.activities });
+      setData({
+        details,
+        definitionVersion: definitionVersionResult.definitionVersion,
+        definitionVersionError: definitionVersionResult.error,
+        activityCatalog: activityCatalog.activities
+      });
       setSelectedEvidenceId(null);
       setState("ready");
     } catch (e) {
       setData(null);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
   }, [context, workflowExecutionId]);
@@ -915,7 +1217,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
   return (
     <>
       <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Instances</button>
+        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data && instanceAction ? (
           <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
@@ -923,12 +1225,13 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
           </button>
         ) : null}
       </div>
-      {state === "loading" ? <div className="wf-empty">Loading workflow instance...</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {state === "ready" && data ? (
         <div className="wf-instance-detail-workbench">
           <WorkflowInstanceCanvas
             definitionVersion={data.definitionVersion}
+            definitionVersionError={data.definitionVersionError}
             activityCatalog={data.activityCatalog}
             details={data.details}
             selectedEvidenceId={selectedEvidenceId}
@@ -943,7 +1246,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
             error=""
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
-            graphNodeIds={getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog)}
+            graphNodeIds={data.definitionVersion ? getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
           />
         </div>
       ) : null}
@@ -951,14 +1254,17 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
   );
 }
 
-function WorkflowInstanceCanvas({ definitionVersion, activityCatalog, details, selectedEvidenceId, onSelectEvidence }: {
-  definitionVersion: WorkflowDefinitionVersionDetails;
+function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, activityCatalog, details, selectedEvidenceId, onSelectEvidence }: {
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+  definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
   details: WorkflowInstanceDetails;
   selectedEvidenceId: string | null;
   onSelectEvidence(evidenceId: string | null): void;
 }) {
   const canvas = useMemo(() => {
+    if (!definitionVersion) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
+
     const root = definitionVersion.state.rootActivity;
     if (!root) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
 
@@ -984,16 +1290,30 @@ function WorkflowInstanceCanvas({ definitionVersion, activityCatalog, details, s
   }, [activityCatalog, definitionVersion, details, selectedEvidenceId]);
 
   return (
-    <section className="wf-instance-canvas-shell" aria-label="Workflow instance canvas">
+    <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
       <header>
         <div>
           <span>Definition version</span>
-          <h3>{definitionVersion.definition.name} <small>{definitionVersion.version}</small></h3>
+          <h3>{definitionVersion ? (
+            <>
+              {definitionVersion.definition.name} <small>{definitionVersion.version}</small>
+            </>
+          ) : (
+            <>
+              Definition graph unavailable <small>{details.instance.definitionVersionId}</small>
+            </>
+          )}</h3>
         </div>
         <WorkflowStatusBadge status={details.instance.status} subStatus={details.instance.subStatus} />
       </header>
       <div className="wf-instance-canvas">
-        {canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this definition version.</div> : null}
+        {!definitionVersion ? (
+          <div className="wf-empty">
+            The workflow run loaded, but its definition graph could not be resolved for this version.
+            {definitionVersionError ? <small>{formatWorkflowVersionLoadError(definitionVersionError)}</small> : null}
+          </div>
+        ) : null}
+        {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this definition version.</div> : null}
         {canvas.nodes.length > 0 ? (
           <ReactFlow
             nodes={canvas.nodes}
@@ -1029,14 +1349,14 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   graphNodeIds?: Set<string>;
 }) {
   if (!summary) {
-    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow instance to inspect activity history.</div></aside>;
+    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect activity history.</div></aside>;
   }
 
   return (
-    <aside className="wf-instance-inspector" aria-label="Workflow instance details">
+    <aside className="wf-instance-inspector" aria-label="Workflow run details">
       <header>
         <div>
-          <span>Workflow instance</span>
+          <span>Workflow Instance ID</span>
           <h3>{summary.workflowExecutionId}</h3>
         </div>
         {action ? (
@@ -1048,6 +1368,8 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
       <dl className="wf-instance-meta">
         <dt>Status</dt>
         <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+        <dt>Run Kind</dt>
+        <dd>{formatRunKind(summary.runKind)}</dd>
         <dt>Artifact</dt>
         <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
         <dt>Definition</dt>
@@ -1061,7 +1383,7 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
         <dt>Correlation</dt>
         <dd>{summary.correlationId || "None"}</dd>
       </dl>
-      {state === "loading" ? <div className="wf-empty">Loading instance details...</div> : null}
+      {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
       {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {state === "ready" && details ? (
         <>
@@ -1170,6 +1492,23 @@ function WorkflowStatusBadge({ status, subStatus }: { status: string; subStatus?
   return <span className="wf-status-badge" data-status={status.toLowerCase()}>{subStatus ? `${status} · ${subStatus}` : status}</span>;
 }
 
+function formatRunKind(runKind?: string | null) {
+  switch (normalizeRunKind(runKind)) {
+    case "testrun":
+      return "Test Run";
+    case "publishedrun":
+      return "Published Run";
+    case "backgroundweaverrun":
+      return "Background Weaver Run";
+    default:
+      return "Unknown / legacy";
+  }
+}
+
+function normalizeRunKind(runKind?: string | null) {
+  return (runKind ?? "").replace(/[\s_-]+/g, "").toLowerCase();
+}
+
 function getVisibleWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
   const root = definitionVersion.state.rootActivity;
   if (!root) return new Set<string>();
@@ -1234,7 +1573,10 @@ function findAiAction(ai: StudioAiContributionApi, id: string) {
 
 function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioAiPromptActionContribution<TContext>, context: TContext) {
   const prompt = action.createPrompt(context);
-  if (prompt) ai.dispatchPrompt(prompt);
+  if (!prompt) return false;
+
+  ai.dispatchPrompt(prompt);
+  return true;
 }
 
 function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
@@ -1324,17 +1666,77 @@ function isActivityBrowsable(activity: ActivityCatalogItem) {
   return (activity as { isBrowsable?: unknown }).isBrowsable !== false && (activity as { browsable?: unknown }).browsable !== false;
 }
 
-function formatExecutableSource(executable: WorkflowExecutableSummary) {
-  if (executable.sourceKind || executable.sourceId || executable.sourceVersion) {
-    return [executable.sourceKind, executable.sourceId, executable.sourceVersion].filter(Boolean).join(" / ");
-  }
-
-  return executable.definitionId;
-}
-
 function formatExecutableRoot(executable: WorkflowExecutableSummary) {
   const rootName = formatActivityTypeName(executable.rootActivityType);
   return rootName || executable.rootActivityType;
+}
+
+function executableMatchesDefinitionFilter(executable: WorkflowExecutableSummary, normalizedFilter: string) {
+  return [
+    executable.definitionId,
+    executable.definitionVersionId,
+    executable.sourceId,
+    executable.sourceVersion
+  ].some(value => value?.toLowerCase().includes(normalizedFilter));
+}
+
+function executableBelongsToDefinition(executable: WorkflowExecutableSummary, definitionId: string) {
+  return executable.definitionId === definitionId || executable.sourceId === definitionId;
+}
+
+function compareExecutablesByPublishedDate(left: WorkflowExecutableSummary, right: WorkflowExecutableSummary) {
+  return getExecutablePublishedTime(right) - getExecutablePublishedTime(left);
+}
+
+function getExecutablePublishedTime(executable: WorkflowExecutableSummary) {
+  const value = executable.publishedAt ?? executable.createdAt;
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function formatExecutableSourceKind(sourceKind?: string | null) {
+  const normalized = sourceKind?.trim().toLowerCase() ?? "";
+
+  if (!normalized || normalized === "definition" || normalized === "workflowdefinition") {
+    return "Definition";
+  }
+
+  if (normalized === "definitionversion" || normalized === "workflowdefinitionversion") {
+    return "Definition version";
+  }
+
+  return sourceKind!
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function readExecutableRunWorkflowExecutionId(response: WorkflowExecutableRunResponse | null | undefined) {
+  const workflowExecutionId = response?.workflowExecutionId ?? response?.runId ?? response?.executionId;
+  return typeof workflowExecutionId === "string" && workflowExecutionId.trim() ? workflowExecutionId : null;
+}
+
+async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand("copy");
+  textArea.remove();
+
+  if (!copied) {
+    throw new Error("Clipboard copy failed.");
+  }
 }
 
 function formatActivityTypeName(typeName: string) {
@@ -1463,6 +1865,7 @@ function WorkflowEditor({
   definitionId,
   ai,
   propertyEditors,
+  expressionEditors,
   workflowDesignerPanels,
   onBack
 }: {
@@ -1470,6 +1873,7 @@ function WorkflowEditor({
   definitionId: string;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
+  expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   onBack(): void;
 }) {
@@ -1501,16 +1905,18 @@ function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const connectSourceRef = useRef<{ nodeId: string; handleId: string | null } | null>(null);
+  const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const workflowBatchUndoRef = useRef(new Map<string, WorkflowDraft>());
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
     startY: number;
     dragging: boolean;
   } | null>(null);
+  const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
 
   const root = draft?.state.rootActivity ?? null;
@@ -1536,6 +1942,99 @@ function WorkflowEditor({
   const canRunTest = !!draft?.state.rootActivity && !busy;
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
+
+  useEffect(() => {
+    if (!details || !draft) return;
+
+    window.__ELSA_STUDIO_WORKFLOW_CONTEXT__ = {
+      workflowId: details.definition.id,
+      workflowDefinitionId: details.definition.id,
+      workflowVersionId: draft.sourceVersionId ?? null,
+      draftId: draft.id,
+      revision: getDraftRevision(draft),
+      selectedNodeId,
+      selectedActivityType: selectedDescriptor?.typeName ?? (selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? selectedNode.activityVersionId : null),
+      summary: details.definition.name,
+      activities: collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion),
+      diagnostics: draft.validationErrors.map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." }))
+    };
+
+    return () => {
+      if (window.__ELSA_STUDIO_WORKFLOW_CONTEXT__?.workflowId === details.definition.id) {
+        window.__ELSA_STUDIO_WORKFLOW_CONTEXT__ = undefined;
+      }
+    };
+  }, [catalogByVersion, details, draft, selectedDescriptor, selectedNode, selectedNodeId]);
+
+  useEffect(() => {
+    const handleApply = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        batch: WorkflowGraphOperationBatch;
+        respond(result: { ok: true; result: { appliedCount: number; finalActivityIds: string[]; temporaryReferences: Record<string, string>; summary: string; undoToken: string } } | { ok: false; message: string }): void;
+      }>).detail;
+      if (!detail?.batch || !detail.respond) return;
+      if (!draft || !details) {
+        detail.respond({ ok: false, message: "No active workflow draft is open." });
+        return;
+      }
+
+      const batchWorkflowId = detail.batch.workflowDefinitionId;
+      if (batchWorkflowId && batchWorkflowId !== "active-draft" && batchWorkflowId !== details.definition.id) {
+        detail.respond({ ok: false, message: `Batch targets workflow '${batchWorkflowId}', but '${details.definition.id}' is active.` });
+        return;
+      }
+
+      try {
+        const previousDraft = cloneWorkflowDraftForUndo(draft);
+        const applied = applyWorkflowGraphOperationBatch(draft, detail.batch, catalog);
+        const undoToken = `weaver-batch-${Date.now()}`;
+        workflowBatchUndoRef.current.set(undoToken, previousDraft);
+        setDraft(applied.draft);
+        setFrames([]);
+        setSelectedNodeId(applied.finalActivityIds.at(-1) ?? null);
+        setPublishedArtifactId(null);
+        setTestRun(null);
+        setStatus(applied.summary);
+        setError("");
+        detail.respond({ ok: true, result: { ...applied, undoToken } });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
+        detail.respond({ ok: false, message });
+      }
+    };
+
+    const handleUndo = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        undoToken: string;
+        respond(result: { ok: true; summary: string } | { ok: false; message: string }): void;
+      }>).detail;
+      if (!detail?.undoToken || !detail.respond) return;
+
+      const previousDraft = workflowBatchUndoRef.current.get(detail.undoToken);
+      if (!previousDraft) {
+        detail.respond({ ok: false, message: "The Weaver batch undo point is no longer available." });
+        return;
+      }
+
+      workflowBatchUndoRef.current.delete(detail.undoToken);
+      setDraft(previousDraft);
+      setFrames([]);
+      setSelectedNodeId(null);
+      setPublishedArtifactId(null);
+      setTestRun(null);
+      setStatus("Restored workflow draft before Weaver batch.");
+      setError("");
+      detail.respond({ ok: true, summary: "Restored workflow draft before Weaver batch." });
+    };
+
+    window.addEventListener(workflowGraphOperationApplyEvent, handleApply);
+    window.addEventListener(workflowGraphOperationUndoEvent, handleUndo);
+    return () => {
+      window.removeEventListener(workflowGraphOperationApplyEvent, handleApply);
+      window.removeEventListener(workflowGraphOperationUndoEvent, handleUndo);
+    };
+  }, [catalog, details, draft]);
 
   useEffect(() => {
     writeStoredValue(workflowPaletteWidthStorageKey, String(paletteWidth));
@@ -1849,6 +2348,7 @@ function WorkflowEditor({
       const drag = pointerDragRef.current;
       pointerDragRef.current = null;
       if (!drag?.dragging || !canvasRef.current) return;
+      if (nativePaletteDragRef.current) return;
 
       const canvasRect = canvasRef.current.getBoundingClientRect();
       const isOverCanvas =
@@ -1879,12 +2379,16 @@ function WorkflowEditor({
   }, [reactFlowInstance, tryAddActivityAtClientPoint]);
 
   const onPaletteDragStart = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+    nativePaletteDragRef.current = { activityVersionId: activity.activityVersionId, handledDrop: false };
     event.dataTransfer.setData(activityDragDataType, activity.activityVersionId);
     event.dataTransfer.setData("text/plain", activity.activityVersionId);
     event.dataTransfer.effectAllowed = "copy";
   };
 
   const onPaletteDragEnd = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+    const nativeDrag = nativePaletteDragRef.current;
+    nativePaletteDragRef.current = null;
+    if (nativeDrag?.handledDrop) return;
     if (event.clientX === 0 && event.clientY === 0) return;
     if (!tryAddActivityAtClientPoint(activity, event.clientX, event.clientY)) return;
 
@@ -1935,9 +2439,15 @@ function WorkflowEditor({
   const onCanvasDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setHighlightedEdgeId(null);
-    if (!canAddActivitiesToCanvas) return;
 
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) || event.dataTransfer.getData("text/plain");
+    if (!activityVersionId) return;
+    event.stopPropagation();
+    if (nativePaletteDragRef.current?.activityVersionId === activityVersionId) {
+      nativePaletteDragRef.current.handledDrop = true;
+    }
+    if (!canAddActivitiesToCanvas) return;
+
     const activity = catalogByVersion.get(activityVersionId);
     if (!activity) return;
 
@@ -2050,6 +2560,8 @@ function WorkflowEditor({
         state: draftSnapshot.state
       });
       setTestRun({ draftSignature, view: nextTestRun });
+      setActiveRightPanelId("runtime");
+      setInspectorCollapsed(false);
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
     } catch (e) {
       setStatus("");
@@ -2101,13 +2613,13 @@ function WorkflowEditor({
     };
   };
 
-  const onConnectEnd: OnConnectEnd = event => {
-    const source = connectSourceRef.current;
+  const onConnectEnd: OnConnectEnd = (event, connectionState) => {
+    const source = resolveConnectEndSource(connectSourceRef.current, connectionState);
     connectSourceRef.current = null;
     if (!source || !isFlowchartDesigner) return;
+    if (connectionState.toNode || connectionState.toHandle) return;
 
-    const target = event.target as HTMLElement | null;
-    if (target?.closest(".react-flow__handle, .react-flow__node")) return;
+    if (isConnectEndOverExistingWorkflowNode(event)) return;
 
     const point = clientPointFromEvent(event);
     setConnectMenu({
@@ -2344,6 +2856,11 @@ function WorkflowEditor({
   const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
     ? testRun.view
     : null;
+  const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
+  const openWorkflowRun = (workflowExecutionId: string) => {
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
   const panelContext: WorkflowDesignerPanelContext = {
     definition: details.definition,
     draft,
@@ -2383,6 +2900,27 @@ function WorkflowEditor({
       order: 0,
       icon: <ListTree size={15} />,
       render: renderInspectorPanel
+    },
+    {
+      id: "runtime",
+      title: "Runtime",
+      order: 5,
+      icon: <Play size={15} />,
+      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} onOpenRun={openWorkflowRun} />
+    },
+    {
+      id: "artifacts",
+      title: "Artifacts",
+      order: 10,
+      icon: <Package size={15} />,
+      render: () => (
+        <WorkflowArtifactsPanel
+          context={context}
+          ai={ai}
+          definitionId={details.definition.id}
+          publishedArtifactId={publishedArtifactId}
+        />
+      )
     },
     ...contributedPanelTabs.filter(tab => tab.side === "right")
   ].sort(compareWorkflowPanelTabs);
@@ -2463,6 +3001,7 @@ function WorkflowEditor({
           activity={selectedNode}
           descriptor={selectedDescriptor}
           editors={propertyEditors}
+          expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
           descriptorStatus={descriptorStatus}
           onChange={updateSelectedActivity}
@@ -2489,10 +3028,10 @@ function WorkflowEditor({
         <ChevronRight size={14} />
         <strong>{details.definition.name}</strong>
         <span className="wf-chip">Draft</span>
-        {status ? <span className="wf-status"><Check size={13} /> {status}</span> : null}
+        {visibleStatus ? <span className="wf-status"><Check size={13} /> {visibleStatus}</span> : null}
         <div className="wf-editor-actions">
           <label className="wf-autosave-toggle">
-            <input type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
+            <input className="wf-autosave-switch-input" type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
             <span>Autosave</span>
           </label>
           {findRisksAction ? (
@@ -2503,6 +3042,15 @@ function WorkflowEditor({
           ) : null}
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
           <button type="button" disabled={busy} onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
+          {renderedTestRun ? (
+            <TestRunStatus
+              testRun={renderedTestRun}
+              onOpenDetails={() => {
+                setActiveRightPanelId("runtime");
+                setInspectorCollapsed(false);
+              }}
+            />
+          ) : null}
           <button
             type="button"
             disabled={!canRunTest}
@@ -2514,7 +3062,6 @@ function WorkflowEditor({
       </div>
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {renderedTestRun ? <TestRunCapsule testRun={renderedTestRun} /> : null}
 
       <div className={editorBodyClassName} style={editorBodyStyle}>
         <aside className="wf-palette" aria-label="Activities panel">
@@ -2961,28 +3508,78 @@ function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
   );
 }
 
-function TestRunCapsule({ testRun }: { testRun: WorkflowTestRunView }) {
+function TestRunStatus({
+  testRun,
+  onOpenDetails
+}: {
+  testRun: WorkflowTestRunView;
+  onOpenDetails(): void;
+}) {
   const rejected = isRejectedTestRun(testRun);
   return (
-    <section className="wf-test-run-capsule" data-state={rejected ? "rejected" : "accepted"} aria-live="polite">
-      <div className="wf-test-run-heading">
+    <div className="wf-test-run-status" data-state={rejected ? "rejected" : "accepted"}>
+      <button
+        type="button"
+        className="wf-test-run-trigger"
+        onClick={onOpenDetails}
+      >
         {rejected ? <AlertCircle size={16} /> : <Check size={16} />}
-        <div>
-          <strong>{rejected ? "Test run rejected" : "Test run dispatched"}</strong>
-          <span>Ephemeral - not promoted</span>
-        </div>
-      </div>
-      {rejected && testRun.reason ? <p>{testRun.reason}</p> : null}
-      <dl>
-        <div><dt>Status</dt><dd>{testRun.status}</dd></div>
-        {testRun.commandDispatchStatus ? <div><dt>Dispatch</dt><dd>{testRun.commandDispatchStatus}</dd></div> : null}
-        <div><dt>Test run</dt><dd>{testRun.testRunId}</dd></div>
-        {testRun.artifactId ? <div><dt>Transient artifact</dt><dd>{testRun.artifactId}</dd></div> : null}
-        {testRun.workflowExecutionId ? <div><dt>Execution</dt><dd>{testRun.workflowExecutionId}</dd></div> : null}
-        {testRun.expiresAt ? <div><dt>Expires</dt><dd>{formatDate(testRun.expiresAt)}</dd></div> : null}
-      </dl>
-    </section>
+        {rejected ? "Test run rejected" : "Test run dispatched"}
+      </button>
+    </div>
   );
+}
+
+function WorkflowRuntimePanel({ testRun, onOpenRun }: {
+  testRun: WorkflowTestRunView | null;
+  onOpenRun(workflowExecutionId: string): void;
+}) {
+  if (!testRun) {
+    return (
+      <div className="wf-runtime-panel">
+        <div className="wf-empty">Run the draft to see Runtime Evidence.</div>
+      </div>
+    );
+  }
+
+  const rejected = isRejectedTestRun(testRun);
+  const workflowExecutionId = testRun.workflowExecutionId;
+  return (
+    <div className="wf-runtime-panel">
+      <section className="wf-runtime-card" data-state={rejected ? "rejected" : "accepted"}>
+        <header>
+          <div>
+            <span>Latest Test Run</span>
+            <h3>{rejected ? "Rejected by the server" : "Transient run accepted"}</h3>
+          </div>
+          <WorkflowStatusBadge status={testRun.status} subStatus={testRun.commandDispatchStatus ?? undefined} />
+        </header>
+        <p>Ephemeral - not saved, promoted, or published.</p>
+        {rejected && testRun.reason ? <div className="wf-runtime-reason"><AlertCircle size={14} /> {testRun.reason}</div> : null}
+        <dl className="wf-runtime-meta">
+          <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus ?? testRun.status}>{testRun.commandDispatchStatus ?? testRun.status}</dd></div>
+          <div><dt>Test Run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
+          <div><dt>Artifact</dt><dd title={testRun.artifactId ?? "None"}>{testRun.artifactId ?? "None"}</dd></div>
+          <div>
+            <dt>Run / Instance</dt>
+            <dd title={workflowExecutionId ?? "None"}>
+              {workflowExecutionId ? (
+                <button type="button" onClick={() => onOpenRun(workflowExecutionId)}>{workflowExecutionId}</button>
+              ) : "None"}
+            </dd>
+          </div>
+          <div><dt>Activities</dt><dd>{formatEvidenceCount(testRun.activityCount, "activity")}</dd></div>
+          <div><dt>Incidents</dt><dd>{formatEvidenceCount(testRun.incidentCount, "incident")}</dd></div>
+          <div><dt>Expires</dt><dd title={testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}>{testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}</dd></div>
+        </dl>
+      </section>
+    </div>
+  );
+}
+
+function formatEvidenceCount(count: number | null | undefined, label: string) {
+  if (typeof count !== "number") return "Available on linked Run";
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
 
 function createNodeId(activity: ActivityCatalogItem) {
@@ -3009,8 +3606,51 @@ function clientPointFromEvent(event: MouseEvent | TouchEvent) {
   return { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY };
 }
 
+export function isConnectEndOverExistingWorkflowNode(event: MouseEvent | TouchEvent) {
+  const point = clientPointFromEvent(event);
+  const releaseTarget = document.elementFromPoint?.(point.x, point.y) as HTMLElement | null | undefined;
+  const target = releaseTarget ?? (event.target as HTMLElement | null);
+  return !!target?.closest(".react-flow__handle, .react-flow__node");
+}
+
+export function resolveConnectEndSource(
+  currentSource: WorkflowConnectSource | null,
+  connectionState: { fromNode?: { id?: string | null } | null; fromHandle?: { id?: string | null } | null }
+): WorkflowConnectSource | null {
+  if (currentSource) return currentSource;
+  const nodeId = connectionState.fromNode?.id;
+  return nodeId ? { nodeId, handleId: connectionState.fromHandle?.id ?? null } : null;
+}
+
 function getDraftSignature(draft: WorkflowDraft) {
   return JSON.stringify({ state: draft.state, layout: draft.layout });
+}
+
+function getDraftRevision(draft: WorkflowDraft) {
+  return hashString(getDraftSignature(draft));
+}
+
+function collectWorkflowContextActivities(activity: ActivityNode | null | undefined, catalogByVersion: Map<string, ActivityCatalogItem>, result: Array<{ id: string; type: string; displayName?: string }> = []) {
+  if (!activity) return result;
+
+  const catalogItem = catalogByVersion.get(activity.activityVersionId);
+  result.push({
+    id: activity.nodeId,
+    type: catalogItem?.activityTypeKey ?? activity.activityVersionId,
+    displayName: catalogItem ? getActivityDisplay(catalogItem) : undefined
+  });
+
+  for (const slot of getChildSlots(activity)) {
+    for (const child of slot.activities) collectWorkflowContextActivities(child, catalogByVersion, result);
+  }
+
+  return result;
+}
+
+function cloneWorkflowDraftForUndo(draft: WorkflowDraft) {
+  return typeof structuredClone === "function"
+    ? structuredClone(draft)
+    : JSON.parse(JSON.stringify(draft)) as WorkflowDraft;
 }
 
 function createDraftSnapshotId(draft: WorkflowDraft) {
@@ -3035,6 +3675,39 @@ function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatWorkflowVersionLoadError(error: string) {
+  try {
+    const payload = JSON.parse(error) as { error?: unknown };
+    if (typeof payload.error === "string") return payload.error;
+  } catch {
+    // Fall through to the original message when the server did not return the standard error shape.
+  }
+
+  return error;
+}
+
+function formatWorkflowRunLoadError(error: unknown, workflowExecutionId: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isNotFoundError(error, message)) return `Run ${workflowExecutionId} was not found.`;
+  return message;
+}
+
+function isNotFoundError(error: unknown, message: string) {
+  const responseStatus = typeof error === "object" && error
+    ? (error as { response?: { status?: unknown }; status?: unknown }).response?.status
+      ?? (error as { response?: { status?: unknown }; status?: unknown }).status
+    : undefined;
+  if (responseStatus === 404 || /\b404\b/.test(message)) return true;
+
+  try {
+    const payload = JSON.parse(message) as { error?: unknown; title?: unknown; detail?: unknown };
+    return [payload.error, payload.title, payload.detail]
+      .some(value => typeof value === "string" && /not found/i.test(value));
+  } catch {
+    return /not found/i.test(message);
+  }
 }
 
 function formatDuration(start?: string | null, end?: string | null) {

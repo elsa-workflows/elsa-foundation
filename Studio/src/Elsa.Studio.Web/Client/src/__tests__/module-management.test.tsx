@@ -110,6 +110,26 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("shows module load status and reasons under module management diagnostics", async () => {
+    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    await clickRowContaining(activeGridPanel(container), "Elsa.Studio.FeatureManagement");
+
+    const diagnosticsTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Diagnostics");
+    expect(diagnosticsTab).toBeTruthy();
+
+    flushSync(() => {
+      diagnosticsTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    const inspector = container.querySelector(".modules-inspector");
+    expect(inspector?.textContent).toContain("Diagnostics");
+    expect(inspector?.textContent).toContain("available");
+    expect(inspector?.textContent).toContain("Module manifest accepted.");
+
+    await unmount();
+  });
+
   it("shows package dependencies in the package inspector tab", async () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");
@@ -428,6 +448,49 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Server");
     expect(activeGridPanel(container)?.textContent).toContain("Workflows Runtime API");
     expect(container.textContent).toContain("local-packages");
+
+    await unmount();
+  });
+
+  it("renders a sparse Server registry without blanking the page", async () => {
+    const backendGetJson = vi.fn(async () => ({
+      host: { id: "server", displayName: "Server", runtime: "Elsa.Server", contentRootPath: "/server" },
+      generatedAt: new Date().toISOString(),
+      modules: [{
+        id: "ServerOnlyModule",
+        displayName: "Server only module",
+        surface: "Server",
+        runtime: "Elsa.Server",
+        sourceKind: "backend",
+        scope: "backend",
+        version: "",
+        status: "available",
+        compatibility: "unknown",
+        packageId: null,
+        packageVersion: null,
+        contributions: null,
+        diagnostics: null,
+        manifest: null
+      }],
+      packages: null,
+      dropFolderPackages: null,
+      feeds: null,
+      retentionPolicy: null,
+      capabilities: null,
+      diagnostics: null
+    }));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Server only module");
+    expect(container.textContent).not.toBe("");
 
     await unmount();
   });

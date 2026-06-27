@@ -1,80 +1,73 @@
-var n = { exports: {} }, a = {};
+var i = { exports: {} }, s = {};
 var l;
-function m() {
-  if (l) return a;
+function p() {
+  if (l) return s;
   l = 1;
-  var s = /* @__PURE__ */ Symbol.for("react.transitional.element"), u = /* @__PURE__ */ Symbol.for("react.fragment");
-  function o(x, r, d) {
-    var t = null;
-    if (d !== void 0 && (t = "" + d), r.key !== void 0 && (t = "" + r.key), "key" in r) {
+  var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), c = /* @__PURE__ */ Symbol.for("react.fragment");
+  function o(h, r, d) {
+    var n = null;
+    if (d !== void 0 && (n = "" + d), r.key !== void 0 && (n = "" + r.key), "key" in r) {
       d = {};
-      for (var i in r)
-        i !== "key" && (d[i] = r[i]);
+      for (var a in r)
+        a !== "key" && (d[a] = r[a]);
     } else d = r;
     return r = d.ref, {
-      $$typeof: s,
-      type: x,
-      key: t,
+      $$typeof: t,
+      type: h,
+      key: n,
       ref: r !== void 0 ? r : null,
       props: d
     };
   }
-  return a.Fragment = u, a.jsx = o, a.jsxs = o, a;
+  return s.Fragment = c, s.jsx = o, s.jsxs = o, s;
 }
-var h;
-function p() {
-  return h || (h = 1, n.exports = m()), n.exports;
+var u;
+function m() {
+  return u || (u = 1, i.exports = p()), i.exports;
 }
-var e = p();
-function v(s) {
-  s.navigation.add({
-    id: "dashboard-sample",
-    label: "Dashboard",
-    path: "/dashboard",
-    order: 100,
-    iconColor: "#0ea5e9"
-  }), s.routes.add({
-    id: "dashboard-sample",
-    label: "Dashboard",
-    path: "/dashboard",
-    component: j
-  }), s.dashboardWidgets.add({
+var e = m();
+function v(t) {
+  t.dashboardWidgets.add({
     id: "dashboard-sample-health",
     title: "Module health",
     order: 100,
-    component: c
+    component: x
+  }), t.dashboardWidgets.add({
+    id: "dashboard-sample-route",
+    title: "Route ownership",
+    order: 110,
+    component: R
+  }), t.dashboardWidgets.add({
+    id: "dashboard-sample-backend",
+    title: "Backend endpoints",
+    order: 120,
+    component: j
   });
 }
-function j() {
-  return /* @__PURE__ */ e.jsxs("section", { children: [
-    /* @__PURE__ */ e.jsx("div", { className: "section-header", children: /* @__PURE__ */ e.jsxs("div", { children: [
-      /* @__PURE__ */ e.jsx("h2", { children: "Dashboard sample" }),
-      /* @__PURE__ */ e.jsx("p", { children: "This frontend-only module contributed navigation, a route, and dashboard widgets." })
-    ] }) }),
-    /* @__PURE__ */ e.jsxs("div", { className: "dashboard-sample-grid", children: [
-      /* @__PURE__ */ e.jsx(c, {}),
-      /* @__PURE__ */ e.jsxs("div", { className: "admin-card", children: [
-        /* @__PURE__ */ e.jsx("h2", { children: "Registered routes" }),
-        /* @__PURE__ */ e.jsx("p", { className: "metric", children: "1" }),
-        /* @__PURE__ */ e.jsx("p", { children: "The route was added by the dashboard module at runtime." })
-      ] }),
-      /* @__PURE__ */ e.jsxs("div", { className: "admin-card", children: [
-        /* @__PURE__ */ e.jsx("h2", { children: "Backend endpoints" }),
-        /* @__PURE__ */ e.jsx("p", { className: "metric", children: "0" }),
-        /* @__PURE__ */ e.jsx("p", { children: "This sample proves a frontend-only contribution." })
-      ] })
-    ] })
-  ] });
-}
-function c() {
+function x() {
   return /* @__PURE__ */ e.jsxs("div", { className: "admin-card dashboard-sample-card", children: [
     /* @__PURE__ */ e.jsx("h2", { children: "Dashboard module" }),
     /* @__PURE__ */ e.jsx("p", { className: "metric", children: "Loaded" }),
-    /* @__PURE__ */ e.jsx("p", { children: "Runtime registration completed through the Studio SDK." })
+    /* @__PURE__ */ e.jsx("p", { children: "Runtime widget registration completed through the Studio SDK." })
+  ] });
+}
+function R() {
+  return /* @__PURE__ */ e.jsxs("div", { className: "admin-card dashboard-sample-card", children: [
+    /* @__PURE__ */ e.jsx("h2", { children: "Route ownership" }),
+    /* @__PURE__ */ e.jsx("p", { className: "metric", children: "Host" }),
+    /* @__PURE__ */ e.jsx("p", { children: "Dashboard navigation and routing are provided by Studio." })
+  ] });
+}
+function j() {
+  return /* @__PURE__ */ e.jsxs("div", { className: "admin-card dashboard-sample-card", children: [
+    /* @__PURE__ */ e.jsx("h2", { children: "Backend endpoints" }),
+    /* @__PURE__ */ e.jsx("p", { className: "metric", children: "0" }),
+    /* @__PURE__ */ e.jsx("p", { children: "This widget is contributed by a frontend-only module." })
   ] });
 }
 export {
-  j as DashboardPage,
-  c as ModuleHealthWidget,
+  j as BackendEndpointsWidget,
+  x as ModuleHealthWidget,
+  R as RouteOwnershipWidget,
   v as register
 };

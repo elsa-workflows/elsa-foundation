@@ -8,6 +8,7 @@ import {
   formatFileSize,
   getErrorMessage,
   hostTabs,
+  normalizeModuleManagementRegistry,
   uploadPackage,
   type HostId,
   type HostModel,
@@ -106,8 +107,8 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     }
 
     try {
-      const registry = await host.context.http.getJson<ModuleManagementRegistryResponse>("/_elsa/module-management/registry");
-      patchHostState(hostId, { state: "ready", registry, status: null, error: null });
+      const registry = await host.context.http.getJson<Partial<ModuleManagementRegistryResponse>>("/_elsa/module-management/registry");
+      patchHostState(hostId, { state: "ready", registry: normalizeModuleManagementRegistry(registry), status: null, error: null });
     } catch (e) {
       if (!options?.silent) {
         patchHostState(hostId, { state: "failed", error: getErrorMessage(e) });

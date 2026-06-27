@@ -70,6 +70,31 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("does not show a global 404 when the initial file detail endpoint is unavailable", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/repositories")) return [repositorySummary()];
+        if (url.endsWith("/workspaces")) return [workspaceWithProject()];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
+        if (url.endsWith("/files")) return projectFiles();
+        if (url.endsWith("/runtime-status")) return loadedRuntime();
+        if (url.endsWith("Activities%2FHelloActivity.cs")) throw new Error("Request failed with 404.");
+        if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
+        return {};
+      }
+    }));
+
+    await waitForText(container, "Activities/HelloActivity.cs");
+    await flushPromises();
+
+    expect(container.textContent).not.toContain("Request failed with 404.");
+
+    await unmount();
+  });
+
   it("attaches a server-local repository, refreshes the rail, and selects it", async () => {
     let attached = false;
     const serverPath = "/srv/elsa/extensions/server-repo";

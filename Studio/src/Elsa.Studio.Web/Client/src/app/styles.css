@@ -501,7 +501,18 @@ textarea:focus {
   width: 100%;
 }
 
-.dashboard-view {
+.content:has(> .wf-editor) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.content:has(> .wf-editor) > .wf-editor {
+  width: 100%;
+  margin-inline: 0;
+}
+
+.dashboard-view,
+.diagnostics-view {
   display: grid;
   gap: 20px;
 }
@@ -653,7 +664,8 @@ textarea:focus {
   margin: 0 0 16px;
 }
 
-.dashboard-view .section-header {
+.dashboard-view .section-header,
+.diagnostics-view .section-header {
   margin: 0;
 }
 

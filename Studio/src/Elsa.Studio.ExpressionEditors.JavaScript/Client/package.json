@@ -1,0 +1,14 @@
+{
+  "name": "@elsa-workflows/studio-expression-editors-javascript",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@uiw/react-codemirror": "^4.25.10"
+  }
+}

@@ -3,14 +3,40 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
-import { register } from "../module";
+import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource } from "../module";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("workflows module", () => {
-  it("registers navigation and definitions route", () => {
+  it("treats a connect-end captured by the source handle as an empty-canvas release when the pointer is over the pane", () => {
+    const sourceHandle = document.createElement("div");
+    sourceHandle.className = "react-flow__handle";
+    const pane = document.createElement("div");
+    pane.className = "react-flow__pane";
+    const elementFromPoint = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn(() => pane) });
+
+    try {
+      const event = new MouseEvent("mouseup", { bubbles: true, clientX: 300, clientY: 240 });
+      sourceHandle.dispatchEvent(event);
+
+      expect(isConnectEndOverExistingWorkflowNode(event)).toBe(false);
+    } finally {
+      if (elementFromPoint) Object.defineProperty(document, "elementFromPoint", elementFromPoint);
+      else Reflect.deleteProperty(document, "elementFromPoint");
+    }
+  });
+
+  it("resolves a connect-end source from React Flow connection state when the start ref is empty", () => {
+    expect(resolveConnectEndSource(null, {
+      fromNode: { id: "write-line-1" },
+      fromHandle: { id: "Done" }
+    })).toEqual({ nodeId: "write-line-1", handleId: "Done" });
+  });
+
+  it("registers Runs navigation while preserving instance routes", () => {
     const api = testApi();
 
     register(api);
@@ -22,13 +48,13 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
+      expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" })
     ]);
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
-      expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances" }),
-      expect.objectContaining({ id: "workflows-instance-detail", path: "/workflows/instances/:workflowExecutionId" })
+      expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
+      expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" })
     ]);
   });
 
@@ -309,6 +335,56 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows current workflow artifacts in the designer right panel", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/_demo/workflows/executables")) return response([
+        executable({ artifactId: "artifact-current", definitionId: "definition-1", artifactVersion: "2.0.0" }),
+        executable({ artifactId: "artifact-other", definitionId: "definition-2", sourceId: "definition-2" })
+      ]);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    try {
+      await waitForText(container, "Write Line");
+      await click(buttonByText(container, "Artifacts"));
+      await waitForText(container, "artifact-current");
+
+      expect(container.textContent).toContain("Version 2.0.0");
+      expect(container.textContent).not.toContain("artifact-other");
+
+      await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
+      expect(writeText).toHaveBeenCalledWith("artifact-current");
+      expect(container.textContent).toContain("Copied artifact ID");
+
+      await click(buttonByText(container, "Open list"));
+      expect(window.location.pathname).toBe("/workflows/executables");
+      expect(window.location.search).toBe("?definition=definition-1");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
   it("opens the canvas activity picker and inserts an activity into an empty flowchart", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -351,6 +427,63 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-node")?.textContent).toContain("Write Line");
 
     await unmount();
+  });
+
+  it("adds one activity for one palette drag onto the canvas", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+    const paletteActivity = container.querySelector(".wf-palette-activity");
+    const canvas = container.querySelector<HTMLElement>(".wf-canvas");
+    const reactFlow = container.querySelector<HTMLElement>(".react-flow");
+    if (!canvas || !reactFlow) throw new Error("Canvas not found");
+    stubRect(canvas, { left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600 });
+    stubRect(reactFlow, { left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600 });
+    const restoreElementFromPoint = stubElementFromPoint(reactFlow);
+
+    try {
+      const dataTransfer = dragDataTransfer();
+      dispatchDragEvent(paletteActivity, "dragstart", { dataTransfer, clientX: 220, clientY: 220 });
+      dispatchDragEvent(reactFlow, "drop", { dataTransfer, clientX: 360, clientY: 300 });
+      dispatchDragEvent(paletteActivity, "dragend", { dataTransfer, clientX: 360, clientY: 300 });
+      await flushPromises();
+      flushSync(() => {});
+
+      expect(container.querySelectorAll(".wf-canvas .wf-node")).toHaveLength(1);
+    } finally {
+      restoreElementFromPoint();
+      await unmount();
+    }
   });
 
   it("renders an unsupported root activity as a fixed selectable node without flow ports", async () => {
@@ -619,9 +752,29 @@ describe("workflows module", () => {
   it("renders workflow executables and runs an artifact", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return response(null, 204);
+      if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1" })
+        }));
+      }
+      if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
+        return response(workflowDefinitionVersionDetails());
+      }
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
       expect(url).toBe("https://server.example/_demo/workflows/executables");
-      return response([executable({ rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart" })]);
+      return response([executable({
+        rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+        sourceKind: "WorkflowDefinitionVersion",
+        sourceId: "version-1"
+      })]);
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
@@ -630,14 +783,71 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Executables");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     expect(container.textContent).toContain("Flowchart");
+    expect(container.textContent).toContain("Definition version");
+    expect(container.textContent).not.toContain("WorkflowDefinitionVersion / version-1 / 1.0.0");
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Open Run wfexec-published-1");
+    await click(buttonByText(container, "Open Run wfexec-published-1"));
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/_elsa/workflow-management/executables/artifact-1/run",
       expect.objectContaining({ method: "POST" })
     );
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
+
+    await unmount();
+  });
+
+  it("copies executable identifiers from the grid", async () => {
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    vi.stubGlobal("fetch", vi.fn(async () => response([executable()])));
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    try {
+      await waitForText(container, "artifact-1");
+      await click(buttonByLabel(container, "Copy artifact ID artifact-1"));
+
+      expect(writeText).toHaveBeenCalledWith("artifact-1");
+      expect(container.textContent).toContain("Copied artifact ID");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("dispatches executable Explain actions to Weaver", async () => {
+    const fetchMock = vi.fn(async () => response([executable()]));
+    const dispatchPrompt = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
+      api.ai.promptActions.add({
+        id: "weaver.workflows.explain-executable",
+        label: "Explain executable",
+        placement: "selection",
+        contextKind: "workflow-executable",
+        createPrompt: context => ({
+          message: "Explain this workflow executable.",
+          mode: "enqueue",
+          attachments: [{ kind: "workflow-executable", referenceId: (context as { artifactId: string }).artifactId }]
+        })
+      });
+      api.ai.dispatchPrompt = dispatchPrompt;
+    });
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByText(container, "Explain"));
+
+    expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      message: "Explain this workflow executable.",
+      attachments: [expect.objectContaining({ kind: "workflow-executable", referenceId: "artifact-1" })]
+    }));
+    expect(container.textContent).toContain("Sent artifact-1 to Weaver");
 
     await unmount();
   });
@@ -650,7 +860,8 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
       if (init?.method === "POST" && url.includes("/versions/")) throw new Error("Designer Run must not publish versions.");
       if (init?.method === "POST" && url.includes("/executables/")) throw new Error("Designer Run must not call durable executable run.");
@@ -672,21 +883,39 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Add activity"));
     await click(optionByText(container, "Write Line"));
     await click(buttonByText(container, "Run"));
-    await waitForText(container, "test-run-1");
+    await waitForText(container, "Test run dispatched");
 
     const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
-    const testRunCall = calls.find(call => call.method === "POST" && call.url.endsWith("/_elsa/publishing/workflows/drafts/test-runs"));
+    const testRunCall = calls.find(call => call.method === "POST" && urlPath(call.url) === "/publishing/workflows/drafts/test-runs");
     expect(testRunCall).toBeTruthy();
     const requestBody = JSON.parse(testRunCall?.body ?? "{}");
     expect(requestBody.definitionId).toBe("definition-1");
     expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
-    expect(JSON.stringify(requestBody.state)).toContain("write-line-v1");
+    expect(requestBody.state.rootActivity).toMatchObject({
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      structure: {
+        kind: "elsa.flowchart.structure",
+        payload: {
+          activities: [expect.objectContaining({ activityVersionId: "write-line-v1" })]
+        }
+      }
+    });
+    expect(calls.some(call => call.method === "POST" && urlPath(call.url) === "/_elsa/publishing/workflows/drafts/test-runs")).toBe(false);
     expect(calls.some(call => call.url.includes("/drafts/draft-1/promote") && call.method === "POST")).toBe(false);
     expect(calls.some(call => call.url.includes("/versions/") && call.method === "POST")).toBe(false);
     expect(calls.some(call => call.url.includes("/executables/") && call.method === "POST")).toBe(false);
-    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(container.querySelector(".wf-test-run-capsule")).toBeNull();
+    expect(container.querySelector(".wf-test-run-popover")).toBeNull();
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+    await click(buttonByText(container, "Test run dispatched"));
+    await waitForText(container, "test-run-1");
+    expect(container.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
+    expect(container.textContent).toContain("1 activity");
+    expect(container.textContent).toContain("0 incidents");
 
     await unmount();
   });
@@ -699,7 +928,8 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
         { type: "Literal", displayName: "Literal" },
@@ -738,10 +968,13 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Test run dispatched");
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
     expect(container.textContent).toContain("artifact-transient-1");
     expect(container.textContent).toContain("wfexec-1");
 
+    await click(buttonByText(container, "Inspector"));
     await click(container.querySelector(".wf-canvas .react-flow__node"));
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
@@ -761,7 +994,7 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST" && url.endsWith("/_elsa/publishing/workflows/drafts/test-runs")) return response(testRunView({
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView({
         artifactId: null,
         workflowExecutionId: null,
         status: "Rejected",
@@ -769,6 +1002,7 @@ describe("workflows module", () => {
         reason: "Workflow version has no root activity to publish.",
         expiresAt: null
       }), 400);
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
@@ -785,10 +1019,12 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Test run rejected");
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
 
     expect(container.textContent).toContain("Test run rejected");
-    expect(container.textContent).toContain("Ephemeral - not promoted");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
 
     await unmount();
@@ -797,22 +1033,41 @@ describe("workflows module", () => {
   it("filters workflow executables by definition query parameter", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response([
       executable({ artifactId: "artifact-visible", definitionId: "definition-1" }),
-      executable({ artifactId: "artifact-hidden", definitionId: "definition-2", sourceId: "definition-2" })
+      executable({ artifactId: "artifact-hidden", definitionId: "definition-2", definitionVersionId: "version-2", sourceId: "definition-2" })
     ])));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables?definition=definition-1");
 
     await waitForText(container, "artifact-visible");
-    expect(container.textContent).toContain("Definition definition-1");
+    const filterInput = inputByLabel(container, "Filter executables by workflow definition");
+    expect(filterInput?.value).toBe("definition-1");
     expect(container.textContent).not.toContain("artifact-hidden");
+
+    await fill(filterInput, "version-2");
+    await waitForText(container, "artifact-hidden");
+    expect(window.location.search).toBe("?definition=version-2");
+    expect(container.textContent).not.toContain("artifact-visible");
+
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "");
+    await waitForText(container, "artifact-visible");
+    expect(window.location.search).toBe("");
 
     await unmount();
   });
 
-  it("navigates from workflow instances to the wider instance detail route", async () => {
+  it("navigates from workflow runs to the compatible instance detail route", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances")) {
-        return response([workflowInstance()]);
+        if (url.includes("runKind=TestRun")) {
+          return response([workflowInstance({
+            workflowExecutionId: "wfexec-test",
+            artifactId: "artifact-test",
+            runKind: "TestRun",
+            activityCount: 2,
+            incidentCount: 1
+          })]);
+        }
+        return response([workflowInstance({ runKind: "PublishedRun" })]);
       }
 
       throw new Error(`Unexpected request ${url}`);
@@ -821,13 +1076,23 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    expect(container.textContent).toContain("Instances");
+    expect(container.textContent).toContain("Runs");
+    expect(container.textContent).toContain("Published Run");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
-    await click(rowByLabel(container, "Inspect workflow instance wfexec-1"));
+    await select(selectByLabel(container, "Run Kind"), "TestRun");
+    await waitForText(container, "wfexec-test");
+    expect(container.textContent).toContain("Test Run");
+    expect(container.textContent).toContain("2 activities");
+    expect(container.textContent).toContain("1 incidents");
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test"));
 
-    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/instances?take=100",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?runKind=TestRun&take=100",
       expect.any(Object)
     );
 
@@ -865,6 +1130,9 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Definition version");
+    expect(container.textContent).toContain("Run");
+    expect(container.textContent).toContain("Workflow Instance ID");
+    expect(container.textContent).toContain("Published Run");
     expect(container.textContent).toContain("Activity history");
     expect(container.textContent).toContain("WriteLine");
     expect(container.textContent).toContain("No incidents recorded.");
@@ -876,6 +1144,72 @@ describe("workflows module", () => {
       "https://server.example/_elsa/workflow-management/versions/version-1",
       expect.any(Object)
     );
+
+    await unmount();
+  });
+
+  it("shows a not-found state only when the run record is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-missing")) {
+        return response({ error: "Workflow run was not found." }, 404);
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-missing");
+
+    await waitForText(container, "Run wfexec-missing was not found.");
+    expect(container.textContent).not.toContain("Definition graph unavailable");
+
+    await unmount();
+  });
+
+  it("renders transient workflow instance details when the draft definition version is unavailable", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const draftVersionId = "draft:01KVWDKVN8HDDM9WPCGCK8QXJ4-2fead0b1";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({
+            definitionVersionId: draftVersionId,
+            artifactId: "test-artifact-46792146fbed",
+            artifactVersion: "draft",
+            status: "Running",
+            completedAt: null
+          })
+        }));
+      }
+
+      if (url.startsWith(`https://server.example/_elsa/workflow-management/versions/${encodeURIComponent(draftVersionId)}`)) {
+        return response({ error: `Workflow definition version '${draftVersionId}' was not found.` }, 404);
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Definition graph unavailable");
+    expect(container.textContent).toContain("Activity history");
+    expect(container.textContent).toContain("WriteLine");
+    expect(container.textContent).toContain("test-artifact-46792146fbed");
+    expect(container.textContent).not.toContain("Request failed with 404");
 
     await unmount();
   });
@@ -1061,6 +1395,8 @@ function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
     workflowExecutionId: "wfexec-1",
     status: "DispatchAccepted",
     commandDispatchStatus: "Accepted",
+    activityCount: 1,
+    incidentCount: 0,
     reason: null,
     expiresAt: "2026-06-24T12:00:00Z",
     ...overrides
@@ -1074,6 +1410,7 @@ function workflowInstance(overrides: Partial<Record<string, unknown>> = {}) {
     artifactVersion: "1.0.0",
     definitionId: "definition-1",
     definitionVersionId: "version-1",
+    runKind: "PublishedRun",
     status: "Completed",
     subStatus: null,
     correlationId: "correlation-1",
@@ -1287,6 +1624,10 @@ function rowByLabel(container: HTMLElement, label: string) {
     .find(row => row.getAttribute("aria-label") === label) ?? null;
 }
 
+function urlPath(url: string) {
+  return new URL(url).pathname;
+}
+
 async function fill(element: HTMLInputElement | HTMLTextAreaElement | null, value: string) {
   if (!element) throw new Error("Input not found");
   const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -1304,6 +1645,65 @@ async function select(element: HTMLSelectElement | null, value: string) {
   element.dispatchEvent(new Event("change", { bubbles: true }));
   await flushPromises();
   flushSync(() => {});
+}
+
+function dragDataTransfer() {
+  const values = new Map<string, string>();
+  return {
+    dropEffect: "none",
+    effectAllowed: "all",
+    setData: vi.fn((type: string, value: string) => {
+      values.set(type, value);
+    }),
+    getData: vi.fn((type: string) => values.get(type) ?? ""),
+    clearData: vi.fn((type?: string) => {
+      if (type) values.delete(type);
+      else values.clear();
+    })
+  };
+}
+
+function dispatchDragEvent(
+  element: Element | null,
+  type: string,
+  options: { dataTransfer: ReturnType<typeof dragDataTransfer>; clientX: number; clientY: number }
+) {
+  if (!(element instanceof HTMLElement)) throw new Error(`Drag target not found: ${type}`);
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    dataTransfer: { value: options.dataTransfer },
+    clientX: { value: options.clientX },
+    clientY: { value: options.clientY }
+  });
+  element.dispatchEvent(event);
+}
+
+function stubRect(element: HTMLElement, rect: Partial<DOMRect>) {
+  element.getBoundingClientRect = () => ({
+    x: rect.left ?? 0,
+    y: rect.top ?? 0,
+    left: rect.left ?? 0,
+    top: rect.top ?? 0,
+    right: rect.right ?? 0,
+    bottom: rect.bottom ?? 0,
+    width: rect.width ?? 0,
+    height: rect.height ?? 0,
+    toJSON: () => ({})
+  } as DOMRect);
+}
+
+function stubElementFromPoint(element: HTMLElement) {
+  const descriptor = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn(() => element) });
+
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(document, "elementFromPoint", descriptor);
+      return;
+    }
+
+    Reflect.deleteProperty(document, "elementFromPoint");
+  };
 }
 
 async function flushPromises() {

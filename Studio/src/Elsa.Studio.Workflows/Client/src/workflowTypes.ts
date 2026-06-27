@@ -7,6 +7,10 @@ export interface WorkflowDefinitionsResponse {
   totalCount?: number;
 }
 
+export interface WorkflowExecutablesResponse {
+  executables: WorkflowExecutableSummary[];
+}
+
 export interface WorkflowDefinitionSummary {
   id: string;
   name: string;
@@ -102,8 +106,6 @@ export interface ActivityCatalogItem {
   category: string;
   displayName: string;
   description?: string | null;
-  icon?: string | null;
-  iconColor?: string | null;
   executionType: string;
   icon?: string | null;
   iconName?: string | null;
@@ -164,6 +166,8 @@ export interface WorkflowTestRunView {
   workflowExecutionId?: string | null;
   status: string;
   commandDispatchStatus?: string | null;
+  activityCount?: number | null;
+  incidentCount?: number | null;
   reason?: string | null;
   expiresAt?: string | null;
 }
@@ -176,6 +180,7 @@ export interface WorkflowExecutableSummary {
   definitionVersionId: string;
   createdAt: string;
   publishedAt?: string | null;
+  deletedAt?: string | null;
   sourceKind?: string | null;
   sourceId?: string | null;
   sourceVersion?: string | null;
@@ -185,6 +190,12 @@ export interface WorkflowExecutableSummary {
   resumeTargetCount: number;
 }
 
+export interface WorkflowExecutableRunResponse {
+  workflowExecutionId?: string | null;
+  runId?: string | null;
+  executionId?: string | null;
+}
+
 export interface WorkflowInstanceSummary {
   workflowExecutionId: string;
   artifactId: string;
@@ -192,6 +203,7 @@ export interface WorkflowInstanceSummary {
   definitionVersionId: string;
   artifactVersion: string;
   artifactHash: string;
+  runKind?: string | null;
   status: string;
   subStatus?: string | null;
   createdAt: string;

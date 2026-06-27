@@ -1,7 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStudioRegistry, findFeatureAreaForPath } from "../app/registry";
 import { registerBuiltInPropertyEditors } from "../app/propertyEditors";
-import { createEndpointContext, describeApiError, StudioHttpError, tryExtractValidationErrors, type StudioActivityInputDescriptor, type StudioActivityPropertyEditorContribution, type StudioActivityPropertyEditorContext, type StudioFeatureAreaContribution } from "../sdk";
+import {
+  createContributionRegistry,
+  createEndpointContext,
+  defineStudioSlot,
+  describeApiError,
+  moduleSlotOwner,
+  StudioHttpError,
+  studioSlotIds,
+  tryExtractValidationErrors,
+  type StudioActivityInputDescriptor,
+  type StudioActivityPropertyEditorContribution,
+  type StudioActivityPropertyEditorContext,
+  type StudioExpressionEditorContribution,
+  type StudioFeatureAreaContribution
+} from "../sdk";
 
 describe("studio registry", () => {
   afterEach(() => {
@@ -9,7 +23,7 @@ describe("studio registry", () => {
     vi.unstubAllGlobals();
   });
 
-  it("tracks typed bottom panel contributions", () => {
+  it("tracks typed bottom panel contributions with deterministic ordering", () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
@@ -19,7 +33,150 @@ describe("studio registry", () => {
     api.panels.add({ id: "second", title: "Second", order: 20, component: () => null });
     api.panels.add({ id: "first", title: "First", order: 10, component: () => null });
 
-    expect(api.panels.list().map(panel => panel.id)).toEqual(["second", "first"]);
+    expect(api.panels.slot.id).toBe(studioSlotIds.panels);
+    expect(api.panels.list().map(panel => panel.id)).toEqual(["first", "second"]);
+  });
+
+  it("uses stable fallback ordering instead of module load order", () => {
+    const first = createContributionRegistry<{ id: string }>();
+    const second = createContributionRegistry<{ id: string }>();
+
+    first.add({ id: "zebra" });
+    first.add({ id: "alpha" });
+    second.add({ id: "alpha" });
+    second.add({ id: "zebra" });
+
+    expect(first.list().map(item => item.id)).toEqual(["alpha", "zebra"]);
+    expect(second.list().map(item => item.id)).toEqual(["alpha", "zebra"]);
+  });
+
+  it("maps current registries to public Slot IDs", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    expect(api.routes.slot.id).toBe(studioSlotIds.routes);
+    expect(api.dashboardWidgets.slot.id).toBe(studioSlotIds.dashboardWidgets);
+    expect(api.workflowDesigner.panels.slot.id).toBe(studioSlotIds.workflowDesignerPanels);
+    expect(api.propertyEditors.slot.id).toBe(studioSlotIds.propertyEditors);
+    expect(api.agent.promptStarters.slot.id).toBe(studioSlotIds.agentPromptStarters);
+    expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
+    expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
+    expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
+    expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
+  });
+
+  it("supports module-owned nested Slots", () => {
+    const weatherCardsSlot = defineStudioSlot({
+      id: "weather.dashboard.cards",
+      kind: "dashboard-widget",
+      title: "Weather dashboard cards",
+      parentId: studioSlotIds.dashboardWidgets,
+      owner: moduleSlotOwner("weather")
+    });
+    const registry = createContributionRegistry<{ id: string; component: () => null }>({ slot: weatherCardsSlot });
+
+    registry.add({ id: "weather.forecast", component: () => null });
+
+    expect(registry.slot).toMatchObject({
+      id: "weather.dashboard.cards",
+      parentId: studioSlotIds.dashboardWidgets,
+      owner: { kind: "module", moduleId: "weather" }
+    });
+    expect(registry.compose()[0]).toMatchObject({
+      slot: weatherCardsSlot,
+      availability: { state: "available" }
+    });
+  });
+
+  it("runs Slot Owner rules before Host Policy vetoes", () => {
+    const registry = createContributionRegistry<{ id: string; moduleId: string; component?: () => null }>({
+      slot: defineStudioSlot({
+        id: "weather.dashboard.cards",
+        kind: "dashboard-widget",
+        parentId: studioSlotIds.dashboardWidgets,
+        owner: moduleSlotOwner("weather")
+      }),
+      slotOwner: ({ contribution }) => contribution.id.startsWith("weather.")
+        ? true
+        : { state: "hidden", reason: "Only weather cards are accepted." },
+      hostPolicy: ({ contribution }) => contribution.moduleId === "blocked"
+        ? { state: "unavailable", reason: "Host policy blocked this module." }
+        : true
+    });
+
+    registry.add({ id: "other.card", moduleId: "weather", component: () => null });
+    registry.add({ id: "weather.blocked", moduleId: "blocked", component: () => null });
+    registry.add({ id: "weather.forecast", moduleId: "weather", component: () => null });
+
+    expect(registry.list().map(item => item.id)).toEqual(["weather.forecast"]);
+    expect(registry.compose({ includeHidden: true, includeUnavailable: true }).map(item => ({
+      id: item.contribution.id,
+      state: item.availability.state,
+      source: item.availability.source,
+      reason: item.availability.reason
+    }))).toEqual([
+      { id: "other.card", state: "hidden", source: "slot-owner", reason: "Only weather cards are accepted." },
+      { id: "weather.blocked", state: "unavailable", source: "host-policy", reason: "Host policy blocked this module." },
+      { id: "weather.forecast", state: "available", source: undefined, reason: undefined }
+    ]);
+  });
+
+  it("hides disabled module and feature Contributions by default", () => {
+    const registry = createContributionRegistry<{ id: string; moduleId?: string; featureId?: string }>();
+
+    registry.add({ id: "weather.forecast", moduleId: "weather" });
+    registry.add({ id: "secrets.picker", featureId: "secrets" });
+    registry.add({ id: "workflows.definitions", moduleId: "workflows" });
+
+    expect(registry.list({ disabledModuleIds: ["weather"], disabledFeatureIds: ["secrets"] }).map(item => item.id)).toEqual(["workflows.definitions"]);
+    expect(registry.compose({
+      disabledModuleIds: ["weather"],
+      disabledFeatureIds: ["secrets"],
+      includeHidden: true
+    }).map(item => [item.contribution.id, item.availability.state, item.availability.source])).toEqual([
+      ["secrets.picker", "hidden", "feature"],
+      ["weather.forecast", "hidden", "module"],
+      ["workflows.definitions", "available", undefined]
+    ]);
+  });
+
+  it("can surface runtime-unavailable Contributions with disabled reasons", () => {
+    const registry = createContributionRegistry<{
+      id: string;
+      availability?: { state: "unavailable"; reason: string };
+    }>();
+
+    registry.add({ id: "weaver.prompt.build", availability: { state: "unavailable", reason: "Weaver backend is offline." } });
+    registry.add({ id: "weaver.prompt.explain" });
+
+    expect(registry.list().map(item => item.id)).toEqual(["weaver.prompt.explain"]);
+    expect(registry.compose({ includeUnavailable: true }).map(item => ({
+      id: item.contribution.id,
+      availability: item.availability
+    }))).toEqual([
+      { id: "weaver.prompt.build", availability: { state: "unavailable", reason: "Weaver backend is offline.", source: "runtime" } },
+      { id: "weaver.prompt.explain", availability: { state: "available" } }
+    ]);
+  });
+
+  it("tracks diagnostics widget contributions through the public SDK registry", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const widget = {
+      id: "runtime-health",
+      title: "Runtime health",
+      component: () => null
+    };
+
+    api.diagnosticsWidgets.add(widget);
+
+    expect(api.diagnosticsWidgets.list()).toEqual([widget]);
   });
 
   it("registers descriptor-driven property editors with fallback and order-based overrides", () => {
@@ -42,6 +199,31 @@ describe("studio registry", () => {
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "checkbox", typeName: "System.Boolean" }), context)?.id).toBe("studio.property.checkbox");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "unknown", typeName: "Acme.Custom" }), context)?.id).toBe("studio.property.text-fallback");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "singleline", typeName: "System.String" }), context)?.id).toBe("custom.singleline");
+  });
+
+  it("tracks expression editor contributions through the public SDK registry", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const expandedEditor: StudioExpressionEditorContribution = {
+      id: "javascript.expanded",
+      order: 20,
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { expanded: () => null }
+    };
+    const inlineEditor: StudioExpressionEditorContribution = {
+      id: "javascript.inline",
+      order: 10,
+      supports: context => context.syntax === "JavaScript",
+      surfaces: { inline: () => null }
+    };
+
+    api.expressionEditors.add(expandedEditor);
+    api.expressionEditors.add(inlineEditor);
+
+    expect(api.expressionEditors.list()).toEqual([inlineEditor, expandedEditor]);
   });
 
   it("preserves navigation icon colors", () => {
