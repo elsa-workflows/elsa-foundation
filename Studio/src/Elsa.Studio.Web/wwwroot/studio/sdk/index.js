@@ -118,8 +118,8 @@ function H(t) {
       const s = "method" in i ? i.method.toUpperCase() : "GET";
       if (s !== "GET")
         throw new A(`Provider '${t.id}' exposes an unsupported ${s} challenge.`);
-      const d = new URL(et(i), N(t)), a = o?.returnUrl ?? t.location?.href ?? window.location.href;
-      return d.searchParams.set("returnUrl", nt(a, o?.providerId ?? t.id, t)), (t.location ?? window.location).assign(d.toString()), Promise.resolve();
+      const d = new URL(et(i), N(t)), c = o?.returnUrl ?? t.location?.href ?? window.location.href;
+      return d.searchParams.set("returnUrl", nt(c, o?.providerId ?? t.id, t)), (t.location ?? window.location).assign(d.toString()), Promise.resolve();
     },
     handleCallback: () => C(e, n, t),
     logout: async () => {
@@ -249,24 +249,24 @@ function j() {
   return t;
 }
 function Ct({ manager: t, children: e }) {
-  const [n, r] = l.useState(() => t.getSession() ?? M), [o, i] = l.useState(null), s = l.useRef(!1), d = l.useRef(0), a = l.useCallback((u) => s.current && d.current === u, []), p = l.useCallback(async (u) => {
-    if (a(u)) {
+  const [n, r] = l.useState(() => t.getSession() ?? M), [o, i] = l.useState(null), s = l.useRef(!1), d = l.useRef(0), c = l.useCallback((u) => s.current && d.current === u, []), p = l.useCallback(async (u) => {
+    if (c(u)) {
       i(null);
       try {
         const h = await t.getCapabilities();
-        a(u) && i(h);
+        c(u) && i(h);
       } catch (h) {
-        a(u) && (console.error("Auth capabilities request failed.", h), i(null));
+        c(u) && (console.error("Auth capabilities request failed.", h), i(null));
       }
     }
-  }, [t, a]);
+  }, [t, c]);
   l.useLayoutEffect(() => {
     s.current = !0;
     const u = ++d.current;
     async function h() {
       try {
         const w = await t.initialize();
-        if (!a(u))
+        if (!c(u))
           return;
         if (r(w), w.status !== "authenticated") {
           i(null);
@@ -274,26 +274,26 @@ function Ct({ manager: t, children: e }) {
         }
         await p(u);
       } catch (w) {
-        a(u) && (console.error("Auth initialization failed.", w), r(T), i(null));
+        c(u) && (console.error("Auth initialization failed.", w), r(T), i(null));
       }
     }
     return h(), () => {
       s.current = !1, d.current += 1;
     };
-  }, [p, t, a]);
+  }, [p, t, c]);
   const $ = l.useCallback(async (u) => {
     const h = ++d.current;
-    if (await t.login(u), !a(h))
+    if (await t.login(u), !c(h))
       return;
     const w = t.getSession();
     r(w), w.status === "authenticated" ? await p(h) : i(null);
-  }, [p, t, a]), I = l.useCallback(async () => {
+  }, [p, t, c]), I = l.useCallback(async () => {
     const u = ++d.current;
-    await t.logout(), a(u) && (r(t.getSession()), i(null));
-  }, [t, a]), L = l.useCallback(async () => {
+    await t.logout(), c(u) && (r(t.getSession()), i(null));
+  }, [t, c]), L = l.useCallback(async () => {
     const u = ++d.current, h = await t.refresh();
-    return a(u) && (r(h), h.status === "authenticated" ? await p(u) : i(null)), h;
-  }, [p, t, a]), Q = l.useMemo(() => ({
+    return c(u) && (r(h), h.status === "authenticated" ? await p(u) : i(null)), h;
+  }, [p, t, c]), Q = l.useMemo(() => ({
     session: n,
     capabilities: o,
     login: $,
@@ -330,9 +330,9 @@ function xt({ children: t, fallback: e = null, loginOptions: n }) {
       const s = at(n), d = i.current;
       if (d?.key === s && d.login === o)
         return;
-      const a = { key: s, login: o };
-      i.current = a, o(n).catch((p) => {
-        i.current === a && (i.current = null), console.error("Auth login failed.", p);
+      const c = { key: s, login: o };
+      i.current = c, o(n).catch((p) => {
+        i.current === c && (i.current = null), console.error("Auth login failed.", p);
       });
     } else
       i.current = null;
@@ -389,16 +389,16 @@ function Rt(t, e, n = {}) {
 }
 const R = /* @__PURE__ */ new Map();
 async function y(t, e, n, r, o) {
-  const i = r.fetch ?? fetch, s = new URL(e, t).toString(), d = await i(s, await B(n, U(r, o))), a = d.status === 401 && r.refreshOnUnauthorized !== !1 ? await ct(i, s, n, U(r, o)) : d;
-  if (!a.ok)
-    throw await G(a);
-  const p = await a.text();
+  const i = r.fetch ?? fetch, s = new URL(e, t).toString(), d = await i(s, await B(n, U(r, o))), c = d.status === 401 && r.refreshOnUnauthorized !== !1 ? await ct(i, s, n, U(r, o)) : d;
+  if (!c.ok)
+    throw await G(c);
+  const p = await c.text();
   if (!p.trim())
     return {};
   try {
     return JSON.parse(p);
   } catch {
-    throw new v(a.status, `Expected JSON from ${s}.`);
+    throw new v(c.status, `Expected JSON from ${s}.`);
   }
 }
 async function ct(t, e, n, r) {
@@ -447,7 +447,7 @@ function Nt(t, e) {
 function lt(t) {
   return typeof t == "function";
 }
-const F = 1e4, c = {
+const F = 1e4, a = {
   host: {
     kind: "host",
     id: "studio.host",
@@ -469,175 +469,182 @@ const k = {
   featureAreas: {
     id: "studio.feature-areas",
     kind: "feature-area",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioFeatureAreaContribution",
     description: "Top-level module-owned feature areas that expand into navigation and routes."
   },
   navigation: {
     id: "studio.navigation",
     kind: "navigation",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioNavigationContribution",
     description: "Shell navigation entries shown in the Studio workbench."
   },
   routes: {
     id: "studio.routes",
     kind: "route",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioRouteContribution",
     description: "Routable Studio pages and feature-area routes."
   },
   dashboardWidgets: {
     id: "studio.dashboard.widgets",
     kind: "dashboard-widget",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioDashboardWidgetContribution",
     description: "Dashboard workspace summary widgets contributed by modules."
   },
   panels: {
     id: "studio.shell.panels",
     kind: "panel",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioPanelContribution",
     description: "Global shell panels such as assistant or utility panels."
   },
   toolbarActions: {
     id: "studio.shell.toolbar-actions",
     kind: "toolbar-action",
-    owner: c.host,
+    owner: a.host,
     contributionName: "unknown",
     description: "Global shell toolbar actions."
   },
   activityEditors: {
     id: "studio.activity.editors",
     kind: "activity-editor",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "unknown",
     description: "Activity editing surfaces owned by the workflow designer."
   },
   propertyEditors: {
     id: "workflow.activity.property-editors",
     kind: "property-editor",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "StudioActivityPropertyEditorContribution",
     description: "Activity property editors selected by descriptor and context."
   },
   expressionEditors: {
     id: "workflow.expression.editors",
     kind: "expression-editor",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "StudioExpressionEditorContribution",
     description: "Expression editors selected by expression type and surface."
   },
   settingEditors: {
     id: "studio.settings.editors",
     kind: "setting-editor",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioSettingEditorContribution",
     description: "Host setting editors selected by setting descriptor."
   },
   agentContextProviders: {
     id: "studio.agent.context-providers",
     kind: "agent-context-provider",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentContextProviderContribution",
     description: "Provider-neutral context collectors for Weaver and agent surfaces."
   },
   agentPromptStarters: {
     id: "studio.agent.prompt-starters",
     kind: "agent-prompt-starter",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentPromptStarterContribution",
     description: "Route-aware prompt starters."
   },
   agentCapabilities: {
     id: "studio.agent.capabilities",
     kind: "agent-capability",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentCapabilityContribution",
     description: "Agent capability declarations with risk and permission metadata."
   },
   agentActions: {
     id: "studio.agent.actions",
     kind: "agent-action",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentActionContribution",
     description: "Reviewable agent actions that produce backend-owned proposals."
   },
   agentToolSlots: {
     id: "studio.agent.tool-slots",
     kind: "agent-tool-slot",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentToolSlotContribution",
     description: "Resource-aware Weaver Tool Slots contributed through the Studio SDK."
   },
   agentToolContracts: {
     id: "studio.agent.tool-contracts",
     kind: "agent-tool-contract",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAgentToolContractContribution",
     description: "Weaver Tool Contracts that declare input, target, result, risk, permissions, availability, and invocation modes."
+  },
+  agentResultRenderers: {
+    id: "studio.agent.result-renderers",
+    kind: "agent-result-renderer",
+    owner: a.ai,
+    contributionName: "StudioAgentResultRendererContribution",
+    description: "Module renderers for Weaver Tool Results and proposal payloads inside the Review Shell."
   },
   aiContextProviders: {
     id: "studio.ai.context-providers",
     kind: "ai-context-provider",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAiContextProviderContribution",
     description: "Legacy AI context attachment providers."
   },
   aiPromptActions: {
     id: "studio.ai.prompt-actions",
     kind: "ai-prompt-action",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAiPromptActionContribution",
     description: "Prompt-producing AI actions."
   },
   aiTools: {
     id: "studio.ai.tools",
     kind: "ai-tool",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAiToolContribution",
     description: "Tool declarations exposed through backend-governed agent providers."
   },
   aiProposalRenderers: {
     id: "studio.ai.proposal-renderers",
     kind: "ai-proposal-renderer",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAiProposalRendererContribution",
     description: "Renderers for proposal summaries and review shells."
   },
   aiSurfaces: {
     id: "studio.ai.surfaces",
     kind: "ai-surface",
-    owner: c.ai,
+    owner: a.ai,
     contributionName: "StudioAiSurfaceContribution",
     description: "AI surfaces such as routes, panels, drawers, and inline placements."
   },
   workflowDesignerNodeRenderers: {
     id: "workflow.designer.node-renderers",
     kind: "workflow-designer-node-renderer",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "unknown",
     description: "Workflow designer node renderer contributions."
   },
   workflowDesignerToolboxItems: {
     id: "workflow.designer.toolbox-items",
     kind: "workflow-designer-toolbox-item",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "unknown",
     description: "Workflow designer toolbox item contributions."
   },
   workflowDesignerPanels: {
     id: "workflow.designer.panels",
     kind: "workflow-designer-panel",
-    owner: c.workflowDesigner,
+    owner: a.workflowDesigner,
     contributionName: "StudioWorkflowDesignerPanelContribution",
     description: "Workflow designer side-panel tabs and panel surfaces."
   },
   diagnostics: {
     id: "studio.diagnostics",
     kind: "diagnostic",
-    owner: c.host,
+    owner: a.host,
     contributionName: "StudioModuleDiagnostic",
     description: "Module diagnostics surfaced by the host registry.",
     unavailableContributions: "show-disabled"
@@ -736,8 +743,8 @@ async function b(t, e, n) {
       ...n,
       signal: ft(n?.signal, o.signal)
     });
-  } catch (a) {
-    throw o.signal.aborted && !n?.signal?.aborted ? new Error(`Request to ${r} timed out after ${F / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : a;
+  } catch (c) {
+    throw o.signal.aborted && !n?.signal?.aborted ? new Error(`Request to ${r} timed out after ${F / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : c;
   } finally {
     globalThis.clearTimeout(i);
   }
@@ -886,7 +893,7 @@ export {
   G as createStudioHttpError,
   It as describeApiError,
   wt as readStudioHttpErrorMessage,
-  c as studioSlotOwners,
+  a as studioSlotOwners,
   k as studioSlots,
   Lt as tryExtractValidationErrors,
   Pt as useAuthCapabilities,

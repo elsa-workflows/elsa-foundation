@@ -85,6 +85,7 @@ export type StudioSlotKind =
   | "agent-action"
   | "agent-tool-slot"
   | "agent-tool-contract"
+  | "agent-result-renderer"
   | "ai-context-provider"
   | "ai-prompt-action"
   | "ai-tool"
@@ -537,6 +538,33 @@ export interface StudioAgentToolContractContribution {
   resultRendererIds?: string[];
 }
 
+export interface StudioAgentResourceTarget {
+  resourceType: string;
+  resourceId?: string;
+  displayName?: string;
+  moduleId?: string;
+  route?: string;
+  summary?: string;
+}
+
+export interface StudioAgentResultRendererProps {
+  proposal: unknown;
+  resourceTarget?: StudioAgentResourceTarget;
+  result: unknown;
+  resultType?: string;
+}
+
+export interface StudioAgentResultRendererContribution {
+  id: string;
+  moduleId?: string;
+  displayName: string;
+  order?: number;
+  resourceTypes?: string[];
+  resultTypes?: string[];
+  component: ComponentType<StudioAgentResultRendererProps>;
+  supports?(props: StudioAgentResultRendererProps): boolean;
+}
+
 export interface StudioAgentRegistry {
   readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
   readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
@@ -544,6 +572,7 @@ export interface StudioAgentRegistry {
   readonly actions: StudioContributionRegistry<StudioAgentActionContribution>;
   readonly toolSlots: StudioContributionRegistry<StudioAgentToolSlotContribution>;
   readonly toolContracts: StudioContributionRegistry<StudioAgentToolContractContribution>;
+  readonly resultRenderers: StudioContributionRegistry<StudioAgentResultRendererContribution>;
 }
 
 export type StudioAiPromptMode = "enqueue" | "steer";
@@ -777,6 +806,13 @@ export const studioSlots = {
     owner: studioSlotOwners.ai,
     contributionName: "StudioAgentToolContractContribution",
     description: "Weaver Tool Contracts that declare input, target, result, risk, permissions, availability, and invocation modes."
+  }),
+  agentResultRenderers: defineStudioSlot<StudioAgentResultRendererContribution>({
+    id: "studio.agent.result-renderers",
+    kind: "agent-result-renderer",
+    owner: studioSlotOwners.ai,
+    contributionName: "StudioAgentResultRendererContribution",
+    description: "Module renderers for Weaver Tool Results and proposal payloads inside the Review Shell."
   }),
   aiContextProviders: defineStudioSlot<StudioAiContextProviderContribution>({
     id: "studio.ai.context-providers",

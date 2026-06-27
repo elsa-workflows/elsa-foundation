@@ -1,11 +1,13 @@
 import React from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
+import type { StudioAgentResultRendererContribution } from "../../sdk";
 import type { AgentActionProposal } from "./agentTypes";
 
 export function AgentProposalReview({
   proposals,
   disabled,
   pendingProposalIds,
+  resultRenderers = [],
   onApprove,
   onDeny,
   onExecute
@@ -13,6 +15,7 @@ export function AgentProposalReview({
   proposals: AgentActionProposal[];
   disabled?: boolean;
   pendingProposalIds?: ReadonlySet<string>;
+  resultRenderers?: StudioAgentResultRendererContribution[];
   onApprove(proposal: AgentActionProposal): void;
   onDeny(proposal: AgentActionProposal): void;
   onExecute(proposal: AgentActionProposal): void;
@@ -27,6 +30,8 @@ export function AgentProposalReview({
         const reviewable = isReviewable(proposal);
         const pending = pendingProposalIds?.has(proposal.id) ?? false;
         const controlsDisabled = disabled || pending || proposal.isLoading || Boolean(proposal.disabledReason);
+        const resultRenderer = findResultRenderer(proposal, resultRenderers);
+        const ResultRenderer = resultRenderer?.component;
         return (
           <article key={proposal.id} className="agent-proposal" data-risk={proposal.risk} data-status={proposal.status}>
             <header>
@@ -46,6 +51,11 @@ export function AgentProposalReview({
               </ul>
             ) : null}
             {proposal.audit ? <AuditDetails proposal={proposal} /> : null}
+            {ResultRenderer ? (
+              <div className="agent-proposal-result" aria-label={resultRenderer.displayName}>
+                <ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} />
+              </div>
+            ) : <GenericResultFallback proposal={proposal} />}
             {proposal.risks && proposal.risks.length > 0 ? (
               <ul aria-label="Proposal risks">
                 {proposal.risks.map((risk, index) => <li key={`${risk}-${index}`}>{risk}</li>)}
@@ -71,6 +81,38 @@ export function AgentProposalReview({
         );
       })}
     </section>
+  );
+}
+
+function findResultRenderer(
+  proposal: AgentActionProposal,
+  renderers: StudioAgentResultRendererContribution[]
+) {
+  const props = {
+    proposal,
+    resourceTarget: proposal.resourceTarget,
+    result: proposal.result,
+    resultType: proposal.resultType
+  };
+
+  return [...renderers]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName))
+    .find(renderer => renderer.id === proposal.resultRendererId
+      || (!!proposal.resourceTarget?.resourceType && renderer.resourceTypes?.includes(proposal.resourceTarget.resourceType))
+      || (!!proposal.resultType && renderer.resultTypes?.includes(proposal.resultType))
+      || renderer.supports?.(props));
+}
+
+function GenericResultFallback({ proposal }: { proposal: AgentActionProposal }) {
+  if (proposal.result === undefined) {
+    return null;
+  }
+
+  return (
+    <div className="agent-proposal-result" aria-label="Structured result">
+      <span>Structured result</span>
+      <pre>{formatStructuredValue(proposal.result)}</pre>
+    </div>
   );
 }
 
@@ -152,6 +194,18 @@ function formatRisk(risk: AgentActionProposal["risk"]) {
 
 function formatStatus(status: string) {
   return status.split("-").join(" ");
+}
+
+function formatStructuredValue(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function isReviewable(proposal: AgentActionProposal) {

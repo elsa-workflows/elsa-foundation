@@ -321,6 +321,31 @@
   color: var(--studio-text-muted);
 }
 
+.agent-proposal-result {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-result > span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-proposal-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--studio-text);
+  font: inherit;
+}
+
 .agent-proposal footer,
 .agent-workflow-batch footer {
   display: flex;

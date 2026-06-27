@@ -65,6 +65,12 @@ describe("agent registry", () => {
       invocationModes: ["read-only"],
       resultRendererIds: ["workflow.summary"]
     });
+    api.agent.resultRenderers.add({
+      id: "workflow.summary",
+      displayName: "Workflow summary",
+      resourceTypes: ["workflow-definition"],
+      component: ({ result }) => String(result)
+    });
 
     expect(api.agent.contextProviders.list()).toHaveLength(1);
     expect(api.agent.promptStarters.list()).toHaveLength(1);
@@ -72,5 +78,6 @@ describe("agent registry", () => {
     expect(api.agent.actions.list()).toHaveLength(1);
     expect(api.agent.toolSlots.list()).toHaveLength(1);
     expect(api.agent.toolContracts.list()).toHaveLength(1);
+    expect(api.agent.resultRenderers.list()).toHaveLength(1);
   });
 });
