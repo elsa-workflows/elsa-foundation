@@ -219,6 +219,12 @@ describe("extension builder page", () => {
         gitStatus = sourceControlStatus();
         return { commitId: "abc123", message: "Add source control file", status: gitStatus };
       }
+      if (url.endsWith("/source-control/push")) {
+        return { operation: "Push", state: "Completed", message: "Pushed feature/source-control to origin.", remote: "origin", branch: "feature/source-control", ahead: 0, behind: 0, status: gitStatus };
+      }
+      if (url.endsWith("/source-control/pull")) {
+        return { operation: "Pull", state: "Completed", message: "Already up to date.", remote: "origin", branch: "feature/source-control", ahead: 0, behind: 0, status: gitStatus };
+      }
       return defaultPostJson(url);
     });
     const getJson = vi.fn(async (url: string) => {
@@ -243,11 +249,17 @@ describe("extension builder page", () => {
     await fill(await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Commit message']"), "Add source control file");
     await clickButton(container, "Commit staged");
     await waitForText(container, "Committed staged changes.");
+    await clickExactButton(container, "Push");
+    await waitForText(container, "Pushed committed changes.");
+    await clickExactButton(container, "Pull");
+    await waitForText(container, "Pulled remote changes.");
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage-all", {});
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/push", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/pull", {});
     expect(getJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/diff/src%2FStatus.cs?staged=true");
 
     await unmount();

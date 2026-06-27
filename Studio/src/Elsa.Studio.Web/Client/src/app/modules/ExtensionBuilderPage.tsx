@@ -20,7 +20,9 @@ import {
   listTemplates,
   listWorkspaces,
   moveRepositoryFile,
+  pullRepository,
   promoteBuild,
+  pushRepository,
   readRepositoryFile,
   retryReconciliation,
   rollbackPackage,
@@ -686,6 +688,29 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  async function handlePushRepository() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => pushRepository(context, workspaceId), "Pushed committed changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+    }
+  }
+
+  async function handlePullRepository() {
+    if (!selectedWorkspace) return;
+    const workspaceId = selectedWorkspace.id;
+    const result = await runOperation(() => pullRepository(context, workspaceId), "Pulled remote changes.");
+    if (result && selectedIds.current.workspaceId === workspaceId) {
+      setSourceControlStatus(result.status);
+      setSourceControlDiff(null);
+      await refreshWorkspaces({ preserveSelection: true });
+      await loadRepositoryTree(workspaceId, selectedSolutionPath || null);
+    }
+  }
+
   async function handleSubmitBuild() {
     if (!selectedWorkspace || !selectedProject) return;
     if (editorDirty) {
@@ -956,6 +981,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           onStageAll={handleStageAll}
           onCommitMessageChange={setCommitMessage}
           onCommit={handleCommitChanges}
+          onPush={handlePushRepository}
+          onPull={handlePullRepository}
           onPromote={handlePromote}
           onRefreshRuntime={() => refreshRuntimeStatus()}
           onRetryReconciliation={handleRetryReconciliation}
@@ -1365,6 +1392,8 @@ function BuildRuntimeInspector({
   onStageAll,
   onCommitMessageChange,
   onCommit,
+  onPush,
+  onPull,
   onPromote,
   onRefreshRuntime,
   onRetryReconciliation,
@@ -1393,6 +1422,8 @@ function BuildRuntimeInspector({
   onStageAll(): void;
   onCommitMessageChange(value: string): void;
   onCommit(): void;
+  onPush(): void;
+  onPull(): void;
   onPromote(): void;
   onRefreshRuntime(): void;
   onRetryReconciliation(): void;
@@ -1432,6 +1463,8 @@ function BuildRuntimeInspector({
           onStageAll={onStageAll}
           onCommitMessageChange={onCommitMessageChange}
           onCommit={onCommit}
+          onPush={onPush}
+          onPull={onPull}
         />
       ) : null}
 
@@ -1525,7 +1558,9 @@ function SourceControlPanel({
   onUnstageFile,
   onStageAll,
   onCommitMessageChange,
-  onCommit
+  onCommit,
+  onPush,
+  onPull
 }: {
   status: SourceControlStatus | null;
   diff: SourceControlDiff | null;
@@ -1537,9 +1572,12 @@ function SourceControlPanel({
   onStageAll(): void;
   onCommitMessageChange(value: string): void;
   onCommit(): void;
+  onPush(): void;
+  onPull(): void;
 }) {
   const stagedFiles = status?.stagedFiles ?? [];
   const unstagedFiles = status?.unstagedFiles ?? [];
+  const hasBranch = !!status?.activeBranch;
   return (
     <div className="extension-builder-source-control">
       <div className="modules-inspector-section">
@@ -1552,6 +1590,14 @@ function SourceControlPanel({
         <button type="button" className="studio-button" disabled={busy || unstagedFiles.length === 0} onClick={onStageAll}>
           <Save size={14} />
           Stage all
+        </button>
+        <button type="button" className="studio-button" disabled={busy || !hasBranch || !!status?.isDirty} title={status?.isDirty ? "Commit or discard changes before pushing" : undefined} onClick={onPush}>
+          <GitBranch size={14} />
+          Push
+        </button>
+        <button type="button" className="studio-button" disabled={busy || !hasBranch || !!status?.isDirty} title={status?.isDirty ? "Commit or discard changes before pulling" : undefined} onClick={onPull}>
+          <RefreshCcw size={14} />
+          Pull
         </button>
       </div>
 
