@@ -294,7 +294,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Build");
     await flushPromises();
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/projects/proj-1/builds", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", { projectId: "proj-1", command: "Build", targetPath: null });
     expect(container.textContent).toContain("Build submitted");
     expect(container.textContent).toContain("Succeeded");
 
@@ -304,6 +304,39 @@ describe("extension builder page", () => {
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/promote", {});
     expect(container.textContent).toContain("is loaded at runtime");
+
+    await unmount();
+  });
+
+  it("submits restore build and test jobs with explicit repository targets", async () => {
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
+      return defaultPostJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await selectValue(await waitForElement<HTMLSelectElement>(container, "[aria-label='Build command']"), "Test");
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Build target path']"), "src/TeamExtensions.Tests/TeamExtensions.Tests.csproj");
+    await clickButton(container, "Run command");
+    await flushPromises();
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+      projectId: "proj-1",
+      command: "Test",
+      targetPath: "src/TeamExtensions.Tests/TeamExtensions.Tests.csproj"
+    });
+
+    await selectValue(await waitForElement<HTMLSelectElement>(container, "[aria-label='Build command']"), "Restore");
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Build target path']"), "");
+    await clickButton(container, "Run command");
+    await flushPromises();
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+      projectId: "proj-1",
+      command: "Restore",
+      targetPath: null
+    });
 
     await unmount();
   });
@@ -584,6 +617,15 @@ async function fill(element: HTMLInputElement | HTMLTextAreaElement, value: stri
     const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
     setter?.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
+async function selectValue(element: HTMLSelectElement, value: string) {
+  flushSync(() => {
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
+    setter?.call(element, value);
     element.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await flushPromises();

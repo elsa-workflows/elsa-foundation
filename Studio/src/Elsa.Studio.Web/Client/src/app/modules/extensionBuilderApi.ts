@@ -11,6 +11,7 @@ export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warni
 export type ExtensionTemplateScope = "Repository" | "Solution" | "Project" | "Item" | string;
 export type RemoteSyncOperation = "Push" | "Pull" | string;
 export type RemoteSyncState = "Completed" | "Blocked" | string;
+export type RepositoryBuildCommand = "Restore" | "Build" | "Test" | string;
 
 export interface ExtensionBuilderCapabilities {
   canCreateWorkspace: boolean;
@@ -167,6 +168,8 @@ export interface RemoteSyncResult {
 export interface BuildRequest {
   projectId?: string;
   revision?: string | null;
+  command?: RepositoryBuildCommand;
+  targetPath?: string | null;
 }
 
 export interface BuildResult {
@@ -428,8 +431,12 @@ export async function deleteProjectFile(context: StudioEndpointContext, _workspa
   return requestJson(context, `${projectRoot(projectId)}/files/${filePath(path)}`, { method: "DELETE" });
 }
 
-export async function submitBuild(context: StudioEndpointContext, _workspaceId: string, projectId: string, _request: BuildRequest = {}) {
-  return normalizeBuild(await context.http.postJson<RawBuildResult>(`${projectRoot(projectId)}/builds`, {}));
+export async function submitBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, request: BuildRequest = {}) {
+  return normalizeBuild(await context.http.postJson<RawBuildResult>(`${workspaceRoot(workspaceId)}/builds`, {
+    projectId: request.projectId ?? projectId,
+    command: request.command ?? "Build",
+    targetPath: request.targetPath ?? null
+  }));
 }
 
 export async function getBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string) {
