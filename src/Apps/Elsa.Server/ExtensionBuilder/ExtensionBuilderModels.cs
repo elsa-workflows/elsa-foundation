@@ -92,6 +92,10 @@ internal sealed record ExtensionBuilderCapabilities(
 
 internal sealed record CreateWorkspaceRequest(string DisplayName);
 
+internal sealed record AttachServerLocalRepositoryRequest(string Path, string? DisplayName);
+
+internal sealed record CloneRepositoryRequest(string RepositoryUrl, string? DisplayName);
+
 internal sealed record SelectWorkingCopyRequest(
     string SessionId,
     string? BranchName,
