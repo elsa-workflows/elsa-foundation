@@ -615,10 +615,16 @@ describe("workflows module", () => {
 
     const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
     expect(putCall).toBeTruthy();
-    expect(JSON.parse(String(putCall?.[1]?.body)).state.rootActivity.text).toEqual({
-      typeName: "System.String",
-      expression: { type: "Literal", value: "Hello from expanded editor\nwith more room" }
-    });
+    const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
+    // The wire payload carries the authored value in the canonical `inputs` array (ArgumentState),
+    // not as a top-level `text` property — that mismatch is what made WriteLine print blank lines.
+    expect(savedRoot.text).toBeUndefined();
+    expect(savedRoot.inputs).toEqual([
+      {
+        referenceKey: "Text",
+        value: { value: "Hello from expanded editor\nwith more room", expressionType: "Literal" }
+      }
+    ]);
 
     await unmount();
   });

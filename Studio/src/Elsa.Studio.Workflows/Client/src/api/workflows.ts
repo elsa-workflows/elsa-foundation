@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import type {
   ActivityCatalogResponse,
   ActivityDescriptor,
@@ -119,11 +120,15 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
 }
 
 export async function getDefinition(context: StudioEndpointContext, definitionId: string) {
-  return context.http.getJson<WorkflowDefinitionDetails>(`${basePath}/definitions/${encodeURIComponent(definitionId)}`);
+  const details = await context.http.getJson<WorkflowDefinitionDetails>(`${basePath}/definitions/${encodeURIComponent(definitionId)}`);
+  return details.draft
+    ? { ...details, draft: { ...details.draft, state: expandStateFromWire(details.draft.state) } }
+    : details;
 }
 
 export async function getWorkflowDefinitionVersion(context: StudioEndpointContext, versionId: string) {
-  return context.http.getJson<WorkflowDefinitionVersionDetails>(`${basePath}/versions/${encodeURIComponent(versionId)}`);
+  const details = await context.http.getJson<WorkflowDefinitionVersionDetails>(`${basePath}/versions/${encodeURIComponent(versionId)}`);
+  return { ...details, state: expandStateFromWire(details.state) };
 }
 
 export async function createDefinition(context: StudioEndpointContext, request: CreateDefinitionRequest) {
@@ -143,7 +148,10 @@ export async function deleteDefinitionPermanently(context: StudioEndpointContext
 }
 
 export async function updateDraft(context: StudioEndpointContext, draft: WorkflowDraft) {
-  return context.http.putJson<WorkflowDraft>(`${basePath}/drafts/${encodeURIComponent(draft.id)}`, { state: draft.state, layout: draft.layout });
+  const saved = await context.http.putJson<WorkflowDraft>(
+    `${basePath}/drafts/${encodeURIComponent(draft.id)}`,
+    { state: canonicalizeStateForWire(draft.state), layout: draft.layout });
+  return { ...saved, state: expandStateFromWire(saved.state) };
 }
 
 export async function promoteDraft(context: StudioEndpointContext, draftId: string) {
@@ -155,8 +163,9 @@ export async function publishVersion(context: StudioEndpointContext, versionId: 
 }
 
 export async function startWorkflowDraftTestRun(context: StudioEndpointContext, request: StartWorkflowDraftTestRunRequest) {
+  const wireRequest = { ...request, state: canonicalizeStateForWire(request.state) };
   try {
-    return await context.http.postJson<WorkflowTestRunView>(`${publishingBasePath}/workflows/drafts/test-runs`, request);
+    return await context.http.postJson<WorkflowTestRunView>(`${publishingBasePath}/workflows/drafts/test-runs`, wireRequest);
   } catch (error) {
     const rejected = parseRejectedTestRun(error);
     if (rejected) return rejected;
