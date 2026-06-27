@@ -294,6 +294,89 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task TemplateDiscoveryExposesTrustedScopesParametersAndCompatibility()
+    {
+        var templates = await CreateService().ListTemplatesAsync();
+
+        Assert.Equal(
+            [ExtensionTemplateScope.Repository, ExtensionTemplateScope.Solution, ExtensionTemplateScope.Project, ExtensionTemplateScope.Item],
+            templates.Select(template => template.Scope).Distinct().OrderBy(scope => scope).ToArray());
+        Assert.DoesNotContain(templates, template => template.Id.Contains("archive", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(templates, template => template is { Id: "generic-dotnet", Scope: ExtensionTemplateScope.Project } && template.CompatibleFileExtensions.Contains(".slnx"));
+        Assert.Contains(templates.Single(template => template.Id == "csharp-class").Parameters, parameter => parameter is { Name: "namespace", Required: true });
+    }
+
+    [Fact]
+    public async Task RepositoryTemplateApplicationSupportsTrustedScopesAndDirtyTree()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+        await service.SelectWorkingCopyAsync(_caller, workspace.Id, new("session-1", "feature/templates", false));
+
+        await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("repository-readme", ExtensionTemplateScope.Repository, "docs/templates", new Dictionary<string, string>
+        {
+            ["name"] = "ExtensionTemplates",
+            ["description"] = "Trusted generated repository content."
+        }));
+        await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("solution-slnx", ExtensionTemplateScope.Solution, "solutions", new Dictionary<string, string>
+        {
+            ["name"] = "GeneratedExtensions"
+        }));
+        var projectResult = await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("generic-dotnet", ExtensionTemplateScope.Project, "src/GeneratedProject", new Dictionary<string, string>
+        {
+            ["packageId"] = "Elsa.Generated.Project",
+            ["packageVersion"] = "2.1.0",
+            ["targetFramework"] = "net10.0"
+        }));
+        var itemResult = await service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src/GeneratedProject/Generated", new Dictionary<string, string>
+        {
+            ["name"] = "CustomActivity",
+            ["namespace"] = "Elsa.Generated.Project"
+        }));
+        var generatedItem = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/GeneratedProject/Generated/CustomActivity.cs");
+        var generatedProject = await service.ReadRepositoryFileAsync(_caller, workspace.Id, "src/GeneratedProject/GenericExtension.csproj");
+        var status = await service.GetSourceControlStatusAsync(_caller, workspace.Id);
+
+        Assert.Contains(projectResult!.Tree.Entries, entry => entry is { Path: "docs/templates/README.md", IsDirty: true });
+        Assert.Contains(projectResult.Tree.Entries, entry => entry is { Path: "solutions/GeneratedExtensions.slnx", Kind: RepositoryFileKind.Solution, IsDirty: true });
+        Assert.Contains(projectResult.Tree.Entries, entry => entry is { Path: "src/GeneratedProject/GenericExtension.csproj", Kind: RepositoryFileKind.Project, IsDirty: true });
+        Assert.Contains(itemResult!.Files, file => file is { Path: "src/GeneratedProject/Generated/CustomActivity.cs", IsDirty: true });
+        Assert.Contains("namespace Elsa.Generated.Project;", generatedItem!.Content);
+        Assert.Contains("public sealed class CustomActivity", generatedItem.Content);
+        Assert.Contains("<PackageId>Elsa.Generated.Project</PackageId>", generatedProject!.Content);
+        Assert.Contains(status!.ChangedFiles, file => file.Path == "src/GeneratedProject/Generated/CustomActivity.cs");
+        Assert.True(status.IsDirty);
+    }
+
+    [Fact]
+    public async Task RepositoryTemplateApplicationRejectsUntrustedUnsafeOverwriteAndOtherOwners()
+    {
+        var service = CreateService();
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Workspace"));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("uploaded-archive", null, null, null)));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src", new Dictionary<string, string>
+        {
+            ["name"] = "../Bad",
+            ["namespace"] = "Elsa.Generated"
+        })));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, ".git/hooks", new Dictionary<string, string>
+        {
+            ["name"] = "SafeClass",
+            ["namespace"] = "Elsa.Generated"
+        })));
+        await Assert.ThrowsAsync<IOException>(() => service.ApplyRepositoryTemplateAsync(_caller, workspace.Id, new("repository-readme", ExtensionTemplateScope.Repository, null, new Dictionary<string, string>
+        {
+            ["name"] = "AlreadyExists"
+        })));
+        Assert.Null(await service.ApplyRepositoryTemplateAsync(_caller with { OwnerId = "other" }, workspace.Id, new("csharp-class", ExtensionTemplateScope.Item, "src", new Dictionary<string, string>
+        {
+            ["name"] = "NoAccess",
+            ["namespace"] = "Elsa.Generated"
+        })));
+    }
+
+    [Fact]
     public async Task FileEditsPersistAndRejectUnsafePaths()
     {
         var service = CreateService();
