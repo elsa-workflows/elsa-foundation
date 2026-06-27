@@ -1804,6 +1804,77 @@ textarea:focus {
   min-height: 180px;
 }
 
+.extension-builder-source-control {
+  display: grid;
+  gap: 14px;
+}
+
+.extension-builder-source-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.extension-builder-source-list {
+  display: grid;
+  gap: 8px;
+}
+
+.extension-builder-source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.extension-builder-source-row > button:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.extension-builder-source-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-commit-message {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font: inherit;
+  padding: 8px;
+}
+
+.extension-builder-diff {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 10px;
+  white-space: pre;
+}
+
 .extension-builder-diagnostic-button,
 .extension-builder-history-row {
   width: 100%;

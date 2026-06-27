@@ -141,6 +141,62 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("stages, unstages, stages all, inspects diffs, and commits from the source inspector", async () => {
+    let gitStatus = sourceControlStatus({ unstaged: ["src/Status.cs"] });
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/source-control/stage")) {
+        expect(body).toEqual({ path: "src/Status.cs" });
+        gitStatus = sourceControlStatus({ staged: ["src/Status.cs"] });
+        return gitStatus;
+      }
+      if (url.endsWith("/source-control/unstage")) {
+        expect(body).toEqual({ path: "src/Status.cs" });
+        gitStatus = sourceControlStatus({ unstaged: ["src/Status.cs"] });
+        return gitStatus;
+      }
+      if (url.endsWith("/source-control/stage-all")) {
+        gitStatus = sourceControlStatus({ staged: ["src/Status.cs"] });
+        return gitStatus;
+      }
+      if (url.endsWith("/source-control/commit")) {
+        expect(body).toEqual({ message: "Add source control file" });
+        gitStatus = sourceControlStatus();
+        return { commitId: "abc123", message: "Add source control file", status: gitStatus };
+      }
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/source-control/status")) return gitStatus;
+      if (url.includes("/source-control/diff/")) return { path: "src/Status.cs", isStaged: url.includes("staged=true"), patch: "+namespace Status;" };
+      if (url.endsWith("/repositories")) return [repositorySummary({ isDirty: gitStatus.isDirty })];
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await clickTab(container, "Source");
+    await waitForText(container, "src/Status.cs");
+    await clickExactButton(container, "Stage");
+    await waitForText(container, "No unstaged changes.");
+    await clickExactButton(container, "Unstage");
+    await waitForText(container, "No staged changes.");
+    await clickButton(container, "Stage all");
+    await waitForText(container, "No unstaged changes.");
+    await clickButton(container, "src/Status.cs");
+    await waitForText(container, "+namespace Status;");
+    await fill(await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Commit message']"), "Add source control file");
+    await clickButton(container, "Commit staged");
+    await waitForText(container, "Committed staged changes.");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage-all", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
+    expect(getJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/diff/src%2FStatus.cs?staged=true");
+
+    await unmount();
+  });
+
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
@@ -191,6 +247,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject()];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
         if (url.includes("/builds/build-failed")) return failedBuild();
@@ -246,6 +303,7 @@ describe("extension builder page", () => {
             { path: "Activities/HelloActivity.cs", kind: 3, size: 37, isDirty: false }
           ]
         };
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return [
           { path: "Activities", type: "folder" },
           { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" }
@@ -278,6 +336,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject()];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), features: null };
         if (url.includes("/builds/build-1")) return succeededBuild();
@@ -303,6 +362,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject()];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
         if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
@@ -337,6 +397,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/workspaces")) return [workspaceWithProject({ project: selectedProject })];
         if (url.endsWith("/templates")) return templates();
         if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return failedRuntime({ features: [] });
         if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
@@ -385,6 +446,7 @@ async function defaultGetJson(url: string): Promise<unknown> {
   if (url.endsWith("/workspaces")) return [workspaceWithProject()];
   if (url.endsWith("/templates")) return templates();
   if (url.endsWith("/repository-tree")) return repositoryTree();
+  if (url.endsWith("/source-control/status")) return sourceControlStatus();
   if (url.endsWith("/files")) return projectFiles();
   if (url.endsWith("/runtime-status")) return loadedRuntime();
   if (url.includes("/builds/build-1")) return succeededBuild();
@@ -437,6 +499,14 @@ async function clickButton(container: Element, text: string) {
     .filter(candidate => !candidate.disabled && (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label")?.includes(text)));
   const button = buttons.find(candidate => candidate.getAttribute("role") !== "tab") ?? buttons[0];
   if (!button) throw new Error(`Could not find button containing '${text}'.`);
+  flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await flushPromises();
+}
+
+async function clickExactButton(container: Element, text: string) {
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+    .find(candidate => !candidate.disabled && candidate.textContent?.trim() === text);
+  if (!button) throw new Error(`Could not find enabled button '${text}'.`);
   flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await flushPromises();
 }
@@ -632,6 +702,21 @@ function repositoryTree() {
       isDirty: false,
       updatedAt: new Date().toISOString()
     }))
+  };
+}
+
+function sourceControlStatus(options?: { staged?: string[]; unstaged?: string[] }) {
+  const staged = options?.staged ?? [];
+  const unstaged = options?.unstaged ?? [];
+  const stagedFiles = staged.map(path => ({ path, status: "A", isStaged: true, isUnstaged: false }));
+  const unstagedFiles = unstaged.map(path => ({ path, status: "??", isStaged: false, isUnstaged: true }));
+  return {
+    workspaceId: "ws-1",
+    activeBranch: "feature/source-control",
+    isDirty: stagedFiles.length + unstagedFiles.length > 0,
+    changedFiles: [...stagedFiles, ...unstagedFiles],
+    stagedFiles,
+    unstagedFiles
   };
 }
 
