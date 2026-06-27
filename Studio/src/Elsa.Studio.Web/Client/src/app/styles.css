@@ -1606,9 +1606,35 @@ textarea:focus {
   height: 30px;
 }
 
+.extension-builder-solution-picker,
+.extension-builder-selected-solution {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid var(--studio-border);
+  padding-bottom: 8px;
+}
+
+.extension-builder-solution-picker span,
+.extension-builder-selected-solution span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-solution-picker select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px;
+}
+
 .extension-builder-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -1671,10 +1697,48 @@ textarea:focus {
 
 .extension-builder-code-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 8px;
   min-width: 0;
   min-height: 0;
+}
+
+.extension-builder-editor-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.extension-builder-editor-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  min-height: 32px;
+  border: 0;
+  border-right: 1px solid var(--studio-border);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  padding: 0 8px;
+}
+
+.extension-builder-editor-tabs button.active {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.extension-builder-editor-tabs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-editor-tabs em {
+  color: var(--studio-text-muted);
+  font-style: normal;
 }
 
 .extension-builder-editor-status,

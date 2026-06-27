@@ -6,6 +6,7 @@ export type BuildStatus = "Pending" | "Running" | "Succeeded" | "Failed" | "queu
 export type RuntimeState = "Loaded" | "PendingRestart" | "FailedReconciliation" | string;
 export type PromotionRejectionCategory = "Duplicate" | "InvalidManifest" | "DependencyPolicy" | "MalformedPackage" | string;
 export type ProjectFileType = "file" | "folder" | "Source" | "Project" | "Manifest" | "Configuration" | "Other" | string;
+export type RepositoryFileKind = "Solution" | "Project" | "Folder" | "File" | string;
 export type DiagnosticSeverity = "Error" | "Warning" | "Info" | "error" | "warning" | "info" | string;
 
 export interface ExtensionBuilderCapabilities {
@@ -67,6 +68,33 @@ export interface ProjectFile {
   type: ProjectFileType;
   size?: number | null;
   updatedAt?: string | null;
+  content?: string | null;
+}
+
+export interface RepositorySolutionSummary {
+  path: string;
+  name: string;
+  isSelected: boolean;
+}
+
+export interface RepositoryFileSummary {
+  path: string;
+  type: ProjectFileType;
+  kind: RepositoryFileKind;
+  size?: number | null;
+  isDirty: boolean;
+  updatedAt?: string | null;
+}
+
+export interface RepositoryTree {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty: boolean;
+  solutions: RepositorySolutionSummary[];
+  entries: RepositoryFileSummary[];
+}
+
+export interface RepositoryFile extends RepositoryFileSummary {
   content?: string | null;
 }
 
@@ -249,6 +277,31 @@ export async function listWorkingCopies(context: StudioEndpointContext, workspac
 
 export async function selectWorkingCopy(context: StudioEndpointContext, workspaceId: string, request: SelectWorkingCopyRequest) {
   return normalizeWorkingCopySummary(await context.http.postJson<RawExtensionWorkingCopySummary>(`${root}/workspaces/${segment(workspaceId)}/working-copies/select`, request));
+}
+
+export async function getRepositoryTree(context: StudioEndpointContext, workspaceId: string, solutionPath?: string | null) {
+  const query = solutionPath ? `?solutionPath=${encodeURIComponent(solutionPath)}` : "";
+  return normalizeRepositoryTree(await context.http.getJson<RawRepositoryTree>(`${root}/workspaces/${segment(workspaceId)}/repository-tree${query}`));
+}
+
+export async function readRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return normalizeRepositoryFile(await context.http.getJson<RawRepositoryFile>(`${workspaceRoot(workspaceId)}/files/${filePath(path)}`));
+}
+
+export async function writeRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string, request: WriteProjectFileRequest) {
+  return normalizeRepositoryFile(await requestJson<RawRepositoryFile>(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(request)
+  }));
+}
+
+export async function moveRepositoryFile(context: StudioEndpointContext, workspaceId: string, sourcePath: string, destinationPath: string) {
+  return normalizeRepositoryFile(await context.http.postJson<RawRepositoryFile>(`${workspaceRoot(workspaceId)}/files/move`, { sourcePath, destinationPath }));
+}
+
+export async function deleteRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
+  return requestJson(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, { method: "DELETE" });
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -446,6 +499,35 @@ function normalizeProjectFile(file: RawProjectFile): ProjectFile {
   };
 }
 
+function normalizeRepositoryTree(tree: RawRepositoryTree): RepositoryTree {
+  return {
+    workspaceId: tree.workspaceId,
+    activeBranch: tree.activeBranch,
+    isDirty: tree.isDirty ?? false,
+    solutions: tree.solutions ?? [],
+    entries: (tree.entries ?? []).map(normalizeRepositoryFileSummary)
+  };
+}
+
+function normalizeRepositoryFileSummary(file: RawRepositoryFileSummary): RepositoryFileSummary {
+  const kind = normalizeRepositoryFileKind(file.kind);
+  return {
+    path: file.path,
+    type: kind === "Folder" ? "folder" : "file",
+    kind,
+    size: file.size,
+    isDirty: file.isDirty ?? false,
+    updatedAt: file.updatedAt
+  };
+}
+
+function normalizeRepositoryFile(file: RawRepositoryFile): RepositoryFile {
+  return {
+    ...normalizeRepositoryFileSummary(file),
+    content: file.content
+  };
+}
+
 function normalizeBuild(build: RawBuildResult): BuildResult {
   return {
     id: build.id,
@@ -537,6 +619,10 @@ function normalizeProjectFileType(value?: ProjectFileType | number | null): Proj
   return "file";
 }
 
+function normalizeRepositoryFileKind(value?: RepositoryFileKind | number | null): RepositoryFileKind {
+  return enumName(value, ["Solution", "Project", "Folder", "File"]);
+}
+
 function normalizePromotionStatus(value?: string | number | null) {
   return enumName(value, ["Accepted", "Rejected"]);
 }
@@ -560,6 +646,10 @@ function enumName<T extends string>(value: T | number | null | undefined, names:
 
 function projectRoot(projectId: string) {
   return `${root}/projects/${segment(projectId)}`;
+}
+
+function workspaceRoot(workspaceId: string) {
+  return `${root}/workspaces/${segment(workspaceId)}`;
 }
 
 function segment(value: string) {
@@ -648,6 +738,26 @@ interface RawProjectFile {
   kind?: ProjectFileType | number;
   size?: number | null;
   updatedAt?: string | null;
+  content?: string | null;
+}
+
+interface RawRepositoryTree {
+  workspaceId: string;
+  activeBranch?: string | null;
+  isDirty?: boolean | null;
+  solutions?: RepositorySolutionSummary[];
+  entries?: RawRepositoryFileSummary[];
+}
+
+interface RawRepositoryFileSummary {
+  path: string;
+  kind?: RepositoryFileKind | number;
+  size?: number | null;
+  isDirty?: boolean | null;
+  updatedAt?: string | null;
+}
+
+interface RawRepositoryFile extends RawRepositoryFileSummary {
   content?: string | null;
 }
 
