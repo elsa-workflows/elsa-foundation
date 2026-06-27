@@ -94,11 +94,14 @@ function findResultRenderer(
     result: proposal.result,
     resultType: proposal.resultType
   };
+  const explicitRenderer = renderers.find(renderer => renderer.id === proposal.resultRendererId);
+  if (explicitRenderer) {
+    return explicitRenderer;
+  }
 
   return [...renderers]
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName))
-    .find(renderer => renderer.id === proposal.resultRendererId
-      || (!!proposal.resourceTarget?.resourceType && renderer.resourceTypes?.includes(proposal.resourceTarget.resourceType))
+    .find(renderer => (!!proposal.resourceTarget?.resourceType && renderer.resourceTypes?.includes(proposal.resourceTarget.resourceType))
       || (!!proposal.resultType && renderer.resultTypes?.includes(proposal.resultType))
       || renderer.supports?.(props));
 }

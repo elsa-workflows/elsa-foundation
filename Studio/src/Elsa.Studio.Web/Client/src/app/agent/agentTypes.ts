@@ -131,7 +131,7 @@ export interface AgentProposalAuditState {
   recordedAt?: string;
 }
 
-export type AgentToolPolicyResult = "allowed" | "denied" | "proposal-required";
+export type AgentToolPolicyResult = "allowed" | "denied" | "requires-proposal" | "proposal-required";
 export type AgentToolInvocationOutcome = "allowed" | "denied" | "failed" | "proposal-created" | "executed";
 
 export interface AgentToolInvocationPolicy {
@@ -140,7 +140,6 @@ export interface AgentToolInvocationPolicy {
   allowedInvocationModes?: StudioAgentToolInvocationMode[];
   deniedInvocationModes?: StudioAgentToolInvocationMode[];
 }
-
 export interface AgentProposalOperation {
   op: string;
   [key: string]: unknown;

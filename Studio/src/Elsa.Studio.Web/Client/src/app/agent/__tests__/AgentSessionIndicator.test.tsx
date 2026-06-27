@@ -51,9 +51,9 @@ describe("AgentSessionIndicator", () => {
     );
 
     expect(container.textContent).toContain("1 waiting");
-    expect(container.textContent).toContain("1 proposals");
-    expect(container.textContent).toContain("1 artifacts");
-    expect(container.textContent).toContain("1 prompts");
+    expect(container.textContent).toContain("1 proposal");
+    expect(container.textContent).toContain("1 artifact");
+    expect(container.textContent).toContain("1 prompt");
     expect(container.textContent).toContain("1 child");
     expect(container.querySelector(".agent-session-indicator")?.getAttribute("aria-label")).toContain("pending proposals");
 

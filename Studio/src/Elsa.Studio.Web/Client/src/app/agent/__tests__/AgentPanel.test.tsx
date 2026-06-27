@@ -139,6 +139,59 @@ describe("AgentPanel", () => {
     unmount();
   });
 
+  it("clears published session indicator state when closed during streaming", async () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    }, "https://foundation.example/");
+    api.agent.capabilities.add({
+      id: "studio.explain",
+      displayName: "Explain",
+      description: "Explain the active screen.",
+      kind: "answer",
+      risk: "read-only",
+      surfaces: ["*"]
+    });
+    api.agent.promptStarters.add({
+      id: "studio.prompt",
+      label: "Explain screen",
+      prompt: "Explain this screen.",
+      surfaces: ["*"],
+      requiredCapabilities: ["studio.explain"]
+    });
+    const client = stubClient();
+    const onSessionIndicatorChange = vi.fn();
+    const subscribeStream = vi.fn((_context, _streamUrl, onEvent: (event: AgentStreamEvent) => void) => {
+      onEvent({ type: "message-started", messageId: "msg_01", role: "assistant" });
+      return { close() {} };
+    });
+    const { container, unmount } = render(
+      <AgentPanel
+        api={api}
+        surface={{ route: "/" }}
+        client={client}
+        subscribeStream={subscribeStream}
+        onClose={() => {}}
+        onSessionIndicatorChange={onSessionIndicatorChange}
+      />
+    );
+
+    await waitForText(container, "Explain screen");
+    clickButton(container, "Explain screen");
+    await flushPromises();
+    await flushPromises();
+
+    expect(onSessionIndicatorChange).toHaveBeenCalledWith([expect.objectContaining({
+      id: "agt_01",
+      status: "active"
+    })]);
+
+    unmount();
+
+    expect(onSessionIndicatorChange).toHaveBeenLastCalledWith([]);
+  });
+
   it("shows disabled state when the backend reports the agent unavailable", async () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",

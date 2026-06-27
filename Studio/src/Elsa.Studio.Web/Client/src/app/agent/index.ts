@@ -3,6 +3,7 @@ export * from "./agentContext";
 export * from "./agentContributions";
 export * from "./agentErrors";
 export * from "./agentStream";
+export * from "./agentToolPolicy";
 export * from "./agentTypes";
 export * from "./workflowAgentContext";
 export * from "./workflowPromptStarters";

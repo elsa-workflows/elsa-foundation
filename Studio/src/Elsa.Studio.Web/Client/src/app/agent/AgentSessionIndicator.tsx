@@ -36,10 +36,10 @@ export function AgentSessionIndicator({ sessions }: { sessions: AgentSessionIndi
       {summary.waiting > 0 ? <span data-state="waiting">{summary.waiting} waiting</span> : null}
       {summary.blocked > 0 ? <span data-state="blocked">{summary.blocked} blocked</span> : null}
       {summary.failed > 0 ? <span data-state="failed">{summary.failed} failed</span> : null}
-      {summary.pendingProposals > 0 ? <span>{summary.pendingProposals} proposals</span> : null}
-      {summary.pendingArtifacts > 0 ? <span>{summary.pendingArtifacts} artifacts</span> : null}
-      {summary.pendingPrompts > 0 ? <span>{summary.pendingPrompts} prompts</span> : null}
-      {summary.childSessions > 0 ? <span>{summary.childSessions} child</span> : null}
+      {summary.pendingProposals > 0 ? <span>{formatCount(summary.pendingProposals, "proposal")}</span> : null}
+      {summary.pendingArtifacts > 0 ? <span>{formatCount(summary.pendingArtifacts, "artifact")}</span> : null}
+      {summary.pendingPrompts > 0 ? <span>{formatCount(summary.pendingPrompts, "prompt")}</span> : null}
+      {summary.childSessions > 0 ? <span>{formatCount(summary.childSessions, "child", "children")}</span> : null}
     </span>
   );
 }
@@ -99,4 +99,8 @@ function formatIndicatorLabel(summary: AgentSessionIndicatorSummary) {
   if (summary.pendingPrompts > 0) parts.push(`${summary.pendingPrompts} pending prompts`);
   if (summary.childSessions > 0) parts.push(`${summary.childSessions} child sessions`);
   return parts.join(", ");
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }

@@ -66,6 +66,8 @@ export function AgentPanel({
     return () => streamSubscriptionRef.current?.close();
   }, []);
 
+  useEffect(() => () => onSessionIndicatorChange?.([]), [onSessionIndicatorChange]);
+
   useEffect(() => {
     let disposed = false;
 

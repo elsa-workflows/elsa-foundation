@@ -37,7 +37,7 @@ describe("AgentLauncher", () => {
     const button = container.querySelector("button")!;
 
     expect(button.textContent).toContain("Weaver");
-    expect(button.textContent).toContain("1 proposals");
+    expect(button.textContent).toContain("1 proposal");
     expect(button.textContent).toContain("1 child");
 
     button.click();
