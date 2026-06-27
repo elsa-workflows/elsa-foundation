@@ -406,6 +406,32 @@ public sealed class WorkflowAgentTests
         Assert.Contains(WorkflowGraphOperationBatchRiskReason.UnavailableActivity, result.Reasons);
     }
 
+    [Theory]
+    [InlineData("direct-apply-succeeded", AgentResultKind.WorkflowGraphOperationBatch)]
+    [InlineData("direct-apply-rejected", AgentResultKind.Proposal)]
+    [InlineData("provider-error", AgentResultKind.Error)]
+    public async Task Workflow_authoring_audit_records_interaction_outcomes_with_attribution(string outcome, AgentResultKind resultKind)
+    {
+        using var provider = BuildWorkflowProvider("rev-1", allowChanges: true);
+        var audit = provider.GetRequiredService<IWorkflowAuthoringAuditService>();
+        var auditReader = provider.GetRequiredService<IAgentAuditReader>();
+
+        await audit.EmitAsync(CreateAuditRequest(outcome, resultKind));
+
+        var auditEvent = Assert.Single(await auditReader.ListAsync("session-1"), x => x.Kind == AgentAuditEventKind.WorkflowAuthoringInteraction);
+        Assert.Equal("actor-1", auditEvent.ActorId);
+        Assert.Equal("wf-1", auditEvent.Metadata["workflowDefinitionId"]);
+        Assert.Equal("workflow.propose-change", auditEvent.Metadata["capabilityId"]);
+        Assert.Equal(DeterministicWorkflowAgentProvider.Id, auditEvent.Metadata["providerId"]);
+        Assert.Equal("Prepared one workflow graph operation batch.", auditEvent.Metadata["operationSummary"]);
+        Assert.Equal(outcome, auditEvent.Metadata["outcome"]);
+        Assert.Equal(resultKind.ToString(), auditEvent.Metadata["resultKind"]);
+        Assert.Equal("deterministic-model", auditEvent.Metadata["modelId"]);
+        Assert.Equal("run-1", auditEvent.Metadata["runId"]);
+        Assert.Equal("false", auditEvent.Metadata["persistedWorkflowRevisionChanged"]);
+        Assert.Equal(string.Empty, auditEvent.Metadata["workflowProvenanceState"]);
+    }
+
     private static ServiceProvider BuildWorkflowProvider(string revision, bool allowChanges)
     {
         var services = new ServiceCollection();
@@ -461,6 +487,24 @@ public sealed class WorkflowAgentTests
                 new("Elsa.Email.SendEmail", "Send email", true, ["email"]),
                 new("Elsa.Workflows.WriteLine", "Write line", true, ["write"])
             ]);
+
+    private static WorkflowAuthoringAuditRequest CreateAuditRequest(string outcome, AgentResultKind resultKind)
+        => new(
+            "session-1",
+            "actor-1",
+            "wf-1",
+            "workflow.propose-change",
+            DeterministicWorkflowAgentProvider.Id,
+            "Prepared one workflow graph operation batch.",
+            outcome,
+            resultKind,
+            "deterministic-model",
+            "run-1",
+            new Dictionary<string, string>
+            {
+                ["persistedWorkflowRevisionChanged"] = "false",
+                ["workflowProvenanceState"] = string.Empty
+            });
 
     private static async Task<List<AgentStreamEvent>> CollectAsync(IAsyncEnumerable<AgentStreamEvent> events)
     {

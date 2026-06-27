@@ -32,3 +32,8 @@ public interface IWorkflowGraphOperationBatchRiskClassifier
 {
     WorkflowGraphOperationBatchRiskClassification Classify(WorkflowGraphOperationBatchRiskClassificationRequest request);
 }
+
+public interface IWorkflowAuthoringAuditService
+{
+    Task EmitAsync(WorkflowAuthoringAuditRequest request, CancellationToken cancellationToken = default);
+}

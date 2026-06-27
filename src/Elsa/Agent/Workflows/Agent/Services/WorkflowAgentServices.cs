@@ -548,6 +548,33 @@ public sealed class DefaultWorkflowGraphOperationBatchRiskClassifier : IWorkflow
         => kind is WorkflowGraphOperationKind.RemoveActivity or WorkflowGraphOperationKind.DisconnectActivities;
 }
 
+public sealed class DefaultWorkflowAuthoringAuditService(IAgentAuditSink auditSink) : IWorkflowAuthoringAuditService
+{
+    public Task EmitAsync(WorkflowAuthoringAuditRequest request, CancellationToken cancellationToken = default)
+    {
+        var metadata = new Dictionary<string, string>(request.Metadata, StringComparer.OrdinalIgnoreCase)
+        {
+            ["workflowDefinitionId"] = request.WorkflowDefinitionId,
+            ["capabilityId"] = request.CapabilityId,
+            ["providerId"] = request.ProviderId,
+            ["operationSummary"] = request.OperationSummary,
+            ["outcome"] = request.Outcome,
+            ["resultKind"] = request.ResultKind.ToString(),
+            ["modelId"] = request.ModelId ?? string.Empty,
+            ["runId"] = request.RunId ?? string.Empty
+        };
+
+        return auditSink.EmitAsync(new(
+            Guid.NewGuid().ToString("N"),
+            AgentAuditEventKind.WorkflowAuthoringInteraction,
+            request.SessionId,
+            request.ActorId,
+            $"Weaver workflow authoring interaction {request.Outcome}.",
+            DateTimeOffset.UtcNow,
+            metadata), cancellationToken);
+    }
+}
+
 public sealed class DefaultWorkflowChangeProposalService(
     IWorkflowRevisionProvider revisionProvider,
     IWorkflowChangePermissionEvaluator permissions,
