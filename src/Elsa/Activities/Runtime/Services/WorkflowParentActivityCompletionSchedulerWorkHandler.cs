@@ -231,7 +231,21 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
         var latestParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
                                 ?? parentState;
+
+        // A completing container's scope is no longer live for runtime expressions; mark it completed
+        // and retain its final variable values as inspection evidence only through the configured
+        // capture/retention policy (ADR 0027, #210).
+        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
+        var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
+            payloadCapturePolicy, scopeService, parentExecutableNode, latestParentState,
+            workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
         var completedParentState = CompleteParentActivity(workItem, payload, latestParentState, context.CompositeCompletionOutcomeNames);
+
+        // Only a container that actually owns scoped variables gets its scope marked completed; this
+        // keeps the completion of ordinary containers untouched (ADR 0027, #210).
+        if (containerVariableSnapshots.Count > 0)
+            completedParentState = RuntimeContainerScopeService.MarkScopeCompleted(completedParentState);
+
         if (checkpointCommitter is null || inspectionAccumulator is null)
         {
             await activityExecutionStateStore.SaveAsync(completedParentState, cancellationToken);
@@ -239,7 +253,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             return;
         }
 
-        await CommitCompletedParentActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, payload, completedParentState, ReadCompletionOutcomeNames(completedParentState), cancellationToken);
+        await CommitCompletedParentActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, payload, completedParentState, ReadCompletionOutcomeNames(completedParentState), containerVariableSnapshots, cancellationToken);
     }
 
     private async ValueTask<ConstructedActivity> ConstructActivityAsync(
@@ -448,6 +462,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         RuntimeCompleteActivityCommandPayload parentCompletionPayload,
         ActivityExecutionState completedParentState,
         IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
@@ -469,6 +484,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             checkpointId,
             occurredAt,
             outcomeNames: outcomeNames,
+            valueSnapshots: valueSnapshots,
             metadata: metadata,
             cancellationToken: cancellationToken);
         var completionWorkItem = NewCompletionWorkItem(parentCompletionWorkItem, parentCompletionPayload, completedParentState);

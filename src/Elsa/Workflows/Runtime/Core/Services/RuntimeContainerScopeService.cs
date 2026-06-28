@@ -60,7 +60,8 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
                         ScopeId: ancestorState.Execution.ExecutableNodeId,
                         ExecutionId: ancestorState.Execution.ActivityExecutionId,
                         Variables: declared,
-                        Values: ReadSnapshot(ancestorState)));
+                        Values: ReadSnapshot(ancestorState),
+                        IsCompleted: IsScopeCompleted(ancestorState)));
                 }
             }
 
@@ -128,6 +129,50 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         metadata[RuntimeMetadataKeys.ScopedVariableValues] = serialized;
         return containerState with { Metadata = metadata };
     }
+
+    /// <summary>
+    /// Marks <paramref name="containerState"/>'s scope completed (ADR 0027, #210) so that any later
+    /// rebuild treats it as non-live for runtime expressions. Idempotent; returns the same instance
+    /// when already marked.
+    /// </summary>
+    public static ActivityExecutionState MarkScopeCompleted(ActivityExecutionState containerState)
+    {
+        ArgumentNullException.ThrowIfNull(containerState);
+
+        if (IsScopeCompleted(containerState))
+            return containerState;
+
+        var metadata = containerState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.ScopedVariableScopeCompleted] = bool.TrueString;
+        return containerState with { Metadata = metadata };
+    }
+
+    /// <summary>
+    /// Reads the current values of the variables a container declares, for capturing completed-scope
+    /// evidence: the assigned value where present, otherwise the declared default. Returns an empty
+    /// list when the node declares no container-scoped variables.
+    /// </summary>
+    public IReadOnlyList<RuntimeScopedVariableValue> ReadScopeVariableValues(ExecutableNode containerNode, ActivityExecutionState containerState)
+    {
+        ArgumentNullException.ThrowIfNull(containerNode);
+        ArgumentNullException.ThrowIfNull(containerState);
+
+        var declared = _scopeFactory.ProjectDeclaredVariables(containerNode);
+        if (declared.Count == 0)
+            return [];
+
+        var values = ReadSnapshot(containerState);
+        return declared
+            .Select(entry => new RuntimeScopedVariableValue(
+                entry.Value.Name,
+                entry.Key,
+                values.TryGetValue(entry.Key, out var value) ? value : entry.Value.DefaultValue))
+            .ToArray();
+    }
+
+    private static bool IsScopeCompleted(ActivityExecutionState containerState) =>
+        containerState.Metadata.TryGetValue(RuntimeMetadataKeys.ScopedVariableScopeCompleted, out var flag) &&
+        StringComparer.OrdinalIgnoreCase.Equals(flag, bool.TrueString);
 
     private static IReadOnlyDictionary<string, object?> ReadSnapshot(ActivityExecutionState containerState)
     {

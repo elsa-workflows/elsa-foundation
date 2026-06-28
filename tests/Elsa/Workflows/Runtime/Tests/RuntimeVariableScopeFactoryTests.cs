@@ -77,6 +77,20 @@ public sealed class RuntimeVariableScopeFactoryTests
         Assert.Equal(1, outerValue); // falls back to default when no stored value
     }
 
+    [Fact]
+    public void BuildChain_marks_completed_layers_as_non_live()
+    {
+        var completed = new RuntimeContainerScopeLayer("container", "exec-1", Vars(("var-c", "Counter", 1)), Values(("var-c", 7)), IsCompleted: true);
+
+        var chain = _factory.BuildChain([completed]);
+
+        Assert.NotNull(chain);
+        Assert.True(chain!.IsCompleted);
+        // A completed scope is no longer live: reads and writes are rejected (#210).
+        Assert.False(chain.TryGetValue(new VariableReference("var-c", "container"), out _));
+        Assert.False(chain.TrySetValue(new VariableReference("var-c", "container"), 99));
+    }
+
     private static ExecutableNode NodeWithStructure(JsonElement? structurePayload) =>
         new(
             executableNodeId: "container",
