@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
-  StudioAiContributionApi,
   StudioDiagnosticsWidgetContribution,
   StudioDiagnosticsWidgetProps,
   StudioDiagnosticsWidgetState,
@@ -209,7 +208,6 @@ function AppContent() {
       <ShellFrame
         navigation={navigation}
         panels={panels}
-        ai={api!.ai}
         path={path}
         title={pageTitle}
         onNavigate={navigateTo}
@@ -259,7 +257,6 @@ function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit |
 function ShellFrame({
   navigation,
   panels,
-  ai,
   path,
   title,
   backendBaseUrl,
@@ -269,7 +266,6 @@ function ShellFrame({
 }: {
   navigation: StudioNavigationContribution[];
   panels: StudioPanelContribution[];
-  ai?: StudioAiContributionApi;
   path: string;
   title: string;
   backendBaseUrl: string;
@@ -381,7 +377,7 @@ function ShellFrame({
         </header>
         <main className="content">{children}</main>
       </div>
-      {panels.length > 0 ? <BottomPanel panels={panels} ai={ai} /> : null}
+      {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
     </div>
   );
 }
@@ -397,58 +393,20 @@ function registerBuiltInAgentContributions(api: ElsaStudioModuleApi) {
   }
 }
 
-export function BottomPanel({ panels, ai }: { panels: StudioPanelContribution[]; ai?: StudioAiContributionApi }) {
+function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
   const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
   const [maximized, setMaximized] = useState(() => initialMaximized);
-  const [revealedPanelId, setRevealedPanelId] = useState<string | null>(null);
-  const [revealNonce, setRevealNonce] = useState(0);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
-
-  // Panels that host an AI surface (e.g. Weaver chat). Dispatching a prompt action
-  // such as "Explain" should bring the corresponding panel into view automatically.
-  const aiPanelIds = useMemo(
-    () => new Set((ai?.surfaces.list() ?? []).filter(surface => surface.placement === "panel").map(surface => surface.id)),
-    [ai]
-  );
 
   useEffect(() => {
     if (!panels.some(panel => panel.id === activePanelId)) {
       setActivePanelId(panels[0].id);
     }
   }, [activePanelId, panels]);
-
-  useEffect(() => {
-    if (!ai) {
-      return;
-    }
-
-    return ai.onPrompt(() => {
-      const target = panels.find(panel => aiPanelIds.has(panel.id));
-      if (!target) {
-        return;
-      }
-
-      setActivePanelId(target.id);
-      setCollapsed(false);
-      setRevealedPanelId(target.id);
-      // Bump the nonce so the pulse overlay remounts and its animation replays even
-      // when the same panel is revealed again within the highlight window.
-      setRevealNonce(nonce => nonce + 1);
-    });
-  }, [ai, aiPanelIds, panels]);
-
-  useEffect(() => {
-    if (!revealedPanelId) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setRevealedPanelId(null), 1600);
-    return () => window.clearTimeout(timer);
-  }, [revealedPanelId]);
 
   useEffect(() => {
     window.localStorage.setItem(bottomPanelHeightStorageKey, String(height));
@@ -596,7 +554,6 @@ export function BottomPanel({ panels, ai }: { panels: StudioPanelContribution[];
               }}
             >
               {panel.title}
-              {panel.id === revealedPanelId ? <span key={revealNonce} className="bottom-panel-tab-pulse" aria-hidden="true" /> : null}
             </button>
           ))}
         </div>
