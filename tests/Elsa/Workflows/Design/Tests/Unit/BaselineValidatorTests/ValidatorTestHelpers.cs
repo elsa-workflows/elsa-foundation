@@ -30,6 +30,20 @@ internal static class ValidatorTestHelpers
         StrategyOptions: null
     );
 
+    public static WorkflowDefinitionState StateWithRoot(
+        ActivityNode rootActivity,
+        IEnumerable<VariableDefinition>? variables = null,
+        IEnumerable<InputDefinition>? inputs = null,
+        IEnumerable<OutputDefinition>? outputs = null
+    ) => new(
+        Variables: variables ?? [],
+        RootActivity: rootActivity,
+        Inputs: inputs ?? [],
+        Outputs: outputs ?? [],
+        WorkflowActivityOptions: null,
+        StrategyOptions: null
+    );
+
     public static OnDraftValidating EventFor(WorkflowDefinitionState state) =>
         new(new StubDraft(state));
 

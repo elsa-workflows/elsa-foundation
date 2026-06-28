@@ -199,7 +199,7 @@ public sealed class WorkflowExecutableCompiler(
         var nullableTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
         if (value is JsonElement jsonElement)
         {
-            if (jsonElement.ValueKind == JsonValueKind.Null)
+            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
                 return null;
 
             value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();

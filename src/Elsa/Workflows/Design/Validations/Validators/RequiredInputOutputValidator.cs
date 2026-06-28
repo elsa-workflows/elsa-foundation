@@ -96,8 +96,9 @@ public sealed class RequiredInputOutputValidator(
         return state.Value.Value switch
         {
             null => false,
-            string value => !string.IsNullOrEmpty(value),
+            JsonElement { ValueKind: JsonValueKind.Undefined } => false,
             JsonElement { ValueKind: JsonValueKind.Null } => false,
+            string value => !string.IsNullOrEmpty(value),
             JsonElement { ValueKind: JsonValueKind.String } value => !string.IsNullOrEmpty(value.GetString()),
             _ => true
         };

@@ -72,6 +72,20 @@ public sealed class RequiredInputOutputValidatorTests
     }
 
     [Fact]
+    public async Task Required_input_present_but_undefined_json_value_emits_error()
+    {
+        var lookup = StubLookup.WithVersion("av-1",
+            inputs: [RequiredInput("body")],
+            outputs: []);
+
+        var state = StateWithRoot(Node("n1", "av-1",
+            inputs: [LiteralInput("body", default(JsonElement))]));
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
     public async Task Required_output_missing_emits_error()
     {
         var lookup = StubLookup.WithVersion("av-1",
