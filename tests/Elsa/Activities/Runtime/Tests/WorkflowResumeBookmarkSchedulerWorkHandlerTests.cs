@@ -191,8 +191,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
         Assert.Equal("InputMaterializationFailed", state.SubStatus);
         Assert.Equal(_now, state.CompletedAt);
-        Assert.Contains("not a supported materialized value binding", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("not a supported materialized value binding", message));
+        Assert.Contains("typeName", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("typeName", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }

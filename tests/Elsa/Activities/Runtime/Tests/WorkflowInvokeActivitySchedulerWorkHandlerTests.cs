@@ -444,8 +444,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal("InputMaterializationFailed", state.SubStatus);
         Assert.Equal(_now, state.CompletedAt);
         Assert.Equal(1, state.FaultCount);
-        Assert.Contains("not a supported materialized value binding", state.Metadata["runtime.faultMessage"]);
-        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("not a supported materialized value binding", message));
+        Assert.Contains("typeName", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("typeName", message));
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 

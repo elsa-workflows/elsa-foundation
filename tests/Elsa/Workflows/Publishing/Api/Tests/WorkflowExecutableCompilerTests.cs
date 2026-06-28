@@ -50,6 +50,47 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompilesJavaScriptBoundInputIntoRuntimeExpressionBinding()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-js", JavaScriptText("\"Hello \" + \"World\""))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Null(binding.LiteralValue);
+        var expression = binding.Expression;
+        Assert.NotNull(expression);
+        Assert.Equal("JavaScript", expression!.Language);
+        Assert.Equal("\"Hello \" + \"World\"", expression.Expression);
+        Assert.StartsWith("System.String", expression.ResultType?.Id, StringComparison.Ordinal);
+        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+        Assert.Equal("Text", binding.Metadata["referenceKey"]);
+    }
+
+    [Fact]
+    public async Task CompilingExpressionInputWithoutExpressionTextThrows()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-js", JavaScriptText(""))));
+
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-")).AsTask());
+    }
+
+    [Fact]
     public async Task CompilesTransientWorkflowExecutableWithExpirationAndMetadata()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -142,6 +183,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+
+    private static WorkflowArgumentState JavaScriptText(string expression) =>
+        new("Text", new ArgumentValue(expression, "JavaScript"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
