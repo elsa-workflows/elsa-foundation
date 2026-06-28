@@ -191,17 +191,25 @@ public sealed class WorkflowExecutableCompiler(
         return $"{fullName}, {type.Assembly.GetName().Name}";
     }
 
-    private static object? ConvertLiteral(string? value, Type targetType)
+    private static object? ConvertLiteral(object? value, Type targetType)
     {
         if (value is null)
             return null;
 
         var nullableTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (value is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+                return null;
+
+            value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
+        }
+
         if (nullableTargetType == typeof(string))
-            return value;
+            return $"{value}";
 
         if (nullableTargetType.IsEnum)
-            return Enum.Parse(nullableTargetType, value, ignoreCase: true);
+            return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
 
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
     }

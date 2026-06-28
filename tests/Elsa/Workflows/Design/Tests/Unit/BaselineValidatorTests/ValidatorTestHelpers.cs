@@ -30,6 +30,20 @@ internal static class ValidatorTestHelpers
         StrategyOptions: null
     );
 
+    public static WorkflowDefinitionState StateWithRoot(
+        ActivityNode rootActivity,
+        IEnumerable<VariableDefinition>? variables = null,
+        IEnumerable<InputDefinition>? inputs = null,
+        IEnumerable<OutputDefinition>? outputs = null
+    ) => new(
+        Variables: variables ?? [],
+        RootActivity: rootActivity,
+        Inputs: inputs ?? [],
+        Outputs: outputs ?? [],
+        WorkflowActivityOptions: null,
+        StrategyOptions: null
+    );
+
     public static OnDraftValidating EventFor(WorkflowDefinitionState state) =>
         new(new StubDraft(state));
 
@@ -67,10 +81,10 @@ internal static class ValidatorTestHelpers
         Default: null
     );
 
-    public static ArgumentState VariableInput(string referenceKey, string variableReferenceKey) =>
-        new(referenceKey, new ArgumentValue(variableReferenceKey, "Variable"), null, null, null, null);
+    public static ArgumentState VariableInput(string referenceKey, object? variableReference) =>
+        new(referenceKey, new ArgumentValue(variableReference, "Variable"), null, null, null, null);
 
-    public static ArgumentState LiteralInput(string referenceKey, string? literalValue) =>
+    public static ArgumentState LiteralInput(string referenceKey, object? literalValue) =>
         new(referenceKey, new ArgumentValue(literalValue, "Literal"), null, null, null, null);
 
     private static ActivityNode? RootActivity(IEnumerable<ActivityNode>? activities)
