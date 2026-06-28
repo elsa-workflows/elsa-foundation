@@ -113,7 +113,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   }), [bootstrap]);
   const capabilities = useMemo(() => getActiveAgentCapabilities(api, surface, contributionFilter), [api, surface, contributionFilter]);
   const promptStarters = useMemo(() => getActivePromptStarters(api, surface, capabilities, contributionFilter), [api, surface, capabilities, contributionFilter]);
-  const activeProvider = useMemo(() => bootstrap?.providers?.find(provider => provider.isAvailable) ?? bootstrap?.providers?.[0], [bootstrap]);
+  const activeProvider = useMemo(() => bootstrap?.provider, [bootstrap]);
   const ready = useMemo(() => bootstrap?.enabled === true && bootstrap.providerStatus !== "unavailable" && capabilities.length > 0, [bootstrap, capabilities]);
 
   useEffect(() => () => streamRef.current?.close(), []);
@@ -126,7 +126,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         if (!disposed) setBootstrap(result);
       } catch (e) {
         if (!disposed) {
-          setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], providers: [], policy: { contextVisibility: true, requiresApprovalForMutations: true } });
+          setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], provider: undefined, policy: { contextVisibility: true, requiresApprovalForMutations: true } });
           setError(getAgentErrorMessage(e));
         }
       }

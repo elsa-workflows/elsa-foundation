@@ -25,18 +25,14 @@ export interface AgentClient {
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
-  let providerId: string | undefined;
-
   return {
     async bootstrap() {
-      const response = mapBootstrap(unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/agent/bootstrap")));
-      providerId = response.providers?.find(provider => provider.isAvailable)?.providerId;
-      return response;
+      // A single agent harness is active server-side; the client never chooses among providers.
+      return mapBootstrap(unwrap(await context.http.getJson<AgentApiResponse<BackendAgentBootstrapResponse>>("/_elsa/agent/bootstrap")));
     },
     async createSession(request) {
       return mapSession(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentSession>>("/_elsa/agent/sessions", {
         conversationId: request.activeSurface.resourceId ?? request.activeSurface.route,
-        ...(providerId ? { providerId } : {}),
         mode: request.mode,
         activeSurface: request.activeSurface,
         clientContext: request.clientContext,
@@ -125,7 +121,7 @@ interface BackendAgentBootstrapResponse {
   modes?: AgentBootstrapResponse["modes"];
   capabilities?: BackendAgentCapability[];
   policy?: AgentBootstrapResponse["policy"];
-  providers?: BackendAgentProviderDiagnostics[];
+  provider?: BackendAgentProviderDiagnostics | null;
 }
 
 interface BackendAgentCapability {
@@ -203,15 +199,16 @@ function unwrap<T>(response: AgentApiResponse<T>): T {
 }
 
 function mapBootstrap(response: BackendAgentBootstrapResponse): AgentBootstrapResponse {
-  const providers = readRecordArray(response, "providers").map(mapProviderDiagnostics);
+  const providerRecord = readRecord(response, "provider");
+  const provider = providerRecord ? mapProviderDiagnostics(providerRecord) : undefined;
   const capabilities = readRecordArray(response, "capabilities");
-  const providerStatus = mapProviderStatus(readField(response, "providerStatus"), providers);
+  const providerStatus = mapProviderStatus(readField(response, "providerStatus"), provider);
   return {
     enabled: readBoolean(response, "enabled") ?? providerStatus === "available",
     providerStatus,
     modes: readStringArray(response, "modes") as AgentBootstrapResponse["modes"] ?? ["explain", "troubleshoot", "build"],
     capabilities: capabilities.map(mapCapability),
-    providers,
+    provider,
     policy: readField(response, "policy") as AgentBootstrapResponse["policy"] ?? { contextVisibility: true, requiresApprovalForMutations: true }
   };
 }
@@ -232,13 +229,13 @@ function mapCapability(capability: Record<string, unknown>): AgentBootstrapRespo
   };
 }
 
-function mapProviderStatus(status: unknown, providers: AgentProviderDiagnostics[]): AgentProviderStatus {
+function mapProviderStatus(status: unknown, provider: AgentProviderDiagnostics | undefined): AgentProviderStatus {
   const value = normalizeEnum(status);
   if (value === "available" || value === "unavailable" || value === "disabled" || value === "degraded") {
     return value;
   }
 
-  return providers.some(provider => provider.isAvailable) ? "available" : "unavailable";
+  return provider?.isAvailable ? "available" : "unavailable";
 }
 
 function mapSession(session: BackendAgentSession): AgentCreateSessionResponse {

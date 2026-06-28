@@ -50,7 +50,7 @@ function disabledClient(): AgentClient {
       providerStatus: "disabled",
       modes: [],
       capabilities: [],
-      providers: [],
+      provider: undefined,
       policy: { contextVisibility: true, requiresApprovalForMutations: true }
     })),
     createSession: vi.fn(),
