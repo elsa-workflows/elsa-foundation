@@ -13,22 +13,19 @@ namespace Elsa.Workflows.Design.Core.Services;
 /// Invalid scoped-reference diagnostics are produced by the variable-expression draft validator and
 /// already flow to the client through the normal validation results — they are not duplicated here.
 /// </summary>
-public sealed class ScopedVariableAuthoringContract(ScopedVariableResolver scopedVariableResolver, IActivityStructureService structureService)
+public sealed class ScopedVariableAuthoringContract(
+    ScopedVariableResolver scopedVariableResolver,
+    ScopedVariablePicker scopedVariablePicker,
+    IActivityStructureService structureService)
 {
-    public const int DefaultMaxDepth = 100;
-
     /// <summary>
     /// Returns the variables visible from <paramref name="nodeId"/>, nearest-scope first, as a
-    /// serializable view for the authoring picker.
+    /// serializable view for the authoring picker. Wraps <see cref="ScopedVariablePicker"/>.
     /// </summary>
-    public IReadOnlyList<VisibleVariableView> GetVisibleVariables(WorkflowDefinitionState state, string nodeId, int maxDepth = DefaultMaxDepth)
+    public IReadOnlyList<VisibleVariableView> GetVisibleVariables(WorkflowDefinitionState state, string nodeId, int maxDepth = ScopedVariablePicker.DefaultMaxDepth)
     {
-        ArgumentNullException.ThrowIfNull(state);
-        ArgumentException.ThrowIfNullOrEmpty(nodeId);
-
-        return scopedVariableResolver
-            .Resolve(state.Variables, state.RootActivity, maxDepth)
-            .GetVisibleVariables(nodeId)
+        return scopedVariablePicker
+            .GetVisibleVariables(state, nodeId, maxDepth)
             .Select(visible => new VisibleVariableView(
                 visible.Variable.ReferenceKey,
                 visible.Variable.Name,
@@ -42,7 +39,7 @@ public sealed class ScopedVariableAuthoringContract(ScopedVariableResolver scope
     /// visible ancestor declaration. Shadowing is intentional and allowed — these are advisory only,
     /// never validation errors.
     /// </summary>
-    public IReadOnlyList<ScopedVariableShadowingWarning> GetShadowingWarnings(WorkflowDefinitionState state, int maxDepth = DefaultMaxDepth)
+    public IReadOnlyList<ScopedVariableShadowingWarning> GetShadowingWarnings(WorkflowDefinitionState state, int maxDepth = ScopedVariablePicker.DefaultMaxDepth)
     {
         ArgumentNullException.ThrowIfNull(state);
 
