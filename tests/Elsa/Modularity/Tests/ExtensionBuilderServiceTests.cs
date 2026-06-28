@@ -1349,13 +1349,14 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     {
         var options = new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") };
         configure?.Invoke(options);
-        return new(new FakeEnvironment(_directory), Options.Create(options));
+        return new(new FakeEnvironment(_directory), Options.Create(options), NullLogger<ExtensionBuilderStorage>.Instance);
     }
 
     private ExtensionBuilderStorage CreateStorageFromOptions(ExtensionBuilderOptions? options) =>
         new(
             new FakeEnvironment(_directory),
-            Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }));
+            Options.Create(options ?? new ExtensionBuilderOptions { StoragePath = Path.Combine(_directory, "state") }),
+            NullLogger<ExtensionBuilderStorage>.Instance);
 
     private async Task<string> CreateFakeDotNetAsync(int exitCode, string output, int? delaySeconds = null, IReadOnlyList<string>? packageFiles = null)
     {

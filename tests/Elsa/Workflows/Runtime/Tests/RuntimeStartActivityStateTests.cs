@@ -219,7 +219,7 @@ public sealed class RuntimeStartActivityStateTests
     }
 
     private WorkflowStartActivitySchedulerWorkHandler NewHandler() =>
-        new(_executableStore, _activityStateStore, _schedulerWorkQueue, new FixedTimeProvider(_now));
+        new(_executableStore, _activityStateStore, _schedulerWorkQueue, checkpointCommitter: null, inspectionAccumulator: null, timeProvider: new FixedTimeProvider(_now));
 
     private WorkflowStartActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointCommitStore checkpointWriter) =>
         new(
