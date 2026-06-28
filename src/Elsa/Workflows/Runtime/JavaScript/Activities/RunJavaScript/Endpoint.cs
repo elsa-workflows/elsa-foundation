@@ -2,10 +2,11 @@ using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript;
 
-internal sealed class Endpoint(IServiceProvider serviceProvider) : ElsaEndpoint<RequestModel>
+internal sealed class Endpoint(IServiceProvider serviceProvider, ILogger<Endpoint> logger) : ElsaEndpoint<RequestModel>
 {
     public override void Configure()
     {
@@ -45,6 +46,7 @@ internal sealed class Endpoint(IServiceProvider serviceProvider) : ElsaEndpoint<
         }
         catch (Exception e)
         {
+            logger.LogError(e, "JavaScript script execution failed.");
             await Send.ResponseAsync(
                 new { success = false, message = e.Message },
                 500,
