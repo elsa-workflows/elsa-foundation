@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -29,6 +30,10 @@ public sealed class RuntimeCheckpointCommitter
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
         {
+            if (IsMandatoryCheckpoint(commit.Checkpoint))
+                throw new InvalidOperationException(
+                    $"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
+
             if (commit.PostCommitIntents.Count > 0)
                 return RuntimeCheckpointCommitResult.Failure(
                     commit,
@@ -57,4 +62,8 @@ public sealed class RuntimeCheckpointCommitter
 
         return RuntimeCheckpointCommitResult.Success(commit, decision, storeResult.PendingPostCommitWorkIds);
     }
+
+    private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
+        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
+        StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 }
