@@ -25,10 +25,16 @@ public sealed record StructuredLogStreamItem
     public bool IsDropped => Dropped is not null;
 
     /// <summary>Creates an item carrying a log entry.</summary>
-    public static StructuredLogStreamItem ForEntry(StructuredLogEntry entry) =>
-        new(entry ?? throw new ArgumentNullException(nameof(entry)), null);
+    public static StructuredLogStreamItem ForEntry(StructuredLogEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return new(entry, null);
+    }
 
     /// <summary>Creates an item carrying a drop notice.</summary>
-    public static StructuredLogStreamItem ForDropped(DroppedEntriesSignal dropped) =>
-        new(null, dropped ?? throw new ArgumentNullException(nameof(dropped)));
+    public static StructuredLogStreamItem ForDropped(DroppedEntriesSignal dropped)
+    {
+        ArgumentNullException.ThrowIfNull(dropped);
+        return new(null, dropped);
+    }
 }
