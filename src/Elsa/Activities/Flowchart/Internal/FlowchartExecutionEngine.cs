@@ -42,7 +42,8 @@ public sealed class FlowchartExecutionEngine(
         }
 
         var state = LoadState(context.ActivityExecutionState) ?? CreateInitialState(startNode.ExecutableNodeId);
-        var rootPath = state.ExecutionPaths.Single(path => path.ExecutionPathId == "path:root");
+        var rootPath = state.ExecutionPaths.SingleOrDefault(path => path.ExecutionPathId == "path:root")
+            ?? throw new InvalidOperationException($"Root execution path 'path:root' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
         state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, rootPath.IterationKey, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
         SaveState(context, state);
     }
@@ -97,7 +98,8 @@ public sealed class FlowchartExecutionEngine(
                 throw;
             }
 
-            var currentPath = state.ExecutionPaths.First(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, path.ExecutionPathId));
+            var currentPath = state.ExecutionPaths.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, path.ExecutionPathId))
+                ?? throw new InvalidOperationException($"Execution path '{path.ExecutionPathId}' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
             if (currentPath.Status == ExecutionPathStatus.Active)
                 state = UpdatePath(state, currentPath with
                 {
@@ -327,7 +329,8 @@ public sealed class FlowchartExecutionEngine(
         var connection = ResolveScheduleConnection(graph, command, currentPath, nodeId, policyKind);
         if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
         {
-            var currentScope = state.Scopes.First(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId));
+            var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
+                ?? throw new InvalidOperationException($"Execution scope '{currentPath.ExecutionScopeId}' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
             var loopScope = ResolveTargetScope(state, graph, currentScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, loopScope.ExecutionScopeId)))
                 state = AddScope(state, loopScope);
