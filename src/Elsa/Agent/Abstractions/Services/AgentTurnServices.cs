@@ -201,6 +201,55 @@ public sealed class DefaultAgentTurnOrchestrator(
         {
             yield return Lifecycle(AgentStreamEventKind.Started, new AgentTurnStarted(turnId, maxSteps));
 
+            // Loop-owning providers (e.g. the GitHub Copilot harness) run the whole turn themselves; we just forward
+            // their events and own the turn-level lifecycle (Started/Completed/TurnCancelled) for cancellation.
+            if (provider is IAgentHarness harness)
+            {
+                var request = new AgentHarnessTurnRequest(session.Id, session.ActorId, prepared.History, prepared.Context, toolRegistry.Tools, session.Policy);
+                var harnessErrored = false;
+                var harnessCancelled = false;
+
+                await using (var harnessEnumerator = harness.RunTurnAsync(request, token).GetAsyncEnumerator(token))
+                {
+                    while (true)
+                    {
+                        bool moved;
+                        try
+                        {
+                            moved = await harnessEnumerator.MoveNextAsync();
+                        }
+                        catch (OperationCanceledException) when (turnToken.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                        {
+                            harnessCancelled = true;
+                            break;
+                        }
+
+                        if (!moved)
+                            break;
+
+                        var harnessEvent = harnessEnumerator.Current;
+                        if (harnessEvent.Kind is AgentStreamEventKind.Started or AgentStreamEventKind.Completed)
+                            continue; // The orchestrator owns turn lifecycle.
+
+                        if (harnessEvent.Kind == AgentStreamEventKind.Error)
+                            harnessErrored = true;
+
+                        yield return harnessEvent;
+                    }
+                }
+
+                if (harnessCancelled)
+                {
+                    yield return Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
+                    yield break;
+                }
+
+                if (!harnessErrored)
+                    yield return Lifecycle(AgentStreamEventKind.Completed, null);
+
+                yield break;
+            }
+
             var history = prepared.History;
             var pendingResults = prepared.PendingResults;
             var tools = toolRegistry.Descriptors;

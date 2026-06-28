@@ -1,3 +1,5 @@
+using Microsoft.Extensions.AI;
+
 namespace Elsa.Agent.GitHubCopilot.Services;
 
 public interface IGitHubCopilotClientFactory
@@ -44,12 +46,15 @@ public sealed record GitHubCopilotSessionRequest(
     bool Streaming,
     string? SystemMessage,
     IReadOnlyCollection<string> AvailableTools,
-    IReadOnlyCollection<string> ExcludedTools);
+    IReadOnlyCollection<string> ExcludedTools,
+    IReadOnlyCollection<AIFunction>? CustomTools = null);
 
 public enum GitHubCopilotStreamEventKind
 {
     Started,
     MessageDelta,
+    ToolExecutionStarted,
+    ToolExecutionCompleted,
     Completed,
     Error
 }
@@ -58,4 +63,7 @@ public sealed record GitHubCopilotStreamEvent(
     GitHubCopilotStreamEventKind Kind,
     string? Content = null,
     string? ErrorCode = null,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    string? ToolCallId = null,
+    string? ToolName = null,
+    bool? Success = null);

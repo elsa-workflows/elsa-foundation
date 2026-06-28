@@ -140,6 +140,20 @@ public sealed class AgentTurnOrchestratorTests
     }
 
     [Fact]
+    public async Task Loop_owning_harness_provider_is_delegated_and_its_events_forwarded()
+    {
+        using var sp = Build(new DeterministicHarnessProvider(), []);
+
+        var events = await RunAsync(sp, DeterministicHarnessProvider.Id, "anything");
+
+        Assert.Contains(events, x => x.Kind == AgentStreamEventKind.Started && x.Payload is AgentTurnStarted);
+        var delta = events.Last(x => x.Kind == AgentStreamEventKind.MessageDelta);
+        Assert.Equal("harness answer", delta.Content);
+        Assert.Equal(AgentStreamEventKind.Completed, events[^1].Kind);
+        Assert.DoesNotContain(events, x => x.Kind == AgentStreamEventKind.StepStarted);
+    }
+
+    [Fact]
     public async Task Turn_stops_at_the_step_budget()
     {
         using var sp = Build(new LoopingToolProvider(), [new EchoTool()], maxSteps: 2);
@@ -225,6 +239,38 @@ public sealed class AgentTurnOrchestratorTests
 
             var userMessages = string.Join(" | ", context.History.Where(x => x.Role == AgentRole.User).Select(x => x.Content));
             yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.MessageDelta, $"Saw: {userMessages}", null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
+        }
+
+        public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentToolApprovalResult(false, string.Empty));
+
+        public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderDiagnostics(ProviderId, true, "ok", AgentProviderKind.ProviderSdkBinding, [AgentProviderOperation.Chat], AgentProviderRiskProfile.ReadOnly, new Dictionary<string, string>()));
+    }
+
+    private sealed class DeterministicHarnessProvider : IAgentProvider, IAgentHarness
+    {
+        public const string Id = "harness-test";
+
+        public string ProviderId => Id;
+
+        public AgentHarnessCapabilities Capabilities => AgentHarnessCapabilities.Tools | AgentHarnessCapabilities.Plan;
+
+        public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>()));
+
+        // The harness owns the whole turn: it emits content directly (the orchestrator must not run the host loop).
+        public async IAsyncEnumerable<AgentStreamEvent> RunTurnAsync(AgentHarnessTurnRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.MessageDelta, "harness answer", null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
+        }
+
+        // Must never be reached for a harness provider; emits a sentinel to make accidental host-loop use visible.
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.MessageDelta, "host-loop should not run", null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
         }
 
         public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)

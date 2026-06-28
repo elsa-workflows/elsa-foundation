@@ -64,6 +64,8 @@ public interface IAgentToolRegistry
 {
     IReadOnlyCollection<AgentToolDescriptor> Descriptors { get; }
 
+    IReadOnlyCollection<IAgentTool> Tools { get; }
+
     IAgentTool? Find(string toolName);
 }
 

@@ -11,6 +11,8 @@ public sealed class DefaultAgentToolRegistry(IEnumerable<IAgentTool> tools) : IA
 
     public IReadOnlyCollection<AgentToolDescriptor> Descriptors => _tools.Values.Select(x => x.Descriptor).ToList();
 
+    public IReadOnlyCollection<IAgentTool> Tools => _tools.Values.ToList();
+
     public IAgentTool? Find(string toolName)
         => !string.IsNullOrWhiteSpace(toolName) && _tools.TryGetValue(toolName, out var tool) ? tool : null;
 }
