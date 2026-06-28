@@ -29,6 +29,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// variables, workflow inputs, and prior activity outputs supplied by the
 /// <see cref="RuntimeInputBindingResolutionContext"/> and print the computed value.
 /// </summary>
+[Collection("ConsoleCapture")]
 public sealed class WriteLineExpressionScopeInputExecutionTests
 {
     private const string StringTypeName = "System.String";
