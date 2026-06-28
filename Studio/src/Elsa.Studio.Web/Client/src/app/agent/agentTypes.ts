@@ -28,7 +28,7 @@ export interface AgentBootstrapResponse {
   providerStatus: AgentProviderStatus;
   modes: StudioAgentMode[];
   capabilities: StudioAgentCapabilityContribution[];
-  providers: AgentProviderDiagnostics[];
+  provider?: AgentProviderDiagnostics;
   policy: {
     contextVisibility: boolean;
     requiresApprovalForMutations: boolean;

@@ -127,7 +127,7 @@ function readyClient(): AgentClient {
       providerStatus: "available",
       modes: ["troubleshoot"],
       capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }],
-      providers: [{ providerId: "deterministic-test", isAvailable: true, status: "ok", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} }],
+      provider: { providerId: "github-copilot", isAvailable: true, status: "ok", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
       policy: { contextVisibility: true, requiresApprovalForMutations: true }
     })),
     createSession: vi.fn(async () => ({ sessionId: "agt_1", status: "active", contextAttachments: [] })),

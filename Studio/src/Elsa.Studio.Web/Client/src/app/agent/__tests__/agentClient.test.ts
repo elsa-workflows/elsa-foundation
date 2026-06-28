@@ -34,9 +34,11 @@ describe("agent client", () => {
 
     expect(context.http.getJson).toHaveBeenCalledWith("/_elsa/agent/bootstrap");
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({
-      providerId: "deterministic-test",
       metadata: expect.objectContaining({ mode: "troubleshoot", route: "/workflows/order" })
     }));
+    // The client never chooses a provider; the server binds the session to the single active harness.
+    const sessionCall = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === "/_elsa/agent/sessions");
+    expect(sessionCall?.[1]).not.toHaveProperty("providerId");
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions/agt_01/messages", expect.objectContaining({
       role: "user",
       content: "Explain this workflow.",
@@ -82,7 +84,7 @@ describe("agent client", () => {
     const execution = await client.executeProposal("prop_01", {});
 
     expect(bootstrap.providerStatus).toBe("available");
-    expect(bootstrap.providers[0]).toMatchObject({
+    expect(bootstrap.provider).toMatchObject({
       providerId: "deterministic-workflow-authoring",
       isAvailable: true,
       providerKind: "agent-harness-provider",
@@ -98,9 +100,6 @@ describe("agent client", () => {
     expect(message).toMatchObject({ messageId: "msg_01", status: "pending" });
     expect(approval).toMatchObject({ proposalId: "prop_01", approvalStatus: "approved" });
     expect(execution).toMatchObject({ proposalId: "prop_01", approvalStatus: "executed" });
-    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({
-      providerId: "deterministic-workflow-authoring"
-    }));
   });
 });
 
@@ -108,7 +107,7 @@ function stubContext(): StudioEndpointContext {
   return {
     baseUrl: "https://foundation.example/",
     http: {
-      getJson: vi.fn(async () => ({ data: { capabilities: [], providers: [{ providerId: "deterministic-test", isAvailable: true, status: "available" }] } })),
+      getJson: vi.fn(async () => ({ data: { capabilities: [], provider: { providerId: "deterministic-test", isAvailable: true, status: "available" } } })),
       postJson: vi.fn(async url => {
         if (url === "/_elsa/agent/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };
@@ -128,14 +127,14 @@ function stubPascalCaseContext(): StudioEndpointContext {
         Data: {
           Enabled: true,
           ProviderStatus: "Available",
-          Providers: [{
+          Provider: {
             ProviderId: "deterministic-workflow-authoring",
             IsAvailable: true,
             Status: "Available",
             ProviderKind: 1,
             SupportedOperations: [0, 2],
             RiskProfile: 2
-          }],
+          },
           Capabilities: [{
             Id: "workflow.author",
             DisplayName: "Workflow authoring",
