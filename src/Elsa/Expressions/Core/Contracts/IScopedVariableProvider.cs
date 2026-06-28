@@ -23,4 +23,16 @@ public interface IScopedVariableProvider
     /// guard that rejects assignment to sibling or unrelated container scopes).
     /// </summary>
     bool TrySetScopedVariableValue(VariableReference reference, object? value);
+
+    /// <summary>
+    /// The variables visible from the current context, nearest-scope first with shadowed same-named
+    /// declarations omitted — for exposing name-based convenience helpers (e.g. JavaScript functions).
+    /// </summary>
+    IReadOnlyCollection<IVariable> GetVisibleVariables();
+
+    /// <summary>Reads a value by bare variable name through the visible scope chain (nearest wins).</summary>
+    bool TryGetVariableValueByName(string name, out object? value);
+
+    /// <summary>Assigns a value by bare variable name to the nearest visible scope declaring it.</summary>
+    bool TrySetVariableValueByName(string name, object? value);
 }

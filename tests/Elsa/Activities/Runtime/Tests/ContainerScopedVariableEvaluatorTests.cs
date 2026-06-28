@@ -162,6 +162,12 @@ public sealed class ContainerScopedVariableEvaluatorTests
         public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
             scope.TrySetValue(reference, value);
 
+        public IReadOnlyCollection<IVariable> GetVisibleVariables() => scope.EnumerateVisibleVariables();
+
+        public bool TryGetVariableValueByName(string name, out object? value) => scope.TryGetValueByName(name, out value);
+
+        public bool TrySetVariableValueByName(string name, object? value) => scope.TrySetValueByName(name, value);
+
         public bool IsContainedWithinCompositeActivity() => false;
         public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
         public bool TryGetWorkflowInput(string key, out object? value) { value = null; return false; }

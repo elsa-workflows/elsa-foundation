@@ -128,12 +128,82 @@ public sealed class VariableScope
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
+        return FindByName(name)?.Variable;
+    }
+
+    /// <summary>
+    /// Enumerates the variables visible from this scope, nearest-scope first, with shadowed
+    /// (outer) same-named declarations omitted. Used to expose name-based helpers (e.g. JavaScript
+    /// <c>getX()</c>/<c>setX()</c> functions) over the visible scope chain. Completed scopes are
+    /// excluded.
+    /// </summary>
+    public IReadOnlyList<IVariable> EnumerateVisibleVariables()
+    {
+        var visible = new List<IVariable>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+
         for (var scope = this; scope is not null; scope = scope.Parent)
         {
+            if (scope.IsCompleted)
+                continue;
+
             foreach (var variable in scope._variablesByReferenceKey.Values)
             {
+                if (seenNames.Add(variable.Name))
+                    visible.Add(variable);
+            }
+        }
+
+        return visible;
+    }
+
+    /// <summary>
+    /// Reads a variable value by bare name through the visible scope chain (nearest declaring scope
+    /// wins). Returns the assigned value if set, otherwise the default. Backs name-based script reads.
+    /// </summary>
+    public bool TryGetValueByName(string name, out object? value)
+    {
+        var found = FindByName(name);
+        if (found is null)
+        {
+            value = null;
+            return false;
+        }
+
+        value = found.Value.Scope._values.TryGetValue(found.Value.ReferenceKey, out var stored)
+            ? stored
+            : found.Value.Variable.DefaultValue;
+        return true;
+    }
+
+    /// <summary>
+    /// Assigns a variable value by bare name to the nearest visible scope that declares the name, so
+    /// name-based script writes target the correct workflow or container scope. Returns false when no
+    /// visible scope declares the name.
+    /// </summary>
+    public bool TrySetValueByName(string name, object? value)
+    {
+        var found = FindByName(name);
+        if (found is null)
+            return false;
+
+        found.Value.Scope._values[found.Value.ReferenceKey] = value;
+        return true;
+    }
+
+    private (VariableScope Scope, string ReferenceKey, IVariable Variable)? FindByName(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        for (var scope = this; scope is not null; scope = scope.Parent)
+        {
+            if (scope.IsCompleted)
+                continue;
+
+            foreach (var (referenceKey, variable) in scope._variablesByReferenceKey)
+            {
                 if (StringComparer.Ordinal.Equals(variable.Name, name))
-                    return variable;
+                    return (scope, referenceKey, variable);
             }
         }
 
