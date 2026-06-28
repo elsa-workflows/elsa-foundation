@@ -219,7 +219,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ?? throw new InvalidOperationException($"Required service '{type.FullName}' is not registered.");
 
         public bool IsContainedWithinCompositeActivity() => false;
-        public bool TryGetActivityInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
+        // Activity inputs are composite-activity scoped and do not exist at materialization time; only workflow inputs are available.
+        public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
         public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
         public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
         public string GetCorrelationId() => string.Empty;
