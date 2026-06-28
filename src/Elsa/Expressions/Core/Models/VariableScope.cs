@@ -22,7 +22,9 @@ public sealed class VariableScope
     public VariableScope(
         string scopeId,
         IReadOnlyDictionary<string, IVariable> variablesByReferenceKey,
-        VariableScope? parent = null)
+        VariableScope? parent = null,
+        string? executionId = null,
+        IReadOnlyDictionary<string, object?>? initialValues = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(scopeId);
         ArgumentNullException.ThrowIfNull(variablesByReferenceKey);
@@ -30,6 +32,13 @@ public sealed class VariableScope
         ScopeId = scopeId;
         _variablesByReferenceKey = variablesByReferenceKey;
         Parent = parent;
+        ExecutionId = executionId;
+
+        if (initialValues is not null)
+        {
+            foreach (var (key, value) in initialValues)
+                _values[key] = value;
+        }
     }
 
     /// <summary>The declaring scope identity — a container activity node id, or the workflow-scope sentinel.</summary>
@@ -37,6 +46,33 @@ public sealed class VariableScope
 
     /// <summary>The next outer visible scope, or <c>null</c> at the workflow scope.</summary>
     public VariableScope? Parent { get; }
+
+    /// <summary>
+    /// The concrete container activity execution this scope belongs to (ADR 0027). Container
+    /// variable values are isolated per execution: repeated, retried, or parallel executions of the
+    /// same authored container declaration (same <see cref="ScopeId"/>) get separate
+    /// <see cref="VariableScope"/> instances with distinct execution ids and value stores. Null for
+    /// the workflow scope or when execution identity is not tracked.
+    /// </summary>
+    public string? ExecutionId { get; }
+
+    /// <summary>
+    /// Whether this scope's execution has completed. A completed scope's values are no longer live
+    /// for later runtime expressions (reads/writes are rejected), but its captured values remain
+    /// available via <see cref="SnapshotValues"/> as inspection/history evidence — exposure of which
+    /// is gated by the runtime's configured retention/redaction policy.
+    /// </summary>
+    public bool IsCompleted { get; private set; }
+
+    /// <summary>Marks this scope's execution complete; its values stop being live for later expressions.</summary>
+    public void Complete() => IsCompleted = true;
+
+    /// <summary>
+    /// Captures the current values declared by this scope (for checkpoint persistence and resume
+    /// recovery, and as completed-scope inspection evidence under retention/redaction policy).
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> SnapshotValues() =>
+        new Dictionary<string, object?>(_values, StringComparer.Ordinal);
 
     /// <summary>
     /// Resolves a structured reference to its declared variable: walks outward to the scope whose
@@ -56,7 +92,7 @@ public sealed class VariableScope
     public bool TryGetValue(VariableReference reference, out object? value)
     {
         var owning = FindOwningScope(reference);
-        if (owning is null)
+        if (owning is null || owning.Value.Scope.IsCompleted)
         {
             value = null;
             return false;
@@ -77,7 +113,7 @@ public sealed class VariableScope
     public bool TrySetValue(VariableReference reference, object? value)
     {
         var owning = FindOwningScope(reference);
-        if (owning is null)
+        if (owning is null || owning.Value.Scope.IsCompleted)
             return false;
 
         owning.Value.Scope._values[reference.ReferenceKey] = value;
