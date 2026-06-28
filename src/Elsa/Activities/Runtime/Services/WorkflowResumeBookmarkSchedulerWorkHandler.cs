@@ -126,7 +126,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         try
         {
-            inputs = _inputMaterializer.MaterializeInputs(executableNode);
+            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, serviceProvider, cancellationToken);
         }
         catch (OperationCanceledException)
         {

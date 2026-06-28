@@ -149,8 +149,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: invokePayload.ActivityExecutionId,
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-                activityOutputs: activityOutputRegister);
-            inputs = _inputMaterializer.MaterializeInputs(executableNode, resolutionContext);
+                activityOutputs: activityOutputRegister,
+                serviceProvider: serviceProvider);
+            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {

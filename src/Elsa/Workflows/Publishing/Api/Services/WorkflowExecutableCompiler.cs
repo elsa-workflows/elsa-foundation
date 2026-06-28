@@ -115,7 +115,7 @@ public sealed class WorkflowExecutableCompiler(
             if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
 
-            inputBindings[inputDefinition.Name] = CompileLiteralInput(activity.NodeId, inputDefinition, inputState.Value);
+            inputBindings[inputDefinition.Name] = CompileInput(activity.NodeId, inputDefinition, inputState.Value);
         }
 
         var activityType = activityVersion.Definition?.ActivityTypeKey
@@ -154,11 +154,15 @@ public sealed class WorkflowExecutableCompiler(
             ? null
             : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
 
+    private static RuntimeInputBinding CompileInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        return string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase)
+            ? CompileLiteralInput(nodeId, inputDefinition, value)
+            : CompileExpressionInput(nodeId, inputDefinition, value);
+    }
+
     private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
-        if (!string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}', but only literal inputs are supported by this vertical slice.");
-
         var inputType = inputDefinition.Type.LoadType();
         object? converted;
         try
@@ -176,12 +180,47 @@ public sealed class WorkflowExecutableCompiler(
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Literal,
             literalValue: literal,
-            metadata: new Dictionary<string, string>
-            {
-                [InputTypeMetadataKey] = GetRuntimeTypeName(inputType),
-                [ReferenceKeyMetadataKey] = inputDefinition.ReferenceKey
-            });
+            metadata: BuildInputMetadata(inputType, inputDefinition));
     }
+
+    private static RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        if (string.IsNullOrWhiteSpace(value.ExpressionType))
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
+
+        var expressionText = ExtractExpressionText(value.Value);
+        if (string.IsNullOrWhiteSpace(expressionText))
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
+
+        var inputType = inputDefinition.Type.LoadType();
+        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
+
+        return new RuntimeInputBinding(
+            inputName: inputDefinition.Name,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
+            metadata: BuildInputMetadata(inputType, inputDefinition));
+    }
+
+    private static string? ExtractExpressionText(object? value)
+    {
+        if (value is null)
+            return null;
+
+        if (value is JsonElement jsonElement)
+            return jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+                ? null
+                : jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
+
+        return value.ToString();
+    }
+
+    private static Dictionary<string, string> BuildInputMetadata(Type inputType, InputDefinition inputDefinition) =>
+        new()
+        {
+            [InputTypeMetadataKey] = GetRuntimeTypeName(inputType),
+            [ReferenceKeyMetadataKey] = inputDefinition.ReferenceKey
+        };
 
     private static string GetRuntimeTypeName(Type type)
     {
@@ -252,7 +291,13 @@ public sealed class WorkflowExecutableCompiler(
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => $"{item.Key}={item.Value}"));
 
-        return $"{input.Key}={input.Value.LiteralValue?.GetRawText()}[{metadata}]";
+        var payload = input.Value.Source switch
+        {
+            RuntimeInputBindingSource.Expression => $"{input.Value.Source}:{input.Value.Expression?.Language}:{input.Value.Expression?.Expression}",
+            _ => input.Value.LiteralValue?.GetRawText()
+        };
+
+        return $"{input.Key}={payload}[{metadata}]";
     }
 
     private static string FormatNode(ExecutableNode node)

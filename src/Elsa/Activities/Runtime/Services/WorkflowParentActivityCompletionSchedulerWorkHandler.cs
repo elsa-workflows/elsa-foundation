@@ -149,6 +149,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         try
         {
             var constructedParent = await ConstructActivityAsync(
+                serviceProvider,
                 activityFactory,
                 activityOutputRegister,
                 durableValueStateStore,
@@ -242,6 +243,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     }
 
     private async ValueTask<ConstructedActivity> ConstructActivityAsync(
+        IServiceProvider serviceProvider,
         IActivityFactory activityFactory,
         IRuntimeActivityOutputRegister activityOutputRegister,
         IDurableValueStateStore durableValueStateStore,
@@ -255,8 +257,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             workflowExecutionId: workItem.WorkflowExecutionId,
             activityExecutionId: payload.ActivityExecutionId,
             durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
-            activityOutputs: activityOutputRegister);
-        var inputs = _inputMaterializer.MaterializeInputs(executableNode, resolutionContext);
+            activityOutputs: activityOutputRegister,
+            serviceProvider: serviceProvider);
+        var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
 
         var activity = await activityFactory.Create(
             executableNode.DescriptorType,

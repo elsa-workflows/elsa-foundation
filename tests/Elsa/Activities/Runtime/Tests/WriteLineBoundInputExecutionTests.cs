@@ -21,6 +21,9 @@ namespace Elsa.Activities.Runtime.Tests;
 /// Before the fix the authored text never reached the binding, so WriteLine ran with a null Text and
 /// printed a blank line with no incident.
 /// </summary>
+// Shares a collection with other Console.Out-capturing tests so xUnit does not run them in parallel
+// (Console.SetOut is process-global; concurrent capture would interleave output).
+[Collection("ConsoleCapture")]
 public sealed class WriteLineBoundInputExecutionTests
 {
     [Fact]

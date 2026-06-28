@@ -165,14 +165,30 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task RejectsNonLiteralInput()
+    public async Task PublishesNonLiteralInputAsExpressionBinding()
     {
-        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("name", "Variable"), null, null, null, null)));
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null)));
+        var handler = Handler(workflowVersion);
+
+        var view = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var executable = await _store.FindAsync(view.ArtifactId);
+
+        Assert.NotNull(executable);
+        var binding = executable.NodesById["write-one"].InputBindings["Text"];
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal("JavaScript", binding.Expression!.Language);
+        Assert.Equal("\"Hello \" + \"World\"", binding.Expression.Expression);
+    }
+
+    [Fact]
+    public async Task RejectsExpressionInputWithoutExpressionText()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("", "JavaScript"), null, null, null, null)));
         var handler = Handler(workflowVersion);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        Assert.Contains("only literal", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no expression text", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

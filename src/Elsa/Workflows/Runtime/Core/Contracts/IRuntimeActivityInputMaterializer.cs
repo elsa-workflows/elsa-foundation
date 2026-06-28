@@ -4,9 +4,13 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IRuntimeActivityInputMaterializer
 {
-    IReadOnlyList<RuntimeMaterializedActivityInput> MaterializeInputs(ExecutableNode node);
-
-    IReadOnlyList<RuntimeMaterializedActivityInput> MaterializeInputs(
+    ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
         ExecutableNode node,
-        RuntimeInputBindingResolutionContext resolutionContext);
+        IServiceProvider? serviceProvider = null,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<IReadOnlyList<RuntimeMaterializedActivityInput>> MaterializeInputsAsync(
+        ExecutableNode node,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        CancellationToken cancellationToken = default);
 }

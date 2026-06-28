@@ -129,15 +129,28 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
-    public async Task RejectsNonLiteralInputWithoutDispatchingExecution()
+    public async Task DispatchesNonLiteralExpressionInput()
     {
-        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("customerName", "Variable"), null, null, null, null))));
+        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("\"Hello \" + \"World\"", "JavaScript"), null, null, null, null))));
+
+        var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+
+        Assert.Equal("DispatchAccepted", view.Status);
+        Assert.Equal("Accepted", view.CommandDispatchStatus);
+        Assert.NotNull(view.WorkflowExecutionId);
+        Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectsExpressionInputWithoutExpressionTextWithoutDispatchingExecution()
+    {
+        var handler = Handler(WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("", "JavaScript"), null, null, null, null))));
 
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
         Assert.Equal("Rejected", view.Status);
         Assert.Null(view.WorkflowExecutionId);
-        Assert.Contains("only literal", view.Reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no expression text", view.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

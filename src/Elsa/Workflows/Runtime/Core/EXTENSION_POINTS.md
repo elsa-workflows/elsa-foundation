@@ -110,8 +110,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ### `IRuntimeActivityInputMaterializer` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one materializer owns conversion from executable input bindings to activity runtime arguments for a composition).
-- **Signature:** `MaterializeInputs(ExecutableNode node)`.
-- **Usage:** constructs activity input arguments and memory values from runtime-owned executable node bindings. The first default supports literal bindings with `typeName` metadata only; expression, durable-value, active-output, and reference materialization remain future middleware/provider behavior.
+- **Signature:** `MaterializeInputsAsync(ExecutableNode node, IServiceProvider? serviceProvider = null, CancellationToken cancellationToken = default)` and `MaterializeInputsAsync(ExecutableNode node, RuntimeInputBindingResolutionContext resolutionContext, CancellationToken cancellationToken = default)`.
+- **Usage:** constructs activity input arguments and memory values from runtime-owned executable node bindings. Supports literal, durable-value, active-output, and reference bindings (all requiring `typeName` metadata), plus `Expression` bindings — evaluated through the registered `IExpressionEvaluator` (e.g. JavaScript/Liquid) using the resolution context's `ServiceProvider`. Expression evaluation requires a service provider; the literal-only convenience overload passes one through for resume paths.
 - **Default implementation:** `RuntimeActivityInputMaterializer`.
 
 ### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
