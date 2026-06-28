@@ -19,12 +19,18 @@ public sealed class ShortIdentityGenerator(ISystemClock systemClock) : IIdentity
 {
     private static readonly long EpochMs = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
     private const int RandomBits = 22;
+    private const int TimestampBits = 64 - RandomBits; // 42
+    private const long MaxMilliseconds = (1L << TimestampBits) - 1;
 
     public string Generate()
     {
-        var elapsedMs = (ulong)(systemClock.UtcNow.ToUnixTimeMilliseconds() - EpochMs);
+        var elapsedMs = systemClock.UtcNow.ToUnixTimeMilliseconds() - EpochMs;
+        if (elapsedMs is < 0 or > MaxMilliseconds)
+            throw new InvalidOperationException(
+                $"Timestamp {elapsedMs} ms is outside the representable {TimestampBits}-bit range [0, {MaxMilliseconds}] relative to the 2020-01-01Z epoch; cannot generate a short id.");
+
         var random = (ulong)Random.Shared.NextInt64(1L << RandomBits);
-        var value = (elapsedMs << RandomBits) | random;
+        var value = ((ulong)elapsedMs << RandomBits) | random;
         return Base62.Encode(value);
     }
 }

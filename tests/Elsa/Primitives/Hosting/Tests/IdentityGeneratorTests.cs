@@ -55,7 +55,8 @@ public sealed class IdentityGeneratorTests
         var generator = new ShortIdentityGenerator(_clock);
         var ids = Enumerable.Range(0, 1_000).Select(_ => generator.Generate()).ToList();
 
-        Assert.Equal(ids.Count, ids.Distinct().Count());
+        // 22 random bits within a fixed ms: birthday collisions are possible but vanishingly unlikely at this volume.
+        Assert.True(ids.Distinct().Count() > 990);
     }
 
     [Fact]
@@ -107,5 +108,23 @@ public sealed class IdentityGeneratorTests
 
         Assert.Equal(32, id.Length);
         Assert.All(id, c => Assert.True(char.IsAsciiHexDigitLower(c)));
+    }
+
+    [Fact]
+    public void ShortThrowsWhenClockIsBeforeEpoch()
+    {
+        var clock = new MutableClock(new DateTimeOffset(2019, 1, 1, 0, 0, 0, TimeSpan.Zero)); // before the 2020-01-01Z epoch
+        var generator = new ShortIdentityGenerator(clock);
+
+        Assert.Throws<InvalidOperationException>(() => generator.Generate());
+    }
+
+    [Fact]
+    public void SnowflakeThrowsWhenClockIsBeforeEpoch()
+    {
+        var clock = new MutableClock(new DateTimeOffset(2019, 1, 1, 0, 0, 0, TimeSpan.Zero)); // before the 2020-01-01Z epoch
+        var generator = new SnowflakeIdentityGenerator(clock, new SnowflakeIdentitySequence(new() { WorkerId = 1 }));
+
+        Assert.Throws<InvalidOperationException>(() => generator.Generate());
     }
 }

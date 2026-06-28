@@ -15,8 +15,10 @@ public sealed class SnowflakeIdentitySequence
 {
     private const int WorkerIdBits = 10;
     private const int SequenceBits = 12;
+    private const int TimestampBits = 41;
     private const long MaxWorkerId = (1L << WorkerIdBits) - 1; // 1023
     private const long SequenceMask = (1L << SequenceBits) - 1; // 4095
+    private const long MaxTimestamp = (1L << TimestampBits) - 1;
 
     private readonly long _workerId;
     private readonly long _epochMs;
@@ -41,6 +43,11 @@ public sealed class SnowflakeIdentitySequence
         lock (_lock)
         {
             var timestamp = systemClock.UtcNow.ToUnixTimeMilliseconds();
+
+            var elapsedMs = timestamp - _epochMs;
+            if (elapsedMs is < 0 or > MaxTimestamp)
+                throw new InvalidOperationException(
+                    $"Timestamp {elapsedMs} ms is outside the representable {TimestampBits}-bit range [0, {MaxTimestamp}] relative to the configured epoch; cannot generate a snowflake id.");
 
             if (timestamp < _lastTimestamp)
                 throw new InvalidOperationException($"Clock moved backwards by {_lastTimestamp - timestamp} ms; refusing to generate an identifier.");
