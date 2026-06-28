@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Contracts;
@@ -17,4 +18,11 @@ public interface IActivityStructureHandler
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
+
+    /// <summary>
+    /// Projects the container-scoped variables declared by this activity node, if any. Container
+    /// activities (e.g. <c>Sequence</c>, <c>Flowchart</c>) own variable declarations that are
+    /// visible to their descendant activities. Non-container activities declare none.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
 }

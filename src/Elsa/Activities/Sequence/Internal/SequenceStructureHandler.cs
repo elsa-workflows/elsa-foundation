@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Sequence.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -22,9 +23,10 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
+        var current = ReadAuthoredStructure(activity);
         var slot = childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, SequenceActivity.ActivitiesSlotName));
         var activities = slot?.Activities.ToArray() ?? [];
-        var structure = new SequenceAuthoredStructure(activities);
+        var structure = new SequenceAuthoredStructure(activities, current.Variables);
 
         return activity with
         {
@@ -38,13 +40,18 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authoredStructure = ReadAuthoredStructure(activity);
-        var executableStructure = new SequenceExecutableStructure(authoredStructure.Activities.Select(child => child.NodeId).ToArray());
+        var executableStructure = new SequenceExecutableStructure(
+            authoredStructure.Activities.Select(child => child.NodeId).ToArray(),
+            authoredStructure.Variables);
 
         return new ActivityNodeStructure(
             SequenceActivity.StructureKind,
             SequenceActivity.StructureSchemaVersion,
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
+
+    public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
+        ReadAuthoredStructure(activity).Variables;
 
     private static SequenceAuthoredStructure ReadAuthoredStructure(ActivityNode activity)
     {

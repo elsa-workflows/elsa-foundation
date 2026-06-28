@@ -56,21 +56,28 @@ internal static class ValidatorTestHelpers
     public static ActivityTreeWalker Walker() =>
         new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
 
+    public static ScopedVariableResolver Resolver() =>
+        new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
+
     public static ActivityNode Node(
         string nodeId,
         string activityVersionId = "av-1",
         IEnumerable<ArgumentState>? inputs = null,
         IEnumerable<ArgumentState>? outputs = null,
         bool isStart = false,
-        IEnumerable<ActivityNode>? childActivities = null
+        IEnumerable<ActivityNode>? childActivities = null,
+        IEnumerable<VariableDefinition>? containerVariables = null
     ) => new(
         NodeId: nodeId,
         ActivityVersionId: activityVersionId,
         Inputs: inputs ?? [],
         Outputs: outputs ?? [],
-        Structure: childActivities is null
+        Structure: childActivities is null && containerVariables is null
             ? null
-            : TestActivityStructureHandler.CreateStructure(childActivities, childActivities.FirstOrDefault()?.NodeId)
+            : TestActivityStructureHandler.CreateStructure(
+                childActivities ?? [],
+                (childActivities ?? []).FirstOrDefault()?.NodeId,
+                containerVariables?.ToArray())
     );
 
     public static VariableDefinition Variable(string referenceKey, string name) => new(

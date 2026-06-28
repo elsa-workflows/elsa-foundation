@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
@@ -48,6 +49,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
         return TryGetHandler(activity.Structure, out var handler)
             ? handler.CompileExecutableStructure(activity)
             : new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
+    }
+
+    public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectScopedVariables(activity)
+            : [];
     }
 
     private bool TryGetHandler(ActivityNodeStructure? structure, out IActivityStructureHandler handler)

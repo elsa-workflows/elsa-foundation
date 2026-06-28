@@ -27,6 +27,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions` — 
 - `Elsa.Expressions.JavaScript` — `JavaScriptExpressionDescriptorProvider` *(cross-domain — registers JS expression descriptor)*
 - `Elsa.Expressions.Liquid` — `LiquidExpressionDescriptorProvider` *(cross-domain — registers Liquid expression descriptor)*
 
+### `IScopedVariableProvider` *(Core — `Elsa.Expressions.Core`)*
+- **Kind:** Optional capability implemented by an `IExpressionExecutionContext` (not DI-registered).
+- **Signature:** `bool TryGetScopedVariable(VariableReference reference, out IVariable? variable);`
+- **Purpose:** Lets `VariableExpressionHandler` resolve a structured `VariableReference` (reference key + declaring scope identity) through the context's visible scope chain — workflow scope plus visible ancestor container scopes — honouring nearest-scope visibility and shadowing (ADR 0027). Contexts that do not implement it fall back to workflow-scope name lookup, preserving prior behaviour. The reusable `VariableScope` chain (`Elsa.Expressions.Core.Models`) provides the resolution primitives.
+
 ---
 
 ## Cross-references
