@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
@@ -23,6 +24,7 @@ public sealed class WorkflowExecutableCompiler(
     : IWorkflowExecutableCompiler
 {
     private const string LiteralExpressionType = "Literal";
+    private const string VariableExpressionType = "Variable";
     private const string InputTypeMetadataKey = "typeName";
     private const string ReferenceKeyMetadataKey = "referenceKey";
     private const string ArtifactHashPrefix = "sha256:";
@@ -156,10 +158,47 @@ public sealed class WorkflowExecutableCompiler(
 
     private static RuntimeInputBinding CompileInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
-        return string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase)
-            ? CompileLiteralInput(nodeId, inputDefinition, value)
-            : CompileExpressionInput(nodeId, inputDefinition, value);
+        if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileLiteralInput(nodeId, inputDefinition, value);
+
+        if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileVariableInput(nodeId, inputDefinition, value);
+
+        return CompileExpressionInput(nodeId, inputDefinition, value);
     }
+
+    /// <summary>
+    /// Compiles a structured <c>Variable</c> reference input into a runtime expression binding whose
+    /// language is <c>Variable</c> and whose expression text round-trips the reference (reference key
+    /// plus optional declaring scope) as a JSON object. The runtime materializer feeds that object to
+    /// the registered <c>VariableExpressionHandler</c>, which resolves it through the visible scope
+    /// chain at execution time (ADR 0027).
+    /// </summary>
+    private static RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
+        var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
+
+        var inputType = inputDefinition.Type.LoadType();
+        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
+
+        return new RuntimeInputBinding(
+            inputName: inputDefinition.Name,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(VariableExpressionType, referenceText, resultType),
+            metadata: BuildInputMetadata(inputType, inputDefinition));
+    }
+
+    private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
+    {
+        var unwrapped = value is JsonElement jsonElement ? jsonElement : JsonSerializer.SerializeToElement(value);
+        if (!VariableReference.TryParse(unwrapped, out var reference) || reference is null)
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type 'Variable' but carries no resolvable variable reference (a reference key is required).");
+
+        return reference;
+    }
+
+    private sealed record VariableReferencePayload(string referenceKey, string? declaringScopeId);
 
     private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {

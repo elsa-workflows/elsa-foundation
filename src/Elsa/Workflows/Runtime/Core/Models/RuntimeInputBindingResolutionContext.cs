@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -13,7 +14,8 @@ public sealed class RuntimeInputBindingResolutionContext
         IServiceProvider? serviceProvider = null,
         IReadOnlyDictionary<string, object?>? workflowVariables = null,
         IReadOnlyDictionary<string, object?>? workflowInputs = null,
-        IReadOnlyDictionary<string, object?>? activityOutputValues = null)
+        IReadOnlyDictionary<string, object?>? activityOutputValues = null,
+        VariableScope? variableScope = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -28,6 +30,7 @@ public sealed class RuntimeInputBindingResolutionContext
         WorkflowVariables = Snapshot(workflowVariables);
         WorkflowInputs = Snapshot(workflowInputs);
         ActivityOutputValues = Snapshot(activityOutputValues);
+        VariableScope = variableScope;
     }
 
     public string WorkflowExecutionId { get; }
@@ -59,6 +62,15 @@ public sealed class RuntimeInputBindingResolutionContext
     /// bindings (e.g. the JavaScript <c>output.foo</c> accessor or <c>getOutput("foo")</c>). Empty when none are available.
     /// </summary>
     public IReadOnlyDictionary<string, object?> ActivityOutputValues { get; }
+
+    /// <summary>
+    /// The innermost visible <see cref="VariableScope"/> for the activity whose inputs are being
+    /// materialized (its declaring-container chain up to the workflow scope, ADR 0027). Null when the
+    /// activity has no enclosing container scope chain. Threaded into the materialization expression
+    /// context so structured <c>Variable</c> references and name-based script helpers resolve and
+    /// assign container-scoped variables in production.
+    /// </summary>
+    public VariableScope? VariableScope { get; }
 
     private static IReadOnlyDictionary<string, object?> Snapshot(IReadOnlyDictionary<string, object?>? values) =>
         new ReadOnlyDictionary<string, object?>(

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -85,10 +87,11 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no '{nameof(IExpressionEvaluator)}' is registered.");
         var executionContext = new MaterializationExpressionExecutionContext(resolutionContext, serviceProvider, cancellationToken);
+        var expressionValue = BuildExpressionValue(expression);
 
         try
         {
-            return await evaluator.EvaluateAsync(new RuntimeExpression(expression.Language, expression.Expression), type, executionContext);
+            return await evaluator.EvaluateAsync(new RuntimeExpression(expression.Language, expressionValue), type, executionContext);
         }
         catch (OperationCanceledException)
         {
@@ -97,6 +100,28 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         catch (Exception exception)
         {
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its '{expression.Language}' expression.", exception);
+        }
+    }
+
+    /// <summary>
+    /// Produces the value handed to the registered expression handler. A <c>Variable</c> expression's
+    /// text is a JSON-encoded structured <see cref="VariableReference"/> (reference key plus optional
+    /// declaring scope); it is parsed back into a <see cref="JsonElement"/> so the variable handler's
+    /// <see cref="VariableReference.TryParse"/> recovers the declaring scope rather than treating the
+    /// whole JSON blob as a bare reference key. Other languages pass their raw source text.
+    /// </summary>
+    private static object? BuildExpressionValue(RuntimeExpressionBinding expression)
+    {
+        if (!string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Variable, StringComparison.Ordinal))
+            return expression.Expression;
+
+        try
+        {
+            return JsonSerializer.Deserialize<JsonElement>(expression.Expression);
+        }
+        catch (JsonException)
+        {
+            return expression.Expression;
         }
     }
 
@@ -205,7 +230,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         RuntimeInputBindingResolutionContext resolutionContext,
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken)
-        : IExpressionExecutionContext, IMaterializationExpressionState
+        : IExpressionExecutionContext, IMaterializationExpressionState, IScopedVariableProvider
     {
         public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
         public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
@@ -241,6 +266,37 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         public IEnumerable<IVariable> EnumerateVariablesInScope() =>
             WorkflowVariables.Select(entry => new MaterializationVariable(entry.Key, entry.Value)).ToArray();
+
+        // IScopedVariableProvider — resolves structured/name-based variable access through the visible
+        // scope chain threaded from the runtime (workflow + ancestor container scopes, ADR 0027). When
+        // no scope chain is present these return false/empty so the variable handler falls back to its
+        // workflow-scoped behaviour.
+        public bool TryGetScopedVariableValue(VariableReference reference, out object? value)
+        {
+            if (resolutionContext.VariableScope is { } scope && scope.TryGetValue(reference, out value))
+                return true;
+
+            value = null;
+            return false;
+        }
+
+        public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
+            resolutionContext.VariableScope?.TrySetValue(reference, value) ?? false;
+
+        public IReadOnlyCollection<IVariable> GetVisibleVariables() =>
+            resolutionContext.VariableScope?.EnumerateVisibleVariables() ?? [];
+
+        public bool TryGetVariableValueByName(string name, out object? value)
+        {
+            if (resolutionContext.VariableScope is { } scope && scope.TryGetValueByName(name, out value))
+                return true;
+
+            value = null;
+            return false;
+        }
+
+        public bool TrySetVariableValueByName(string name, object? value) =>
+            resolutionContext.VariableScope?.TrySetValueByName(name, value) ?? false;
     }
 
     /// <summary>
