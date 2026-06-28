@@ -160,6 +160,60 @@ public sealed class RuntimeContainerScopeServiceTests
         Assert.Equal(0, await _service.PersistScopeMutationsAsync(null, WorkflowExecutionId));
     }
 
+    [Fact]
+    public void MarkScopeCompleted_sets_the_completed_flag_idempotently()
+    {
+        var state = NewState("actexec-container", "container", parentActivityExecutionId: null);
+
+        var completed = RuntimeContainerScopeService.MarkScopeCompleted(state);
+
+        Assert.Equal(bool.TrueString, completed.Metadata[RuntimeMetadataKeys.ScopedVariableScopeCompleted]);
+        Assert.Same(completed, RuntimeContainerScopeService.MarkScopeCompleted(completed)); // idempotent
+    }
+
+    [Fact]
+    public async Task BuildScope_builds_a_completed_ancestor_scope_as_non_live()
+    {
+        var executable = Executable(ContainerNode("container", variables: [("var-counter", "Counter")]));
+        await _store.SaveAsync(RuntimeContainerScopeService.MarkScopeCompleted(
+            NewState("actexec-container", "container", parentActivityExecutionId: null,
+                scopeValues: new Dictionary<string, object?> { ["var-counter"] = 42 })));
+        var childState = NewState("actexec-child", "child", parentActivityExecutionId: "actexec-container");
+
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, childState);
+
+        Assert.NotNull(scope);
+        Assert.True(scope!.IsCompleted);
+        // A completed container scope is no longer live for runtime expressions (#210).
+        Assert.False(scope.TryGetValue(new VariableReference("var-counter", "container"), out _));
+    }
+
+    [Fact]
+    public void ReadScopeVariableValues_returns_declared_variables_with_current_or_default_values()
+    {
+        var container = ContainerNode("container", variables: [("var-counter", "Counter"), ("var-flag", "Flag")]);
+        var state = NewState("actexec-container", "container", parentActivityExecutionId: null,
+            scopeValues: new Dictionary<string, object?> { ["var-counter"] = 7 });
+
+        var values = _service.ReadScopeVariableValues(container, state);
+
+        Assert.Equal(2, values.Count);
+        var counter = Assert.Single(values, value => value.ReferenceKey == "var-counter");
+        Assert.Equal("Counter", counter.Name);
+        Assert.Equal(7, ((JsonElement)counter.Value!).GetInt32());
+        var flag = Assert.Single(values, value => value.ReferenceKey == "var-flag");
+        Assert.Equal("default", flag.Value?.ToString()); // falls back to the declared default
+    }
+
+    [Fact]
+    public void ReadScopeVariableValues_returns_empty_for_a_non_container_node()
+    {
+        var node = NewState("actexec-x", "leaf", parentActivityExecutionId: null);
+        var leaf = ContainerNode("leaf", variables: []);
+
+        Assert.Empty(_service.ReadScopeVariableValues(leaf, node));
+    }
+
     private static WorkflowExecutable Executable(ExecutableNode root) =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),

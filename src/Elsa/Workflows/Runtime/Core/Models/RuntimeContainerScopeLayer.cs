@@ -12,8 +12,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="ExecutionId">The concrete container <c>ActivityExecutionId</c>, or <c>null</c> for the workflow scope.</param>
 /// <param name="Variables">The variables this scope declares, keyed by reference key.</param>
 /// <param name="Values">The current values for this scope (assigned values; absent keys fall back to defaults).</param>
+/// <param name="IsCompleted">Whether this container execution has completed; a completed scope is rebuilt as non-live (#210).</param>
 public sealed record RuntimeContainerScopeLayer(
     string ScopeId,
     string? ExecutionId,
     IReadOnlyDictionary<string, IVariable> Variables,
-    IReadOnlyDictionary<string, object?> Values);
+    IReadOnlyDictionary<string, object?> Values,
+    bool IsCompleted = false);

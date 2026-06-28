@@ -249,6 +249,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         ? NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
                         : NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
                     completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
+
+                    // A completing container's scope is no longer live for runtime expressions; its
+                    // final variable values are retained as inspection evidence only through the
+                    // configured capture/retention policy (ADR 0027, #210).
+                    if (context.CompositeCompletionRequested)
+                    {
+                        var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
+                            payloadCapturePolicy, scopeService, executableNode, state,
+                            workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
+                        if (containerVariableSnapshots.Count > 0)
+                        {
+                            valueSnapshots.AddRange(containerVariableSnapshots);
+                            completedState = RuntimeContainerScopeService.MarkScopeCompleted(completedState);
+                        }
+                    }
                 }
             }
         }

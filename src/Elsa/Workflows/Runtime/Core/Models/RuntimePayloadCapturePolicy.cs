@@ -62,7 +62,8 @@ public enum RuntimePayloadCaptureSubject
     ActivityOutput,
     DurableValue,
     Incident,
-    Diagnostic
+    Diagnostic,
+    ContainerVariable
 }
 
 public enum RuntimePayloadCaptureMode

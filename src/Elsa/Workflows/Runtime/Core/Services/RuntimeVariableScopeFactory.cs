@@ -73,6 +73,9 @@ public sealed class RuntimeVariableScopeFactory
                 parent: current,
                 executionId: layer.ExecutionId,
                 initialValues: layer.Values);
+
+            if (layer.IsCompleted)
+                current.Complete();
         }
 
         return current;

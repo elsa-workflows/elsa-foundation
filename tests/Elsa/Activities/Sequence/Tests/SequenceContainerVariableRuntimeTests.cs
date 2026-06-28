@@ -83,15 +83,119 @@ public sealed class SequenceContainerVariableRuntimeTests
             variableDefault: "starting");
         await ExecuteAsync(provider, executable);
 
-        // Simulate a resume: rebuild the descendant's visible scope from the now-persisted container
+        // Simulate a resume: rebuild the descendant's visible scope from the persisted container
         // state, exactly as the invoke handler does, and assert the assigned value is restored.
+        // A real resume targets a container that is still running (a descendant suspended on a
+        // bookmark), so clear the completion marker this finished run left behind — a completed
+        // scope is deliberately non-live (#210).
         var store = provider.GetRequiredService<IActivityExecutionStateStore>();
         var readState = Assert.Single(await store.ListAsync("wfexec-1"), state => state.Execution.ExecutableNodeId == "node-read");
+        var sequenceState = Assert.Single(await store.ListAsync("wfexec-1"), state => state.Execution.ExecutableNodeId == SequenceNodeId);
+        await store.SaveAsync(sequenceState with
+        {
+            Metadata = sequenceState.Metadata
+                .Where(entry => entry.Key != RuntimeMetadataKeys.ScopedVariableScopeCompleted)
+                .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal)
+        });
         var scope = await new RuntimeContainerScopeService(store).BuildScopeAsync(executable, "wfexec-1", readState);
 
         Assert.NotNull(scope);
         Assert.True(scope!.TryGetValue(new VariableReference(CounterReferenceKey, SequenceNodeId), out var restored));
         Assert.Equal("assigned-value", restored?.ToString());
+    }
+
+    [Fact]
+    public async Task Container_completion_marks_scope_completed_and_redacts_evidence_by_default()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
+        var executable = NewExecutable(
+            children:
+            [
+                AssignNode("node-assign", "Counter", "assigned-value"),
+                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
+            ],
+            variableDefault: "starting");
+
+        await ExecuteAsync(provider, executable);
+
+        // The completed container's scope is marked completed (no longer live for later expressions).
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var sequenceState = Assert.Single(states, state => state.Execution.ExecutableNodeId == SequenceNodeId);
+        Assert.Equal(bool.TrueString, sequenceState.Metadata[RuntimeMetadataKeys.ScopedVariableScopeCompleted]);
+
+        // The completed-scope variable is recorded as inspection evidence, but the default capture
+        // policy omits its payload — completed-scope values are retained only when policy allows.
+        var snapshot = await ContainerVariableSnapshot(provider, "actexec-sequence", "Counter");
+        Assert.Equal(RuntimePayloadCaptureMode.None, snapshot.CaptureMode);
+        Assert.Null(snapshot.Payload);
+    }
+
+    [Fact]
+    public async Task Capture_policy_retains_completed_scope_variable_payload()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"], new CapturingPolicy());
+        var executable = NewExecutable(
+            children:
+            [
+                AssignNode("node-assign", "Counter", "assigned-value"),
+                CaptureNode("node-read", VariableBinding(CounterReferenceKey, SequenceNodeId))
+            ],
+            variableDefault: "starting");
+
+        await ExecuteAsync(provider, executable);
+
+        var snapshot = await ContainerVariableSnapshot(provider, "actexec-sequence", "Counter");
+        Assert.Equal(RuntimePayloadCaptureMode.Payload, snapshot.CaptureMode);
+        Assert.Equal("assigned-value", snapshot.Payload?.GetString());
+    }
+
+    [Fact]
+    public async Task Container_without_scoped_variables_is_not_marked_completed()
+    {
+        await using var provider = NewProvider(["actexec-sequence", "actexec-read"]);
+        var executable = NewExecutable(
+            children: [CaptureNode("node-read", LiteralBinding("plain"))],
+            variableDefault: null);
+
+        await ExecuteAsync(provider, executable);
+
+        // No scoped variables declared → the completion path leaves the container state untouched.
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var sequenceState = Assert.Single(states, state => state.Execution.ExecutableNodeId == SequenceNodeId);
+        Assert.Equal(ActivityExecutionStatus.Completed, sequenceState.Status);
+        Assert.DoesNotContain(RuntimeMetadataKeys.ScopedVariableScopeCompleted, sequenceState.Metadata.Keys);
+
+        var projection = await provider.GetRequiredService<IActivityExecutionInspectionStore>().FindAsync("wfexec-1", "actexec-sequence");
+        Assert.DoesNotContain(projection?.ValueSnapshots ?? [], s => s.Subject == ActivityExecutionInspectionValueSubject.ContainerVariable);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string value) =>
+        new(
+            inputName: "Value",
+            source: RuntimeInputBindingSource.Literal,
+            literalValue: JsonSerializer.SerializeToElement(value),
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String",
+                ["referenceKey"] = "Value"
+            });
+
+    private static async Task<ActivityExecutionInspectionValueSnapshot> ContainerVariableSnapshot(ServiceProvider provider, string activityExecutionId, string variableName)
+    {
+        var projection = await provider.GetRequiredService<IActivityExecutionInspectionStore>().FindAsync("wfexec-1", activityExecutionId);
+        Assert.NotNull(projection);
+        return Assert.Single(projection!.ValueSnapshots, s =>
+            s.Subject == ActivityExecutionInspectionValueSubject.ContainerVariable &&
+            s.Name == variableName);
+    }
+
+    // Captures the payload for completed container-scoped variables (the opposite of the default policy).
+    private sealed class CapturingPolicy : IRuntimePayloadCapturePolicy
+    {
+        public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request) =>
+            request.Subject == RuntimePayloadCaptureSubject.ContainerVariable
+                ? new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.Payload, "Container variables captured for the test.")
+                : new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Other subjects omitted for the test.");
     }
 
     private static string? CapturedValue(ServiceProvider provider, string activityExecutionId)
@@ -102,13 +206,15 @@ public sealed class SequenceContainerVariableRuntimeTests
         return captured.Value.ValueKind == JsonValueKind.String ? captured.Value.GetString() : captured.Value.ToString();
     }
 
-    private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
+    private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds, IRuntimePayloadCapturePolicy? capturePolicy = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityConstructor, SequenceActivityConstructor>();
         services.AddSingleton<IActivityConstructor, CaptureActivityConstructor>();
         services.AddSingleton<IActivityConstructor, AssignActivityConstructor>();
         services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
+        if (capturePolicy is not null)
+            services.AddSingleton(capturePolicy);
 
         // Minimal expression evaluation surface so the runtime materializer resolves the Variable
         // expression language through the descriptor registry (the same wiring published apps get).
@@ -137,9 +243,16 @@ public sealed class SequenceContainerVariableRuntimeTests
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
-    private WorkflowExecutable NewExecutable(IReadOnlyCollection<ExecutableNode> children, string variableDefault)
+    private WorkflowExecutable NewExecutable(IReadOnlyCollection<ExecutableNode> children, string? variableDefault)
     {
-        var counter = new VariableDefinition(CounterReferenceKey, "Counter", TypeInformation.String, null, new ArgumentValue(variableDefault, "Literal"));
+        var activities = children.Select(child => child.ExecutableNodeId).ToArray();
+        object structurePayload = variableDefault is null
+            ? new { activities }
+            : new
+            {
+                activities,
+                variables = new[] { new VariableDefinition(CounterReferenceKey, "Counter", TypeInformation.String, null, new ArgumentValue(variableDefault, "Literal")) }
+            };
         var root = new ExecutableNode(
             executableNodeId: SequenceNodeId,
             authoredActivityId: "authored-sequence",
@@ -154,9 +267,7 @@ public sealed class SequenceContainerVariableRuntimeTests
             structure: new ExecutableActivityStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(
-                    new { activities = children.Select(child => child.ExecutableNodeId).ToArray(), variables = new[] { counter } },
-                    new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+                JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
         return new WorkflowExecutable(
             identity: NewIdentity(),

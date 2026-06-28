@@ -37,5 +37,6 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
 public enum ActivityExecutionInspectionValueSubject
 {
     ActivityInput,
-    ActivityOutput
+    ActivityOutput,
+    ContainerVariable
 }

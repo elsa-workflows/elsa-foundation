@@ -36,6 +36,13 @@ public static class RuntimeMetadataKeys
     /// scope for descendant input evaluation and on resume.
     /// </summary>
     public const string ScopedVariableValues = "runtime.scopedVariableValues";
+
+    /// <summary>
+    /// Set on a container activity execution's state when its scope has completed (ADR 0027, #210):
+    /// the scope's values are no longer live for runtime expressions, and the rebuilt
+    /// <see cref="Elsa.Expressions.Core.Models.VariableScope"/> is marked completed.
+    /// </summary>
+    public const string ScopedVariableScopeCompleted = "runtime.scopedVariableScopeCompleted";
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
