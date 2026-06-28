@@ -258,7 +258,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             activityExecutionId: payload.ActivityExecutionId,
             durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
             activityOutputs: activityOutputRegister,
-            serviceProvider: serviceProvider);
+            serviceProvider: serviceProvider,
+            activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
         var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
 
         var activity = await activityFactory.Create(

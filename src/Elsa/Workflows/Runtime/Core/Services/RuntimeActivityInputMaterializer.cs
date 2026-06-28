@@ -84,7 +84,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         var evaluator = serviceProvider.GetService(typeof(IExpressionEvaluator)) as IExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no '{nameof(IExpressionEvaluator)}' is registered.");
-        var executionContext = new MaterializationExpressionExecutionContext(serviceProvider, cancellationToken);
+        var executionContext = new MaterializationExpressionExecutionContext(resolutionContext, serviceProvider, cancellationToken);
 
         try
         {
@@ -193,13 +193,24 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     }
 
     /// <summary>
-    /// Minimal <see cref="IExpressionExecutionContext"/> used to evaluate input expressions before the
-    /// activity (and therefore its real execution context) exists. It exposes the request-scoped service
-    /// provider the expression handlers need and reports no variables, inputs, or memory.
+    /// <see cref="IExpressionExecutionContext"/> used to evaluate input expressions before the activity
+    /// (and therefore its real execution context) exists. It exposes the request-scoped service provider the
+    /// expression handlers need, plus the workflow variables, workflow inputs, and prior activity outputs
+    /// carried by the <see cref="RuntimeInputBindingResolutionContext"/>, so that references such as
+    /// <c>variables.foo</c>, <c>input.bar</c>, and prior-output accessors resolve. It also implements
+    /// <see cref="IMaterializationExpressionState"/> so language-specific pre-processors can surface those
+    /// values without a live workflow execution context.
     /// </summary>
-    private sealed class MaterializationExpressionExecutionContext(IServiceProvider serviceProvider, CancellationToken cancellationToken)
-        : IExpressionExecutionContext
+    private sealed class MaterializationExpressionExecutionContext(
+        RuntimeInputBindingResolutionContext resolutionContext,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+        : IExpressionExecutionContext, IMaterializationExpressionState
     {
+        public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
+        public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
+        public IReadOnlyDictionary<string, object?> ActivityOutputValues => resolutionContext.ActivityOutputValues;
+
         public IMemoryRegister Memory => null!;
         public IExpressionExecutionContext? ParentContext { get => null; set { } }
         public CancellationToken CancellationToken { get; } = cancellationToken;
@@ -208,22 +219,47 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ?? throw new InvalidOperationException($"Required service '{type.FullName}' is not registered.");
 
         public bool IsContainedWithinCompositeActivity() => false;
+        // Activity inputs are composite-activity scoped and do not exist at materialization time; only workflow inputs are available.
         public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }
-        public bool TryGetWorkflowInput(string key, out object? value) { value = null; return false; }
-        public object? GetVariableValueOrDefault(string variableName) => null;
+        public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
+        public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
         public string GetCorrelationId() => string.Empty;
         public string GetWorkfowDefinitionId() => string.Empty;
         public string GetWorkfowDefinitionVersionId() => string.Empty;
         public int GetWorkfowDefinitionVersion() => 0;
-        public string GetWorkfowInstanceId() => string.Empty;
+        public string GetWorkfowInstanceId() => resolutionContext.WorkflowExecutionId;
 
         public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
         public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }
         public T? Get<T>(IMemoryBlockReference blockReference) => (T?)blockReference.Declare().Value;
         public void Set(IMemoryBlockReference blockReference, object? value, Action<IMemoryBlock>? configure = null) { }
 
-        public IVariable? GetVariable(string name, bool localScopeOnly = false) => null;
-        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => null!;
-        public IEnumerable<IVariable> EnumerateVariablesInScope() => [];
+        public IVariable? GetVariable(string name, bool localScopeOnly = false) =>
+            WorkflowVariables.TryGetValue(name, out var value) ? new MaterializationVariable(name, value) : null;
+
+        public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null) => new MaterializationVariable(name, value);
+
+        public IEnumerable<IVariable> EnumerateVariablesInScope() =>
+            WorkflowVariables.Select(entry => new MaterializationVariable(entry.Key, entry.Value)).ToArray();
+    }
+
+    /// <summary>
+    /// Read-only <see cref="IVariable"/> backed by a fixed materialization-time value. Exposes the value
+    /// to the standard variable accessors (e.g. <see cref="IExpressionExecutionContext.GetVariableInScope"/>).
+    /// </summary>
+    private sealed class MaterializationVariable(string name, object? value) : IVariable
+    {
+        public string Id { get; set; } = $"variable:{name}";
+        public string Name { get; set; } = name;
+        public object? DefaultValue { get; set; } = value;
+        public Type? StorageDriverType { get; set; }
+
+        public IMemoryBlock Declare() => new LiteralMemoryBlock { Value = DefaultValue };
+
+        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
+
+        public object? Get(IExpressionExecutionContext context) => DefaultValue;
+
+        public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
     }
 }
