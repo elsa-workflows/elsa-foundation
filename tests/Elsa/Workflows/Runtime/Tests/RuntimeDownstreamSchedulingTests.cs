@@ -342,7 +342,8 @@ public sealed class RuntimeDownstreamSchedulingTests
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
-            new FixedTimeProvider(_now));
+            inspectionAccumulator: null,
+            timeProvider: new FixedTimeProvider(_now));
 
     private RuntimeSchedulerWorkItem NewCompleteWorkItem(
         WorkflowExecutableIdentity pinnedExecutable,

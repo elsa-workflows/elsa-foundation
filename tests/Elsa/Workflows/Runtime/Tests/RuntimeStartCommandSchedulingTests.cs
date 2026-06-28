@@ -252,7 +252,8 @@ public sealed class RuntimeStartCommandSchedulingTests
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
-            new FixedTimeProvider(_now));
+            inspectionAccumulator: null,
+            timeProvider: new FixedTimeProvider(_now));
 
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string> nodeIds, IReadOnlyCollection<string> startNodeIds) =>
         new(

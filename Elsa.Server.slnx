@@ -254,6 +254,10 @@
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Primitives/" />
+  <Folder Name="/tests/Elsa/Primitives/Hosting/">
+    <Project Path="tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />

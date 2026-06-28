@@ -7,6 +7,7 @@ using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Services;
 using Elsa.Persistence.EFCore.Tasks;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Identity;
 using Elsa.Tasks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -86,8 +87,8 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
     {
         OnBeforeConfiguring(services);
 
-        // General services
-        services.TryAddScoped<IIdentityGenerator, EFCoreIdentityGenerator>();
+        // General services. Defaults to short, time-ordered ids (~11 chars); override via AddIdentityGenerator.
+        services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
 
         // The two single aggregating event handlers that dispatch the typed
         // IEntitySavingHandler<,> / IEntityLoadingHandler<,> contributors (the draft-validator

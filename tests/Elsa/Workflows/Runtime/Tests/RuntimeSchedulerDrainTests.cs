@@ -801,7 +801,8 @@ public sealed class RuntimeSchedulerDrainTests
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
-            new FixedTimeProvider(_now));
+            inspectionAccumulator: null,
+            timeProvider: new FixedTimeProvider(_now));
 
     private static string CompletionReason(SchedulerCompletionKind completionKind) =>
         completionKind switch
