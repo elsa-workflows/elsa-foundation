@@ -12,7 +12,9 @@ public static class WorkflowAgentServiceCollectionExtensions
     public static IServiceCollection AddFoundationWorkflowsAgent(this IServiceCollection services)
     {
         services.AddFoundationAgentAbstractions();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentProvider, DeterministicWorkflowAgentProvider>());
+        // The agent harness/provider is a single-implementation contract: a concrete harness feature
+        // (e.g. GitHub Copilot) registers the one IAgentProvider. The workflow feature only contributes
+        // capabilities and context. DeterministicWorkflowAgentProvider stays a test-only seam.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WorkflowAgentCapabilityProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, DefaultWorkflowAgentContextProvider>());
         services.TryAddScoped<IWorkflowAgentContextProvider, DefaultWorkflowAgentContextProvider>();
