@@ -95,13 +95,41 @@ public interface IAgentAuditReader
     Task<IReadOnlyCollection<AgentAuditEvent>> ListAsync(string? sessionId = null, int? take = null, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// The accumulated state handed to a provider for one step of a turn. The orchestrator owns the loop,
+/// history, and tool execution; the provider maps this context to its SDK and yields the next step's
+/// message deltas and tool-call requests.
+/// </summary>
+public sealed record AgentTurnContext(
+    string SessionId,
+    string ProviderSessionId,
+    IReadOnlyList<AgentTurnMessage> History,
+    IReadOnlyList<AgentToolResult> PendingToolResults,
+    IReadOnlyCollection<AgentToolDescriptor> AvailableTools,
+    IReadOnlyCollection<AgentContextAttachment> Context,
+    int StepIndex,
+    int MaxSteps)
+{
+    /// <summary>The most recent user message in the turn history, if any.</summary>
+    public AgentTurnMessage? LatestUserMessage => History.LastOrDefault(x => x.Role == AgentRole.User);
+
+    /// <summary>Convenience factory for a single-step, single-user-message turn (tests and simple callers).</summary>
+    public static AgentTurnContext ForMessage(string sessionId, string content, IReadOnlyCollection<AgentContextAttachment> context)
+        => new(sessionId, sessionId, [new AgentTurnMessage(AgentRole.User, content)], [], [], context, 0, 1);
+}
+
 public interface IAgentProvider
 {
     string ProviderId { get; }
 
     Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default);
 
-    IAsyncEnumerable<AgentStreamEvent> SendMessageAsync(AgentProviderMessage message, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Produces the next step of a turn. Yields <see cref="AgentStreamEventKind.MessageDelta"/> events for
+    /// assistant text and <see cref="AgentStreamEventKind.ToolCallRequested"/> events for tools the provider
+    /// wants run. The orchestrator executes any requested tools and calls this again with their results.
+    /// </summary>
+    IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, CancellationToken cancellationToken = default);
 
     Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default);
 

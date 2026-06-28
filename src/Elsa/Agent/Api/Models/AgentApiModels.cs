@@ -108,6 +108,14 @@ public sealed class AgentSessionRouteRequest
     public string SessionId { get; init; } = string.Empty;
 }
 
+public sealed class AgentTurnCancelRequest
+{
+    public string SessionId { get; init; } = string.Empty;
+    public string TurnId { get; init; } = string.Empty;
+}
+
+public sealed record AgentTurnCancelResponse(string TurnId, bool Cancelled);
+
 public sealed class AgentMessageRequest
 {
     public string SessionId { get; init; } = string.Empty;

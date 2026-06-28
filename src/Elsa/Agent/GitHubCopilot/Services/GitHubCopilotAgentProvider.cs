@@ -43,8 +43,9 @@ public sealed class GitHubCopilotAgentProvider(
         return new AgentProviderSession(session.Id, ProviderId, metadata);
     }
 
-    public async IAsyncEnumerable<AgentStreamEvent> SendMessageAsync(AgentProviderMessage message, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var message = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
         var readiness = GetReadiness();
         if (!readiness.Available)
         {

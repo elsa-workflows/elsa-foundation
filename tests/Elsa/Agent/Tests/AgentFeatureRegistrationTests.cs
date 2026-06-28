@@ -1,6 +1,7 @@
 using Elsa.Agent.Api;
 using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot;
@@ -26,6 +27,7 @@ public sealed class AgentFeatureRegistrationTests
         Assert.NotNull(provider.GetRequiredService<IAgentContextSanitizer>());
         Assert.NotNull(provider.GetRequiredService<IAgentProposalService>());
         Assert.NotNull(provider.GetRequiredService<IAgentAuditReader>());
+        Assert.NotNull(provider.GetRequiredService<IAgentToolRegistry>());
     }
 
     [Fact]
@@ -95,23 +97,26 @@ public sealed class AgentFeatureRegistrationTests
         Assert.Contains(AgentProviderOperation.Chat, diagnostics.SupportedOperations);
 
         var events = new List<AgentStreamEvent>();
-        await foreach (var item in provider.SendMessageAsync(new(session.Id, "Hello", [])))
+        await foreach (var item in provider.ContinueTurnAsync(AgentTurnContext.ForMessage(session.Id, "Hello", [])))
             events.Add(item);
 
-        Assert.Collection(
-            events,
-            started => Assert.Equal(AgentStreamEventKind.Started, started.Kind),
-            delta => Assert.Equal(AgentStreamEventKind.MessageDelta, delta.Kind),
-            completed => Assert.Equal(AgentStreamEventKind.Completed, completed.Kind));
+        // The provider yields only content; the orchestrator owns turn lifecycle (Started/StepStarted/Completed).
+        var delta = Assert.Single(events);
+        Assert.Equal(AgentStreamEventKind.MessageDelta, delta.Kind);
+        Assert.Equal("Deterministic agent provider response.", delta.Content);
     }
 
     [Fact]
-    public async Task Streaming_service_sends_latest_user_message_to_provider()
+    public async Task Orchestrator_sends_latest_user_message_and_context_to_provider()
     {
-        var audit = new InMemoryAgentAuditStore();
-        var sessions = new InMemoryAgentSessionService(audit);
+        var services = new ServiceCollection();
+        services.AddFoundationAgentAbstractions();
         var provider = new CapturingAgentProvider();
-        var streaming = new DefaultAgentStreamingService(sessions, new DefaultAgentProviderRegistry([provider]));
+        services.AddSingleton<IAgentProvider>(provider);
+        using var sp = services.BuildServiceProvider();
+        using var scope = sp.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
         var session = await sessions.CreateAsync(new(
             "tenant-1",
             "actor-1",
@@ -134,7 +139,7 @@ public sealed class AgentFeatureRegistrationTests
         }
 
         Assert.NotNull(provider.LastMessage);
-        Assert.Equal("Explain this workflow.", provider.LastMessage.Content);
+        Assert.Equal("Explain this workflow.", provider.LastMessage!.Content);
         Assert.Single(provider.LastMessage.Context);
     }
 
@@ -147,10 +152,10 @@ public sealed class AgentFeatureRegistrationTests
         public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
             => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>()));
 
-        public async IAsyncEnumerable<AgentStreamEvent> SendMessageAsync(AgentProviderMessage message, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
-            LastMessage = message;
+            LastMessage = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
             yield return new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
         }
 

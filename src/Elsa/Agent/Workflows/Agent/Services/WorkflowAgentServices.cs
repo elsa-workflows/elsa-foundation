@@ -60,8 +60,9 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
             ["status"] = "available"
         }));
 
-    public async IAsyncEnumerable<AgentStreamEvent> SendMessageAsync(AgentProviderMessage message, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var message = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
         await Task.Yield();
         var messageId = Guid.NewGuid().ToString("N");
         yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow);

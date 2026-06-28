@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using static Elsa.Agent.Core.Services.AgentIds;
@@ -459,41 +458,6 @@ public sealed class NoopAgentActionProposalExecutor : IAgentActionProposalExecut
             proposal.ResourceType ?? "workflow-definition",
             proposal.ResourceId ?? proposal.Id,
             "Proposal execution seam accepted the proposal; no concrete executor is registered.")));
-}
-
-public sealed class DefaultAgentStreamingService(
-    IAgentSessionService sessions,
-    IAgentProviderRegistry providers) : IAgentStreamingService
-{
-    public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var session = await sessions.FindAsync(sessionId, cancellationToken);
-        if (session is null)
-        {
-            yield return Error("agent.session.not_found", $"Agent session '{sessionId}' was not found.", 404);
-            yield break;
-        }
-
-        var provider = providers.Find(session.ProviderId);
-        if (provider is null)
-        {
-            yield return Error("agent.provider.not_found", $"Agent provider '{session.ProviderId}' is not registered.", 404);
-            yield break;
-        }
-
-        var message = await sessions.FindLatestMessageAsync(session.Id, AgentRole.User, cancellationToken);
-        if (message is null)
-        {
-            yield return Error("agent.message.not_found", $"Agent session '{sessionId}' does not have a user message to stream.", 404);
-            yield break;
-        }
-
-        await foreach (var item in provider.SendMessageAsync(new(session.Id, message.Content, message.Context), cancellationToken))
-            yield return item;
-    }
-
-    private static AgentStreamEvent Error(string code, string message, int statusCode)
-        => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, statusCode), DateTimeOffset.UtcNow);
 }
 
 public sealed class InMemoryAgentFeedbackService(IAgentAuditSink auditSink) : IAgentFeedbackService

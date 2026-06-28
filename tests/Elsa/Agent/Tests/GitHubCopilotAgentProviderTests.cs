@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.GitHubCopilot.Options;
 using Elsa.Agent.GitHubCopilot.Services;
@@ -335,8 +336,9 @@ public sealed class GitHubCopilotAgentProviderTests
 
     private async Task<List<AgentStreamEvent>> StreamAsync(AgentProviderMessage message, CancellationToken cancellationToken = default)
     {
+        var turn = AgentTurnContext.ForMessage(message.SessionId, message.Content, message.Context);
         var events = new List<AgentStreamEvent>();
-        await foreach (var item in _provider.SendMessageAsync(message, cancellationToken))
+        await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
             events.Add(item);
         return events;
     }
