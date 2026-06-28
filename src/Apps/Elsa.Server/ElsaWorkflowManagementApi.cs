@@ -26,6 +26,12 @@ namespace Elsa.Server;
 internal static class ElsaWorkflowManagementApi
 {
     private const string DefaultShellName = "default";
+
+    // Draft test runs pin a synthetic definition-version id of the form "draft:{draftId}-{stateHash}"
+    // (see StartWorkflowDraftTestRunRequestHandler). These ids never reach the version store, so the
+    // designer graph for such a run is resolved from the originating draft instead.
+    private const string DraftVersionIdPrefix = "draft:";
+    private const string DraftVersionLabel = "draft";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public static IEndpointRouteBuilder MapElsaWorkflowManagementApi(this IEndpointRouteBuilder endpoints)
@@ -380,6 +386,9 @@ internal static class ElsaWorkflowManagementApi
 
     private static async Task<IResult> LoadVersionResultAsync(IServiceProvider services, string versionId, CancellationToken cancellationToken)
     {
+        if (TryGetDraftIdFromSyntheticVersionId(versionId, out var draftId))
+            return await LoadDraftVersionResultAsync(services, versionId, draftId, cancellationToken);
+
         var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
         var layoutStore = services.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>();
 
@@ -398,6 +407,53 @@ internal static class ElsaWorkflowManagementApi
 
         var layout = await layoutStore.FindByVersionIdAsync(versionId, cancellationToken);
         return Results.Ok(version.ToDetailsView(layout?.Records));
+    }
+
+    /// <summary>
+    /// Resolves the designer graph for a draft test run. The pinned version id is synthetic
+    /// (<c>draft:{draftId}-{stateHash}</c>) and has no row in the version store, so the authored
+    /// state is read back from the originating draft and projected into the same details view the
+    /// version endpoint returns.
+    /// </summary>
+    private static async Task<IResult> LoadDraftVersionResultAsync(IServiceProvider services, string versionId, string draftId, CancellationToken cancellationToken)
+    {
+        var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+
+        var draft = await draftStore.FindByIdAsync(draftId, cancellationToken);
+        if (draft is null)
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition version '{versionId}' was not found."));
+
+        var definition = await definitionStore.FindByIdAsync(draft.WorkflowDefinitionId, cancellationToken);
+        if (definition is null)
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition version '{versionId}' was not found."));
+
+        var layout = await draftStore.FindLayoutByDraftIdAsync(draftId, cancellationToken);
+        var details = new WorkflowDefinitionVersionDetailsView(
+            versionId,
+            DraftVersionLabel,
+            definition.ToView(),
+            draft.State.ToStateView(),
+            layout.Select(WorkflowDefinitionLayoutRecordView.From).ToArray());
+
+        return Results.Ok(details);
+    }
+
+    /// <summary>
+    /// Extracts the originating draft id from a synthetic draft-test-run version id of the form
+    /// <c>draft:{draftId}-{stateHash}</c>. The draft id is a hyphen-free ULID, so the trailing
+    /// <c>-{stateHash}</c> segment is stripped to recover it.
+    /// </summary>
+    private static bool TryGetDraftIdFromSyntheticVersionId(string? versionId, out string draftId)
+    {
+        draftId = string.Empty;
+        if (string.IsNullOrEmpty(versionId) || !versionId.StartsWith(DraftVersionIdPrefix, StringComparison.Ordinal))
+            return false;
+
+        var snapshotId = versionId[DraftVersionIdPrefix.Length..];
+        var separatorIndex = snapshotId.LastIndexOf('-');
+        draftId = separatorIndex > 0 ? snapshotId[..separatorIndex] : snapshotId;
+        return !string.IsNullOrWhiteSpace(draftId);
     }
 
     private static async Task<WorkflowDraftResponse> LoadDraftAsync(IWorkflowDefinitionDraftStore draftStore, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
