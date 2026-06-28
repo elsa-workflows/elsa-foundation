@@ -22,10 +22,10 @@ internal sealed class CreateSession(
     {
         var actorId = AgentEndpointActor.Resolve(User);
         var tenantId = AgentEndpointActor.ResolveTenant(User);
-        var provider = providers.Find(req.ProviderId);
+        var provider = providers.Active;
         if (provider is null)
         {
-            var error = new AgentError("agent.provider.not_found", $"Agent provider '{req.ProviderId}' is not registered.", 404);
+            var error = new AgentError("agent.provider.not_found", "No agent harness is enabled.", 404);
             await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), 404, cancellation: ct);
             return;
         }
@@ -44,7 +44,7 @@ internal sealed class CreateSession(
             string.IsNullOrWhiteSpace(req.ConversationId)
                 ? string.IsNullOrWhiteSpace(req.ActiveSurface.ResourceId) ? req.ActiveSurface.Route : req.ActiveSurface.ResourceId
                 : req.ConversationId,
-            req.ProviderId,
+            provider.ProviderId,
             GetMode(req),
             BuildTitle(req),
             AgentPolicy.Default,

@@ -10,7 +10,7 @@ namespace Elsa.Http.Services;
 /// </summary>
 internal sealed class MultiDownloadableContentHandler(IServiceProvider serviceProvider) : IDownloadableContentHandler
 {
-    public float Priority => throw new NotImplementedException();
+    public float Priority => 0;
 
     /// <inheritdoc />
     public IEnumerable<Func<ValueTask<Downloadable>>> GetDownloadablesAsync(object content, CancellationToken cancellationToken)

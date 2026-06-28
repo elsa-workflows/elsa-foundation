@@ -508,12 +508,18 @@ public sealed class InMemoryAgentAuditStore : IAgentAuditSink, IAgentAuditReader
     }
 }
 
-public sealed class DefaultAgentProviderRegistry(IEnumerable<IAgentProvider> providers) : IAgentProviderRegistry
+public sealed class DefaultAgentProviderRegistry : IAgentProviderRegistry
 {
-    public IReadOnlyCollection<IAgentProvider> Providers { get; } = providers.ToList();
+    public DefaultAgentProviderRegistry(IEnumerable<IAgentProvider> providers)
+    {
+        var registered = providers.ToList();
+        if (registered.Count > 1)
+            throw new AgentHarnessConflictException(registered.Select(x => x.ProviderId).ToList());
 
-    public IAgentProvider? Find(string providerId)
-        => Providers.FirstOrDefault(x => string.Equals(x.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
+        Active = registered.SingleOrDefault();
+    }
+
+    public IAgentProvider? Active { get; }
 }
 
 internal static class AgentIds

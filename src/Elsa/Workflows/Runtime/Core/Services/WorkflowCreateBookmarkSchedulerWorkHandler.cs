@@ -21,32 +21,6 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
-        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
-    {
-    }
-
-    public WorkflowCreateBookmarkSchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        RuntimeCheckpointCommitter checkpointCommitter)
-        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, TimeProvider.System)
-    {
-    }
-
-    public WorkflowCreateBookmarkSchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        RuntimeCheckpointCommitter checkpointCommitter,
-        TimeProvider timeProvider)
-        : this(workflowExecutableStore, activityExecutionStateStore, checkpointCommitter, null, timeProvider)
-    {
-    }
-
-    public WorkflowCreateBookmarkSchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)
     {

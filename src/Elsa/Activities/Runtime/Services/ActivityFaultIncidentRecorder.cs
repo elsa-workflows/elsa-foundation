@@ -19,7 +19,8 @@ public sealed class ActivityFaultIncidentRecorder
         TimeProvider timeProvider,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
     {
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
         _inspectionAccumulator = inspectionAccumulator;
     }
 

@@ -138,7 +138,6 @@ public interface IAgentProvider
 
 public interface IAgentProviderRegistry
 {
-    IReadOnlyCollection<IAgentProvider> Providers { get; }
-
-    IAgentProvider? Find(string providerId);
+    /// <summary>The single active agent provider, or null when no harness is enabled.</summary>
+    IAgentProvider? Active { get; }
 }

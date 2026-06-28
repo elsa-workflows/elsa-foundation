@@ -42,8 +42,6 @@ public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectC
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
     };
 
-    public static bool StrictMode { get; set; } = false; // Set to true to opt into strict mode.
-
     /// <summary>
     /// Attempts to convert the source value into the destination type.
     /// </summary>
@@ -91,7 +89,7 @@ public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectC
         if (TryGetTypeConverter(targetType, out var typeConverter))
             return typeConverter.Convert(value);
 
-        var strictMode = converterOptions?.StrictMode ?? StrictMode;
+        var strictMode = converterOptions?.StrictMode ?? false;
 
         if (value == null)
             return null;

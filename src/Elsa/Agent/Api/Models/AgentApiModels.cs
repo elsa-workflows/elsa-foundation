@@ -16,7 +16,7 @@ public sealed record AgentBootstrapResponse(
     string ProviderStatus,
     IReadOnlyCollection<string> Modes,
     IReadOnlyCollection<AgentCapabilityResponse> Capabilities,
-    IReadOnlyCollection<AgentProviderDiagnosticsResponse> Providers,
+    AgentProviderDiagnosticsResponse? Provider,
     AgentPolicySummaryResponse Policy);
 
 public sealed record AgentPolicySummaryResponse(
@@ -48,7 +48,6 @@ public sealed class AgentCreateSessionRequest
 {
     public string TenantId { get; init; } = "default";
     public string ConversationId { get; init; } = string.Empty;
-    public string ProviderId { get; init; } = "github-copilot";
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
     public string Mode { get; init; } = "explain";
     public AgentSurfaceRequest ActiveSurface { get; init; } = new();

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Server.ExtensionBuilder;
@@ -69,13 +70,15 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly ILogger<ExtensionBuilderStorage> _logger;
     private readonly string _dotNetExecutable;
     private readonly string _gitExecutable;
     private readonly string[] _serverLocalRepositoryRoots;
     private readonly string _statePath;
 
-    public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options)
+    public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options, ILogger<ExtensionBuilderStorage> logger)
     {
+        _logger = logger;
         var extensionBuilderOptions = options.Value;
         var configuredPath = extensionBuilderOptions.StoragePath;
         var contentRootPath = environment.ContentRootPath;
@@ -1816,8 +1819,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var result = RunProcess(_gitExecutable, workingDirectory, arguments);
             return result.ExitCode == 0 ? result.Output.Trim() : "";
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Git operation failed, returning empty result.");
             return "";
         }
     }
@@ -2085,8 +2089,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
             return output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogDebug(ex, "Git operation failed, returning empty result.");
             return [];
         }
     }

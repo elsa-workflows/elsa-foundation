@@ -21,33 +21,6 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         IWorkflowExecutableStore workflowExecutableStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
-        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
-    {
-    }
-
-    public WorkflowScheduleActivitySchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, null, null, TimeProvider.System)
-    {
-    }
-
-    public WorkflowScheduleActivitySchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        TimeProvider timeProvider)
-        : this(workflowExecutableStore, activityExecutionStateStore, schedulerWorkQueue, null, null, timeProvider)
-    {
-    }
-
-    public WorkflowScheduleActivitySchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         RuntimeCheckpointCommitter? checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider)

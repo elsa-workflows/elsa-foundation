@@ -59,7 +59,7 @@ Reads persisted audit records for Studio audit views.
 
 ### `IAgentProviderRegistry`
 
-Resolves configured provider facades by provider ID.
+Exposes the single active agent provider (`Active`). Exactly one harness may be enabled per composition; registering more than one `IAgentProvider` fails fast with `AgentHarnessConflictException`.
 
 ## Implementable contributor interfaces
 
@@ -87,7 +87,9 @@ Kind: Source (a server-side tool the agent loop can invoke). Read-only tools exe
 
 ### `IAgentProvider`
 
-Kind: Bridge/adapter (provider facade for external agent-provider SDK sessions, streaming, tool approval, and diagnostics). Providers implement `ContinueTurnAsync(AgentTurnContext)`: given the turn history and any pending tool results, they yield the next step's message deltas and tool-call requests. The orchestrator owns the loop and tool execution.
+Kind: Bridge/adapter, **single-implementation (replacement) contract** — exactly one harness/provider is enabled per composition (enforced by `IAgentProviderRegistry`, which throws `AgentHarnessConflictException` on more than one). A concrete harness feature (e.g. GitHub Copilot) registers the one provider; the workflow feature contributes only capabilities/context. Deterministic providers are test-only seams and are not registered in shipped compositions.
+
+Providers implement `ContinueTurnAsync(AgentTurnContext)`: given the turn history and any pending tool results, they yield the next step's message deltas and tool-call requests. The orchestrator owns the loop and tool execution.
 
 Known implementations:
 
