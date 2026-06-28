@@ -188,7 +188,8 @@ public sealed class WorkflowExecutableCompiler(
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
 
-        if (string.IsNullOrWhiteSpace(value.Value))
+        var expressionText = ExtractExpressionText(value.Value);
+        if (string.IsNullOrWhiteSpace(expressionText))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
 
         var inputType = inputDefinition.Type.LoadType();
@@ -197,8 +198,21 @@ public sealed class WorkflowExecutableCompiler(
         return new RuntimeInputBinding(
             inputName: inputDefinition.Name,
             source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(value.ExpressionType, value.Value, resultType),
+            expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
             metadata: BuildInputMetadata(inputType, inputDefinition));
+    }
+
+    private static string? ExtractExpressionText(object? value)
+    {
+        if (value is null)
+            return null;
+
+        if (value is JsonElement jsonElement)
+            return jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+                ? null
+                : jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
+
+        return value.ToString();
     }
 
     private static Dictionary<string, string> BuildInputMetadata(Type inputType, InputDefinition inputDefinition) =>
@@ -216,17 +230,25 @@ public sealed class WorkflowExecutableCompiler(
         return $"{fullName}, {type.Assembly.GetName().Name}";
     }
 
-    private static object? ConvertLiteral(string? value, Type targetType)
+    private static object? ConvertLiteral(object? value, Type targetType)
     {
         if (value is null)
             return null;
 
         var nullableTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (value is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+                return null;
+
+            value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
+        }
+
         if (nullableTargetType == typeof(string))
-            return value;
+            return $"{value}";
 
         if (nullableTargetType.IsEnum)
-            return Enum.Parse(nullableTargetType, value, ignoreCase: true);
+            return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
 
         return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
     }

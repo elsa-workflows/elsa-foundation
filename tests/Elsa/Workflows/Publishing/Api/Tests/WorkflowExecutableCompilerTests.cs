@@ -15,6 +15,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
@@ -88,6 +89,52 @@ public sealed class WorkflowExecutableCompilerTests
             PublishedAt: now,
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-")).AsTask());
+    }
+
+    [Fact]
+    public async Task CompilesBoundTextInputIntoRuntimeLiteralBinding()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-hello", Text("Hello World!"))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal("Text", binding.InputName);
+        Assert.Equal("Hello World!", binding.LiteralValue?.GetString());
+        Assert.Equal("Text", binding.Metadata["referenceKey"]);
+        Assert.StartsWith("System.String", binding.Metadata["typeName"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompiledBoundTextInputMaterializesAuthoredValueForTheRuntime()
+    {
+        // End-to-end proof for the WriteLine "blank line" bug: the authored text must survive
+        // compilation as a runtime input binding and materialize back into the value the runtime
+        // feeds to WriteLine.Text. A regression here is exactly what prints a blank line.
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-hello", Text("Hello World!"))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+
+        var textInput = Assert.Single(materialized);
+        Assert.Equal("Text", textInput.Name);
+        Assert.Equal("Hello World!", textInput.Value);
     }
 
     [Fact]

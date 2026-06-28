@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
@@ -51,6 +52,34 @@ public sealed class RequiredInputOutputValidatorTests
 
         var state = State(activities: [Node("n1", "av-1",
             inputs: [LiteralInput("body", "")])]);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public async Task Required_input_present_but_empty_json_string_value_emits_error()
+    {
+        var lookup = StubLookup.WithVersion("av-1",
+            inputs: [RequiredInput("body")],
+            outputs: []);
+
+        var state = State(activities: [Node("n1", "av-1",
+            inputs: [LiteralInput("body", JsonSerializer.SerializeToElement(""))])]);
+        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
+
+        Assert.Single(errors);
+    }
+
+    [Fact]
+    public async Task Required_input_present_but_undefined_json_value_emits_error()
+    {
+        var lookup = StubLookup.WithVersion("av-1",
+            inputs: [RequiredInput("body")],
+            outputs: []);
+
+        var state = StateWithRoot(Node("n1", "av-1",
+            inputs: [LiteralInput("body", default(JsonElement))]));
         var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
 
         Assert.Single(errors);

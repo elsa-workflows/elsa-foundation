@@ -56,6 +56,7 @@ Status: `400 Bad Request` for invalid workflow content or unknown source version
 
 ### Contract notes
 
+- `versionId` excludes the reserved literal `drafts`: the versioned route is constrained so it can never bind `versionId = "drafts"`. This guarantees `POST /publishing/workflows/drafts/test-runs` always resolves to the draft-snapshot endpoint below rather than this versioned endpoint, independent of endpoint registration/order.
 - Test-run artifacts are not returned by durable published executable listing.
 - Normal runtime execute-by-artifact-id remains a production/durable execution path and does not accept transient test-run artifacts.
 - Runtime execution receives a pinned executable identity; it does not load workflow design state.
