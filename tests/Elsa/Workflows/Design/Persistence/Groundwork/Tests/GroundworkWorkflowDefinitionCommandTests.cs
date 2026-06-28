@@ -349,5 +349,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
         public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
         public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => null;
+        public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
     }
 }
