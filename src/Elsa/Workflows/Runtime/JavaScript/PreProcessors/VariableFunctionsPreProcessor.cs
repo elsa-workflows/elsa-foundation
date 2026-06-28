@@ -14,49 +14,59 @@ public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> optio
 {
     public ValueTask PreProcess(string script, IJavaScriptExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? evaluatorOptions, CancellationToken cancellationToken)
     {
-        var workflowVariableFunctions = BuildWorkflowVariableFunctions(executionContext);
-        workflowVariableFunctions.ToList().ForEach(executionContext.RegisterFunction);
+        // When the activity's expression context exposes a visible scope chain (workflow + ancestor
+        // container scopes, ADR 0027), resolve name-based helpers through it so freehand scripts can
+        // read/assign container-scoped variables with nearest-scope shadowing. Otherwise fall back to
+        // the workflow-scoped behaviour.
+        var scopedVariables = expressionContext as IScopedVariableProvider;
+
+        var namedVariables = scopedVariables is not null
+            ? scopedVariables.GetVisibleVariables()
+            : workflowExecution.GetVariables();
+
+        foreach (var variable in namedVariables)
+            foreach (var function in BuildNamedVariableFunctions(executionContext, scopedVariables, variable))
+                executionContext.RegisterFunction(function);
 
         executionContext.RegisterFunction(
             new JavaScriptFunction<string, object>(
                 WorkflowFunctionNames.SetVariableFunctionName,
-                (name, value) => SetVariable(executionContext, name, value)
+                (name, value) => SetVariable(executionContext, scopedVariables, name, value)
             )
         );
 
         executionContext.RegisterFunction(
             new JavaScriptFunction<string>(
                 WorkflowFunctionNames.GetVariableFunctionName,
-                (name) => workflowExecution.GetVariable(name)
+                (name) => GetVariable(scopedVariables, name)
             )
         );
 
         return ValueTask.CompletedTask;
     }
 
-    private IEnumerable<IJavaScriptFunction> BuildWorkflowVariableFunctions(IJavaScriptExecutionContext context)
+    private IEnumerable<IJavaScriptFunction> BuildNamedVariableFunctions(IJavaScriptExecutionContext context, IScopedVariableProvider? scopedVariables, IVariable variable)
     {
-        foreach (var variable in workflowExecution.GetVariables())
-        {
-            var pascalName = variable.Name.Pascalize();
-            var variableType = variable.GetVariableType();
+        var pascalName = variable.Name.Pascalize();
 
-            var setVariable = new JavaScriptFunction<object>(
-                string.Format(WorkflowFunctionNames.SetNamedVariableFunctionFormat, pascalName),
-                (value) => SetVariable(context, variable.Name, value)
-            );
-            var getVariable = new JavaScriptFunction(
-                string.Format(WorkflowFunctionNames.GetNamedVariableFunctionFormat, pascalName),
-                () => workflowExecution.GetVariable(variable.Name)
-            );
+        yield return new JavaScriptFunction<object>(
+            string.Format(WorkflowFunctionNames.SetNamedVariableFunctionFormat, pascalName),
+            (value) => SetVariable(context, scopedVariables, variable.Name, value));
 
-            yield return setVariable;
-            yield return getVariable;
-        }
+        yield return new JavaScriptFunction(
+            string.Format(WorkflowFunctionNames.GetNamedVariableFunctionFormat, pascalName),
+            () => GetVariable(scopedVariables, variable.Name));
     }
 
+    private object? GetVariable(IScopedVariableProvider? scopedVariables, string name)
+    {
+        if (scopedVariables is not null && scopedVariables.TryGetVariableValueByName(name, out var value))
+            return value;
 
-    private void SetVariable(IJavaScriptExecutionContext context, string name, object? value)
+        return workflowExecution.GetVariable(name);
+    }
+
+    private void SetVariable(IJavaScriptExecutionContext context, IScopedVariableProvider? scopedVariables, string name, object? value)
     {
         if (options.Value.DisableVariableCopying)
             return;
@@ -77,7 +87,11 @@ public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> optio
             variablesContainer
         );
 
-        // Set value in Workflow Context
+        // Write back to the correct visible scope (nearest workflow/container scope declaring the
+        // name) when a scope chain is available; otherwise to the workflow context.
+        if (scopedVariables is not null && scopedVariables.TrySetVariableValueByName(name, value))
+            return;
+
         workflowExecution.SetVariable(name, value);
     }
 }

@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Contracts;
@@ -12,9 +13,23 @@ public interface IActivityStructureHandler
 
     string SchemaVersion { get; }
 
+    /// <summary>
+    /// Whether this activity is a container scope that can own container-scoped variable
+    /// declarations (ADR 0027). Container activities (e.g. <c>Sequence</c>, <c>Flowchart</c>)
+    /// return <c>true</c>; ordinary activities use the default <c>false</c>.
+    /// </summary>
+    bool SupportsScopedVariables => false;
+
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
+
+    /// <summary>
+    /// Projects the container-scoped variables declared by this activity node, if any. Container
+    /// activities (e.g. <c>Sequence</c>, <c>Flowchart</c>) own variable declarations that are
+    /// visible to their descendant activities. Non-container activities declare none.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
 }

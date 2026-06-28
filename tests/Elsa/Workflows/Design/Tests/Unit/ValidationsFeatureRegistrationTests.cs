@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
@@ -33,6 +34,17 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Contains(typeof(RequiredInputOutputValidator), validatorTypes);
         Assert.Contains(typeof(VariableExpressionResolverValidator), validatorTypes);
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Feature_registers_the_scoped_variable_services()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.NotNull(provider.GetRequiredService<ScopedVariableResolver>());
+        Assert.NotNull(provider.GetRequiredService<ScopedVariablePicker>());
+        Assert.NotNull(provider.GetRequiredService<ScopedVariableReferenceRemapper>());
+        Assert.NotNull(provider.GetRequiredService<ScopedVariableAuthoringContract>());
     }
 
     [Fact]

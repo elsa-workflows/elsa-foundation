@@ -51,6 +51,10 @@ public class WorkflowDesignValidationsFeature : IShellFeature
 
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         services.AddScoped<ActivityTreeWalker>();
+        services.AddScoped<ScopedVariableResolver>();
+        services.AddScoped<ScopedVariablePicker>();
+        services.AddScoped<ScopedVariableReferenceRemapper>();
+        services.AddScoped<ScopedVariableAuthoringContract>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();
         services.AddScoped<IDraftValidator, RequiredInputOutputValidator>();

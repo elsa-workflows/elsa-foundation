@@ -198,6 +198,42 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("snapshot-1", executable.Identity.Source?.SourceId);
     }
 
+    [Fact]
+    public async Task CompilesContainerScopedVariablesIntoExecutableStructure()
+    {
+        // Publishing/runtime materialization (#207): container-scoped variable declarations authored
+        // on a Sequence must survive compilation into the executable structure so the runtime can
+        // read them without re-reading the design document.
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var counter = new Elsa.Expressions.Core.Models.VariableDefinition(
+            ReferenceKey: "var-counter",
+            Name: "Counter",
+            TypeInformation: TypeInformation.String,
+            StorageDriverType: null,
+            Default: new ArgumentValue("0", "Literal"));
+        var compiler = Compiler(WorkflowVersion(SequenceNode(
+            "sequence",
+            [Node("write-one", Text("one"))],
+            [counter])));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var structure = executable.RootActivity.Structure;
+        Assert.NotNull(structure);
+        var executableStructure = structure!.Payload.Deserialize<SequenceExecutableStructure>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(executableStructure);
+        var materializedVariable = Assert.Single(executableStructure!.Variables);
+        Assert.Equal("var-counter", materializedVariable.ReferenceKey);
+        Assert.Equal("Counter", materializedVariable.Name);
+    }
+
     private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion) =>
         new(
             new FakeVersionStore(workflowVersion),
@@ -217,7 +253,8 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static ActivityNode SequenceNode(
         string nodeId,
-        IReadOnlyCollection<ActivityNode> activities) =>
+        IReadOnlyCollection<ActivityNode> activities,
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
         new(
             nodeId,
             "activity-sequence",
@@ -226,7 +263,7 @@ public sealed class WorkflowExecutableCompilerTests
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities))));
+                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);

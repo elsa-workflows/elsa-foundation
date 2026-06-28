@@ -20,7 +20,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - `Elsa.Expressions.JavaScript` — `ArgumentFunctionsPreProcessor` *(intra-domain)*
 - `Elsa.Expressions.JavaScript` — `ArgsObjectPreProcessor` *(intra-domain)*
 - `Elsa.Expressions.JavaScript.Libraries` — `LibraryResourcePreProcessor` *(cross-domain — injects library resources)*
-- `Elsa.Workflows.Runtime.JavaScript` — `VariableFunctionsPreProcessor` *(cross-domain)*
+- `Elsa.Workflows.Runtime.JavaScript` — `VariableFunctionsPreProcessor` *(cross-domain — resolves get/set variable helpers through the visible scope chain via `IScopedVariableProvider` when the expression context exposes one, else workflow scope; ADR 0027)*
 - `Elsa.Workflows.Runtime.JavaScript` — `WorkflowFunctionsPreProcessor` *(cross-domain)*
 - `Elsa.Workflows.Runtime.JavaScript` — `WorkflowInputFunctionsPreProcessor` *(cross-domain)*
 - `Elsa.Workflows.Runtime.JavaScript` — `ActivityOutputFunctionsPreProcessor` *(cross-domain)*
