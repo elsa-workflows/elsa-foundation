@@ -17,19 +17,13 @@ internal sealed class Bootstrap(IAgentCapabilityCatalog capabilities, IAgentProv
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var diagnostics = new List<Elsa.Agent.Core.Models.AgentProviderDiagnostics>();
-        foreach (var provider in providers.Providers)
-            diagnostics.Add(await provider.GetDiagnosticsAsync(ct));
-
-        var providerStatus = diagnostics.Count == 0
-            ? "unavailable"
-            : diagnostics.Any(x => x.IsAvailable)
-                ? "available"
-                : "unavailable";
+        // A single agent harness is active at a time (enforced by the provider registry).
+        var diagnostics = providers.Active is null ? null : await providers.Active.GetDiagnosticsAsync(ct);
+        var providerStatus = diagnostics?.IsAvailable == true ? "available" : "unavailable";
         var activePolicy = AgentPolicy.Default;
         var availability = await policyEvaluator.EvaluateAvailabilityAsync(activePolicy, ct);
         var listedCapabilities = (await capabilities.ListAsync(ct)).ToList();
-        var enabled = availability.Allowed && diagnostics.Any(x => x.IsAvailable);
+        var enabled = availability.Allowed && diagnostics?.IsAvailable == true;
         var modes = enabled ? BuildModes(listedCapabilities) : [];
 
         var response = new AgentBootstrapResponse(
@@ -37,7 +31,7 @@ internal sealed class Bootstrap(IAgentCapabilityCatalog capabilities, IAgentProv
             providerStatus,
             modes,
             listedCapabilities.Select(x => x.ToResponse()).ToList(),
-            diagnostics.Select(x => x.ToResponse()).ToList(),
+            diagnostics?.ToResponse(),
             new(activePolicy.ContextVisibility, activePolicy.RequireProposalApproval, activePolicy.RetentionLabel));
 
         await Send.OkAsync(AgentApiResponse<AgentBootstrapResponse>.Success(response), ct);

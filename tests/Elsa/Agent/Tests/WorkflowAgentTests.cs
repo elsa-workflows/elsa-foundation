@@ -439,6 +439,8 @@ public sealed class WorkflowAgentTests
         services.AddSingleton<IWorkflowChangePermissionEvaluator>(new FixedWorkflowChangePermissionEvaluator(allowChanges));
         services.AddFoundationAgentAbstractions();
         services.AddFoundationWorkflowsAgent();
+        // The deterministic workflow provider is a test-only seam; register the single harness explicitly.
+        services.AddScoped<IAgentProvider, DeterministicWorkflowAgentProvider>();
         return services.BuildServiceProvider();
     }
 

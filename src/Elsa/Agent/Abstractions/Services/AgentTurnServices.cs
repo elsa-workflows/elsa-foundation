@@ -177,10 +177,10 @@ public sealed class DefaultAgentTurnOrchestrator(
             yield break;
         }
 
-        var provider = providers.Find(session.ProviderId);
+        var provider = providers.Active;
         if (provider is null)
         {
-            yield return Error("agent.provider.not_found", $"Agent provider '{session.ProviderId}' is not registered.", 404);
+            yield return Error("agent.provider.not_found", "No agent harness is enabled.", 404);
             yield break;
         }
 
