@@ -49,11 +49,11 @@ Call `AddIdentityGenerator` from the host **after** the persistence feature has 
 using Elsa.Primitives.Hosting.Extensions;
 using Elsa.Primitives.Identity;
 
-// Recommended default.
-services.AddIdentityGenerator(IdentityGeneratorKind.UuidV7);
-
-// Short, no coordination.
+// Short, time-ordered, no coordination — this is the active persistence default.
 services.AddIdentityGenerator(IdentityGeneratorKind.Short);
+
+// UUIDv7 — collision-free 128-bit, zero coordination.
+services.AddIdentityGenerator(IdentityGeneratorKind.UuidV7);
 
 // Snowflake — assign a distinct worker id per node (e.g. from configuration / env var).
 services.AddIdentityGenerator(IdentityGeneratorKind.Snowflake, options =>
@@ -77,3 +77,7 @@ services.AddScoped<IIdentityGenerator, MyIdentityGenerator>();
 ```
 
 If your id is time-ordered, encode it so that ordinal string comparison matches numeric order. `Base62` (fixed 11-char width, ascending alphabet) in the `Identity` namespace is the helper the built-in 64-bit generators use for exactly this.
+
+## Format compatibility with Groundwork
+
+This catalog deliberately mirrors the [Groundwork](https://github.com/valence-works/Groundwork) library's `Groundwork.Core.Identity` catalog — same Base62 alphabet/width, same epoch (`2020-01-01Z`), and the same Snowflake bit layout — so ids produced by either codebase are format-compatible. Because the two are independent copies, that compatibility is a convention, not an automatic invariant; it is pinned by golden-value tests (`IdentityFormatCompatibilityTests`) that exist with **identical literals** in both repos. If you change an epoch, bit split, or alphabet here, update Groundwork's copy and its golden test to match.
