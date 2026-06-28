@@ -77,6 +77,73 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompilesVariableReferenceInputIntoRuntimeExpressionBinding()
+    {
+        // #206: a structured Variable reference input must compile into a runtime expression binding
+        // whose language is "Variable" and whose expression text round-trips the reference (reference
+        // key + declaring scope), so the runtime VariableExpressionHandler resolves it at execution time.
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var reference = JsonSerializer.SerializeToElement(new { referenceKey = "var-counter", declaringScopeId = "node-sequence" });
+        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(reference))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Null(binding.LiteralValue);
+        var expression = binding.Expression;
+        Assert.NotNull(expression);
+        Assert.Equal("Variable", expression!.Language);
+
+        var parsed = JsonSerializer.Deserialize<JsonElement>(expression.Expression);
+        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
+        Assert.Equal("node-sequence", parsed.GetProperty("declaringScopeId").GetString());
+    }
+
+    [Fact]
+    public async Task CompilesBareVariableReferenceKeyInputIntoRuntimeExpressionBinding()
+    {
+        // A Variable input may carry just a bare reference key string (workflow-scope reference).
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement("var-counter")))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var binding = Assert.Contains("Text", (IReadOnlyDictionary<string, RuntimeInputBinding>)executable.RootActivity.InputBindings);
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal("Variable", binding.Expression!.Language);
+        var parsed = JsonSerializer.Deserialize<JsonElement>(binding.Expression.Expression);
+        Assert.Equal("var-counter", parsed.GetProperty("referenceKey").GetString());
+    }
+
+    [Fact]
+    public async Task CompilingVariableInputWithoutReferenceKeyThrows()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-var", VariableText(JsonSerializer.SerializeToElement(new { declaringScopeId = "node-sequence" })))));
+
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-")).AsTask());
+    }
+
+    [Fact]
     public async Task CompilingExpressionInputWithoutExpressionTextThrows()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -270,6 +337,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static WorkflowArgumentState JavaScriptText(string expression) =>
         new("Text", new ArgumentValue(expression, "JavaScript"), null, null, null, null);
+
+    private static WorkflowArgumentState VariableText(JsonElement reference) =>
+        new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);

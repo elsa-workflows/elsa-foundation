@@ -120,7 +120,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
-        await InvokeActivityAsync(serviceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, workItem, invokePayload, executableNode, state, cancellationToken);
+        await InvokeActivityAsync(serviceProvider, activityFactory, activityExecutionStateStore, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, workItem, invokePayload, executable, executableNode, state, cancellationToken);
     }
 
     private async ValueTask InvokeActivityAsync(
@@ -136,10 +136,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
+        WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
+        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
+        var variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken);
+
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         try
@@ -151,7 +155,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
-                activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+                activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues),
+                variableScope: variableScope);
             inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -183,7 +188,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             invokePayload.PinnedExecutable,
             workItem,
             executableNode,
-            state);
+            state,
+            variableScope);
         RuntimeActivityInputMemory.Seed(context, inputs);
 
         ActivityExecutionState? completedState = null;
@@ -197,6 +203,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             else
             {
                 await activity.ExecuteAsync(context);
+
+                // Persist any container-scoped variable assignments the activity made back to the owning
+                // container executions' snapshots, so sibling branches and later activities observe them
+                // and resume restores them (ADR 0027).
+                await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
+
                 var bookmarkRequests = context.GetBookmarkRequests();
                 var childScheduleRequests = context.GetChildActivityScheduleRequests();
                 if (context.CompositeCompletionRequested && childScheduleRequests.Count > 0)

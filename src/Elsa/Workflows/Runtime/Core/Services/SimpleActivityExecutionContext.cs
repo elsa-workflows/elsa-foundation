@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -17,8 +18,9 @@ public sealed class SimpleActivityExecutionContext(
     WorkflowExecutableIdentity? pinnedExecutable = null,
     RuntimeSchedulerWorkItem? schedulerWorkItem = null,
     ExecutableNode? executableNode = null,
-    ActivityExecutionState? activityExecutionState = null)
-    : IRuntimeActivityExecutionContext, IExpressionExecutionContext
+    ActivityExecutionState? activityExecutionState = null,
+    VariableScope? variableScope = null)
+    : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider
 {
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
@@ -129,10 +131,19 @@ public sealed class SimpleActivityExecutionContext(
         CompositeCompletionDeferred = true;
     }
 
+    /// <summary>
+    /// The visible container-scope chain threaded by the runtime for this concrete activity execution
+    /// (ADR 0027). Null when the activity has no enclosing container scope; in that case variable
+    /// access falls back to the activity's own memory register.
+    /// </summary>
+    public VariableScope? VariableScope { get; } = variableScope;
+
     public bool IsContainedWithinCompositeActivity() => false;
     public bool TryGetActivityInput(string key, out object? value) => TryGetById(key, out value);
     public bool TryGetWorkflowInput(string key, out object? value) => TryGetById(key, out value);
-    public object? GetVariableValueOrDefault(string variableName) => null;
+
+    public object? GetVariableValueOrDefault(string variableName) =>
+        VariableScope is { } scope && scope.TryGetValueByName(variableName, out var value) ? value : null;
     public string GetCorrelationId() => string.Empty;
     public string GetWorkfowDefinitionId() => string.Empty;
     public string GetWorkfowDefinitionVersionId() => string.Empty;
@@ -150,16 +161,53 @@ public sealed class SimpleActivityExecutionContext(
         configure?.Invoke(block);
     }
 
-    public IVariable? GetVariable(string name, bool localScopeOnly = false) => null;
+    public IVariable? GetVariable(string name, bool localScopeOnly = false) =>
+        VariableScope?.ResolveByName(name);
 
     public IVariable SetVariable<T>(string name, T? value, Action<IMemoryBlock>? configure = null)
     {
+        // Prefer the visible scope chain so an assignment lands in the declaring container scope and is
+        // observed by sibling branches; fall back to local memory when no scope declares the name.
+        if (VariableScope is { } scope && scope.TrySetValueByName(name, value))
+            return scope.ResolveByName(name) ?? new SimpleVariable(name, value);
+
         var variable = new SimpleVariable(name, value);
         Set(variable, value, configure);
         return variable;
     }
 
-    public IEnumerable<IVariable> EnumerateVariablesInScope() => [];
+    public IEnumerable<IVariable> EnumerateVariablesInScope() =>
+        VariableScope?.EnumerateVisibleVariables() ?? [];
+
+    // IScopedVariableProvider — resolves structured/name-based variable access through the visible
+    // scope chain so variable-assignment activities and scripts read and write container-scoped
+    // variables in production (ADR 0027). Returns false/empty when no scope chain is present.
+    public bool TryGetScopedVariableValue(VariableReference reference, out object? value)
+    {
+        if (VariableScope is { } scope && scope.TryGetValue(reference, out value))
+            return true;
+
+        value = null;
+        return false;
+    }
+
+    public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
+        VariableScope?.TrySetValue(reference, value) ?? false;
+
+    public IReadOnlyCollection<IVariable> GetVisibleVariables() =>
+        VariableScope?.EnumerateVisibleVariables() ?? [];
+
+    public bool TryGetVariableValueByName(string name, out object? value)
+    {
+        if (VariableScope is { } scope && scope.TryGetValueByName(name, out value))
+            return true;
+
+        value = null;
+        return false;
+    }
+
+    public bool TrySetVariableValueByName(string name, object? value) =>
+        VariableScope?.TrySetValueByName(name, value) ?? false;
 
     private static InvalidOperationException MissingRuntimeValue(string name) =>
         new($"Runtime activity execution context value '{name}' is unavailable for this context.");

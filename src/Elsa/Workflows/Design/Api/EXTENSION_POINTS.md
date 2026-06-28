@@ -44,7 +44,24 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 ## Implementable contributor interfaces
 
-This domain owns no add-don't-replace contributor interface of its own. The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers extend this domain by handling the Background events below.
+The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
+
+### `IActivityStructureHandler` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Contributor (add-don't-replace, keyed by structure `Kind`). One handler per composite/container activity structure kind; generic design and publishing code dispatch to the matching handler without interpreting activity-specific structure payloads.
+- **Contract:** `Elsa.Workflows.Design.Core.Contracts.IActivityStructureHandler`.
+- **Members:**
+  - `Kind` / `SchemaVersion` — identify the structure shape this handler owns.
+  - `ProjectChildren(activity)` / `ReplaceChildren(activity, projections)` — expose and rewrite the activity's child slots.
+  - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
+  - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
+  - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
+- **Aggregation:** `IActivityStructureService` (`DefaultActivityStructureService`) resolves the registered handlers by `Kind`. `ScopedVariableResolver` walks the authored tree through this contract to compute per-node scoped-variable visibility.
+- **Registration:** register an implementation with DI as `IActivityStructureHandler` from the activity's own module.
+
+Known implementations:
+- `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
 
 ---
 

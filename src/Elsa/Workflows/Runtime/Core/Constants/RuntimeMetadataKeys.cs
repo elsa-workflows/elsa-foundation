@@ -28,6 +28,14 @@ public static class RuntimeMetadataKeys
     public const string InvokeSkipped = "runtime.invokeSkipped";
     public const string OutputName = "runtime.outputName";
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
+
+    /// <summary>
+    /// Metadata key on a container activity execution carrying the JSON snapshot of its
+    /// container-scoped variable values (ADR 0027, #210). The single source of truth for a concrete
+    /// container execution's variable values: written when the scope mutates and read to rebuild the
+    /// scope for descendant input evaluation and on resume.
+    /// </summary>
+    public const string ScopedVariableValues = "runtime.scopedVariableValues";
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
