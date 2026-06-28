@@ -221,6 +221,39 @@ describe("agent stream", () => {
       { type: "message-completed", messageId: "msg_01" }
     ]);
   });
+
+  it("normalizes the agentic turn loop events with numeric enums and PascalCase payloads", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ Id: "evt_00", Kind: 0, Payload: { TurnId: "turn_01", MaxSteps: 8 } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_01", Kind: 8, Payload: { StepIndex: 0, MaxSteps: 8 } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_02", Kind: 10, ProposalId: "call-1", Payload: { ToolCallId: "call-1", ToolName: "echo", Arguments: "{}", Risk: 0, RequiresApproval: false } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_03", Kind: 11, ProposalId: "call-1", Payload: { ToolCallId: "call-1", ToolName: "echo", Arguments: "{}", Risk: 0, RequiresApproval: false } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_04", Kind: 12, ProposalId: "call-1", Payload: { ToolCallId: "call-1", ToolName: "echo", Succeeded: true, Summary: "echo:hello" } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_05", Kind: 14, Content: "Incorporating follow-up: more", Payload: { StepIndex: 1, MaxSteps: 8 } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_06", Kind: 9, Payload: { StepIndex: 0, MaxSteps: 8 } })}\n\n`,
+      `data: ${JSON.stringify({ Id: "evt_07", Kind: 15, Payload: { TurnId: "turn_01", MaxSteps: 8 } })}\n\n`
+    ]), { status: 200 }));
+
+    subscribeAgentSessionStream(
+      createEndpointContext("https://foundation.example/"),
+      "/_elsa/agent/sessions/agt_01/stream",
+      event => events.push(event),
+      error => { throw error; },
+      { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
+    await flushPromises();
+
+    expect(events).toEqual([
+      { type: "turn-started", turnId: "turn_01", maxSteps: 8 },
+      { type: "step-started", stepIndex: 0, maxSteps: 8 },
+      { type: "tool-call-requested", toolCallId: "call-1", toolName: "echo", arguments: "{}", requiresApproval: false },
+      { type: "tool-call-started", toolCallId: "call-1", toolName: "echo" },
+      { type: "tool-call-completed", toolCallId: "call-1", toolName: "echo", succeeded: true, summary: "echo:hello" },
+      { type: "progress", label: "Incorporating follow-up: more" },
+      { type: "step-completed", stepIndex: 0, maxSteps: 8 },
+      { type: "turn-cancelled", turnId: "turn_01" }
+    ]);
+  });
 });
 
 function streamFrom(chunks: string[]) {

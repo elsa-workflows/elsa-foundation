@@ -15,7 +15,13 @@ export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed"
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled";
-export type AgentStreamEventType = "message-started" | "message-delta" | "context-used" | "clarification-requested" | "workflow-batch-created" | "proposal-created" | "progress" | "message-completed" | "error";
+export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "workflow-batch-created" | "proposal-created" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+
+export interface AgentPlanStep {
+  id: string;
+  title: string;
+  status: string;
+}
 
 export interface AgentBootstrapResponse {
   enabled: boolean;
@@ -181,6 +187,7 @@ export interface WorkflowGraphOperationBatchApplyResult {
 }
 
 export type AgentStreamEvent =
+  | { type: "turn-started"; turnId: string; maxSteps: number }
   | { type: "message-started"; messageId: string; role: AgentMessageRole }
   | { type: "message-delta"; messageId: string; content: string }
   | { type: "context-used"; messageId: string; attachmentIds: string[] }
@@ -188,7 +195,14 @@ export type AgentStreamEvent =
   | { type: "workflow-batch-created"; messageId: string; batch: WorkflowGraphOperationBatch }
   | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
   | { type: "progress"; label: string; percent?: number }
+  | { type: "step-started"; stepIndex: number; maxSteps: number }
+  | { type: "step-completed"; stepIndex: number; maxSteps: number }
+  | { type: "tool-call-requested"; toolCallId: string; toolName: string; arguments: string; requiresApproval: boolean }
+  | { type: "tool-call-started"; toolCallId: string; toolName: string }
+  | { type: "tool-call-completed"; toolCallId: string; toolName: string; succeeded: boolean; summary: string }
+  | { type: "plan-updated"; steps: AgentPlanStep[] }
   | { type: "message-completed"; messageId: string }
+  | { type: "turn-cancelled"; turnId: string }
   | { type: "error"; message: string };
 
 export interface AgentFeedbackRequest {

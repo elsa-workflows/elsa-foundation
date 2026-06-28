@@ -21,6 +21,7 @@ export interface AgentClient {
   denyProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   executeProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   submitFeedback(sessionId: string, messageId: string, request: AgentFeedbackRequest): Promise<void>;
+  cancelTurn(sessionId: string, turnId: string): Promise<void>;
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
@@ -106,6 +107,9 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         comment: request.comment,
         actorId: "studio"
       }));
+    },
+    async cancelTurn(sessionId, turnId) {
+      unwrap(await context.http.postJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`, {}));
     }
   };
 }

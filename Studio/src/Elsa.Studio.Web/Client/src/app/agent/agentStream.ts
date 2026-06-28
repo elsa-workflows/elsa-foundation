@@ -191,8 +191,47 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
   switch (type) {
     case "message-started":
     case "started":
-    case "conversation.started":
+    case "conversation.started": {
+      // The orchestrator's turn-level Started event carries a turn id (for cancellation); a provider's
+      // bare Started does not.
+      const turnId = readString(payload, "turnId");
+      if (turnId) {
+        return { type: "turn-started", turnId, maxSteps: readNumber(payload, "maxSteps") ?? 0 };
+      }
       return { type: "message-started", messageId, role: "assistant" };
+    }
+    case "step-started":
+      return { type: "step-started", stepIndex: readNumber(payload, "stepIndex") ?? 0, maxSteps: readNumber(payload, "maxSteps") ?? 0 };
+    case "step-completed":
+      return { type: "step-completed", stepIndex: readNumber(payload, "stepIndex") ?? 0, maxSteps: readNumber(payload, "maxSteps") ?? 0 };
+    case "tool-call-requested":
+      return {
+        type: "tool-call-requested",
+        toolCallId: readString(payload, "toolCallId") ?? readString(event, "proposalId") ?? messageId,
+        toolName: readString(payload, "toolName") ?? "tool",
+        arguments: readString(payload, "arguments") ?? "",
+        requiresApproval: readBoolean(payload, "requiresApproval") ?? false
+      };
+    case "tool-call-started":
+      return {
+        type: "tool-call-started",
+        toolCallId: readString(payload, "toolCallId") ?? readString(event, "proposalId") ?? messageId,
+        toolName: readString(payload, "toolName") ?? "tool"
+      };
+    case "tool-call-completed":
+      return {
+        type: "tool-call-completed",
+        toolCallId: readString(payload, "toolCallId") ?? readString(event, "proposalId") ?? messageId,
+        toolName: readString(payload, "toolName") ?? "tool",
+        succeeded: readBoolean(payload, "succeeded") ?? false,
+        summary: readString(payload, "summary") ?? ""
+      };
+    case "plan-updated":
+      return { type: "plan-updated", steps: normalizePlanSteps(payload) };
+    case "progress":
+      return { type: "progress", label: content || readString(payload, "label") || "Working…" };
+    case "turn-cancelled":
+      return { type: "turn-cancelled", turnId: readString(payload, "turnId") ?? messageId };
     case "message-delta":
     case "assistant.delta":
       if (resultKind === "error") {
@@ -237,7 +276,15 @@ const agentStreamEventNames = [
   "completed",
   "error",
   "clarification-requested",
-  "workflow-graph-operation-batch-created"
+  "workflow-graph-operation-batch-created",
+  "step-started",
+  "step-completed",
+  "tool-call-requested",
+  "tool-call-started",
+  "tool-call-completed",
+  "plan-updated",
+  "progress",
+  "turn-cancelled"
 ];
 
 const agentResultKindNames = [
@@ -270,6 +317,26 @@ function normalizeEventName(value: unknown, numericNames?: string[]) {
 function readString(source: Record<string, unknown> | undefined, key: string) {
   const value = readField(source, key);
   return typeof value === "string" ? value : undefined;
+}
+
+function readNumber(source: Record<string, unknown> | undefined, key: string) {
+  const value = readField(source, key);
+  return typeof value === "number" ? value : undefined;
+}
+
+function readBoolean(source: Record<string, unknown> | undefined, key: string) {
+  const value = readField(source, key);
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function normalizePlanSteps(payload: Record<string, unknown> | undefined) {
+  return (readArray(payload, "steps") ?? [])
+    .filter((step): step is Record<string, unknown> => !!step && typeof step === "object")
+    .map(step => ({
+      id: readString(step, "id") ?? "",
+      title: readString(step, "title") ?? "",
+      status: readString(step, "status") ?? "pending"
+    }));
 }
 
 function readObject<T extends object>(source: Record<string, unknown> | undefined, key: string) {

@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@elsa-workflows/studio-code-editor": "workspace:*"
+    "@elsa-workflows/studio-code-editor": "workspace:*",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   }
 }
