@@ -1,6 +1,6 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Identity;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -77,7 +77,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IDraftStateDiffEngine>();
         services.AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>();
 
-        services.TryAddScoped<IIdentityGenerator, GroundworkIdentityGenerator>();
+        services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
 

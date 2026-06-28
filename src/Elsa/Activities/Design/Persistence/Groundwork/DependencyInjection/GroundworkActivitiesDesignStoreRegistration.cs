@@ -6,8 +6,8 @@ using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Services;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -43,7 +43,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.RemoveAll<IActivityAvailabilitySettingsStore>();
         services.AddScoped<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>();
 
-        services.TryAddScoped<IIdentityGenerator, GroundworkIdentityGenerator>();
+        services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
         services.TryAddScoped<IActivityDefinitionHasher, DefaultActivityDefinitionHasher>();
         services.TryAddScoped<IActivityDefinitionFactory, ActivityDefinitionFactory>();
         services.TryAddScoped<IActivityDefinitionVersionFactory, ActivityDefinitionVersionFactory>();
