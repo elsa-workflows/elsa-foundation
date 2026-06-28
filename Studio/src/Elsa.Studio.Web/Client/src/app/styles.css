@@ -628,6 +628,33 @@ textarea:focus {
   color: var(--primary);
 }
 
+.bottom-panel-tab-list button {
+  position: relative;
+}
+
+.bottom-panel-tab-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  animation: bottom-panel-tab-reveal 1.6s ease-out;
+}
+
+@keyframes bottom-panel-tab-reveal {
+  0% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-panel-tab-pulse {
+    animation: none;
+  }
+}
+
 .bottom-panel-actions {
   display: flex;
   align-items: center;

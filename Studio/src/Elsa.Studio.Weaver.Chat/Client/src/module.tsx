@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, MessageSquare, RefreshCcw, Send } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAiContextAttachment, StudioAiPromptRequest } from "@elsa-workflows/studio-sdk";
 import { getWeaverCapabilities, listWeaverTools, streamWeaverChat, type WeaverCapabilities, type WeaverTool } from "./weaverClient";
@@ -65,6 +65,8 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatState, setChatState] = useState<ChatState>("idle");
   const [error, setError] = useState("");
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const pinnedToBottomRef = useRef(true);
   const promptActions = useMemo(() => api.ai.promptActions.list(), [api]);
   const contextProviders = useMemo(() => api.ai.contextProviders.list(), [api]);
   const proposalRenderers = useMemo(() => api.ai.proposalRenderers.list(), [api]);
@@ -126,6 +128,18 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
     submitQueuedPrompt(prompt);
   }, [capabilityState, chatState, queuedPrompts]);
 
+  useEffect(() => {
+    const container = messagesRef.current;
+    // Only follow new content when the user is already at the bottom, so streaming
+    // deltas don't yank them away while they scroll up to read earlier output.
+    if (container && pinnedToBottomRef.current) container.scrollTop = container.scrollHeight;
+  }, [messages]);
+
+  function handleMessagesScroll() {
+    const container = messagesRef.current;
+    if (container) pinnedToBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 24;
+  }
+
   async function submitPrompt(prompt: StudioAiPromptRequest) {
     const message = prompt.message.trim();
     if (!message || capabilityState !== "ready" || chatState === "streaming") return;
@@ -176,6 +190,22 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
     void submitPrompt({ message: input, agent: selectedAgent || null, mode: "enqueue" });
   }
 
+  function changeAgent(name: string) {
+    if (name === selectedAgent) return;
+    setSelectedAgent(name);
+
+    // The backend pins a conversation to the provider it was created with, so an in-flight
+    // conversation keeps responding from the original agent. Start a fresh conversation so the
+    // newly selected agent actually handles the next message.
+    if (conversationId) {
+      setConversationId(null);
+      const label = capabilities?.agents.find(agent => agent.name === name)?.displayName || name;
+      setMessages(current => current.length === 0
+        ? current
+        : [...current, { id: createId("system"), role: "system", content: `Switched to ${label}. Starting a new conversation.` }]);
+    }
+  }
+
   return (
     <section className={variant === "panel" ? "weaver-surface panel" : "weaver-surface"}>
       <div className="weaver-header">
@@ -194,7 +224,7 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
         <aside className="weaver-sidebar">
           <label className="weaver-field">
             <span>Agent</span>
-            <select value={selectedAgent} onChange={event => setSelectedAgent(event.target.value)} disabled={capabilityState !== "ready"}>
+            <select value={selectedAgent} onChange={event => changeAgent(event.target.value)} disabled={capabilityState !== "ready" || chatState === "streaming"}>
               {capabilities?.agents.length ? capabilities.agents.map(agent => (
                 <option key={agent.name} value={agent.name}>{agent.displayName || agent.name}</option>
               )) : <option value="">No agent</option>}
@@ -211,7 +241,7 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
         </aside>
 
         <main className="weaver-chat">
-          <div className="weaver-messages" aria-live="polite">
+          <div className="weaver-messages" aria-live="polite" ref={messagesRef} onScroll={handleMessagesScroll}>
             {messages.length === 0 ? (
               <div className="weaver-empty">
                 <Bot size={24} />
@@ -220,7 +250,7 @@ function WeaverChatSurface({ api, variant }: { api: ElsaStudioModuleApi; variant
               </div>
             ) : messages.map(message => (
               <article className={`weaver-message ${message.role}`} key={message.id}>
-                <span>{message.role === "user" ? "You" : "Weaver"}</span>
+                <span>{message.role === "user" ? "You" : message.role === "system" ? "System" : "Weaver"}</span>
                 <p>{message.content || (chatState === "streaming" && message.role === "assistant" ? "Thinking..." : "")}</p>
               </article>
             ))}

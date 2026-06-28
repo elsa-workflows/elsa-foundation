@@ -182,6 +182,61 @@ describe("weaver chat module", () => {
 
     root.unmount();
   });
+
+  it("starts a new conversation when the agent changes so the selection is honored", async () => {
+    const sessionPosts: Array<Record<string, unknown>> = [];
+    const backend: StudioEndpointContext = {
+      baseUrl: "https://server.example/",
+      http: {
+        getJson: vi.fn(async () => twoAgentBootstrap()),
+        postJson: vi.fn(async (url: string, body?: Record<string, unknown>) => {
+          if (url === "/_elsa/agent/sessions") {
+            sessionPosts.push(body ?? {});
+            return { data: { sessionId: "agt_01", status: "active" } };
+          }
+          return { data: { message: { id: "msg_01" } } };
+        })
+      }
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ Kind: 1, Id: "evt_1", Content: "Answer." })}\n\n`,
+      `data: ${JSON.stringify({ Kind: 4, Id: "evt_1" })}\n\n`
+    ]))));
+    const api = testApi(backend);
+    register(api);
+    const Panel = api.panels.list()[0].component;
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    root.render(<Panel />);
+    await waitFor(() => expect(host.textContent).toContain("2 agent(s)"));
+
+    // First prompt pins the conversation to the default (first) agent.
+    api.ai.dispatchPrompt({ message: "Explain.", mode: "enqueue", source: { label: "Explain" } });
+    await waitFor(() => expect(sessionPosts).toHaveLength(1));
+    expect(sessionPosts[0]).toMatchObject({ providerId: "alpha-agent" });
+    await waitFor(() => expect(host.textContent).toContain("Answer."));
+
+    // Switching agent must reset the pinned conversation.
+    const select = host.querySelector("select") as HTMLSelectElement;
+    await waitFor(() => expect(select.disabled).toBe(false));
+    setControlledValue(select, "beta-agent");
+    await waitFor(() => expect(host.textContent).toContain("Starting a new conversation"));
+
+    // Next message creates a fresh session bound to the newly selected agent.
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    setControlledValue(textarea, "And now?");
+    const sendButton = Array.from(host.querySelectorAll("button")).find(button => /send/i.test(button.textContent ?? "")) as HTMLButtonElement;
+    await waitFor(() => expect(sendButton.disabled).toBe(false));
+    sendButton.click();
+
+    await waitFor(() => expect(sessionPosts).toHaveLength(2));
+    expect(sessionPosts[1]).toMatchObject({ providerId: "beta-agent" });
+
+    root.unmount();
+    host.remove();
+  });
 });
 
 function testApi(backend: StudioEndpointContext = {
@@ -259,6 +314,29 @@ function agentBootstrap() {
     },
     error: null
   };
+}
+
+function twoAgentBootstrap() {
+  return {
+    data: {
+      enabled: true,
+      providerStatus: "available",
+      capabilities: [{ id: "workflow.explain", displayName: "Explain", risk: "read-only" }],
+      providers: [
+        { providerId: "alpha-agent", isAvailable: true, status: "Available", supportedOperations: ["chat", "streaming"], riskProfile: "read-only" },
+        { providerId: "beta-agent", isAvailable: true, status: "Available", supportedOperations: ["chat", "streaming"], riskProfile: "read-only" }
+      ],
+      policy: { requiresApprovalForMutations: false }
+    },
+    error: null
+  };
+}
+
+function setControlledValue(element: HTMLSelectElement | HTMLTextAreaElement, value: string) {
+  const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLTextAreaElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(element, value);
+  const eventType = element instanceof HTMLSelectElement ? "change" : "input";
+  element.dispatchEvent(new Event(eventType, { bubbles: true }));
 }
 
 function streamFrom(chunks: string[]) {

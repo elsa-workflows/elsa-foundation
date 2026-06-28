@@ -1,34 +1,34 @@
-import { forwardRef as G, createElement as _, useState as h, useMemo as S, useCallback as ie, useEffect as q } from "react";
-var L = { exports: {} }, C = {};
-var F;
-function ce() {
-  if (F) return C;
-  F = 1;
+import { forwardRef as ne, createElement as J, useState as m, useRef as Z, useMemo as S, useCallback as pe, useEffect as E } from "react";
+var z = { exports: {} }, C = {};
+var G;
+function fe() {
+  if (G) return C;
+  G = 1;
   var e = /* @__PURE__ */ Symbol.for("react.transitional.element"), t = /* @__PURE__ */ Symbol.for("react.fragment");
-  function r(n, o, i) {
-    var l = null;
-    if (i !== void 0 && (l = "" + i), o.key !== void 0 && (l = "" + o.key), "key" in o) {
+  function n(s, o, i) {
+    var u = null;
+    if (i !== void 0 && (u = "" + i), o.key !== void 0 && (u = "" + o.key), "key" in o) {
       i = {};
       for (var v in o)
         v !== "key" && (i[v] = o[v]);
     } else i = o;
     return o = i.ref, {
       $$typeof: e,
-      type: n,
-      key: l,
+      type: s,
+      key: u,
       ref: o !== void 0 ? o : null,
       props: i
     };
   }
-  return C.Fragment = t, C.jsx = r, C.jsxs = r, C;
+  return C.Fragment = t, C.jsx = n, C.jsxs = n, C;
 }
-var H;
-function de() {
-  return H || (H = 1, L.exports = ce()), L.exports;
+var X;
+function ve() {
+  return X || (X = 1, z.exports = fe()), z.exports;
 }
-var s = de();
-const le = (e) => e.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(), X = (...e) => e.filter((t, r, n) => !!t && t.trim() !== "" && n.indexOf(t) === r).join(" ").trim();
-var ue = {
+var a = ve();
+const he = (e) => e.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(), re = (...e) => e.filter((t, n, s) => !!t && t.trim() !== "" && s.indexOf(t) === n).join(" ").trim();
+var me = {
   xmlns: "http://www.w3.org/2000/svg",
   width: 24,
   height: 24,
@@ -39,46 +39,46 @@ var ue = {
   strokeLinecap: "round",
   strokeLinejoin: "round"
 };
-const pe = G(
+const we = ne(
   ({
     color: e = "currentColor",
     size: t = 24,
-    strokeWidth: r = 2,
-    absoluteStrokeWidth: n,
+    strokeWidth: n = 2,
+    absoluteStrokeWidth: s,
     className: o = "",
     children: i,
-    iconNode: l,
+    iconNode: u,
     ...v
-  }, x) => _(
+  }, x) => J(
     "svg",
     {
       ref: x,
-      ...ue,
+      ...me,
       width: t,
       height: t,
       stroke: e,
-      strokeWidth: n ? Number(r) * 24 / Number(t) : r,
-      className: X("lucide", o),
+      strokeWidth: s ? Number(n) * 24 / Number(t) : n,
+      className: re("lucide", o),
       ...v
     },
     [
-      ...l.map(([m, u]) => _(m, u)),
+      ...u.map(([h, p]) => J(h, p)),
       ...Array.isArray(i) ? i : [i]
     ]
   )
 );
-const $ = (e, t) => {
-  const r = G(
-    ({ className: n, ...o }, i) => _(pe, {
+const M = (e, t) => {
+  const n = ne(
+    ({ className: s, ...o }, i) => J(we, {
       ref: i,
       iconNode: t,
-      className: X(`lucide-${le(e)}`, n),
+      className: re(`lucide-${he(e)}`, s),
       ...o
     })
   );
-  return r.displayName = `${e}`, r;
+  return n.displayName = `${e}`, n;
 };
-const fe = $("Bot", [
+const ge = M("Bot", [
   ["path", { d: "M12 8V4H8", key: "hb8ula" }],
   ["rect", { width: "16", height: "12", x: "4", y: "8", rx: "2", key: "enze0r" }],
   ["path", { d: "M2 14h2", key: "vft8re" }],
@@ -86,16 +86,16 @@ const fe = $("Bot", [
   ["path", { d: "M15 13v2", key: "1xurst" }],
   ["path", { d: "M9 13v2", key: "rq6x2g" }]
 ]);
-const ve = $("MessageSquare", [
+const xe = M("MessageSquare", [
   ["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", key: "1lielz" }]
 ]);
-const he = $("RefreshCcw", [
+const be = M("RefreshCcw", [
   ["path", { d: "M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "14sxne" }],
   ["path", { d: "M3 3v5h5", key: "1xhq8a" }],
   ["path", { d: "M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16", key: "1hlbsb" }],
   ["path", { d: "M16 16h5v5", key: "ccwih5" }]
 ]);
-const me = $("Send", [
+const ke = M("Send", [
   [
     "path",
     {
@@ -105,114 +105,114 @@ const me = $("Send", [
   ],
   ["path", { d: "m21.854 2.147-10.94 10.939", key: "12cjpa" }]
 ]);
-async function we(e) {
-  const t = N(await e.http.getJson("/_elsa/agent/bootstrap"));
-  return ke(t);
+async function ye(e) {
+  const t = P(await e.http.getJson("/_elsa/agent/bootstrap"));
+  return Ce(t);
 }
-async function ge(e, t) {
-  const r = N(await e.http.getJson("/_elsa/agent/bootstrap"));
-  return ye(r, t);
+async function je(e, t) {
+  const n = P(await e.http.getJson("/_elsa/agent/bootstrap"));
+  return Ae(n, t);
 }
-async function xe(e, t, r) {
-  const n = N(await e.http.getJson("/_elsa/agent/bootstrap")), o = t.agent || n.providers.find((b) => b.isAvailable)?.providerId, i = t.conversationId || await je(e, o);
+async function Ie(e, t, n) {
+  const s = P(await e.http.getJson("/_elsa/agent/bootstrap")), o = t.agent || s.providers.find((b) => b.isAvailable)?.providerId, i = t.conversationId || await Re(e, o);
   await e.http.postJson(`/_elsa/agent/sessions/${encodeURIComponent(i)}/messages`, {
     role: "user",
     content: t.message,
     message: t.message,
     mode: "explain",
-    contextAttachments: (t.attachments ?? []).map(Ie)
+    contextAttachments: (t.attachments ?? []).map(We)
   });
-  const l = await fetch(new URL(`/_elsa/agent/sessions/${encodeURIComponent(i)}/stream`, e.baseUrl).toString(), be(e.headers, {
+  const u = await fetch(new URL(`/_elsa/agent/sessions/${encodeURIComponent(i)}/stream`, e.baseUrl).toString(), Se(e.headers, {
     headers: { Accept: "text/event-stream" }
   }));
-  if (!l.ok)
-    throw new Error(await l.text() || `Weaver chat failed with ${l.status}.`);
-  if (!l.body)
+  if (!u.ok)
+    throw new Error(await u.text() || `Weaver chat failed with ${u.status}.`);
+  if (!u.body)
     return;
-  const v = l.body.getReader(), x = new TextDecoder();
-  let m = "";
+  const v = u.body.getReader(), x = new TextDecoder();
+  let h = "";
   for (; ; ) {
     const { value: b, done: I } = await v.read();
     if (I) break;
-    m += x.decode(b, { stream: !0 });
-    const k = m.split(`
+    h += x.decode(b, { stream: !0 });
+    const k = h.split(`
 
 `);
-    m = k.pop() ?? "";
+    h = k.pop() ?? "";
     for (const w of k) {
-      const y = Q(w);
-      y && r({ ...y, conversationId: y.conversationId || i });
+      const y = K(w);
+      y && n({ ...y, conversationId: y.conversationId || i });
     }
   }
-  const u = Q(m);
-  u && r({ ...u, conversationId: u.conversationId || i });
+  const p = K(h);
+  p && n({ ...p, conversationId: p.conversationId || i });
 }
-function Q(e) {
+function K(e) {
   const t = e.split(`
-`).map((r) => r.trim()).find((r) => r.startsWith("data:"));
-  return t ? Ae(JSON.parse(t.slice(5).trim())) : null;
+`).map((n) => n.trim()).find((n) => n.startsWith("data:"));
+  return t ? Ne(JSON.parse(t.slice(5).trim())) : null;
 }
-function be(e, t = {}) {
+function Se(e, t = {}) {
   if (!e) return t;
-  const r = new Headers(e);
-  return new Headers(t.headers).forEach((n, o) => r.set(o, n)), { ...t, headers: r };
+  const n = new Headers(e);
+  return new Headers(t.headers).forEach((s, o) => n.set(o, s)), { ...t, headers: n };
 }
-function N(e) {
+function P(e) {
   if (e.error) throw new Error(e.error.message || e.error.code || "Weaver request failed.");
   if (e.data === void 0 || e.data === null) throw new Error("Weaver backend returned an empty response.");
   return e.data;
 }
-function ke(e) {
-  const r = (e.providers ?? []).filter((n) => n.isAvailable);
+function Ce(e) {
+  const n = (e.providers ?? []).filter((s) => s.isAvailable);
   return {
-    streaming: e.enabled !== !1 && e.providerStatus !== "unavailable" && r.length > 0,
+    streaming: e.enabled !== !1 && e.providerStatus !== "unavailable" && n.length > 0,
     conversationPersistence: !0,
-    proposalReview: e.policy?.requiresApprovalForMutations ?? (e.capabilities ?? []).some((n) => n.requiresApproval || n.risk === "review-required"),
+    proposalReview: e.policy?.requiresApprovalForMutations ?? (e.capabilities ?? []).some((s) => s.requiresApproval || s.risk === "review-required"),
     supportedAttachmentKinds: ["workflow.definition", "workflow.instance", "workflow.execution", "workflow.diagnostics", "studio.context"],
-    agents: r.map((n) => ({
-      name: n.providerId,
-      displayName: n.providerId,
-      description: n.status ?? "Weaver provider"
+    agents: n.map((s) => ({
+      name: s.providerId,
+      displayName: s.providerId,
+      description: s.status ?? "Weaver provider"
     }))
   };
 }
-function ye(e, t) {
-  return (e.providers ?? []).filter((n) => n.isAvailable && (!t || n.providerId === t)).flatMap((n) => (n.supportedOperations ?? []).map((o) => ({
-    name: `${n.providerId}.${o}`,
-    displayName: T(o),
-    description: `${T(o)} support exposed by ${n.providerId}.`,
+function Ae(e, t) {
+  return (e.providers ?? []).filter((s) => s.isAvailable && (!t || s.providerId === t)).flatMap((s) => (s.supportedOperations ?? []).map((o) => ({
+    name: `${s.providerId}.${o}`,
+    displayName: D(o),
+    description: `${D(o)} support exposed by ${s.providerId}.`,
     mutability: o === "chat" || o === "streaming" ? "read-only" : "proposal",
-    dangerLevel: n.riskProfile === "privileged-execution" ? "high" : "low",
+    dangerLevel: s.riskProfile === "privileged-execution" ? "high" : "low",
     permissions: [],
-    agentScopes: [n.providerId],
+    agentScopes: [s.providerId],
     isEnabled: !0
   })));
 }
-async function je(e, t) {
-  const r = N(await e.http.postJson("/_elsa/agent/sessions", {
+async function Re(e, t) {
+  const n = P(await e.http.postJson("/_elsa/agent/sessions", {
     conversationId: "weaver-chat",
     ...t ? { providerId: t } : {},
     mode: "explain",
     activeSurface: { route: "/weaver" },
     clientContext: { studioVersion: "studio", sdkVersion: "studio", moduleIds: ["Elsa.Studio.Weaver.Chat"] },
     metadata: { route: "/weaver", source: "weaver-chat" }
-  })), n = r.sessionId ?? r.id;
-  if (!n) throw new Error("Weaver backend did not return an agent session.");
-  return n;
+  })), s = n.sessionId ?? n.id;
+  if (!s) throw new Error("Weaver backend did not return an agent session.");
+  return s;
 }
-function Ie(e) {
-  const t = Se(e.kind), r = Ce(e, t), n = r.sourceId || e.referenceId || "";
+function We(e) {
+  const t = Ee(e.kind), n = $e(e, t), s = n.sourceId || e.referenceId || "";
   return {
-    id: e.id ?? `${t}:${n || e.scope || "context"}`,
+    id: e.id ?? `${t}:${s || e.scope || "context"}`,
     kind: t,
-    displayName: T(t),
+    displayName: D(t),
     sensitivity: "public",
-    summary: n || e.scope || t,
-    references: r,
+    summary: s || e.scope || t,
+    references: n,
     metadata: e.metadata ?? {}
   };
 }
-function Se(e) {
+function Ee(e) {
   const t = e.trim().toLowerCase();
   return {
     "workflow-definition": "workflow.definition",
@@ -223,61 +223,61 @@ function Se(e) {
     "studio-context": "studio.context"
   }[t] ?? t;
 }
-function Ce(e, t) {
-  const r = e.metadata ?? {}, n = {
+function $e(e, t) {
+  const n = e.metadata ?? {}, s = {
     source: t.startsWith("workflow.") ? "workflow" : t,
-    sourceId: e.referenceId ?? f(r, "artifactId") ?? f(r, "definitionId") ?? f(r, "id") ?? "",
+    sourceId: e.referenceId ?? f(n, "artifactId") ?? f(n, "definitionId") ?? f(n, "id") ?? "",
     scope: e.scope ?? ""
   };
-  return A(n, "workflowDefinitionId", f(r, "workflowDefinitionId") ?? f(r, "definitionId")), A(n, "workflowVersionId", f(r, "workflowVersionId") ?? f(r, "definitionVersionId") ?? f(r, "sourceId")), A(n, "artifactId", f(r, "artifactId")), A(n, "workflowExecutionId", f(r, "workflowExecutionId") ?? f(r, "instanceId")), A(n, "selectedActivityId", e.activityId ?? f(r, "selectedActivityId")), n;
+  return A(s, "workflowDefinitionId", f(n, "workflowDefinitionId") ?? f(n, "definitionId")), A(s, "workflowVersionId", f(n, "workflowVersionId") ?? f(n, "definitionVersionId") ?? f(n, "sourceId")), A(s, "artifactId", f(n, "artifactId")), A(s, "workflowExecutionId", f(n, "workflowExecutionId") ?? f(n, "instanceId")), A(s, "selectedActivityId", e.activityId ?? f(n, "selectedActivityId")), s;
 }
-function A(e, t, r) {
-  r?.trim() && (e[t] = r);
+function A(e, t, n) {
+  n?.trim() && (e[t] = n);
 }
 function f(e, t) {
-  const r = e[t];
-  return typeof r == "string" && r.trim() ? r : void 0;
+  const n = e[t];
+  return typeof n == "string" && n.trim() ? n : void 0;
 }
-function Ae(e) {
+function Ne(e) {
   if (!e || typeof e != "object") return null;
-  const t = e, r = R(t, "type") ?? R(t, "kind"), n = Re(r), o = Y(t, "error"), i = Y(t, "data"), l = j(t, "content") ?? j(i, "content") ?? j(o, "message") ?? "";
-  return n === "assistant.delta" ? z("assistant.delta", t, { content: l }) : n === "conversation.error" ? z("conversation.error", t, { content: l || "Weaver is unavailable for this request." }) : n === "conversation.completed" ? z("conversation.completed", t, {}) : n === "conversation.started" ? null : e;
+  const t = e, n = R(t, "type") ?? R(t, "kind"), s = Me(n), o = ee(t, "error"), i = ee(t, "data"), u = j(t, "content") ?? j(i, "content") ?? j(o, "message") ?? "";
+  return s === "assistant.delta" ? _("assistant.delta", t, { content: u }) : s === "conversation.error" ? _("conversation.error", t, { content: u || "Weaver is unavailable for this request." }) : s === "conversation.completed" ? _("conversation.completed", t, {}) : s === "conversation.started" ? null : e;
 }
-function z(e, t, r) {
+function _(e, t, n) {
   return {
     type: e,
     conversationId: j(t, "conversationId") ?? "",
     sequence: Number(R(t, "sequence") ?? 0),
     timestamp: j(t, "timestamp") ?? j(t, "createdAt") ?? (/* @__PURE__ */ new Date()).toISOString(),
-    data: r
+    data: n
   };
 }
-function Re(e) {
+function Me(e) {
   if (typeof e == "number")
     return ["conversation.started", "assistant.delta", "tool.approval", "proposal.created", "conversation.completed", "conversation.error"][e] ?? "";
   const t = String(e ?? "").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
   return t === "message-delta" ? "assistant.delta" : t === "completed" ? "conversation.completed" : t === "error" ? "conversation.error" : String(e ?? "");
 }
-function T(e) {
+function D(e) {
   return e.replace(/[-_.]+/g, " ").replace(/\b\w/g, (t) => t.toUpperCase());
 }
 function j(e, t) {
-  const r = R(e, t);
-  return typeof r == "string" ? r : void 0;
+  const n = R(e, t);
+  return typeof n == "string" ? n : void 0;
 }
-function Y(e, t) {
-  const r = R(e, t);
-  return r && typeof r == "object" ? r : void 0;
+function ee(e, t) {
+  const n = R(e, t);
+  return n && typeof n == "object" ? n : void 0;
 }
 function R(e, t) {
   if (!e) return;
   if (t in e) return e[t];
-  const r = t.toLowerCase(), n = Object.keys(e).find((o) => o.toLowerCase() === r);
-  return n ? e[n] : void 0;
+  const n = t.toLowerCase(), s = Object.keys(e).find((o) => o.toLowerCase() === n);
+  return s ? e[s] : void 0;
 }
-const E = /* @__PURE__ */ new Set(), J = [];
-let We = 0;
-function qe(e) {
+const N = /* @__PURE__ */ new Set(), H = [];
+let Pe = 0;
+function Je(e) {
   e.navigation.add({
     id: "weaver",
     label: "Weaver",
@@ -288,140 +288,154 @@ function qe(e) {
     id: "weaver-chat",
     path: "/weaver",
     label: "Weaver",
-    component: () => /* @__PURE__ */ s.jsx(Z, { api: e, variant: "route" })
+    component: () => /* @__PURE__ */ a.jsx(te, { api: e, variant: "route" })
   }), e.panels.add({
     id: "weaver-chat",
     title: "Weaver",
     order: 40,
-    component: () => /* @__PURE__ */ s.jsx(Z, { api: e, variant: "panel" })
+    component: () => /* @__PURE__ */ a.jsx(te, { api: e, variant: "panel" })
   }), e.ai.surfaces.add({
     id: "weaver-chat",
     title: "Weaver chat",
     placement: "panel",
     moduleId: "Elsa.Studio.Weaver.Chat"
-  }), e.ai.onPrompt((t) => Ne(t));
+  }), e.ai.onPrompt((t) => Le(t));
 }
-function Z({ api: e, variant: t }) {
-  const [r, n] = h("loading"), [o, i] = h(null), [l, v] = h([]), [x, m] = h([]), [u, b] = h([]), [I, k] = h(""), [w, y] = h(""), [K, ee] = h(null), [g, V] = h("idle"), [O, W] = h(""), te = S(() => e.ai.promptActions.list(), [e]), re = S(() => e.ai.contextProviders.list(), [e]), ne = S(() => e.ai.proposalRenderers.list(), [e]), se = S(() => e.ai.surfaces.list(), [e]), ae = S(
-    () => u.flatMap((a) => a.attachments ?? []).slice(0, 8),
-    [u]
-  ), M = ie(async () => {
-    n("loading"), W("");
+function te({ api: e, variant: t }) {
+  const [n, s] = m("loading"), [o, i] = m(null), [u, v] = m([]), [x, h] = m([]), [p, b] = m([]), [I, k] = m(""), [w, y] = m(""), [V, B] = m(null), [g, O] = m("idle"), [U, W] = m(""), q = Z(null), F = Z(!0), se = S(() => e.ai.promptActions.list(), [e]), ae = S(() => e.ai.contextProviders.list(), [e]), oe = S(() => e.ai.proposalRenderers.list(), [e]), ie = S(() => e.ai.surfaces.list(), [e]), ce = S(
+    () => p.flatMap((r) => r.attachments ?? []).slice(0, 8),
+    [p]
+  ), T = pe(async () => {
+    s("loading"), W("");
     try {
-      const a = await we(e.backend);
-      i(a), y((d) => d || a.agents[0]?.name || ""), n(a.streaming ? "ready" : "unavailable"), a.streaming && v(await ge(e.backend, w || a.agents[0]?.name));
-    } catch (a) {
-      i(null), v([]), n("unavailable"), W(a instanceof Error ? a.message : String(a));
+      const r = await ye(e.backend);
+      i(r), y((c) => c || r.agents[0]?.name || ""), s(r.streaming ? "ready" : "unavailable"), r.streaming && v(await je(e.backend, w || r.agents[0]?.name));
+    } catch (r) {
+      i(null), v([]), s("unavailable"), W(r instanceof Error ? r.message : String(r));
     }
   }, [e.backend, w]);
-  q(() => {
-    M();
-  }, [M]), q(() => {
-    const a = (d) => {
-      b((p) => [...p, d]), d.mode === "steer" && k(d.message);
+  E(() => {
+    T();
+  }, [T]), E(() => {
+    const r = (c) => {
+      b((l) => [...l, c]), c.mode === "steer" && k(c.message);
     };
-    if (E.add(a), J.length > 0) {
-      const d = J.splice(0);
-      for (const p of d)
-        a(p);
+    if (N.add(r), H.length > 0) {
+      const c = H.splice(0);
+      for (const l of c)
+        r(l);
     }
     return () => {
-      E.delete(a);
+      N.delete(r);
     };
-  }, []), q(() => {
-    if (r !== "ready" || g !== "idle") return;
-    const a = u.find((d) => d.mode !== "steer");
-    a && B(a);
-  }, [r, g, u]);
-  async function U(a) {
-    const d = a.message.trim();
-    if (!d || r !== "ready" || g === "streaming") return;
-    const p = D("assistant");
-    V("streaming"), W(""), k(""), m((c) => [
-      ...c,
-      { id: D("user"), role: "user", content: d },
-      { id: p, role: "assistant", content: "" }
+  }, []), E(() => {
+    if (n !== "ready" || g !== "idle") return;
+    const r = p.find((c) => c.mode !== "steer");
+    r && Y(r);
+  }, [n, g, p]), E(() => {
+    const r = q.current;
+    r && F.current && (r.scrollTop = r.scrollHeight);
+  }, [x]);
+  function de() {
+    const r = q.current;
+    r && (F.current = r.scrollHeight - r.scrollTop - r.clientHeight < 24);
+  }
+  async function Q(r) {
+    const c = r.message.trim();
+    if (!c || n !== "ready" || g === "streaming") return;
+    const l = $("assistant");
+    O("streaming"), W(""), k(""), h((d) => [
+      ...d,
+      { id: $("user"), role: "user", content: c },
+      { id: l, role: "assistant", content: "" }
     ]);
     try {
-      await xe(e.backend, {
-        conversationId: K,
-        message: d,
-        agent: a.agent ?? w,
-        attachments: a.attachments
-      }, (c) => {
-        c.conversationId && ee(c.conversationId), (c.type === "assistant.delta" && typeof c.data.content == "string" || c.type === "conversation.error" && typeof c.data.content == "string") && P(p, c.data.content);
+      await Ie(e.backend, {
+        conversationId: V,
+        message: c,
+        agent: r.agent ?? w,
+        attachments: r.attachments
+      }, (d) => {
+        d.conversationId && B(d.conversationId), (d.type === "assistant.delta" && typeof d.data.content == "string" || d.type === "conversation.error" && typeof d.data.content == "string") && L(l, d.data.content);
       });
-    } catch (c) {
-      W(c instanceof Error ? c.message : String(c)), P(p, "Weaver is unavailable for this request.");
+    } catch (d) {
+      W(d instanceof Error ? d.message : String(d)), L(l, "Weaver is unavailable for this request.");
     } finally {
-      V("idle");
+      O("idle");
     }
   }
-  function P(a, d) {
-    m((p) => p.map((c) => c.id === a ? { ...c, content: `${c.content}${d}` } : c));
+  function L(r, c) {
+    h((l) => l.map((d) => d.id === r ? { ...d, content: `${d.content}${c}` } : d));
   }
-  function B(a) {
-    b((d) => d.filter((p) => p.id !== a.id)), U(a);
+  function Y(r) {
+    b((c) => c.filter((l) => l.id !== r.id)), Q(r);
   }
-  function oe() {
-    U({ message: I, agent: w || null, mode: "enqueue" });
+  function le() {
+    Q({ message: I, agent: w || null, mode: "enqueue" });
   }
-  return /* @__PURE__ */ s.jsxs("section", { className: t === "panel" ? "weaver-surface panel" : "weaver-surface", children: [
-    /* @__PURE__ */ s.jsxs("div", { className: "weaver-header", children: [
-      /* @__PURE__ */ s.jsxs("div", { children: [
-        /* @__PURE__ */ s.jsx("h2", { children: "Weaver" }),
-        /* @__PURE__ */ s.jsx("p", { children: Me(r, o) })
+  function ue(r) {
+    if (r !== w && (y(r), V)) {
+      B(null);
+      const c = o?.agents.find((l) => l.name === r)?.displayName || r;
+      h((l) => l.length === 0 ? l : [...l, { id: $("system"), role: "system", content: `Switched to ${c}. Starting a new conversation.` }]);
+    }
+  }
+  return /* @__PURE__ */ a.jsxs("section", { className: t === "panel" ? "weaver-surface panel" : "weaver-surface", children: [
+    /* @__PURE__ */ a.jsxs("div", { className: "weaver-header", children: [
+      /* @__PURE__ */ a.jsxs("div", { children: [
+        /* @__PURE__ */ a.jsx("h2", { children: "Weaver" }),
+        /* @__PURE__ */ a.jsx("p", { children: ze(n, o) })
       ] }),
-      /* @__PURE__ */ s.jsx("button", { type: "button", className: "weaver-icon-button", "aria-label": "Refresh Weaver capabilities", title: "Refresh", onClick: () => {
-        M();
-      }, children: /* @__PURE__ */ s.jsx(he, { size: 15 }) })
+      /* @__PURE__ */ a.jsx("button", { type: "button", className: "weaver-icon-button", "aria-label": "Refresh Weaver capabilities", title: "Refresh", onClick: () => {
+        T();
+      }, children: /* @__PURE__ */ a.jsx(be, { size: 15 }) })
     ] }),
-    O ? /* @__PURE__ */ s.jsx("div", { className: "weaver-alert", children: O }) : null,
-    /* @__PURE__ */ s.jsxs("div", { className: "weaver-layout", children: [
-      /* @__PURE__ */ s.jsxs("aside", { className: "weaver-sidebar", children: [
-        /* @__PURE__ */ s.jsxs("label", { className: "weaver-field", children: [
-          /* @__PURE__ */ s.jsx("span", { children: "Agent" }),
-          /* @__PURE__ */ s.jsx("select", { value: w, onChange: (a) => y(a.target.value), disabled: r !== "ready", children: o?.agents.length ? o.agents.map((a) => /* @__PURE__ */ s.jsx("option", { value: a.name, children: a.displayName || a.name }, a.name)) : /* @__PURE__ */ s.jsx("option", { value: "", children: "No agent" }) })
+    U ? /* @__PURE__ */ a.jsx("div", { className: "weaver-alert", children: U }) : null,
+    /* @__PURE__ */ a.jsxs("div", { className: "weaver-layout", children: [
+      /* @__PURE__ */ a.jsxs("aside", { className: "weaver-sidebar", children: [
+        /* @__PURE__ */ a.jsxs("label", { className: "weaver-field", children: [
+          /* @__PURE__ */ a.jsx("span", { children: "Agent" }),
+          /* @__PURE__ */ a.jsx("select", { value: w, onChange: (r) => ue(r.target.value), disabled: n !== "ready" || g === "streaming", children: o?.agents.length ? o.agents.map((r) => /* @__PURE__ */ a.jsx("option", { value: r.name, children: r.displayName || r.name }, r.name)) : /* @__PURE__ */ a.jsx("option", { value: "", children: "No agent" }) })
         ] }),
-        /* @__PURE__ */ s.jsx(Ee, { attachments: ae }),
-        /* @__PURE__ */ s.jsx(
-          $e,
+        /* @__PURE__ */ a.jsx(qe, { attachments: ce }),
+        /* @__PURE__ */ a.jsx(
+          Te,
           {
-            promptActions: te.length,
-            contextProviders: re.length,
-            proposalRenderers: ne.length,
-            surfaces: se.length,
-            tools: l.length
+            promptActions: se.length,
+            contextProviders: ae.length,
+            proposalRenderers: oe.length,
+            surfaces: ie.length,
+            tools: u.length
           }
         )
       ] }),
-      /* @__PURE__ */ s.jsxs("main", { className: "weaver-chat", children: [
-        /* @__PURE__ */ s.jsx("div", { className: "weaver-messages", "aria-live": "polite", children: x.length === 0 ? /* @__PURE__ */ s.jsxs("div", { className: "weaver-empty", children: [
-          /* @__PURE__ */ s.jsx(fe, { size: 24 }),
-          /* @__PURE__ */ s.jsx("strong", { children: "Ask Weaver about the current Studio context." }),
-          /* @__PURE__ */ s.jsx("span", { children: "Workflow modules and third-party modules can attach resources, tools, and proposals when their Weaver features are enabled." })
-        ] }) : x.map((a) => /* @__PURE__ */ s.jsxs("article", { className: `weaver-message ${a.role}`, children: [
-          /* @__PURE__ */ s.jsx("span", { children: a.role === "user" ? "You" : "Weaver" }),
-          /* @__PURE__ */ s.jsx("p", { children: a.content || (g === "streaming" && a.role === "assistant" ? "Thinking..." : "") })
-        ] }, a.id)) }),
-        u.length > 0 ? /* @__PURE__ */ s.jsx("div", { className: "weaver-queue", "aria-label": "Queued Weaver prompts", children: u.map((a) => /* @__PURE__ */ s.jsxs("button", { type: "button", onClick: () => B(a), disabled: g === "streaming" || r !== "ready", children: [
-          /* @__PURE__ */ s.jsx(ve, { size: 13 }),
-          /* @__PURE__ */ s.jsx("span", { children: a.source?.label ?? a.message })
-        ] }, a.id)) }) : null,
-        /* @__PURE__ */ s.jsxs("div", { className: "weaver-composer", children: [
-          /* @__PURE__ */ s.jsx(
+      /* @__PURE__ */ a.jsxs("main", { className: "weaver-chat", children: [
+        /* @__PURE__ */ a.jsx("div", { className: "weaver-messages", "aria-live": "polite", ref: q, onScroll: de, children: x.length === 0 ? /* @__PURE__ */ a.jsxs("div", { className: "weaver-empty", children: [
+          /* @__PURE__ */ a.jsx(ge, { size: 24 }),
+          /* @__PURE__ */ a.jsx("strong", { children: "Ask Weaver about the current Studio context." }),
+          /* @__PURE__ */ a.jsx("span", { children: "Workflow modules and third-party modules can attach resources, tools, and proposals when their Weaver features are enabled." })
+        ] }) : x.map((r) => /* @__PURE__ */ a.jsxs("article", { className: `weaver-message ${r.role}`, children: [
+          /* @__PURE__ */ a.jsx("span", { children: r.role === "user" ? "You" : r.role === "system" ? "System" : "Weaver" }),
+          /* @__PURE__ */ a.jsx("p", { children: r.content || (g === "streaming" && r.role === "assistant" ? "Thinking..." : "") })
+        ] }, r.id)) }),
+        p.length > 0 ? /* @__PURE__ */ a.jsx("div", { className: "weaver-queue", "aria-label": "Queued Weaver prompts", children: p.map((r) => /* @__PURE__ */ a.jsxs("button", { type: "button", onClick: () => Y(r), disabled: g === "streaming" || n !== "ready", children: [
+          /* @__PURE__ */ a.jsx(xe, { size: 13 }),
+          /* @__PURE__ */ a.jsx("span", { children: r.source?.label ?? r.message })
+        ] }, r.id)) }) : null,
+        /* @__PURE__ */ a.jsxs("div", { className: "weaver-composer", children: [
+          /* @__PURE__ */ a.jsx(
             "textarea",
             {
               "aria-label": "Prompt Weaver",
-              placeholder: r === "ready" ? "Ask Weaver..." : "Weaver backend is unavailable",
+              placeholder: n === "ready" ? "Ask Weaver..." : "Weaver backend is unavailable",
               value: I,
-              onChange: (a) => k(a.target.value),
-              disabled: r !== "ready",
+              onChange: (r) => k(r.target.value),
+              disabled: n !== "ready",
               rows: t === "panel" ? 2 : 3
             }
           ),
-          /* @__PURE__ */ s.jsxs("button", { type: "button", onClick: oe, disabled: !I.trim() || r !== "ready" || g === "streaming", children: [
-            /* @__PURE__ */ s.jsx(me, { size: 15 }),
+          /* @__PURE__ */ a.jsxs("button", { type: "button", onClick: le, disabled: !I.trim() || n !== "ready" || g === "streaming", children: [
+            /* @__PURE__ */ a.jsx(ke, { size: 15 }),
             g === "streaming" ? "Streaming" : "Send"
           ] })
         ] })
@@ -429,58 +443,58 @@ function Z({ api: e, variant: t }) {
     ] })
   ] });
 }
-function Ee({ attachments: e }) {
-  return /* @__PURE__ */ s.jsxs("section", { className: "weaver-context-stack", children: [
-    /* @__PURE__ */ s.jsx("h3", { children: "Context stack" }),
-    e.length === 0 ? /* @__PURE__ */ s.jsx("p", { children: "No context attached." }) : e.map((t, r) => /* @__PURE__ */ s.jsxs("div", { className: "weaver-context-item", children: [
-      /* @__PURE__ */ s.jsx("strong", { children: t.kind }),
-      /* @__PURE__ */ s.jsx("span", { children: t.referenceId ?? t.scope ?? "current selection" })
-    ] }, `${t.kind}-${t.referenceId ?? r}`))
+function qe({ attachments: e }) {
+  return /* @__PURE__ */ a.jsxs("section", { className: "weaver-context-stack", children: [
+    /* @__PURE__ */ a.jsx("h3", { children: "Context stack" }),
+    e.length === 0 ? /* @__PURE__ */ a.jsx("p", { children: "No context attached." }) : e.map((t, n) => /* @__PURE__ */ a.jsxs("div", { className: "weaver-context-item", children: [
+      /* @__PURE__ */ a.jsx("strong", { children: t.kind }),
+      /* @__PURE__ */ a.jsx("span", { children: t.referenceId ?? t.scope ?? "current selection" })
+    ] }, `${t.kind}-${t.referenceId ?? n}`))
   ] });
 }
-function $e({ promptActions: e, contextProviders: t, proposalRenderers: r, surfaces: n, tools: o }) {
-  return /* @__PURE__ */ s.jsxs("section", { className: "weaver-contributions", children: [
-    /* @__PURE__ */ s.jsx("h3", { children: "Enabled contributions" }),
-    /* @__PURE__ */ s.jsxs("span", { children: [
+function Te({ promptActions: e, contextProviders: t, proposalRenderers: n, surfaces: s, tools: o }) {
+  return /* @__PURE__ */ a.jsxs("section", { className: "weaver-contributions", children: [
+    /* @__PURE__ */ a.jsx("h3", { children: "Enabled contributions" }),
+    /* @__PURE__ */ a.jsxs("span", { children: [
       e,
       " prompt actions"
     ] }),
-    /* @__PURE__ */ s.jsxs("span", { children: [
+    /* @__PURE__ */ a.jsxs("span", { children: [
       t,
       " context providers"
     ] }),
-    /* @__PURE__ */ s.jsxs("span", { children: [
-      r,
+    /* @__PURE__ */ a.jsxs("span", { children: [
+      n,
       " proposal renderers"
     ] }),
-    /* @__PURE__ */ s.jsxs("span", { children: [
-      n,
+    /* @__PURE__ */ a.jsxs("span", { children: [
+      s,
       " surfaces"
     ] }),
-    /* @__PURE__ */ s.jsxs("span", { children: [
+    /* @__PURE__ */ a.jsxs("span", { children: [
       o,
       " backend tools"
     ] })
   ] });
 }
-function Ne(e) {
-  const t = { ...e, id: D("prompt") };
-  if (E.size === 0) {
-    J.push(t);
+function Le(e) {
+  const t = { ...e, id: $("prompt") };
+  if (N.size === 0) {
+    H.push(t);
     return;
   }
-  for (const r of E)
-    r(t);
+  for (const n of N)
+    n(t);
 }
-function Me(e, t) {
+function ze(e, t) {
   if (e === "loading") return "Checking backend AI capabilities.";
   if (e === "unavailable") return "Enable Elsa Server AI capabilities to use Weaver chat.";
-  const r = t?.conversationPersistence ? "durable sessions" : "ephemeral sessions", n = t?.proposalReview ? "proposal review" : "draft-only suggestions";
-  return `${t?.agents.length ?? 0} agent(s), ${r}, ${n}.`;
+  const n = t?.conversationPersistence ? "durable sessions" : "ephemeral sessions", s = t?.proposalReview ? "proposal review" : "draft-only suggestions";
+  return `${t?.agents.length ?? 0} agent(s), ${n}, ${s}.`;
 }
-function D(e) {
-  return `${e}-${Date.now()}-${++We}`;
+function $(e) {
+  return `${e}-${Date.now()}-${++Pe}`;
 }
 export {
-  qe as register
+  Je as register
 };
