@@ -26,6 +26,7 @@ public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
             .AddScoped<IScriptPreProcessor, WorkflowInputFunctionsPreProcessor>()
             .AddScoped<IScriptPreProcessor, WorkflowFunctionsPreProcessor>()
             .AddScoped<IScriptPreProcessor, VariableFunctionsPreProcessor>()
-            .AddScoped<IScriptPreProcessor, ActivityOutputFunctionsPreProcessor>();
+            .AddScoped<IScriptPreProcessor, ActivityOutputFunctionsPreProcessor>()
+            .AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
     }
 }

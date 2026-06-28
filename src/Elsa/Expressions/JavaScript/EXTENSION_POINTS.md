@@ -25,6 +25,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - `Elsa.Workflows.Runtime.JavaScript` — `WorkflowInputFunctionsPreProcessor` *(cross-domain)*
 - `Elsa.Workflows.Runtime.JavaScript` — `ActivityOutputFunctionsPreProcessor` *(cross-domain)*
 - `Elsa.Workflows.Runtime.JavaScript` — `WorkflowVariablesContextPreProcessor` *(cross-domain)*
+- `Elsa.Workflows.Runtime.JavaScript` — `MaterializationAccessorsPreProcessor` *(cross-domain — surfaces `variables`/`input`/`output` and `getVariable`/`getInput`/`getOutput`/`getOutputFrom` from `IMaterializationExpressionState` during activity-input materialization; no-op otherwise)*
 
 ### `IScriptPostProcessor` *(Core — `Elsa.Expressions.JavaScript.Core`)*
 - **Kind:** Contributor (receives execution context after the script has run and acts — push pattern).
