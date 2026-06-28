@@ -58,7 +58,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
             object? value;
             if (resolved.Source == RuntimeInputBindingSource.Expression)
-                value = await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken);
+                value = CoerceToType(await EvaluateExpressionAsync(resolved, type, node.ExecutableNodeId, inputName, resolutionContext, cancellationToken), type);
             else if (resolved.Value.HasValue)
                 value = JsonSerializer.Deserialize(resolved.Value.Value.GetRawText(), type);
             else
@@ -123,6 +123,24 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         {
             return expression.Expression;
         }
+    }
+
+    /// <summary>
+    /// Coerces an evaluated expression result to the input's declared <paramref name="type"/> when it
+    /// is a <see cref="JsonElement"/>. Scoped variable values round-trip through the container
+    /// execution's persisted snapshot as JSON, so a non-string variable (e.g. an <c>int</c>) assigned
+    /// by one activity and read by a sibling (or after resume) arrives here as a <see cref="JsonElement"/>;
+    /// without this it would reach the activity as a boxed element rather than the declared CLR type.
+    /// Non-<see cref="JsonElement"/> results (the usual literal/script case) are returned unchanged.
+    /// </summary>
+    private static object? CoerceToType(object? value, Type type)
+    {
+        if (value is not JsonElement element)
+            return value;
+
+        return element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? null
+            : JsonSerializer.Deserialize(element.GetRawText(), type);
     }
 
     private static RuntimeMaterializedActivityInput BuildInput(string nodeId, string inputName, Type type, object? value)
