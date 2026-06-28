@@ -70,7 +70,7 @@ internal static class ValidatorTestHelpers
     public static ScopedVariableAuthoringContract Authoring()
     {
         var resolver = Resolver();
-        return new(resolver, new ScopedVariablePicker(resolver), new DefaultActivityStructureService([new TestActivityStructureHandler()]));
+        return new(resolver, new ScopedVariablePicker(resolver));
     }
 
     public static ActivityNode Node(

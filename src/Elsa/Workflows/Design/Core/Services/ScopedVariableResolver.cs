@@ -23,9 +23,10 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
     {
         var workflowScope = new VisibleVariableScope(VariableReference.WorkflowScopeId, [.. workflowVariables]);
         var visibleScopesByNode = new Dictionary<string, IReadOnlyList<VisibleVariableScope>>(StringComparer.Ordinal);
+        var declaredByNode = new Dictionary<string, IReadOnlyList<VariableDefinition>>(StringComparer.Ordinal);
 
         if (root is null)
-            return new ScopedVariableVisibility(visibleScopesByNode);
+            return new ScopedVariableVisibility(visibleScopesByNode, declaredByNode);
 
         var stack = new Stack<(ActivityNode Node, int Depth, IReadOnlyList<VisibleVariableScope> VisibleScopes)>();
         stack.Push((root, 0, [workflowScope]));
@@ -41,6 +42,9 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
                 continue;
 
             var declared = structureService.ProjectScopedVariables(node);
+            if (declared.Count > 0)
+                declaredByNode[node.NodeId] = [.. declared];
+
             var childScopes = declared.Count > 0
                 ? new List<VisibleVariableScope> { new(node.NodeId, [.. declared]) }.Concat(visibleScopes).ToArray()
                 : visibleScopes;
@@ -49,7 +53,7 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
                 stack.Push((child, depth + 1, childScopes));
         }
 
-        return new ScopedVariableVisibility(visibleScopesByNode);
+        return new ScopedVariableVisibility(visibleScopesByNode, declaredByNode);
     }
 }
 
@@ -63,6 +67,12 @@ public sealed record VisibleVariableScope(string ScopeId, IReadOnlyList<Variable
 /// A variable visible from a node, with its declaring scope, for authoring pickers.
 /// </summary>
 public sealed record VisibleVariable(string ScopeId, bool IsWorkflowScope, VariableDefinition Variable);
+
+/// <summary>
+/// A non-blocking warning that a container scope declares a variable name that shadows a visible
+/// ancestor declaration of the same name (ADR 0027). Advisory only — shadowing is allowed.
+/// </summary>
+public sealed record ScopedVariableShadowingWarning(string ScopeId, string ShadowedScopeId, string Name, string ReferenceKey);
 
 /// <summary>
 /// Backend picker contract (ADR 0027): resolves the variables visible from a selected activity so
@@ -91,7 +101,9 @@ public sealed class ScopedVariablePicker(ScopedVariableResolver scopedVariableRe
 /// <summary>
 /// Per-node scoped-variable visibility produced by <see cref="ScopedVariableResolver"/>.
 /// </summary>
-public sealed class ScopedVariableVisibility(IReadOnlyDictionary<string, IReadOnlyList<VisibleVariableScope>> visibleScopesByNode)
+public sealed class ScopedVariableVisibility(
+    IReadOnlyDictionary<string, IReadOnlyList<VisibleVariableScope>> visibleScopesByNode,
+    IReadOnlyDictionary<string, IReadOnlyList<VariableDefinition>> declaredByNode)
 {
     /// <summary>
     /// Returns the ordered visible scopes for <paramref name="nodeId"/> (nearest container first,
@@ -99,6 +111,32 @@ public sealed class ScopedVariableVisibility(IReadOnlyDictionary<string, IReadOn
     /// </summary>
     public IReadOnlyList<VisibleVariableScope> GetVisibleScopes(string nodeId) =>
         visibleScopesByNode.TryGetValue(nodeId, out var scopes) ? scopes : [];
+
+    /// <summary>
+    /// Returns non-blocking warnings for container scopes whose declared variable names shadow a
+    /// visible ancestor declaration of the same name. Computed from this visibility's single
+    /// traversal — callers do not re-walk the tree. Shadowing is allowed; these are advisory only.
+    /// </summary>
+    public IReadOnlyList<ScopedVariableShadowingWarning> GetShadowingWarnings()
+    {
+        var warnings = new List<ScopedVariableShadowingWarning>();
+
+        foreach (var (nodeId, declared) in declaredByNode)
+        {
+            var ancestorScopes = GetVisibleScopes(nodeId);
+
+            foreach (var variable in declared)
+            {
+                var shadowedScope = ancestorScopes.FirstOrDefault(scope =>
+                    scope.Variables.Any(ancestor => StringComparer.Ordinal.Equals(ancestor.Name, variable.Name)));
+
+                if (shadowedScope is not null)
+                    warnings.Add(new ScopedVariableShadowingWarning(nodeId, shadowedScope.ScopeId, variable.Name, variable.ReferenceKey));
+            }
+        }
+
+        return warnings;
+    }
 
     /// <summary>
     /// Returns the variables visible from <paramref name="nodeId"/> in nearest-scope-first order,

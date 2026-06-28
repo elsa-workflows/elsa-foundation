@@ -77,6 +77,9 @@ public sealed class VariableScope
     /// <summary>
     /// Resolves a structured reference to its declared variable: walks outward to the scope whose
     /// identity matches the reference's declaring scope, then looks the variable up by reference key.
+    /// This resolves the variable <em>declaration</em> (metadata) regardless of completion; live
+    /// value access via <see cref="TryGetValue"/>/<see cref="TrySetValue"/> additionally rejects
+    /// completed scopes.
     /// </summary>
     public bool TryResolve(VariableReference reference, out IVariable? variable)
     {

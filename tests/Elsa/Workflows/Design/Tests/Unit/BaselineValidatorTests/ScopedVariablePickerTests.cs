@@ -39,6 +39,19 @@ public sealed class ScopedVariablePickerTests
     }
 
     [Fact]
+    public void Picker_truncates_beyond_max_recursion_depth()
+    {
+        // grandchild sits below maxDepth=1, so the resolver never records its visible scopes and the
+        // picker returns nothing rather than walking unbounded into malformed/deep trees.
+        var grandchild = Node("grandchild");
+        var child = Node("child", childActivities: [grandchild], containerVariables: [Variable("var-c", "Local")]);
+        var container = Node("container", childActivities: [child], containerVariables: [Variable("var-o", "Outer")]);
+        var state = State(activities: [container], variables: [Variable("var-wf", "WorkflowVar")]);
+
+        Assert.Empty(Picker().GetVisibleVariables(state, "grandchild", maxDepth: 1));
+    }
+
+    [Fact]
     public void Structure_service_reports_container_capability()
     {
         var structureService = StructureService();

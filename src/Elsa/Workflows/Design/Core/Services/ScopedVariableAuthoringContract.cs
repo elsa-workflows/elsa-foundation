@@ -1,4 +1,3 @@
-using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Services;
@@ -15,8 +14,7 @@ namespace Elsa.Workflows.Design.Core.Services;
 /// </summary>
 public sealed class ScopedVariableAuthoringContract(
     ScopedVariableResolver scopedVariableResolver,
-    ScopedVariablePicker scopedVariablePicker,
-    IActivityStructureService structureService)
+    ScopedVariablePicker scopedVariablePicker)
 {
     /// <summary>
     /// Returns the variables visible from <paramref name="nodeId"/>, nearest-scope first, as a
@@ -37,55 +35,15 @@ public sealed class ScopedVariableAuthoringContract(
     /// <summary>
     /// Returns non-blocking warnings for container scopes whose declared variable names shadow a
     /// visible ancestor declaration. Shadowing is intentional and allowed — these are advisory only,
-    /// never validation errors.
+    /// never validation errors. Delegates to the resolver's single traversal (no re-walk).
     /// </summary>
     public IReadOnlyList<ScopedVariableShadowingWarning> GetShadowingWarnings(WorkflowDefinitionState state, int maxDepth = ScopedVariablePicker.DefaultMaxDepth)
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        var visibility = scopedVariableResolver.Resolve(state.Variables, state.RootActivity, maxDepth);
-        var warnings = new List<ScopedVariableShadowingWarning>();
-
-        foreach (var node in Walk(state.RootActivity, maxDepth))
-        {
-            var declared = structureService.ProjectScopedVariables(node);
-            if (declared.Count == 0)
-                continue;
-
-            var ancestorScopes = visibility.GetVisibleScopes(node.NodeId);
-
-            foreach (var variable in declared)
-            {
-                var shadowedScope = ancestorScopes.FirstOrDefault(scope =>
-                    scope.Variables.Any(ancestor => StringComparer.Ordinal.Equals(ancestor.Name, variable.Name)));
-
-                if (shadowedScope is not null)
-                    warnings.Add(new ScopedVariableShadowingWarning(node.NodeId, shadowedScope.ScopeId, variable.Name, variable.ReferenceKey));
-            }
-        }
-
-        return warnings;
-    }
-
-    private IEnumerable<ActivityNode> Walk(ActivityNode? root, int maxDepth)
-    {
-        if (root is null)
-            yield break;
-
-        var stack = new Stack<(ActivityNode Node, int Depth)>();
-        stack.Push((root, 0));
-
-        while (stack.Count > 0)
-        {
-            var (node, depth) = stack.Pop();
-            yield return node;
-
-            if (depth >= maxDepth)
-                continue;
-
-            foreach (var child in structureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
-                stack.Push((child, depth + 1));
-        }
+        return scopedVariableResolver
+            .Resolve(state.Variables, state.RootActivity, maxDepth)
+            .GetShadowingWarnings();
     }
 }
 
@@ -93,9 +51,3 @@ public sealed class ScopedVariableAuthoringContract(
 /// A variable visible from a selected activity, in serializable form for the authoring picker.
 /// </summary>
 public sealed record VisibleVariableView(string ReferenceKey, string Name, string ScopeId, bool IsWorkflowScope);
-
-/// <summary>
-/// A non-blocking warning that a container scope declares a variable name that shadows a visible
-/// ancestor declaration of the same name (ADR 0027). Advisory only — shadowing is allowed.
-/// </summary>
-public sealed record ScopedVariableShadowingWarning(string ScopeId, string ShadowedScopeId, string Name, string ReferenceKey);
