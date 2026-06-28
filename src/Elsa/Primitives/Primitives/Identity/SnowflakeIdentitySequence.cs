@@ -29,7 +29,7 @@ public sealed class SnowflakeIdentitySequence
     public SnowflakeIdentitySequence(SnowflakeIdentityGeneratorOptions options)
     {
         if (options.WorkerId is < 0 or > MaxWorkerId)
-            throw new ArgumentOutOfRangeException(nameof(options), options.WorkerId, $"WorkerId must be between 0 and {MaxWorkerId}.");
+            throw new ArgumentOutOfRangeException(nameof(options.WorkerId), options.WorkerId, $"WorkerId must be between 0 and {MaxWorkerId}.");
 
         _workerId = options.WorkerId;
         _epochMs = options.Epoch.ToUnixTimeMilliseconds();
