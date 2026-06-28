@@ -8,6 +8,5 @@ public static class WeaverStudioCapabilities
     public const string AiProposalRenderers = "ai-proposal-renderers";
     public const string AiSurfaces = "ai-surfaces";
     public const string AiTools = "ai-tools";
-    public const string WeaverChat = "weaver-chat";
     public const string WeaverWorkflows = "weaver-workflows";
 }

@@ -8,7 +8,6 @@ using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Workflows;
 using Elsa.Studio.Samples.Dashboard;
-using Elsa.Studio.Weaver.Chat;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Web;
 using Nuplane;
@@ -47,7 +46,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
             typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,
             typeof(FeatureManagementStudioFeature).Assembly,
-            typeof(WeaverChatStudioFeature).Assembly,
             typeof(WeaverWorkflowsStudioFeature).Assembly,
             typeof(WorkflowsStudioFeature).Assembly,
             typeof(DashboardStudioFeature).Assembly)

@@ -86,8 +86,6 @@ importers:
 
   src/Elsa.Studio.Secrets/Client: {}
 
-  src/Elsa.Studio.Weaver.Chat/Client: {}
-
   src/Elsa.Studio.Weaver.Workflows/Client: {}
 
   src/Elsa.Studio.Web/Client:

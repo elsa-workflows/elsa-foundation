@@ -94,6 +94,9 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   // Bumped whenever a turn starts or is stopped, so an in-flight startTurn can detect that it was
   // superseded/cancelled during one of its awaits and bail out before re-subscribing a stream.
   const turnGenerationRef = useRef(0);
+  // Set when Stop is pressed after the stream is open but before 'turn-started' reveals the turn id.
+  // The stream is kept open just long enough to learn the id and cancel the turn server-side.
+  const stopRequestedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(null);
   const streamRef = useRef<AgentStreamSubscription | null>(null);
   const pendingProposalIdsRef = useRef(new Set<string>());
@@ -145,6 +148,23 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   }, [agentClient, api.host.hostVersion, api.host.sdkVersion, mode, surface]);
 
   const handleStreamEvent = useCallback((event: AgentStreamEvent) => {
+    if (stopRequestedRef.current) {
+      // Stopped before we knew the turn id: cancel the turn as soon as it identifies itself,
+      // tear down on any terminal event, and drop everything else so no content keeps streaming.
+      if (event.type === "turn-started") {
+        stopRequestedRef.current = false;
+        turnIdRef.current = event.turnId;
+        if (sessionIdRef.current) void agentClient.cancelTurn(sessionIdRef.current, event.turnId).catch(() => undefined);
+        streamRef.current?.close();
+        streamRef.current = null;
+      } else if (event.type === "message-completed" || event.type === "turn-cancelled" || event.type === "error") {
+        stopRequestedRef.current = false;
+        streamRef.current?.close();
+        streamRef.current = null;
+      }
+      return;
+    }
+
     switch (event.type) {
       case "turn-started":
         turnIdRef.current = event.turnId;
@@ -208,7 +228,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProvider]);
+  }, [activeProvider, agentClient]);
 
   function finishTurn() {
     setChatState("idle");
@@ -218,6 +238,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   const startTurn = useCallback(async (message: string) => {
     const generation = ++turnGenerationRef.current;
+    stopRequestedRef.current = false;
     setChatState("streaming");
     setError(null);
     setTimeline([]);
@@ -273,10 +294,21 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const stop = useCallback(() => {
     // Invalidate any startTurn still awaiting so it can't re-subscribe a stream after we cancel.
     turnGenerationRef.current++;
-    streamRef.current?.close();
-    streamRef.current = null;
+    const sessionId = sessionIdRef.current;
     const turnId = turnIdRef.current;
-    if (sessionIdRef.current && turnId) void agentClient.cancelTurn(sessionIdRef.current, turnId).catch(() => undefined);
+    if (sessionId && turnId) {
+      void agentClient.cancelTurn(sessionId, turnId).catch(() => undefined);
+      streamRef.current?.close();
+      streamRef.current = null;
+    } else if (sessionId && streamRef.current) {
+      // The stream is open but 'turn-started' hasn't arrived yet, so we don't know the turn id.
+      // Keep listening until it does (handleStreamEvent cancels + tears down) instead of closing
+      // blind and leaving the backend turn running.
+      stopRequestedRef.current = true;
+    } else {
+      streamRef.current?.close();
+      streamRef.current = null;
+    }
     setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
     finishTurn();
   }, [agentClient]);

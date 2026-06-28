@@ -11,7 +11,6 @@ using Elsa.Studio.ExpressionEditors.Liquid;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Samples.WeatherForecast;
-using Elsa.Studio.Weaver.Chat;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +38,6 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.Dashboard");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
-        Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Contains(response.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
     }
@@ -50,14 +48,6 @@ public sealed class StudioModuleManifestProviderTests
         var provider = CreateProvider();
 
         var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
-
-        var chat = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
-        Assert.Equal("Weaver chat", chat.DisplayName);
-        Assert.Equal("WeaverChatStudio", chat.ShellFeatureName);
-        Assert.StartsWith("/_content/Elsa.Studio.Weaver.Chat/studio/modules/weaver-chat/module.js", chat.Entry, StringComparison.Ordinal);
-        Assert.Contains("weaver-chat", chat.Capabilities);
-        Assert.Contains("ai-capabilities", chat.Capabilities);
-        Assert.Contains("ai-surfaces", chat.Capabilities);
 
         var workflows = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Workflows");
         Assert.Equal("Weaver workflows", workflows.DisplayName);
@@ -246,10 +236,6 @@ public sealed class StudioModuleManifestProviderTests
         Assert.Contains(response.Diagnostics, x =>
             x.ModuleId == "Elsa.Studio.Samples.WeatherForecast" &&
             x.Status == StudioModuleDiagnosticStatuses.Disabled);
-        Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Weaver.Chat");
-        Assert.Contains(response.Diagnostics, x =>
-            x.ModuleId == "Elsa.Studio.Weaver.Chat" &&
-            x.Status == StudioModuleDiagnosticStatuses.Disabled);
     }
 
     [Fact]
@@ -306,7 +292,6 @@ public sealed class StudioModuleManifestProviderTests
         services.AddJavaScriptExpressionEditorStudio();
         services.AddLiquidExpressionEditorStudio();
         services.AddFeatureManagementStudio();
-        services.AddWeaverChatStudio();
         services.AddWeaverWorkflowsStudio();
         services.AddWorkflowsStudio();
         services.AddDashboardStudioSample();

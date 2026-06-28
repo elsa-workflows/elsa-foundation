@@ -186,7 +186,6 @@ public sealed class StudioModuleManifestProvider(
             "ai-proposal-renderers" => "AI proposal renderers",
             "ai-surfaces" => "AI surfaces",
             "ai-tools" => "AI tools",
-            "weaver-chat" => "Weaver chat",
             "weaver-workflows" => "Weaver workflows",
             _ => string.Join(' ', capability.Split('-', StringSplitOptions.RemoveEmptyEntries)
                 .Select(part => char.ToUpperInvariant(part[0]) + part[1..]))

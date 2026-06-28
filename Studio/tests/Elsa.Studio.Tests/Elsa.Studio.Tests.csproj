@@ -22,7 +22,6 @@
     <ProjectReference Include="..\..\src\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
-    <ProjectReference Include="..\..\src\Elsa.Studio.Weaver.Chat\Elsa.Studio.Weaver.Chat.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\src\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />

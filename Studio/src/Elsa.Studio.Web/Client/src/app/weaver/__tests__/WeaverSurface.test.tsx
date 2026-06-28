@@ -67,6 +67,30 @@ describe("WeaverSurface", () => {
 
     unmount();
   });
+
+  it("cancels the turn server-side when stopped before the turn id is known", async () => {
+    const api = readyApi();
+    const client = readyClient();
+    let emit: ((event: AgentStreamEvent) => void) | undefined;
+    const subscribeStream = ((_ctx, _url, onEvent) => { emit = onEvent; return { close: () => {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+
+    const { container, unmount } = render(
+      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />
+    );
+
+    await flushPromises();
+    typeAndSend(container, "Add an activity");
+    await flushPromises();
+
+    // Stream is open but no turn-started yet: stop, then let the turn identify itself.
+    flushSync(() => container.querySelector<HTMLButtonElement>(".weaver-stop")?.click());
+    flushSync(() => emit?.({ type: "turn-started", turnId: "turn_9", maxSteps: 8 }));
+    await flushPromises();
+
+    expect(client.cancelTurn).toHaveBeenCalledWith("agt_1", "turn_9");
+
+    unmount();
+  });
 });
 
 function typeAndSend(container: HTMLElement, value: string) {
@@ -112,7 +136,7 @@ function readyClient(): AgentClient {
     denyProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "denied" })),
     executeProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "executed" })),
     submitFeedback: vi.fn(),
-    cancelTurn: vi.fn()
+    cancelTurn: vi.fn(async () => {})
   };
 }
 
