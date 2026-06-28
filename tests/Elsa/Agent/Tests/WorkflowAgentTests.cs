@@ -74,7 +74,7 @@ public sealed class WorkflowAgentTests
     {
         var provider = new DeterministicWorkflowAgentProvider();
 
-        var events = await CollectAsync(provider.SendMessageAsync(new(
+        var events = await CollectAsync(provider.ContinueTurnAsync(AgentTurnContext.ForMessage(
             "session-1",
             "Create workflow graph operation batch to add activity.",
             [CreateWorkflowContext()])));
@@ -98,12 +98,12 @@ public sealed class WorkflowAgentTests
     {
         var provider = new DeterministicWorkflowAgentProvider();
 
-        var messageEvents = await CollectAsync(provider.SendMessageAsync(new("session-1", "Explain this workflow.", [])));
+        var messageEvents = await CollectAsync(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("session-1", "Explain this workflow.", [])));
         var messageDelta = Assert.Single(messageEvents, x => x.Kind == AgentStreamEventKind.MessageDelta);
         Assert.Equal(AgentResultKind.Message, messageDelta.ResultKind);
         Assert.DoesNotContain(messageEvents, x => x.ResultKind == AgentResultKind.WorkflowGraphOperationBatch);
 
-        var errorEvents = await CollectAsync(provider.SendMessageAsync(new("session-1", "Force error.", [])));
+        var errorEvents = await CollectAsync(provider.ContinueTurnAsync(AgentTurnContext.ForMessage("session-1", "Force error.", [])));
         var error = Assert.Single(errorEvents, x => x.Kind == AgentStreamEventKind.Error);
         Assert.Equal(AgentResultKind.Error, error.ResultKind);
         Assert.Equal("agent.workflow.deterministic_error", error.Error?.Code);
@@ -115,7 +115,7 @@ public sealed class WorkflowAgentTests
     {
         var provider = new DeterministicWorkflowAgentProvider();
 
-        var events = await CollectAsync(provider.SendMessageAsync(new(
+        var events = await CollectAsync(provider.ContinueTurnAsync(AgentTurnContext.ForMessage(
             "session-1",
             "This workflow request is ambiguous; ask a question.",
             [CreateWorkflowContext()])));

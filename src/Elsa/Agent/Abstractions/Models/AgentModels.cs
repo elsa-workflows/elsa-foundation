@@ -80,7 +80,8 @@ public enum AgentAuditEventKind
     ProposalFailed,
     FeedbackReceived,
     ProviderDiagnostic,
-    WorkflowAuthoringInteraction
+    WorkflowAuthoringInteraction,
+    ToolInvoked
 }
 
 public enum AgentStreamEventKind
@@ -92,7 +93,15 @@ public enum AgentStreamEventKind
     Completed,
     Error,
     ClarificationRequested,
-    WorkflowGraphOperationBatchCreated
+    WorkflowGraphOperationBatchCreated,
+    StepStarted,
+    StepCompleted,
+    ToolCallRequested,
+    ToolCallStarted,
+    ToolCallCompleted,
+    PlanUpdated,
+    Progress,
+    TurnCancelled
 }
 
 public enum AgentResultKind
@@ -319,6 +328,30 @@ public sealed record AgentStreamEvent(
     DateTimeOffset CreatedAt,
     AgentResultKind? ResultKind = null,
     object? Payload = null);
+
+/// <summary>A single message in the running turn's history fed to the provider on each step.</summary>
+public sealed record AgentTurnMessage(AgentRole Role, string Content, string? ToolCallId = null, string? ToolName = null);
+
+/// <summary>The result of executing one tool, fed back to the provider on the next step.</summary>
+public sealed record AgentToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, object? Payload = null);
+
+/// <summary>Payload for <see cref="AgentStreamEventKind.ToolCallRequested"/>: the provider asks the orchestrator to run a tool.</summary>
+public sealed record AgentToolCallRequest(string ToolCallId, string ToolName, string Arguments, AgentRisk Risk, bool RequiresApproval);
+
+/// <summary>Payload for the turn-level <see cref="AgentStreamEventKind.Started"/> and <see cref="AgentStreamEventKind.TurnCancelled"/> events. Carries the turn id used to cancel the turn.</summary>
+public sealed record AgentTurnStarted(string TurnId, int MaxSteps);
+
+/// <summary>Payload for <see cref="AgentStreamEventKind.StepStarted"/> / <see cref="AgentStreamEventKind.StepCompleted"/>.</summary>
+public sealed record AgentStepInfo(int StepIndex, int MaxSteps);
+
+/// <summary>Payload for <see cref="AgentStreamEventKind.ToolCallStarted"/> / <see cref="AgentStreamEventKind.ToolCallCompleted"/>.</summary>
+public sealed record AgentToolCallOutcome(string ToolCallId, string ToolName, bool Succeeded, string Summary, object? Result = null);
+
+/// <summary>A single entry in the agent's working plan.</summary>
+public sealed record AgentPlanStep(string Id, string Title, string Status);
+
+/// <summary>Payload for <see cref="AgentStreamEventKind.PlanUpdated"/>.</summary>
+public sealed record AgentPlanUpdate(IReadOnlyCollection<AgentPlanStep> Steps);
 
 public sealed record AgentProviderToolApprovalRequest(
     string ProviderSessionId,

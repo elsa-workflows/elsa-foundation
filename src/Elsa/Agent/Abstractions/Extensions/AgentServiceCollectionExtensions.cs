@@ -20,7 +20,13 @@ public static class AgentServiceCollectionExtensions
         services.TryAddSingleton<IAgentAuditSink>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentAuditReader>(sp => sp.GetRequiredService<InMemoryAgentAuditStore>());
         services.TryAddSingleton<IAgentFeedbackService, InMemoryAgentFeedbackService>();
-        services.TryAddScoped<IAgentStreamingService, DefaultAgentStreamingService>();
+        // Scoped so tools may depend on per-request services without being captured by a singleton.
+        services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();
+        services.TryAddSingleton<IAgentTurnRegistry, AgentTurnRegistry>();
+        services.TryAddSingleton<IAgentTurnStateStore, InMemoryAgentTurnStateStore>();
+        services.TryAddSingleton(new AgentTurnOptions());
+        services.TryAddScoped<IAgentToolInvoker, DefaultAgentToolInvoker>();
+        services.TryAddScoped<IAgentStreamingService, DefaultAgentTurnOrchestrator>();
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();
 
         return services;
