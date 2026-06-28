@@ -27,6 +27,9 @@ namespace Elsa.Activities.Runtime.Tests;
 /// computed value. Before the fix the compiler rejected non-Literal inputs and the materializer could
 /// not evaluate expression bindings, so JavaScript/Liquid inputs never reached an activity.
 /// </summary>
+// Shares a collection with other Console.Out-capturing tests so xUnit does not run them in parallel
+// (Console.SetOut is process-global; concurrent capture would interleave output).
+[Collection("ConsoleCapture")]
 public sealed class WriteLineExpressionInputExecutionTests
 {
     private const string StringTypeName = "System.String";
