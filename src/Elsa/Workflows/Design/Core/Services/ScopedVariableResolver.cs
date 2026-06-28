@@ -60,6 +60,35 @@ public sealed class ScopedVariableResolver(IActivityStructureService structureSe
 public sealed record VisibleVariableScope(string ScopeId, IReadOnlyList<VariableDefinition> Variables);
 
 /// <summary>
+/// A variable visible from a node, with its declaring scope, for authoring pickers.
+/// </summary>
+public sealed record VisibleVariable(string ScopeId, bool IsWorkflowScope, VariableDefinition Variable);
+
+/// <summary>
+/// Backend picker contract (ADR 0027): resolves the variables visible from a selected activity so
+/// authoring surfaces (Studio) show only in-scope variables by default. Wraps
+/// <see cref="ScopedVariableResolver"/> over a workflow design state.
+/// </summary>
+public sealed class ScopedVariablePicker(ScopedVariableResolver scopedVariableResolver)
+{
+    public const int DefaultMaxDepth = 100;
+
+    /// <summary>
+    /// Returns the variables visible from <paramref name="nodeId"/> within
+    /// <paramref name="state"/>, nearest-scope first.
+    /// </summary>
+    public IReadOnlyList<VisibleVariable> GetVisibleVariables(WorkflowDefinitionState state, string nodeId, int maxDepth = DefaultMaxDepth)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentException.ThrowIfNullOrEmpty(nodeId);
+
+        return scopedVariableResolver
+            .Resolve(state.Variables, state.RootActivity, maxDepth)
+            .GetVisibleVariables(nodeId);
+    }
+}
+
+/// <summary>
 /// Per-node scoped-variable visibility produced by <see cref="ScopedVariableResolver"/>.
 /// </summary>
 public sealed class ScopedVariableVisibility(IReadOnlyDictionary<string, IReadOnlyList<VisibleVariableScope>> visibleScopesByNode)
@@ -70,6 +99,17 @@ public sealed class ScopedVariableVisibility(IReadOnlyDictionary<string, IReadOn
     /// </summary>
     public IReadOnlyList<VisibleVariableScope> GetVisibleScopes(string nodeId) =>
         visibleScopesByNode.TryGetValue(nodeId, out var scopes) ? scopes : [];
+
+    /// <summary>
+    /// Returns the variables visible from <paramref name="nodeId"/> in nearest-scope-first order,
+    /// for authoring pickers. Each entry carries its declaring scope so callers can present scope
+    /// context; nearest declarations precede outer ones (shadowing-aware presentation).
+    /// </summary>
+    public IReadOnlyList<VisibleVariable> GetVisibleVariables(string nodeId) =>
+        GetVisibleScopes(nodeId)
+            .SelectMany(scope => scope.Variables.Select(variable =>
+                new VisibleVariable(scope.ScopeId, StringComparer.Ordinal.Equals(scope.ScopeId, VariableReference.WorkflowScopeId), variable)))
+            .ToArray();
 
     /// <summary>
     /// True when <paramref name="reference"/> resolves to a variable that is visible from

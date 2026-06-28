@@ -13,6 +13,13 @@ public interface IActivityStructureHandler
 
     string SchemaVersion { get; }
 
+    /// <summary>
+    /// Whether this activity is a container scope that can own container-scoped variable
+    /// declarations (ADR 0027). Container activities (e.g. <c>Sequence</c>, <c>Flowchart</c>)
+    /// return <c>true</c>; ordinary activities use the default <c>false</c>.
+    /// </summary>
+    bool SupportsScopedVariables => false;
+
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);

@@ -60,6 +60,13 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public bool SupportsScopedVariables(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return TryGetHandler(activity.Structure, out var handler) && handler.SupportsScopedVariables;
+    }
+
     private bool TryGetHandler(ActivityNodeStructure? structure, out IActivityStructureHandler handler)
     {
         if (structure is not null && _handlers.TryGetValue(new StructureKey(structure.Kind, structure.SchemaVersion), out handler!))

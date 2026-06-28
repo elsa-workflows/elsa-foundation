@@ -16,4 +16,11 @@ public interface IActivityStructureService
     /// empty collection when the node has no structure handler or declares no container variables.
     /// </summary>
     IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity);
+
+    /// <summary>
+    /// Whether <paramref name="activity"/> is a container scope that can own container-scoped
+    /// variable declarations (ADR 0027). Used by authoring tooling to discover which activities can
+    /// declare container variables.
+    /// </summary>
+    bool SupportsScopedVariables(ActivityNode activity);
 }

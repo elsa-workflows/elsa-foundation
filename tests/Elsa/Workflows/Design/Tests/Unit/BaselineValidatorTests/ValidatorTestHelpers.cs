@@ -59,6 +59,11 @@ internal static class ValidatorTestHelpers
     public static ScopedVariableResolver Resolver() =>
         new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
 
+    public static ScopedVariablePicker Picker() => new(Resolver());
+
+    public static IActivityStructureService StructureService() =>
+        new DefaultActivityStructureService([new TestActivityStructureHandler()]);
+
     public static ActivityNode Node(
         string nodeId,
         string activityVersionId = "av-1",

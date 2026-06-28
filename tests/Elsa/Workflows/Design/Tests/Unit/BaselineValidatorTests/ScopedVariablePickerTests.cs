@@ -1,0 +1,51 @@
+using Xunit;
+using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTestHelpers;
+
+namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
+
+/// <summary>
+/// Backend picker contract for scoped variables (#208): given a selected activity, the picker
+/// surfaces only the variables visible from that activity's scope, nearest-scope first.
+/// </summary>
+public sealed class ScopedVariablePickerTests
+{
+    [Fact]
+    public void Picker_returns_workflow_and_visible_container_variables_for_a_descendant()
+    {
+        var child = Node("child");
+        var container = Node("container", childActivities: [child], containerVariables: [Variable("var-c", "Local")]);
+        var state = State(activities: [container], variables: [Variable("var-wf", "WorkflowVar")]);
+
+        var visible = Picker().GetVisibleVariables(state, "child");
+
+        // Nearest scope (container) first, then workflow scope.
+        Assert.Collection(visible,
+            v => { Assert.Equal("container", v.ScopeId); Assert.False(v.IsWorkflowScope); Assert.Equal("var-c", v.Variable.ReferenceKey); },
+            v => { Assert.True(v.IsWorkflowScope); Assert.Equal("var-wf", v.Variable.ReferenceKey); });
+    }
+
+    [Fact]
+    public void Picker_hides_container_variables_from_activities_outside_the_container()
+    {
+        var container = Node("container", childActivities: [Node("inner")], containerVariables: [Variable("var-c", "Local")]);
+        var outsider = Node("outsider");
+        var state = State(activities: [container, outsider], variables: [Variable("var-wf", "WorkflowVar")]);
+
+        var visible = Picker().GetVisibleVariables(state, "outsider");
+
+        var only = Assert.Single(visible);
+        Assert.True(only.IsWorkflowScope);
+        Assert.Equal("var-wf", only.Variable.ReferenceKey);
+    }
+
+    [Fact]
+    public void Structure_service_reports_container_capability()
+    {
+        var structureService = StructureService();
+        var container = Node("container", containerVariables: [Variable("var-c", "Local")]);
+        var plain = Node("plain");
+
+        Assert.True(structureService.SupportsScopedVariables(container));
+        Assert.False(structureService.SupportsScopedVariables(plain));
+    }
+}

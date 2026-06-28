@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Flowchart.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
@@ -14,6 +15,8 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => FlowchartActivity.StructureSchemaVersion;
 
+    public bool SupportsScopedVariables => true;
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);
@@ -25,7 +28,13 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         var current = ReadAuthoredStructure(activity);
         var slot = childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, FlowchartActivity.ActivitiesSlotName));
         var activities = slot?.Activities.ToArray() ?? [];
-        var updated = new FlowchartAuthoredStructure(activities, current.Connections, current.StartNodeId);
+        var updated = new FlowchartAuthoredStructure(
+            activities,
+            current.Connections,
+            current.StartNodeId,
+            current.NodeMetadata,
+            current.ConnectionMetadata,
+            current.Variables);
 
         return activity with
         {
@@ -39,13 +48,21 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authoredStructure = ReadAuthoredStructure(activity);
-        var executableStructure = new FlowchartStructure(authoredStructure.Connections, authoredStructure.StartNodeId);
+        var executableStructure = new FlowchartStructure(
+            authoredStructure.Connections,
+            authoredStructure.StartNodeId,
+            authoredStructure.NodeMetadata,
+            authoredStructure.ConnectionMetadata,
+            authoredStructure.Variables);
 
         return new ActivityNodeStructure(
             FlowchartActivity.StructureKind,
             FlowchartActivity.StructureSchemaVersion,
             JsonSerializer.SerializeToElement(executableStructure, SerializerOptions));
     }
+
+    public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
+        ReadAuthoredStructure(activity).Variables;
 
     private static FlowchartAuthoredStructure ReadAuthoredStructure(ActivityNode activity)
     {

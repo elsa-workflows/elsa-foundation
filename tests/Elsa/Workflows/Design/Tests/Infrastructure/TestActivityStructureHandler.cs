@@ -18,6 +18,8 @@ internal sealed class TestActivityStructureHandler : IActivityStructureHandler
 
     public string SchemaVersion => StructureSchemaVersion;
 
+    public bool SupportsScopedVariables => true;
+
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadStructure(activity);

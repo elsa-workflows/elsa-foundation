@@ -40,3 +40,8 @@ This module also exposes these activity-owned contracts:
 - `FlowchartStructure.StartNodeId` optional start-node selection
 - `FlowchartStructure.NodeMetadata` optional node policy metadata
 - `FlowchartStructure.ConnectionMetadata` optional connection policy metadata
+- `FlowchartStructure.Variables` optional container-scoped variable declarations (ADR 0027)
+
+## Cross-domain contributions
+
+- `FlowchartStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`) with `SupportsScopedVariables = true` and `ProjectScopedVariables` — a `Flowchart` is a container scope that can own container-scoped variables visible to its descendant activities, using the same generic scope semantics as `Sequence` (ADR 0027).
