@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext } from "../../../sdk";
 import { AgentContextChips } from "../AgentContextChips";
-import { AgentPanel } from "../AgentPanel";
 import type { AgentClient } from "../agentClient";
+import { WeaverSurface } from "../../weaver/WeaverSurface";
 
 describe("agent governance UI", () => {
   it("keeps Studio usable while showing policy-disabled assistant state", async () => {
@@ -15,12 +15,13 @@ describe("agent governance UI", () => {
       sdkVersion: "1.0.0",
       ...createEndpointContext("https://studio.example/")
     }, "https://foundation.example/");
-    const { container, unmount } = render(<AgentPanel api={api} surface={{ route: "/" }} client={disabledClient()} onClose={() => {}} />);
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={disabledClient()} onClose={() => {}} />);
 
-    await waitForText(container, "Weaver features are disabled or unavailable.");
+    await waitForText(container, "Weaver is unavailable.");
 
-    expect(container.textContent).toContain("Weaver features are disabled or unavailable.");
-    expect(container.querySelector("#studio-agent-composer")).toHaveProperty("disabled", true);
+    expect(container.textContent).toContain("Studio remains fully usable.");
+    const composer = container.querySelector<HTMLTextAreaElement>("textarea");
+    expect(composer?.disabled).toBe(true);
 
     unmount();
   });
@@ -49,6 +50,7 @@ function disabledClient(): AgentClient {
       providerStatus: "disabled",
       modes: [],
       capabilities: [],
+      providers: [],
       policy: { contextVisibility: true, requiresApprovalForMutations: true }
     })),
     createSession: vi.fn(),
@@ -56,7 +58,8 @@ function disabledClient(): AgentClient {
     approveProposal: vi.fn(),
     denyProposal: vi.fn(),
     executeProposal: vi.fn(),
-    submitFeedback: vi.fn()
+    submitFeedback: vi.fn(),
+    cancelTurn: vi.fn()
   };
 }
 

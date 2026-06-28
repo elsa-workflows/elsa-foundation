@@ -39,9 +39,11 @@ import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, AgentPanel, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
+import { AgentLauncher, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
+import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./agent/agent.css";
+import "./weaver/weaver.css";
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = "workspace" | "settings";
@@ -92,6 +94,7 @@ function AppContent() {
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
+  const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string } | null>(null);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -108,6 +111,15 @@ function AppContent() {
     window.addEventListener(ModulesChangedEventName, onModulesChanged);
     return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
   }, []);
+
+  // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
+  useEffect(() => {
+    if (!api) return;
+    return api.ai.onPrompt(prompt => {
+      setAssistantOpen(true);
+      setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message });
+    });
+  }, [api]);
 
   useEffect(() => {
     let disposed = false;
@@ -220,7 +232,7 @@ function AppContent() {
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <AgentPanel api={api!} surface={{ route: path }} onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} />
+        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} />
       ) : null}
     </>
   );
