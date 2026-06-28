@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using GitHub.Copilot;
 using GitHub.Copilot.Rpc;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.GitHubCopilot.Services;
@@ -77,6 +78,11 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
         config.Streaming = request.Streaming;
         config.AvailableTools = request.AvailableTools.ToList();
         config.ExcludedTools = request.ExcludedTools.ToList();
+        if (request.CustomTools is { Count: > 0 })
+        {
+            // Tools backed by an AIFunction are auto-invoked by the harness during the turn.
+            config.Tools = request.CustomTools.Cast<AIFunctionDeclaration>().ToList();
+        }
         config.OnPermissionRequest = (_, _) => Task.FromResult(PermissionDecision.Reject("Elsa requires workflow, file, package, runtime, and external-service mutations to be proposed through Elsa-owned approval flows."));
 
         if (!string.IsNullOrWhiteSpace(request.SystemMessage))
@@ -143,6 +149,12 @@ internal sealed class GitHubCopilotSdkSession(CopilotSession session) : IGitHubC
                 break;
             case AssistantMessageDeltaEvent delta:
                 writer.TryWrite(new(GitHubCopilotStreamEventKind.MessageDelta, delta.Data.DeltaContent));
+                break;
+            case ToolExecutionStartEvent start:
+                writer.TryWrite(new(GitHubCopilotStreamEventKind.ToolExecutionStarted, ToolCallId: start.Data.ToolCallId, ToolName: start.Data.ToolName));
+                break;
+            case ToolExecutionCompleteEvent complete:
+                writer.TryWrite(new(GitHubCopilotStreamEventKind.ToolExecutionCompleted, ToolCallId: complete.Data.ToolCallId, Success: complete.Data.Success, ErrorMessage: complete.Data.Error?.ToString()));
                 break;
             case SessionErrorEvent error:
                 writer.TryWrite(new(GitHubCopilotStreamEventKind.Error, ErrorCode: "agent.provider.github_copilot.sdk_error", ErrorMessage: error.Data.Message));

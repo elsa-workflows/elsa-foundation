@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot.Options;
 using Elsa.Agent.GitHubCopilot.Services;
 using Elsa.Agent.Workflows.Models;
@@ -17,7 +18,9 @@ public sealed class GitHubCopilotAgentProviderTests
 
     public GitHubCopilotAgentProviderTests()
     {
-        _provider = new(_factory, Options.Create(_options), NullLogger<GitHubCopilotAgentProvider>.Instance);
+        var audit = new InMemoryAgentAuditStore();
+        var invoker = new DefaultAgentToolInvoker(new DefaultAgentToolRegistry([]), new InMemoryAgentProposalService(new NoopAgentActionProposalExecutor(), audit), audit);
+        _provider = new(_factory, Options.Create(_options), invoker, NullLogger<GitHubCopilotAgentProvider>.Instance);
     }
 
     [Fact]

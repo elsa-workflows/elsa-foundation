@@ -2,8 +2,10 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot.Options;
 using Elsa.Agent.Workflows.Models;
 using Microsoft.Extensions.Logging;
@@ -14,7 +16,8 @@ namespace Elsa.Agent.GitHubCopilot.Services;
 public sealed class GitHubCopilotAgentProvider(
     IGitHubCopilotClientFactory clientFactory,
     IOptions<GitHubCopilotAgentOptions> options,
-    ILogger<GitHubCopilotAgentProvider> logger) : IAgentProvider
+    IAgentToolInvoker toolInvoker,
+    ILogger<GitHubCopilotAgentProvider> logger) : IAgentProvider, IAgentHarness
 {
     public const string Id = "github-copilot";
 
@@ -98,6 +101,140 @@ public sealed class GitHubCopilotAgentProvider(
         }
     }
 
+    // GitHub Copilot owns its own multi-step agent loop (tools, reasoning, plan, MCP, permissions). When the
+    // orchestrator sees this capability it delegates the whole turn here instead of driving the host step loop.
+    public AgentHarnessCapabilities Capabilities =>
+        AgentHarnessCapabilities.Tools
+        | AgentHarnessCapabilities.Reasoning
+        | AgentHarnessCapabilities.Usage
+        | AgentHarnessCapabilities.Plan
+        | AgentHarnessCapabilities.Mcp
+        | AgentHarnessCapabilities.Permissions;
+
+    public async IAsyncEnumerable<AgentStreamEvent> RunTurnAsync(AgentHarnessTurnRequest request, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var readiness = GetReadiness();
+        if (!readiness.Available)
+        {
+            yield return Error("agent.provider.github_copilot.unavailable", readiness.Status, 503);
+            yield break;
+        }
+
+        var message = new AgentProviderMessage(request.SessionId, request.LatestUserMessage?.Content ?? string.Empty, request.Context);
+
+        // Side-band channel so proposals raised when a mutating tool is auto-invoked surface in the live stream
+        // alongside the SDK's own tool-execution events.
+        var output = Channel.CreateUnbounded<AgentStreamEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        var toolContext = new AgentToolAIFunctionContext(
+            request.SessionId,
+            request.ActorId,
+            request.Context,
+            request.Policy,
+            toolInvoker,
+            proposal => output.Writer.TryWrite(new AgentStreamEvent(NewId(), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow, AgentResultKind.Proposal, proposal)));
+        var aiFunctions = AgentToolAIFunctions.CreateAll(request.Tools, toolContext);
+
+        await using var client = clientFactory.Create(BuildClientRequest(readiness));
+        IGitHubCopilotSession? session = null;
+        AgentStreamEvent? setupError = null;
+
+        try
+        {
+            await client.StartAsync(cancellationToken);
+            session = await client.ResumeSessionAsync(BuildSessionRequest(request.SessionId, aiFunctions), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to resume GitHub Copilot session {SessionId}; creating a new session.", request.SessionId);
+            try
+            {
+                session = await client.CreateSessionAsync(BuildSessionRequest(request.SessionId, aiFunctions), cancellationToken);
+            }
+            catch (Exception createEx) when (createEx is not OperationCanceledException)
+            {
+                setupError = Error("agent.provider.github_copilot.session_failed", NormalizeMessage(createEx), 503);
+            }
+        }
+
+        if (setupError is not null)
+        {
+            yield return setupError;
+            yield break;
+        }
+
+        if (session is null)
+        {
+            yield return Error("agent.provider.github_copilot.session_failed", "GitHub Copilot session could not be created.", 503);
+            yield break;
+        }
+
+        await using (session)
+        {
+            var toolNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            var pump = PumpTurnAsync(session, BuildPrompt(message), output.Writer, toolNames, cancellationToken);
+
+            await foreach (var item in output.Reader.ReadAllAsync(cancellationToken))
+                yield return item;
+
+            await pump;
+        }
+    }
+
+    private async Task PumpTurnAsync(IGitHubCopilotSession session, string prompt, ChannelWriter<AgentStreamEvent> writer, Dictionary<string, string> toolNames, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var raw in session.SendAsync(prompt, cancellationToken))
+            {
+                var mapped = MapHarnessEvent(raw, toolNames);
+                if (mapped is not null)
+                    writer.TryWrite(mapped);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation surfaces to the reader via the linked token; nothing more to emit.
+        }
+        catch (Exception ex)
+        {
+            writer.TryWrite(Error("agent.provider.github_copilot.turn_failed", NormalizeMessage(ex), 502));
+        }
+        finally
+        {
+            writer.TryComplete();
+        }
+    }
+
+    private static AgentStreamEvent? MapHarnessEvent(GitHubCopilotStreamEvent raw, Dictionary<string, string> toolNames)
+    {
+        switch (raw.Kind)
+        {
+            case GitHubCopilotStreamEventKind.MessageDelta:
+                return new(NewId(), AgentStreamEventKind.MessageDelta, raw.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message);
+            case GitHubCopilotStreamEventKind.ToolExecutionStarted:
+            {
+                var name = raw.ToolName ?? "tool";
+                if (!string.IsNullOrEmpty(raw.ToolCallId))
+                    toolNames[raw.ToolCallId] = name;
+                return new(NewId(), AgentStreamEventKind.ToolCallStarted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new AgentToolCallRequest(raw.ToolCallId ?? NewId(), name, string.Empty, AgentRisk.ReadOnly, false));
+            }
+            case GitHubCopilotStreamEventKind.ToolExecutionCompleted:
+            {
+                var name = raw.ToolCallId is not null && toolNames.TryGetValue(raw.ToolCallId, out var resolved) ? resolved : raw.ToolName ?? "tool";
+                var succeeded = raw.Success ?? string.IsNullOrEmpty(raw.ErrorMessage);
+                return new(NewId(), AgentStreamEventKind.ToolCallCompleted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new AgentToolCallOutcome(raw.ToolCallId ?? string.Empty, name, succeeded, succeeded ? "Tool completed." : raw.ErrorMessage ?? "Tool failed."));
+            }
+            case GitHubCopilotStreamEventKind.Error:
+                return Error(raw.ErrorCode ?? "agent.provider.github_copilot.sdk_error", raw.ErrorMessage ?? "GitHub Copilot stream failed.", 502);
+            default:
+                return null;
+        }
+    }
+
     public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
         => Task.FromResult(new AgentToolApprovalResult(false, MutationPolicyMessage));
 
@@ -141,7 +278,7 @@ public sealed class GitHubCopilotAgentProvider(
             BuildMetadata(readiness, models));
     }
 
-    private GitHubCopilotSessionRequest BuildSessionRequest(string sessionId)
+    private GitHubCopilotSessionRequest BuildSessionRequest(string sessionId, IReadOnlyCollection<Microsoft.Extensions.AI.AIFunction>? customTools = null)
     {
         var value = options.Value;
         return new(
@@ -151,7 +288,8 @@ public sealed class GitHubCopilotAgentProvider(
             value.Streaming,
             value.SystemMessage,
             value.AvailableTools.ToList(),
-            value.ExcludedTools.ToList());
+            value.ExcludedTools.ToList(),
+            customTools);
     }
 
     private GitHubCopilotClientRequest BuildClientRequest(ProviderReadiness readiness)
