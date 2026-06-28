@@ -20,6 +20,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Server;
 
@@ -312,12 +313,13 @@ internal static class ElsaWorkflowManagementApi
                     version.Definition = await definitionStore.GetAsync(version.DefinitionId, cancellationToken);
             }
 
+            var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ElsaWorkflowManagementApi));
             var response = versions
                 .Where(x => x.Definition is not null)
                 .OrderBy(x => x.Definition!.Category, StringComparer.Ordinal)
                 .ThenBy(x => x.Definition!.DisplayName, StringComparer.Ordinal)
                 .ThenBy(x => x.Id, StringComparer.Ordinal)
-                .Select(ToActivityDescriptorResponse)
+                .Select(v => ToActivityDescriptorResponse(v, logger))
                 .ToArray();
 
             return Results.Ok(new ActivityDescriptorsResponse(response));
@@ -541,7 +543,7 @@ internal static class ElsaWorkflowManagementApi
     private static bool IsSequenceActivity(string? activityTypeKey) =>
         activityTypeKey?.Contains(nameof(Sequence), StringComparison.Ordinal) == true;
 
-    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version)
+    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version, ILogger logger)
     {
         var definition = version.Definition!;
         var activityName = definition.ActivityTypeKey.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? definition.ActivityTypeKey;
@@ -554,7 +556,7 @@ internal static class ElsaWorkflowManagementApi
             definition.DisplayName ?? activityName,
             definition.Description,
             version.ExecutionType.ToString(),
-            version.Inputs.Select(ToInputDescriptorResponse).ToArray(),
+            version.Inputs.Select(input => ToInputDescriptorResponse(input, logger)).ToArray(),
             version.Outputs.Select(ToOutputDescriptorResponse).ToArray(),
             version.DesignFacets.SelectMany(ToPortDescriptorResponses).ToArray(),
             new Dictionary<string, object>(),
@@ -565,7 +567,7 @@ internal static class ElsaWorkflowManagementApi
             false);
     }
 
-    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input) =>
+    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input, ILogger logger) =>
         new(
             input.Name,
             GetTypeName(input.Type),
@@ -578,7 +580,7 @@ internal static class ElsaWorkflowManagementApi
             true,
             null,
             "Literal",
-            input.UISpecifications ?? GetUiSpecifications(input.Type),
+            input.UISpecifications ?? GetUiSpecifications(input.Type, logger),
             input.IsRequired);
 
     private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
@@ -644,7 +646,7 @@ internal static class ElsaWorkflowManagementApi
         return "singleline";
     }
 
-    private static IDictionary<string, object>? GetUiSpecifications(TypeInformation type)
+    private static IDictionary<string, object>? GetUiSpecifications(TypeInformation type, ILogger logger)
     {
         try
         {
@@ -657,8 +659,9 @@ internal static class ElsaWorkflowManagementApi
                 ["options"] = Enum.GetNames(loadedType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
             };
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "Could not load UI specifications for type {TypeName}.", type.TypeName);
             return null;
         }
     }
