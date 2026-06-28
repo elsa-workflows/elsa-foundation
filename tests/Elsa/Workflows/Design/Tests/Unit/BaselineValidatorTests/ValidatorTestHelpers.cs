@@ -64,6 +64,9 @@ internal static class ValidatorTestHelpers
     public static IActivityStructureService StructureService() =>
         new DefaultActivityStructureService([new TestActivityStructureHandler()]);
 
+    public static ScopedVariableReferenceRemapper Remapper() =>
+        new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
+
     public static ActivityNode Node(
         string nodeId,
         string activityVersionId = "av-1",
