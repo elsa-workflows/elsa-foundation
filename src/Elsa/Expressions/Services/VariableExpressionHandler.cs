@@ -12,8 +12,8 @@ public sealed class VariableExpressionHandler : IExpressionHandler
 
         // Container-scoped references resolve through the context's visible scope chain when present;
         // this honours nearest-scope visibility and shadowing (ADR 0027).
-        if (context is IScopedVariableProvider scopedProvider && scopedProvider.TryGetScopedVariable(reference, out var scopedVariable))
-            return new(scopedVariable?.Get(context));
+        if (context is IScopedVariableProvider scopedProvider && scopedProvider.TryGetScopedVariableValue(reference, out var scopedValue))
+            return new(scopedValue);
 
         if (!reference.IsWorkflowScope)
             return new ValueTask<object?>((object?)null);

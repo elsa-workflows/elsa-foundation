@@ -29,8 +29,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions` — 
 
 ### `IScopedVariableProvider` *(Core — `Elsa.Expressions.Core`)*
 - **Kind:** Optional capability implemented by an `IExpressionExecutionContext` (not DI-registered).
-- **Signature:** `bool TryGetScopedVariable(VariableReference reference, out IVariable? variable);`
-- **Purpose:** Lets `VariableExpressionHandler` resolve a structured `VariableReference` (reference key + declaring scope identity) through the context's visible scope chain — workflow scope plus visible ancestor container scopes — honouring nearest-scope visibility and shadowing (ADR 0027). Contexts that do not implement it fall back to workflow-scope name lookup, preserving prior behaviour. The reusable `VariableScope` chain (`Elsa.Expressions.Core.Models`) provides the resolution primitives.
+- **Signature:** `bool TryGetScopedVariableValue(VariableReference reference, out object? value);` and `bool TrySetScopedVariableValue(VariableReference reference, object? value);`
+- **Purpose:** Lets `VariableExpressionHandler` read (and authoring/runtime code assign) a structured `VariableReference` (reference key + declaring scope identity) through the context's visible scope chain — workflow scope plus visible ancestor container scopes — honouring nearest-scope visibility and shadowing, and rejecting assignment to sibling/unrelated scopes (ADR 0027). Contexts that do not implement it fall back to workflow-scope name lookup, preserving prior behaviour. The reusable `VariableScope` chain (`Elsa.Expressions.Core.Models`) provides the resolution, assignment, and sibling-sharing primitives.
 
 ---
 

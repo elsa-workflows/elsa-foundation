@@ -97,6 +97,47 @@ public sealed class ContainerScopedVariableEvaluatorTests
         Assert.Same(nearest, resolvedInner);
     }
 
+    [Fact]
+    public async Task Descendant_assignment_to_visible_container_variable_is_observed_by_a_later_read()
+    {
+        var scope = ContainerScope(("var-counter", "Counter", 0));
+        var context = new ScopedExpressionContext(scope);
+        var reference = new VariableReference("var-counter", SequenceScopeId);
+
+        Assert.True(context.TrySetScopedVariableValue(reference, 42));
+
+        var result = await Evaluator().EvaluateAsync<int>(
+            new TestExpression(WellKnownExpressionDescriptorTypes.Variable, reference), context);
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void Assignment_to_an_invisible_scope_is_rejected_by_the_runtime_guard()
+    {
+        var scope = ContainerScope(("var-counter", "Counter", 0));
+        var context = new ScopedExpressionContext(scope);
+
+        var assigned = context.TrySetScopedVariableValue(new VariableReference("var-counter", "sibling-container"), 99);
+
+        Assert.False(assigned);
+    }
+
+    [Fact]
+    public void Sibling_branches_in_one_container_execution_share_assigned_values()
+    {
+        // Two sibling branch activities resolve the same container scope instance, so an assignment
+        // made by one branch is observed by the other (the container owns the shared running state).
+        var container = ContainerScope(("var-shared", "Shared", "initial"));
+        var branchA = new ScopedExpressionContext(container);
+        var branchB = new ScopedExpressionContext(container);
+        var reference = new VariableReference("var-shared", SequenceScopeId);
+
+        Assert.True(branchA.TrySetScopedVariableValue(reference, "from-branch-a"));
+
+        Assert.True(branchB.TryGetScopedVariableValue(reference, out var observed));
+        Assert.Equal("from-branch-a", observed);
+    }
+
     private static VariableScope ContainerScope(params (string ReferenceKey, string Name, object? Value)[] containerVariables)
     {
         var workflowScope = new VariableScope(VariableReference.WorkflowScopeId, ByKey(("var-greeting", "Greeting", "hello")));
@@ -115,8 +156,11 @@ public sealed class ContainerScopedVariableEvaluatorTests
         public IExpressionExecutionContext? ParentContext { get; set; }
         public CancellationToken CancellationToken => CancellationToken.None;
 
-        public bool TryGetScopedVariable(VariableReference reference, out IVariable? variable) =>
-            scope.TryResolve(reference, out variable);
+        public bool TryGetScopedVariableValue(VariableReference reference, out object? value) =>
+            scope.TryGetValue(reference, out value);
+
+        public bool TrySetScopedVariableValue(VariableReference reference, object? value) =>
+            scope.TrySetValue(reference, value);
 
         public bool IsContainedWithinCompositeActivity() => false;
         public bool TryGetActivityInput(string key, out object? value) { value = null; return false; }

@@ -7,10 +7,17 @@ namespace Elsa.Expressions.Core.Models;
 /// its parent scope, up to the workflow scope, so that a descendant activity can resolve both
 /// structured references (by declaring scope identity + reference key) and bare names (nearest
 /// declaring scope wins, allowing intentional shadowing).
+///
+/// Each scope owns the current values of the variables it declares. Descendant activities read and
+/// assign visible ancestor variables through the chain, and because sibling branches of one
+/// container execution share the same <see cref="VariableScope"/> instance they observe each
+/// other's assignments. Values are ordinary in-memory runtime state, so assignment durability
+/// follows the normal runtime checkpoint boundary — there is no variable-specific persistence path.
 /// </summary>
 public sealed class VariableScope
 {
     private readonly IReadOnlyDictionary<string, IVariable> _variablesByReferenceKey;
+    private readonly Dictionary<string, object?> _values = new(StringComparer.Ordinal);
 
     public VariableScope(
         string scopeId,
@@ -32,27 +39,49 @@ public sealed class VariableScope
     public VariableScope? Parent { get; }
 
     /// <summary>
-    /// Resolves a structured reference: walks outward to the scope whose identity matches the
-    /// reference's declaring scope, then looks the variable up by reference key within that scope.
+    /// Resolves a structured reference to its declared variable: walks outward to the scope whose
+    /// identity matches the reference's declaring scope, then looks the variable up by reference key.
     /// </summary>
     public bool TryResolve(VariableReference reference, out IVariable? variable)
     {
-        ArgumentNullException.ThrowIfNull(reference);
+        variable = FindOwningScope(reference)?.Variable;
+        return variable is not null;
+    }
 
-        var targetScopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId;
-
-        for (var scope = this; scope is not null; scope = scope.Parent)
+    /// <summary>
+    /// Reads the current value of a visible variable: the assigned value if one has been set in its
+    /// owning scope, otherwise the variable's default. Returns <c>false</c> when the reference's
+    /// declaring scope is not visible from this scope.
+    /// </summary>
+    public bool TryGetValue(VariableReference reference, out object? value)
+    {
+        var owning = FindOwningScope(reference);
+        if (owning is null)
         {
-            if (StringComparer.Ordinal.Equals(scope.ScopeId, targetScopeId) &&
-                scope._variablesByReferenceKey.TryGetValue(reference.ReferenceKey, out var found))
-            {
-                variable = found;
-                return true;
-            }
+            value = null;
+            return false;
         }
 
-        variable = null;
-        return false;
+        value = owning.Value.Scope._values.TryGetValue(reference.ReferenceKey, out var stored)
+            ? stored
+            : owning.Value.Variable.DefaultValue;
+        return true;
+    }
+
+    /// <summary>
+    /// Assigns a value to a visible variable in its owning scope, so that sibling branches sharing
+    /// that scope observe the new value. Returns <c>false</c> when the reference's declaring scope is
+    /// not visible from this scope (e.g. a sibling or unrelated container) — the runtime guard that
+    /// keeps scope boundaries enforceable.
+    /// </summary>
+    public bool TrySetValue(VariableReference reference, object? value)
+    {
+        var owning = FindOwningScope(reference);
+        if (owning is null)
+            return false;
+
+        owning.Value.Scope._values[reference.ReferenceKey] = value;
+        return true;
     }
 
     /// <summary>
@@ -69,6 +98,24 @@ public sealed class VariableScope
             {
                 if (StringComparer.Ordinal.Equals(variable.Name, name))
                     return variable;
+            }
+        }
+
+        return null;
+    }
+
+    private (VariableScope Scope, IVariable Variable)? FindOwningScope(VariableReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        var targetScopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId;
+
+        for (var scope = this; scope is not null; scope = scope.Parent)
+        {
+            if (StringComparer.Ordinal.Equals(scope.ScopeId, targetScopeId) &&
+                scope._variablesByReferenceKey.TryGetValue(reference.ReferenceKey, out var variable))
+            {
+                return (scope, variable);
             }
         }
 

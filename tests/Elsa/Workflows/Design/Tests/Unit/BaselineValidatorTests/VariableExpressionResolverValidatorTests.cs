@@ -181,6 +181,35 @@ public sealed class VariableExpressionResolverValidatorTests
     }
 
     [Fact]
+    public async Task Descendant_assignment_to_visible_container_variable_emits_no_error()
+    {
+        // An assignment is a variable reference on an output; assigning a visible ancestor container
+        // variable is allowed (#209).
+        var child = Node("child", outputs: [VariableInput("result", new VariableReference("var-c", "container"))]);
+        var container = Node("container", childActivities: [child], containerVariables: [Variable("var-c", "Local")]);
+        var state = State(activities: [container], variables: []);
+
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker(), Resolver()), state);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public async Task Assignment_to_a_sibling_container_variable_emits_error()
+    {
+        // A child of container A cannot assign a variable declared by sibling container B (#209).
+        var childA = Node("child-a", outputs: [VariableInput("result", new VariableReference("var-b", "container-b"))]);
+        var containerA = Node("container-a", childActivities: [childA], containerVariables: [Variable("var-a", "A")]);
+        var containerB = Node("container-b", childActivities: [Node("child-b")], containerVariables: [Variable("var-b", "B")]);
+        var state = State(activities: [containerA, containerB], variables: []);
+
+        var errors = await Validate(new VariableExpressionResolverValidator(Options(), Walker(), Resolver()), state);
+
+        var error = Assert.Single(errors);
+        Assert.Equal("child-a/outputs/result", error.Path);
+    }
+
+    [Fact]
     public async Task Nested_containers_allow_shadowing_and_resolve_each_scope_explicitly()
     {
         // Outer and inner containers both declare the same reference key in their own scope.
