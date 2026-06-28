@@ -1,4 +1,5 @@
 export * from "./data-grid/DataGrid";
+export * from "./dialog/DialogHost";
 export * from "./feedback/FeedbackStates";
 export * from "./feedback/StatusChip";
 export * from "./forms/Field";

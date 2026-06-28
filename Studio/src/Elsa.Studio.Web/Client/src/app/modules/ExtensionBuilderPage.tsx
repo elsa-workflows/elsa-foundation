@@ -387,8 +387,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  const confirmDiscard = () =>
+    api.dialogs.confirm({ message: "Discard unsaved file changes?", confirmLabel: "Discard", tone: "danger" });
+
   async function openFile(workspaceId: string, path: string, options?: { force?: boolean }) {
-    if (!options?.force && editorDirty && !window.confirm("Discard unsaved file changes?")) return false;
+    if (!options?.force && editorDirty && !(await confirmDiscard())) return false;
     setError(null);
     try {
       const file = await readRepositoryFile(context, workspaceId, path);
@@ -431,20 +434,20 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
-  function handleSelectEditorTab(path: string) {
+  async function handleSelectEditorTab(path: string) {
     const tab = editorTabs.find(item => item.path === path);
     if (!tab) return;
-    if (editorDirty && activeFilePath !== path && !window.confirm("Discard unsaved file changes?")) return;
+    if (editorDirty && activeFilePath !== path && !(await confirmDiscard())) return;
     setActiveFilePath(tab.path);
     setEditorText(tab.content);
     setSavedEditorText(tab.savedContent);
     setLineHint(null);
   }
 
-  function handleCloseEditorTab(path: string) {
+  async function handleCloseEditorTab(path: string) {
     const tab = editorTabs.find(item => item.path === path);
     if (!tab) return;
-    if (tab.content !== tab.savedContent && !window.confirm("Discard unsaved file changes?")) return;
+    if (tab.content !== tab.savedContent && !(await confirmDiscard())) return;
     const remaining = editorTabs.filter(item => item.path !== path);
     setEditorTabs(remaining);
     if (activeFilePath === path) {
@@ -655,7 +658,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function handleDeleteFile(path: string) {
-    if (!selectedWorkspace || !window.confirm(`Delete ${path}?`)) return;
+    if (!selectedWorkspace) return;
+    if (!(await api.dialogs.confirm({ message: `Delete ${path}?`, confirmLabel: "Delete", tone: "danger" }))) return;
     const workspaceId = selectedWorkspace.id;
     const deleted = await runOperation(() => deleteRepositoryFile(context, workspaceId, path), `Deleted ${path}.`);
     if (!deleted || selectedIds.current.workspaceId !== workspaceId) return;
@@ -676,7 +680,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   async function handleRenameFile(path: string) {
     if (!selectedWorkspace) return;
-    const destinationPath = window.prompt("Rename file", path)?.trim();
+    const destinationPath = (await api.dialogs.prompt({ title: "Rename file", message: "Enter a new path for the file.", defaultValue: path, confirmLabel: "Rename" }))?.trim();
     if (!destinationPath || destinationPath === path) return;
     const workspaceId = selectedWorkspace.id;
     const moved = await runOperation(() => moveRepositoryFile(context, workspaceId, path, destinationPath), `Renamed ${path} to ${destinationPath}.`);
@@ -887,7 +891,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function handleRollback(version: string) {
-    if (!selectedWorkspace || !selectedProject || !window.confirm(`Roll back ${selectedProject.packageId} to ${version}?`)) return;
+    if (!selectedWorkspace || !selectedProject) return;
+    if (!(await api.dialogs.confirm({ message: `Roll back ${selectedProject.packageId} to ${version}?`, confirmLabel: "Roll back", tone: "danger" }))) return;
     const workspaceId = selectedWorkspace.id;
     const projectId = selectedProject.id;
     const requestId = ++runtimeStatusRequestId.current;
@@ -907,13 +912,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function handleDeleteProject() {
-    if (!selectedWorkspace || !selectedProject || !window.confirm(`Delete project ${selectedProject.name}?`)) return;
+    if (!selectedWorkspace || !selectedProject) return;
+    if (!(await api.dialogs.confirm({ message: `Delete project ${selectedProject.name}?`, confirmLabel: "Delete", tone: "danger" }))) return;
     const deleted = await runOperation(() => deleteProject(context, selectedWorkspace.id, selectedProject.id), `Deleted project ${selectedProject.name}.`);
     if (deleted) await refreshWorkspacesSafely({ preserveSelection: true });
   }
 
   async function handleDeleteWorkspace() {
-    if (!selectedWorkspace || !window.confirm(`Delete workspace ${selectedWorkspace.name}?`)) return;
+    if (!selectedWorkspace) return;
+    if (!(await api.dialogs.confirm({ message: `Delete workspace ${selectedWorkspace.name}?`, confirmLabel: "Delete", tone: "danger" }))) return;
     const deleted = await runOperation(() => deleteWorkspace(context, selectedWorkspace.id), `Deleted workspace ${selectedWorkspace.name}.`);
     if (deleted) await refreshWorkspacesSafely();
   }
@@ -1004,12 +1011,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           onSelectWorkingCopy={handleSelectWorkingCopy}
           onCloneRepository={handleCloneRepository}
           onCreateProject={handleCreateProject}
-          onSelectWorkspace={workspaceId => {
-            if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
+          onSelectWorkspace={async workspaceId => {
+            if (editorDirty && !(await confirmDiscard())) return;
             setSelectedWorkspaceId(workspaceId);
           }}
-          onSelectProject={projectId => {
-            if (editorDirty && !window.confirm("Discard unsaved file changes?")) return;
+          onSelectProject={async projectId => {
+            if (editorDirty && !(await confirmDiscard())) return;
             setSelectedProjectId(projectId);
           }}
           onDeleteWorkspace={handleDeleteWorkspace}

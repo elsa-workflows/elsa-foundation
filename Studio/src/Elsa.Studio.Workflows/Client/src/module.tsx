@@ -28,7 +28,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Package, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, X, Zap } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioDialogApi, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
   deleteDefinition,
@@ -161,7 +161,12 @@ declare global {
   }
 }
 
+// Host-provided dialog service, captured at registration so imperative handlers can await it
+// without prop-drilling. Assigned before any route component renders.
+let dialogs: StudioDialogApi;
+
 export function register(api: ElsaStudioModuleApi) {
+  dialogs = api.dialogs;
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
@@ -466,7 +471,7 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    if (!window.confirm(`Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`)) return;
+    if (!(await dialogs.confirm({ message: `Delete workflow definition "${definition.name}"? You can restore it from the Deleted view.`, confirmLabel: "Delete", tone: "danger" }))) return;
     setStatus("");
     setError("");
     try {
@@ -493,7 +498,7 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   };
 
   const permanentDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
-    if (!window.confirm(`Permanently delete workflow definition "${definition.name}"? This removes its drafts, versions, layouts, and validations and cannot be undone.`)) return;
+    if (!(await dialogs.confirm({ message: `Permanently delete workflow definition "${definition.name}"? This removes its drafts, versions, layouts, and validations and cannot be undone.`, confirmLabel: "Delete permanently", tone: "danger" }))) return;
     setStatus("");
     setError("");
     try {

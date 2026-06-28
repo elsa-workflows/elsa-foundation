@@ -658,7 +658,6 @@ describe("extension builder page", () => {
       if (url.endsWith("/rollback")) return loadedRuntime({ version: "0.9.0", features: [] });
       return {};
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
       postJson,
       getJson: async url => {
@@ -705,6 +704,11 @@ function stubApi(options?: {
         getJson: options?.getJson ?? defaultGetJson,
         postJson: options?.postJson ?? defaultPostJson
       }
+    },
+    dialogs: {
+      confirm: vi.fn(async () => true),
+      prompt: vi.fn(async () => null),
+      alert: vi.fn(async () => {})
     }
   } as ElsaStudioModuleApi;
 }

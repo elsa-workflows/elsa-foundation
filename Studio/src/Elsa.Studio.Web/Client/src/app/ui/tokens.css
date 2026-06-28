@@ -5,10 +5,12 @@
   --studio-bg: var(--background);
   --studio-surface: var(--card);
   --studio-surface-muted: var(--muted);
+  --studio-surface-raised: var(--muted);
   --studio-text: var(--foreground);
   --studio-text-muted: var(--muted-foreground);
   --studio-border: var(--border);
   --studio-accent: var(--primary);
+  --studio-accent-text: var(--primary-foreground);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
   --studio-focus: color-mix(in srgb, var(--ring) 24%, transparent);
 
@@ -22,6 +24,7 @@
   --studio-radius-sm: var(--radius-sm);
   --studio-radius: var(--radius);
   --studio-radius-md: var(--radius-md);
+  --studio-radius-lg: var(--radius-lg);
   --studio-shadow-sm: var(--shadow-sm);
 
   --studio-page-title-size: 20px;

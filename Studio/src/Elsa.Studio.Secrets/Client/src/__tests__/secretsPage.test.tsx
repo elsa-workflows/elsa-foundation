@@ -92,6 +92,11 @@ function render(options: {
           postForm: vi.fn()
         }
       }}
+      dialogs={{
+        confirm: vi.fn(async () => true),
+        prompt: vi.fn(async () => null),
+        alert: vi.fn(async () => {})
+      }}
     />
   ));
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
 import { SecretDetail } from "./SecretDetail";
@@ -8,7 +8,7 @@ import { CreateSecretDialog, RotateSecretDialog } from "./SecretDialogs";
 
 const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked", "Deleted"];
 
-export function SecretsPage({ context }: { context: StudioEndpointContext }) {
+export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export function SecretsPage({ context }: { context: StudioEndpointContext }) {
 
   async function revoke(secret: SecretMetadata) {
     if (secret.status === "Revoked" || secret.status === "Deleted") return;
-    if (!window.confirm(`Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`)) return;
+    if (!(await dialogs.confirm({ message: `Revoke secret "${secret.name}"? Existing references keep the name, but the secret can no longer be used as active material.`, confirmLabel: "Revoke", tone: "danger" }))) return;
     setBusyName(secret.name);
     setError(null);
     setStatus(null);
@@ -130,7 +130,7 @@ export function SecretsPage({ context }: { context: StudioEndpointContext }) {
   }
 
   async function remove(secret: SecretMetadata) {
-    if (!window.confirm(`Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`)) return;
+    if (!(await dialogs.confirm({ message: `Delete secret "${secret.name}"? This removes the metadata record and cannot reveal or recover its value.`, confirmLabel: "Delete", tone: "danger" }))) return;
     setBusyName(secret.name);
     setError(null);
     setStatus(null);

@@ -2742,3 +2742,133 @@ textarea:focus {
     grid-column: 2;
   }
 }
+
+/* Studio dialogs — api.dialogs.confirm/prompt/alert, rendered by <DialogHost /> via Radix. */
+.studio-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.studio-dialog-overlay[data-state="open"] {
+  animation: studio-dialog-overlay-in var(--transition-base);
+}
+
+.studio-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1201;
+  display: grid;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  box-shadow: var(--shadow-xl);
+  padding: 20px;
+}
+
+.studio-dialog:focus-visible {
+  outline: none;
+}
+
+.studio-dialog[data-state="open"] {
+  animation: studio-dialog-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.studio-dialog-body {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-dialog-title {
+  margin: 0;
+  font-size: var(--studio-section-title-size);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.studio-dialog-message {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.studio-dialog-input {
+  width: 100%;
+}
+
+.studio-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.studio-dialog-confirm[data-tone="default"] {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent);
+  color: var(--studio-accent-text);
+}
+
+.studio-dialog-confirm[data-tone="default"]:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 86%, black);
+  background: color-mix(in srgb, var(--studio-accent) 86%, black);
+  color: var(--studio-accent-text);
+}
+
+.studio-dialog-confirm[data-tone="danger"] {
+  border-color: var(--studio-danger);
+  background: var(--studio-danger);
+  color: var(--studio-danger-text);
+}
+
+.studio-dialog-confirm[data-tone="danger"]:hover {
+  border-color: color-mix(in srgb, var(--studio-danger) 86%, black);
+  background: color-mix(in srgb, var(--studio-danger) 86%, black);
+  color: var(--studio-danger-text);
+}
+
+.studio-dialog-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes studio-dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes studio-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-dialog-overlay[data-state="open"],
+  .studio-dialog[data-state="open"] {
+    animation: none;
+  }
+}

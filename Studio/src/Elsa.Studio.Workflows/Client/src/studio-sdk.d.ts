@@ -204,12 +204,42 @@ declare module "@elsa-workflows/studio-sdk" {
     onPrompt?(listener: (request: StudioAiPromptRequest) => void): () => void;
   }
 
+  export interface StudioConfirmOptions {
+    title?: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: "default" | "danger";
+  }
+
+  export interface StudioPromptOptions {
+    title?: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    defaultValue?: string;
+    placeholder?: string;
+  }
+
+  export interface StudioAlertOptions {
+    title?: string;
+    message: string;
+    confirmLabel?: string;
+  }
+
+  export interface StudioDialogApi {
+    confirm(options: StudioConfirmOptions): Promise<boolean>;
+    prompt(options: StudioPromptOptions): Promise<string | null>;
+    alert(options: StudioAlertOptions): Promise<void>;
+  }
+
   export interface ElsaStudioModuleApi {
     readonly backend: StudioEndpointContext;
     readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
     readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
     readonly routes: StudioContributionRegistry<StudioRouteContribution>;
     readonly ai: StudioAiContributionApi;
+    readonly dialogs: StudioDialogApi;
     readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
     readonly workflowDesigner: {
       readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;

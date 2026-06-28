@@ -33,6 +33,7 @@ import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { QueryProvider } from "./providers/QueryProvider";
+import { DialogHost } from "./ui/dialog/DialogHost";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
@@ -1062,6 +1063,7 @@ export function App() {
     <ThemeProvider>
       <QueryProvider>
         <AppContent />
+        <DialogHost />
       </QueryProvider>
     </ThemeProvider>
   );

@@ -595,6 +595,57 @@ export interface StudioAiSurfaceContribution {
   order?: number;
 }
 
+export type StudioDialogTone = "default" | "danger";
+export type StudioDialogKind = "confirm" | "prompt" | "alert";
+
+export interface StudioConfirmOptions {
+  title?: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: StudioDialogTone;
+}
+
+export interface StudioPromptOptions extends Omit<StudioConfirmOptions, "tone"> {
+  defaultValue?: string;
+  placeholder?: string;
+}
+
+export type StudioAlertOptions = Omit<StudioConfirmOptions, "tone" | "cancelLabel">;
+
+export interface StudioDialogApi {
+  /** Resolves to true when confirmed, false when cancelled/dismissed. */
+  confirm(options: StudioConfirmOptions): Promise<boolean>;
+  /** Resolves to the entered string, or null when cancelled/dismissed. */
+  prompt(options: StudioPromptOptions): Promise<string | null>;
+  /** Resolves when acknowledged/dismissed. */
+  alert(options: StudioAlertOptions): Promise<void>;
+}
+
+export type StudioDialogResult = boolean | string | null;
+
+/** A dialog request as surfaced to the host UI. The pending promise is owned by the controller. */
+export interface StudioDialogRequest {
+  id: number;
+  kind: StudioDialogKind;
+  title?: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: StudioDialogTone;
+  defaultValue?: string;
+  placeholder?: string;
+}
+
+export interface StudioDialogController {
+  readonly api: StudioDialogApi;
+  subscribe(listener: (request: StudioDialogRequest | null) => void): () => void;
+  getCurrent(): StudioDialogRequest | null;
+  respond(id: number, result: StudioDialogResult): void;
+  /** Settle every pending dialog as cancelled. Used when the dialog surface tears down so callers never hang. */
+  cancelAll(): void;
+}
+
 export const studioSlotIds = {
   featureAreas: "studio.feature-areas",
   navigation: "studio.navigation",
@@ -765,6 +816,7 @@ export interface ElsaStudioModuleApi {
     readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
   };
   readonly ai: StudioAiContributionApi;
+  readonly dialogs: StudioDialogApi;
   readonly diagnostics: StudioContributionRegistry<StudioModuleDiagnostic>;
 }
 
@@ -824,6 +876,85 @@ export function createAiContributionApi(): StudioAiContributionApi {
     onPrompt(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    }
+  };
+}
+
+export function createDialogController(): StudioDialogController {
+  interface QueuedDialogRequest extends StudioDialogRequest {
+    settle(result: StudioDialogResult): void;
+  }
+
+  const queue: QueuedDialogRequest[] = [];
+  const listeners = new Set<(request: StudioDialogRequest | null) => void>();
+  let nextId = 1;
+
+  const current = () => queue[0] ?? null;
+
+  const notify = () => {
+    const head = current();
+    for (const listener of listeners) {
+      listener(head);
+    }
+  };
+
+  function enqueue(request: Omit<QueuedDialogRequest, "id">) {
+    queue.push({ ...request, id: nextId++ });
+    if (queue.length === 1) {
+      notify();
+    }
+  }
+
+  const api: StudioDialogApi = {
+    confirm(options) {
+      return new Promise<boolean>(resolve => {
+        enqueue({ ...options, kind: "confirm", settle: result => resolve(result === true) });
+      });
+    },
+    prompt(options) {
+      return new Promise<string | null>(resolve => {
+        enqueue({ ...options, kind: "prompt", settle: result => resolve(typeof result === "string" ? result : null) });
+      });
+    },
+    alert(options) {
+      return new Promise<void>(resolve => {
+        enqueue({ ...options, kind: "alert", settle: () => resolve() });
+      });
+    }
+  };
+
+  return {
+    api,
+    subscribe(listener) {
+      listeners.add(listener);
+      listener(current());
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getCurrent: current,
+    respond(id, result) {
+      const index = queue.findIndex(request => request.id === id);
+      if (index === -1) {
+        return;
+      }
+
+      const [request] = queue.splice(index, 1);
+      request.settle(result);
+      if (index === 0) {
+        notify();
+      }
+    },
+    cancelAll() {
+      if (queue.length === 0) {
+        return;
+      }
+
+      const pending = queue.splice(0);
+      for (const request of pending) {
+        request.settle(request.kind === "prompt" ? null : false);
+      }
+      notify();
     }
   };
 }

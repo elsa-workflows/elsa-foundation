@@ -15,6 +15,7 @@ import {
   type StudioNavigationContribution,
   type StudioRouteContribution
 } from "../sdk";
+import { dialogController } from "./dialogs";
 
 export interface CreateStudioRegistryOptions {
   backendBaseUrl?: string;
@@ -66,6 +67,7 @@ export function createStudioRegistry(
       panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
     ai: createAiContributionApi(),
+    dialogs: dialogController.api,
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>({ slot: studioSlots.diagnostics })
   };
 }

@@ -66,8 +66,7 @@ describe("workflows module", () => {
       return response({ definitions: [definition()] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
-    const { container, unmount } = await renderRegisteredRoute();
+    const { api, container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Latest version");
 
@@ -79,7 +78,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Delete"));
     await flushPromises();
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Delete workflow definition"));
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Delete workflow definition") }));
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/_elsa/workflow-management/definitions/definition-1",
       expect.objectContaining({ method: "DELETE" })
@@ -95,8 +94,7 @@ describe("workflows module", () => {
       return response({ definitions: url.includes("state=deleted") ? [definition({ deletedAt: "2026-06-18T01:00:00Z" })] : [] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
-    const { container, unmount } = await renderRegisteredRoute();
+    const { api, container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "No active workflow definitions found.");
     await click(buttonByText(container, "Deleted"));
@@ -116,7 +114,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Delete permanently"));
     await flushPromises();
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Permanently delete workflow definition"));
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Permanently delete workflow definition") }));
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/_elsa/workflow-management/definitions/definition-1/permanent",
       expect.objectContaining({ method: "DELETE" })
@@ -1240,6 +1238,11 @@ function testApi(): ElsaStudioModuleApi {
       promptActions: registry(),
       dispatchPrompt: vi.fn(),
       onPrompt: vi.fn(() => () => {})
+    },
+    dialogs: {
+      confirm: vi.fn(async () => true),
+      prompt: vi.fn(async () => null),
+      alert: vi.fn(async () => {})
     }
   } as ElsaStudioModuleApi;
 }
@@ -1341,6 +1344,7 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
   });
 
   return {
+    api,
     container,
     unmount: async () => {
       flushSync(() => root.unmount());

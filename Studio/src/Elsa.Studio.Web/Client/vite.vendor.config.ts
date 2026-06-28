@@ -11,6 +11,7 @@ export default defineConfig({
     lib: {
       entry: {
         "vendor/react": resolve(__dirname, "src/vendor/react.ts"),
+        "vendor/react-dom": resolve(__dirname, "src/vendor/react-dom.ts"),
         "vendor/react-dom-client": resolve(__dirname, "src/vendor/react-dom-client.ts"),
         "vendor/react-query": resolve(__dirname, "src/vendor/react-query.ts"),
         "sdk/index": resolve(__dirname, "src/sdk/index.ts")
