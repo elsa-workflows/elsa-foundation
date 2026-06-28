@@ -1361,13 +1361,57 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let activeStream = null;
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(`${consoleLogsEndpointPrefix}/hub`)
-      .withAutomaticReconnect()
+      // Retry indefinitely with capped exponential backoff. The default policy
+      // stops after ~42s, which leaves the console permanently dead after an
+      // idle-timeout drop.
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (retryContext) =>
+          Math.min(30_000, 1_000 * 2 ** Math.min(retryContext.previousRetryCount, 5))
+      })
       .build();
 
+    function startStream() {
+      // Dispose any prior subscription before opening a new one so reconnects
+      // don't leak streams.
+      activeStream?.dispose();
+      const stream = connection.stream("StreamAsync", { limit: consoleReplayLimit });
+      activeStream = stream.subscribe({
+        next: (item) => {
+          if (item?.line) {
+            addConsoleEntries([createConsoleEntryFromLine(item.line)]);
+          } else if (item?.droppedLines || item?.dropped) {
+            const dropped = item.droppedLines ?? item.dropped;
+            addConsoleLine("stderr", `${dropped.count} console lines were dropped.`);
+          }
+        },
+        error: (error) => {
+          // The stream's error fires when the socket drops mid-flight (e.g.
+          // "Cannot send data if the connection is not in the 'Connected'
+          // State"). That's expected during a reconnect — onreconnected
+          // re-subscribes — so only surface errors raised while genuinely
+          // connected.
+          if (cancelled || connection.state !== signalR.HubConnectionState.Connected)
+            return;
+          addConsoleLine("stderr", `Console stream failed: ${error.message}`);
+        },
+        complete: () => {
+          if (!cancelled)
+            addConsoleLine("stdout", "Console stream completed.");
+        }
+      });
+    }
+
     connection.onreconnecting(() => setConsoleConnected(false));
-    connection.onreconnected(() => setConsoleConnected(true));
+    connection.onreconnected(() => {
+      setConsoleConnected(true);
+      // The previous stream subscription died with the old socket; re-establish
+      // it and replay any lines missed during the outage.
+      startStream();
+      loadRecentConsoleLines().catch(() => {});
+    });
     connection.onclose(() => setConsoleConnected(false));
 
     async function connect() {
@@ -1377,19 +1421,7 @@ export function App() {
           return;
 
         setConsoleConnected(true);
-        const stream = connection.stream("StreamAsync", { limit: consoleReplayLimit });
-        stream.subscribe({
-          next: (item) => {
-            if (item?.line) {
-              addConsoleEntries([createConsoleEntryFromLine(item.line)]);
-            } else if (item?.droppedLines || item?.dropped) {
-              const dropped = item.droppedLines ?? item.dropped;
-              addConsoleLine("stderr", `${dropped.count} console lines were dropped.`);
-            }
-          },
-          error: (error) => addConsoleLine("stderr", `Console stream failed: ${error.message}`),
-          complete: () => addConsoleLine("stdout", "Console stream completed.")
-        });
+        startStream();
 
         await loadRecentConsoleLines();
       } catch (error) {
@@ -1401,6 +1433,7 @@ export function App() {
     connect();
     return () => {
       cancelled = true;
+      activeStream?.dispose();
       connection.stop();
     };
   }, [addConsoleEntries, addConsoleLine, loadRecentConsoleLines]);
