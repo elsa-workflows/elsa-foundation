@@ -18,15 +18,6 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, TimeProvider.System)
-    {
-    }
-
-    public WorkflowCancelSchedulerWorkHandler(
-        IWorkflowExecutionStateStore workflowExecutionStateStore,
-        IActivityExecutionStateStore activityExecutionStateStore,
-        RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
         TimeProvider timeProvider)
     {

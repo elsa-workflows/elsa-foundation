@@ -19,14 +19,6 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IRuntimeExecutionIdGenerator idGenerator)
-        : this(workflowExecutableStore, schedulerWorkQueue, idGenerator, TimeProvider.System)
-    {
-    }
-
-    public WorkflowStartSchedulerWorkHandler(
-        IWorkflowExecutableStore workflowExecutableStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
     {
