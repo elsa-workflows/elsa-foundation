@@ -17,24 +17,9 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue)
-        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, TimeProvider.System)
-    {
-    }
-
-    public WorkflowCompleteActivitySchedulerWorkHandler(
-        IActivityExecutionStateStore activityExecutionStateStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         TimeProvider timeProvider)
         : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore: null, timeProvider)
-    {
-    }
-
-    public WorkflowCompleteActivitySchedulerWorkHandler(
-        IActivityExecutionStateStore activityExecutionStateStore,
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowExecutableStore workflowExecutableStore)
-        : this(activityExecutionStateStore, schedulerWorkQueue, workflowExecutableStore, TimeProvider.System)
     {
     }
 
