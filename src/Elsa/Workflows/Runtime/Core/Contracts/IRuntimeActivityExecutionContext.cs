@@ -30,4 +30,28 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     void DeferCompositeCompletion();
 
     bool CompositeCompletionDeferred { get; }
+
+    /// <summary>
+    /// Requests that the whole workflow run end now with a successful outcome, regardless of any remaining
+    /// scheduled work. Used by the <c>Finish</c>/<c>Complete</c> leaf control activity. The engine drains this
+    /// on the leaf execution path and commits a terminal <c>WorkflowCompleted</c> checkpoint in place of the
+    /// usual activity-completed propagation.
+    /// </summary>
+    void FinishWorkflow(IEnumerable<string>? outcomeNames = null);
+
+    bool FinishWorkflowRequested { get; }
+
+    IReadOnlyCollection<string> FinishWorkflowOutcomeNames { get; }
+
+    /// <summary>
+    /// Requests that the workflow instance correlation id be set to <paramref name="correlationId"/>. Used by
+    /// the <c>Correlate</c> leaf control activity. The engine drains this on the leaf execution path and folds
+    /// the new correlation id into the activity-completed checkpoint's workflow-execution state change. A null
+    /// or blank value clears the correlation id.
+    /// </summary>
+    void SetCorrelationId(string? correlationId);
+
+    bool CorrelationIdAssignmentRequested { get; }
+
+    string? RequestedCorrelationId { get; }
 }

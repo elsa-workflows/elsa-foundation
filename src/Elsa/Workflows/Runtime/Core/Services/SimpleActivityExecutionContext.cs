@@ -28,6 +28,7 @@ public sealed class SimpleActivityExecutionContext(
     private readonly List<RecordedActivityOutput> _recordedOutputs = [];
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<string> _compositeCompletionOutcomeNames = [];
+    private readonly List<string> _finishWorkflowOutcomeNames = [];
 
     public IExpressionExecutionContext ExpressionExecutionContext => this;
     public IActivity Activity { get; } = activity;
@@ -43,6 +44,10 @@ public sealed class SimpleActivityExecutionContext(
     public bool CompositeCompletionRequested { get; private set; }
     public bool CompositeCompletionDeferred { get; private set; }
     public IReadOnlyCollection<string> CompositeCompletionOutcomeNames => _compositeCompletionOutcomeNames.ToArray();
+    public bool FinishWorkflowRequested { get; private set; }
+    public IReadOnlyCollection<string> FinishWorkflowOutcomeNames => _finishWorkflowOutcomeNames.ToArray();
+    public bool CorrelationIdAssignmentRequested { get; private set; }
+    public string? RequestedCorrelationId { get; private set; }
 
     public TService GetRequiredService<TService>() where TService : notnull =>
         (TService)GetRequiredService(typeof(TService))!;
@@ -129,6 +134,26 @@ public sealed class SimpleActivityExecutionContext(
             throw new InvalidOperationException("Composite completion cannot be deferred after completion was requested.");
 
         CompositeCompletionDeferred = true;
+    }
+
+    public void FinishWorkflow(IEnumerable<string>? outcomeNames = null)
+    {
+        var outcomeSnapshot = (outcomeNames ?? [ActivityOutcomes.Done]).ToArray();
+        if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException("Finish workflow outcome names cannot contain blank values.");
+
+        if (outcomeSnapshot.Distinct(StringComparer.Ordinal).Count() != outcomeSnapshot.Length)
+            throw new InvalidOperationException("Finish workflow outcome names cannot contain duplicates.");
+
+        FinishWorkflowRequested = true;
+        _finishWorkflowOutcomeNames.Clear();
+        _finishWorkflowOutcomeNames.AddRange(outcomeSnapshot);
+    }
+
+    public void SetCorrelationId(string? correlationId)
+    {
+        CorrelationIdAssignmentRequested = true;
+        RequestedCorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId;
     }
 
     /// <summary>

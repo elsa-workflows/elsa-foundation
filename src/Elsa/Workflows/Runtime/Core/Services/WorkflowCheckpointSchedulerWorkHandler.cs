@@ -13,13 +13,21 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
 
+    /// <summary>
+    /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
+    /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
+    /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
+    /// behaviour of rebuilding workflow state from the checkpoint payload alone.
+    /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
@@ -28,6 +36,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
         _timeProvider = timeProvider;
     }
 
@@ -103,6 +112,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             [RuntimeMetadataKeys.ExecutableArtifactVersion] = payload.PinnedExecutable.ArtifactVersion,
             [RuntimeMetadataKeys.ExecutableArtifactHash] = payload.PinnedExecutable.ArtifactHash
         });
+
+        // Preserve durable instance fields (correlation id, parent, tenant) that earlier checkpoints set —
+        // e.g. a Correlate leaf — across the workflow-completed transition, which otherwise rebuilds the
+        // workflow state from the checkpoint payload alone.
+        var priorWorkflowState = _workflowExecutionStateStore is null
+            ? null
+            : await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -113,7 +130,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -161,13 +178,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static RuntimeStateChange<WorkflowExecutionState>? BuildWorkflowExecutionStateChange(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
-            return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt);
+            return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
 
         return null;
     }
@@ -175,7 +193,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static RuntimeStateChange<WorkflowExecutionState> BuildWorkflowStartedStateChange(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -187,9 +206,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
-            CorrelationId: null,
-            ParentWorkflowExecutionId: null,
-            TenantId: null,
+            CorrelationId: priorWorkflowState?.CorrelationId,
+            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
+            TenantId: priorWorkflowState?.TenantId,
             SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
@@ -202,21 +221,22 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static RuntimeStateChange<WorkflowExecutionState> BuildWorkflowCompletedStateChange(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
-        var startedAt = ReadWorkflowStartedAt(workItem);
+        var startedAt = ReadWorkflowStartedAt(workItem) ?? priorWorkflowState?.StartedAt;
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: workItem.WorkflowExecutionId,
             PinnedExecutable: payload.PinnedExecutable,
             Status: WorkflowExecutionStatus.Completed,
             SubStatus: null,
-            CreatedAt: startedAt ?? occurredAt,
+            CreatedAt: priorWorkflowState?.CreatedAt ?? startedAt ?? occurredAt,
             StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: occurredAt,
-            CorrelationId: null,
-            ParentWorkflowExecutionId: null,
-            TenantId: null,
+            CorrelationId: priorWorkflowState?.CorrelationId,
+            ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
+            TenantId: priorWorkflowState?.TenantId,
             SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
