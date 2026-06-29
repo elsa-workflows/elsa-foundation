@@ -26,6 +26,7 @@ namespace Elsa.Activities.Design.Reconciliation.Json;
 [ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "JsonActivityReconciliation",
+    DisplayName = "JSON Activity Reconciliation",
     Description = "Reconciliation source that reads activity definitions from JSON files."
 )]
 public class JsonActivityReconciliationFeature : IShellFeature

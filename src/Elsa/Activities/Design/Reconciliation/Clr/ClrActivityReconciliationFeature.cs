@@ -27,6 +27,7 @@ namespace Elsa.Activities.Design.Reconciliation.Clr;
 [ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "ClrActivityReconciliation",
+    DisplayName = "CLR Activity Reconciliation",
     Description = "Reconciliation source that scans a folder of assemblies for IActivity implementations (the CLR kind)."
 )]
 public class ClrActivityReconciliationFeature : IShellFeature

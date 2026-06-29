@@ -12,6 +12,7 @@ namespace Elsa3.Mapping;
 [ManifestFeatureCategory("Mapping")]
 [ShellFeature(
     name: "Elsa3Mapping",
+    DisplayName = "Elsa 3 Mapping",
     Description = "Provides converters for Elsa3 workflow models"
 )]
 public class Elsa3MappingFeature : IShellFeature

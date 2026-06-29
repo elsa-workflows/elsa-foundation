@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -19,8 +20,13 @@ namespace Elsa.Workflows.Publishing.Api;
 /// <c>IActivity</c>. The feature depends only on the two seams' <c>.Core</c> contracts; it is neither
 /// Design nor Runtime, which is why it may bridge them without breaking §E2.2.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Publishing")]
+[ManifestFeatureCategory("API")]
 [ShellFeature(
     name: "WorkflowsPublishingApi",
+    DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam)."
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase

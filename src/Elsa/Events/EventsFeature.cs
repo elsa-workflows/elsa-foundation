@@ -14,6 +14,7 @@ namespace Elsa.Events;
 [ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "Events",
+    DisplayName = "Events",
     Description = "Provides event publishing, event pipeline dispatch, and background event processing services."
 )]
 public class EventsFeature : IShellFeature

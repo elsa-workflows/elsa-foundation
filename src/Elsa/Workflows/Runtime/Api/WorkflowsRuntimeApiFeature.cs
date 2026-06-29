@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -10,8 +11,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Api;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Workflows")]
+[ManifestFeatureCategory("Runtime")]
+[ManifestFeatureCategory("API")]
 [ShellFeature(
     name: "WorkflowsRuntimeApi",
+    DisplayName = "Workflows Runtime API",
     Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts."
 )]
 public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase

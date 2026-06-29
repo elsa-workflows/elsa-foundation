@@ -29,6 +29,7 @@ namespace Elsa.Workflows.Design.Validations;
 [ManifestFeatureCategory("Validation")]
 [ShellFeature(
     name: "WorkflowDesignValidations",
+    DisplayName = "Workflow Design Validations",
     Description = "Registers baseline workflow draft validators and validation event handling."
 )]
 public class WorkflowDesignValidationsFeature : IShellFeature

@@ -22,6 +22,18 @@ public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalogAcces
 
             builder.DisplayName = GetMetadataString(descriptor, "DisplayName") ?? builder.DisplayName ?? featureName;
             builder.Description = GetMetadataString(descriptor, "Description") ?? builder.Description;
+
+            // Surface categories/settings declared via the source-only manifest hint attributes. The package-manifest
+            // contributor runs after this one and overwrites with FeatureSourceKinds.Manifest, so manifest data wins
+            // for package-backed features; bundled shell/runtime features keep these reflected values.
+            if (builder.SourceKind is not FeatureSourceKinds.Manifest && descriptor.StartupType is { } featureType)
+            {
+                var hints = ManifestHintReader.Read(featureType);
+                if (builder.Categories.Count == 0 && hints.Categories.Count > 0)
+                    builder.Categories = hints.Categories;
+                if (builder.Settings.Count == 0 && hints.Settings.Count > 0)
+                    builder.Settings = hints.Settings;
+            }
         }
     }
 

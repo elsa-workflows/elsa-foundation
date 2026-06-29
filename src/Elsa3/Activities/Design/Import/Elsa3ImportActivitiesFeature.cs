@@ -13,6 +13,7 @@ namespace Elsa3.Activities.Design.Import;
 [ManifestFeatureCategory("Import")]
 [ShellFeature(
     name: "Elsa3ImportJsonActivities",
+    DisplayName = "Elsa 3 Import Activities",
     Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline."
 )]
 public class Elsa3ImportActivitiesFeature : IShellFeature

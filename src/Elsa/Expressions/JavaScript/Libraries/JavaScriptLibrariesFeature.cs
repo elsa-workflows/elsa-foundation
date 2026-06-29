@@ -13,8 +13,8 @@ namespace Elsa.Expressions.JavaScript.Libraries;
 [ManifestFeatureCategory("JavaScript")]
 [ShellFeature(
     name: "JavaScriptLibraries",
-    DisplayName = "JavaScript libraries such as 'lodash', 'lodashFp', or 'moment'",
-    Description = "Registers embedded JavaScript libraries for expression script preprocessing."
+    DisplayName = "JavaScript Libraries",
+    Description = "Registers embedded JavaScript libraries (such as 'lodash', 'lodashFp', or 'moment') for expression script preprocessing."
 )]
 public class JavaScriptLibrariesFeature : IShellFeature
 {

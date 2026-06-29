@@ -1,10 +1,15 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Api.FastEndpoints;
 using Elsa.Secrets.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Secrets.Api.Features;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Secrets")]
+[ManifestFeatureCategory("Security")]
+[ManifestFeatureCategory("API")]
 [ShellFeature(
     name: "SecretsApi",
     DisplayName = "Secrets API",

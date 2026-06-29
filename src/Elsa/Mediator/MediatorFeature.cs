@@ -12,6 +12,7 @@ namespace Elsa.Mediator;
 [ManifestFeatureCategory("Infrastructure")]
 [ShellFeature(
     name: "Mediator",
+    DisplayName = "Mediator",
     Description = "Provides request and command dispatch pipelines for synchronous in-process mediation."
 )]
 public class MediatorFeature : IShellFeature

@@ -14,6 +14,10 @@
     exactly why §E2.2 (Runtime must not depend on Design) is preserved — the bridge is a third party.
   -->
   <ItemGroup>
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />

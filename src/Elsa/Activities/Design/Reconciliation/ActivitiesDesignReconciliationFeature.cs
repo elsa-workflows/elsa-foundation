@@ -24,6 +24,7 @@ namespace Elsa.Activities.Design.Reconciliation;
 [ManifestFeatureCategory("Reconciliation")]
 [ShellFeature(
     name: "ActivitiesDesignReconciliation",
+    DisplayName = "Activities Design Reconciliation",
     Description = "Universal activity-design reconciliation pass; discovers IActivityReconciliationSource contributions from DI."
 )]
 public class ActivitiesDesignReconciliationFeature : IShellFeature

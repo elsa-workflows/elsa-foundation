@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
@@ -12,8 +13,13 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Design.Api;
 
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Design")]
+[ManifestFeatureCategory("API")]
 [ShellFeature(
     name: "ActivitiesDesignApi",
+    DisplayName = "Activities Design API",
     Description = "Contains endpoints to manage data in the Activities Design Domain"
 )]
 public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
