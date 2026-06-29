@@ -13,8 +13,18 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowInputs"/> can rebuild the <c>variables.*</c>
 /// and <c>input.*</c> snapshots for later activities and after the instance unloads/resumes.
 /// </summary>
+/// <remarks>
+/// Seam-C boundary: this seeds the start-time values only and there is no write-back. A workflow variable
+/// mutated mid-run (e.g. by a SetVariable activity) still resolves to its start-time seed through
+/// <c>variables.*</c> input expressions; mid-run mutation visibility is tracked as a Seam-C follow-up.
+/// </remarks>
 public static class RuntimeWorkflowStateSeed
 {
+    // Reserved durable-value-id namespace for seeded workflow state. Activity-output captures derive their
+    // value ids from the authored output reference, so a structural collision is only possible if a
+    // compiler ever emitted an output reference literally prefixed "variable:" / "input:". Projection also
+    // disambiguates by metadata key (VariableName / InputName), so a collision would have to share both the
+    // value-id prefix and the tag; keep these prefixes reserved for the seed to preserve that guarantee.
     public const string VariableValueIdPrefix = "variable:";
     public const string InputValueIdPrefix = "input:";
     private const string DurableValueIdPrefix = "durable-";

@@ -13,7 +13,8 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     [Fact]
     public async Task RejectsUnknownArtifactId()
     {
-        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(new InMemoryWorkflowExecutableStore()));
+        var store = new InMemoryWorkflowExecutableStore();
+        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(store), store);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => handler.Handle(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
 
@@ -26,7 +27,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     {
         var store = new InMemoryWorkflowExecutableStore();
         await store.SaveAsync(NewExecutable());
-        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(store));
+        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(store), store);
 
         var result = await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 

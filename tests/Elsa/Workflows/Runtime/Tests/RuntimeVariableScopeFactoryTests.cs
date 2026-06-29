@@ -53,6 +53,25 @@ public sealed class RuntimeVariableScopeFactoryTests
     }
 
     [Fact]
+    public void ProjectDeclaredVariableDefaultsByName_keys_defaults_by_authored_variable_name()
+    {
+        var node = NodeWithStructure(StructurePayload(("var-greeting", "greeting", "Hello"), ("var-flag", "flag", "true")));
+
+        var defaults = _factory.ProjectDeclaredVariableDefaultsByName(node);
+
+        Assert.Equal(2, defaults.Count);
+        // Defaults round-trip through the compiled structure as JSON, so values surface as JsonElement.
+        Assert.Equal("Hello", defaults["greeting"]?.ToString());
+        Assert.Equal("true", defaults["flag"]?.ToString());
+    }
+
+    [Fact]
+    public void ProjectDeclaredVariableDefaultsByName_returns_empty_when_node_declares_no_variables()
+    {
+        Assert.Empty(_factory.ProjectDeclaredVariableDefaultsByName(NodeWithStructure(null)));
+    }
+
+    [Fact]
     public void BuildChain_returns_null_for_no_layers()
     {
         Assert.Null(_factory.BuildChain([]));

@@ -4,6 +4,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
@@ -18,6 +19,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
 {
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
+    private static readonly RuntimeVariableScopeFactory ScopeFactory = new();
     private const string TestArtifactPrefix = "test-artifact-";
     private const string DraftSnapshotSourceKind = "WorkflowDraftSnapshot";
     private const string DraftArtifactVersion = "draft";
@@ -140,6 +142,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         await transientExecutableStore.SaveAsync(executable, cancellationToken);
 
+        // Seed authored workflow variable defaults from the compiled executable's root structure so a test
+        // run resolves `variables.*` input expressions to their declared values (Seam C, #254), matching the
+        // production runtime-API start path.
+        var variables = ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
+
         var dispatch = await startDispatcher.DispatchTransientAsync(
             new WorkflowExecutionStartDispatchRequest(
                 executable.Identity.ArtifactId,
@@ -150,7 +157,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     ["runtime.testRunId"] = testRunId,
                     ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
                     ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
-                }),
+                },
+                variables: variables),
             executable,
             cancellationToken);
 
